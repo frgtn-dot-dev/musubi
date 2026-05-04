@@ -5,7 +5,8 @@ dotenv.config({ path: path.relative(__dirname, "../../.env") })
 
 const expoConfig = {
   name: "Musubi",
-  slug: "Musubi",
+  slug: "musubi",
+  owner: "frgtn",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
@@ -69,6 +70,9 @@ const expoConfig = {
   },
   extra: {
     apiUrl: process.env.API_URL,
+    eas: {
+      projectId: "38c1b679-ef45-47ee-b644-36000f3c55a6",
+    },
   }
 }
 
