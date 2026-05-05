@@ -5,7 +5,7 @@ COPY . .
 
 RUN npm install -g pnpm
 RUN pnpm install
-RUN pnpm astro build
+RUN pnpm --filter @musubi/docs run build
 
 ENV HOST=0.0.0.0
 ENV PORT=4321
