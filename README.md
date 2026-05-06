@@ -19,13 +19,7 @@ Musubi (結び) means *knot* or *tie* in Japanese. The app ties people's schedul
 
 ## Roadmap
 
-- **External calendar sync** — Google Calendar, Apple Calendar, CalDAV. The core "tying point" idea.
-- **Plugin / extension system** — make Musubi extendable from the outside.
-- **CalDAV server** — be a calendar source for other apps, not just a consumer.
-- **iOS build** (Android is the current target).
-- **Web client.**
-- **Push notifications.**
-- **Recurring events.**
+You can find all planned features and fixes here: [Musubi Roadmap](https://github.com/users/f-tuma/projects/2)
 
 ## Tech stack
 
