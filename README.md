@@ -46,11 +46,9 @@ packages/
 
 ## Quick Start
 
-You can try the application for your self. **It will be accessible through google play store and apple app store in a few days, I will update here when process of adding is done.
+You can try the application for your self [here](https://play.google.com/store/apps/details?id=dev.frgtn.musubi&pli=1).
 
 More info at [Musubi Wehsite](https://musubi.frgtn.dev).
-
-The application is setup to work with main server at the moment. Self-hostable options are on the way.
 
 ## Usage
 
