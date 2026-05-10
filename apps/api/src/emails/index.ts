@@ -15,6 +15,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
       },
     });
 
+    console.log(transporter);
     // Define the email content
     const mailOptions = {
       from: config.smtp.from,
@@ -23,6 +24,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
       html: html,
     };
 
+    console.log(mailOptions);
     // Send the email
     const info = await transporter.sendMail(mailOptions);
     console.log('Email sent:', info.messageId);
