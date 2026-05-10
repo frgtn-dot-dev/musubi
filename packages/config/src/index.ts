@@ -35,7 +35,7 @@ const dbConfig: DBConfig = {
 const apiConfig: APIConfig = {
   port: Number(envOrThrow("API_SERVER_PORT")),
   environment: envOrThrow("ENVIRONMENT"),
-  url: envOrThrow("API_URL"),
+  url: envOrThrow("BETTER_AUTH_URL"),
 }
 
 export const config: Config = {

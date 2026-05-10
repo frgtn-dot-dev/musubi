@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { bearer } from "better-auth/plugins";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { db, schema } from '@musubi/db';
-import { config, envOrThrow } from '@musubi/config';
+import { config } from '@musubi/config';
 import { sendEmail } from '../../../../apps/api/src/emails';
 import { getPasswordResetHtml } from '../../../../apps/api/src/emails/password_reset';
 
@@ -26,7 +26,7 @@ export const auth = betterAuth({
     enabled: true,
     sendResetPassword: async ({ user, token }, request) => {
       console.log("Sending URL...");
-      const customUrl = `https://musubi.frgtn.dev/reset-password/?token=${token}&callback=${envOrThrow("BETTER_AUTH_URL")}`
+      const customUrl = `https://musubi.frgtn.dev/reset-password/?token=${token}&callback=${config.api.url}`
       sendEmail(user.email, "Reset your password", getPasswordResetHtml(user.name, customUrl, "1 hour"));
     },
   },
