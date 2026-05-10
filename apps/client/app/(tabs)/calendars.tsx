@@ -46,7 +46,7 @@ export default function CalendarsTab() {
           <Text style={styles.btnPrimaryText}>Create Calendar</Text>
         </Pressable>
       </View>
-      <ScrollView style={{ zIndex: -1 }}>
+      <ScrollView>
         <View style={{ height: 1, backgroundColor: colors.line }} />
         {calendars.map((c) => (
           <Pressable
