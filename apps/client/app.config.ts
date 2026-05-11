@@ -2,7 +2,7 @@ const expoConfig = {
   name: "Musubi",
   slug: "musubi",
   owner: "frgtn",
-  version: "1.0.0",
+  version: "0.0.2",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "musubi",
@@ -16,7 +16,6 @@ const expoConfig = {
     }
   },
   android: {
-    "version": "0.0.1",
     "package": "dev.frgtn.musubi",
     "adaptiveIcon": {
       "backgroundColor": "#050507",

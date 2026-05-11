@@ -2,7 +2,9 @@ packages:
   - 'apps/*'
   - 'packages/*'
 allowBuilds:
+  esbuild: false
   sharp: false
+  unrs-resolver: false
 overrides:
   esbuild@<=0.24.2: '>=0.25.0'
   postcss@<8.5.10: '>=8.5.10'

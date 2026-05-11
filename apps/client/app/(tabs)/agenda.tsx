@@ -25,7 +25,9 @@ export default function AgendaTab() {
   const [eventDetail, setEventDetail] = useState<Event | null>(null);
 
   const groups = useMemo(() => {
+    const now = new Date();
     const sorted = events
+      .filter(e => e.start > now)
       .filter(e => e.calendars.some(id => activeCals.has(id)))
       .sort((a, b) => a.start.getTime() - b.start.getTime());
     const result: { date: Date, items: Event[] }[] = [];
