@@ -12,8 +12,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
 export default function TabLayout() {
-  const api = useApi();
   const { apiUrl, isLoading } = useServer();
+  const api = useApi();
   const { loadSettings } = useSettingsStore();
   const { loadCalendars } = useCalendarsStore();
   const { loadEvents } = useEventsStore();
@@ -31,7 +31,7 @@ export default function TabLayout() {
       }
     };
     fetch();
-  }, [apiUrl, isLoading])
+  }, [apiUrl, isLoading]);
 
   useConnectToEventStream();
 

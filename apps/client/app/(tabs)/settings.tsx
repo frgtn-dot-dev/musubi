@@ -35,13 +35,8 @@ export default function SettingsTab() {
   const handleSignOut = () => {
     loadCalendars([]);
     loadEvents([]);
-    authClient.signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          router.dismissAll();
-        }
-      }
-    });
+    authClient.signOut();
+    router.replace('/(auth)/welcome');
   };
 
   const handleUserDelete = () => {
@@ -49,6 +44,7 @@ export default function SettingsTab() {
     loadEvents([]);
     api.deleteUser();
     authClient.signOut();
+    router.replace('/(auth)/welcome');
   }
 
   const testDeleteConfirm = async (v: string) => {

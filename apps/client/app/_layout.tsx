@@ -1,8 +1,7 @@
 import { ServerProvider, useServer } from '@/contexts/ServerContext';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { SplashScreen } from 'expo-router';
+import { Stack, SplashScreen, useRouter } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { InterTight_400Regular, InterTight_500Medium } from '@expo-google-fonts/inter-tight';
 import { NotoSerif_400Regular } from '@expo-google-fonts/noto-serif';
@@ -10,12 +9,11 @@ import { ShipporiMinchoB1_400Regular } from '@expo-google-fonts/shippori-mincho-
 import { colors, styles } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-
 SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
-
   const { isLoading, authClient } = useServer();
+  const router = useRouter();
 
   const [loaded, error] = useFonts({
     InterTight_400Regular,
@@ -24,40 +22,35 @@ function AppContent() {
     ShipporiMinchoB1_400Regular,
   });
 
-  const router = useRouter();
-  const segments = useSegments();
-  const inAuthGroup = segments[0] === "(auth)";
-  const inInviteGroup = segments[0] === "invite";
-
   const { data: session, isPending } = authClient.useSession();
 
+  const ready = (loaded || !!error) && !isPending && !isLoading;
+
+  const everReady = useRef(false);
+  if (ready) everReady.current = true;
+
+  const navigated = useRef(false);
   useEffect(() => {
-    if ((loaded || error) && !isPending && !isLoading) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded, error, isPending, isLoading]);
+    if (!ready || navigated.current) return;
+    navigated.current = true;
+    router.replace(session ? '/(tabs)' : '/(auth)/welcome');
+  }, [ready]);
 
   useEffect(() => {
-    if (isPending || !loaded) return;
-    if (!session && !inAuthGroup && !inInviteGroup) {
-      router.replace("/(auth)/welcome");
-    }
-    if (session && inAuthGroup) {
-      router.replace("/(tabs)");
-    }
-  }, [session, loaded, isPending, inAuthGroup]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
-  if (!loaded && !error || isPending) return null;
+  if (!everReady.current) return null;
 
   return (
-    <Stack screenOptions={{ statusBarStyle: "auto", navigationBarHidden: true, headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+    <Stack screenOptions={{ statusBarStyle: 'auto', navigationBarHidden: true, headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
   );
 }
 
 function AppLoader() {
   const { apiUrl } = useServer();
   return (
-    <SafeAreaView style={styles.screen} >
+    <SafeAreaView style={styles.screen}>
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <AppContent key={apiUrl ?? 'loading'} />
       </View>

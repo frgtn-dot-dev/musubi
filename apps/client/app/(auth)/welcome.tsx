@@ -1,7 +1,7 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Linking } from "react-native";
 import InputModal from "@/components/TextInputModal";
 import { useServer } from "@/contexts/ServerContext";
 
@@ -76,8 +76,28 @@ export default function Welcome() {
             </Text>
           </Pressable>
           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg4, textAlign: "center" }}>
-            By continuing you accept the terms and
-            our quiet privacy promise.
+            By continuing you accept the
+            <Text
+              style={{
+                color: colors.fg3
+              }}
+              onPress={() => {
+                Linking.openURL("https://musubi.frgtn.dev/terms/");
+              }}
+            >
+              {" terms of service "}
+            </Text>
+            and our
+            <Text
+              style={{
+                color: colors.fg3
+              }}
+              onPress={() => {
+                Linking.openURL("https://musubi.frgtn.dev/privacy/");
+              }}
+            >
+              {" privacy policy."}
+            </Text>
           </Text>
         </View>
       </View >
