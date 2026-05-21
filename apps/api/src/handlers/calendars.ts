@@ -1,24 +1,13 @@
 import { Request, Response } from "express";
 import { addCalendarMember, createCalendar, getCalendar, getCalendarEvents, getCalendarIDFromToken, getCalendarMembers, getUsersCalendars, NewCalendar, removeCalendar, removeClaendarMember, updateCalendar } from '@musubi/db';
-import { BadRequestError, NotFoundError } from "@musubi/types";
-import * as z from "zod";
+import { BadRequestError, Calendar, CalendarSchema, NotFoundError, User } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 
-
-const Calendar = z.object({
-  id: z.string(),
-  name: z.string(),
-  color: z.string(),
-  members: z.array(z.string()),
-  invite: z.string(),
-});
-
-export type Calendar = z.infer<typeof Calendar>;
 
 export async function handlerCreateCalendar(req: Request, res: Response) {
   let calendar: Calendar;
   try {
-    calendar = z.parse(Calendar, req.body);
+    calendar = CalendarSchema.parse(req.body);
   } catch (err) {
     throw new BadRequestError("Request is missing valid calendar data...");
   }
@@ -28,13 +17,13 @@ export async function handlerCreateCalendar(req: Request, res: Response) {
     creatorID: req.user!.id,
   }
   const result = await createCalendar(newCalendar);
-  res.status(201).json({ ...result, members: [req.user!.id], invites: "wip" });
+  res.status(201).json({ ...result, members: [{ id: req.user!.id, name: req.user!.name, email: req.user!.email }], invites: "wip" });
 }
 
 export async function handlerRemoveCalendar(req: Request, res: Response) {
   let calendar: Calendar;
   try {
-    calendar = z.parse(Calendar, req.body);
+    calendar = CalendarSchema.parse(req.body);
   } catch (err) {
     throw new BadRequestError("Request is missing valid calendar data...");
   }
@@ -65,7 +54,7 @@ export async function handlerRemoveCalendar(req: Request, res: Response) {
 export async function handlerUpdateCalendar(req: Request, res: Response) {
   let calendar: Calendar;
   try {
-    calendar = Calendar.parse(req.body);
+    calendar = CalendarSchema.parse(req.body);
   } catch (err) {
     throw new BadRequestError("Request missing valid calendar data...");
   }
@@ -99,10 +88,10 @@ export async function handlerGetCalendars(req: Request, res: Response) {
   const result: Calendar[] = [];
 
   for (const calendar of calendars) {
-    const members: string[] = [];
+    const members: User[] = [];
     const users = await getCalendarMembers(calendar.calendarID);
     for (const user of users) {
-      members.push(user.user.id);
+      members.push({ id: user.user.id, name: user.user.name, email: user.user.email });
     }
     result.push({ ...calendar.calendars, members: members, invite: "wip" })
   }

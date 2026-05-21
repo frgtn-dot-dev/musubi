@@ -167,6 +167,14 @@ export const events = pgTable("events", {
   color: text("color").notNull(),
   start: timestamp("start_at").notNull(),
   end: timestamp("end_at").notNull(),
+  isAllDay: boolean("is_all_day").notNull().default(false),
+  description: text("description"),
+  location: text("location"),
+  isCanceled: boolean("is_canceled").notNull().default(false),
+  organizer: text("organizer").notNull(),
+  recurrence: text("recurrence"),
+  // reminders:
+  url: text("url"),
 });
 
 export type NewEvent = typeof events.$inferInsert;
@@ -280,3 +288,23 @@ export const eventUsersRelations = relations(eventUsers, ({ one }) => ({
   events: one(events, { fields: [eventUsers.eventID], references: [events.id] }),
 }));
 
+
+// export const eventAttendees = pgTable("event_attendees", {
+//   id: uuid("id").primaryKey().defaultRandom(),
+//   createdAt: timestamp("created_at").notNull().defaultNow(),
+//   updatedAt: timestamp("updated_at")
+//     .notNull()
+//     .defaultNow()
+//     .$onUpdate(() => new Date()),
+//   eventID: uuid("event_id")
+//     .references(() => events.id, {
+//       onDelete: "cascade",
+//     })
+//     .notNull(),
+//   userID: text("user_id")
+//     .references(() => user.id, {
+//       onDelete: "cascade",
+//     })
+//     .notNull(),
+//   //TODO: Complete Table
+// });

@@ -15,6 +15,13 @@
       "when": 1777917660911,
       "tag": "0001_funny_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779358311358,
+      "tag": "0002_flaky_natasha_romanoff",
+      "breakpoints": true
     }
   ]
 }

@@ -1,32 +1,18 @@
 import { Request, Response } from "express";
 import { NewEvent, createEvent, getCalendarMembers, getUsersEvents, removeEvent, updateEvent } from '@musubi/db';
-import { BadRequestError, NotFoundError } from "@musubi/types";
-import * as z from "zod";
+import { BadRequestError, Event, EventSchema, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
-
-const Event = z.object({
-  id: z.string(),
-  title: z.string(),
-  color: z.string(),
-  start: z.coerce.date(),
-  end: z.coerce.date(),
-  calendars: z.array(z.string()),
-});
-
-export type Event = z.infer<typeof Event>;
 
 export async function handlerCreateEvent(req: Request, res: Response) {
   let event: Event;
   try {
-    event = Event.parse(req.body);
+    event = EventSchema.parse(req.body);
   } catch (err) {
     throw new BadRequestError("Request is missing valid event data...");
   }
   const newEvent: NewEvent = {
-    title: event.title,
-    color: event.color,
-    start: event.start,
-    end: event.end,
+    ...event,
+    id: undefined,
     creatorID: req.user!.id,
   }
   const createdEvent = await createEvent(newEvent, event.calendars);
@@ -53,12 +39,15 @@ export async function handlerCreateEvent(req: Request, res: Response) {
 export async function handlerUpdateEvent(req: Request, res: Response) {
   let event: Event;
   try {
-    event = Event.parse(req.body);
+    event = EventSchema.parse(req.body);
   } catch (err) {
     throw new BadRequestError("Request missing valid event data...");
   }
 
-  const updatedEvent = await updateEvent({ ...event, creatorID: req.user!.id });
+  const updatedEvent = await updateEvent({
+    ...event,
+    creatorID: req.user!.id,
+  });
 
   if (updatedEvent) {
 
@@ -84,12 +73,8 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
 }
 
 export async function handlerRemoveEvent(req: Request, res: Response) {
-  let event: Event;
-  try {
-    event = Event.parse(req.body);
-  } catch (err) {
-    throw new BadRequestError("Request missing valid event data...");
-  }
+  const event = EventSchema.parse(req.body);
+  if (!event.id) throw new BadRequestError("Event id is required...");
 
   const removedEvent = await removeEvent(event.id);
 
@@ -116,33 +101,17 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   throw new NotFoundError("Event not found...");
 }
 
-type TempEvent = {
-  title: string,
-  id: string,
-  color: string,
-  start: Date,
-  end: Date,
-  calendars: string[],
-}
-
 export async function handlerGetEvents(req: Request, res: Response) {
   const result = await getUsersEvents(req.user!.id!);
-  const seen = new Map<string, TempEvent>();
+  const seen = new Map<string, Event>();
   for (const calendarMember of result) {
     for (const calendarEvent of calendarMember.calendars.calendarEvents) {
-      const event = calendarEvent.events
-      if (!seen.has(event.id)) {
-        const newEvent = {
-          title: event.title,
-          id: event.id,
-          color: event.color,
-          start: event.start,
-          end: event.end,
-          calendars: [calendarEvent.calendarID],
-        }
-        seen.set(event.id, newEvent);
+      const dbEvent = calendarEvent.events
+      if (!seen.has(dbEvent.id)) {
+        const newEvent = { ...dbEvent, calendars: [calendarEvent.calendarID] };
+        seen.set(dbEvent.id, newEvent);
       } else {
-        const updateEvent = seen.get(event.id);
+        const updateEvent = seen.get(dbEvent.id);
         updateEvent?.calendars.push(calendarEvent.calendarID);
       }
     }

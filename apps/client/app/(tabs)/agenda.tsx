@@ -2,7 +2,7 @@ import { AddEventModal } from "@/components/calendar/AddEventModal";
 import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
 import { colors, fonts, styles } from "@/constants/theme";
-import { Event } from "@/constants/types";
+import { Event } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";

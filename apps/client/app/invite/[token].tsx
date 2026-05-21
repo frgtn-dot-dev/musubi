@@ -1,5 +1,5 @@
 import { colors, fonts, styles } from "@/constants/theme";
-import { Calendar } from "@/constants/types";
+import { CalendarWithEvents } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -20,7 +20,7 @@ export default function Invite() {
   const { token } = useLocalSearchParams();
   const router = useRouter();
 
-  const [calendarData, setCalendarData] = useState<Calendar | null>(null);
+  const [calendarData, setCalendarData] = useState<CalendarWithEvents | null>(null);
 
   useEffect(() => {
     const fetchCalendar = async () => {

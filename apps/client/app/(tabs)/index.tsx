@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Calendar, Mode } from "react-native-big-calendar";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
-import { Event } from "@/constants/types";
+import { Event } from "@musubi/types";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";

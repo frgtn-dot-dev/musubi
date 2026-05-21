@@ -1,7 +1,7 @@
 import { SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
-import { Settings } from "@/constants/types";
+import { CalendarView, Settings } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
@@ -111,7 +111,7 @@ export default function SettingsTab() {
           value={defaultCalendarView}
           options={["month", "week", "day"]}
           onChange={v => {
-            setDefaultCalendarView(v);
+            setDefaultCalendarView(v as CalendarView);
             setSettingsChanged(true);
           }}
         />
@@ -120,7 +120,7 @@ export default function SettingsTab() {
           value={weekStartsOn}
           options={["sunday", "monday"]}
           onChange={v => {
-            setWeekStartsOn(v);
+            setWeekStartsOn(v as "monday" | "sunday");
             setSettingsChanged(true);
           }}
         />

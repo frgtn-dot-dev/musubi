@@ -1,3 +1,4 @@
+import { Calendar, Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -5,7 +6,6 @@ import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { Calendar, Event } from "@/constants/types";
 import { appColors } from "@/constants/colors";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useServer } from "@/contexts/ServerContext";
@@ -34,6 +34,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   );
   const [newColor, setNewColor] = useState(appColors[0].color);
   const [isLoading, setIsLoading] = useState(false);
+  const [eventHint, setEventHint] = useState(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)])
 
   const [nameError, setNameError] = useState("");
   const [calendarsError, setCalendarsError] = useState("");
@@ -54,6 +55,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setEndError("");
     setSelectedCals(new Set(calendars.slice(0, 1).map(c => c.id)));
     setCalendarsError("");
+    setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
   }
 
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, closeSequence);
@@ -123,16 +125,24 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     return date;
   }
 
+
   const handleSave = async () => {
 
     const eventConstruct: Event = {
       id: event?.id ?? "create",
       creatorID: userID!,
+      organizer: userID!, //TODO: ADD Organizer selection option in client
       calendars: [...selectedCals],
       title: newTitle,
       color: newColor,
       start: newStart,
       end: newEnd,
+      isAllDay: false, //TODO: ADD All Day switcher to client
+      isCanceled: false, //TODO: Before cal sync we need a system for event status
+      description: "", //TODO: ADD description field to events
+      location: "", //TODO: ADD location field to events
+      recurrence: "", //TODO: Recurring events function needs to be added... (Fear that I'll have to fork the bigcalendar lib and change it to fit my needs...)
+      url: "", //TODO: ADD url link field to events
     }
 
     let passed: boolean = true;
@@ -207,7 +217,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                 <TextInput
                   value={newTitle}
                   onChangeText={setNewTitle}
-                  placeholder={EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]}
+                  placeholder={eventHint}
                   placeholderTextColor={colors.fg4}
                   multiline={true}
                   style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}

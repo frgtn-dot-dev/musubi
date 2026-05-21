@@ -1,4 +1,4 @@
-import { Calendar } from "@/constants/types";
+import { Calendar } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { create } from "zustand";
 

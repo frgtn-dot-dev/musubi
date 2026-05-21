@@ -1,4 +1,4 @@
-import { Calendar, Event, Invite, Settings } from "@/constants/types";
+import { Calendar, CalendarWithEvents, Event, Invite, Settings } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 
 
@@ -50,7 +50,7 @@ export function useApi() {
     },
 
     async getCalendarFromToken(token: string) {
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/calendars/tokens/${token}`, {
+      const { error, data } = await authClient.$fetch<CalendarWithEvents>(`${apiUrl}/api/calendars/tokens/${token}`, {
         method: "GET",
       });
 
@@ -71,13 +71,9 @@ export function useApi() {
 
 
       const newEvent: Event = {
-        title: data.title,
-        color: data.color,
-        id: data.id,
-        creatorID: data.creatorID,
+        ...data,
         start: new Date(data.start),
         end: new Date(data.end),
-        calendars: data.calendars,
       }
 
       return newEvent;
