@@ -12,7 +12,7 @@ import { handlerCreateCalendarInvite } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
 import { middlewareLogHandler } from "./middleware/log_handler";
 import { handlerGetSettings, handlerSaveSettings } from "./handlers/settings";
-import { handlerServerStatus } from "./handlers/server";
+import { handlerServer, handlerServerStatus } from "./handlers/server";
 
 const app = express()
 const port = config.api.port;
@@ -48,6 +48,7 @@ app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 // GET REQUESTS
 
+app.get("/api/server", handlerServer);
 app.get("/api/server/ok", handlerServerStatus);
 
 app.get("/api/calendars", requireAuth, (
