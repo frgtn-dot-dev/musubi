@@ -1,4 +1,4 @@
-import { Event } from "@/constants/types";
+import { Event } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { create } from "zustand";
 
@@ -26,6 +26,13 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       end: result.end,
       calendars: result.calendars,
       creatorID: result.creatorID,
+      organizer: result.creatorID, //TODO: Fix after adding organizer field
+      isAllDay: false, //TODO: Fix after adding all day functionality
+      isCanceled: false, //TODO: Fix after adding event status functionality
+      //description: "", //TODO: Fix after adding event description field
+      //location: "", //TODO: Fix after adding event location field
+      //recurrence: "", //TODO: Fix after adding event recurrence functionality
+      //url: "", //TODO: Fix after adding event url field
     }
     set((state) => ({
       events: [...state.events.filter(e => e.id !== newEvent.id), newEvent]

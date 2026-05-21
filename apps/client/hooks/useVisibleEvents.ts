@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Event } from "@/constants/types";
+import { Event } from "@musubi/types";
 
 export function useVisibleEvents(events: Event[], activeCals: Set<string>) {
   return useMemo(() => {

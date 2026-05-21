@@ -1,15 +1,14 @@
 
-import { Settings } from "@/constants/types";
-import { Mode } from "react-native-big-calendar";
+import { CalendarView, Settings } from "@musubi/types";
 import { create } from "zustand";
 
 
 type SettingsStore = {
   loadSettings: (settings: Settings) => void,
-  defaultCalendarView: Mode,
-  setDefaultCalendarView: (view: Mode) => void,
-  weekStartsOn: string,
-  setWeekStartsOn: (start: string) => void,
+  defaultCalendarView: CalendarView,
+  setDefaultCalendarView: (view: CalendarView) => void,
+  weekStartsOn: "monday" | "sunday",
+  setWeekStartsOn: (start: "monday" | "sunday") => void,
   accentColor: string,
   setAccentColor: (color: string) => void,
   showKanji: boolean,

@@ -5,7 +5,7 @@ import { Modal, Pressable, Text, View, ScrollView, Share } from "react-native"
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { Calendar, Invite } from "@/constants/types";
+import { Calendar, Invite } from "@musubi/types";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useState } from "react";
 import { useApi } from "@/services/api";

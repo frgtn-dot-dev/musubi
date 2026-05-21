@@ -1,6 +1,6 @@
 import { appColors } from "@/constants/colors";
 import { colors, fonts, styles } from "@/constants/theme";
-import { Calendar } from "@/constants/types";
+import { Calendar } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useEffect, useState } from "react";
@@ -25,6 +25,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
   const { authClient } = useServer();
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(appColors[0].color);
+  const [calendarHint, setCalendarHint] = useState(CALENDAR_HINTS[Math.floor(Math.random() * CALENDAR_HINTS.length)]);
 
   const [nameError, setNameError] = useState("");
 
@@ -82,6 +83,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
     setNewName("");
     setNameError("");
     setNewColor(appColors[0].color);
+    setCalendarHint(CALENDAR_HINTS[Math.floor(Math.random() * CALENDAR_HINTS.length)]);
   };
 
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, closeSequence);
@@ -112,7 +114,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                   <TextInput
                     value={newName}
                     onChangeText={setNewName}
-                    placeholder={CALENDAR_HINTS[Math.floor(Math.random() * CALENDAR_HINTS.length)]}
+                    placeholder={calendarHint}
                     placeholderTextColor={colors.fg4}
                     style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
                   />

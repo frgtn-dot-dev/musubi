@@ -1,7 +1,7 @@
 import CalendarDetail from "@/components/calendar/CalendarDetailModal";
 import CreateCalendarModal from "@/components/calendar/CreateCalendarModal";
 import { colors, fonts, styles } from "@/constants/theme";
-import { Calendar } from "@/constants/types";
+import { Calendar } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";

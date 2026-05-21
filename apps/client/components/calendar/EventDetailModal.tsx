@@ -1,4 +1,4 @@
-import { Event } from "@/constants/types";
+import { Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";

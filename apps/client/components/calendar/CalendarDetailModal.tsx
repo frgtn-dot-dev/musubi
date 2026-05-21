@@ -1,6 +1,6 @@
 import { MONTH_KANJI } from "@/constants/const";
 import { calendarTheme, colors, fonts, styles } from "@/constants/theme";
-import { Calendar, Event } from "@/constants/types";
+import { Calendar, Event } from "@musubi/types";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useCallback, useMemo, useState } from "react";
