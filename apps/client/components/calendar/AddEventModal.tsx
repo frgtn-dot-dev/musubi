@@ -1,7 +1,7 @@
 import { Calendar, Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useState } from "react";
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -25,8 +25,10 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const insets = useSafeAreaInsets();
   const { authClient } = useServer();
   const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
   const [newStart, setNewStart] = useState(startingDate ?? new Date());
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
+  const [allDayToggle, setAllDayToggle] = useState(false);
   // const [showStartPicker, setShowStartPicker] = useState(false);
   // const [showEndPicker, setShowEndPicker] = useState(false);
   const [selectedCals, setSelectedCals] = useState<Set<string>>(
@@ -135,11 +137,11 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       calendars: [...selectedCals],
       title: newTitle,
       color: newColor,
-      start: newStart,
-      end: newEnd,
-      isAllDay: false, //TODO: ADD All Day switcher to client
+      start: allDayToggle ? new Date(newStart.setHours(0, 0, 0, 0)) : newStart,
+      end: allDayToggle ? new Date(newEnd.setHours(0, 0, 0, 0)) : newEnd,
+      isAllDay: allDayToggle,
       isCanceled: false, //TODO: Before cal sync we need a system for event status
-      description: "", //TODO: ADD description field to events
+      description: newDescription,
       location: "", //TODO: ADD location field to events
       recurrence: "", //TODO: Recurring events function needs to be added... (Fear that I'll have to fork the bigcalendar lib and change it to fit my needs...)
       url: "", //TODO: ADD url link field to events
@@ -209,6 +211,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                 <View style={styles.modalTitleRow}>
                   <Text style={styles.modalTitle}>{event ? "Edit Event" : "New Event"}</Text>
                 </View>
+
               </View>
             </GestureDetector>
             <ScrollView>
@@ -281,6 +284,23 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
               </View>
 
               <View style={styles.fieldContainer}>
+                <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 8 }}>
+                  <Text style={[styles.fieldLabel, { fontFamily: fonts.sans, alignSelf: "center" }]}>All Day</Text>
+                  <Switch
+                    style={{ alignSelf: "center" }}
+                    thumbColor={allDayToggle ? colors.accent : colors.bg3}
+                    trackColor={{
+                      false: colors.line,
+                      true: colors.line3,
+                    }}
+                    onValueChange={(v) => { setAllDayToggle(v) }}
+                    value={allDayToggle}
+                  />
+                </View>
+                {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
+              </View>
+
+              <View style={styles.fieldContainer}>
                 <View style={{ flexDirection: "row", gap: 32 }}>
                   <Pressable onPress={() => showDatePicker("start")}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Start Date</Text>
@@ -288,12 +308,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                       {newStart.toLocaleString('en-UK', { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
-                  <Pressable onPress={() => showTimePicker("start")}>
-                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
-                    <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {newStart.toLocaleString('en-UK', { timeStyle: 'short' })}
-                    </Text>
-                  </Pressable>
+                  {!allDayToggle &&
+                    <Pressable onPress={() => showTimePicker("start")}>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
+                      <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                        {newStart.toLocaleString('en-UK', { timeStyle: 'short' })}
+                      </Text>
+                    </Pressable>
+                  }
                 </View>
                 {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
               </View>
@@ -312,12 +334,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                       {newEnd.toLocaleString('en-UK', { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
-                  <Pressable onPress={() => showTimePicker("end")}>
-                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
-                    <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {newEnd.toLocaleString('en-UK', { timeStyle: 'short' })}
-                    </Text>
-                  </Pressable>
+                  {!allDayToggle &&
+                    <Pressable onPress={() => showTimePicker("end")}>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
+                      <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                        {newEnd.toLocaleString('en-UK', { timeStyle: 'short' })}
+                      </Text>
+                    </Pressable>
+                  }
                 </View>
                 {endError ? <Text style={styles.errorText}>{endError}</Text> : null}
               </View>
@@ -328,6 +352,17 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
               {/*   /> */}
               {/* )} */}
 
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Note</Text>
+                <TextInput
+                  value={newDescription}
+                  onChangeText={setNewDescription}
+                  placeholder="..."
+                  placeholderTextColor={colors.fg4}
+                  multiline={true}
+                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                />
+              </View>
             </ScrollView>
             <View style={[styles.modalButtons, { paddingBottom: insets.bottom + 16 }]}>
               <Pressable style={styles.btnSecondary} onPress={handleClose}>

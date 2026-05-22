@@ -95,7 +95,7 @@ export default function MainTab() {
             mode={calMode}
             weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
             swipeEnabled={true}
-            showAllDayEventCell={false}
+            showAllDayEventCell={true}
             date={jumpDate}
             scrollOffsetMinutes={scrollOffset}
             onSwipeEnd={setAnchorDate}
