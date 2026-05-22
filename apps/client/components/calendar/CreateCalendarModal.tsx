@@ -35,7 +35,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
   useEffect(() => {
     if (visible) {
       setNewName(calendar?.name ?? "");
-      setNewColor(calendar?.color ?? "");
+      setNewColor(calendar?.color ?? appColors[0].color);
     }
   }, [calendar, visible]);
 

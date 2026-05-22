@@ -56,6 +56,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setNewEnd(new Date());
     setEndError("");
     setSelectedCals(new Set(calendars.slice(0, 1).map(c => c.id)));
+    setNewDescription("");
     setCalendarsError("");
     setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
   }
@@ -67,7 +68,9 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       setNewTitle(event?.title ?? "");
       setNewStart(event?.start ?? startingDate ?? new Date());
       setNewEnd(event?.end ?? startingDate ?? new Date());
+      setNewColor(event?.color ?? appColors[0].color)
       setSelectedCals(new Set(event?.calendars) ?? new Set<string>);
+      setNewDescription(event?.description ?? "");
     }
   }, [event, visible]);
 
