@@ -2,7 +2,7 @@ import { Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
-import { Modal, Pressable, Text, View, ScrollView } from "react-native"
+import { Modal, Pressable, Text, View, ScrollView, Linking, Platform } from "react-native"
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
@@ -15,13 +15,22 @@ type Props = {
   onClose: () => void,
   onDelete: (event: Event) => void,
   onEdit: (event: Event) => void,
-}
+};
+
+const openMaps = (location: string) => {
+  const query = encodeURIComponent(location);
+  const url = Platform.OS === 'ios'
+    ? `maps:?q=${query}`
+    : `geo:0,0?q=${query}`;
+  Linking.openURL(url);
+};
 
 export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit }: Props) {
   const { calendars } = useCalendarsStore();
 
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
+
 
   return (
     <Modal
@@ -63,25 +72,64 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
               <Text style={styles.modalTitle}>{event?.title}</Text>
             </View>
             <ScrollView>
-              <View style={{ paddingTop: 10, marginBottom: 10 }}>
+              <View style={styles.fieldContainer}>
                 <View style={styles.modalDetailRow}>
                   <Feather size={20} name="calendar" color={colors.fg4} />
-                  <Text style={{ color: colors.fg2 }}>{event?.start.toLocaleString("en-UK", { weekday: "long", month: "long", day: "numeric" })}</Text>
-                </View>
-                <View style={styles.modalDetailRow}>
-                  <Feather size={20} name="clock" color={colors.fg4} />
                   <Text style={{ color: colors.fg2 }}>
-                    {event?.start.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })} – {event?.end.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })}
+                    {event?.start.toLocaleString("en-UK", { weekday: "long", month: "long", day: "numeric" })}
+                    {new Date(new Date(event?.start!).setHours(0, 0, 0, 0)).getTime()
+                      === new Date(new Date(event?.end!).setHours(0, 0, 0, 0)).getTime() ? ""
+                      : " – " + event?.end.toLocaleString("en-UK", { weekday: "long", month: "long", day: "numeric" })
+                    }
                   </Text>
                 </View>
+                {!event?.isAllDay &&
+                  <View style={styles.modalDetailRow}>
+                    <Feather size={20} name="clock" color={colors.fg4} />
+                    <Text style={{ color: colors.fg2 }}>
+                      {event?.start.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })}
+                      {" – "}
+                      {event?.end.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })}
+                    </Text>
+                  </View>
+                }
+                {event?.location &&
+                  <View style={styles.modalDetailRow}>
+                    <Feather size={20} name="map-pin" color={colors.fg4} />
+                    <Pressable onPress={() => openMaps(event.location!)}>
+                      <Text style={{ color: colors.fg2, textDecorationLine: "underline" }}>{event?.location}</Text>
+                    </Pressable>
+                  </View>
+                }
+                {event?.url &&
+                  <View style={styles.modalDetailRow}>
+                    <Feather size={20} name="link" color={colors.fg4} />
+                    <Pressable onPress={() => { Linking.openURL(event?.url!) }}>
+                      <Text style={{ color: colors.fg2, textDecorationLine: "underline" }}>{event?.url}</Text>
+                    </Pressable>
+                  </View>
+                }
               </View>
+              {
+                event?.description &&
+                <View style={styles.fieldContainer}>
+                  <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Note</Text>
+                  <View style={{
+                    padding: 12,
+                    backgroundColor: colors.bg3,
+                    borderColor: colors.line,
+                    borderWidth: 1,
+                    borderRadius: 8
+                  }}>
+                    <Text style={{ fontFamily: fonts.serif, color: colors.fg2 }}>{event?.description}</Text>
+                  </View>
+                </View>
+              }
             </ScrollView>
             <View
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
-                borderTopWidth: 1,
-                borderColor: colors.line,
                 paddingBottom: insets.bottom,
               }}
             >

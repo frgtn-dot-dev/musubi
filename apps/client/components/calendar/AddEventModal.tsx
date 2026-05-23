@@ -1,7 +1,7 @@
 import { Calendar, Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useState } from "react";
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -10,6 +10,8 @@ import { appColors } from "@/constants/colors";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
+import { Feather } from "@expo/vector-icons";
+import { after } from "node:test";
 
 type Props = {
   visible: boolean;
@@ -21,18 +23,30 @@ type Props = {
   event?: Event;
 };
 
+const morningStart = new Date(new Date().setHours(6, 0, 0, 0,));
+const afternoonStart = new Date(new Date().setHours(12, 0, 0, 0,));
+const eveningStart = new Date(new Date().setHours(18, 0, 0, 0,));
+const midnight = new Date(new Date().setHours(24, 0, 0, 0,));
+
 export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, calendars, event }: Props) {
   const insets = useSafeAreaInsets();
   const { authClient } = useServer();
-  const [newTitle, setNewTitle] = useState('');
+
+  const [newTitle, setNewTitle] = useState("");
+  const [newColor, setNewColor] = useState(appColors[0].color);
+  const [newDescription, setNewDescription] = useState("");
   const [newStart, setNewStart] = useState(startingDate ?? new Date());
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
+  const [allDayToggle, setAllDayToggle] = useState(false);
+  const [newLocation, setNewLocation] = useState("");
+  const [newUrl, setNewUrl] = useState("");
+
   // const [showStartPicker, setShowStartPicker] = useState(false);
   // const [showEndPicker, setShowEndPicker] = useState(false);
+
   const [selectedCals, setSelectedCals] = useState<Set<string>>(
     () => new Set(calendars.slice(0, 1).map(c => c.id))
   );
-  const [newColor, setNewColor] = useState(appColors[0].color);
   const [isLoading, setIsLoading] = useState(false);
   const [eventHint, setEventHint] = useState(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)])
 
@@ -40,6 +54,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const [calendarsError, setCalendarsError] = useState("");
   const [startError, setStartError] = useState("");
   const [endError, setEndError] = useState("");
+  const [urlError, setUrlError] = useState("");
 
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
@@ -54,7 +69,11 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setNewEnd(new Date());
     setEndError("");
     setSelectedCals(new Set(calendars.slice(0, 1).map(c => c.id)));
+    setNewDescription("");
     setCalendarsError("");
+    setNewLocation("");
+    setNewUrl("");
+    setUrlError("");
     setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
   }
 
@@ -65,7 +84,11 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       setNewTitle(event?.title ?? "");
       setNewStart(event?.start ?? startingDate ?? new Date());
       setNewEnd(event?.end ?? startingDate ?? new Date());
+      setNewColor(event?.color ?? appColors[0].color)
       setSelectedCals(new Set(event?.calendars) ?? new Set<string>);
+      setNewDescription(event?.description ?? "");
+      setNewLocation(event?.location ?? "");
+      setNewUrl(event?.url ?? "");
     }
   }, [event, visible]);
 
@@ -135,14 +158,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       calendars: [...selectedCals],
       title: newTitle,
       color: newColor,
-      start: newStart,
-      end: newEnd,
-      isAllDay: false, //TODO: ADD All Day switcher to client
+      start: allDayToggle ? new Date(newStart.setHours(0, 0, 0, 0)) : newStart,
+      end: allDayToggle ? new Date(newEnd.setHours(0, 0, 0, 0)) : newEnd,
+      isAllDay: allDayToggle,
       isCanceled: false, //TODO: Before cal sync we need a system for event status
-      description: "", //TODO: ADD description field to events
-      location: "", //TODO: ADD location field to events
+      description: newDescription,
+      location: newLocation,
       recurrence: "", //TODO: Recurring events function needs to be added... (Fear that I'll have to fork the bigcalendar lib and change it to fit my needs...)
-      url: "", //TODO: ADD url link field to events
+      url: newUrl.toLowerCase(),//TODO: ADD url link field to events
     }
 
     let passed: boolean = true;
@@ -166,6 +189,19 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     } else {
       setStartError("");
       setEndError("");
+    }
+    if (newUrl) {
+      try {
+        const { protocol } = new URL(newUrl);
+        if (protocol !== "http:" && protocol !== "https:") {
+          setUrlError("Invalid URL protocol...");
+          passed = false;
+        }
+
+      } catch {
+        setUrlError("Invalid URL...");
+        passed = false;
+      }
     }
 
     if (!passed) {
@@ -209,6 +245,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                 <View style={styles.modalTitleRow}>
                   <Text style={styles.modalTitle}>{event ? "Edit Event" : "New Event"}</Text>
                 </View>
+
               </View>
             </GestureDetector>
             <ScrollView>
@@ -281,6 +318,67 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
               </View>
 
               <View style={styles.fieldContainer}>
+                <View style={{ flexDirection: "row", gap: 36, alignItems: "flex-start" }}>
+                  <View>
+                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>All Day</Text>
+                    <Switch
+                      thumbColor={allDayToggle ? colors.accent : colors.bg3}
+                      trackColor={{
+                        false: colors.line,
+                        true: colors.line3,
+                      }}
+                      onValueChange={(v) => { setAllDayToggle(v) }}
+                      value={allDayToggle}
+                    />
+                  </View>
+                  {!allDayToggle &&
+                    <View>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Quck Time</Text>
+                      <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
+                        <Pressable
+                          onPress={() => {
+                            setNewStart(morningStart);
+                            setNewEnd(afternoonStart);
+                          }}
+                          style={newStart === morningStart && newEnd === afternoonStart ? styles.pillActive : styles.pill}
+                        >
+                          <Feather name="sunrise" color={colors.fg2} />
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart === morningStart && newEnd === afternoonStart ? colors.fg : colors.fg3 }}>
+                            Mor
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setNewStart(afternoonStart);
+                            setNewEnd(eveningStart);
+                          }}
+                          style={newStart === afternoonStart && newEnd === eveningStart ? styles.pillActive : styles.pill}
+                        >
+                          <Feather name="sun" color={colors.fg2} />
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart === afternoonStart && newEnd === eveningStart ? colors.fg : colors.fg3 }}>
+                            Arvo
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setNewStart(eveningStart);
+                            setNewEnd(midnight);
+                          }}
+                          style={newStart === eveningStart && newEnd === midnight ? styles.pillActive : styles.pill}
+                        >
+                          <Feather name="moon" color={colors.fg2} />
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart === eveningStart && newEnd === midnight ? colors.fg : colors.fg3 }}>
+                            Eve
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  }
+                </View>
+                {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
+              </View>
+
+              <View style={styles.fieldContainer}>
                 <View style={{ flexDirection: "row", gap: 32 }}>
                   <Pressable onPress={() => showDatePicker("start")}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Start Date</Text>
@@ -288,12 +386,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                       {newStart.toLocaleString('en-UK', { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
-                  <Pressable onPress={() => showTimePicker("start")}>
-                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
-                    <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {newStart.toLocaleString('en-UK', { timeStyle: 'short' })}
-                    </Text>
-                  </Pressable>
+                  {!allDayToggle &&
+                    <Pressable onPress={() => showTimePicker("start")}>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
+                      <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                        {newStart.toLocaleString('en-UK', { timeStyle: 'short' })}
+                      </Text>
+                    </Pressable>
+                  }
                 </View>
                 {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
               </View>
@@ -312,12 +412,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                       {newEnd.toLocaleString('en-UK', { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
-                  <Pressable onPress={() => showTimePicker("end")}>
-                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
-                    <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {newEnd.toLocaleString('en-UK', { timeStyle: 'short' })}
-                    </Text>
-                  </Pressable>
+                  {!allDayToggle &&
+                    <Pressable onPress={() => showTimePicker("end")}>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
+                      <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                        {newEnd.toLocaleString('en-UK', { timeStyle: 'short' })}
+                      </Text>
+                    </Pressable>
+                  }
                 </View>
                 {endError ? <Text style={styles.errorText}>{endError}</Text> : null}
               </View>
@@ -328,6 +430,40 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
               {/*   /> */}
               {/* )} */}
 
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Note</Text>
+                <TextInput
+                  value={newDescription}
+                  onChangeText={setNewDescription}
+                  placeholder="..."
+                  placeholderTextColor={colors.fg4}
+                  multiline={true}
+                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                />
+              </View>
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Location</Text>
+                <TextInput
+                  value={newLocation}
+                  onChangeText={setNewLocation}
+                  placeholder="..."
+                  placeholderTextColor={colors.fg4}
+                  multiline={true}
+                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                />
+              </View>
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>URL</Text>
+                <TextInput
+                  value={newUrl}
+                  onChangeText={setNewUrl}
+                  placeholder="https://..."
+                  placeholderTextColor={colors.fg4}
+                  multiline={true}
+                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                />
+                {urlError ? <Text style={styles.errorText}>{urlError}</Text> : null}
+              </View>
             </ScrollView>
             <View style={[styles.modalButtons, { paddingBottom: insets.bottom + 16 }]}>
               <Pressable style={styles.btnSecondary} onPress={handleClose}>
