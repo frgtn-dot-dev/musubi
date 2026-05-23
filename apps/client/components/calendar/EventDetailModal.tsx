@@ -101,6 +101,14 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                     </Pressable>
                   </View>
                 }
+                {event?.url &&
+                  <View style={styles.modalDetailRow}>
+                    <Feather size={20} name="link" color={colors.fg4} />
+                    <Pressable onPress={() => { Linking.openURL(event?.url!) }}>
+                      <Text style={{ color: colors.fg2, textDecorationLine: "underline" }}>{event?.url}</Text>
+                    </Pressable>
+                  </View>
+                }
               </View>
               {
                 event?.description &&

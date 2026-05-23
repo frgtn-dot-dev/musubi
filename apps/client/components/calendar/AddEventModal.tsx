@@ -32,6 +32,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
   const [allDayToggle, setAllDayToggle] = useState(false);
   const [newLocation, setNewLocation] = useState("");
+  const [newUrl, setNewUrl] = useState("");
 
   // const [showStartPicker, setShowStartPicker] = useState(false);
   // const [showEndPicker, setShowEndPicker] = useState(false);
@@ -46,6 +47,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const [calendarsError, setCalendarsError] = useState("");
   const [startError, setStartError] = useState("");
   const [endError, setEndError] = useState("");
+  const [urlError, setUrlError] = useState("");
 
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
@@ -63,6 +65,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setNewDescription("");
     setCalendarsError("");
     setNewLocation("");
+    setNewUrl("");
+    setUrlError("");
     setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
   }
 
@@ -76,6 +80,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       setNewColor(event?.color ?? appColors[0].color)
       setSelectedCals(new Set(event?.calendars) ?? new Set<string>);
       setNewDescription(event?.description ?? "");
+      setNewLocation(event?.location ?? "");
+      setNewUrl(event?.url ?? "");
     }
   }, [event, visible]);
 
@@ -152,7 +158,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       description: newDescription,
       location: newLocation,
       recurrence: "", //TODO: Recurring events function needs to be added... (Fear that I'll have to fork the bigcalendar lib and change it to fit my needs...)
-      url: "", //TODO: ADD url link field to events
+      url: newUrl.toLowerCase(),//TODO: ADD url link field to events
     }
 
     let passed: boolean = true;
@@ -176,6 +182,19 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     } else {
       setStartError("");
       setEndError("");
+    }
+    if (newUrl) {
+      try {
+        const { protocol } = new URL(newUrl);
+        if (protocol !== "http:" && protocol !== "https:") {
+          setUrlError("Invalid URL protocol...");
+          passed = false;
+        }
+
+      } catch {
+        setUrlError("Invalid URL...");
+        passed = false;
+      }
     }
 
     if (!passed) {
@@ -381,6 +400,18 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   multiline={true}
                   style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
                 />
+              </View>
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>URL</Text>
+                <TextInput
+                  value={newUrl}
+                  onChangeText={setNewUrl}
+                  placeholder="https://..."
+                  placeholderTextColor={colors.fg4}
+                  multiline={true}
+                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                />
+                {urlError ? <Text style={styles.errorText}>{urlError}</Text> : null}
               </View>
             </ScrollView>
             <View style={[styles.modalButtons, { paddingBottom: insets.bottom + 16 }]}>
