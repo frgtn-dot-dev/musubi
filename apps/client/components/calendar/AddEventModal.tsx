@@ -10,6 +10,8 @@ import { appColors } from "@/constants/colors";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
+import { Feather } from "@expo/vector-icons";
+import { after } from "node:test";
 
 type Props = {
   visible: boolean;
@@ -20,6 +22,11 @@ type Props = {
   calendars: Calendar[];
   event?: Event;
 };
+
+const morningStart = new Date(new Date().setHours(6, 0, 0, 0,));
+const afternoonStart = new Date(new Date().setHours(12, 0, 0, 0,));
+const eveningStart = new Date(new Date().setHours(18, 0, 0, 0,));
+const midnight = new Date(new Date().setHours(24, 0, 0, 0,));
 
 export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, calendars, event }: Props) {
   const insets = useSafeAreaInsets();
@@ -311,18 +318,62 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
               </View>
 
               <View style={styles.fieldContainer}>
-                <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 8 }}>
-                  <Text style={[styles.fieldLabel, { fontFamily: fonts.sans, alignSelf: "center" }]}>All Day</Text>
-                  <Switch
-                    style={{ alignSelf: "center" }}
-                    thumbColor={allDayToggle ? colors.accent : colors.bg3}
-                    trackColor={{
-                      false: colors.line,
-                      true: colors.line3,
-                    }}
-                    onValueChange={(v) => { setAllDayToggle(v) }}
-                    value={allDayToggle}
-                  />
+                <View style={{ flexDirection: "row", gap: 36, alignItems: "flex-start" }}>
+                  <View>
+                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>All Day</Text>
+                    <Switch
+                      thumbColor={allDayToggle ? colors.accent : colors.bg3}
+                      trackColor={{
+                        false: colors.line,
+                        true: colors.line3,
+                      }}
+                      onValueChange={(v) => { setAllDayToggle(v) }}
+                      value={allDayToggle}
+                    />
+                  </View>
+                  {!allDayToggle &&
+                    <View>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Quck Time</Text>
+                      <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
+                        <Pressable
+                          onPress={() => {
+                            setNewStart(morningStart);
+                            setNewEnd(afternoonStart);
+                          }}
+                          style={newStart === morningStart && newEnd === afternoonStart ? styles.pillActive : styles.pill}
+                        >
+                          <Feather name="sunrise" color={colors.fg2} />
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart === morningStart && newEnd === afternoonStart ? colors.fg : colors.fg3 }}>
+                            Mor
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setNewStart(afternoonStart);
+                            setNewEnd(eveningStart);
+                          }}
+                          style={newStart === afternoonStart && newEnd === eveningStart ? styles.pillActive : styles.pill}
+                        >
+                          <Feather name="sun" color={colors.fg2} />
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart === afternoonStart && newEnd === eveningStart ? colors.fg : colors.fg3 }}>
+                            Arvo
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setNewStart(eveningStart);
+                            setNewEnd(midnight);
+                          }}
+                          style={newStart === eveningStart && newEnd === midnight ? styles.pillActive : styles.pill}
+                        >
+                          <Feather name="moon" color={colors.fg2} />
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart === eveningStart && newEnd === midnight ? colors.fg : colors.fg3 }}>
+                            Eve
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  }
                 </View>
                 {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
               </View>
