@@ -2,7 +2,7 @@ import { Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
-import { Modal, Pressable, Text, View, ScrollView } from "react-native"
+import { Modal, Pressable, Text, View, ScrollView, Linking, Platform } from "react-native"
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
@@ -15,7 +15,15 @@ type Props = {
   onClose: () => void,
   onDelete: (event: Event) => void,
   onEdit: (event: Event) => void,
-}
+};
+
+const openMaps = (location: string) => {
+  const query = encodeURIComponent(location);
+  const url = Platform.OS === 'ios'
+    ? `maps:?q=${query}`
+    : `geo:0,0?q=${query}`;
+  Linking.openURL(url);
+};
 
 export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit }: Props) {
   const { calendars } = useCalendarsStore();
@@ -83,6 +91,14 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                       {" – "}
                       {event?.end.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })}
                     </Text>
+                  </View>
+                }
+                {event?.location &&
+                  <View style={styles.modalDetailRow}>
+                    <Feather size={20} name="map-pin" color={colors.fg4} />
+                    <Pressable onPress={() => openMaps(event.location!)}>
+                      <Text style={{ color: colors.fg2, textDecorationLine: "underline" }}>{event?.location}</Text>
+                    </Pressable>
                   </View>
                 }
               </View>

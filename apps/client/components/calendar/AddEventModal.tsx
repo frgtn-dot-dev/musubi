@@ -24,17 +24,21 @@ type Props = {
 export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, calendars, event }: Props) {
   const insets = useSafeAreaInsets();
   const { authClient } = useServer();
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
+
+  const [newTitle, setNewTitle] = useState("");
+  const [newColor, setNewColor] = useState(appColors[0].color);
+  const [newDescription, setNewDescription] = useState("");
   const [newStart, setNewStart] = useState(startingDate ?? new Date());
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
   const [allDayToggle, setAllDayToggle] = useState(false);
+  const [newLocation, setNewLocation] = useState("");
+
   // const [showStartPicker, setShowStartPicker] = useState(false);
   // const [showEndPicker, setShowEndPicker] = useState(false);
+
   const [selectedCals, setSelectedCals] = useState<Set<string>>(
     () => new Set(calendars.slice(0, 1).map(c => c.id))
   );
-  const [newColor, setNewColor] = useState(appColors[0].color);
   const [isLoading, setIsLoading] = useState(false);
   const [eventHint, setEventHint] = useState(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)])
 
@@ -58,6 +62,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setSelectedCals(new Set(calendars.slice(0, 1).map(c => c.id)));
     setNewDescription("");
     setCalendarsError("");
+    setNewLocation("");
     setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
   }
 
@@ -145,7 +150,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       isAllDay: allDayToggle,
       isCanceled: false, //TODO: Before cal sync we need a system for event status
       description: newDescription,
-      location: "", //TODO: ADD location field to events
+      location: newLocation,
       recurrence: "", //TODO: Recurring events function needs to be added... (Fear that I'll have to fork the bigcalendar lib and change it to fit my needs...)
       url: "", //TODO: ADD url link field to events
     }
@@ -360,6 +365,17 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                 <TextInput
                   value={newDescription}
                   onChangeText={setNewDescription}
+                  placeholder="..."
+                  placeholderTextColor={colors.fg4}
+                  multiline={true}
+                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                />
+              </View>
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Location</Text>
+                <TextInput
+                  value={newLocation}
+                  onChangeText={setNewLocation}
                   placeholder="..."
                   placeholderTextColor={colors.fg4}
                   multiline={true}
