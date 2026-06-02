@@ -1,18 +1,18 @@
 ---
 title: Running Locally
-description: How to run the Musubi client and server on your machine.
+description: How to run the Musubi client and API server on your own machine for development.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 ## Prerequisites
 
-- Node.js 20+
-- pnpm 10+
-- Postgres 15+
-- [Expo Go](https://expo.dev/go) on your phone, or an Android/iOS simulator
+- **Node.js 20+**
+- **pnpm 11+** — install with `npm i -g pnpm`
+- **PostgreSQL 15+** — running and accessible
+- **[Expo Go](https://expo.dev/go)** on your phone, or an Android/iOS simulator
 
-## Install dependencies
+## 1. Install dependencies
 
 From the monorepo root:
 
@@ -20,23 +20,39 @@ From the monorepo root:
 pnpm install
 ```
 
-## Environment variables
+## 2. Set up environment variables
 
-Musubi uses a single `.env` file at the monorepo root, shared across all apps and packages. Copy the example:
+Copy the example file:
 
 ```sh
 cp .env.example .env
 ```
 
-At minimum, set `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `API_URL`. See `.env.example` for the full list of keys.
+Then edit `.env`. The required variables are:
 
-## Run database migrations
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string, e.g. `postgresql://user:pass@localhost:5432/musubi` |
+| `BETTER_AUTH_SECRET` | Any long random string — used to sign sessions |
+| `BETTER_AUTH_URL` | The **origin** of the API server, e.g. `http://localhost:3000`. **No trailing slash, no `/api` suffix.** |
+| `API_SERVER_PORT` | Port the API listens on. Defaults to `3000` |
+| `ENVIRONMENT` | Set to `dev` during development — enables CORS for localhost |
+
+SMTP variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL`) are only required if you want password reset emails to actually send. The app works without them in development.
+
+<Aside type="caution">
+`BETTER_AUTH_URL` must be the origin only — no `/api` suffix. Both the client and Better Auth append their own paths to it. If you set it to `http://localhost:3000/api`, requests will land at `/api/api/...` and fail.
+</Aside>
+
+## 3. Run database migrations
 
 ```sh
 pnpm db:migrate
 ```
 
-## Start everything
+This applies all pending Drizzle migrations to your PostgreSQL database.
+
+## 4. Start everything
 
 From the monorepo root:
 
@@ -44,22 +60,18 @@ From the monorepo root:
 pnpm dev
 ```
 
-This runs the API, the Expo client, and the docs site in parallel using Turborepo's interactive TUI — each app's output gets its own pane. Pass `--ui=stream` if you'd rather have plain streamed output.
+Turborepo runs the API, the Expo client, and the docs site in parallel with an interactive TUI — each gets its own pane. Use `--ui=stream` for plain output.
 
-To start a single app instead, `cd` into its directory and run `pnpm dev` there:
+To run a single piece in isolation:
 
 ```sh
-cd apps/api && pnpm dev        # API only
+cd apps/api && pnpm dev        # API only  → http://localhost:3000
 cd apps/client && pnpm dev     # Expo client only
-cd packages/docs && pnpm dev   # Docs only
+cd packages/docs && pnpm dev   # Docs site only → http://localhost:4321/docs
 ```
 
-The API runs on `http://localhost:3000` by default (configurable via `API_SERVER_PORT`). The Expo dev server prints a QR code — scan it with Expo Go, or press `i` / `a` for an iOS / Android simulator.
+The Expo dev server will print a QR code. Scan it with Expo Go on your phone, or press `i` for an iOS simulator or `a` for Android.
 
 <Aside type="tip">
-  When testing the client on a real device (not a simulator), set `API_URL` in the root `.env` to your machine's LAN IP — e.g. `http://192.168.1.42:3000`, not `localhost`. A simulator can use `localhost` directly.
-</Aside>
-
-<Aside type="note">
-  Musubi is an early MVP. Some flows may be incomplete or require manual steps.
+If you're testing on a **real phone** (not a simulator), `localhost` won't work — your phone and computer are different machines. Set `BETTER_AUTH_URL` and the app's server URL to your machine's local network IP, e.g. `http://192.168.1.42:3000`. You can find it with `ip addr` (Linux) or `ifconfig` (macOS).
 </Aside>

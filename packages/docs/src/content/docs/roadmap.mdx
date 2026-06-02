@@ -1,0 +1,58 @@
+---
+title: What's Coming
+description: Planned features and integrations for Musubi.
+---
+
+Musubi is in active development. This page tracks what's planned. Nothing here is promised by a specific date.
+
+---
+
+## Onboarding (steps 2 & 3)
+
+The sign-up flow is currently step 1 of 3: create an account with name, email, and passphrase.
+
+**Step 2** — Create your first personal calendar. Giving new users a starting calendar makes the app immediately useful without having to find the "create calendar" flow.
+
+**Step 3** — Connect existing calendars. After the external integrations are ready (see below), this step will let you link Outlook, Google, or CalDAV during setup so your schedule is populated from day one.
+
+---
+
+## External calendar integrations
+
+The biggest planned expansion: read and display events from external calendar sources alongside Musubi's own shared calendars.
+
+| Integration | Standard |
+|---|---|
+| Google Calendar | Google Calendar API |
+| Microsoft Outlook | Microsoft Graph API |
+| Apple iCloud | CalDAV |
+| Any CalDAV server | CalDAV (RFC 4791) |
+
+These will be read-only imports initially — your existing events show up in the app, but you manage them in their original calendars. Two-way sync may follow.
+
+---
+
+## User roles and permissions
+
+Right now, all calendar members have equal write access. The plan is to add roles:
+
+- **Owner** — can delete the calendar, manage members, assign roles
+- **Editor** — can create and edit events (current default for all members)
+- **Viewer** — read-only access, can see events but not modify them
+
+---
+
+## OAuth login
+
+Currently Musubi uses email/password only. OAuth sign-in (Google, Microsoft, Apple) is a likely future addition, though not on an immediate timeline.
+
+---
+
+## Things that are done
+
+- Shared calendars with invite links
+- Real-time event sync via SSE
+- Recurring events (RRULE — daily, weekly, custom schedules)
+- Event details: location, notes, URL, all-day toggle
+- Calendar filter bar with solo mode (long-press to isolate)
+- Self-hosting via Docker Compose

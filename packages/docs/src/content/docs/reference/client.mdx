@@ -1,101 +1,141 @@
 ---
 title: Client
-description: Reference for the Musubi React Native / Expo client app.
+description: Reference for the Musubi React Native / Expo mobile app.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The client is a React Native app built with [Expo](https://expo.dev) and [Expo Router](https://docs.expo.dev/router/introduction/).
+The client is a React Native app built with Expo SDK 56. It runs on iOS and Android.
 
 ## Tech stack
 
 | Concern | Library |
 |---|---|
-| Framework | Expo / React Native |
-| Routing | Expo Router (file-based) |
+| Framework | Expo SDK 56 / React Native 0.85 |
+| Routing | Expo Router — file-based, tab + stack navigation |
 | State management | Zustand |
-| Calendar UI | `react-native-big-calendar` |
-| Auth | Better Auth client |
-| Fonts | Inter Tight, Noto Serif, Shippori Mincho |
+| Calendar component | `@musubi/calendar` — forked in-repo, extended with recurrence |
+| Animations | Reanimated v4 + Gesture Handler |
+| Auth client | Better Auth |
+| Fonts | Inter Tight, Noto Serif, Shippori Mincho B1 |
 
 ## File structure
 
 ```
 apps/client/
 ├── app/
-│   ├── _layout.tsx          # Root layout — auth guard + font loading
+│   ├── _layout.tsx           # Root layout — font loading, auth guard, splash
 │   ├── (auth)/
-│   │   ├── welcome.tsx      # Onboarding / landing screen
-│   │   ├── sign-in.tsx      # Email + password sign-in
-│   │   └── sign-up.tsx      # Registration
+│   │   ├── welcome.tsx       # Landing screen — server URL + sign in / sign up
+│   │   ├── sign-in.tsx       # Email + password sign-in
+│   │   └── sign-up.tsx       # Registration (step 1 of 3)
 │   ├── (tabs)/
-│   │   ├── index.tsx        # Calendar view (main screen)
-│   │   ├── agenda.tsx       # Agenda / list view
-│   │   ├── calendars.tsx    # Manage calendars
-│   │   └── settings.tsx     # User settings
+│   │   ├── _layout.tsx       # Tab navigator + initial data fetch
+│   │   ├── index.tsx         # Main calendar view
+│   │   ├── agenda.tsx        # Upcoming events list
+│   │   ├── calendars.tsx     # Manage calendars
+│   │   └── settings.tsx      # User settings
 │   └── invite/
-│       └── [token].tsx      # Deep-link invite acceptance
+│       └── [token].tsx       # Deep-link invite acceptance
 ├── components/
-│   └── calendar/            # Calendar-specific components
+│   ├── calendar/             # Calendar-specific UI (modals, filter bar, skeletons…)
+│   └── ...                   # General components
 ├── constants/
-│   ├── colors.ts            # Named app colors (bone, shu, moss…)
-│   ├── theme.ts             # StyleSheet + calendarTheme config
-│   ├── const.ts             # Locale constants (Japanese month/day names)
-│   └── types.ts             # Shared TypeScript types
-├── hooks/                   # Custom React hooks
-├── services/                # API service functions
-└── store/                   # Zustand stores
+│   ├── colors.ts             # Named colour swatches (appColors array)
+│   ├── theme.ts              # StyleSheet, fonts, calendarTheme
+│   └── const.ts              # Japanese month/day name arrays
+├── hooks/
+│   ├── useVisibleEvents.ts   # Filters + sorts events by active calendars
+│   ├── useEventsStream.ts    # SSE connection for real-time event updates
+│   └── useModalAnimation.ts  # Shared bottom-sheet animation hook
+├── services/
+│   └── api.ts                # Typed HTTP client for all API endpoints
+├── store/
+│   ├── useEventsStore.ts     # Events state + CRUD
+│   ├── useCalendarsStore.ts  # Calendars state, active filter, solo mode
+│   └── useSettingsStore.ts   # User settings (view mode, week start, kanji)
+└── contexts/
+    └── ServerContext.tsx      # Server URL + auth client instance
 ```
 
 ## Screens
 
-### Calendar (`app/(tabs)/index.tsx`)
+### Welcome (`app/(auth)/welcome.tsx`)
+The first screen new users see. Lets them set a custom server URL (for self-hosters), then navigate to sign-in or sign-up.
 
-The main screen. Shows a weekly or daily calendar view powered by `react-native-big-calendar`. Tap an event to see details; use the FAB to create a new event.
+### Sign Up (`app/(auth)/sign-up.tsx`)
+Three-step account creation. **Step 1** (currently implemented): name, email, and passphrase. Step 2 and 3 are planned — see [What's Coming](/docs/roadmap/).
+
+### Sign In (`app/(auth)/sign-in.tsx`)
+Email and passphrase. Both fields are wired for platform autofill (`textContentType` on iOS, `autoComplete` on Android) so password managers including Bitwarden work out of the box.
+
+### Home — Calendar (`app/(tabs)/index.tsx`)
+The main screen. Displays a calendar in day, week, or month view. Recurring events are expanded from their RRULE strings for the visible date range. Tap an event to see details; use the FAB to create a new one. Long-press a calendar filter pill to isolate (solo) that calendar.
 
 ### Agenda (`app/(tabs)/agenda.tsx`)
-
-A scrollable list of upcoming events across all joined calendars, grouped by date.
+A scrollable list of upcoming events across all active calendars, grouped by date. Only shows events from today onwards.
 
 ### Calendars (`app/(tabs)/calendars.tsx`)
-
-Manage your calendars — create new ones, view members, send invites, or leave a calendar.
+Create calendars, view members, send invite links, and manage calendar settings.
 
 ### Settings (`app/(tabs)/settings.tsx`)
-
-Account settings, display name, sign out.
+Set the default calendar view, week start day, and toggle the kanji header decoration.
 
 ### Invite (`app/invite/[token].tsx`)
+Handles deep links (`https://musubi.frgtn.dev/invite/<token>`). Shows the calendar you're being invited to, with member count and upcoming events. If you're already a member of that calendar, the screen skips straight to the app.
 
-Handles deep links for calendar invitations. Accepts or rejects an invite by token.
+## Calendar component (`@musubi/calendar`)
 
-## Color palette
+Musubi uses a forked version of `react-native-big-calendar`, maintained in `packages/calendar/`. The fork adds:
 
-The app uses a fixed dark palette defined in `constants/colors.ts` and `constants/theme.ts`.
+- **Recurrence expansion** — `expandRecurringEvents()` turns RRULE strings into individual occurrences for the current view window
+- **Enriched events optimisation** — pre-computes a date-keyed lookup map so per-cell rendering does O(1) lookups instead of scanning the full event array
 
-| Token | Hex | Usage |
-|---|---|---|
-| `bone` | `#E8E4D9` | Primary foreground text |
-| `shu` | `#C8553D` | Accent — buttons, highlights, errors |
-| `moss` | `#A8B5A0` | Secondary accents |
-| `ochre` | `#D4A574` | Inline code, warm highlights |
-| `indigo` | `#7A8BA3` | Info/note accents |
-| `bg` | `#0c0c0e` | Main background |
-| `bg1` | `#131316` | Card / sidebar background |
-| `bg2` | `#1a1a1e` | Elevated surfaces |
-| `bg3` | `#222226` | Pill / chip backgrounds |
+Use `Calendar` from `@musubi/calendar`, not the npm package directly:
+
+```tsx
+import { Calendar } from '@musubi/calendar';
+```
 
 ## State management
 
-Zustand stores live in `store/`. Each slice of state (auth, calendars, events) is a separate store file. Access them with their respective hooks — never mutate state directly.
+Three Zustand stores cover all app state:
+
+**`useEventsStore`** — the list of events fetched from the server, and the CRUD actions that call the API and update the store.
+
+**`useCalendarsStore`** — the list of calendars, which ones are currently shown (`activeCals`), and solo mode (long-pressing a filter pill to isolate one calendar).
+
+**`useSettingsStore`** — user preferences persisted via the API.
 
 <Aside type="tip">
-  Keep the Zustand stores as the single source of truth. Components should read from stores and call service functions which update the store after a successful API response.
+Components should read from stores and call store actions. Don't manage server state in local component state — it won't sync across tabs or survive navigation.
 </Aside>
 
-## Adding a new screen
+## Real-time updates
 
-1. Create a file in the appropriate `app/` folder (e.g. `app/(tabs)/my-screen.tsx`).
-2. Export a default React component.
-3. If it's a tab, add it to `app/(tabs)/_layout.tsx`.
-4. Use `colors` from `constants/theme.ts` and `styles` from `constants/theme.ts` — don't hardcode colors.
+`useEventsStream` opens a persistent SSE connection to `GET /api/stream`. The server pushes event payloads whenever something changes in a calendar you're a member of. The hook calls the appropriate store actions to keep local state current.
+
+## Colour palette
+
+The app uses a fixed dark palette. Named tokens live in `constants/theme.ts`:
+
+| Token | Hex | Usage |
+|---|---|---|
+| `fg` | `#e8e4d9` | Primary text |
+| `fg2` | 72% of `fg` | Secondary text |
+| `fg3` | 48% of `fg` | Muted text, labels |
+| `fg4` | 28% of `fg` | Placeholders |
+| `accent` | `#c8553d` | Buttons, errors, highlights |
+| `bg` | `#0c0c0e` | Main background |
+| `bg1` | `#131316` | Tab bar, cards |
+| `bg2` | `#1a1a1e` | Elevated surfaces |
+| `bg3` | `#222226` | Pills, input backgrounds |
+
+Never hardcode hex values in components. Always use `colors` from `constants/theme.ts`.
+
+## Adding a screen
+
+1. Create a file in the appropriate `app/` directory
+2. Export a default React component as the screen
+3. If it's a new tab, add it to `app/(tabs)/_layout.tsx`
+4. Use `styles.screen` as the root container style — it handles background colour and flex

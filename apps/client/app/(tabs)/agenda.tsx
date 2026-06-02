@@ -89,9 +89,9 @@ export default function AgendaTab() {
           groups.map((g, i) => (
             <Animated.View
               key={g.date.toISOString()}
-              entering={FadeInUp.delay(i * 40).duration(300).springify()}
+              entering={FadeInUp.delay(i * 40).duration(300)}
               exiting={FadeOutDown.duration(180)}
-              layout={LinearTransition.springify().damping(16)}
+              layout={LinearTransition.springify().damping(58).stiffness(350)}
             >
               <View style={styles.timelineRow}>
                 <View style={{ flex: 1 }}>

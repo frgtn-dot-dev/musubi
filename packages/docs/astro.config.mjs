@@ -1,10 +1,8 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-
 import node from '@astrojs/node';
 
-// https://astro.build/config
 export default defineConfig({
   integrations: [
     starlight({
@@ -16,14 +14,22 @@ export default defineConfig({
           items: [
             { label: 'Introduction', slug: 'guides/introduction' },
             { label: 'Running Locally', slug: 'guides/running-locally' },
+            { label: 'Self-Hosting', slug: 'guides/self-hosting' },
+            { label: 'Contributing', slug: 'guides/contributing' },
           ],
         },
         {
-          label: 'App',
+          label: 'Reference',
           items: [
             { label: 'Client', slug: 'reference/client' },
-            { label: 'Server', slug: 'reference/server' },
+            { label: 'Server & API', slug: 'reference/server' },
             { label: 'Database Schema', slug: 'reference/schema' },
+          ],
+        },
+        {
+          label: 'Roadmap',
+          items: [
+            { label: "What's Coming", slug: 'roadmap' },
           ],
         },
       ],

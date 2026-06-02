@@ -2,6 +2,7 @@ import { colors, fonts, styles } from "@/constants/theme";
 import { CalendarWithEvents } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
+import { useServer } from "@/contexts/ServerContext";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, TouchableOpacity, View, Text, StyleSheet } from "react-native";
@@ -16,10 +17,12 @@ function Avatar({ label, size = 36 }: { label: string; size?: number }) {
 
 export default function Invite() {
   const api = useApi();
+  const { authClient } = useServer();
   const { loadCalendars } = useCalendarsStore();
   const { token } = useLocalSearchParams();
   const router = useRouter();
 
+  const { data: session } = authClient.useSession();
   const [calendarData, setCalendarData] = useState<CalendarWithEvents | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
 
@@ -30,6 +33,16 @@ export default function Invite() {
     };
     fetchCalendar();
   }, []);
+
+  // If the current user is already a member of this calendar, skip the invite
+  // screen entirely and drop them into the app.
+  useEffect(() => {
+    if (!calendarData || !session?.user.id) return;
+    const alreadyMember = calendarData.members.some(m => m.id === session.user.id);
+    if (alreadyMember) {
+      router.replace("/(tabs)");
+    }
+  }, [calendarData, session]);
 
   return (
     <View style={styles.screen}>

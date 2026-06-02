@@ -1,83 +1,155 @@
 ---
-title: Server
-description: Reference for the Musubi backend packages.
+title: Server & API
+description: Reference for the Musubi backend — Express.js REST API and shared packages.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The Musubi backend is split into shared packages inside `packages/` rather than a single server app. Auth, database schema, and config are each their own package, consumed by any server runtime you wire up.
+The backend is an **Express.js** application in `apps/api/`, backed by PostgreSQL via Drizzle ORM and Better Auth for session management. Shared logic (schema, auth config, environment parsing, types) lives in `packages/` and is consumed by the API server.
 
-## Package structure
+## Structure
 
 ```
+apps/api/
+└── src/
+    ├── index.ts          # Express app + route registration
+    ├── handlers/         # One file per domain (calendars, events, invites…)
+    └── middleware/       # Auth guard, error handler, request logger
+
 packages/
-├── auth/        # Better Auth server setup
-├── db/          # Drizzle ORM schema + queries
-├── config/      # Shared environment config
-└── types/       # Shared TypeScript types
+├── auth/                 # Better Auth server configuration
+├── db/                   # Drizzle ORM schema + query helpers
+├── config/               # Environment variable loading and validation
+└── types/                # Shared TypeScript types (used by client too)
 ```
 
-## `packages/auth`
+## API endpoints
 
-Configures [Better Auth](https://better-auth.com) for the server. Exports an `auth` instance that handles:
+All routes are prefixed with `/api`. Routes marked 🔒 require a valid bearer token (the `Authorization: Bearer <token>` header, set automatically by the client).
+
+### Auth
+
+Better Auth handles everything under `/api/auth/*` — sign-in, sign-up, session, password reset. These routes are managed by the `toNodeHandler(auth)` adapter; you don't write them manually.
+
+### Server
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/server` | — | Returns version and `minClientVersion` |
+| `GET` | `/api/server/ok` | — | Health check — returns `200 OK` |
+
+### Calendars
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/calendars` | 🔒 | Get all calendars the user is a member of |
+| `GET` | `/api/calendars/:id` | 🔒 | Get a single calendar by ID |
+| `GET` | `/api/calendars/tokens/:token` | 🔒 | Get calendar data from an invite token |
+| `POST` | `/api/calendars` | 🔒 | Create a new calendar |
+| `POST` | `/api/calendars/members/:calendarId` | 🔒 | Join a calendar (accept invite) |
+| `POST` | `/api/calendars/invites` | 🔒 | Create a shareable invite link |
+| `PUT` | `/api/calendars` | 🔒 | Update a calendar |
+| `DELETE` | `/api/calendars` | 🔒 | Delete a calendar |
+| `DELETE` | `/api/calendars/members/:calendarId` | 🔒 | Leave a calendar |
+
+### Events
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/events` | 🔒 | Get all events across the user's calendars |
+| `POST` | `/api/events` | 🔒 | Create an event |
+| `PUT` | `/api/events` | 🔒 | Update an event |
+| `DELETE` | `/api/events` | 🔒 | Delete an event |
+
+### Real-time stream
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/stream` | 🔒 | SSE stream — server pushes event updates |
+
+The client holds this connection open for the duration of the session. When another user in a shared calendar creates, updates, or deletes an event, the server broadcasts the change to all connected clients in that calendar.
+
+### Settings
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/users/settings` | 🔒 | Get the current user's settings |
+| `PUT` | `/api/users/settings` | 🔒 | Save settings |
+
+### Users
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `DELETE` | `/api/users` | 🔒 | Delete the current user's account |
+
+---
+
+## Shared packages
+
+### `packages/auth`
+
+Configures Better Auth and exports the `auth` instance used by the API. Handles:
 
 - Email / password sign-in and sign-up
-- Session management via bearer tokens (the `bearer` plugin)
-- Trusted origins for the Expo client (dev and prod)
-- Middleware helpers
+- Session management via bearer tokens
+- Password reset emails (requires SMTP config)
+- Trusted origins for the Expo client (both dev and production URLs)
 
 **Entry point:** `packages/auth/src/index.ts`
 
-## `packages/db`
+### `packages/db`
 
-Database access via [Drizzle ORM](https://orm.drizzle.team).
+Database access via Drizzle ORM. Exports the `db` client and typed query helpers for each domain.
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `src/schema.ts` | Table definitions (users, calendars, events, invites…) |
-| `src/queries/` | Typed query helpers per domain |
-| `src/index.ts` | Exports `db` client + all queries |
-| `drizzle/` | Migration files |
+| `src/schema.ts` | Table definitions |
+| `src/queries/calendars.ts` | Calendar CRUD + member management |
+| `src/queries/events.ts` | Event CRUD |
+| `src/queries/invites.ts` | Invite creation |
+| `src/queries/settings.ts` | User settings |
+| `src/queries/users.ts` | User lookup and deletion |
+| `drizzle/` | Migration SQL files |
 
-### Running migrations
+### `packages/config`
 
-```sh
-pnpm --filter db migrate
-```
+Loads and validates environment variables at startup. Exports a typed `config` object used by `auth`, `db`, and the API server.
 
-<Aside type="note">
-  Musubi uses a SQL database (see `packages/config` for the `DATABASE_URL` key). Make sure the database is running and the URL is set before running migrations.
-</Aside>
+### `packages/types`
 
-## `packages/config`
+TypeScript types shared between client and server. The canonical source of truth for the data model — `Calendar`, `Event`, `Invite`, `User`, `Settings`.
 
-Shared environment variable parsing. Validates required keys at startup and exports typed config objects for other packages.
-
-## `packages/types`
-
-Shared TypeScript types used across client and server. Importing from here instead of redeclaring types prevents drift between the two sides.
-
-## Core data model
-
-```
-User
- └── owns many Calendars
-      └── has many Events
-      └── has many Invites → other Users
-```
-
-A `Calendar` can have multiple **members** (users who joined via invite). Events are visible to all members of the calendar.
+---
 
 ## Environment variables
 
-| Key | Used by | Description |
+| Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | `db` | Postgres connection string |
-| `BETTER_AUTH_SECRET` | `auth` | Secret for signing sessions |
-| `BETTER_AUTH_URL` | `auth` | Public URL of the auth server |
-
-Copy `packages/config/.env.example` (or the root `.env.example`) to get started.
+| `DATABASE_URL` | ✓ | PostgreSQL connection string |
+| `BETTER_AUTH_SECRET` | ✓ | Secret for signing sessions. Keep this private and stable |
+| `BETTER_AUTH_URL` | ✓ | Origin of the API server — **no trailing slash, no `/api` suffix** |
+| `API_SERVER_PORT` | — | Port to listen on. Defaults to `3000` |
+| `ENVIRONMENT` | — | Set to `dev` to enable localhost CORS. Anything else is treated as production |
+| `SMTP_HOST` | — | SMTP server for transactional email |
+| `SMTP_PORT` | — | SMTP port (typically `587`) |
+| `SMTP_USER` | — | SMTP username |
+| `SMTP_PASS` | — | SMTP password |
+| `FROM_EMAIL` | — | Sender address for password reset emails |
 
 <Aside type="caution">
-  The server packages are early MVP — some query helpers and endpoints are still being built out. Check `packages/db/src/queries/` for what's currently implemented.
+`BETTER_AUTH_URL` must be the bare origin only — for example `https://musubi.yourdomain.com`, not `https://musubi.yourdomain.com/api`. Both Better Auth and the client append their own paths to this value. Setting it incorrectly leads to `404` errors on every auth request.
 </Aside>
+
+---
+
+## Running migrations
+
+```sh
+# Generate a new migration after editing the schema
+pnpm --filter @musubi/db generate
+
+# Apply pending migrations
+pnpm --filter @musubi/db migrate
+# or from the monorepo root:
+pnpm db:migrate
+```

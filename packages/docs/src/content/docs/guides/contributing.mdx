@@ -1,0 +1,53 @@
+---
+title: Contributing
+description: How to contribute to Musubi.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Musubi is open source under the MIT licence and welcomes contributions. Whether that's a bug fix, a new feature, better tests, or improved documentation — it's all welcome.
+
+## Before you start
+
+- Check the [GitHub issues](https://github.com/f-tuma/musubi/issues) to see if someone is already working on what you have in mind
+- For larger changes, open an issue first to discuss the approach before investing time in a PR
+- Keep changes focused — one thing per pull request makes reviewing easier
+
+## Development setup
+
+Follow the [Running Locally](/docs/guides/running-locally/) guide to get the full stack running on your machine.
+
+## Making changes
+
+The project uses **pnpm workspaces** and **Turborepo**. A few things to know:
+
+- The mobile client lives in `apps/client/` — it's an Expo app with Expo Router
+- The API server lives in `apps/api/` — Express.js with Better Auth and Drizzle
+- Shared types are in `packages/types/` — if you're adding or changing a data model, start here
+- The calendar component is a fork in `packages/calendar/` — changes to calendar rendering go here
+
+**Don't hardcode colours or fonts in components.** Use `colors` and `fonts` from `apps/client/constants/theme.ts`. The design system is intentional.
+
+## Submitting a pull request
+
+1. Fork the repo and create a branch from `main`
+2. Make your changes
+3. Test on both iOS and Android if the change touches the client
+4. Open a PR with a clear description of what changed and why
+
+<Aside type="tip">
+The PR description is where context lives — what problem does this solve, what alternatives did you consider, anything reviewers should watch out for. The code shows *what* changed; the description explains *why*.
+</Aside>
+
+## Code style
+
+The codebase uses TypeScript throughout. A few conventions:
+
+- React components use functional style with hooks
+- State lives in Zustand stores in `apps/client/store/` — components read from stores and call store actions, they don't manage server state locally
+- Animations use Reanimated v4 — avoid the legacy `Animated` API from React Native
+- No inline magic numbers for colours or spacing — use the theme constants
+
+## Questions
+
+Open a GitHub issue or discussion if you're unsure about something before spending time on it.
