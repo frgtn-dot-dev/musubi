@@ -6,7 +6,9 @@ import { create } from "zustand";
 type CalendarStore = {
   calendars: Calendar[],
   activeCals: Set<string>;
+  soloCalId: string | null;
   toggleCal: (id: string) => void;
+  soloCalendar: (id: string) => void;
   syncActiveCals: (calendars: Calendar[]) => void;
   addCalendar: (calendar: Calendar, api: ReturnType<typeof useApi>) => Promise<void>;
   loadCalendars: (calendars: Calendar[]) => void;
@@ -20,29 +22,49 @@ type CalendarStore = {
 export const useCalendarsStore = create<CalendarStore>((set, get) => ({
   calendars: [],
   activeCals: new Set(),
+  soloCalId: null,
+
   toggleCal: (id) => {
     const next = new Set(get().activeCals);
     next.has(id) ? next.delete(id) : next.add(id);
-    set(() => ({
-      activeCals: next,
-    }));
+    set({ activeCals: next, soloCalId: null });
   },
+
+  soloCalendar: (id) => {
+    const { activeCals, soloCalId, calendars } = get();
+
+    if (soloCalId === id) {
+      // Already soloed — revert to all calendars active
+      set({
+        activeCals: new Set(calendars.map(c => c.id)),
+        soloCalId: null,
+      });
+    } else {
+      // Solo this calendar (switch if another was soloed)
+      set({
+        activeCals: new Set([id]),
+        soloCalId: id,
+      });
+    }
+  },
+
   syncActiveCals: (calendars) => {
-    const now = new Set(get().activeCals);
+    const { activeCals, soloCalId } = get();
+    if (soloCalId !== null) return; // don't disturb solo mode
+    const now = new Set(activeCals);
     calendars.forEach(c => !now.has(c.id) && now.add(c.id));
-    set(() => ({
-      activeCals: now,
-    }))
+    set({ activeCals: now });
   },
+
   addCalendar: async (calendar, api) => {
     const result = await api.createCalendar(calendar);
     set((state) => ({
       calendars: [...state.calendars, result],
     }));
   },
-  loadCalendars: (calendars: Calendar[]) => set(() => ({
-    calendars: calendars,
-  })),
+
+  loadCalendars: (calendars: Calendar[]) => set({ calendars }),
+
   removeCalendar: async (calendar, api) => {
     const result = await api.removeCalendar(calendar);
     set((state) => {
@@ -51,9 +73,11 @@ export const useCalendarsStore = create<CalendarStore>((set, get) => ({
       return {
         calendars: [...state.calendars.filter(c => c.id !== result)],
         activeCals: next,
+        soloCalId: state.soloCalId === calendar.id ? null : state.soloCalId,
       }
     });
   },
+
   localRemoveCalendar: (calendar) => {
     set((state) => {
       const next = new Set(state.activeCals);
@@ -61,9 +85,11 @@ export const useCalendarsStore = create<CalendarStore>((set, get) => ({
       return {
         calendars: state.calendars.filter(c => c.id !== calendar.id),
         activeCals: next,
+        soloCalId: state.soloCalId === calendar.id ? null : state.soloCalId,
       }
     });
   },
+
   updateCalendar: async (calendar, api) => {
     const result = await api.updateCalendar(calendar);
     set((state) => ({
@@ -71,6 +97,7 @@ export const useCalendarsStore = create<CalendarStore>((set, get) => ({
     }));
     return result;
   },
+
   localUpdateCalendar: (calendar) => {
     set((state) => ({
       calendars: [...state.calendars.filter(c => c.id !== calendar.id), calendar],

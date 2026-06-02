@@ -20,6 +20,7 @@
     "@expo-google-fonts/noto-serif": "^0.4.2",
     "@expo-google-fonts/noto-serif-jp": "^0.4.3",
     "@expo-google-fonts/shippori-mincho-b1": "^0.4.1",
+    "@expo/dom-webview": "^56.0.5",
     "@expo/metro-runtime": "^56.0.13",
     "@expo/vector-icons": "^15.1.1",
     "@musubi/calendar": "workspace:*",
@@ -48,7 +49,6 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
-
     "react-native-gesture-handler": "~2.31.2",
     "react-native-infinite-pager": "^0.3.18",
     "react-native-reanimated": "~4.3.1",

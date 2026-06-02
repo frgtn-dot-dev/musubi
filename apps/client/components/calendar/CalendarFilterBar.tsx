@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, startTransition, useEffect, useState } from "react";
 import { colors, fonts } from "@/constants/theme";
 import { View, Pressable, ScrollView, Text } from "react-native";
 import * as Haptics from "expo-haptics";
@@ -8,45 +8,97 @@ type Calendar = { id: string; name: string; color: string };
 type Props = {
   calendars: Calendar[];
   activeCals: Set<string>;
+  soloCalId: string | null;
   onToggle: (id: string) => void;
+  onSolo: (id: string) => void;
 };
 
-export const CalendarFilterBar = memo(function CalendarFilterBar({ calendars, activeCals, onToggle }: Props) {
+export const CalendarFilterBar = memo(function CalendarFilterBar({
+  calendars,
+  activeCals,
+  soloCalId,
+  onToggle,
+  onSolo,
+}: Props) {
+  // Optimistic local state so pills repaint before the expensive event
+  // filtering pipeline catches up.
+  const [display, setDisplay] = useState(() => new Set(activeCals));
+  const [localSoloId, setLocalSoloId] = useState(soloCalId);
+
+  // Sync from outside (initial load, solo from another tab, etc.)
+  useEffect(() => { setDisplay(new Set(activeCals)); }, [activeCals]);
+  useEffect(() => { setLocalSoloId(soloCalId); }, [soloCalId]);
+
+  const handleToggle = (id: string) => {
+    // Paint immediately
+    setDisplay(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+    if (process.env.EXPO_OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Defer the expensive filtering work
+    startTransition(() => onToggle(id));
+  };
+
+  const handleSolo = (id: string) => {
+    if (process.env.EXPO_OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const newSoloId = localSoloId === id ? null : id;
+    setLocalSoloId(newSoloId);
+    setDisplay(
+      newSoloId === null
+        ? new Set(calendars.map(c => c.id))
+        : new Set([id]),
+    );
+    startTransition(() => onSolo(id));
+  };
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={{ flexShrink: 0, flexDirection: "row", backgroundColor: colors.bg1, borderBottomWidth: 1, borderBottomColor: colors.line, maxHeight: 52 }}
+      style={{
+        flexShrink: 0, flexDirection: "row",
+        backgroundColor: colors.bg1,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+        maxHeight: 52,
+      }}
       contentContainerStyle={{ padding: 10, gap: 6, alignItems: "center" }}
     >
-      {calendars.map((cal) => (
-        <Pressable
-          key={cal.id}
-          onPress={() => {
-            if (process.env.EXPO_OS === 'ios') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-            onToggle(cal.id);
-          }}
-          style={{
-            flexDirection: 'row', alignItems: 'center', gap: 6,
-            paddingHorizontal: 12, paddingVertical: 6,
-            borderRadius: 999, borderCurve: 'continuous',
-            borderWidth: 1,
-            borderColor: activeCals.has(cal.id) ? colors.line3 : colors.line,
-            backgroundColor: activeCals.has(cal.id) ? colors.bg2 : colors.line,
-          }}
-        >
-          <View style={{
-            width: 7, height: 7, borderRadius: 4,
-            backgroundColor: cal.color,
-            opacity: activeCals.has(cal.id) ? 1 : 0.5,
-          }} />
-          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: activeCals.has(cal.id) ? colors.fg : colors.fg3 }}>
-            {cal.name}
-          </Text>
-        </Pressable>
-      ))}
+      {calendars.map((cal) => {
+        const active = display.has(cal.id);
+        const soloed = localSoloId === cal.id;
+        return (
+          <Pressable
+            key={cal.id}
+            onPress={() => handleToggle(cal.id)}
+            onLongPress={() => handleSolo(cal.id)}
+            delayLongPress={350}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 6,
+              paddingHorizontal: 12, paddingVertical: 6,
+              borderRadius: 999, borderCurve: 'continuous',
+              borderWidth: soloed ? 1.5 : 1,
+              borderColor: soloed
+                ? colors.fg
+                : active ? colors.line3 : colors.line,
+              backgroundColor: active ? colors.bg2 : colors.line,
+            }}
+          >
+            <View style={{
+              width: 7, height: 7, borderRadius: 4,
+              backgroundColor: cal.color,
+              opacity: active ? 1 : 0.5,
+            }} />
+            <Text style={{
+              fontFamily: fonts.sans, fontSize: 12,
+              color: active ? colors.fg : colors.fg3,
+            }}>
+              {cal.name}
+            </Text>
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 });

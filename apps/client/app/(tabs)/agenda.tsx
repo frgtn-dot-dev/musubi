@@ -8,7 +8,12 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
-import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  FadeOutDown,
+  LinearTransition,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 
@@ -18,7 +23,7 @@ const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 export default function AgendaTab() {
   const api = useApi();
   const { events, addEvent, updateEvent, removeEvent } = useEventsStore();
-  const { calendars, activeCals, toggleCal, syncActiveCals } = useCalendarsStore();
+  const { calendars, activeCals, soloCalId, toggleCal, soloCalendar, syncActiveCals } = useCalendarsStore();
   useEffect(() => {
     syncActiveCals(calendars);
   }, [calendars]);
@@ -73,14 +78,21 @@ export default function AgendaTab() {
         </Text>
       </View>
       <CalendarFilterBar
-        onToggle={toggleCal}
         calendars={calendars}
         activeCals={activeCals}
+        soloCalId={soloCalId}
+        onToggle={toggleCal}
+        onSolo={soloCalendar}
       />
       <ScrollView style={{ paddingHorizontal: 16 }}>
         {
           groups.map((g, i) => (
-            <Animated.View key={g.date.toISOString()} entering={FadeInUp.delay(i * 40).duration(300).springify()}>
+            <Animated.View
+              key={g.date.toISOString()}
+              entering={FadeInUp.delay(i * 40).duration(300).springify()}
+              exiting={FadeOutDown.duration(180)}
+              layout={LinearTransition.springify().damping(16)}
+            >
               <View style={styles.timelineRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.timelineDay}>

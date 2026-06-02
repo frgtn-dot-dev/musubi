@@ -3,10 +3,11 @@ import { calendarTheme, colors, fonts, styles } from "@/constants/theme";
 import { Calendar, Event } from "@musubi/types";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Text, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { CalendarSkeleton } from "./CalendarSkeleton";
 import { Calendar as BigCalendar, enrichEvents, expandRecurringEvents, type Mode } from "@musubi/calendar";
 import dayjs from "dayjs";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
@@ -54,6 +55,15 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   const [eventDetail, setEventDetail] = useState<Event | null>(null);
   const [calendarSettings, setCallendarSettings] = useState<Calendar | null>(null);
   const [startingDate, setStartingDate] = useState<Date | undefined>(new Date());
+
+  // Ensure the skeleton is shown for at least 500ms so the slide-up animation
+  // isn't competing with BigCalendar rendering at the same time.
+  const [calReady, setCalReady] = useState(false);
+  useEffect(() => {
+    if (!visible) { setCalReady(false); return; }
+    const t = setTimeout(() => setCalReady(true), 500);
+    return () => clearTimeout(t);
+  }, [visible]);
 
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
@@ -208,24 +218,27 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                 style={{ flex: 1 }}
                 onLayout={(event) => setCalHeight(event.nativeEvent.layout.height)}
               >
-                {calHeight > 0 && (
-                  <BigCalendar
-                    events={expandedEvents}
-                    eventsAreSorted={true}
-                    enableEnrichedEvents={true}
-                    enrichedEventsByDate={enrichedEventsByDate}
-                    height={calMode === "month" ? calHeight : calHeight + 95}
-                    theme={calendarTheme}
-                    eventCellStyle={eventCellStyle}
-                    mode={calMode}
-                    weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
-                    swipeEnabled={true}
-                    showAllDayEventCell={false}
-                    date={jumpDate}
-                    scrollOffsetMinutes={scrollOffset}
-                    onSwipeEnd={setAnchorDate}
-                    onPressEvent={openEventDetail}
-                  />
+                {(!calReady || calHeight === 0) && <CalendarSkeleton />}
+                {calReady && calHeight > 0 && (
+                  <Animated.View entering={FadeIn.duration(350)} style={{ flex: 1 }}>
+                    <BigCalendar
+                      events={expandedEvents}
+                      eventsAreSorted={true}
+                      enableEnrichedEvents={true}
+                      enrichedEventsByDate={enrichedEventsByDate}
+                      height={calMode === "month" ? calHeight : calHeight + 95}
+                      theme={calendarTheme}
+                      eventCellStyle={eventCellStyle}
+                      mode={calMode}
+                      weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
+                      swipeEnabled={true}
+                      showAllDayEventCell={false}
+                      date={jumpDate}
+                      scrollOffsetMinutes={scrollOffset}
+                      onSwipeEnd={setAnchorDate}
+                      onPressEvent={openEventDetail}
+                    />
+                  </Animated.View>
                 )}
               </View>
             </View>

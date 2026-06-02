@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Calendar, enrichEvents, expandRecurringEvents, type Mode } from "@musubi/calendar";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { CalendarSkeleton } from "@/components/calendar/CalendarSkeleton";
 import * as Haptics from "expo-haptics";
 import dayjs from "dayjs";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
@@ -39,7 +40,7 @@ export default function MainTab() {
     defaultCalendarView,
   } = useSettingsStore();
 
-  const { calendars, activeCals, toggleCal, syncActiveCals } = useCalendarsStore();
+  const { calendars, activeCals, soloCalId, toggleCal, soloCalendar, syncActiveCals } = useCalendarsStore();
   useEffect(() => {
     syncActiveCals(calendars);
   }, [calendars]);
@@ -50,6 +51,12 @@ export default function MainTab() {
 
 
   const [calHeight, setCalHeight] = useState(0);
+  const [calReady, setCalReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setCalReady(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+
   const [calMode, setCalMode] = useState<Mode>(defaultCalendarView);
   const [anchorDate, setAnchorDate] = useState(new Date());
   const [jumpDate, setJumpDate] = useState<Date>(new Date());
@@ -120,13 +127,17 @@ export default function MainTab() {
       <CalendarFilterBar
         calendars={calendars}
         activeCals={activeCals}
+        soloCalId={soloCalId}
         onToggle={toggleCal}
+        onSolo={soloCalendar}
       />
       <View
         style={{ flex: 1 }}
         onLayout={(event) => setCalHeight(event.nativeEvent.layout.height)}
       >
-        {calHeight > 0 && (
+        {(!calReady || calHeight === 0) && <CalendarSkeleton />}
+        {calReady && calHeight > 0 && (
+          <Animated.View entering={FadeIn.duration(350)} style={{ flex: 1 }}>
           <Calendar
             events={expandedEvents}
             eventsAreSorted={true}
@@ -145,6 +156,7 @@ export default function MainTab() {
             onPressEvent={openEventDetail}
             onPressCell={handleCreateEventOnCell}
           />
+          </Animated.View>
         )}
       </View>
       <Animated.View entering={FadeIn.duration(400)}>
