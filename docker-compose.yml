@@ -30,3 +30,7 @@ services:
 
 volumes:
   data:
+
+networks:
+  dokploy-network:
+    external: true
