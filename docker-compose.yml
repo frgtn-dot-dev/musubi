@@ -10,8 +10,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "${API_SERVER_PORT}:7531"
     restart: unless-stopped
 
   db:
@@ -30,3 +28,7 @@ services:
 
 volumes:
   data:
+
+networks:
+  dokploy-network:
+    external: true
