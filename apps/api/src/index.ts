@@ -18,8 +18,7 @@ const app = express()
 const port = config.api.port;
 
 const allowedOrigins = [
-  "https://musubi.frgtn.dev",
-  "https://dev-musubi.frgtn.dev",
+  config.api.url,
   ...(config.api.environment === "dev" ? ["http://localhost:3000", "http://localhost:8081"] : []),
 ];
 
