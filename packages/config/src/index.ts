@@ -49,6 +49,8 @@ const apiConfig: APIConfig = {
   url: envOrThrow("BETTER_AUTH_URL"),
 }
 
+console.log(`USING PORT: ${apiConfig.port}`)
+
 const smtpConfig: SMTPConfig = {
   host: envOrThrow("SMTP_HOST"),
   port: Number(envOrThrow("SMTP_PORT")),
