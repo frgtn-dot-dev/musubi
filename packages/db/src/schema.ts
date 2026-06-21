@@ -153,7 +153,7 @@ export const calendarsRelations = relations(calendars, ({ many, one }) => ({
 
 
 export const events = pgTable("events", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").primaryKey(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()

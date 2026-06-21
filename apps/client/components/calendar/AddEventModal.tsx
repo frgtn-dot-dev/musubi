@@ -1,16 +1,19 @@
 import { Calendar, Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useState } from "react";
-import { Alert, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { appColors } from "@/constants/colors";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import DateTimePicker from '@expo/ui/community/datetime-picker';
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather } from "@expo/vector-icons";
+import { useSettingsStore } from "@/store/useSettingsStore";
+import { scheduleEventPushNotification, storeNotification } from "@/services/notifications";
+import dayjs from "dayjs";
 
 type Props = {
   visible: boolean;
@@ -51,13 +54,13 @@ const WEEKDAYS_DISPLAY = [
 ];
 
 const RECURRENCE_OPTIONS: { value: RecurrenceOption; label: string; icon: string }[] = [
-  { value: 'none',     label: 'None',     icon: 'slash'     },
-  { value: 'daily',    label: 'Daily',    icon: 'sun'       },
-  { value: 'weekly',   label: 'Weekly',   icon: 'repeat'    },
+  { value: 'none', label: 'None', icon: 'slash' },
+  { value: 'daily', label: 'Daily', icon: 'sun' },
+  { value: 'weekly', label: 'Weekly', icon: 'repeat' },
   { value: 'weekdays', label: 'Weekdays', icon: 'briefcase' },
-  { value: 'monthly',  label: 'Monthly',  icon: 'calendar'  },
-  { value: 'yearly',   label: 'Yearly',   icon: 'award'     },
-  { value: 'custom',   label: 'Custom',   icon: 'sliders'   },
+  { value: 'monthly', label: 'Monthly', icon: 'calendar' },
+  { value: 'yearly', label: 'Yearly', icon: 'award' },
+  { value: 'custom', label: 'Custom', icon: 'sliders' },
 ];
 
 function buildRRule(
@@ -66,12 +69,12 @@ function buildRRule(
   advanced: AdvancedRRuleConfig,
 ): string | null {
   switch (option) {
-    case 'none':     return null;
-    case 'daily':    return 'FREQ=DAILY';
-    case 'weekly':   return `FREQ=WEEKLY;BYDAY=${RRULE_DAYS[startDate.getDay()]}`;
+    case 'none': return null;
+    case 'daily': return 'FREQ=DAILY';
+    case 'weekly': return `FREQ=WEEKLY;BYDAY=${RRULE_DAYS[startDate.getDay()]}`;
     case 'weekdays': return 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
-    case 'monthly':  return 'FREQ=MONTHLY';
-    case 'yearly':   return 'FREQ=YEARLY';
+    case 'monthly': return 'FREQ=MONTHLY';
+    case 'yearly': return 'FREQ=YEARLY';
     case 'custom': {
       const { freq, interval, days, endType, count } = advanced;
       let rule = `FREQ=${freq}`;
@@ -133,6 +136,10 @@ function describeAdvanced(cfg: AdvancedRRuleConfig): string {
 }
 
 export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, calendars, event }: Props) {
+  const {
+    notificationsOnByDefault,
+  } = useSettingsStore();
+
   const insets = useSafeAreaInsets();
   const { authClient } = useServer();
 
@@ -141,6 +148,12 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const [newDescription, setNewDescription] = useState("");
   const [newStart, setNewStart] = useState(startingDate ?? new Date());
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
+  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">("start");
+  const [notifyBeforeTime, setNotifyBeforeTime] = useState<number>(15);
+  const [notifyBeforePickerVisible, setNotifyBeforePickerVisible] = useState(false);
+  const [notificationToggle, setNotificationToggle] = useState<boolean>(notificationsOnByDefault);
   const [allDayToggle, setAllDayToggle] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -150,9 +163,6 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const [advDays, setAdvDays] = useState<Set<number>>(new Set([1]));
   const [advEndType, setAdvEndType] = useState<AdvancedEndType>('never');
   const [advCount, setAdvCount] = useState(10);
-
-  // const [showStartPicker, setShowStartPicker] = useState(false);
-  // const [showEndPicker, setShowEndPicker] = useState(false);
 
   const [selectedCals, setSelectedCals] = useState<Set<string>>(
     () => new Set(calendars.slice(0, 1).map(c => c.id))
@@ -169,6 +179,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
 
+  const NOTIFY_BEFORE = [
+    { label: "15 minutes", value: 15 },
+    { label: "30 minutes", value: 30 },
+    { label: "1 hour", value: 1 * 60 },
+    { label: "Half a day", value: 12 * 60 },
+    { label: "1 Day", value: 24 * 60 },
+  ]
+
   const closeSequence = () => {
     onClose();
 
@@ -178,6 +196,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setStartError("");
     setNewEnd(new Date());
     setEndError("");
+    setNotificationToggle(notificationsOnByDefault);
+    setNotifyBeforeTime(15);
     setSelectedCals(new Set(calendars.slice(0, 1).map(c => c.id)));
     setNewDescription("");
     setCalendarsError("");
@@ -219,10 +239,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   }, [event, visible]);
 
   useEffect(() => {
-    if (newStart.getTime() > newEnd.getTime()) {
-      setNewEnd(newStart);
+    const lastStart = new Date(newStart);
+    const lastEnd = new Date(newEnd);
+
+    if (lastStart.getTime() > lastEnd.getTime()) {
+      datePickerTarget === "start" ? setNewEnd(newStart) : setNewStart(newEnd);
     }
-  }, [newStart]);
+
+  }, [newStart, newEnd]);
 
   const toggleCal = (id: string) => {
     setSelectedCals(prev => {
@@ -230,40 +254,6 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
-
-  const showDatePicker = (mode: 'start' | 'end') => {
-    const current = mode === 'start' ? newStart : newEnd;
-    const setter = mode === 'start' ? setNewStart : setNewEnd;
-
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: current,
-        mode: 'date',
-        onChange: (e, date) => {
-          if (e.type === 'set' && date) {
-            setter(date);
-          }
-        },
-      });
-    }
-  };
-
-  const showTimePicker = (mode: 'start' | 'end') => {
-    const current = mode === 'start' ? newStart : newEnd;
-    const setter = mode === 'start' ? setNewStart : setNewEnd;
-
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: roundMinutes(current),
-        mode: 'time',
-        onChange: (e, timeDate) => {
-          if (e.type === 'set' && timeDate) {
-            setter(timeDate);
-          }
-        },
-      });
-    }
   };
 
   function roundMinutes(date: Date) {
@@ -274,11 +264,43 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     return date;
   }
 
+  function getDatePickerValue() {
+    const current = datePickerTarget === "start" ? new Date(newStart.getTime()) : new Date(newEnd.getTime());
+    const final = datePickerMode === "date" ? current : roundMinutes(current);
+    return final;
+  }
+  function setDateFromDatePicker(date: Date) {
+    const minutes = datePickerTarget === "start" ? newStart.getMinutes() : newEnd.getMinutes();
+    const hours = datePickerTarget === "start" ? newStart.getHours() : newEnd.getHours();
+
+    if (datePickerMode === "date") {
+      const fixed_hours = new Date(date.setHours(hours));
+      const fixed_minutes = new Date(fixed_hours.setMinutes(minutes));
+      datePickerTarget === "start" ? setNewStart(fixed_minutes) : setNewEnd(fixed_minutes);
+    } else {
+      datePickerTarget === "start" ? setNewStart(date) : setNewEnd(date);
+    }
+  }
+
+  const setNotification = async (eventConstruct: Event) => {
+    if (!event) {
+      if (eventConstruct.id === "create") {
+        const start = eventConstruct.start.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
+        const end = eventConstruct.end.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
+        const body = `${start}-${end}`;
+        const triggerDate = dayjs(eventConstruct.start).subtract(notifyBeforeTime, "minute").toDate();
+
+        const identifier = await scheduleEventPushNotification(eventConstruct.title, body, triggerDate)
+        storeNotification(identifier, eventConstruct.id, triggerDate)
+        console.info(identifier, eventConstruct.id, triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+      }
+    }
+  };
 
   const handleSave = async () => {
 
     const eventConstruct: Event = {
-      id: event?.id ?? "create",
+      id: event?.id ?? crypto.randomUUID(),
       creatorID: userID!,
       organizer: userID!, //TODO: ADD Organizer selection option in client
       calendars: [...selectedCals],
@@ -294,7 +316,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
         freq: advFreq, interval: advInterval, days: advDays,
         endType: advEndType, count: advCount,
       }),
-      url: newUrl.toLowerCase(),//TODO: ADD url link field to events
+      url: newUrl.toLowerCase()
     }
 
     let passed: boolean = true;
@@ -338,6 +360,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     }
 
     setIsLoading(true);
+
+    await setNotification(eventConstruct);
 
     try {
       if (event) {
@@ -448,7 +472,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
 
               <View style={styles.fieldContainer}>
                 <View style={{ flexDirection: "row", gap: 36, alignItems: "flex-start" }}>
-                  <View>
+                  <View style={{ flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>All Day</Text>
                     <Switch
                       thumbColor={allDayToggle ? colors.accent : colors.bg3}
@@ -461,62 +485,86 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                     />
                   </View>
                   {!allDayToggle &&
-                    <View>
-                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Quck Time</Text>
-                      <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
-                        <Pressable
-                          onPress={() => {
-                            setNewStart(withHours(newStart, 6));
-                            setNewEnd(withHours(newStart, 12));
-                          }}
-                          style={newStart.getHours() === 6 && newEnd.getHours() === 12 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? styles.pillActive : styles.pill}
-                        >
-                          <Feather name="sunrise" color={colors.fg2} />
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart.getHours() === 6 && newEnd.getHours() === 12 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? colors.fg : colors.fg3 }}>
-                            Mor
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            setNewStart(withHours(newStart, 12));
-                            setNewEnd(withHours(newStart, 18));
-                          }}
-                          style={newStart.getHours() === 12 && newEnd.getHours() === 18 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? styles.pillActive : styles.pill}
-                        >
-                          <Feather name="sun" color={colors.fg2} />
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart.getHours() === 12 && newEnd.getHours() === 18 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? colors.fg : colors.fg3 }}>
-                            Arvo
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            setNewStart(withHours(newStart, 18));
-                            setNewEnd(withHours(newStart, 24));
-                          }}
-                          style={newStart.getHours() === 18 && newEnd.getHours() === 0 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? styles.pillActive : styles.pill}
-                        >
-                          <Feather name="moon" color={colors.fg2} />
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart.getHours() === 18 && newEnd.getHours() === 0 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? colors.fg : colors.fg3 }}>
-                            Eve
-                          </Text>
-                        </Pressable>
-                      </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Quick Time</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <View style={styles.horizontalPillView}>
+                          <Pressable
+                            onPress={() => {
+                              setNewStart(withHours(newStart, 6));
+                              setNewEnd(withHours(newStart, 12));
+                            }}
+                            style={newStart.getHours() === 6 && newEnd.getHours() === 12 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? styles.pillActive : styles.pill}
+                          >
+                            <Feather name="sunrise" color={colors.fg2} />
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart.getHours() === 6 && newEnd.getHours() === 12 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? colors.fg : colors.fg3 }}>
+                              Mor
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => {
+                              setNewStart(withHours(newStart, 12));
+                              setNewEnd(withHours(newStart, 18));
+                            }}
+                            style={newStart.getHours() === 12 && newEnd.getHours() === 18 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? styles.pillActive : styles.pill}
+                          >
+                            <Feather name="sun" color={colors.fg2} />
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart.getHours() === 12 && newEnd.getHours() === 18 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? colors.fg : colors.fg3 }}>
+                              Arvo
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => {
+                              setNewStart(withHours(newStart, 18));
+                              setNewEnd(withHours(newStart, 24));
+                            }}
+                            style={newStart.getHours() === 18 && newEnd.getHours() === 0 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? styles.pillActive : styles.pill}
+                          >
+                            <Feather name="moon" color={colors.fg2} />
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: newStart.getHours() === 18 && newEnd.getHours() === 0 && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0 ? colors.fg : colors.fg3 }}>
+                              Eve
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </ScrollView>
                     </View>
                   }
                 </View>
                 {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
               </View>
 
+              {datePickerVisible &&
+                <DateTimePicker
+                  presentation="dialog"
+                  value={getDatePickerValue()}
+                  mode={datePickerMode}
+                  onValueChange={(_event, selectedDate) => {
+                    setDatePickerVisible(false);
+                    setDateFromDatePicker(selectedDate);
+                  }}
+                  onDismiss={() => {
+                    setDatePickerVisible(false);
+                  }}
+                />}
+
               <View style={styles.fieldContainer}>
                 <View style={{ flexDirection: "row", gap: 32 }}>
-                  <Pressable onPress={() => showDatePicker("start")}>
+                  <Pressable onPress={() => {
+                    setDatePickerTarget("start");
+                    setDatePickerMode("date");
+                    setDatePickerVisible(true);
+                  }}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Start Date</Text>
                     <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
                       {newStart.toLocaleString('en-UK', { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
                   {!allDayToggle &&
-                    <Pressable onPress={() => showTimePicker("start")}>
+                    <Pressable onPress={() => {
+                      setDatePickerTarget("start");
+                      setDatePickerMode("time");
+                      setDatePickerVisible(true);
+                    }}>
                       <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
                       <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
                         {newStart.toLocaleString('en-UK', { timeStyle: 'short' })}
@@ -526,23 +574,24 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                 </View>
                 {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
               </View>
-
-              {/* {Platform.OS === 'ios' && showStartPicker && ( */}
-              {/*   <DateTimePicker value={newStart} mode="datetime" */}
-              {/*     onChange={(e, date) => { setShowStartPicker(false); if (e.type === 'set' && date) setNewStart(date); }} */}
-              {/*   /> */}
-              {/* )} */}
-
               <View style={styles.fieldContainer}>
                 <View style={{ flexDirection: "row", gap: 32 }}>
-                  <Pressable onPress={() => showDatePicker("end")}>
+                  <Pressable onPress={() => {
+                    setDatePickerTarget("end");
+                    setDatePickerMode("date");
+                    setDatePickerVisible(true);
+                  }}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>End Date</Text>
                     <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
                       {newEnd.toLocaleString('en-UK', { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
                   {!allDayToggle &&
-                    <Pressable onPress={() => showTimePicker("end")}>
+                    <Pressable onPress={() => {
+                      setDatePickerTarget("end");
+                      setDatePickerMode("time");
+                      setDatePickerVisible(true);
+                    }}>
                       <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
                       <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
                         {newEnd.toLocaleString('en-UK', { timeStyle: 'short' })}
@@ -553,12 +602,46 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                 {endError ? <Text style={styles.errorText}>{endError}</Text> : null}
               </View>
 
-              {/* {Platform.OS === 'ios' && showEndPicker && ( */}
-              {/*   <DateTimePicker value={newEnd} mode="datetime" */}
-              {/*     onChange={(e, date) => { setShowEndPicker(false); if (e.type === 'set' && date) setNewEnd(date); }} */}
-              {/*   /> */}
-              {/* )} */}
-
+              <View style={styles.fieldContainer}>
+                <View style={{ flexDirection: "row", gap: 36, alignItems: "flex-start" }}>
+                  <View style={{ flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Notification</Text>
+                    <Switch
+                      thumbColor={notificationToggle ? colors.accent : colors.bg3}
+                      trackColor={{
+                        false: colors.line,
+                        true: colors.line3,
+                      }}
+                      onValueChange={(v) => { setNotificationToggle(v) }}
+                      value={notificationToggle}
+                    />
+                  </View>
+                  {notificationToggle &&
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Notify Before Event</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <View style={styles.horizontalPillView}>
+                          {NOTIFY_BEFORE.map((opt) => {
+                            const active = notifyBeforeTime === opt.value;
+                            return (
+                              <Pressable
+                                key={opt.label}
+                                onPress={() => setNotifyBeforeTime(opt.value)}
+                                style={active ? styles.pillActive : styles.pill}
+                              >
+                                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
+                                  {opt.label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </ScrollView>
+                    </View>
+                  }
+                </View>
+                {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
+              </View>
               <View style={styles.fieldContainer}>
                 <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Repeat</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -729,7 +812,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   placeholder="..."
                   placeholderTextColor={colors.fg4}
                   multiline={true}
-                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                  style={[styles.fieldValueText, { fontFamily: fonts.sans }]}
                 />
               </View>
               <View style={styles.fieldContainer}>
@@ -740,7 +823,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   placeholder="..."
                   placeholderTextColor={colors.fg4}
                   multiline={true}
-                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                  style={[styles.fieldValueText, { fontFamily: fonts.sans }]}
                 />
               </View>
               <View style={styles.fieldContainer}>
@@ -751,7 +834,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   placeholder="https://..."
                   placeholderTextColor={colors.fg4}
                   multiline={true}
-                  style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                  style={[styles.fieldValueText, { fontFamily: fonts.sans }]}
                 />
                 {urlError ? <Text style={styles.errorText}>{urlError}</Text> : null}
               </View>

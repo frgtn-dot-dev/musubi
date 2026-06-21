@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const EventSchema = z.object({
-  id: z.string().optional(),
+  id: z.string(),
   creatorID: z.string(),
   organizer: z.string(),
   title: z.string(),

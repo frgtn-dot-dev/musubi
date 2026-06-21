@@ -12,7 +12,6 @@ export async function handlerCreateEvent(req: Request, res: Response) {
   }
   const newEvent: NewEvent = {
     ...event,
-    id: undefined,
     creatorID: req.user!.id,
   }
   const createdEvent = await createEvent(newEvent, event.calendars);

@@ -22,6 +22,7 @@
     "@expo-google-fonts/shippori-mincho-b1": "^0.4.1",
     "@expo/dom-webview": "^56.0.5",
     "@expo/metro-runtime": "^56.0.15",
+    "@expo/ui": "~56.0.18",
     "@expo/vector-icons": "^15.1.1",
     "@musubi/calendar": "workspace:*",
     "@musubi/types": "workspace:*",
