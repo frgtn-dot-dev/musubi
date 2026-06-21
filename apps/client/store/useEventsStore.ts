@@ -1,6 +1,7 @@
 import { Event } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { create } from "zustand";
+import { cancelEventPushNotification, getEventsNotificationIdentifier, removeNotification } from "@/services/notifications";
 
 
 type EventsStore = {
@@ -35,6 +36,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   })),
   removeEvent: async (event, api) => {
     const result = await api.removeEvent(event);
+    const identifier = await getEventsNotificationIdentifier(event.id);
+    if (identifier !== null) {
+      cancelEventPushNotification(identifier);
+      removeNotification(event.id);
+    }
     set((state) => ({
       events: [...state.events.filter(e => e.id !== result)],
     }));

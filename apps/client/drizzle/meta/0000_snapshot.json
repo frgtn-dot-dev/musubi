@@ -1,11 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c8f093ec-f284-4feb-bdcd-926b841607e8",
+  "id": "edcb200f-86ec-46ce-a72c-8a53688f05c2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "users_table": {
-      "name": "users_table",
+    "notifications_table": {
+      "name": "notifications_table",
       "columns": {
         "id": {
           "name": "id",
@@ -23,6 +23,13 @@
         },
         "eventID": {
           "name": "eventID",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "triggerDate": {
+          "name": "triggerDate",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

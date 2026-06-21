@@ -1,3 +1,4 @@
+import "react-native-get-random-values";
 import { Calendar, Event } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useState } from "react";
@@ -12,8 +13,9 @@ import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { scheduleEventPushNotification, storeNotification } from "@/services/notifications";
+import { cancelEventPushNotification, getEventsNotificationIdentifier, removeNotification, scheduleEventPushNotification, storeNotification, updateEventPushNotification, updateNotificationTriggerDate } from "@/services/notifications";
 import dayjs from "dayjs";
+import { uuidv7 } from 'uuidv7';
 
 type Props = {
   visible: boolean;
@@ -283,16 +285,47 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   }
 
   const setNotification = async (eventConstruct: Event) => {
-    if (!event) {
-      if (eventConstruct.id === "create") {
-        const start = eventConstruct.start.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
-        const end = eventConstruct.end.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
-        const body = `${start}-${end}`;
-        const triggerDate = dayjs(eventConstruct.start).subtract(notifyBeforeTime, "minute").toDate();
+    const start = eventConstruct.start.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
+    const end = eventConstruct.end.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
+    const body = `${start}-${end}`;
+    const triggerDate = dayjs(eventConstruct.start).subtract(notifyBeforeTime, "minute").toDate();
 
+    if (!event) {
+      if (notificationToggle) {
         const identifier = await scheduleEventPushNotification(eventConstruct.title, body, triggerDate)
         storeNotification(identifier, eventConstruct.id, triggerDate)
-        console.info(identifier, eventConstruct.id, triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log("=== NEW NOTIFICATION ===");
+        console.log(identifier);
+        console.log(eventConstruct.id);
+        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log("========================");
+      }
+    } else {
+      const lastIdentifier = await getEventsNotificationIdentifier(eventConstruct.id);
+      if (notificationToggle && lastIdentifier !== null) {
+        const newIdentifier = await updateEventPushNotification(lastIdentifier, eventConstruct.title, body, triggerDate);
+        updateNotificationTriggerDate(newIdentifier, eventConstruct.id, triggerDate);
+        console.log("=== UPDATED NOTIFICATION ===");
+        console.log(newIdentifier);
+        console.log(eventConstruct.id);
+        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log("============================");
+      } else if (notificationToggle && lastIdentifier === null) {
+        const identifier = await scheduleEventPushNotification(eventConstruct.title, body, triggerDate);
+        storeNotification(identifier, eventConstruct.id, triggerDate);
+        console.log("=== NEW NOTIFICATION FROM UPDATE ===");
+        console.log(identifier);
+        console.log(eventConstruct.id);
+        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log("====================================");
+      } else if (!notificationToggle && lastIdentifier !== null) {
+        cancelEventPushNotification(lastIdentifier);
+        removeNotification(eventConstruct.id);
+        console.log("=== REMOVED NOTIFICATION ===");
+        console.log(lastIdentifier);
+        console.log(eventConstruct.id);
+        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log("============================");
       }
     }
   };
@@ -300,7 +333,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const handleSave = async () => {
 
     const eventConstruct: Event = {
-      id: event?.id ?? crypto.randomUUID(),
+      id: event?.id ?? uuidv7(),
       creatorID: userID!,
       organizer: userID!, //TODO: ADD Organizer selection option in client
       calendars: [...selectedCals],

@@ -30,6 +30,53 @@ export async function scheduleEventPushNotification(title: string, body: string,
   return identifier;
 }
 
+export async function cancelEventPushNotification(identifier: string) {
+  await Notifications.cancelScheduledNotificationAsync(identifier)
+}
+
+export async function updateEventPushNotification(identifier: string, title: string, body: string, date: Date) {
+  await cancelEventPushNotification(identifier);
+  const newIdentifier = await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date,
+    },
+  });
+
+  return newIdentifier;
+}
+
+export async function storeNotification(identifier: string, eventID: string, triggerDate: Date) {
+  await db.insert(notificationsTable).values({
+    identifier,
+    eventID,
+    triggerDate: String(triggerDate),
+  })
+  console.log("--- NOTIFICATION STORED IN DB ---")
+}
+
+export async function updateNotificationTriggerDate(identifier: string, eventID: string, triggerDate: Date) {
+  await db.update(notificationsTable).set({ triggerDate: String(triggerDate), identifier }).where(eq(notificationsTable.eventID, eventID));
+}
+
+export async function removeNotification(eventID: string) {
+  await db.delete(notificationsTable).where(eq(notificationsTable.eventID, eventID));
+}
+
+export async function getEventsNotificationIdentifier(eventID: string) {
+  const result = await db
+    .select({ identifier: notificationsTable.identifier })
+    .from(notificationsTable)
+    .where(eq(notificationsTable.eventID, eventID))
+    .limit(1);
+
+  return result[0]?.identifier ?? null;
+}
+
 export async function registerForPushNotificationsAsync() {
   // let token;
 
@@ -54,43 +101,4 @@ export async function registerForPushNotificationsAsync() {
     return;
 
   }
-
-  // try {
-  //   const projectId =
-  //     Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-  //   if (!projectId) {
-  //     throw new Error('Project ID not found');
-  //   }
-  //   token = (
-  //     await Notifications.getExpoPushTokenAsync({
-  //       projectId,
-  //     })
-  //   ).data;
-  //   console.log(token);
-  // } catch (e) {
-  //   console.error(`${e}`);
-  // }
-}
-
-
-export async function storeNotification(identifier: string, eventID: string, triggerDate: Date) {
-  db.insert(notificationsTable).values({
-    identifier,
-    eventID,
-    trigerDate: String(triggerDate),
-  })
-}
-
-export async function updateNotificationTriggerDate(eventID: string, trigerDate: string) {
-  db.update(notificationsTable).set({ trigerDate }).where(eq(notificationsTable.eventID, eventID));
-}
-
-export async function getEventsNotificationIdentifier(eventID: string) {
-  const result = await db
-    .select({ identifier: notificationsTable.identifier })
-    .from(notificationsTable)
-    .where(eq(notificationsTable.eventID, eventID))
-    .limit(1);
-
-  return result[0]?.identifier ?? null;
 }

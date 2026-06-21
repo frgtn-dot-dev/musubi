@@ -15,9 +15,18 @@ import Constants from "expo-constants";
 import UpdateRequiredModal from "@/components/UpdateRequiredModal";
 import { registerForPushNotificationsAsync } from '@/services/notifications';
 
+import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
+import { db } from '@/services/db';
+import migrations from '@/drizzle/migrations';
+
 SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
+  const { success: migrated, error: migError } = useMigrations(db, migrations);
+  useEffect(() => {
+    if (migError) console.error("Migration failed:", migError);
+  }, [migError]);
+
   const { isLoading, authClient, apiUrl } = useServer();
   const router = useRouter();
 
@@ -52,7 +61,7 @@ function AppContent() {
       .finally(() => setVersionChecked(true));
   }, [apiUrl]);
 
-  const ready = (loaded || !!error) && !isPending && !isLoading && versionChecked;
+  const ready = (loaded || !!error) && !isPending && !isLoading && versionChecked && migrated;
 
   const everReady = useRef(false);
   if (ready) everReady.current = true;
