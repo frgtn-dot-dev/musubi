@@ -140,6 +140,7 @@ function describeAdvanced(cfg: AdvancedRRuleConfig): string {
 export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, calendars, event }: Props) {
   const {
     notificationsOnByDefault,
+    timeLocale,
   } = useSettingsStore();
 
   const insets = useSafeAreaInsets();
@@ -285,7 +286,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   }
 
   const setNotification = async (eventConstruct: Event) => {
-    const start = eventConstruct.start.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
+    const start = eventConstruct.start.toLocaleString(timeLocale, { dateStyle: 'medium', timeStyle: "medium" });
     const end = eventConstruct.end.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
     const body = `${start}-${end}`;
     const triggerDate = dayjs(eventConstruct.start).subtract(notifyBeforeTime, "minute").toDate();
@@ -297,7 +298,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
         console.log("=== NEW NOTIFICATION ===");
         console.log(identifier);
         console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
         console.log("========================");
       }
     } else {
@@ -308,7 +309,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
         console.log("=== UPDATED NOTIFICATION ===");
         console.log(newIdentifier);
         console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
         console.log("============================");
       } else if (notificationToggle && lastIdentifier === null) {
         const identifier = await scheduleEventPushNotification(eventConstruct.title, body, triggerDate);
@@ -316,7 +317,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
         console.log("=== NEW NOTIFICATION FROM UPDATE ===");
         console.log(identifier);
         console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
         console.log("====================================");
       } else if (!notificationToggle && lastIdentifier !== null) {
         cancelEventPushNotification(lastIdentifier);
@@ -324,7 +325,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
         console.log("=== REMOVED NOTIFICATION ===");
         console.log(lastIdentifier);
         console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString("en-UK", { dateStyle: "medium", timeStyle: "medium" }));
+        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
         console.log("============================");
       }
     }
@@ -589,7 +590,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   }}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Start Date</Text>
                     <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {newStart.toLocaleString('en-UK', { dateStyle: 'medium' })}
+                      {newStart.toLocaleString(timeLocale, { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
                   {!allDayToggle &&
@@ -600,7 +601,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                     }}>
                       <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
                       <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                        {newStart.toLocaleString('en-UK', { timeStyle: 'short' })}
+                        {newStart.toLocaleString(timeLocale, { timeStyle: 'short' })}
                       </Text>
                     </Pressable>
                   }
@@ -616,7 +617,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   }}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>End Date</Text>
                     <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {newEnd.toLocaleString('en-UK', { dateStyle: 'medium' })}
+                      {newEnd.toLocaleString(timeLocale, { dateStyle: 'medium' })}
                     </Text>
                   </Pressable>
                   {!allDayToggle &&
@@ -627,7 +628,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                     }}>
                       <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Time</Text>
                       <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                        {newEnd.toLocaleString('en-UK', { timeStyle: 'short' })}
+                        {newEnd.toLocaleString(timeLocale, { timeStyle: 'short' })}
                       </Text>
                     </Pressable>
                   }

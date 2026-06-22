@@ -7,6 +7,7 @@ import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { useSettingsStore } from "@/store/useSettingsStore";
 
 
 type Props = {
@@ -27,6 +28,10 @@ const openMaps = (location: string) => {
 
 export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit }: Props) {
   const { calendars } = useCalendarsStore();
+
+  const {
+    timeLocale,
+  } = useSettingsStore();
 
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
@@ -76,10 +81,10 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                 <View style={styles.modalDetailRow}>
                   <Feather size={20} name="calendar" color={colors.fg4} />
                   <Text style={{ color: colors.fg2 }}>
-                    {event?.start.toLocaleString("en-UK", { weekday: "long", month: "long", day: "numeric" })}
+                    {event?.start.toLocaleString(timeLocale, { weekday: "long", month: "long", day: "numeric" })}
                     {new Date(new Date(event?.start!).setHours(0, 0, 0, 0)).getTime()
                       === new Date(new Date(event?.end!).setHours(0, 0, 0, 0)).getTime() ? ""
-                      : " – " + event?.end.toLocaleString("en-UK", { weekday: "long", month: "long", day: "numeric" })
+                      : " – " + event?.end.toLocaleString(timeLocale, { weekday: "long", month: "long", day: "numeric" })
                     }
                   </Text>
                 </View>
@@ -87,9 +92,9 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                   <View style={styles.modalDetailRow}>
                     <Feather size={20} name="clock" color={colors.fg4} />
                     <Text style={{ color: colors.fg2 }}>
-                      {event?.start.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })}
+                      {event?.start.toLocaleString(timeLocale, { hour: "2-digit", minute: "2-digit" })}
                       {" – "}
-                      {event?.end.toLocaleString("en-UK", { hour: "2-digit", minute: "2-digit" })}
+                      {event?.end.toLocaleString(timeLocale, { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                   </View>
                 }
