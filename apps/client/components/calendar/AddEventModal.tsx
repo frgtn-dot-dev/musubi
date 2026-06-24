@@ -272,6 +272,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     const final = datePickerMode === "date" ? current : roundMinutes(current);
     return final;
   }
+
   function setDateFromDatePicker(date: Date) {
     const minutes = datePickerTarget === "start" ? newStart.getMinutes() : newEnd.getMinutes();
     const hours = datePickerTarget === "start" ? newStart.getHours() : newEnd.getHours();

@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, Alert } from "react-native";
 
-
 export default function SignIn() {
   const { authClient } = useServer();
   const [email, setEmail] = useState("");

@@ -1,3 +1,8 @@
+import dotenv from "dotenv";
+import path from "path";
+
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
 const expoConfig = {
   name: "Musubi",
   slug: "musubi",
@@ -63,6 +68,7 @@ const expoConfig = {
     ],
     "expo-secure-store",
     "@react-native-community/datetimepicker",
+    "@react-native-google-signin/google-signin",
     "expo-font",
     "expo-web-browser",
     "expo-build-properties",
@@ -76,6 +82,7 @@ const expoConfig = {
     eas: {
       projectId: "4e24bdfa-490c-4c3e-9a76-7abef4efa823",
     },
+    googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID,
   }
 }
 

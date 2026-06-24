@@ -4,9 +4,35 @@ import { useState } from "react";
 import { View, Text, Pressable, Linking } from "react-native";
 import InputModal from "@/components/TextInputModal";
 import { useServer } from "@/contexts/ServerContext";
+import { GoogleSignin, isSuccessResponse, GoogleSigninButton } from "@react-native-google-signin/google-signin";
+import Constants from "expo-constants";
 
+GoogleSignin.configure({
+  webClientId: Constants.expoConfig?.extra?.googleWebClientId,
+});
 
 export default function Welcome() {
+  const { authClient } = useServer();
+  const handleGoogle = async () => {
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+      if (isSuccessResponse(response) && response.data.idToken) {
+        const { error } = await authClient.signIn.social({
+          provider: "google",
+          idToken: { token: response.data.idToken },
+        });
+        if (error) {
+          alert("Google SignIn Failed...");
+        } else {
+          router.replace("/(tabs)");
+        }
+      }
+    } catch (e) {
+      alert("Google SignIn Failed...");
+    }
+  };
+
   const { apiUrl, setNewServerUrl } = useServer();
   const [inputModalVisible, setInputModalVisible] = useState(false);
   const router = useRouter();
@@ -51,6 +77,7 @@ export default function Welcome() {
           </Text>
         </View>
         <View style={styles.modalButtonsColumn}>
+          <GoogleSigninButton onPress={handleGoogle} />
           <Pressable
             style={styles.btnPrimary}
             onPress={() => router.push("/(auth)/sign-up")}

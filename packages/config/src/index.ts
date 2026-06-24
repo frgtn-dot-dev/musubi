@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { expand } from "dotenv-expand";
 import path from "path";
+import { env } from "process";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,10 +34,17 @@ type SMTPConfig = {
   from: string,
 }
 
+type SocialConfig = {
+  googleWebClientID: string,
+  googleIOSClientID: string,
+  googleClientSecret: string,
+}
+
 type Config = {
   api: APIConfig,
   db: DBConfig,
   smtp: SMTPConfig,
+  social: SocialConfig,
 }
 
 const dbConfig: DBConfig = {
@@ -59,9 +67,16 @@ const smtpConfig: SMTPConfig = {
   from: envOrThrow("FROM_EMAIL"),
 }
 
+const socialConfig: SocialConfig = {
+  googleIOSClientID: "", // envOrThrow("GOOGLE_IOS_CLIENT_ID"),
+  googleWebClientID: envOrThrow("GOOGLE_WEB_CLIENT_ID"),
+  googleClientSecret: envOrThrow("GOOGLE_CLIENT_SECRET"),
+}
+
 export const config: Config = {
   api: apiConfig,
   db: dbConfig,
   smtp: smtpConfig,
+  social: socialConfig,
 }
 

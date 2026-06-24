@@ -11,6 +11,7 @@ export const auth = betterAuth({
     provider: "pg",
     schema: schema,
   }),
+  baseURL: config.api.url,
   trustedOrigins: [
     "musubi://",
     "https://musubi.frgtn.dev",
@@ -27,6 +28,15 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, token }, request) => {
       const customUrl = `https://musubi.frgtn.dev/reset-password/?token=${token}&callback=${config.api.url}`
       await sendEmail(user.email, "Reset your password", getPasswordResetHtml(user.name, customUrl, "1 hour"));
+    },
+  },
+  socialProviders: {
+    google: {
+      clientId: [
+        // config.social.googleIOSClientID,
+        config.social.googleWebClientID,
+      ],
+      clientSecret: config.social.googleClientSecret,
     },
   },
   user: {

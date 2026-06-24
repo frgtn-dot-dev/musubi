@@ -4,6 +4,5 @@ export const notificationsTable = sqliteTable("notifications_table", {
   id: int().primaryKey({ autoIncrement: true }),
   identifier: text().notNull(),
   eventID: text().notNull(),
-  triggerDate: text().notNull(),
+  triggerDate: text(),
 });
-
