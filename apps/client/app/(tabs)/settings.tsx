@@ -54,6 +54,15 @@ export default function SettingsTab() {
     router.replace('/(auth)/welcome');
   }
 
+  const handleGoogleSync = async () => {
+    const { error, data } = await authClient.linkSocial({
+      provider: "google",
+      scopes: ["https://www.googleapis.com/auth/calendar"],
+      callbackURL: "/(tabs)",   // kam se v appce vrátit po úspěchu
+    });
+    alert(`ERROR: ${error} \nDATA: ${data}`);
+  };
+
   const testDeleteConfirm = async (v: string) => {
     if (v === userSession.data?.user.name!) {
       return { ok: true, error: "" }
@@ -103,6 +112,39 @@ export default function SettingsTab() {
             <Text style={{ fontSize: 14, color: colors.fg2 }}>
               {userSession.data?.user.email}
             </Text>
+          </View>
+        </View>
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 16,
+            borderBottomWidth: 1,
+            borderTopWidth: 1,
+            borderColor: colors.line,
+            gap: 16
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 16,
+              color: colors.fg2,
+              textDecorationLine: "underline"
+            }}
+          >
+            Socials
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: 14, color: colors.fg2, alignSelf: "center" }}>
+              Google:
+            </Text>
+            <Pressable
+              style={{ borderColor: colors.line3, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12 }}
+              onPress={handleGoogleSync}
+            >
+              <Text style={{ fontSize: 14, color: colors.fg2 }}>
+                Connect Google
+              </Text>
+            </Pressable>
           </View>
         </View>
         <SettingRowToggle
@@ -175,7 +217,7 @@ export default function SettingsTab() {
             </Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </ScrollView >
       {settingsChanged &&
         <Pressable
           style={[styles.fab, isSaving && { backgroundColor: colors.line }]}
@@ -199,6 +241,6 @@ export default function SettingsTab() {
         onTest={(value) => testDeleteConfirm(value)}
         onConfirm={handleUserDelete}
       />
-    </View>
+    </View >
   );
 }

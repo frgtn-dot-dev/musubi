@@ -33,10 +33,11 @@ export const auth = betterAuth({
   socialProviders: {
     google: {
       clientId: [
-        // config.social.googleIOSClientID,
         config.social.googleWebClientID,
       ],
       clientSecret: config.social.googleClientSecret,
+      accessType: "offline",
+      prompt: "select_account consent",
     },
   },
   user: {
