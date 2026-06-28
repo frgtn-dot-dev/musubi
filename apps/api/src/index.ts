@@ -47,45 +47,45 @@ app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 // GET REQUESTS
 
-app.get("/api/server", handlerServer);
-app.get("/api/server/ok", handlerServerStatus);
+app.get("/api/v1/server", handlerServer);
+app.get("/api/v1/server/ok", handlerServerStatus);
 
-app.get("/api/calendars", requireAuth, (
+app.get("/api/v1/calendars", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerGetCalendars(req, res).catch(next));
 });
 
-app.get("/api/calendars/:id", requireAuth, (
+app.get("/api/v1/calendars/:id", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerGetCalendar(req, res).catch(next));
 });
 
-app.get("/api/calendars/tokens/:token", requireAuth, (
+app.get("/api/v1/calendars/tokens/:token", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerGetCalendarFromToken(req, res).catch(next));
 });
 
-app.get("/api/events", requireAuth, (
+app.get("/api/v1/events", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerGetEvents(req, res).catch(next));
 });
 
-app.get("/api/stream", requireAuth, (
+app.get("/api/v1/stream", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerStream(req, res).catch(next));
 });
 
-app.get("/api/users/settings", requireAuth, (
+app.get("/api/v1/users/settings", requireAuth, (
   req,
   res,
   next) => {
@@ -96,35 +96,35 @@ app.get("/api/users/settings", requireAuth, (
 
 // POST REQUESTS
 
-app.post("/api/users/reset", (
+app.post("/api/v1/users/reset", (
   req,
   res,
   next) => {
   Promise.resolve(handlerResetUsers(req, res).catch(next));
 });
 
-app.post("/api/calendars", requireAuth, (
+app.post("/api/v1/calendars", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerCreateCalendar(req, res).catch(next));
 });
 
-app.post("/api/calendars/members/:calendarId", requireAuth, (
+app.post("/api/v1/calendars/members/:calendarId", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerJoinCalendar(req, res).catch(next));
 });
 
-app.post("/api/events", requireAuth, (
+app.post("/api/v1/events", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerCreateEvent(req, res).catch(next));
 });
 
-app.post("/api/calendars/invites", requireAuth, (
+app.post("/api/v1/calendars/invites", requireAuth, (
   req,
   res,
   next) => {
@@ -135,21 +135,21 @@ app.post("/api/calendars/invites", requireAuth, (
 
 // PUT REQUESTS
 
-app.put("/api/events", requireAuth, (
+app.put("/api/v1/events", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerUpdateEvent(req, res).catch(next));
 });
 
-app.put("/api/calendars", requireAuth, (
+app.put("/api/v1/calendars", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerUpdateCalendar(req, res).catch(next));
 });
 
-app.put("/api/users/settings", requireAuth, (
+app.put("/api/v1/users/settings", requireAuth, (
   req,
   res,
   next) => {
@@ -160,14 +160,14 @@ app.put("/api/users/settings", requireAuth, (
 
 // DELETE REQUESTS
 
-app.delete("/api/users", requireAuth, (
+app.delete("/api/v1/users", requireAuth, (
   req,
   res,
   next) => {
   Promise.resolve(handlerDeleteUser(req, res).catch(next));
 });
 
-app.delete("/api/events", requireAuth, (
+app.delete("/api/v1/events", requireAuth, (
   req,
   res,
   next) => {

@@ -1,5 +1,6 @@
 import { Calendar, CalendarWithEvents, Event, Invite, Settings } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
+import { apiVersion } from "@/constants/url";
 
 
 export function useApi() {
@@ -8,7 +9,7 @@ export function useApi() {
 
   return {
     async createCalendar(calendar: Calendar) {
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/calendars`, {
+      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -32,7 +33,7 @@ export function useApi() {
     },
 
     async getCalendars() {
-      const { error, data } = await authClient.$fetch<Calendar[]>(`${apiUrl}/api/calendars`, {
+      const { error, data } = await authClient.$fetch<Calendar[]>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "GET",
       });
 
@@ -41,7 +42,7 @@ export function useApi() {
     },
 
     async getCalendar(calendarID: string) {
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/calendars/${calendarID}`, {
+      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars/${calendarID}`, {
         method: "GET",
       });
 
@@ -50,7 +51,7 @@ export function useApi() {
     },
 
     async getCalendarFromToken(token: string) {
-      const { error, data } = await authClient.$fetch<CalendarWithEvents>(`${apiUrl}/api/calendars/tokens/${token}`, {
+      const { error, data } = await authClient.$fetch<CalendarWithEvents>(`${apiUrl}/api/${apiVersion}/calendars/tokens/${token}`, {
         method: "GET",
       });
 
@@ -59,7 +60,7 @@ export function useApi() {
     },
 
     async createEvent(event: Event) {
-      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/events`, {
+      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,7 +81,7 @@ export function useApi() {
     },
 
     async updateCalendar(calendar: Calendar) {
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/calendars`, {
+      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",
@@ -93,7 +94,7 @@ export function useApi() {
     },
 
     async removeCalendar(calendar: Calendar) {
-      const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/calendars`, {
+      const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
@@ -107,7 +108,7 @@ export function useApi() {
     },
 
     async updateEvent(event: Event) {
-      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/events`, {
+      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",
@@ -120,7 +121,7 @@ export function useApi() {
     },
 
     async removeEvent(event: Event) {
-      const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/events`, {
+      const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
@@ -134,7 +135,7 @@ export function useApi() {
     },
 
     async getEvents() {
-      const { error, data } = await authClient.$fetch<{ events: Event[] }>(`${apiUrl}/api/events`, {
+      const { error, data } = await authClient.$fetch<{ events: Event[] }>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "GET",
         headers: {
           "content-type": "application/json",
@@ -147,7 +148,7 @@ export function useApi() {
     },
 
     async createInvite(invite: Invite) {
-      const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/calendars/invites`, {
+      const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/${apiVersion}/calendars/invites`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -161,7 +162,7 @@ export function useApi() {
     },
 
     async acceptInvite(calendarID: string) {
-      const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/calendars/members/${calendarID}`, {
+      const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`, {
         method: "POST",
       });
 
@@ -171,7 +172,7 @@ export function useApi() {
     },
 
     async leaveCalendar(calendarID: string) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/calendars/members/${calendarID}`, {
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`, {
         method: "DELETE",
       });
 
@@ -181,7 +182,7 @@ export function useApi() {
     },
 
     async getSettings() {
-      const { data, error } = await authClient.$fetch<Settings>(`${apiUrl}/api/users/settings`, {
+      const { data, error } = await authClient.$fetch<Settings>(`${apiUrl}/api/${apiVersion}/users/settings`, {
         method: "GET",
       });
 
@@ -191,7 +192,7 @@ export function useApi() {
     },
 
     async saveSettings(settings: Settings) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/users/settings`, {
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/settings`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",
@@ -205,7 +206,7 @@ export function useApi() {
     },
 
     async deleteUser() {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/users`, {
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users`, {
         method: "DELETE",
       });
 
