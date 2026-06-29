@@ -33,6 +33,7 @@ export default function SettingsTab() {
 
   useEffect(() => {
     getGCStatus();
+    api.getGoogleCalendars();
   }, [])
 
   const handleSave = async (settings: Settings) => {

@@ -9,11 +9,8 @@ export async function getGoogleCalendarList(accessToken: string) {
     }
   });
 
-  if (status !== 200) {
-    console.log(`STATUS: ${status} : ${statusText}`);
-  } else {
-    console.log(JSON.stringify(body));
-  }
+  console.log(`STATUS: ${status} : ${statusText}`);
+  console.log(JSON.stringify(body));
 }
 
 
