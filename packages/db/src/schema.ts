@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp, uuid, integer } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, uuid, integer, unique } from "drizzle-orm/pg-core";
 
 
 // AUTH
@@ -327,3 +327,40 @@ export const eventUsersRelations = relations(eventUsers, ({ one }) => ({
 //     .notNull(),
 //   //TODO: Complete Table
 // });
+
+
+// GOOGLE SYNC
+
+
+export const googleCalendars = pgTable("google_calendars", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  calendarID: uuid("calendar_id")
+    .references(() => calendars.id, { onDelete: "cascade" })
+    .notNull(),
+  googleCalendarID: text("google_calendar_id").notNull(),
+  syncToken: text("sync_token"),
+}, (t) => [unique().on(t.calendarID)]);
+
+export type NewGoogleCalendar = typeof googleCalendars.$inferInsert;
+
+
+export const googleEvents = pgTable("google_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  eventID: uuid("event_id")
+    .references(() => events.id, { onDelete: "cascade" })
+    .notNull(),
+  googleCalendarID: text("google_calendar_id").notNull(),
+  googleEventID: text("google_event_id").notNull(),
+}, (t) => [unique().on(t.googleCalendarID, t.googleEventID)]);
+
+export type NewGoogleEvent = typeof googleEvents.$inferInsert;

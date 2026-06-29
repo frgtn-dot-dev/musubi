@@ -50,6 +50,13 @@
       "when": 1782124272546,
       "tag": "0006_mushy_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782734972976,
+      "tag": "0007_windy_doorman",
+      "breakpoints": true
     }
   ]
 }
