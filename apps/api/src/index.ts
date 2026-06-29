@@ -58,6 +58,13 @@ app.get("/api/v1/calendars", requireAuth, (
   Promise.resolve(handlerGetCalendars(req, res).catch(next));
 });
 
+app.get("/api/v1/calendars/google", requireAuth, (
+  req,
+  res,
+  next) => {
+  Promise.resolve(handlerGetGoogleCalendars(req, res).catch(next));
+});
+
 app.get("/api/v1/calendars/:id", requireAuth, (
   req,
   res,
@@ -116,13 +123,6 @@ app.post("/api/v1/calendars", requireAuth, (
   res,
   next) => {
   Promise.resolve(handlerCreateCalendar(req, res).catch(next));
-});
-
-app.get("/api/v1/calendars/google", requireAuth, (
-  req,
-  res,
-  next) => {
-  Promise.resolve(handlerGetGoogleCalendars(req, res).catch(next));
 });
 
 app.post("/api/v1/calendars/members/:calendarId", requireAuth, (
