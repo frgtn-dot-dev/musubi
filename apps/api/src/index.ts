@@ -118,7 +118,7 @@ app.post("/api/v1/calendars", requireAuth, (
   Promise.resolve(handlerCreateCalendar(req, res).catch(next));
 });
 
-app.post("/api/v1/calendars/google", requireAuth, (
+app.get("/api/v1/calendars/google", requireAuth, (
   req,
   res,
   next) => {

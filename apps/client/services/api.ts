@@ -238,8 +238,8 @@ export function useApi() {
     },
 
     async getGoogleCalendars() {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/google/revoke`, {
-        method: "POST",
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/calendars/google`, {
+        method: "GET",
       });
 
       if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
