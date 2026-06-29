@@ -2,15 +2,18 @@ import { auth } from "@musubi/auth";
 
 
 export async function getGoogleCalendarList(accessToken: string) {
-  const { body, status, statusText } = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
+  const res = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${accessToken}`,
     }
   });
 
-  console.log(`STATUS: ${status} : ${statusText}`);
-  console.log(JSON.stringify(body));
+  if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`)
+
+  const data = await res.json();
+
+  console.log(data);
 }
 
 
