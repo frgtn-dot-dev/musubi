@@ -13,7 +13,7 @@ export async function handlerRevokeGoogle(req: Request, res: Response) {
     body: `token=${(await googleCheck(req.user!.id)).refreshToken}`,
   });
 
-  cleanUsersGoogleTokens(req.user!.id);
+  await cleanUsersGoogleTokens(req.user!.id);
 
   res.sendStatus(200);
 }
