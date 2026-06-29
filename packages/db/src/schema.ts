@@ -344,7 +344,12 @@ export const googleCalendars = pgTable("google_calendars", {
     .notNull(),
   googleCalendarID: text("google_calendar_id").notNull(),
   syncToken: text("sync_token"),
-}, (t) => [unique().on(t.calendarID)]);
+  userID: text("user_id")
+    .references(() => user.id, {
+      onDelete: "cascade",
+    })
+    .notNull(),
+}, (t) => [unique().on(t.googleCalendarID, t.userID), unique().on(t.calendarID)]);
 
 export type NewGoogleCalendar = typeof googleCalendars.$inferInsert;
 

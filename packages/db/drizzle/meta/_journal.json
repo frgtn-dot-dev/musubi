@@ -57,6 +57,13 @@
       "when": 1782734972976,
       "tag": "0007_windy_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782738160738,
+      "tag": "0008_broken_penance",
+      "breakpoints": true
     }
   ]
 }
