@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { account, calendarMembers, calendars, db, googleCalendars, user } from "../index"
+import { account, calendarMembers, calendars, db, googleCalendars } from "../index"
 import { GoogleCheck } from "@musubi/types";
 
 export async function googleCheck(userID: string): Promise<GoogleCheck> {
@@ -61,4 +61,24 @@ export async function importGoogleCalendar(userID: string, g: { id: string, summ
       calendarID: cal.id,
     })
   });
+}
+
+export async function getUserGoogleCalendars(userID: string) {
+  const cals = db.select({
+    calendarID: googleCalendars.calendarID,
+    googleCalendarID: googleCalendars.googleCalendarID,
+    syncToken: googleCalendars.syncToken,
+  }).from(googleCalendars).where(eq(googleCalendars.userID, userID));
+
+  return cals;
+}
+
+export async function setSyncToken(googleCalendarID: string, token: string | null) {
+  await db.update(googleCalendars).set({ syncToken: token }).where(eq(googleCalendars.googleCalendarID, googleCalendarID));
+}
+
+export async function clearGoogleCalendarEvents(googleCalendarID: string) { }
+
+export async function applyEvent(event: { summary: string, id: string, color: string }) {
+  console.log(event.summary);
 }

@@ -1,5 +1,5 @@
 import { auth } from "@musubi/auth";
-import { doesGoogleCalIDExistsForUser, importGoogleCalendar } from "@musubi/db";
+import { doesGoogleCalIDExistsForUser, getGoogleRefreshToken, importGoogleCalendar } from "@musubi/db";
 
 
 export async function syncGoogleCalendarList(userID: string) {
@@ -30,4 +30,45 @@ export async function getGoogleAccessToken(userID: string) {
   });
 
   return accessToken;
+}
+
+
+const GCAL = "https://www.googleapis.com/calendar/v3/calendars";
+
+export async function pullGoogleCalendar(userID: string, link: {
+  calendarID: string,
+  googleCalendarID: string; syncToken: string | null
+}) {
+  const accessToken = await getGoogleRefreshToken(userID);
+  let pageToken: string | undefined;
+  let nextSyncToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams();
+    if (link.syncToken) params.set("syncToken", link.syncToken);
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const res = await fetch(`${GCAL}/${encodeURIComponent(link.googleCalendarID)}/events?${params}`, {
+      headers: {
+        "Authorization:": `Bearer ${accessToken}`,
+      }
+    });
+
+    if (res.status === 410) {
+      // await clearGoogleCalendarEvents(link.calendarID);
+      // await setSyncToken(link.calendarID, null);
+      // return pullGoogleCalendar(userID, {...link, syncToken: null});
+    }
+
+    if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
+
+    const data = await res.json();
+    for (const item of data.times ?? []) {
+      // await applyEvent(item, link.calendarID);
+    }
+    pageToken = data.nextPageToken;
+    nextSyncToken = data.nextSyncToken;
+  } while (pageToken);
+
+  // if (nextSyncToken) await setSyncToken(link.calendarID, nextSyncToken);
 }
