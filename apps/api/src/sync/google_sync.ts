@@ -43,7 +43,7 @@ export async function pullGoogleCalendar(userID: string, link: {
   calendarID: string,
   googleCalendarID: string; syncToken: string | null
 }) {
-  const accessToken = await getGoogleRefreshToken(userID);
+  const accessToken = await getGoogleAccessToken(userID);
   let pageToken: string | undefined;
   let nextSyncToken: string | undefined;
 
@@ -67,7 +67,7 @@ export async function pullGoogleCalendar(userID: string, link: {
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
 
     const data = await res.json();
-    for (const item of data.times ?? []) {
+    for (const item of data.itmes ?? []) {
       await applyEvent(item, link.calendarID);
     }
     pageToken = data.nextPageToken;
