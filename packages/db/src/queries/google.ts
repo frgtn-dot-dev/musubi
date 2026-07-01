@@ -79,6 +79,6 @@ export async function setSyncToken(googleCalendarID: string, token: string | nul
 
 export async function clearGoogleCalendarEvents(googleCalendarID: string) { }
 
-export async function applyEvent(event: { summary: string, id: string, color: string }) {
+export async function applyEvent(event: { summary: string, id: string, color: string }, calendarID: string) {
   console.log(event.summary);
 }

@@ -1,5 +1,5 @@
 import { auth } from "@musubi/auth";
-import { doesGoogleCalIDExistsForUser, getGoogleRefreshToken, importGoogleCalendar } from "@musubi/db";
+import { applyEvent, clearGoogleCalendarEvents, doesGoogleCalIDExistsForUser, getGoogleRefreshToken, getUserGoogleCalendars, importGoogleCalendar, setSyncToken, user } from "@musubi/db";
 
 
 export async function syncGoogleCalendarList(userID: string) {
@@ -20,6 +20,10 @@ export async function syncGoogleCalendarList(userID: string) {
     if (!(await doesGoogleCalIDExistsForUser(userID, cal.id))) {
       await importGoogleCalendar(userID, cal)
     }
+  }
+
+  for (const cal of (await getUserGoogleCalendars(userID))) {
+    await pullGoogleCalendar(userID, cal);
   }
 }
 
@@ -55,20 +59,20 @@ export async function pullGoogleCalendar(userID: string, link: {
     });
 
     if (res.status === 410) {
-      // await clearGoogleCalendarEvents(link.calendarID);
-      // await setSyncToken(link.calendarID, null);
-      // return pullGoogleCalendar(userID, {...link, syncToken: null});
+      await clearGoogleCalendarEvents(link.calendarID);
+      await setSyncToken(link.calendarID, null);
+      return pullGoogleCalendar(userID, { ...link, syncToken: null });
     }
 
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
 
     const data = await res.json();
     for (const item of data.times ?? []) {
-      // await applyEvent(item, link.calendarID);
+      await applyEvent(item, link.calendarID);
     }
     pageToken = data.nextPageToken;
     nextSyncToken = data.nextSyncToken;
   } while (pageToken);
 
-  // if (nextSyncToken) await setSyncToken(link.calendarID, nextSyncToken);
+  if (nextSyncToken) await setSyncToken(link.calendarID, nextSyncToken);
 }
