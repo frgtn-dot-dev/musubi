@@ -1,5 +1,5 @@
 import { auth } from "@musubi/auth";
-import { applyGoogleEvent, clearGoogleCalendarEvents, doesGoogleCalIDExistsForUser, getGoogleRefreshToken, getUserGoogleCalendars, importGoogleCalendar, importGoogleEvent, setGoogleSyncToken } from "@musubi/db";
+import { applyGoogleEvent, clearGoogleCalendarEvents, doesGoogleCalIDExistsForUser, getGoogleEventID, getGoogleRefreshToken, getUserGoogleCalendars, importGoogleCalendar, importGoogleEvent, setGoogleSyncToken } from "@musubi/db";
 import { Event } from "@musubi/types";
 
 
@@ -116,4 +116,26 @@ export async function pushEventCreateToGoogle(
   const data = await res.json();
 
   await importGoogleEvent(userID, event.id, googleCalendarID, data.id);
+}
+
+export async function pushEventUpdateToGoogle(
+  userID: string,
+  googleCalendarID: string,
+  event: Event,
+) {
+  const accessToken = await getGoogleAccessToken(userID);
+  const googleEventID = await getGoogleEventID(event.id, googleCalendarID);
+
+  if (!googleEventID) return; // TODO: If event added after created, create new google event
+
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(googleCalendarID)}/events/${encodeURIComponent(googleEventID)}`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(toGoogleEvent(event))
+  });
+
+  if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
 }

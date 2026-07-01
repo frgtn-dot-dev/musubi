@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { NewEvent, createEvent, getCalendarMembers, getGoogleLinkForCalendar, getUsersEvents, removeEvent, updateEvent } from '@musubi/db';
 import { BadRequestError, Event, EventSchema, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
-import { pushEventCreateToGoogle } from "../sync/google_sync";
+import { pushEventCreateToGoogle, pushEventUpdateToGoogle } from "../sync/google_sync";
 
 export async function handlerCreateEvent(req: Request, res: Response) {
   let event: Event;
@@ -59,6 +59,17 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
     ...event,
     creatorID: req.user!.id,
   });
+
+  try {
+    for (const cal of event.calendars) {
+      const link = await getGoogleLinkForCalendar(cal);
+      if (link) {
+        await pushEventUpdateToGoogle(link.userID, link.googleCalendarID, { ...updatedEvent, calendars: event.calendars });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
 
   if (updatedEvent) {
 

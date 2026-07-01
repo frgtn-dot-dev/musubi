@@ -144,3 +144,12 @@ export async function getGoogleLinkForCalendar(calendarID: string): Promise<{ go
   return cal;
 }
 
+export async function getGoogleEventID(eventID: string, googleCalendarID: string) {
+  const [res] = await db.select({ googleEventID: googleEvents.googleEventID })
+    .from(googleEvents).where(and(
+      eq(googleEvents.eventID, eventID),
+      eq(googleEvents.googleCalendarID, googleCalendarID)
+    ));
+
+  return res?.googleEventID ?? null;
+}
