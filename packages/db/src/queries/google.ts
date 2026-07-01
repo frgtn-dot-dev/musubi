@@ -76,8 +76,8 @@ export async function getUserGoogleCalendars(userID: string) {
   return cals;
 }
 
-export async function setSyncToken(googleCalendarID: string, token: string | null) {
-  await db.update(googleCalendars).set({ syncToken: token }).where(eq(googleCalendars.googleCalendarID, googleCalendarID));
+export async function setSyncToken(calendarID: string, token: string | null) {
+  await db.update(googleCalendars).set({ syncToken: token }).where(eq(googleCalendars.calendarID, calendarID));
 }
 
 export async function clearGoogleCalendarEvents(calendarID: string) {
