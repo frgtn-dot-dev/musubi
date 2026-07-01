@@ -63,6 +63,11 @@ export async function importGoogleCalendar(userID: string, g: { id: string, summ
   });
 }
 
+export async function importGoogleEvent(userID: string, eventID: string, googleCalendarID: string, googleEventID: string) {
+  await db.insert(googleEvents)
+    .values({ eventID, googleCalendarID, googleEventID }).returning();
+}
+
 export async function getUserGoogleCalendars(userID: string) {
   const cals = db.select({
     calendarID: googleCalendars.calendarID,
@@ -76,7 +81,7 @@ export async function getUserGoogleCalendars(userID: string) {
   return cals;
 }
 
-export async function setSyncToken(calendarID: string, token: string | null) {
+export async function setGoogleSyncToken(calendarID: string, token: string | null) {
   await db.update(googleCalendars).set({ syncToken: token }).where(eq(googleCalendars.calendarID, calendarID));
 }
 
@@ -86,7 +91,7 @@ export async function clearGoogleCalendarEvents(calendarID: string) {
       .where(eq(calendarEvents.calendarID, calendarID))));
 }
 
-export async function applyEvent(userID: string, event: any, calendarID: string, googleCalendarID: string, calColor: string) {
+export async function applyGoogleEvent(userID: string, event: any, calendarID: string, googleCalendarID: string, calColor: string) {
   if (event.status === "cancelled") {
     await db.delete(events).where(inArray(events.id,
       db.select({ id: googleEvents.eventID }).from(googleEvents)
@@ -128,3 +133,14 @@ export async function applyEvent(userID: string, event: any, calendarID: string,
     }
   });
 }
+
+export async function getGoogleLinkForCalendar(calendarID: string): Promise<{ googleCalendarID: string, userID: string } | null> {
+  const [cal] = await db.select({
+    googleCalendarID: googleCalendars.googleCalendarID,
+    userID: googleCalendars.userID
+  }).from(googleCalendars)
+    .where(eq(googleCalendars.calendarID, calendarID));
+
+  return cal;
+}
+

@@ -15,6 +15,8 @@ import Animated, {
   LinearTransition,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { RefreshControl } from "react-native";
+import { useRefreshData } from "@/hooks/useRefreshData";
 
 
 
@@ -32,6 +34,14 @@ export default function AgendaTab() {
   const [eventDetailVisible, setEventDetailVisible] = useState<boolean>(false);
   const [prefilledEvent, setPrefilledEvent] = useState<Event | undefined>(undefined);
   const [eventDetail, setEventDetail] = useState<Event | null>(null);
+
+  const refresh = useRefreshData();
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await refresh(); } catch (e) { console.error(e); }
+    finally { setRefreshing(false); }
+  };
 
   const calendarById = useMemo(
     () => new Map(calendars.map(c => [c.id, c])),
@@ -84,7 +94,10 @@ export default function AgendaTab() {
         onToggle={toggleCal}
         onSolo={soloCalendar}
       />
-      <ScrollView style={{ paddingHorizontal: 16 }}>
+      <ScrollView
+        style={{ paddingHorizontal: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {
           groups.map((g, i) => (
             <Animated.View

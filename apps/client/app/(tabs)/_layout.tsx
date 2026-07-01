@@ -2,22 +2,16 @@ import { colors, fonts } from '@/constants/theme';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useServer } from '@/contexts/ServerContext';
 import { useConnectToEventStream } from '@/hooks/useEventsStream';
-import { useApi } from '@/services/api';
-import { useCalendarsStore } from '@/store/useCalendarsStore';
-import { useEventsStore } from '@/store/useEventsStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useRefreshData } from '@/hooks/useRefreshData';
 
 
 export default function TabLayout() {
   const { apiUrl, isLoading } = useServer();
-  const api = useApi();
-  const { loadSettings } = useSettingsStore();
-  const { loadCalendars } = useCalendarsStore();
-  const { loadEvents } = useEventsStore();
+  const refresh = useRefreshData();
   const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
@@ -32,18 +26,7 @@ export default function TabLayout() {
 
     const load = async () => {
       try {
-        const gStatus = await api.checkGoogleStatus();
-        if (gStatus.calendarConnected) {
-          await api.getGoogleCalendars();
-        }
-        const [settings, calendars, events] = await Promise.all([
-          api.getSettings(),
-          api.getCalendars(),
-          api.getEvents(),
-        ]);
-        loadSettings(settings);
-        loadCalendars(calendars);
-        loadEvents(events);
+        await refresh();
       } catch (e: any) {
         console.error("Could not fetch initial data:", e?.message, e?.status, e);
       } finally {

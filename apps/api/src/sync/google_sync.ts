@@ -1,5 +1,6 @@
 import { auth } from "@musubi/auth";
-import { applyEvent, clearGoogleCalendarEvents, doesGoogleCalIDExistsForUser, getGoogleRefreshToken, getUserGoogleCalendars, importGoogleCalendar, setSyncToken, user } from "@musubi/db";
+import { applyGoogleEvent, clearGoogleCalendarEvents, doesGoogleCalIDExistsForUser, getGoogleRefreshToken, getUserGoogleCalendars, importGoogleCalendar, importGoogleEvent, setGoogleSyncToken } from "@musubi/db";
+import { Event } from "@musubi/types";
 
 
 export async function syncGoogleCalendarList(userID: string) {
@@ -61,7 +62,7 @@ export async function pullGoogleCalendar(
 
     if (res.status === 410) {
       await clearGoogleCalendarEvents(link.calendarID);
-      await setSyncToken(link.calendarID, null);
+      await setGoogleSyncToken(link.calendarID, null);
       return pullGoogleCalendar(userID, { ...link, syncToken: null });
     }
 
@@ -69,11 +70,50 @@ export async function pullGoogleCalendar(
 
     const data = await res.json();
     for (const item of data.items ?? []) {
-      await applyEvent(userID, item, link.calendarID, link.googleCalendarID, link.calColor);
+      await applyGoogleEvent(userID, item, link.calendarID, link.googleCalendarID, link.calColor);
     }
     pageToken = data.nextPageToken;
     nextSyncToken = data.nextSyncToken;
   } while (pageToken);
 
-  if (nextSyncToken) await setSyncToken(link.calendarID, nextSyncToken);
+  if (nextSyncToken) await setGoogleSyncToken(link.calendarID, nextSyncToken);
+}
+
+export function toGoogleEvent(event: Event) {
+  const googleEvent = {
+    summary: event.title,
+    description: event.description,
+    location: event.location,
+    start: event.isAllDay ?
+      { "date": event.start.toISOString().slice(0, 10) } :
+      { "dateTime": event.start.toISOString() },
+    end: event.isAllDay ?
+      { "date": event.end.toISOString().slice(0, 10) } :
+      { "dateTime": event.end.toISOString() },
+  };
+
+  return googleEvent;
+}
+
+export async function pushEventCreateToGoogle(
+  userID: string,
+  googleCalendarID: string,
+  event: Event,
+) {
+  const accessToken = await getGoogleAccessToken(userID);
+
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(googleCalendarID)}/events`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(toGoogleEvent(event))
+  });
+
+  if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
+
+  const data = await res.json();
+
+  await importGoogleEvent(userID, event.id, googleCalendarID, data.id);
 }
