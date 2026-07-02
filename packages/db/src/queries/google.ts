@@ -91,6 +91,17 @@ export async function clearGoogleCalendarEvents(calendarID: string) {
       .where(eq(calendarEvents.calendarID, calendarID))));
 }
 
+// Google sometimes sends FREQ=YEARLY;BYMONTHDAY=X without BYMONTH. Per RFC 5545
+// that expands BYMONTHDAY across all 12 months (= monthly), even though Google's
+// UI shows it yearly (it leans on DTSTART's month). Anchor it to the start month
+// so it's actually annual.
+function sanitizeRecurrence(rrule: string, start: Date): string {
+  if (/FREQ=YEARLY/.test(rrule) && /BYMONTHDAY=/.test(rrule) && !/BYMONTH=/.test(rrule)) {
+    return `${rrule};BYMONTH=${start.getUTCMonth() + 1}`;
+  }
+  return rrule;
+}
+
 export async function applyGoogleEvent(userID: string, event: any, calendarID: string, googleCalendarID: string, calColor: string) {
   if (event.status === "cancelled") {
     await db.delete(events).where(inArray(events.id,
@@ -103,10 +114,11 @@ export async function applyGoogleEvent(userID: string, event: any, calendarID: s
   }
 
   const isAllDay = !event.start.dateTime;
+  const start = new Date(event.start.dateTime ?? event.start.date);
   const values = {
     title: event.summary ?? "(untitled)",
     color: calColor,
-    start: new Date(event.start.dateTime ?? event.start.date),
+    start,
     end: isAllDay
       ? new Date(new Date(event.end.date).getTime() - 86400000)   // -1 day (Google end.date is exclusive)
       : new Date(event.end.dateTime),
@@ -114,7 +126,7 @@ export async function applyGoogleEvent(userID: string, event: any, calendarID: s
     description: event.description ?? null,
     location: event.location ?? null,
     organizer: event.organizer?.email ?? "",
-    recurrence: event.recurrence?.join("\n") ?? null,
+    recurrence: event.recurrence ? sanitizeRecurrence(event.recurrence.join("\n"), start) : null,
   };
 
   await db.transaction(async (tx) => {
