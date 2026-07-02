@@ -114,7 +114,6 @@ export async function applyGoogleEvent(userID: string, event: any, calendarID: s
     description: event.description ?? null,
     location: event.location ?? null,
     organizer: event.organizer?.email ?? "",
-    url: event.htmlLink ?? null,
     recurrence: event.recurrence?.join("\n") ?? null,
   };
 

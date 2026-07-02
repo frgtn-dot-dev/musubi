@@ -8,7 +8,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native'
-import { eventCellCss, u } from '../commonStyles'
+import { ALL_DAY_EVENT_HEIGHT, eventCellCss, u } from '../commonStyles'
 import type { ICalendarEventBase } from '../interfaces'
 import { useTheme } from '../theme/ThemeContext'
 import { eventDay, isToday } from '../utils/datetime'
@@ -32,6 +32,9 @@ export interface CalendarHeaderProps<T extends ICalendarEventBase> {
   weekDayHeaderHighlightColor?: string
   showAllDayEventCell?: boolean
   eventFilter?: (event: T) => boolean
+  /** Height of the all-day row; grows with the number of all-day events so the
+   *  timeline can subtract exactly this much. Falls back to cellHeight. */
+  allDayEventCellHeight?: number
   hideHours?: boolean
   showWeekNumber?: boolean
   weekNumberPrefix?: string
@@ -56,6 +59,7 @@ function _CalendarHeader<T extends ICalendarEventBase>({
   weekDayHeaderHighlightColor = '',
   showAllDayEventCell = true,
   eventFilter,
+  allDayEventCellHeight,
   hideHours = false,
   showWeekNumber = false,
   weekNumberPrefix = '',
@@ -176,7 +180,7 @@ function _CalendarHeader<T extends ICalendarEventBase>({
               </View>
             </View>
             {showAllDay ? (
-              <View style={[u['border-l'], { borderColor: theme.palette.gray['200'] }, { height: cellHeight, overflow: 'hidden' }]}>
+              <View style={[u['border-l'], { borderColor: theme.palette.gray['200'] }, { height: allDayEventCellHeight ?? cellHeight, overflow: 'hidden', backgroundColor: theme.palette.gray['100'] }]}>
                 {visibleAllDay.map((event, index) => {
                   if (!dayjs(date).isBetween(eventDay(event.start, event.isAllDay), eventDay(event.end, event.isAllDay), 'day', '[]')) return null
                   const getEventStyle =
@@ -185,7 +189,7 @@ function _CalendarHeader<T extends ICalendarEventBase>({
                       : () => allDayEventCellStyle
                   return (
                     <TouchableOpacity
-                      style={[eventCellCss.style, primaryBg, u['mt-2'], getEventStyle(event)]}
+                      style={[eventCellCss.style, primaryBg, u['mt-2'], { height: ALL_DAY_EVENT_HEIGHT }, getEventStyle(event)]}
                       key={`${index}-${event.start}-${event.title}-${event.end}`}
                       onPress={() => _onPressEvent(event)}
                       {...allDayEventCellAccessibilityProps}

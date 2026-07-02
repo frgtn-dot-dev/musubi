@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
+import { useRefreshData } from "@/hooks/useRefreshData";
 
 
 export default function SettingsTab() {
@@ -34,6 +35,8 @@ export default function SettingsTab() {
   useEffect(() => {
     getGCStatus();
   }, [])
+
+  const refresh = useRefreshData();
 
   const handleSave = async (settings: Settings) => {
     setIsSaving(true);
@@ -70,6 +73,7 @@ export default function SettingsTab() {
     }
 
     await getGCStatus();
+    await refresh();
   };
 
   const getGCStatus = async () => {

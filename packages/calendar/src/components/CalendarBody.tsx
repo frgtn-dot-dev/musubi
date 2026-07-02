@@ -74,6 +74,9 @@ interface CalendarBodyProps<T extends ICalendarEventBase> {
   enrichedEventsByDate?: Record<string, T[]>
   enableEnrichedEvents?: boolean
   eventFilter?: (event: T) => boolean
+  /** Actual height of the all-day header row (grows with # of all-day events);
+   *  the timeline viewport subtracts whatever exceeds one cellHeight. */
+  allDayEventCellHeight?: number
   eventsAreSorted?: boolean
   timeslots?: number
   hourComponent?: HourRenderer
@@ -112,6 +115,7 @@ function _CalendarBody<T extends ICalendarEventBase>({
   enrichedEventsByDate,
   enableEnrichedEvents = false,
   eventFilter,
+  allDayEventCellHeight,
   eventsAreSorted = false,
   timeslots = 0,
   hourComponent,
@@ -229,7 +233,7 @@ function _CalendarBody<T extends ICalendarEventBase>({
     <React.Fragment>
       {headerComponent != null ? <View style={headerComponentStyle}>{headerComponent}</View> : null}
       <ScrollView
-        style={[{ height: containerHeight - cellHeight * 3 }, style]}
+        style={[{ height: containerHeight - cellHeight * 3 - (allDayEventCellHeight ?? 0) }, style]}
         ref={scrollView}
         scrollEventThrottle={32}
         showsVerticalScrollIndicator={showVerticalScrollIndicator}

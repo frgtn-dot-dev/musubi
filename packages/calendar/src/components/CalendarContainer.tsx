@@ -3,7 +3,7 @@ import React, { useLayoutEffect, useRef } from 'react'
 import type { AccessibilityProps, TextStyle, ViewStyle } from 'react-native'
 import InfinitePager, { type InfinitePagerImperativeApi } from 'react-native-infinite-pager'
 
-import { MIN_HEIGHT } from '../commonStyles'
+import { ALL_DAY_EVENT_HEIGHT, MIN_HEIGHT } from '../commonStyles'
 import type {
   AllDayEventCellStyle,
   CalendarCellStyle,
@@ -27,6 +27,7 @@ import {
   getDatesInNextThreeDays,
   getDatesInWeek,
   isAllDayEvent,
+  maxAllDayRows,
   modeToNum,
 } from '../utils/datetime'
 import { typedMemo } from '../utils/react'
@@ -417,12 +418,19 @@ function _CalendarContainer<T extends ICalendarEventBase>({
   return (
     <InfinitePager
       ref={calendarRef}
-      renderPage={({ index }) => (
+      renderPage={({ index }) => {
+        const dr = getDateRange(getCurrentDate(index))
+        // All-day bar grows with the busiest visible day; the timeline subtracts
+        // the same height below so nothing gets pushed off the bottom.
+        const allDayRows = showAllDayEventCell ? maxAllDayRows(dr, allDayEvents, eventFilter) : 0
+        const allDayHeight = allDayRows > 0 ? allDayRows * (ALL_DAY_EVENT_HEIGHT + 2) + 4 : 0
+        return (
         <React.Fragment>
-          <HeaderComponent {...headerProps} dateRange={getDateRange(getCurrentDate(index))} />
+          <HeaderComponent {...headerProps} dateRange={dr} allDayEventCellHeight={allDayHeight} />
           <CalendarBody
             {...commonProps}
-            dateRange={getDateRange(getCurrentDate(index))}
+            dateRange={dr}
+            allDayEventCellHeight={allDayHeight}
             style={bodyContainerStyle}
             containerHeight={height}
             events={daytimeEvents}
@@ -456,7 +464,8 @@ function _CalendarContainer<T extends ICalendarEventBase>({
             hourComponent={hourComponent}
           />
         </React.Fragment>
-      )}
+        )
+      }}
       onPageChange={handlePageChange}
       pageBuffer={2}
     />

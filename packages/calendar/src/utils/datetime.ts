@@ -126,6 +126,28 @@ export function formatStartEnd(start: Date, end: Date, format: string) {
   return `${dayjs(start).format(format)} - ${dayjs(end).format(format)}`
 }
 
+/**
+ * Max number of (calendar-filtered) all-day events landing on any single day of
+ * the given range — i.e. how many rows the all-day header bar must be tall enough
+ * for. All-day placement uses eventDay so it's timezone-invariant.
+ */
+export function maxAllDayRows<T extends ICalendarEventBase>(
+  dateRange: dayjs.Dayjs[],
+  allDayEvents: T[],
+  eventFilter?: (event: T) => boolean,
+): number {
+  const visible = eventFilter ? allDayEvents.filter(eventFilter) : allDayEvents
+  let max = 0
+  for (const d of dateRange) {
+    let n = 0
+    for (const e of visible) {
+      if (d.isBetween(eventDay(e.start, e.isAllDay), eventDay(e.end, e.isAllDay), 'day', '[]')) n++
+    }
+    if (n > max) max = n
+  }
+  return max
+}
+
 export function isAllDayEvent(start: Date, end: Date) {
   // All-day events are anchored to UTC midnight — check in UTC, not local time.
   const _start = dayjs.utc(start)

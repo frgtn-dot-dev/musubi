@@ -2,6 +2,10 @@ import { Platform, StyleSheet } from 'react-native'
 
 export const MIN_HEIGHT = 1200
 export const HOUR_GUIDE_WIDTH = 50
+// Fixed height of one all-day event chip in the header bar. Kept fixed so the
+// header (which grows with the number of all-day events) and the timeline height
+// stay in exact sync. ponytail: bump if a larger theme font clips the title.
+export const ALL_DAY_EVENT_HEIGHT = 22
 export const OVERLAP_OFFSET = Platform.OS === 'web' ? 20 : 8
 export const OVERLAP_PADDING = Platform.OS === 'web' ? 3 : 0
 
