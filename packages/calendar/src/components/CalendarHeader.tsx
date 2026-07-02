@@ -11,7 +11,7 @@ import {
 import { eventCellCss, u } from '../commonStyles'
 import type { ICalendarEventBase } from '../interfaces'
 import { useTheme } from '../theme/ThemeContext'
-import { isToday } from '../utils/datetime'
+import { eventDay, isToday } from '../utils/datetime'
 import { objHasContent, stringHasContent } from '../utils/object'
 import { typedMemo } from '../utils/react'
 
@@ -81,7 +81,7 @@ function _CalendarHeader<T extends ICalendarEventBase>({
   // actually falls in the shown range — otherwise it's an empty bar taking space.
   const visibleAllDay = eventFilter ? allDayEvents.filter(eventFilter) : allDayEvents
   const hasAllDay = visibleAllDay.some((e) =>
-    dateRange.some((d) => d.isBetween(e.start, e.end, 'day', '[]')),
+    dateRange.some((d) => d.isBetween(eventDay(e.start, e.isAllDay), eventDay(e.end, e.isAllDay), 'day', '[]')),
   )
   const showAllDay = showAllDayEventCell && hasAllDay
 
@@ -176,9 +176,9 @@ function _CalendarHeader<T extends ICalendarEventBase>({
               </View>
             </View>
             {showAllDay ? (
-              <View style={[u['border-l'], { borderColor: theme.palette.gray['200'] }, { height: cellHeight }]}>
+              <View style={[u['border-l'], { borderColor: theme.palette.gray['200'] }, { height: cellHeight, overflow: 'hidden' }]}>
                 {visibleAllDay.map((event, index) => {
-                  if (!dayjs(date).isBetween(event.start, event.end, 'day', '[]')) return null
+                  if (!dayjs(date).isBetween(eventDay(event.start, event.isAllDay), eventDay(event.end, event.isAllDay), 'day', '[]')) return null
                   const getEventStyle =
                     typeof allDayEventCellStyle === 'function'
                       ? allDayEventCellStyle
@@ -190,7 +190,10 @@ function _CalendarHeader<T extends ICalendarEventBase>({
                       onPress={() => _onPressEvent(event)}
                       {...allDayEventCellAccessibilityProps}
                     >
-                      <Text style={{ fontSize: theme.typography.sm.fontSize, color: allDayEventCellTextColor || theme.palette.primary.contrastText }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontSize: theme.typography.sm.fontSize, color: allDayEventCellTextColor || theme.palette.primary.contrastText }}
+                      >
                         {event.title}
                       </Text>
                     </TouchableOpacity>

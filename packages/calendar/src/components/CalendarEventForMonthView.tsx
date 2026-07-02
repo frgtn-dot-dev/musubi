@@ -6,7 +6,7 @@ import { u } from '../commonStyles'
 import { useCalendarTouchableOpacityProps } from '../hooks/useCalendarTouchableOpacityProps'
 import type { EventCellStyle, EventRenderer, ICalendarEventBase } from '../interfaces'
 import { useTheme } from '../theme/ThemeContext'
-import { getEventSpanningInfo } from '../utils/datetime'
+import { eventDay, getEventSpanningInfo } from '../utils/datetime'
 import { typedMemo } from '../utils/react'
 
 interface CalendarEventProps<T extends ICalendarEventBase> {
@@ -67,7 +67,7 @@ function _CalendarEventForMonthView<T extends ICalendarEventBase>({
       style={[{ minHeight: eventMinHeightForMonthView }, u['mt-2']]}
       onPress={handlePress}
     >
-      {(!isMultipleDays && date.isSame(event.start, 'day')) ||
+      {(!isMultipleDays && date.isSame(eventDay(event.start, event.isAllDay), 'day')) ||
       (isMultipleDays && isMultipleDaysStart) ? (
         renderEvent ? (
           renderEvent(event, touchableOpacityProps)

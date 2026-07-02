@@ -333,6 +333,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   };
 
   const handleSave = async () => {
+    const allDayUTC = (d: Date) =>
+      new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 
     const eventConstruct: Event = {
       id: event?.id ?? uuidv7(),
@@ -341,8 +343,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       calendars: [...selectedCals],
       title: newTitle,
       color: newColor,
-      start: allDayToggle ? new Date(newStart.setHours(0, 0, 0, 0)) : newStart,
-      end: allDayToggle ? new Date(newEnd.setHours(0, 0, 0, 0)) : newEnd,
+      start: allDayToggle ? allDayUTC(newStart) : newStart,
+      end: allDayToggle ? allDayUTC(newEnd) : newEnd,
       isAllDay: allDayToggle,
       isCanceled: false, //TODO: Before cal sync we need a system for event status
       description: newDescription,

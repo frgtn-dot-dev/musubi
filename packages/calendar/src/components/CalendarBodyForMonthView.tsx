@@ -24,7 +24,7 @@ import type {
   WeekNum,
 } from '../interfaces'
 import { useTheme } from '../theme/ThemeContext'
-import { SIMPLE_DATE_FORMAT, getWeeksWithAdjacentMonths } from '../utils/datetime'
+import { SIMPLE_DATE_FORMAT, eventDay, getWeeksWithAdjacentMonths } from '../utils/datetime'
 import { typedMemo } from '../utils/react'
 import { CalendarEventForMonthView } from './CalendarEventForMonthView'
 
@@ -171,8 +171,8 @@ function _CalendarBodyForMonthView<T extends ICalendarEventBase>({
       // would be O(events) if this ever shows up in a profile.
       const spans = events.map((event) => ({
         event,
-        start: dayjs(event.start).startOf('day'),
-        end: dayjs(event.end).endOf('day'),
+        start: eventDay(event.start, event.isAllDay).startOf('day'),
+        end: eventDay(event.end, event.isAllDay).endOf('day'),
       }))
       let d = gridStart.clone()
       while (d.isBefore(gridEnd, 'day')) {
@@ -204,9 +204,9 @@ function _CalendarBodyForMonthView<T extends ICalendarEventBase>({
       const todayStartsEvents = events
         .filter(
           (event) =>
-            dateToCompare.isSame(dayjs(event.start).startOf('day'), 'day') ||
+            dateToCompare.isSame(eventDay(event.start, event.isAllDay).startOf('day'), 'day') ||
             (dateToCompare.isSame(startDateOfWeek, 'day') &&
-              dateToCompare.isBetween(dayjs(event.start).startOf('day'), dayjs(event.end).startOf('day'), 'day', '[]')),
+              dateToCompare.isBetween(eventDay(event.start, event.isAllDay).startOf('day'), eventDay(event.end, event.isAllDay).startOf('day'), 'day', '[]')),
         )
         .sort((a, b) => a.start.getTime() - b.start.getTime())
 
@@ -216,7 +216,7 @@ function _CalendarBodyForMonthView<T extends ICalendarEventBase>({
       const todayIncludedEvents = events
         .filter(
           (event) =>
-            dateToCompare.isBetween(dayjs(event.start).startOf('day'), dayjs(event.end).startOf('day'), 'day', '[]') &&
+            dateToCompare.isBetween(eventDay(event.start, event.isAllDay).startOf('day'), eventDay(event.end, event.isAllDay).startOf('day'), 'day', '[]') &&
             !todayStartsEventsSet.has(event),
         )
         .sort((a, b) => (multipleDayEventsOrder.get(a) ?? 0) - (multipleDayEventsOrder.get(b) ?? 0))
@@ -232,7 +232,7 @@ function _CalendarBodyForMonthView<T extends ICalendarEventBase>({
 
       for (let i = 0; i < finalEvents.length; i++) {
         const event = finalEvents[i]
-        if (!dayjs(event.start).isSame(dayjs(event.end), 'day')) {
+        if (!eventDay(event.start, event.isAllDay).isSame(eventDay(event.end, event.isAllDay), 'day')) {
           multipleDayEventsOrder.set(event, i)
         }
       }

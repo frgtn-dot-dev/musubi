@@ -116,8 +116,12 @@ export default function MainTab() {
     [activeCals],
   );
 
+  // Timeline (week/day) shows TIMED events only — all-day events live in the header
+  // bar. Building this map from all events rendered them in both places, and
+  // zero-duration all-day events (start == end == 00:00) showed as slivers at
+  // midnight. Exclude all-day here; the header gets them via the container split.
   const enrichedEventsByDate = useMemo(
-    () => enrichEvents(expandedAll, true),
+    () => enrichEvents(expandedAll.filter(e => !e.isAllDay), true),
     [expandedAll],
   );
 
@@ -160,6 +164,7 @@ export default function MainTab() {
             height={calMode === "month" ? calHeight : calHeight + 95}
             theme={calendarTheme}
             eventCellStyle={eventCellStyle}
+            allDayEventCellStyle={eventCellStyle}
             mode={calMode}
             weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
             swipeEnabled={true}

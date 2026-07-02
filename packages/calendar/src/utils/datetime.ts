@@ -1,12 +1,27 @@
 import calendarize, { type Week } from 'calendarize'
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
 
 import { OVERLAP_PADDING } from '../commonStyles'
+
+dayjs.extend(utc)
 import type { ICalendarEventBase, Mode, WeekNum } from '../interfaces'
 import type { Palette } from '../theme/ThemeInterface'
 
 export const DAY_MINUTES = 1440
 export const SIMPLE_DATE_FORMAT = 'YYYY-MM-DD'
+
+/**
+ * Day-anchored dayjs for an event boundary. All-day events are stored as UTC
+ * midnight of a timezone-invariant DATE (à la Google `date`); reinterpret that
+ * UTC calendar date in the LOCAL frame so all the (local) day math elsewhere
+ * lands on the same calendar day regardless of device timezone. A `2026-07-15T00:00:00Z`
+ * all-day event resolves to local 2026-07-15 in UTC+2 and UTC−5 alike. Timed
+ * events pass through as local (unchanged).
+ */
+export function eventDay(date: Date, isAllDay?: boolean): dayjs.Dayjs {
+  return isAllDay ? dayjs(dayjs.utc(date).format(SIMPLE_DATE_FORMAT)) : dayjs(date)
+}
 
 export function getDatesInMonth(date: string | Date | dayjs.Dayjs = new Date(), locale = 'en') {
   const subject = dayjs(date)
@@ -112,8 +127,9 @@ export function formatStartEnd(start: Date, end: Date, format: string) {
 }
 
 export function isAllDayEvent(start: Date, end: Date) {
-  const _start = dayjs(start)
-  const _end = dayjs(end)
+  // All-day events are anchored to UTC midnight — check in UTC, not local time.
+  const _start = dayjs.utc(start)
+  const _end = dayjs.utc(end)
   return _start.hour() === 0 && _start.minute() === 0 && _end.hour() === 0 && _end.minute() === 0
 }
 
@@ -210,9 +226,10 @@ export function enrichEvents<T extends ICalendarEventBase>(
   eventsWithOverlaps.forEach((event, index) => {
     const enrichedEvent = { ...event, overlapCount: overlapCountingPointers[index] }
     // Reuse one dayjs instance per bound — dayjs is immutable, so format/startOf/
-    // endOf return new instances rather than mutating these.
-    const start = dayjs(enrichedEvent.start)
-    const end = dayjs(enrichedEvent.end)
+    // endOf return new instances rather than mutating these. All-day events use
+    // their UTC calendar day (eventDay) so bucketing is timezone-invariant.
+    const start = eventDay(enrichedEvent.start, enrichedEvent.isAllDay)
+    const end = eventDay(enrichedEvent.end, enrichedEvent.isAllDay)
     const startDate = start.format(SIMPLE_DATE_FORMAT)
     const endDate = end.format(SIMPLE_DATE_FORMAT)
 
@@ -310,9 +327,9 @@ export function getEventSpanningInfo(
 ) {
   const dayWidth = calendarWidth / 7
   const eventDuration =
-    Math.floor(dayjs.duration(dayjs(event.end).endOf('day').diff(dayjs(event.start))).asDays()) + 1
+    Math.floor(dayjs.duration(eventDay(event.end, event.isAllDay).endOf('day').diff(eventDay(event.start, event.isAllDay))).asDays()) + 1
   const eventDaysLeft =
-    Math.floor(dayjs.duration(dayjs(event.end).endOf('day').diff(date)).asDays()) + 1
+    Math.floor(dayjs.duration(eventDay(event.end, event.isAllDay).endOf('day').diff(date)).asDays()) + 1
   const weekDaysLeft = 7 - dayOfTheWeek
   const monthDaysLeft = date.endOf('month').date() - date.date()
   const isMultipleDays = eventDuration > 1
@@ -326,8 +343,8 @@ export function getEventSpanningInfo(
           : eventDuration
   const isMultipleDaysStart =
     isMultipleDays &&
-    (date.isSame(event.start, 'day') ||
-      (dayOfTheWeek === 0 && date.isAfter(event.start)) ||
+    (date.isSame(eventDay(event.start, event.isAllDay), 'day') ||
+      (dayOfTheWeek === 0 && date.isAfter(eventDay(event.start, event.isAllDay))) ||
       (!showAdjacentMonths && date.get('date') === 1))
   const eventWidth = dayWidth * eventWeekDuration - 6
   return { eventWidth, isMultipleDays, isMultipleDaysStart, eventWeekDuration }

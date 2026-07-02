@@ -88,7 +88,7 @@ export function toGoogleEvent(event: Event) {
       { "date": event.start.toISOString().slice(0, 10) } :
       { "dateTime": event.start.toISOString() },
     end: event.isAllDay ?
-      { "date": event.end.toISOString().slice(0, 10) } :
+      { "date": new Date(event.end.getTime() + 86400000).toISOString().slice(0, 10) } :  // +1 day, Google exclusive
       { "dateTime": event.end.toISOString() },
   };
 

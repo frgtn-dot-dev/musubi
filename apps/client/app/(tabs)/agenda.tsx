@@ -3,6 +3,7 @@ import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { Event } from "@musubi/types";
+import { eventDay } from "@musubi/calendar";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
@@ -59,16 +60,27 @@ export default function AgendaTab() {
   const groups = useMemo(() => {
     const now = new Date();
     const sorted = events
-      .filter(e => e.start > now && e.calendars.some(id => activeCals.has(id)))
+      .filter(e =>
+        (e.isAllDay
+          // all-day: keep today or later by CALENDAR day — its raw UTC-midnight
+          // instant is already "past" by mid-morning, which wrongly hid it.
+          ? !eventDay(e.start, true).isBefore(eventDay(now), 'day')
+          : e.start > now)
+        && e.calendars.some(id => activeCals.has(id)))
       .sort((a, b) => a.start.getTime() - b.start.getTime());
     const result: { date: Date, items: Event[] }[] = [];
     let lastKey = "";
     for (const e of sorted) {
-      const key = dateKey(e.start);
+      // Normalize all-day events (stored as UTC-midnight) to their calendar day in
+      // the local frame via eventDay, so both the grouping key AND the displayed
+      // date (g.date.toLocaleString) land on the right day in any tz. Timed events
+      // pass through unchanged.
+      const d = eventDay(e.start, e.isAllDay).toDate();
+      const key = dateKey(d);
       if (key === lastKey) {
         result[result.length - 1].items.push(e);
       } else {
-        result.push({ date: e.start, items: [e] });
+        result.push({ date: d, items: [e] });
         lastKey = key;
       }
     }
