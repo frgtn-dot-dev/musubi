@@ -107,7 +107,9 @@ export async function applyGoogleEvent(userID: string, event: any, calendarID: s
     title: event.summary ?? "(untitled)",
     color: calColor,
     start: new Date(event.start.dateTime ?? event.start.date),
-    end: new Date(event.end.dateTime ?? event.end.date),
+    end: isAllDay
+      ? new Date(new Date(event.end.date).getTime() - 86400000)   // -1 day (Google end.date is exclusive)
+      : new Date(event.end.dateTime),
     isAllDay,
     description: event.description ?? null,
     location: event.location ?? null,

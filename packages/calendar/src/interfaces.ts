@@ -12,6 +12,11 @@ export interface ICalendarEventBase {
   hideHours?: boolean
   disabled?: boolean
   /**
+   * Explicit all-day flag. When present it drives the all-day/timed split instead
+   * of the timezone-sensitive midnight heuristic (isAllDayEvent).
+   */
+  isAllDay?: boolean
+  /**
    * overlapping position of event starting from 0 (optional)
    */
   overlapPosition?: number

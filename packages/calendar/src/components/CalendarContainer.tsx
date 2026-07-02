@@ -210,12 +210,14 @@ function _CalendarContainer<T extends ICalendarEventBase>({
     calendarRef.current?.setPage(0, { animated: false })
   }, [targetDate])
 
+  // Prefer the event's explicit isAllDay flag (timezone-agnostic); fall back to
+  // the midnight heuristic only for events that don't carry one.
   const allDayEvents = React.useMemo(
-    () => events.filter((event) => isAllDayEvent(event.start, event.end)),
+    () => events.filter((event) => event.isAllDay ?? isAllDayEvent(event.start, event.end)),
     [events],
   )
   const daytimeEvents = React.useMemo(
-    () => events.filter((event) => !isAllDayEvent(event.start, event.end)),
+    () => events.filter((event) => !(event.isAllDay ?? isAllDayEvent(event.start, event.end))),
     [events],
   )
   const allEvents = React.useMemo(
