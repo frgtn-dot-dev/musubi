@@ -33,6 +33,12 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
 
+  const isExternal = !!calendar?.provider;      // google/caldav mirror — no edit/delete in Musubi
+  const isOwner = userID === calendar?.creatorID;
+  const showEdit = isOwner && !isExternal;       // only the owner edits (native calendars)
+  const showDelete = isOwner && !isExternal;
+  const showLeave = !isOwner;                    // invited members can always leave
+
   return (
     <Modal
       visible={visible}
@@ -78,60 +84,64 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                 </View>
               </View>
             </ScrollView>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                borderTopWidth: 1,
-                borderColor: colors.line,
-                paddingBottom: insets.bottom,
-              }}
-            >
-              <Pressable
-                style={styles.modalActionBtn}
-                disabled={calendar ? false : true}
-                onPress={() => {
-                  onEdit(calendar!);
-                  handleClose();
+            {(showEdit || showDelete || showLeave) && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  borderTopWidth: 1,
+                  borderColor: colors.line,
+                  paddingBottom: insets.bottom,
                 }}
               >
-                <Feather size={20} name="edit" color={colors.fg2} />
-                <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
-              </Pressable>
-              <View style={styles.modalActionDivider} />
-              {userID === calendar?.creatorID ?
+                {showEdit && (
+                  <Pressable
+                    style={styles.modalActionBtn}
+                    disabled={calendar ? false : true}
+                    onPress={() => {
+                      onEdit(calendar!);
+                      handleClose();
+                    }}
+                  >
+                    <Feather size={20} name="edit" color={colors.fg2} />
+                    <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
+                  </Pressable>
+                )}
 
-                <Pressable
-                  style={styles.modalActionBtn}
-                  disabled={calendar ? false : true}
-                  onPress={() => {
-                    onDelete(calendar!);
-                    handleClose();
-                  }}
-                >
-                  <Feather size={20} name="trash" color={colors.accent} />
-                  <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
-                </Pressable>
+                {showEdit && (showDelete || showLeave) && <View style={styles.modalActionDivider} />}
 
-                :
+                {showDelete && (
+                  <Pressable
+                    style={styles.modalActionBtn}
+                    disabled={calendar ? false : true}
+                    onPress={() => {
+                      onDelete(calendar!);
+                      handleClose();
+                    }}
+                  >
+                    <Feather size={20} name="trash" color={colors.accent} />
+                    <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
+                  </Pressable>
+                )}
 
-                <Pressable
-                  style={styles.modalActionBtn}
-                  disabled={isLeaving || !calendar}
-                  onPress={async () => {
-                    setIsLeaving(true);
-                    await api.leaveCalendar(calendar?.id!);
-                    loadCalendars(await api.getCalendars());
-                    handleClose();
-                    onLeave();
-                  }}
-                >
-                  <Feather size={20} name="arrow-left-circle" color={isLeaving ? colors.fg4 : colors.accent} />
-                  <Text style={{ color: isLeaving ? colors.fg4 : colors.accent, fontSize: 10 }}>Leave</Text>
-                </Pressable>
-
-              }
-            </View>
+                {showLeave && (
+                  <Pressable
+                    style={styles.modalActionBtn}
+                    disabled={isLeaving || !calendar}
+                    onPress={async () => {
+                      setIsLeaving(true);
+                      await api.leaveCalendar(calendar?.id!);
+                      loadCalendars(await api.getCalendars());
+                      handleClose();
+                      onLeave();
+                    }}
+                  >
+                    <Feather size={20} name="arrow-left-circle" color={isLeaving ? colors.fg4 : colors.accent} />
+                    <Text style={{ color: isLeaving ? colors.fg4 : colors.accent, fontSize: 10 }}>Leave</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
           </Animated.View>
         </GestureDetector>
       </GestureHandlerRootView>

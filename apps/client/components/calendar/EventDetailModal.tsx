@@ -16,6 +16,7 @@ type Props = {
   onClose: () => void,
   onDelete: (event: Event) => void,
   onEdit: (event: Event) => void,
+  canEdit?: boolean, // false for invited members / external calendars → read-only
 };
 
 const openMaps = (location: string) => {
@@ -26,7 +27,7 @@ const openMaps = (location: string) => {
   Linking.openURL(url);
 };
 
-export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit }: Props) {
+export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit, canEdit = true }: Props) {
   const { calendars } = useCalendarsStore();
 
   const {
@@ -131,37 +132,39 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                 </View>
               }
             </ScrollView>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                paddingBottom: insets.bottom,
-              }}
-            >
-              <Pressable
-                style={styles.modalActionBtn}
-                disabled={event ? false : true}
-                onPress={() => {
-                  onEdit(event!);
-                  handleClose();
+            {canEdit && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  paddingBottom: insets.bottom,
                 }}
               >
-                <Feather size={20} name="edit" color={colors.fg2} />
-                <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
-              </Pressable>
-              <View style={styles.modalActionDivider} />
-              <Pressable
-                style={styles.modalActionBtn}
-                disabled={event ? false : true}
-                onPress={() => {
-                  onDelete(event!);
-                  handleClose();
-                }}
-              >
-                <Feather size={20} name="trash" color={colors.accent} />
-                <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
-              </Pressable>
-            </View>
+                <Pressable
+                  style={styles.modalActionBtn}
+                  disabled={event ? false : true}
+                  onPress={() => {
+                    onEdit(event!);
+                    handleClose();
+                  }}
+                >
+                  <Feather size={20} name="edit" color={colors.fg2} />
+                  <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
+                </Pressable>
+                <View style={styles.modalActionDivider} />
+                <Pressable
+                  style={styles.modalActionBtn}
+                  disabled={event ? false : true}
+                  onPress={() => {
+                    onDelete(event!);
+                    handleClose();
+                  }}
+                >
+                  <Feather size={20} name="trash" color={colors.accent} />
+                  <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
+                </Pressable>
+              </View>
+            )}
           </Animated.View>
         </GestureDetector>
       </GestureHandlerRootView>
