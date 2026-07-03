@@ -10,8 +10,10 @@ export function useRefreshData() {
   const { loadSettings } = useSettingsStore();
 
   return async () => {
-    const gStatus = await api.checkGoogleStatus();
-    if (gStatus.calendarConnected) await api.getGoogleCalendars();   // = sync
+    // Triggers server-side syncUser (all providers; no-op for unconnected ones).
+    // Best-effort — a sync failure must not block loading local data.
+    // ponytail: endpoint is still named /calendars/google from the google-first days.
+    try { await api.getGoogleCalendars(); } catch (e) { console.error("Sync failed:", e); }
     const [settings, calendars, events] = await Promise.all([
       api.getSettings(), api.getCalendars(), api.getEvents(),
     ]);

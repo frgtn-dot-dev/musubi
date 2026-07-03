@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
-import { deleteCaldavAccount, getCaldavAccount, saveCaldavAccount } from "@musubi/db";
+import {
+  deleteCaldavAccount,
+  getCaldavAccountsByUser,
+  getUserExternalCalendars,
+  removeCalendar,
+  saveCaldavAccount,
+} from "@musubi/db";
 import { BadRequestError } from "@musubi/types";
 import { encryptSecret } from "../sync/crypto";
 import { createCaldavClient } from "../sync/caldav_client";
@@ -23,11 +29,18 @@ export async function handlerConnectCaldav(req: Request, res: Response) {
 }
 
 export async function handlerCheckCaldavStatus(req: Request, res: Response) {
-  const account = await getCaldavAccount(req.user!.id);
-  res.status(200).json({ connected: !!account });
+  const accounts = await getCaldavAccountsByUser(req.user!.id);
+  res.status(200).json({ accounts }); // [{ id, serverUrl, username }]
 }
 
 export async function handlerDisconnectCaldav(req: Request, res: Response) {
-  await deleteCaldavAccount(req.user!.id);
+  const accountId = (req.body?.accountId ?? req.query.accountId) as string | undefined;
+  if (!accountId) throw new BadRequestError("accountId is required...");
+
+  // Remove this account's mirrored calendars (+ their events), then the account.
+  for (const link of await getUserExternalCalendars("caldav", req.user!.id, accountId)) {
+    await removeCalendar(link.calendarID);
+  }
+  await deleteCaldavAccount(req.user!.id, accountId);
   res.sendStatus(200);
 }

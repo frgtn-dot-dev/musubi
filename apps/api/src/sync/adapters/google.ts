@@ -1,4 +1,5 @@
 import { auth } from "@musubi/auth";
+import { getGoogleAccountIDs } from "@musubi/db";
 import { Event } from "@musubi/types";
 import {
   CalendarAdapter,
@@ -9,9 +10,9 @@ import {
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 
-async function getAccessToken(userID: string) {
+async function getAccessToken(userID: string, accountId: string) {
   const { accessToken } = await auth.api.getAccessToken({
-    body: { providerId: "google", userId: userID },
+    body: { providerId: "google", userId: userID, accountId },
   });
   return accessToken;
 }
@@ -82,8 +83,12 @@ function toGoogleEvent(event: Event) {
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
 
-  async listCalendars(userID: string): Promise<ExternalCalendarInfo[]> {
-    const accessToken = await getAccessToken(userID);
+  async listAccounts(userID: string): Promise<string[]> {
+    return getGoogleAccountIDs(userID);
+  },
+
+  async listCalendars(userID: string, accountId: string): Promise<ExternalCalendarInfo[]> {
+    const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(`${GCAL}/users/me/calendarList`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -96,8 +101,8 @@ export const googleAdapter: CalendarAdapter = {
     }));
   },
 
-  async fetchChanges(userID, externalCalendarId, cursor): Promise<FetchChangesResult> {
-    const accessToken = await getAccessToken(userID);
+  async fetchChanges(userID, accountId, externalCalendarId, cursor): Promise<FetchChangesResult> {
+    const accessToken = await getAccessToken(userID, accountId);
     const changes: NormalizedEvent[] = [];
     let currentCursor = cursor;
     let pageToken: string | undefined;
@@ -139,8 +144,8 @@ export const googleAdapter: CalendarAdapter = {
     return { changes, nextCursor: nextSyncToken ?? currentCursor, reset };
   },
 
-  async pushCreate(userID, externalCalendarId, event: Event) {
-    const accessToken = await getAccessToken(userID);
+  async pushCreate(userID, accountId, externalCalendarId, event: Event) {
+    const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events`,
       {
@@ -154,8 +159,8 @@ export const googleAdapter: CalendarAdapter = {
     return { externalEventId: data.id };
   },
 
-  async pushUpdate(userID, externalCalendarId, externalEventId, event: Event) {
-    const accessToken = await getAccessToken(userID);
+  async pushUpdate(userID, accountId, externalCalendarId, externalEventId, event: Event) {
+    const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
       {
@@ -167,8 +172,8 @@ export const googleAdapter: CalendarAdapter = {
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
   },
 
-  async pushDelete(userID, externalCalendarId, externalEventId) {
-    const accessToken = await getAccessToken(userID);
+  async pushDelete(userID, accountId, externalCalendarId, externalEventId) {
+    const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
       { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },

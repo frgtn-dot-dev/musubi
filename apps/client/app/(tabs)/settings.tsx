@@ -8,7 +8,7 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View, Text, ScrollView, Pressable, RefreshControl } from "react-native";
 import { useRefreshData } from "@/hooks/useRefreshData";
 
@@ -30,11 +30,6 @@ export default function SettingsTab() {
   const userSession = authClient.useSession();
   const [settingsChanged, setSettingsChanged] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [googleCalendarLinked, setGoogleCalendarLinked] = useState(false);
-
-  useEffect(() => {
-    getGCStatus();
-  }, [])
 
   const refresh = useRefreshData();
   const [refreshing, setRefreshing] = useState(false);
@@ -66,31 +61,6 @@ export default function SettingsTab() {
     api.deleteUser();
     authClient.signOut();
     router.replace('/(auth)/welcome');
-  }
-
-  const handleGoogleConnect = async () => {
-    const { error, data } = await authClient.linkSocial({
-      provider: "google",
-      scopes: ["https://www.googleapis.com/auth/calendar"],
-      callbackURL: "/(tabs)/settings",   // return on success
-    });
-    if (error) {
-      alert(`ERROR: ${JSON.stringify(error)} \nDATA: ${JSON.stringify(data)}`);
-    }
-
-    await getGCStatus();
-    await refresh();
-  };
-
-  const getGCStatus = async () => {
-    const gStatus = await api.checkGoogleStatus();
-    setGoogleCalendarLinked(gStatus.calendarConnected);
-  }
-
-  const handleGoogleRevoke = async () => {
-    const gStatus = await api.revokeGoogleConnection();
-    console.log(gStatus);
-    setGoogleCalendarLinked(gStatus.calendarConnected);
   }
 
   const testDeleteConfirm = async (v: string) => {
@@ -150,39 +120,6 @@ export default function SettingsTab() {
             <Text style={{ fontSize: 14, color: colors.fg2 }}>
               {apiUrl?.slice(8)}
             </Text>
-          </View>
-        </View>
-        <View
-          style={{
-            paddingHorizontal: 16,
-            paddingVertical: 16,
-            borderBottomWidth: 1,
-            borderTopWidth: 1,
-            borderColor: colors.line,
-            gap: 16
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 16,
-              color: colors.fg2,
-              textDecorationLine: "underline"
-            }}
-          >
-            Sync
-          </Text>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: 14, color: colors.fg2, alignSelf: "center" }}>
-              Google Calendar:
-            </Text>
-            <Pressable
-              style={{ borderColor: colors.line3, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12 }}
-              onPress={googleCalendarLinked ? handleGoogleRevoke : handleGoogleConnect}
-            >
-              <Text style={{ fontSize: 14, color: googleCalendarLinked ? colors.accent : colors.fg2 }}>
-                {googleCalendarLinked ? "Google Connected" : "Connect Google"}
-              </Text>
-            </Pressable>
           </View>
         </View>
         <SettingRowToggle

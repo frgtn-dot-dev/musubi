@@ -1,5 +1,6 @@
 import CalendarDetail from "@/components/calendar/CalendarDetailModal";
 import CreateCalendarModal from "@/components/calendar/CreateCalendarModal";
+import SyncCalendarModal from "@/components/calendar/SyncCalendarModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { Calendar } from "@musubi/types";
 import { useApi } from "@/services/api";
@@ -16,6 +17,7 @@ export default function CalendarsTab() {
   const { calendars, addCalendar, removeCalendar, updateCalendar } = useCalendarsStore();
   const { events } = useEventsStore();
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [calendarDetailVisible, setCalendarDetailVisible] = useState(false);
   const [prefilledCalendar, setPrefilledCalendar] = useState<Calendar | null>(null);
 
@@ -54,6 +56,10 @@ export default function CalendarsTab() {
           <Feather size={14} name="plus" color={colors.bg3} />
           <Text style={styles.btnPrimaryText}>Create Calendar</Text>
         </Pressable>
+        <Pressable style={styles.btnSecondary} onPress={() => setSyncModalVisible(true)}>
+          <Feather size={14} name="refresh-cw" color={colors.fg2} />
+          <Text style={styles.btnSecondaryText}>Sync Calendar</Text>
+        </Pressable>
       </View>
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={{ height: 1, backgroundColor: colors.line }} />
@@ -82,7 +88,12 @@ export default function CalendarsTab() {
         visible={createModalVisible}
         onCreate={(calendar) => addCalendar(calendar, api)}
         onClose={() => setCreateModalVisible(false)}
-        onEdit={(c) => updateCalendar(c, api)}
+        onEdit={async (c) => { await updateCalendar(c, api); }}
+      />
+      <SyncCalendarModal
+        visible={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConnected={onRefresh}
       />
       <CalendarDetail
         calendar={prefilledCalendar}

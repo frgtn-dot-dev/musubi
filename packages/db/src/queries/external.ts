@@ -25,7 +25,7 @@ type EventValues = {
 
 // --- calendars ---
 
-export async function getUserExternalCalendars(provider: string, userID: string) {
+export async function getUserExternalCalendars(provider: string, userID: string, accountID: string) {
   return db
     .select({
       calendarID: externalCalendars.calendarID,
@@ -35,16 +35,20 @@ export async function getUserExternalCalendars(provider: string, userID: string)
     })
     .from(externalCalendars)
     .innerJoin(calendars, eq(externalCalendars.calendarID, calendars.id))
-    .where(and(eq(externalCalendars.provider, provider), eq(externalCalendars.userID, userID)));
+    .where(and(
+      eq(externalCalendars.provider, provider),
+      eq(externalCalendars.userID, userID),
+      eq(externalCalendars.accountID, accountID),
+    ));
 }
 
-export async function doesExternalCalIDExist(provider: string, userID: string, externalCalendarID: string) {
+export async function doesExternalCalIDExist(provider: string, accountID: string, externalCalendarID: string) {
   const [res] = await db
     .select()
     .from(externalCalendars)
     .where(and(
       eq(externalCalendars.provider, provider),
-      eq(externalCalendars.userID, userID),
+      eq(externalCalendars.accountID, accountID),
       eq(externalCalendars.externalCalendarID, externalCalendarID),
     ));
   return !!res;
@@ -53,6 +57,7 @@ export async function doesExternalCalIDExist(provider: string, userID: string, e
 export async function importExternalCalendar(
   provider: string,
   userID: string,
+  accountID: string,
   cal: { externalId: string; name: string; color: string },
 ) {
   await db.transaction(async (tx) => {
@@ -63,6 +68,7 @@ export async function importExternalCalendar(
     await tx.insert(externalCalendars).values({
       provider,
       userID,
+      accountID,
       calendarID: created.id,
       externalCalendarID: cal.externalId,
       cursor: null,
@@ -82,6 +88,7 @@ export async function getExternalLinkForCalendar(calendarID: string) {
       provider: externalCalendars.provider,
       externalCalendarID: externalCalendars.externalCalendarID,
       userID: externalCalendars.userID,
+      accountID: externalCalendars.accountID,
     })
     .from(externalCalendars)
     .where(eq(externalCalendars.calendarID, calendarID));

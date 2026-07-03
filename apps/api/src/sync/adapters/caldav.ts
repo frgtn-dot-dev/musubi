@@ -1,13 +1,13 @@
 import ICAL from "ical.js";
 import { Event } from "@musubi/types";
-import { getCaldavAccount } from "@musubi/db";
+import { getCaldavAccountById, getCaldavAccountsByUser } from "@musubi/db";
 import { CalendarAdapter, ExternalCalendarInfo, FetchChangesResult, NormalizedEvent } from "../adapter";
 import { createCaldavClient } from "../caldav_client";
 import { decryptSecret } from "../crypto";
 
-async function clientForUser(userID: string) {
-  const acc = await getCaldavAccount(userID);
-  if (!acc) throw new Error("No CalDAV account connected for this user");
+async function clientForAccount(accountId: string) {
+  const acc = await getCaldavAccountById(accountId);
+  if (!acc) throw new Error("CalDAV account not found");
   return createCaldavClient(acc.serverUrl, acc.username, decryptSecret(acc.encryptedPassword));
 }
 
@@ -93,10 +93,13 @@ function toIcal(event: Event): string {
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
 
-  async listCalendars(userID: string): Promise<ExternalCalendarInfo[]> {
-    const acc = await getCaldavAccount(userID);
-    if (!acc) return []; // not connected → quiet no-op (avoids syncUser error spam)
-    const client = createCaldavClient(acc.serverUrl, acc.username, decryptSecret(acc.encryptedPassword));
+  async listAccounts(userID: string): Promise<string[]> {
+    const accounts = await getCaldavAccountsByUser(userID);
+    return accounts.map((a) => a.id);
+  },
+
+  async listCalendars(_userID: string, accountId: string): Promise<ExternalCalendarInfo[]> {
+    const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
     return cals
       .filter((c) => !c.components || c.components.includes("VEVENT"))
@@ -107,8 +110,8 @@ export const caldavAdapter: CalendarAdapter = {
       }));
   },
 
-  async fetchChanges(userID, externalCalendarId): Promise<FetchChangesResult> {
-    const client = await clientForUser(userID);
+  async fetchChanges(_userID, accountId, externalCalendarId): Promise<FetchChangesResult> {
+    const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
     const cal = cals.find((c) => c.url === externalCalendarId);
     if (!cal) return { changes: [], nextCursor: null };
@@ -123,8 +126,8 @@ export const caldavAdapter: CalendarAdapter = {
     return { changes, nextCursor: cal.syncToken ?? null, reset: true };
   },
 
-  async pushCreate(userID, externalCalendarId, event: Event) {
-    const client = await clientForUser(userID);
+  async pushCreate(_userID, accountId, externalCalendarId, event: Event) {
+    const client = await clientForAccount(accountId);
     const filename = `${event.id}.ics`;
     const res = await client.createCalendarObject({
       calendar: { url: externalCalendarId } as any,
@@ -136,16 +139,16 @@ export const caldavAdapter: CalendarAdapter = {
     return { externalEventId: `${base}${filename}` };
   },
 
-  async pushUpdate(userID, _externalCalendarId, externalEventId, event: Event) {
-    const client = await clientForUser(userID);
+  async pushUpdate(_userID, accountId, _externalCalendarId, externalEventId, event: Event) {
+    const client = await clientForAccount(accountId);
     const res = await client.updateCalendarObject({
       calendarObject: { url: externalEventId, data: toIcal(event) },
     });
     if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
   },
 
-  async pushDelete(userID, _externalCalendarId, externalEventId) {
-    const client = await clientForUser(userID);
+  async pushDelete(_userID, accountId, _externalCalendarId, externalEventId) {
+    const client = await clientForAccount(accountId);
     const res = await client.deleteCalendarObject({
       calendarObject: { url: externalEventId },
     });

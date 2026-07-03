@@ -284,7 +284,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
         calendar={prefilledCalendar}
         visible={newCalendarVisible}
         onClose={() => setNewCalendarVisible(false)}
-        onCreate={() => { }} // Keep empty... should not create new calendars ever...
+        onCreate={async () => { }} // Keep empty... should not create new calendars ever...
         onEdit={async (cal) => {
           await updateCalendar(cal, api);
           onEdit(cal);

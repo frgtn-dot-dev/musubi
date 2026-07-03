@@ -20,6 +20,17 @@ export async function googleCheck(userID: string): Promise<GoogleCheck> {
   return { isLinked, calendarConnected }
 }
 
+// account ids of the user's Google accounts that granted calendar access —
+// used by the Google adapter's listAccounts (one row per connected account).
+export async function getGoogleAccountIDs(userID: string): Promise<string[]> {
+  const rows = await db.select({ accountId: account.accountId, scope: account.scope })
+    .from(account)
+    .where(and(eq(account.userId, userID), eq(account.providerId, "google")));
+  return rows
+    .filter((r) => (r.scope ?? "").includes("https://www.googleapis.com/auth/calendar"))
+    .map((r) => r.accountId);
+}
+
 export async function getGoogleRefreshToken(userID: string) {
   const [google] = await db.select()
     .from(account)

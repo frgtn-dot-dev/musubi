@@ -243,6 +243,36 @@ export function useApi() {
       });
 
       if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
+    },
+
+    async connectCaldav(serverUrl: string, username: string, password: string) {
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverUrl, username, password }),
+      });
+
+      if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
+    },
+
+    async getCaldavAccounts() {
+      const { error, data } = await authClient.$fetch<{ accounts: { id: string; serverUrl: string; username: string }[] }>(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
+        method: "GET",
+      });
+
+      if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
+
+      return data.accounts;
+    },
+
+    async disconnectCaldav(accountId: string) {
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+
+      if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
     }
   }
 };

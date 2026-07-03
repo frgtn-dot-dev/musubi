@@ -34,19 +34,24 @@ export type FetchChangesResult = {
 export type CalendarAdapter = {
   provider: string;
 
-  // Which calendars can this user sync?
-  listCalendars(userID: string): Promise<ExternalCalendarInfo[]>;
+  // Connected account ids for this provider (Better Auth account.accountId for
+  // OAuth; caldav_accounts.id for CalDAV). Empty = provider not connected.
+  listAccounts(userID: string): Promise<string[]>;
+
+  // Which calendars can this account sync?
+  listCalendars(userID: string, accountId: string): Promise<ExternalCalendarInfo[]>;
 
   // Pull changes since `cursor` (null = full sync). Adapter paginates internally
   // and returns the complete change set + the new cursor to persist.
   fetchChanges(
     userID: string,
+    accountId: string,
     externalCalendarId: string,
     cursor: string | null,
   ): Promise<FetchChangesResult>;
 
   // Push a Musubi event out. Adapter maps Event -> its own format.
-  pushCreate(userID: string, externalCalendarId: string, event: Event): Promise<{ externalEventId: string }>;
-  pushUpdate(userID: string, externalCalendarId: string, externalEventId: string, event: Event): Promise<void>;
-  pushDelete(userID: string, externalCalendarId: string, externalEventId: string): Promise<void>;
+  pushCreate(userID: string, accountId: string, externalCalendarId: string, event: Event): Promise<{ externalEventId: string }>;
+  pushUpdate(userID: string, accountId: string, externalCalendarId: string, externalEventId: string, event: Event): Promise<void>;
+  pushDelete(userID: string, accountId: string, externalCalendarId: string, externalEventId: string): Promise<void>;
 };

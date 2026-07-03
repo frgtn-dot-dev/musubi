@@ -44,31 +44,33 @@ function toEventValues(n: NormalizedEvent, calColor: string) {
   };
 }
 
-// Pull: reconcile calendars, then pull each calendar's changes into Musubi.
-export async function syncProvider(adapter: CalendarAdapter, userID: string) {
+// Pull: reconcile calendars, then pull each calendar's changes into Musubi. Scoped
+// to ONE connected account of the provider.
+export async function syncProvider(adapter: CalendarAdapter, userID: string, accountId: string) {
   const provider = adapter.provider;
 
   // 1. reconcile the calendar list
-  const remote = await adapter.listCalendars(userID);
+  const remote = await adapter.listCalendars(userID, accountId);
   const remoteIDs = new Set(remote.map((c) => c.externalId));
 
   // remote calendar gone -> drop the Musubi mirror (removeCalendar handles orphan events)
-  for (const link of await getUserExternalCalendars(provider, userID)) {
+  for (const link of await getUserExternalCalendars(provider, userID, accountId)) {
     if (!remoteIDs.has(link.externalCalendarID)) {
       await removeCalendar(link.calendarID);
     }
   }
   // new remote calendar -> import
   for (const cal of remote) {
-    if (!(await doesExternalCalIDExist(provider, userID, cal.externalId))) {
-      await importExternalCalendar(provider, userID, cal);
+    if (!(await doesExternalCalIDExist(provider, accountId, cal.externalId))) {
+      await importExternalCalendar(provider, userID, accountId, cal);
     }
   }
 
   // 2. pull events per (now reconciled) calendar
-  for (const link of await getUserExternalCalendars(provider, userID)) {
+  for (const link of await getUserExternalCalendars(provider, userID, accountId)) {
     const { changes, nextCursor, reset } = await adapter.fetchChanges(
       userID,
+      accountId,
       link.externalCalendarID,
       link.cursor,
     );
@@ -95,14 +97,14 @@ export async function syncProvider(adapter: CalendarAdapter, userID: string) {
   }
 }
 
-// Sync every registered provider the user is connected to. A provider the user
-// hasn't connected throws in listCalendars (no credentials) and is skipped.
-// ponytail: try-each is wasteful for unconnected providers; add a per-provider
-// isConnected() check if provider count grows.
+// Sync every connected account of every registered provider. listAccounts returns
+// [] when the provider isn't connected, so unconnected providers are a clean no-op.
 export async function syncUser(userID: string) {
   for (const adapter of Object.values(adapters)) {
     try {
-      await syncProvider(adapter, userID);
+      for (const accountId of await adapter.listAccounts(userID)) {
+        await syncProvider(adapter, userID, accountId);
+      }
     } catch (e) {
       console.error(`Sync ${adapter.provider} failed:`, e);
     }
@@ -121,15 +123,15 @@ export async function pushEventToProviders(event: Event, action: "create" | "upd
 
     try {
       if (action === "create") {
-        const { externalEventId } = await adapter.pushCreate(link.userID, link.externalCalendarID, event);
+        const { externalEventId } = await adapter.pushCreate(link.userID, link.accountID, link.externalCalendarID, event);
         await importExternalEvent(link.provider, event.id, link.externalCalendarID, externalEventId);
       } else {
         const externalEventId = await getExternalEventID(link.provider, event.id, link.externalCalendarID);
         if (!externalEventId) continue;
         if (action === "update") {
-          await adapter.pushUpdate(link.userID, link.externalCalendarID, externalEventId, event);
+          await adapter.pushUpdate(link.userID, link.accountID, link.externalCalendarID, externalEventId, event);
         } else {
-          await adapter.pushDelete(link.userID, link.externalCalendarID, externalEventId);
+          await adapter.pushDelete(link.userID, link.accountID, link.externalCalendarID, externalEventId);
         }
       }
     } catch (e) {
