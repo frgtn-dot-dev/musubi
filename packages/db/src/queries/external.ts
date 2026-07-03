@@ -1,0 +1,162 @@
+import { and, eq, inArray } from "drizzle-orm";
+import {
+  calendarEvents,
+  calendarMembers,
+  calendars,
+  db,
+  events,
+  externalCalendars,
+  externalEvents,
+} from "..";
+
+// Column values written to the `events` row for a synced event.
+type EventValues = {
+  title: string;
+  color: string;
+  start: Date;
+  end: Date;
+  isAllDay: boolean;
+  description: string | null;
+  location: string | null;
+  organizer: string;
+  recurrence: string | null;
+  url: string | null;
+};
+
+// --- calendars ---
+
+export async function getUserExternalCalendars(provider: string, userID: string) {
+  return db
+    .select({
+      calendarID: externalCalendars.calendarID,
+      externalCalendarID: externalCalendars.externalCalendarID,
+      cursor: externalCalendars.cursor,
+      calColor: calendars.color,
+    })
+    .from(externalCalendars)
+    .innerJoin(calendars, eq(externalCalendars.calendarID, calendars.id))
+    .where(and(eq(externalCalendars.provider, provider), eq(externalCalendars.userID, userID)));
+}
+
+export async function doesExternalCalIDExist(provider: string, userID: string, externalCalendarID: string) {
+  const [res] = await db
+    .select()
+    .from(externalCalendars)
+    .where(and(
+      eq(externalCalendars.provider, provider),
+      eq(externalCalendars.userID, userID),
+      eq(externalCalendars.externalCalendarID, externalCalendarID),
+    ));
+  return !!res;
+}
+
+export async function importExternalCalendar(
+  provider: string,
+  userID: string,
+  cal: { externalId: string; name: string; color: string },
+) {
+  await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(calendars)
+      .values({ creatorID: userID, name: cal.name, color: cal.color })
+      .returning();
+    await tx.insert(externalCalendars).values({
+      provider,
+      userID,
+      calendarID: created.id,
+      externalCalendarID: cal.externalId,
+      cursor: null,
+    });
+    await tx.insert(calendarMembers).values({ userID, calendarID: created.id });
+  });
+}
+
+export async function setCursor(calendarID: string, cursor: string | null) {
+  await db.update(externalCalendars).set({ cursor }).where(eq(externalCalendars.calendarID, calendarID));
+}
+
+// For push: given a Musubi calendar, which provider/external calendar/user backs it.
+export async function getExternalLinkForCalendar(calendarID: string) {
+  const [res] = await db
+    .select({
+      provider: externalCalendars.provider,
+      externalCalendarID: externalCalendars.externalCalendarID,
+      userID: externalCalendars.userID,
+    })
+    .from(externalCalendars)
+    .where(eq(externalCalendars.calendarID, calendarID));
+  return res ?? null;
+}
+
+// --- events ---
+
+export async function clearCalendarEvents(calendarID: string) {
+  await db.delete(events).where(inArray(events.id,
+    db.select({ id: calendarEvents.eventID }).from(calendarEvents).where(eq(calendarEvents.calendarID, calendarID))));
+}
+
+export async function upsertExternalEvent(
+  provider: string,
+  userID: string,
+  calendarID: string,
+  externalCalendarID: string,
+  externalEventID: string,
+  values: EventValues,
+  etag: string | null = null,
+) {
+  await db.transaction(async (tx) => {
+    const [map] = await tx
+      .select({ eventID: externalEvents.eventID })
+      .from(externalEvents)
+      .where(and(
+        eq(externalEvents.provider, provider),
+        eq(externalEvents.externalCalendarID, externalCalendarID),
+        eq(externalEvents.externalEventID, externalEventID),
+      ));
+
+    if (map) {
+      await tx.update(events).set(values).where(eq(events.id, map.eventID));
+      await tx.update(externalEvents).set({ etag }).where(eq(externalEvents.eventID, map.eventID));
+    } else {
+      const [ev] = await tx
+        .insert(events)
+        .values({ id: crypto.randomUUID(), ...values, creatorID: userID })
+        .returning();
+      await tx.insert(calendarEvents).values({ eventID: ev.id, calendarID });
+      await tx.insert(externalEvents).values({ provider, eventID: ev.id, externalCalendarID, externalEventID, etag });
+    }
+  });
+}
+
+export async function deleteExternalEvent(provider: string, externalCalendarID: string, externalEventID: string) {
+  await db.delete(events).where(inArray(events.id,
+    db.select({ id: externalEvents.eventID }).from(externalEvents).where(and(
+      eq(externalEvents.provider, provider),
+      eq(externalEvents.externalCalendarID, externalCalendarID),
+      eq(externalEvents.externalEventID, externalEventID),
+    ))));
+}
+
+// For push update/delete: find the external id of an already-synced Musubi event.
+export async function getExternalEventID(provider: string, eventID: string, externalCalendarID: string) {
+  const [res] = await db
+    .select({ externalEventID: externalEvents.externalEventID })
+    .from(externalEvents)
+    .where(and(
+      eq(externalEvents.provider, provider),
+      eq(externalEvents.eventID, eventID),
+      eq(externalEvents.externalCalendarID, externalCalendarID),
+    ));
+  return res?.externalEventID ?? null;
+}
+
+// For push create: store the mapping after the provider returns the new id.
+export async function importExternalEvent(
+  provider: string,
+  eventID: string,
+  externalCalendarID: string,
+  externalEventID: string,
+  etag: string | null = null,
+) {
+  await db.insert(externalEvents).values({ provider, eventID, externalCalendarID, externalEventID, etag });
+}

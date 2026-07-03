@@ -375,5 +375,3 @@ export const externalEvents = pgTable("external_events", {
 ]);
 
 export type NewExternalEvent = typeof externalEvents.$inferInsert;
-
-export type NewGoogleEvent = typeof googleEvents.$inferInsert;

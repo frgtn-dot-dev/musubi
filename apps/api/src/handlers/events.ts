@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { NewEvent, createEvent, getCalendarMembers, getGoogleEventID, getGoogleLinkForCalendar, getUsersEvents, removeEvent, updateEvent } from '@musubi/db';
+import { NewEvent, createEvent, getCalendarMembers, getUsersEvents, removeEvent, updateEvent } from '@musubi/db';
 import { BadRequestError, Event, EventSchema, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
-import { pushEventCreateToGoogle, pushEventDeleteToGoogle, pushEventUpdateToGoogle } from "../sync/google_sync";
+import { pushEventToProviders } from "../sync/engine";
 
 export async function handlerCreateEvent(req: Request, res: Response) {
   let event: Event;
@@ -17,18 +17,9 @@ export async function handlerCreateEvent(req: Request, res: Response) {
   }
   const createdEvent = await createEvent(newEvent, event.calendars);
 
-  try {
-    for (const cal of event.calendars) {
-      const link = await getGoogleLinkForCalendar(cal);
-      if (link) {
-        await pushEventCreateToGoogle(link.userID, link.googleCalendarID, { ...createdEvent, calendars: event.calendars });
-      }
-    }
-  } catch (e) {
-    console.error(e);
-  }
-
   const result = { ...createdEvent, calendars: event.calendars };
+
+  await pushEventToProviders(result, "create");
 
   const memberIDSeen = new Set<string>();
 
@@ -60,18 +51,9 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
     creatorID: req.user!.id,
   });
 
-  try {
-    for (const cal of event.calendars) {
-      const link = await getGoogleLinkForCalendar(cal);
-      if (link) {
-        await pushEventUpdateToGoogle(link.userID, link.googleCalendarID, { ...updatedEvent, calendars: event.calendars });
-      }
-    }
-  } catch (e) {
-    console.error(e);
-  }
-
   if (updatedEvent) {
+
+    await pushEventToProviders(event, "update");
 
     const result = { ...updatedEvent, calendars: event.calendars };
 
@@ -98,19 +80,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   const event = EventSchema.parse(req.body);
   if (!event.id) throw new BadRequestError("Event id is required...");
 
-  try {
-    for (const cal of event.calendars) {
-      const link = await getGoogleLinkForCalendar(cal);
-      if (link) {
-        const googleEventID = await getGoogleEventID(event.id, link.googleCalendarID)
-        if (googleEventID) {
-          await pushEventDeleteToGoogle(link.userID, link.googleCalendarID, googleEventID);
-        }
-      }
-    }
-  } catch (e) {
-    console.error(e);
-  }
+  await pushEventToProviders(event, "delete");   // before removeEvent so the external mapping still exists
 
   const removedEvent = await removeEvent(event.id);
 

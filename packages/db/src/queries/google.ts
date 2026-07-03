@@ -1,6 +1,9 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { account, calendarEvents, calendarMembers, calendars, db, events, googleCalendars, googleEvents } from "../index"
+import { and, eq } from "drizzle-orm";
+import { account, db } from "../index";
 import { GoogleCheck } from "@musubi/types";
+
+// Google OAuth account connection status/revoke — operates on the Better Auth
+// `account` table, not the sync tables. (Sync lives in queries/external.ts.)
 
 export async function googleCheck(userID: string): Promise<GoogleCheck> {
   const [google] = await db.select()
@@ -39,130 +42,4 @@ export async function cleanUsersGoogleTokens(userID: string) {
       eq(account.userId, userID),
       eq(account.providerId, "google"),
     ));
-}
-
-export async function doesGoogleCalIDExistsForUser(userID: string, googleCalID: string) {
-  const [res] = await db.select().from(googleCalendars).where(and(
-    eq(googleCalendars.googleCalendarID, googleCalID),
-    eq(googleCalendars.userID, userID)
-  ))
-
-  return !!res;
-}
-
-export async function importGoogleCalendar(userID: string, g: { id: string, summary: string, backgroundColor: string }) {
-  await db.transaction(async (tx) => {
-    const [cal] = await tx.insert(calendars)
-      .values({ creatorID: userID, name: g.summary, color: g.backgroundColor }).returning();
-    await tx.insert(googleCalendars)
-      .values({ userID, calendarID: cal.id, googleCalendarID: g.id, syncToken: null });
-    await tx.insert(calendarMembers).values({
-      userID: cal.creatorID,
-      calendarID: cal.id,
-    })
-  });
-}
-
-export async function importGoogleEvent(userID: string, eventID: string, googleCalendarID: string, googleEventID: string) {
-  await db.insert(googleEvents)
-    .values({ eventID, googleCalendarID, googleEventID }).returning();
-}
-
-export async function getUserGoogleCalendars(userID: string) {
-  const cals = db.select({
-    calendarID: googleCalendars.calendarID,
-    googleCalendarID: googleCalendars.googleCalendarID,
-    syncToken: googleCalendars.syncToken,
-    calColor: calendars.color,
-  }).from(googleCalendars)
-    .innerJoin(calendars, eq(googleCalendars.calendarID, calendars.id))
-    .where(eq(googleCalendars.userID, userID));
-
-  return cals;
-}
-
-export async function setGoogleSyncToken(calendarID: string, token: string | null) {
-  await db.update(googleCalendars).set({ syncToken: token }).where(eq(googleCalendars.calendarID, calendarID));
-}
-
-export async function clearGoogleCalendarEvents(calendarID: string) {
-  await db.delete(events).where(inArray(events.id,
-    db.select({ id: calendarEvents.eventID }).from(calendarEvents)
-      .where(eq(calendarEvents.calendarID, calendarID))));
-}
-
-// Google sometimes sends FREQ=YEARLY;BYMONTHDAY=X without BYMONTH. Per RFC 5545
-// that expands BYMONTHDAY across all 12 months (= monthly), even though Google's
-// UI shows it yearly (it leans on DTSTART's month). Anchor it to the start month
-// so it's actually annual.
-function sanitizeRecurrence(rrule: string, start: Date): string {
-  if (/FREQ=YEARLY/.test(rrule) && /BYMONTHDAY=/.test(rrule) && !/BYMONTH=/.test(rrule)) {
-    return `${rrule};BYMONTH=${start.getUTCMonth() + 1}`;
-  }
-  return rrule;
-}
-
-export async function applyGoogleEvent(userID: string, event: any, calendarID: string, googleCalendarID: string, calColor: string) {
-  if (event.status === "cancelled") {
-    await db.delete(events).where(inArray(events.id,
-      db.select({ id: googleEvents.eventID }).from(googleEvents)
-        .where(and(
-          eq(googleEvents.googleCalendarID, googleCalendarID),
-          eq(googleEvents.googleEventID, event.id)
-        ))));
-    return;
-  }
-
-  const isAllDay = !event.start.dateTime;
-  const start = new Date(event.start.dateTime ?? event.start.date);
-  const values = {
-    title: event.summary ?? "(untitled)",
-    color: calColor,
-    start,
-    end: isAllDay
-      ? new Date(new Date(event.end.date).getTime() - 86400000)   // -1 day (Google end.date is exclusive)
-      : new Date(event.end.dateTime),
-    isAllDay,
-    description: event.description ?? null,
-    location: event.location ?? null,
-    organizer: event.organizer?.email ?? "",
-    recurrence: event.recurrence ? sanitizeRecurrence(event.recurrence.join("\n"), start) : null,
-  };
-
-  await db.transaction(async (tx) => {
-    const [map] = await tx.select({
-      eventID: googleEvents.eventID,
-    }).from(googleEvents).where(and(
-      eq(googleEvents.googleCalendarID, googleCalendarID),
-      eq(googleEvents.googleEventID, event.id)
-    ));
-
-    if (map) {
-      await tx.update(events).set(values).where(eq(events.id, map.eventID));
-    } else {
-      const [ev] = await tx.insert(events).values({ id: crypto.randomUUID(), ...values, creatorID: userID }).returning();
-      await tx.insert(calendarEvents).values({ eventID: ev.id, calendarID });
-      await tx.insert(googleEvents).values({ eventID: ev.id, googleCalendarID, googleEventID: event.id });
-    }
-  });
-}
-
-export async function getGoogleLinkForCalendar(calendarID: string): Promise<{ googleCalendarID: string, userID: string } | null> {
-  const [cal] = await db.select({
-    googleCalendarID: googleCalendars.googleCalendarID,
-    userID: googleCalendars.userID
-  }).from(googleCalendars)
-    .where(eq(googleCalendars.calendarID, calendarID));
-
-  return cal;
-}
-
-export async function getGoogleEventID(eventID: string, googleCalendarID: string) {
-  const [res] = await db.select({ googleEventID: googleEvents.googleEventID })
-    .from(googleEvents).where(and(
-      eq(googleEvents.eventID, eventID),
-      eq(googleEvents.googleCalendarID, googleCalendarID)
-    ));
-
-  return res?.googleEventID ?? null;
 }
