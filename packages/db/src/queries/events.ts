@@ -4,9 +4,11 @@ import { NewEvent, calendarEvents, calendarMembers, eventUsers, events } from ".
 
 
 export async function createEvent(event: NewEvent, calendars: string[]) {
+  // Home calendar = where it's created (first picked). Edit-content is gated by
+  // editEvents on this calendar; the other picked calendars are read-only shares.
   const [result] = await db
     .insert(events)
-    .values(event)
+    .values({ ...event, originCalendarID: event.originCalendarID ?? calendars[0] })
     .onConflictDoNothing()
     .returning();
   await db.insert(eventUsers).values({
@@ -22,6 +24,16 @@ export async function createEvent(event: NewEvent, calendars: string[]) {
   )));
 
   return result;
+}
+
+// Who governs editing this event's shared content: its home calendar (+ creator
+// as legacy fallback when origin is null). Used by assertCanEditEvent.
+export async function getEventOrigin(eventID: string): Promise<{ originCalendarID: string | null; creatorID: string } | undefined> {
+  const [row] = await db
+    .select({ originCalendarID: events.originCalendarID, creatorID: events.creatorID })
+    .from(events)
+    .where(eq(events.id, eventID));
+  return row;
 }
 
 export async function getEvent(id: string) {

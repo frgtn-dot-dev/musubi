@@ -3,7 +3,7 @@ import { NewEvent, createEvent, getCalendarMembers, getUsersEvents, removeEvent,
 import { BadRequestError, Event, EventSchema, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToProviders } from "../sync/engine";
-import { assertCan } from "../permissions";
+import { assertCan, assertCanEditEvent } from "../permissions";
 
 export async function handlerCreateEvent(req: Request, res: Response) {
   let event: Event;
@@ -48,7 +48,7 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
     throw new BadRequestError("Request missing valid event data...");
   }
 
-  for (const cal of event.calendars) await assertCan(req.user!.id, cal, "editEvents");
+  await assertCanEditEvent(req.user!.id, event.id!); // edit-content gated by home calendar
   const updatedEvent = await updateEvent({
     ...event,
     creatorID: req.user!.id,
