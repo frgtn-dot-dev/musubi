@@ -143,16 +143,21 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                   {event?.location &&
                     <View style={styles.modalDetailRow}>
                       <Feather size={20} name="map-pin" color={colors.fg4} />
-                      <Tap onPress={() => openMaps(event.location!)}>
-                        <Text style={{ color: colors.fg2, textDecorationLine: "underline" }}>{event?.location}</Text>
+                      <Tap style={{ flex: 1 }} onPress={() => openMaps(event.location!)}>
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={{ color: colors.fg2, textDecorationLine: "underline" }}>
+                          {event?.location}
+                        </Text>
                       </Tap>
                     </View>
                   }
                   {event?.url &&
                     <View style={styles.modalDetailRow}>
                       <Feather size={20} name="link" color={colors.fg4} />
-                      <Tap onPress={() => { Linking.openURL(event?.url!) }}>
-                        <Text style={{ color: colors.fg2, textDecorationLine: "underline" }}>{event?.url}</Text>
+                      <Tap style={{ flex: 1 }} onPress={() => { Linking.openURL(event?.url!) }}>
+                        {/* Long links are all query params at the tail — ellipsize keeps the useful start. */}
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={{ color: colors.fg2, textDecorationLine: "underline" }}>
+                          {event?.url}
+                        </Text>
                       </Tap>
                     </View>
                   }

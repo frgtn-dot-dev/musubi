@@ -61,7 +61,9 @@ function toNormalized(item: any): NormalizedEvent {
     location: item.location ?? null,
     organizer: item.organizer?.email ?? null,
     recurrence: item.recurrence ? sanitizeRecurrence(item.recurrence.join("\n"), start) : null,
-    url: item.htmlLink ?? null,
+    // NOT htmlLink — that's just "open in Google Calendar" noise on every event.
+    // Meet link / source url are actual event URLs.
+    url: item.hangoutLink ?? item.source?.url ?? null,
   };
 }
 

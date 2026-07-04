@@ -19,6 +19,7 @@ type OptionsProps = {
   onChange: (value: Mode) => void;
 }
 
+// Border color applied inline at usage — the theme can swap at runtime.
 const rowStyle = {
   flexDirection: "row",
   justifyContent: "space-between",
@@ -26,13 +27,12 @@ const rowStyle = {
   paddingHorizontal: 16,
   paddingVertical: 8,
   borderBottomWidth: 1,
-  borderColor: colors.line,
   minHeight: 62,
 } as const;
 
 export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
   return (
-    <Tap onPress={onToggle} scaleTo={1} style={rowStyle}>
+    <Tap onPress={onToggle} scaleTo={1} style={[rowStyle, { borderColor: colors.line }]}>
       <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg2 }}>
         {label}
       </Text>
@@ -53,7 +53,7 @@ export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
 // as the member-role selector.
 export function SettingRowOptions({ label, value, options, onChange }: OptionsProps) {
   return (
-    <View style={rowStyle}>
+    <View style={[rowStyle, { borderColor: colors.line }]}>
       <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg2 }}>
         {label}
       </Text>
@@ -71,12 +71,12 @@ export function SettingRowOptions({ label, value, options, onChange }: OptionsPr
               onPress={() => onChange(o as Mode)}
               style={{
                 paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-                backgroundColor: active ? colors.fg : "transparent",
+                backgroundColor: active ? colors.fill : "transparent",
               }}
             >
               <Text style={{
                 fontFamily: fonts.sans, fontSize: 11,
-                color: active ? colors.bg : colors.fg2,
+                color: active ? colors.onFill : colors.fg2,
               }}>
                 {o[0].toUpperCase() + o.slice(1)}
               </Text>

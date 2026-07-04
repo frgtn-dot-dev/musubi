@@ -205,11 +205,11 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                       haptic="select"
                       style={{
                         paddingHorizontal: 14, paddingVertical: 5, borderRadius: 999,
-                        backgroundColor: calMode === m ? colors.fg : 'transparent'
+                        backgroundColor: calMode === m ? colors.fill : 'transparent'
                       }}
                       onPress={() => onModeChange(m)}
                     >
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: calMode === m ? colors.bg : colors.fg2 }}>
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: calMode === m ? colors.onFill : colors.fg2 }}>
                         {m.charAt(0).toUpperCase()}
                       </Text>
                     </Tap>

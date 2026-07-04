@@ -1,5 +1,5 @@
 import { ServerProvider, useServer } from '@/contexts/ServerContext';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, useColorScheme } from 'react-native';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { applyTheme, activeScheme } from '@/constants/theme';
@@ -102,10 +102,13 @@ function AppLoader() {
   const deviceScheme = useColorScheme();
   const themePref = useSettingsStore(s => s.theme);
   const scheme = themePref === 'system' ? (deviceScheme === 'light' ? 'light' : 'dark') : themePref;
+  console.log("[theme] AppLoader render — pref:", themePref, "device:", deviceScheme, "scheme:", scheme);
 
-  // Swap the palette BEFORE children render (useMemo runs during render);
-  // key={scheme} below remounts the tree so every style re-reads it.
-  useMemo(() => applyTheme(scheme), [scheme]);
+  // Swap the palette BEFORE children render. Plain call, NOT useMemo — the
+  // React Compiler assumes memo callbacks are pure and eliminates unused ones,
+  // which silently dropped this side effect. Idempotent, so calling every
+  // render is fine; key={scheme} below remounts the tree to repaint.
+  applyTheme(scheme);
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg);

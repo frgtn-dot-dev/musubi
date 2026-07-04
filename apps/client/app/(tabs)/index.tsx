@@ -215,7 +215,7 @@ export default function MainTab() {
           setPrefilledEvent(undefined);
           setNewEventVisible(true);
         }}>
-          <Text style={{ color: colors.bg, fontSize: 28, lineHeight: 30 }}>+</Text>
+          <Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text>
         </Tap>
       </Animated.View>
       <AddEventModal

@@ -718,10 +718,10 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                             onPress={() => setAdvFreq(f)}
                             style={{
                               flex: 1, paddingVertical: 5, borderRadius: 8, alignItems: 'center',
-                              backgroundColor: advFreq === f ? colors.fg : colors.bg3,
+                              backgroundColor: advFreq === f ? colors.fill : colors.bg3,
                             }}
                           >
-                            <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: advFreq === f ? colors.bg : colors.fg3 }}>
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: advFreq === f ? colors.onFill : colors.fg3 }}>
                               {label}
                             </Text>
                           </Tap>
@@ -748,10 +748,10 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                                 })}
                                 style={{
                                   flex: 1, aspectRatio: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-                                  backgroundColor: active ? colors.fg : colors.bg3,
+                                  backgroundColor: active ? colors.fill : colors.bg3,
                                 }}
                               >
-                                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: active ? colors.bg : colors.fg3 }}>
+                                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: active ? colors.onFill : colors.fg3 }}>
                                   {label}
                                 </Text>
                               </Tap>

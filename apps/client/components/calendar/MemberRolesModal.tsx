@@ -146,12 +146,12 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
                             onPress={() => role === "owner" ? confirmTransfer(m) : changeRole(m.id, role)}
                             style={{
                               paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-                              backgroundColor: m.role === role ? colors.fg : "transparent",
+                              backgroundColor: m.role === role ? colors.fill : "transparent",
                             }}
                           >
                             <Text style={{
                               fontFamily: fonts.sans, fontSize: 11,
-                              color: m.role === role ? colors.bg : colors.fg2,
+                              color: m.role === role ? colors.onFill : colors.fg2,
                             }}>
                               {role === "viewer" ? "View" : role === "editor" ? "Edit" : "Owner"}
                             </Text>

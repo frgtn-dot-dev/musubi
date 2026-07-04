@@ -14,15 +14,14 @@ type Props = {
   style?: ViewStyle;
 };
 
-const VARIANT = {
-  primary: { box: styles.btnPrimary, text: styles.btnPrimaryText, spinner: colors.bg },
-  secondary: { box: styles.btnSecondary, text: styles.btnSecondaryText, spinner: colors.fg2 },
-  destructive: { box: styles.btnRemove, text: styles.btnPrimaryText, spinner: colors.bg },
-} as const;
-
 // The app button: theme variant + press feel + haptic + busy state in one place.
 export function Btn({ label, onPress, variant = "primary", icon, disabled, loading, style }: Props) {
-  const v = VARIANT[variant];
+  // Resolved at render, not module scope — styles/colors mutate on theme switch.
+  const v = {
+    primary: { box: styles.btnPrimary, text: styles.btnPrimaryText, spinner: colors.onFill },
+    secondary: { box: styles.btnSecondary, text: styles.btnSecondaryText, spinner: colors.fg2 },
+    destructive: { box: styles.btnRemove, text: styles.btnPrimaryText, spinner: colors.onFill },
+  }[variant];
   const blocked = disabled || loading;
   return (
     <Tap

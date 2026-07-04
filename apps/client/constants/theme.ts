@@ -22,6 +22,8 @@ const dark = {
   fg3: 'rgba(232,228,217,0.48)',
   fg4: 'rgba(232,228,217,0.28)',
   accent: '#c8553d',
+  fill: '#e8e4d9',      // solid background of active pills / primary buttons
+  onFill: '#0c0c0e',    // text/icon sitting on `fill`
 };
 
 const light: typeof dark = {
@@ -37,6 +39,8 @@ const light: typeof dark = {
   fg3: 'rgba(28,27,24,0.50)',
   fg4: 'rgba(28,27,24,0.32)',
   accent: '#b3492f', // deeper vermilion — keeps contrast on paper
+  fill: '#4a4741',      // dark warm grey, not full ink — softer active fills
+  onFill: '#f4f1e8',
 };
 
 export type ThemeScheme = 'dark' | 'light';
@@ -50,6 +54,7 @@ export const colors = { ...dark };
 export let activeScheme: ThemeScheme = 'dark';
 
 export function applyTheme(scheme: ThemeScheme) {
+  console.log("[theme] applyTheme:", scheme, "bg before:", colors.bg);
   // No same-scheme early return: cheap to reapply, and a guard can wedge
   // after a hot reload leaves activeScheme out of sync with the palette.
   activeScheme = scheme;
@@ -105,7 +110,7 @@ const makeStyles = () => StyleSheet.create({
     minWidth: 40,
     paddingHorizontal: 16,
     borderRadius: 26,
-    backgroundColor: colors.fg,
+    backgroundColor: colors.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -116,7 +121,7 @@ const makeStyles = () => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 26,
-    backgroundColor: colors.fg,
+    backgroundColor: colors.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -209,7 +214,7 @@ const makeStyles = () => StyleSheet.create({
     maxHeight: 48,
     minHeight: 48,
     gap: 6,
-    backgroundColor: colors.fg,
+    backgroundColor: colors.fill,
     borderRadius: 10,
     padding: 13,
     flexDirection: "row",
@@ -254,7 +259,7 @@ const makeStyles = () => StyleSheet.create({
     alignItems: "center",
   },
   btnPrimaryText: {
-    color: colors.bg,
+    color: colors.onFill,
     fontFamily: fonts.sansMedium,
     fontSize: 13,
   },
