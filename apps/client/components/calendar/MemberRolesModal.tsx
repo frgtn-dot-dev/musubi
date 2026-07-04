@@ -72,12 +72,25 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
                       <Text style={{ fontSize: 11, color: colors.fg3 }}>{m.email}</Text>
                     </View>
                     {isOwner ? (
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>Owner</Text>
+                      // Non-clickable pill, sized to line up with the role toggle below.
+                      <View style={{
+                        borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
+                      }}>
+                        <View style={{ paddingHorizontal: 12, paddingVertical: 5 }}>
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg3 }}>Owner</Text>
+                        </View>
+                      </View>
                     ) : !canManage ? (
-                      // Non-owners see the role but can't change it.
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
-                        {m.role === "viewer" ? "Viewer" : "Editor"}
-                      </Text>
+                      // Non-owners see the role in the same non-clickable pill.
+                      <View style={{
+                        borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
+                      }}>
+                        <View style={{ paddingHorizontal: 12, paddingVertical: 5 }}>
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg3 }}>
+                            {m.role === "viewer" ? "Viewer" : "Editor"}
+                          </Text>
+                        </View>
+                      </View>
                     ) : (
                       <View style={{
                         flexDirection: "row",

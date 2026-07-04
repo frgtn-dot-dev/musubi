@@ -8,6 +8,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { useEventsStore } from "@/store/useEventsStore";
+import { useApi } from "@/services/api";
+import { useState } from "react";
+import LinkEventModal from "./LinkEventModal";
 
 
 type Props = {
@@ -30,6 +34,10 @@ const openMaps = (location: string) => {
 
 export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit, canEdit = true, contextCalendarId }: Props) {
   const { calendars } = useCalendarsStore();
+
+  const api = useApi();
+  const { linkEvent } = useEventsStore();
+  const [linkVisible, setLinkVisible] = useState(false);
 
   // Viewing the event in a calendar that isn't its home → the destructive action is
   // "unlink from this calendar", not a full delete.
@@ -60,6 +68,7 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
             <View style={styles.modalHandle} />
             <ScrollView
               horizontal
+              style={{ flexGrow: 0 }}
               contentContainerStyle={{ paddingLeft: 20, paddingBottom: 5, }}
             >
               <View style={styles.horizontalPillView}>
@@ -143,39 +152,56 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                 </View>
               }
             </ScrollView>
-            {canEdit && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  paddingBottom: insets.bottom,
-                }}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingBottom: insets.bottom,
+              }}
+            >
+              <Pressable
+                style={styles.modalActionBtn}
+                disabled={event ? false : true}
+                onPress={() => setLinkVisible(true)}
               >
-                <Pressable
-                  style={styles.modalActionBtn}
-                  disabled={event ? false : true}
-                  onPress={() => {
-                    onEdit(event!);
-                    handleClose();
-                  }}
-                >
-                  <Feather size={20} name="edit" color={colors.fg2} />
-                  <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
-                </Pressable>
-                <View style={styles.modalActionDivider} />
-                <Pressable
-                  style={styles.modalActionBtn}
-                  disabled={event ? false : true}
-                  onPress={() => {
-                    onDelete(event!, isUnlink ? contextCalendarId : undefined);
-                    handleClose();
-                  }}
-                >
-                  <Feather size={20} name={isUnlink ? "minus-circle" : "trash"} color={colors.accent} />
-                  <Text style={{ color: colors.accent, fontSize: 10 }}>{isUnlink ? "Unlink" : "Delete"}</Text>
-                </Pressable>
-              </View>
-            )}
+                <Feather size={20} name="link" color={colors.fg2} />
+                <Text style={{ color: colors.fg2, fontSize: 10 }}>Link</Text>
+              </Pressable>
+              {canEdit && (
+                <>
+                  <View style={styles.modalActionDivider} />
+                  <Pressable
+                    style={styles.modalActionBtn}
+                    disabled={event ? false : true}
+                    onPress={() => {
+                      onEdit(event!);
+                      handleClose();
+                    }}
+                  >
+                    <Feather size={20} name="edit" color={colors.fg2} />
+                    <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
+                  </Pressable>
+                  <View style={styles.modalActionDivider} />
+                  <Pressable
+                    style={styles.modalActionBtn}
+                    disabled={event ? false : true}
+                    onPress={() => {
+                      onDelete(event!, isUnlink ? contextCalendarId : undefined);
+                      handleClose();
+                    }}
+                  >
+                    <Feather size={20} name={isUnlink ? "minus-circle" : "trash"} color={colors.accent} />
+                    <Text style={{ color: colors.accent, fontSize: 10 }}>{isUnlink ? "Unlink" : "Delete"}</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+            <LinkEventModal
+              event={event}
+              visible={linkVisible}
+              onClose={() => setLinkVisible(false)}
+              onLink={async (calendarID) => { if (event) await linkEvent(event, calendarID, api); }}
+            />
           </Animated.View>
         </GestureDetector>
       </GestureHandlerRootView>

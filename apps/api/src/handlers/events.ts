@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { NewEvent, createEvent, getCalendarMembers, getEventCalendars, getEventOrigin, getUsersEvents, linkEventToCalendars, removeEvent, unlinkEventFromCalendars, updateEvent } from '@musubi/db';
+import { NewEvent, createEvent, getCalendarMembers, getEvent, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, removeEvent, unlinkEventFromCalendars, updateEvent } from '@musubi/db';
 import { BadRequestError, Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
@@ -139,6 +139,45 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
     removed ? "event_removed" : "event_updated",
     removed ? result : { ...event, calendars: remaining },
   );
+
+  return res.status(200).json(result);
+}
+
+// Propagate: add an existing event into another calendar. Anyone who can VIEW the
+// event may link it into a calendar they can EDIT — no edit-on-event needed. To
+// change the event itself they'd have to fork it.
+export async function handlerLinkEvent(req: Request, res: Response) {
+  const eventID = req.params.eventId as string;
+  const calendarID = req.body?.calendarID as string;
+  if (!calendarID) throw new BadRequestError("calendarID is required...");
+
+  const existing = await getEventCalendars(eventID);
+  if (existing.length === 0) throw new NotFoundError("Event not found...");
+
+  // Must be able to see the event (member of some calendar it lives in).
+  let canView = false;
+  for (const cal of existing) {
+    if (await getUserRoleForCalendar(req.user!.id, cal)) { canView = true; break; }
+  }
+  if (!canView) throw new ForbiddenError("You can't access this event.");
+
+  // Must be able to edit the target calendar.
+  if (!(await canDo(req.user!.id, calendarID, "editEvents"))) {
+    throw new ForbiddenError("You can't add events to that calendar.");
+  }
+
+  if (!existing.includes(calendarID)) {
+    await linkEventToCalendars(eventID, [calendarID]);
+    const row = await getEvent(eventID);
+    await pushEventToCalendars({ ...row, calendars: [...existing, calendarID] } as Event, [calendarID], "create");
+  }
+
+  const calendars = await getEventCalendars(eventID);
+  const row = await getEvent(eventID);
+  const result = { ...row, calendars };
+
+  const members = await getCalendarMembers(calendarID);
+  notifyCalendarMembers(members.map(m => m.userID), "event_updated", result);
 
   return res.status(200).json(result);
 }

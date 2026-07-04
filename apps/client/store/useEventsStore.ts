@@ -13,6 +13,7 @@ type EventsStore = {
   localRemoveEvent: (event: Event) => void;
   updateEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
   localUpdateEvent: (event: Event) => void;
+  linkEvent: (event: Event, calendarID: string, api: ReturnType<typeof useApi>) => Promise<void>;
 }
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
@@ -32,6 +33,13 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       events: [...state.events, event],
     }));
     cacheUpsertEvents([event]);
+  },
+  linkEvent: async (event, calendarID, api) => {
+    const result = await api.linkEvent(event.id, calendarID);
+    set((state) => ({
+      events: [...state.events.filter(e => e.id !== result.id), result],
+    }));
+    cacheUpsertEvents([result]);
   },
   loadEvents: (events) => set(() => ({
     events: events,

@@ -80,6 +80,18 @@ export function useApi() {
       return newEvent;
     },
 
+    async linkEvent(eventID: string, calendarID: string) {
+      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/link`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ calendarID }),
+      });
+
+      if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
+
+      return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+    },
+
     async updateCalendar(calendar: Calendar) {
       const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "PUT",
