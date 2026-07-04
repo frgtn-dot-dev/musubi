@@ -18,10 +18,7 @@ type Props = {
   event: Event | null,
   visible: boolean,
   onClose: () => void,
-  onDelete: (event: Event, unlinkCalendarID?: string) => void,
   onEdit: (event: Event) => void,
-  canEdit?: boolean, // false for invited members / external calendars → read-only
-  contextCalendarId?: string, // the calendar this event is viewed in (null in global views)
 };
 
 const openMaps = (location: string) => {
@@ -32,17 +29,23 @@ const openMaps = (location: string) => {
   Linking.openURL(url);
 };
 
-export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit, canEdit = true, contextCalendarId }: Props) {
+export default function EventDetailModal({ event, visible, onClose, onEdit }: Props) {
   const { calendars } = useCalendarsStore();
 
   const api = useApi();
-  const { linkEvent, forkEvent } = useEventsStore();
+  const { linkEvent, forkEvent, removeEvent } = useEventsStore();
   const [linkVisible, setLinkVisible] = useState(false);
   const [forkVisible, setForkVisible] = useState(false);
+  const [unlinkVisible, setUnlinkVisible] = useState(false);
 
-  // Viewing the event in a calendar that isn't its home → the destructive action is
-  // "unlink from this calendar", not a full delete.
-  const isUnlink = !!contextCalendarId && contextCalendarId !== event?.originCalendarID;
+  // Editing content (and deleting) is governed by the event's HOME (origin) calendar —
+  // same rule the server enforces. Not the calendar you happen to be viewing it in.
+  const originCal = calendars.find(c => c.id === event?.originCalendarID);
+  const canEditContent = can(originCal?.role, "editEvents");
+
+  // Unlink = remove from a non-origin calendar you can edit (home is removed via Delete).
+  const canUnlink = !!event && calendars.some(c =>
+    event.calendars.includes(c.id) && c.id !== event.originCalendarID && can(c.role, "editEvents"));
 
   const {
     timeLocale,
@@ -177,7 +180,7 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                 <Feather size={20} name="copy" color={colors.fg2} />
                 <Text style={{ color: colors.fg2, fontSize: 10 }}>Fork</Text>
               </Pressable>
-              {canEdit && (
+              {canEditContent && (
                 <>
                   <View style={styles.modalActionDivider} />
                   <Pressable
@@ -191,35 +194,59 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                     <Feather size={20} name="edit" color={colors.fg2} />
                     <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
                   </Pressable>
+                </>
+              )}
+              {canUnlink && (
+                <>
+                  <View style={styles.modalActionDivider} />
+                  <Pressable
+                    style={styles.modalActionBtn}
+                    disabled={event ? false : true}
+                    onPress={() => setUnlinkVisible(true)}
+                  >
+                    <Feather size={20} name="minus-circle" color={colors.fg2} />
+                    <Text style={{ color: colors.fg2, fontSize: 10 }}>Unlink</Text>
+                  </Pressable>
+                </>
+              )}
+              {canEditContent && (
+                <>
                   <View style={styles.modalActionDivider} />
                   <Pressable
                     style={styles.modalActionBtn}
                     disabled={event ? false : true}
                     onPress={() => {
-                      onDelete(event!, isUnlink ? contextCalendarId : undefined);
+                      if (event) removeEvent(event, api); // cascade from origin
                       handleClose();
                     }}
                   >
-                    <Feather size={20} name={isUnlink ? "minus-circle" : "trash"} color={colors.accent} />
-                    <Text style={{ color: colors.accent, fontSize: 10 }}>{isUnlink ? "Unlink" : "Delete"}</Text>
+                    <Feather size={20} name="trash" color={colors.accent} />
+                    <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
                   </Pressable>
                 </>
               )}
             </View>
             <CalendarPickerModal
               title="Add to calendar"
-              event={event}
               visible={linkVisible}
-              excludeLinked
+              filter={(c) => !event?.calendars.includes(c.id)}
+              emptyLabel="No calendars you can add this to."
               onClose={() => setLinkVisible(false)}
               onSelect={async (calendarID) => { if (event) await linkEvent(event, calendarID, api); }}
             />
             <CalendarPickerModal
               title="Fork to calendar"
-              event={event}
               visible={forkVisible}
               onClose={() => setForkVisible(false)}
               onSelect={async (calendarID) => { if (event) await forkEvent(event, calendarID, api); }}
+            />
+            <CalendarPickerModal
+              title="Remove from calendar"
+              visible={unlinkVisible}
+              filter={(c) => !!event?.calendars.includes(c.id) && c.id !== event?.originCalendarID}
+              emptyLabel="No calendars to remove this from."
+              onClose={() => setUnlinkVisible(false)}
+              onSelect={async (calendarID) => { if (event) await removeEvent(event, api, calendarID); }}
             />
           </Animated.View>
         </GestureDetector>

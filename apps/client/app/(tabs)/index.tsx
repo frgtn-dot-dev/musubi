@@ -234,7 +234,6 @@ export default function MainTab() {
       <EventDetailModal
         visible={eventDetailVisible}
         onClose={() => setEventDetailVisible(false)}
-        onDelete={(event: Event) => removeEvent(event, api)}
         onEdit={(event: Event) => handlerEventEdit(event)}
         event={eventDetail}
       />

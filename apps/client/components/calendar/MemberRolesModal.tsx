@@ -1,6 +1,7 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { Modal, Pressable, Text, View, ScrollView } from "react-native";
+import { Alert, Modal, Pressable, Text, View, ScrollView } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
@@ -41,6 +42,23 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
     } finally {
       setPending(null);
     }
+  };
+
+  const kick = (member: Member) => {
+    Alert.alert("Remove member", `Remove ${member.name} from this calendar?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove", style: "destructive", onPress: async () => {
+          setPending(member.id);
+          try {
+            await api.removeMember(calendar!.id, member.id);
+            setMembers(prev => prev.filter(m => m.id !== member.id));
+          } finally {
+            setPending(null);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -116,6 +134,16 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
                           </Pressable>
                         ))}
                       </View>
+                    )}
+                    {canManage && !isOwner && (
+                      <Pressable
+                        disabled={pending === m.id}
+                        onPress={() => kick(m)}
+                        hitSlop={8}
+                        style={{ opacity: pending === m.id ? 0.4 : 1 }}
+                      >
+                        <Feather name="user-minus" size={18} color={colors.accent} />
+                      </Pressable>
                     )}
                   </View>
                 );

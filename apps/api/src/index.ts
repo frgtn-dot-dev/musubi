@@ -5,7 +5,7 @@ import { toNodeHandler } from "better-auth/node";
 import express from "express";
 import cors from "cors";
 import { middlewareErrorHandler } from "./middleware/error_handler";
-import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handlerRemoveCalendar, handlerUpdateCalendar, handlerJoinCalendar, handlerLeaveCalendar, handlerGetCalendarFromToken, handlerGetCalendarMembers, handlerSetMemberRole } from "./handlers/calendars";
+import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handlerRemoveCalendar, handlerUpdateCalendar, handlerJoinCalendar, handlerLeaveCalendar, handlerGetCalendarFromToken, handlerGetCalendarMembers, handlerSetMemberRole, handlerKickMember } from "./handlers/calendars";
 import { handlerDeleteUser, handlerResetUsers } from "./handlers/users";
 import { handlerCreateEvent, handlerForkEvent, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
@@ -175,6 +175,13 @@ app.put("/api/v1/calendars/:calendarId/members/:userId", requireAuth, (
   res,
   next) => {
   Promise.resolve(handlerSetMemberRole(req, res).catch(next));
+});
+
+app.delete("/api/v1/calendars/:calendarId/members/:userId", requireAuth, (
+  req,
+  res,
+  next) => {
+  Promise.resolve(handlerKickMember(req, res).catch(next));
 });
 
 app.post("/api/v1/events", requireAuth, (

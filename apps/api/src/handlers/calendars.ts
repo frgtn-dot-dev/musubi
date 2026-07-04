@@ -155,6 +155,25 @@ export async function handlerLeaveCalendar(req: Request, res: Response) {
   res.sendStatus(200);
 }
 
+export async function handlerKickMember(req: Request, res: Response) {
+  const calendarID = req.params.calendarId as string;
+  const targetUserID = req.params.userId as string;
+
+  await assertCan(req.user!.id, calendarID, "manageMembers");
+
+  const calendar = await getCalendar(calendarID);
+  if (!calendar) throw new NotFoundError("Calendar not found...");
+  if (targetUserID === calendar.creatorID) {
+    throw new BadRequestError("The calendar owner can't be removed.");
+  }
+
+  await removeClaendarMember(targetUserID, calendarID);
+  // Tell the removed user's client to drop the calendar.
+  notifyCalendarMembers([targetUserID], "calendar_removed", { id: calendarID });
+
+  res.sendStatus(200);
+}
+
 export async function handlerGetCalendarMembers(req: Request, res: Response) {
   const calendarID = req.params.calendarId as string;
   // Any member can see who's in the calendar; only owners change roles (setMemberRole).

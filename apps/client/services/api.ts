@@ -229,6 +229,17 @@ export function useApi() {
       return true;
     },
 
+    async removeMember(calendarID: string, userID: string) {
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members/${userID}`,
+        { method: "DELETE" },
+      );
+
+      if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
+
+      return true;
+    },
+
     async getSettings() {
       const { data, error } = await authClient.$fetch<Settings>(`${apiUrl}/api/${apiVersion}/users/settings`, {
         method: "GET",

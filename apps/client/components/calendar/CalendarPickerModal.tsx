@@ -4,27 +4,26 @@ import { Modal, Pressable, Text, View, ScrollView } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { Event, can } from "@musubi/types";
+import { Calendar, can } from "@musubi/types";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useState } from "react";
 
 type Props = {
   title: string,
-  event: Event | null,
   visible: boolean,
   onClose: () => void,
   onSelect: (calendarID: string) => Promise<void>,
-  excludeLinked?: boolean, // hide calendars the event is already in (link, not fork)
+  filter?: (cal: Calendar) => boolean, // extra filter on top of "can edit"
+  emptyLabel?: string,
 };
 
-export default function CalendarPickerModal({ title, event, visible, onClose, onSelect, excludeLinked }: Props) {
+export default function CalendarPickerModal({ title, visible, onClose, onSelect, filter, emptyLabel }: Props) {
   const { calendars } = useCalendarsStore();
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
   const [pending, setPending] = useState<string | null>(null);
 
-  const options = calendars.filter(c =>
-    can(c.role, "editEvents") && (!excludeLinked || !event?.calendars.includes(c.id)));
+  const options = calendars.filter(c => can(c.role, "editEvents") && (!filter || filter(c)));
 
   return (
     <Modal
@@ -47,7 +46,7 @@ export default function CalendarPickerModal({ title, event, visible, onClose, on
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 4 }}>
               {options.length === 0 ? (
                 <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg3 }}>
-                  No calendars you can add this to.
+                  {emptyLabel ?? "No calendars available."}
                 </Text>
               ) : options.map((c) => (
                 <Pressable

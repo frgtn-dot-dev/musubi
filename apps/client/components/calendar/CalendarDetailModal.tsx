@@ -270,11 +270,8 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
       <EventDetailModal
         visible={eventDetailVisible}
         onClose={() => setEventDetailVisible(false)}
-        onDelete={(event: Event, unlinkCal?: string) => removeEvent(event, api, unlinkCal)}
         onEdit={(event: Event) => handlerEventEdit(event)}
         event={eventDetail}
-        canEdit={canEditEvents}
-        contextCalendarId={calendar?.id}
       />
       <CalendarSettingsModal
         calendar={calendarSettings}
