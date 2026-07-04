@@ -184,7 +184,7 @@ export function useApi() {
     },
 
     async getCalendarMembers(calendarID: string) {
-      const { data, error } = await authClient.$fetch<{ id: string; name: string; email: string; role: string }[]>(
+      const { data, error } = await authClient.$fetch<{ id: string; name: string; email: string; image?: string | null; role: string }[]>(
         `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members`,
         { method: "GET" },
       );

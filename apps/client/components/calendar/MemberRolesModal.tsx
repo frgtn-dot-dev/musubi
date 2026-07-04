@@ -4,11 +4,12 @@ import { Modal, Pressable, Text, View, ScrollView } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { Calendar } from "@musubi/types";
+import { Calendar, can } from "@musubi/types";
 import { useEffect, useState } from "react";
 import { useApi } from "@/services/api";
+import { Avatar } from "@/components/Avatar";
 
-type Member = { id: string; name: string; email: string; role: string };
+type Member = { id: string; name: string; email: string; image?: string | null; role: string };
 
 type Props = {
   calendar: Calendar | null,
@@ -25,6 +26,7 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
 
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<string | null>(null); // userID being updated
+  const canManage = can(calendar?.role, "manageMembers"); // only owners edit roles
 
   useEffect(() => {
     if (!visible || !calendar) return;
@@ -57,19 +59,25 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>Permissions</Text>
+              <Text style={styles.modalTitle}>Members</Text>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 12 }}>
               {members.map((m) => {
                 const isOwner = m.id === calendar?.creatorID;
                 return (
                   <View key={m.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <Avatar name={m.name} image={m.image} size={40} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg }}>{m.name}</Text>
                       <Text style={{ fontSize: 11, color: colors.fg3 }}>{m.email}</Text>
                     </View>
                     {isOwner ? (
                       <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>Owner</Text>
+                    ) : !canManage ? (
+                      // Non-owners see the role but can't change it.
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+                        {m.role === "viewer" ? "Viewer" : "Editor"}
+                      </Text>
                     ) : (
                       <View style={{
                         flexDirection: "row",

@@ -40,7 +40,6 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const showEdit = can(calendar?.role, "editCalendar") && !isExternal;
   const showDelete = can(calendar?.role, "deleteCalendar") && !isExternal;
   const showInvite = can(calendar?.role, "invite");
-  const showManage = can(calendar?.role, "manageMembers"); // owner-only role editing
   const showLeave = !isOwner;                    // non-owners can leave
 
   return (
@@ -87,12 +86,10 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                     <Text style={styles.btnPrimaryText}>Send Invite</Text>
                   </Pressable>
                   )}
-                  {showManage && (
-                    <Pressable style={styles.btnSecondary} onPress={() => setRolesVisible(true)}>
-                      <Feather size={14} name="users" color={colors.fg2} />
-                      <Text style={styles.btnSecondaryText}>Permissions</Text>
-                    </Pressable>
-                  )}
+                  <Pressable style={styles.btnSecondary} onPress={() => setRolesVisible(true)}>
+                    <Feather size={14} name="users" color={colors.fg2} />
+                    <Text style={styles.btnSecondaryText}>Members</Text>
+                  </Pressable>
                 </View>
               </View>
             </ScrollView>

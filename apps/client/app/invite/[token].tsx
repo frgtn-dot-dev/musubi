@@ -6,14 +6,7 @@ import { useServer } from "@/contexts/ServerContext";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, TouchableOpacity, View, Text, StyleSheet } from "react-native";
-
-function Avatar({ label, size = 36 }: { label: string; size?: number }) {
-  return (
-    <View style={[local.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[local.avatarText, { fontSize: size * 0.38 }]}>{label.charAt(0).toUpperCase()}</Text>
-    </View>
-  );
-}
+import { Avatar } from "@/components/Avatar";
 
 export default function Invite() {
   const api = useApi();
@@ -69,7 +62,7 @@ export default function Invite() {
               <View style={local.avatarStack}>
                 {calendarData?.members?.slice(0, 4).map((m) => (
                   <View key={m.id} style={local.avatarStackItem}>
-                    <Avatar label={m.name} size={34} />
+                    <Avatar name={m.name} image={m.image} size={34} />
                   </View>
                 ))}
                 {calendarData?.members?.length! > 4 && (

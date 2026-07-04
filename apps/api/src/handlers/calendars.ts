@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { addCalendarMember, createCalendar, getCalendar, getCalendarEvents, getCalendarIDFromToken, getCalendarMembers, getExternalLinkForCalendar, getUsersCalendars, NewCalendar, removeCalendar, removeClaendarMember, setMemberRole, updateCalendar } from '@musubi/db';
-import { BadRequestError, Calendar, CalendarSchema, NotFoundError, User } from "@musubi/types";
+import { addCalendarMember, createCalendar, getCalendar, getCalendarEvents, getCalendarIDFromToken, getCalendarMembers, getExternalLinkForCalendar, getUserRoleForCalendar, getUsersCalendars, NewCalendar, removeCalendar, removeClaendarMember, setMemberRole, updateCalendar } from '@musubi/db';
+import { BadRequestError, Calendar, CalendarSchema, ForbiddenError, NotFoundError, User } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { assertCan } from "../permissions";
 
@@ -123,6 +123,7 @@ export async function handlerGetCalendarFromToken(req: Request, res: Response) {
       name: u.user.name,
       email: u.user.email,
       id: u.user.id,
+      image: u.user.image,
     })),
     events: events.map(e => e.events).filter(e => !e.deletedAt), // exclude soft-deleted
   });
@@ -156,12 +157,15 @@ export async function handlerLeaveCalendar(req: Request, res: Response) {
 
 export async function handlerGetCalendarMembers(req: Request, res: Response) {
   const calendarID = req.params.calendarId as string;
-  await assertCan(req.user!.id, calendarID, "manageMembers");
+  // Any member can see who's in the calendar; only owners change roles (setMemberRole).
+  const role = await getUserRoleForCalendar(req.user!.id, calendarID);
+  if (!role) throw new ForbiddenError("You're not a member of this calendar.");
   const members = await getCalendarMembers(calendarID);
   res.status(200).json(members.map(m => ({
     id: m.user.id,
     name: m.user.name,
     email: m.user.email,
+    image: m.user.image,
     role: m.role,
   })));
 }
