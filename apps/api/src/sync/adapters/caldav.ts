@@ -106,7 +106,7 @@ export const caldavAdapter: CalendarAdapter = {
       .map((c) => ({
         externalId: c.url,
         name: typeof c.displayName === "string" ? c.displayName : "Calendar",
-        color: (c.calendarColor ?? "#4285F4").slice(0, 7),
+        color: (typeof c.calendarColor === "string" ? c.calendarColor : "#4285F4").slice(0, 7),
       }));
   },
 
