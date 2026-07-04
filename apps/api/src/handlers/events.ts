@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
-import { NewEvent, createEvent, getCalendarMembers, getEventCalendars, getUsersEvents, linkEventToCalendars, removeEvent, unlinkEventFromCalendars, updateEvent } from '@musubi/db';
-import { BadRequestError, Event, EventSchema, NotFoundError } from "@musubi/types";
+import { NewEvent, createEvent, getCalendarMembers, getEventCalendars, getEventOrigin, getUsersEvents, linkEventToCalendars, removeEvent, unlinkEventFromCalendars, updateEvent } from '@musubi/db';
+import { BadRequestError, Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
-import { assertCan, assertCanEditEvent } from "../permissions";
+import { assertCan, assertCanEditEvent, canDo } from "../permissions";
 
 export async function handlerCreateEvent(req: Request, res: Response) {
   let event: Event;
@@ -91,33 +91,56 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   const event = EventSchema.parse(req.body);
   if (!event.id) throw new BadRequestError("Event id is required...");
 
-  for (const cal of event.calendars) await assertCan(req.user!.id, cal, "editEvents");
+  // "Delete" = unlink from every calendar the user is allowed to edit. Calendars
+  // they can only view are left untouched. The event row is tombstoned only once
+  // its last link is gone.
+  const existing = await getEventCalendars(event.id);
+  const unlinkCalendarID = req.body?.unlinkCalendarID as string | undefined;
 
-  await pushEventToProviders(event, "delete");   // before removeEvent so the external mapping still exists
-
-  const removedEvent = await removeEvent(event.id);
-
-  if (removedEvent) {
-
-    const result = { ...removedEvent, calendars: event.calendars };
-
-    const memberIDSeen = new Set<string>();
-
-    for (const cal of event.calendars) {
-      const members = await getCalendarMembers(cal);
-
-      for (const member of members) {
-        if (!memberIDSeen.has(member.userID)) {
-          memberIDSeen.add(member.userID);
-        }
-      }
+  let targets: string[];
+  if (unlinkCalendarID) {
+    // Unlink from ONE calendar only (used from a non-origin calendar view).
+    if (!existing.includes(unlinkCalendarID)) throw new BadRequestError("Event isn't in that calendar...");
+    if (!(await canDo(req.user!.id, unlinkCalendarID, "editEvents"))) {
+      throw new ForbiddenError("You can't remove this event from that calendar.");
     }
-
-    notifyCalendarMembers([...memberIDSeen], "event_removed", result);
-
-    return res.status(200).json(result);
+    targets = [unlinkCalendarID];
+  } else {
+    // Delete: unlink every calendar the user can edit. If the HOME (origin) is among
+    // them the delete is authoritative → cascade to ALL calendars (even viewers').
+    const editable: string[] = [];
+    for (const cal of existing) {
+      if (await canDo(req.user!.id, cal, "editEvents")) editable.push(cal);
+    }
+    if (editable.length === 0) {
+      throw new ForbiddenError("You can't remove this event from any of your calendars.");
+    }
+    const origin = (await getEventOrigin(event.id))?.originCalendarID ?? null;
+    targets = (origin && editable.includes(origin)) ? existing : editable;
   }
-  throw new NotFoundError("Event not found...");
+
+  await pushEventToCalendars(event, targets, "delete"); // remove from external while mapping still exists
+  await unlinkEventFromCalendars(event.id, targets);    // then drop links + stale mappings
+
+  const remaining = await getEventCalendars(event.id);
+  const removed = remaining.length === 0;
+  if (removed) await removeEvent(event.id);              // tombstone the now-orphaned event
+
+  const result = { id: event.id, calendars: remaining, removed };
+
+  // Notify everyone who had it: full removal → drop; partial → update their view.
+  const memberIDSeen = new Set<string>();
+  for (const cal of existing) {
+    const members = await getCalendarMembers(cal);
+    for (const member of members) memberIDSeen.add(member.userID);
+  }
+  notifyCalendarMembers(
+    [...memberIDSeen],
+    removed ? "event_removed" : "event_updated",
+    removed ? result : { ...event, calendars: remaining },
+  );
+
+  return res.status(200).json(result);
 }
 
 export async function handlerGetEvents(req: Request, res: Response) {

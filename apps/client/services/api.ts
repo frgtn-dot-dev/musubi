@@ -120,18 +120,18 @@ export function useApi() {
       return data;
     },
 
-    async removeEvent(event: Event) {
-      const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/${apiVersion}/events`, {
+    async removeEvent(event: Event, unlinkCalendarID?: string) {
+      const { error, data } = await authClient.$fetch<{ id: string; calendars: string[]; removed: boolean }>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
         },
 
-        body: JSON.stringify(event),
+        body: JSON.stringify({ ...event, unlinkCalendarID }),
       });
       if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
 
-      return data.id;
+      return data;
     },
 
     async getEvents(since?: Date) {

@@ -11,6 +11,13 @@ export async function assertCan(userID: string, calendarID: string, action: Cale
   }
 }
 
+// Non-throwing check — for when you need to branch on permission rather than
+// reject the whole request (e.g. unlink only the calendars the user can edit).
+export async function canDo(userID: string, calendarID: string, action: CalendarAction): Promise<boolean> {
+  const role = await getUserRoleForCalendar(userID, calendarID);
+  return can(role, action);
+}
+
 // Event-scoped gate for editing an event's SHARED content. A shared event lives
 // in many calendars, so editing is governed by its home (origin) calendar — not
 // whichever calendar the user is looking at. See ownership model.

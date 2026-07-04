@@ -9,7 +9,7 @@ type EventsStore = {
   addEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
   localAddEvent: (event: Event) => void;
   loadEvents: (events: Event[]) => void;
-  removeEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
+  removeEvent: (event: Event, api: ReturnType<typeof useApi>, unlinkCalendarID?: string) => Promise<void>;
   localRemoveEvent: (event: Event) => void;
   updateEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
   localUpdateEvent: (event: Event) => void;
@@ -36,8 +36,15 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   loadEvents: (events) => set(() => ({
     events: events,
   })),
-  removeEvent: async (event, api) => {
-    const result = await api.removeEvent(event);
+  removeEvent: async (event, api, unlinkCalendarID) => {
+    const result = await api.removeEvent(event, unlinkCalendarID);
+    if (!result.removed) {
+      // Still linked to calendars the user can't edit → keep it, just update links.
+      const updated = { ...event, calendars: result.calendars };
+      set((state) => ({ events: state.events.map(e => e.id === event.id ? updated : e) }));
+      cacheUpsertEvents([updated]);
+      return;
+    }
     const identifier = await getEventsNotificationIdentifier(event.id);
     if (identifier !== null) {
       cancelEventPushNotification(identifier);
@@ -48,7 +55,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       console.log("============================");
     }
     set((state) => ({
-      events: [...state.events.filter(e => e.id !== result)],
+      events: [...state.events.filter(e => e.id !== result.id)],
     }));
     cacheDeleteEvents([event.id]);
   },

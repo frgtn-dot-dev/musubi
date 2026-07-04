@@ -14,9 +14,10 @@ type Props = {
   event: Event | null,
   visible: boolean,
   onClose: () => void,
-  onDelete: (event: Event) => void,
+  onDelete: (event: Event, unlinkCalendarID?: string) => void,
   onEdit: (event: Event) => void,
   canEdit?: boolean, // false for invited members / external calendars → read-only
+  contextCalendarId?: string, // the calendar this event is viewed in (null in global views)
 };
 
 const openMaps = (location: string) => {
@@ -27,8 +28,12 @@ const openMaps = (location: string) => {
   Linking.openURL(url);
 };
 
-export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit, canEdit = true }: Props) {
+export default function EventDetailModal({ event, visible, onClose, onDelete, onEdit, canEdit = true, contextCalendarId }: Props) {
   const { calendars } = useCalendarsStore();
+
+  // Viewing the event in a calendar that isn't its home → the destructive action is
+  // "unlink from this calendar", not a full delete.
+  const isUnlink = !!contextCalendarId && contextCalendarId !== event?.originCalendarID;
 
   const {
     timeLocale,
@@ -162,12 +167,12 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                   style={styles.modalActionBtn}
                   disabled={event ? false : true}
                   onPress={() => {
-                    onDelete(event!);
+                    onDelete(event!, isUnlink ? contextCalendarId : undefined);
                     handleClose();
                   }}
                 >
-                  <Feather size={20} name="trash" color={colors.accent} />
-                  <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
+                  <Feather size={20} name={isUnlink ? "minus-circle" : "trash"} color={colors.accent} />
+                  <Text style={{ color: colors.accent, fontSize: 10 }}>{isUnlink ? "Unlink" : "Delete"}</Text>
                 </Pressable>
               </View>
             )}
