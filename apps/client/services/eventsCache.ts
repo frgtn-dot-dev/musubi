@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { Event } from "@musubi/types";
+import { Calendar, Event } from "@musubi/types";
 import { db } from "./db";
 import { eventsTable, syncMetaTable } from "@/db/schema";
 
@@ -48,11 +48,21 @@ export async function cacheGetAllEvents(): Promise<Event[]> {
   return rows.map(fromRow);
 }
 
+function hasValidDates(e: Event): boolean {
+  return !isNaN(new Date(e.start).getTime()) && !isNaN(new Date(e.end).getTime());
+}
+
 export async function cacheUpsertEvents(events: Event[]) {
-  if (!events.length) return;
+  // Skip events with malformed dates so one bad import can't crash the whole sync.
+  const valid = events.filter((e) => {
+    if (hasValidDates(e)) return true;
+    console.warn("Skipping event with invalid date:", e.id, e.start, e.end);
+    return false;
+  });
+  if (!valid.length) return;
   // delete-then-insert = upsert without excluded gymnastics
-  await db.delete(eventsTable).where(inArray(eventsTable.id, events.map((e) => e.id)));
-  const rows = events.map(toRow);
+  await db.delete(eventsTable).where(inArray(eventsTable.id, valid.map((e) => e.id)));
+  const rows = valid.map(toRow);
   // chunk to stay under SQLite's bound-variable limit on big first syncs
   for (let i = 0; i < rows.length; i += 200) {
     await db.insert(eventsTable).values(rows.slice(i, i + 200));
@@ -64,12 +74,39 @@ export async function cacheDeleteEvents(ids: string[]) {
   await db.delete(eventsTable).where(inArray(eventsTable.id, ids));
 }
 
+// Full sync is authoritative: replace the whole cache so any local drift
+// (e.g. stale ids accumulated from past resets) is dropped.
+export async function cacheReplaceAllEvents(events: Event[]) {
+  await db.delete(eventsTable);
+  const valid = events.filter(hasValidDates);
+  const rows = valid.map(toRow);
+  for (let i = 0; i < rows.length; i += 200) {
+    await db.insert(eventsTable).values(rows.slice(i, i + 200));
+  }
+}
+
+// Calendars are few and have no Date fields → stored as one JSON blob. Cached so
+// the boot hydrate has calendars too (activeCals derives from them; without it,
+// cached events render but get filtered out until calendars arrive over the network).
+export async function cacheSetCalendars(calendars: Calendar[]) {
+  const value = JSON.stringify(calendars);
+  await db.insert(syncMetaTable)
+    .values({ key: "calendars", value })
+    .onConflictDoUpdate({ target: syncMetaTable.key, set: { value } });
+}
+
+export async function cacheGetCalendars(): Promise<Calendar[]> {
+  const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "calendars"));
+  return row ? JSON.parse(row.value) : [];
+}
+
 export async function getLastSync(): Promise<string | null> {
   const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "lastSync"));
   return row?.value ?? null;
 }
 
 export async function setLastSync(iso: string) {
+  if (!iso || isNaN(new Date(iso).getTime())) return; // never persist a garbage cursor
   await db.insert(syncMetaTable)
     .values({ key: "lastSync", value: iso })
     .onConflictDoUpdate({ target: syncMetaTable.key, set: { value: iso } });

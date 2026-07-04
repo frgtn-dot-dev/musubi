@@ -112,7 +112,10 @@ export async function getExternalLinkForCalendar(calendarID: string) {
 // --- events ---
 
 export async function clearCalendarEvents(calendarID: string) {
-  await db.delete(events).where(inArray(events.id,
+  // Soft-delete (tombstone) so the delta tells clients to drop them, and keep
+  // the external_events mapping — a following upsert revives still-present events
+  // with the SAME id (no churn); genuinely-gone ones stay tombstoned.
+  await db.update(events).set({ deletedAt: new Date() }).where(inArray(events.id,
     db.select({ id: calendarEvents.eventID }).from(calendarEvents).where(eq(calendarEvents.calendarID, calendarID))));
 }
 
@@ -136,7 +139,8 @@ export async function upsertExternalEvent(
       ));
 
     if (map) {
-      await tx.update(events).set(values).where(eq(events.id, map.eventID));
+      // revive if it was tombstoned by a reset's clearCalendarEvents
+      await tx.update(events).set({ ...values, deletedAt: null }).where(eq(events.id, map.eventID));
       await tx.update(externalEvents).set({ etag }).where(eq(externalEvents.eventID, map.eventID));
     } else {
       const [ev] = await tx

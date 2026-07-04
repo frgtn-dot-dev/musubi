@@ -2,7 +2,7 @@ import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { cacheDeleteEvents, cacheGetAllEvents, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
+import { cacheDeleteEvents, cacheGetAllEvents, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
 
 export function useRefreshData() {
   const api = useApi();
@@ -15,11 +15,18 @@ export function useRefreshData() {
     // show up in the delta below (best-effort, no-op for unconnected providers)
     try { await api.getGoogleCalendars(); } catch (e) { console.error("Sync failed:", e); }
 
-    // delta: only events changed since our last sync (+ tombstones to drop)
-    const since = await getLastSync();
-    const { events, deletedIds, serverTime } = await api.getEvents(since ? new Date(since) : undefined);
-    await cacheUpsertEvents(events);
-    await cacheDeleteEvents(deletedIds);
+    // delta: only events changed since our last sync (+ tombstones to drop).
+    // Tolerate a garbage stored value → fall back to a full sync (self-heals).
+    const lastSync = await getLastSync();
+    const sinceDate = lastSync ? new Date(lastSync) : null;
+    const since = sinceDate && !isNaN(sinceDate.getTime()) ? sinceDate : undefined;
+    const { events, deletedIds, serverTime } = await api.getEvents(since);
+    if (since === undefined) {
+      await cacheReplaceAllEvents(events); // full sync = authoritative, drops any drift
+    } else {
+      await cacheUpsertEvents(events);
+      await cacheDeleteEvents(deletedIds);
+    }
     await setLastSync(serverTime);
 
     const [settings, calendars, all] = await Promise.all([
@@ -30,5 +37,6 @@ export function useRefreshData() {
     loadSettings(settings);
     loadCalendars(calendars);
     loadEvents(all);
+    cacheSetCalendars(calendars);
   };
 }

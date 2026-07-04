@@ -8,13 +8,15 @@ import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRefreshData } from '@/hooks/useRefreshData';
 import { useEventsStore } from '@/store/useEventsStore';
-import { cacheGetAllEvents } from '@/services/eventsCache';
+import { useCalendarsStore } from '@/store/useCalendarsStore';
+import { cacheGetAllEvents, cacheGetCalendars } from '@/services/eventsCache';
 
 
 export default function TabLayout() {
   const { apiUrl, isLoading } = useServer();
   const refresh = useRefreshData();
   const { loadEvents } = useEventsStore();
+  const { loadCalendars } = useCalendarsStore();
   const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
@@ -29,8 +31,11 @@ export default function TabLayout() {
 
     const load = async () => {
       try {
-        // instant render from the local cache, then sync the delta over the network
-        loadEvents(await cacheGetAllEvents());
+        // instant render from the local cache (calendars too, so activeCals is
+        // populated and events aren't filtered out), then sync over the network
+        const [cachedCals, cachedEvents] = await Promise.all([cacheGetCalendars(), cacheGetAllEvents()]);
+        loadCalendars(cachedCals);
+        loadEvents(cachedEvents);
         setDataReady(true);
         await refresh();
       } catch (e: any) {
