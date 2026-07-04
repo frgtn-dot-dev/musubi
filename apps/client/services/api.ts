@@ -134,13 +134,10 @@ export function useApi() {
       return data.id;
     },
 
-    async getEvents(from?: Date, to?: Date) {
-      const params = new URLSearchParams();
-      if (from) params.set("from", from.toISOString());
-      if (to) params.set("to", to.toISOString());
-      const qs = params.toString() ? `?${params}` : "";
+    async getEvents(since?: Date) {
+      const qs = since ? `?since=${encodeURIComponent(since.toISOString())}` : "";
 
-      const { error, data } = await authClient.$fetch<{ events: Event[] }>(`${apiUrl}/api/${apiVersion}/events${qs}`, {
+      const { error, data } = await authClient.$fetch<{ events: Event[]; deletedIds: string[]; serverTime: string }>(`${apiUrl}/api/${apiVersion}/events${qs}`, {
         method: "GET",
         headers: {
           "content-type": "application/json",
@@ -149,7 +146,7 @@ export function useApi() {
 
       if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
 
-      return data.events;
+      return data; // { events, deletedIds, serverTime }
     },
 
     async createInvite(invite: Invite) {

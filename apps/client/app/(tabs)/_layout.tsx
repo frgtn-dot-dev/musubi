@@ -7,11 +7,14 @@ import { Tabs } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRefreshData } from '@/hooks/useRefreshData';
+import { useEventsStore } from '@/store/useEventsStore';
+import { cacheGetAllEvents } from '@/services/eventsCache';
 
 
 export default function TabLayout() {
   const { apiUrl, isLoading } = useServer();
   const refresh = useRefreshData();
+  const { loadEvents } = useEventsStore();
   const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
@@ -26,6 +29,9 @@ export default function TabLayout() {
 
     const load = async () => {
       try {
+        // instant render from the local cache, then sync the delta over the network
+        loadEvents(await cacheGetAllEvents());
+        setDataReady(true);
         await refresh();
       } catch (e: any) {
         console.error("Could not fetch initial data:", e?.message, e?.status, e);

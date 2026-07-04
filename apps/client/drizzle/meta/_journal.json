@@ -8,6 +8,13 @@
       "when": 1782063835633,
       "tag": "0000_solid_captain_britain",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783153003910,
+      "tag": "0001_next_stark_industries",
+      "breakpoints": true
     }
   ]
 }
