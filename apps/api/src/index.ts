@@ -7,7 +7,7 @@ import cors from "cors";
 import { middlewareErrorHandler } from "./middleware/error_handler";
 import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handlerRemoveCalendar, handlerUpdateCalendar, handlerJoinCalendar, handlerLeaveCalendar, handlerGetCalendarFromToken, handlerGetCalendarMembers, handlerSetMemberRole } from "./handlers/calendars";
 import { handlerDeleteUser, handlerResetUsers } from "./handlers/users";
-import { handlerCreateEvent, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerUpdateEvent } from "./handlers/events";
+import { handlerCreateEvent, handlerForkEvent, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
 import { handlerCreateCalendarInvite } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
@@ -189,6 +189,13 @@ app.post("/api/v1/events/:eventId/link", requireAuth, (
   res,
   next) => {
   Promise.resolve(handlerLinkEvent(req, res).catch(next));
+});
+
+app.post("/api/v1/events/:eventId/fork", requireAuth, (
+  req,
+  res,
+  next) => {
+  Promise.resolve(handlerForkEvent(req, res).catch(next));
 });
 
 app.post("/api/v1/calendars/invites", requireAuth, (

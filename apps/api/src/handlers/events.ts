@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { randomUUID } from "crypto";
 import { NewEvent, createEvent, getCalendarMembers, getEvent, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, removeEvent, unlinkEventFromCalendars, updateEvent } from '@musubi/db';
 import { BadRequestError, Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
@@ -180,6 +181,56 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   notifyCalendarMembers(members.map(m => m.userID), "event_updated", result);
 
   return res.status(200).json(result);
+}
+
+// Fork (claim): make an INDEPENDENT copy of the event into a calendar the user can
+// edit. New id + creatorID + origin = target, no external mapping to the original.
+// Detached from the previous owner — editing the fork never touches the source.
+export async function handlerForkEvent(req: Request, res: Response) {
+  const eventID = req.params.eventId as string;
+  const calendarID = req.body?.calendarID as string;
+  if (!calendarID) throw new BadRequestError("calendarID is required...");
+
+  const sourceCalendars = await getEventCalendars(eventID);
+  if (sourceCalendars.length === 0) throw new NotFoundError("Event not found...");
+
+  // Must be able to see the source, and edit the target.
+  let canView = false;
+  for (const cal of sourceCalendars) {
+    if (await getUserRoleForCalendar(req.user!.id, cal)) { canView = true; break; }
+  }
+  if (!canView) throw new ForbiddenError("You can't access this event.");
+  if (!(await canDo(req.user!.id, calendarID, "editEvents"))) {
+    throw new ForbiddenError("You can't add events to that calendar.");
+  }
+
+  const src = await getEvent(eventID);
+  if (!src) throw new NotFoundError("Event not found...");
+
+  const newEvent: NewEvent = {
+    id: randomUUID(),
+    creatorID: req.user!.id,
+    title: src.title,
+    color: src.color,
+    start: src.start,
+    end: src.end,
+    isAllDay: src.isAllDay,
+    description: src.description,
+    location: src.location,
+    organizer: req.user!.id,       // new owner
+    recurrence: src.recurrence,
+    url: src.url,
+    originCalendarID: calendarID,   // fork's home = chosen calendar
+  };
+  const created = await createEvent(newEvent, [calendarID]);
+  const result = { ...created, calendars: [calendarID] };
+
+  await pushEventToProviders(result, "create"); // sync to target's provider if external
+
+  const members = await getCalendarMembers(calendarID);
+  notifyCalendarMembers(members.map(m => m.userID), "event_created", result);
+
+  return res.status(201).json(result);
 }
 
 export async function handlerGetEvents(req: Request, res: Response) {

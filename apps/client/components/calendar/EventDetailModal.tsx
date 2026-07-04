@@ -11,7 +11,7 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useApi } from "@/services/api";
 import { useState } from "react";
-import LinkEventModal from "./LinkEventModal";
+import CalendarPickerModal from "./CalendarPickerModal";
 
 
 type Props = {
@@ -36,8 +36,9 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
   const { calendars } = useCalendarsStore();
 
   const api = useApi();
-  const { linkEvent } = useEventsStore();
+  const { linkEvent, forkEvent } = useEventsStore();
   const [linkVisible, setLinkVisible] = useState(false);
+  const [forkVisible, setForkVisible] = useState(false);
 
   // Viewing the event in a calendar that isn't its home → the destructive action is
   // "unlink from this calendar", not a full delete.
@@ -167,6 +168,15 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                 <Feather size={20} name="link" color={colors.fg2} />
                 <Text style={{ color: colors.fg2, fontSize: 10 }}>Link</Text>
               </Pressable>
+              <View style={styles.modalActionDivider} />
+              <Pressable
+                style={styles.modalActionBtn}
+                disabled={event ? false : true}
+                onPress={() => setForkVisible(true)}
+              >
+                <Feather size={20} name="copy" color={colors.fg2} />
+                <Text style={{ color: colors.fg2, fontSize: 10 }}>Fork</Text>
+              </Pressable>
               {canEdit && (
                 <>
                   <View style={styles.modalActionDivider} />
@@ -196,11 +206,20 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                 </>
               )}
             </View>
-            <LinkEventModal
+            <CalendarPickerModal
+              title="Add to calendar"
               event={event}
               visible={linkVisible}
+              excludeLinked
               onClose={() => setLinkVisible(false)}
-              onLink={async (calendarID) => { if (event) await linkEvent(event, calendarID, api); }}
+              onSelect={async (calendarID) => { if (event) await linkEvent(event, calendarID, api); }}
+            />
+            <CalendarPickerModal
+              title="Fork to calendar"
+              event={event}
+              visible={forkVisible}
+              onClose={() => setForkVisible(false)}
+              onSelect={async (calendarID) => { if (event) await forkEvent(event, calendarID, api); }}
             />
           </Animated.View>
         </GestureDetector>

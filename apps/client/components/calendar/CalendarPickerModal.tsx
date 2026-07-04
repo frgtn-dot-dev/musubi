@@ -9,20 +9,22 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useState } from "react";
 
 type Props = {
+  title: string,
   event: Event | null,
   visible: boolean,
   onClose: () => void,
-  onLink: (calendarID: string) => Promise<void>,
+  onSelect: (calendarID: string) => Promise<void>,
+  excludeLinked?: boolean, // hide calendars the event is already in (link, not fork)
 };
 
-export default function LinkEventModal({ event, visible, onClose, onLink }: Props) {
+export default function CalendarPickerModal({ title, event, visible, onClose, onSelect, excludeLinked }: Props) {
   const { calendars } = useCalendarsStore();
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
   const [pending, setPending] = useState<string | null>(null);
 
-  // Calendars the user can edit and the event isn't already in.
-  const options = calendars.filter(c => can(c.role, "editEvents") && !event?.calendars.includes(c.id));
+  const options = calendars.filter(c =>
+    can(c.role, "editEvents") && (!excludeLinked || !event?.calendars.includes(c.id)));
 
   return (
     <Modal
@@ -40,7 +42,7 @@ export default function LinkEventModal({ event, visible, onClose, onLink }: Prop
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>Add to calendar</Text>
+              <Text style={styles.modalTitle}>{title}</Text>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 4 }}>
               {options.length === 0 ? (
@@ -54,7 +56,7 @@ export default function LinkEventModal({ event, visible, onClose, onLink }: Prop
                   style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, opacity: pending === c.id ? 0.4 : 1 }}
                   onPress={async () => {
                     setPending(c.id);
-                    try { await onLink(c.id); handleClose(); }
+                    try { await onSelect(c.id); handleClose(); }
                     finally { setPending(null); }
                   }}
                 >
