@@ -165,11 +165,8 @@ export default function SettingsTab() {
         />
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
-        <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
           <Btn label="Sign Out" variant="secondary" onPress={handleSignOut} />
-        </View>
-        {/* Danger stays visually apart from everything else. */}
-        <View style={{ marginTop: 24, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, borderTopWidth: 1, borderColor: colors.line }}>
           <Btn
             label="Delete Account"
             variant="destructive"

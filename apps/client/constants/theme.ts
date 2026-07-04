@@ -50,7 +50,8 @@ export const colors = { ...dark };
 export let activeScheme: ThemeScheme = 'dark';
 
 export function applyTheme(scheme: ThemeScheme) {
-  if (scheme === activeScheme) return;
+  // No same-scheme early return: cheap to reapply, and a guard can wedge
+  // after a hot reload leaves activeScheme out of sync with the palette.
   activeScheme = scheme;
   Object.assign(colors, scheme === 'dark' ? dark : light);
   Object.assign(styles, makeStyles());
