@@ -21,6 +21,7 @@ function toRow(e: Event) {
     recurrence: e.recurrence ?? null,
     url: e.url ?? null,
     calendars: JSON.stringify(e.calendars ?? []),
+    originCalendarID: e.originCalendarID ?? null,
   };
 }
 
@@ -40,6 +41,7 @@ function fromRow(r: typeof eventsTable.$inferSelect): Event {
     recurrence: r.recurrence,
     url: r.url,
     calendars: JSON.parse(r.calendars),
+    originCalendarID: r.originCalendarID,
   } as Event;
 }
 

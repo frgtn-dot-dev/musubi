@@ -9,6 +9,7 @@ export const EventSchema = z.object({
   start: z.coerce.date(),
   end: z.coerce.date(),
   calendars: z.array(z.string()),
+  originCalendarID: z.string().nullish(), // home calendar — governs edit rights
   isCanceled: z.boolean(),
   isAllDay: z.boolean(),
   description: z.string().nullish(),

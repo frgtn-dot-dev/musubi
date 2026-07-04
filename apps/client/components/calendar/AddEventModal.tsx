@@ -1,5 +1,5 @@
 import "react-native-get-random-values";
-import { Calendar, Event } from "@musubi/types";
+import { Calendar, Event, can } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
@@ -459,13 +459,20 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   <View style={styles.horizontalPillView}>
                     {calendars.map((cal) => {
                       const active = selectedCals.has(cal.id);
+                      const isOrigin = event?.originCalendarID === cal.id;
+                      const locked = !can(cal.role, "editEvents"); // can't add/remove here
                       return (
                         <Pressable
                           key={cal.id}
+                          disabled={locked}
                           onPress={() => toggleCal(cal.id)}
                           style={active ? styles.pillActive : styles.pill}
                         >
-                          <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />
+                          {isOrigin
+                            ? <Feather name="star" size={11} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
+                            : locked
+                              ? <Feather name="lock" size={11} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
+                              : <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />}
                           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
                             {cal.name}
                           </Text>

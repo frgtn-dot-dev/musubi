@@ -24,6 +24,7 @@ export const eventsTable = sqliteTable("events", {
   recurrence: text(),
   url: text(),
   calendars: text().notNull(), // JSON string[]
+  originCalendarID: text(),
 });
 
 // key/value for sync bookkeeping (e.g. lastSync = server time of last delta).

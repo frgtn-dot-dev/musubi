@@ -1,4 +1,4 @@
-import { Event } from "@musubi/types";
+import { Event, can } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
@@ -62,9 +62,15 @@ export default function EventDetailModal({ event, visible, onClose, onDelete, on
                   const filteredCalendars = calendars.filter(c => c.id === cal);
                   if (filteredCalendars.length !== 0) {
                     const calendar = filteredCalendars[0];
+                    const isOrigin = event?.originCalendarID === cal;
+                    const locked = !can(calendar.role, "editEvents");
                     return (
                       <Pressable key={cal} style={styles.pillActive}>
-                        <View style={[styles.colorDot, { backgroundColor: calendar.color }]} />
+                        {isOrigin
+                          ? <Feather name="star" size={11} color={calendar.color} />
+                          : locked
+                            ? <Feather name="lock" size={11} color={calendar.color} />
+                            : <View style={[styles.colorDot, { backgroundColor: calendar.color }]} />}
                         <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg }}>
                           {calendar.name}
                         </Text>
