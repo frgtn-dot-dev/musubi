@@ -177,6 +177,12 @@ export const events = pgTable("events", {
   recurrence: text("recurrence"),
   // reminders:
   url: text("url"),
+  // home calendar — where the event was created / claimed. Edit-content is gated by
+  // editEvents on THIS calendar; links into other calendars are read-only shares.
+  // null for legacy events (fallback: creator-only edit). Set null if home is removed.
+  originCalendarID: uuid("origin_calendar_id").references(() => calendars.id, {
+    onDelete: "set null",
+  }),
   deletedAt: timestamp("deleted_at"), // soft-delete tombstone for delta sync (null = live)
 });
 
