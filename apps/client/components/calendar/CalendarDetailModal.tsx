@@ -141,7 +141,9 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   );
 
   const enrichedEventsByDate = useMemo(
-    () => enrichEvents(expandedEvents, true),
+    // all-day events render in the header row; exclude them from the body's enriched
+    // map or they'd show twice (grid + all-day row).
+    () => enrichEvents(expandedEvents.filter(e => !e.isAllDay), true),
     [expandedEvents],
   );
 
@@ -232,10 +234,11 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                       height={calMode === "month" ? calHeight : calHeight + 95}
                       theme={calendarTheme}
                       eventCellStyle={eventCellStyle}
+                      allDayEventCellStyle={eventCellStyle}
                       mode={calMode}
                       weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
                       swipeEnabled={true}
-                      showAllDayEventCell={false}
+                      showAllDayEventCell={true}
                       date={jumpDate}
                       scrollOffsetMinutes={scrollOffset}
                       onSwipeEnd={setAnchorDate}

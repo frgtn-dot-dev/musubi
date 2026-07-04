@@ -14,7 +14,7 @@ import { useRefreshData } from "@/hooks/useRefreshData";
 
 function ProviderIcon({ provider }: { provider?: string | null }) {
   if (provider === "google") return <Ionicons name="logo-google" size={13} color={colors.fg3} />;
-  if (provider === "caldav") return <Ionicons name="cloud-outline" size={14} color={colors.fg3} />;
+  if (provider === "caldav") return <Ionicons name="cloud" size={14} color={colors.fg3} />;
   return <Feather name="calendar" size={13} color={colors.fg3} />; // native Musubi
 }
 

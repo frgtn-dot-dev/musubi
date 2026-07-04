@@ -5,8 +5,9 @@ import { Feather } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import { Calendar, can } from "@musubi/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApi } from "@/services/api";
 import { Avatar } from "@/components/Avatar";
 
@@ -28,6 +29,7 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<string | null>(null); // userID being updated
   const canManage = can(calendar?.role, "manageMembers"); // only owners edit roles
+  const swipeRefs = useRef<Map<string, { close: () => void }>>(new Map());
 
   useEffect(() => {
     if (!visible || !calendar) return;
@@ -44,9 +46,9 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
     }
   };
 
-  const kick = (member: Member) => {
+  const confirmKick = (member: Member, close?: () => void) => {
     Alert.alert("Remove member", `Remove ${member.name} from this calendar?`, [
-      { text: "Cancel", style: "cancel" },
+      { text: "Cancel", style: "cancel", onPress: close },
       {
         text: "Remove", style: "destructive", onPress: async () => {
           setPending(member.id);
@@ -82,8 +84,9 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 12 }}>
               {members.map((m) => {
                 const isOwner = m.id === calendar?.creatorID;
-                return (
-                  <View key={m.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                const kickable = canManage && !isOwner;
+                const row = (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.bg1 }}>
                     <Avatar name={m.name} image={m.image} size={40} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg }}>{m.name}</Text>
@@ -135,17 +138,27 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
                         ))}
                       </View>
                     )}
-                    {canManage && !isOwner && (
-                      <Pressable
-                        disabled={pending === m.id}
-                        onPress={() => kick(m)}
-                        hitSlop={8}
-                        style={{ opacity: pending === m.id ? 0.4 : 1 }}
-                      >
-                        <Feather name="user-minus" size={18} color={colors.accent} />
-                      </Pressable>
-                    )}
                   </View>
+                );
+
+                if (!kickable) return <View key={m.id}>{row}</View>;
+                return (
+                  <Swipeable
+                    key={m.id}
+                    ref={(r) => { if (r) swipeRefs.current.set(m.id, r); }}
+                    overshootRight={false}
+                    overshootLeft={false}
+                    rightThreshold={48}
+                    onSwipeableOpen={() => confirmKick(m, () => swipeRefs.current.get(m.id)?.close())}
+                    renderRightActions={() => (
+                      <View style={{ backgroundColor: colors.accent, justifyContent: "center", alignItems: "center", width: 96 }}>
+                        <Feather name="user-minus" size={18} color={colors.bg} />
+                        <Text style={{ color: colors.bg, fontSize: 10, marginTop: 2 }}>Remove</Text>
+                      </View>
+                    )}
+                  >
+                    {row}
+                  </Swipeable>
                 );
               })}
             </ScrollView>

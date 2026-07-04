@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Text, Modal, Pressable, ScrollView, View, TextInput, Alert, Linking } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 
 const ICLOUD_URL = "https://caldav.icloud.com";
 
@@ -103,12 +104,15 @@ export default function SyncCalendarModal({ visible, onClose, onConnected }: Pro
               {step === "providers" && (
                 <View style={styles.modalButtonsColumn}>
                   <Pressable style={styles.btnSecondary} disabled={isLoading} onPress={handleGoogle}>
+                    <Ionicons name="logo-google" size={16} color={colors.fg2} />
                     <Text style={styles.btnSecondaryText}>Google Calendar</Text>
                   </Pressable>
                   <Pressable style={styles.btnSecondary} onPress={() => setStep("apple")}>
+                    <Ionicons name="logo-apple" size={16} color={colors.fg2} />
                     <Text style={styles.btnSecondaryText}>Apple / iCloud</Text>
                   </Pressable>
                   <Pressable style={styles.btnSecondary} onPress={() => setStep("caldav")}>
+                    <Ionicons name="cloud" size={16} color={colors.fg2} />
                     <Text style={styles.btnSecondaryText}>Other (CalDAV)</Text>
                   </Pressable>
                 </View>
