@@ -181,7 +181,9 @@ export async function upsertExternalEvent(
     } else {
       const [ev] = await tx
         .insert(events)
-        .values({ id: crypto.randomUUID(), ...values, creatorID: userID })
+        // Home calendar = the mirror it was imported into (matches createEvent's
+        // rule) — drives the origin star + edit-permission gating.
+        .values({ id: crypto.randomUUID(), ...values, creatorID: userID, originCalendarID: calendarID })
         .returning();
       await tx.insert(calendarEvents).values({ eventID: ev.id, calendarID });
       await tx.insert(externalEvents).values({ provider, eventID: ev.id, externalCalendarID, externalEventID, etag });
