@@ -5,6 +5,9 @@ export const notificationsTable = sqliteTable("notifications_table", {
   identifier: text().notNull(),
   eventID: text().notNull(),
   triggerDate: text(),
+  // "notify N minutes before" — kept so remote event changes can reschedule
+  // with the user's original choice
+  offsetMinutes: int().notNull().default(15),
 });
 
 // Local cache of events (full mirror). Dates stored as ISO text; calendars as

@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import { Tabs, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { getOnboardingRoute } from '@/lib/onboardingState';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRefreshData } from '@/hooks/useRefreshData';
 import { useEventsStore } from '@/store/useEventsStore';
@@ -52,11 +53,12 @@ export default function TabLayout() {
   useConnectToEventStream();
 
   // First sign-in (any method incl. Google): settings arrive with
-  // onboarded=false → hand over to the onboarding flow once.
+  // onboarded=false → hand over to onboarding, resuming at the last step the
+  // user reached (an OAuth connect round-trip lands back here mid-flow).
   const onboarded = useSettingsStore(s => s.onboarded);
   useEffect(() => {
     // `as any`: expo-router's typed routes regenerate on the next dev run
-    if (dataReady && !onboarded) router.replace('/onboarding' as any);
+    if (dataReady && !onboarded) router.replace(getOnboardingRoute() as any);
   }, [dataReady, onboarded]);
 
   return (

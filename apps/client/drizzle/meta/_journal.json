@@ -22,6 +22,13 @@
       "when": 1783158854646,
       "tag": "0002_loving_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1783249191690,
+      "tag": "0003_classy_vermin",
+      "breakpoints": true
     }
   ]
 }

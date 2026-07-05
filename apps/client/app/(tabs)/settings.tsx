@@ -19,6 +19,7 @@ import { pickAvatarBase64 } from "@/lib/avatar";
 import { Feather } from "@expo/vector-icons";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { cacheClearAll } from "@/services/eventsCache";
+import { clearAllEventNotifications } from "@/services/notifications";
 
 // Clear the natively-cached Google account so the next sign-in shows the account
 // picker again instead of silently reusing the last account.
@@ -96,6 +97,7 @@ export default function SettingsTab() {
     loadCalendars([]);
     loadEvents([]);
     await cacheClearAll();
+    await clearAllEventNotifications();
     await clearGoogleSession();
     await authClient.signOut(); // must finish before next sign-in, else B links onto A's session
     router.replace('/(auth)/welcome');
@@ -106,6 +108,7 @@ export default function SettingsTab() {
     loadEvents([]);
     await api.deleteUser();
     await cacheClearAll();
+    await clearAllEventNotifications();
     await clearGoogleSession();
     await authClient.signOut();
     router.replace('/(auth)/welcome');

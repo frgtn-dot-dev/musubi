@@ -15,6 +15,7 @@ import CalendarPickerModal from "./CalendarPickerModal";
 import { Tap } from "@/components/ui/Tap";
 import { chooseOption, confirm } from "@/lib/confirm";
 import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
+import { syncEventNotification } from "@/services/notifications";
 
 
 type Props = {
@@ -72,14 +73,18 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
   };
   const deleteThisOccurrence = () => {
     if (!event || !master?.recurrence) return deleteAll();
-    updateEvent({ ...master, recurrence: excludeOccurrence(master.recurrence, event.start) }, api);
+    const updated = { ...master, recurrence: excludeOccurrence(master.recurrence, event.start) };
+    updateEvent(updated, api);
+    syncEventNotification(updated).catch(() => { });
     handleClose();
   };
   const deleteFollowing = () => {
     if (!event || !master?.recurrence) return deleteAll();
     // Ending before the first occurrence would leave an invisible husk.
     if (event.start.getTime() <= master.start.getTime()) return deleteAll();
-    updateEvent({ ...master, recurrence: endSeriesBefore(master.recurrence, event.start) }, api);
+    const updated = { ...master, recurrence: endSeriesBefore(master.recurrence, event.start) };
+    updateEvent(updated, api);
+    syncEventNotification(updated).catch(() => { });
     handleClose();
   };
 

@@ -1,7 +1,7 @@
 import { Event } from "@musubi/types";
 import { useApi } from "@/services/api";
 import { create } from "zustand";
-import { cancelEventPushNotification, getEventsNotificationIdentifier, removeNotification } from "@/services/notifications";
+import { cancelEventNotification, syncEventNotification } from "@/services/notifications";
 import { cacheDeleteEvents, cacheUpsertEvents } from "@/services/eventsCache";
 
 type EventsStore = {
@@ -62,15 +62,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       cacheUpsertEvents([updated]);
       return;
     }
-    const identifier = await getEventsNotificationIdentifier(event.id);
-    if (identifier !== null) {
-      cancelEventPushNotification(identifier);
-      removeNotification(event.id);
-      console.log("=== REMOVED NOTIFICATION ===");
-      console.log(identifier);
-      console.log(event.id);
-      console.log("============================");
-    }
+    cancelEventNotification(event.id).catch(() => { });
     set((state) => ({
       events: [...state.events.filter(e => e.id !== result.id)],
     }));
@@ -81,6 +73,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       events: [...state.events.filter(e => e.id !== event.id)],
     }));
     cacheDeleteEvents([event.id]);
+    cancelEventNotification(event.id).catch(() => { });
   },
   updateEvent: async (event, api) => {
     const result = await api.updateEvent(event);
@@ -94,6 +87,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       events: [...state.events.filter(e => e.id !== event.id), event],
     }));
     cacheUpsertEvents([event]);
+    syncEventNotification(event).catch(() => { }); // reschedule if a reminder exists
   },
   // Lost access to a calendar (kicked / calendar deleted): strip its link from
   // every event, drop events that lived only there — memory AND cache, so they
@@ -110,5 +104,6 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     set({ events: kept });
     cacheDeleteEvents(dropped);
     cacheUpsertEvents(changed);
+    dropped.forEach(id => cancelEventNotification(id).catch(() => { }));
   },
 }));

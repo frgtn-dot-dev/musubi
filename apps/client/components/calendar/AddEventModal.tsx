@@ -13,7 +13,7 @@ import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { cancelEventPushNotification, getEventsNotificationIdentifier, removeNotification, scheduleEventPushNotification, storeNotification, updateEventPushNotification, updateNotificationTriggerDate } from "@/services/notifications";
+import { cancelEventNotification, getEventNotification, upsertEventNotification } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from 'uuidv7';
 import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
@@ -257,6 +257,13 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       setNewLocation(event?.location ?? "");
       setNewUrl(event?.url ?? "");
       setDetailsOpen(!!(event?.description || event?.location || event?.url));
+      if (event?.id) {
+        // reflect the reminder's REAL state, not the global default
+        getEventNotification(event.id).then((row) => {
+          setNotificationToggle(!!row);
+          if (row) setNotifyBeforeTime(row.offsetMinutes);
+        }).catch(() => { });
+      }
       const { rrule, extras } = splitRecurrence(event?.recurrence);
       setRecurrenceExtras(extras);
       setSavedUntil(rrule.match(/UNTIL=[^;]+/)?.[0] ?? null);
@@ -317,52 +324,6 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       datePickerTarget === "start" ? setNewStart(date) : setNewEnd(date);
     }
   }
-
-  const setNotification = async (eventConstruct: Event) => {
-    const start = eventConstruct.start.toLocaleString(timeLocale, { dateStyle: 'medium', timeStyle: "medium" });
-    const end = eventConstruct.end.toLocaleString('en-UK', { dateStyle: 'medium', timeStyle: "medium" });
-    const body = `${start}-${end}`;
-    const triggerDate = dayjs(eventConstruct.start).subtract(notifyBeforeTime, "minute").toDate();
-
-    if (!event) {
-      if (notificationToggle) {
-        const identifier = await scheduleEventPushNotification(eventConstruct.title, body, triggerDate)
-        storeNotification(identifier, eventConstruct.id, triggerDate)
-        console.log("=== NEW NOTIFICATION ===");
-        console.log(identifier);
-        console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
-        console.log("========================");
-      }
-    } else {
-      const lastIdentifier = await getEventsNotificationIdentifier(eventConstruct.id);
-      if (notificationToggle && lastIdentifier !== null) {
-        const newIdentifier = await updateEventPushNotification(lastIdentifier, eventConstruct.title, body, triggerDate);
-        updateNotificationTriggerDate(newIdentifier, eventConstruct.id, triggerDate);
-        console.log("=== UPDATED NOTIFICATION ===");
-        console.log(newIdentifier);
-        console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
-        console.log("============================");
-      } else if (notificationToggle && lastIdentifier === null) {
-        const identifier = await scheduleEventPushNotification(eventConstruct.title, body, triggerDate);
-        storeNotification(identifier, eventConstruct.id, triggerDate);
-        console.log("=== NEW NOTIFICATION FROM UPDATE ===");
-        console.log(identifier);
-        console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
-        console.log("====================================");
-      } else if (!notificationToggle && lastIdentifier !== null) {
-        cancelEventPushNotification(lastIdentifier);
-        removeNotification(eventConstruct.id);
-        console.log("=== REMOVED NOTIFICATION ===");
-        console.log(lastIdentifier);
-        console.log(eventConstruct.id);
-        console.log(triggerDate.toLocaleString(timeLocale, { dateStyle: "medium", timeStyle: "medium" }));
-        console.log("============================");
-      }
-    }
-  };
 
   const handleSave = async () => {
     const allDayUTC = (d: Date) =>
@@ -437,7 +398,11 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setIsLoading(true);
 
     try {
-      await setNotification(eventConstruct);
+      if (notificationToggle) {
+        await upsertEventNotification(eventConstruct, notifyBeforeTime);
+      } else {
+        await cancelEventNotification(eventConstruct.id);
+      }
       if (event) {
         await onEdit(eventConstruct);
       } else {

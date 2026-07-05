@@ -2,6 +2,7 @@ import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { reconcileEventNotifications } from "@/services/notifications";
 import { cacheDeleteEvents, cacheGetAllEvents, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
 
 export function useRefreshData() {
@@ -57,5 +58,7 @@ export function useRefreshData() {
 
     loadEvents(kept);
     cacheSetCalendars(calendars);
+    // fire-and-forget: drop reminders of gone events, refresh the rest
+    reconcileEventNotifications(kept).catch(() => { });
   };
 }
