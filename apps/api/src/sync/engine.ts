@@ -2,7 +2,6 @@ import { Event } from "@musubi/types";
 import {
   clearCalendarEvents,
   deleteExternalEvent,
-  doesExternalCalIDExist,
   getExternalEventID,
   getExternalLinkForCalendar,
   getUserExternalCalendars,
@@ -11,6 +10,7 @@ import {
   removeCalendar,
   setAccountLabel,
   setCursor,
+  setMemberRole,
   upsertExternalEvent,
 } from "@musubi/db";
 import { CalendarAdapter, NormalizedEvent } from "./adapter";
@@ -68,10 +68,16 @@ export async function syncProvider(
       await removeCalendar(link.calendarID);
     }
   }
-  // new remote calendar -> import
+  // new remote calendar -> import; existing -> keep the read-only flag fresh
+  // (also self-heals calendars imported before readOnly existed, e.g. holidays)
+  const links = await getUserExternalCalendars(provider, userID, accountId);
   for (const cal of remote) {
-    if (!(await doesExternalCalIDExist(provider, accountId, cal.externalId))) {
-      await importExternalCalendar(provider, userID, accountId, account.label, cal);
+    const desiredRole = cal.readOnly ? "viewer" : "owner";
+    const link = links.find((l) => l.externalCalendarID === cal.externalId);
+    if (!link) {
+      await importExternalCalendar(provider, userID, accountId, account.label, cal, desiredRole);
+    } else {
+      await setMemberRole(userID, link.calendarID, desiredRole);
     }
   }
 

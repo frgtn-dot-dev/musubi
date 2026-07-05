@@ -61,6 +61,7 @@ export async function importExternalCalendar(
   accountID: string,
   accountLabel: string,
   cal: { externalId: string; name: string; color: string },
+  role: string = "owner", // "viewer" for provider-side read-only calendars (holidays, …)
 ) {
   await db.transaction(async (tx) => {
     const [created] = await tx
@@ -76,7 +77,7 @@ export async function importExternalCalendar(
       externalCalendarID: cal.externalId,
       cursor: null,
     });
-    await tx.insert(calendarMembers).values({ userID, calendarID: created.id, role: "owner" });
+    await tx.insert(calendarMembers).values({ userID, calendarID: created.id, role });
   });
 }
 

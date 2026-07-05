@@ -1,11 +1,11 @@
 ---
 title: Server & API
-description: Reference for the Musubi backend — Express.js REST API and shared packages.
+description: Reference for the Musubi backend — the v1 REST API, permission model, and real-time stream.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The backend is an **Express.js** application in `apps/api/`, backed by PostgreSQL via Drizzle ORM and Better Auth for session management. Shared logic (schema, auth config, environment parsing, types) lives in `packages/` and is consumed by the API server.
+The backend is an **Express.js** application in `apps/api/`, backed by PostgreSQL via Drizzle ORM and Better Auth for sessions. Shared logic lives in `packages/` and is consumed by both server and client.
 
 ## Structure
 
@@ -13,143 +13,116 @@ The backend is an **Express.js** application in `apps/api/`, backed by PostgreSQ
 apps/api/
 └── src/
     ├── index.ts          # Express app + route registration
-    ├── handlers/         # One file per domain (calendars, events, invites…)
-    └── middleware/       # Auth guard, error handler, request logger
+    ├── handlers/         # One file per domain (calendars, events, caldav, connections…)
+    ├── permissions.ts    # Authorization gates (assertCan / canDo / assertCanEditEvent)
+    ├── middleware/       # Auth guard, error handler, request logger
+    └── sync/             # External calendar sync engine + provider adapters
 
 packages/
 ├── auth/                 # Better Auth server configuration
 ├── db/                   # Drizzle ORM schema + query helpers
 ├── config/               # Environment variable loading and validation
-└── types/                # Shared TypeScript types (used by client too)
+└── types/                # Shared zod schemas & types (permissions live here too)
 ```
 
-## API endpoints
+## Permission model
 
-All routes are prefixed with `/api`. Routes marked 🔒 require a valid bearer token (the `Authorization: Bearer <token>` header, set automatically by the client).
+Understanding this makes the rest of the API self-explanatory.
 
-### Auth
+**Calendar roles** (`packages/types/src/permissions.ts`, one source of truth for server *and* client UI):
 
-Better Auth handles everything under `/api/auth/*` — sign-in, sign-up, session, password reset. These routes are managed by the `toNodeHandler(auth)` adapter; you don't write them manually.
+| Role | editCalendar | deleteCalendar | manageMembers | editEvents | invite |
+|---|---|---|---|---|---|
+| owner | ✓ | ✓ | ✓ | ✓ | ✓ |
+| editor | | | | ✓ | ✓ |
+| viewer | | | | | |
+
+**Event ownership.** A shared event can live in many calendars (`calendar_events` links), but editing its *content* is governed by its **home calendar** — `events.originCalendarID` — not whichever calendar you're viewing it in. Enforced by `assertCanEditEvent`:
+
+- origin set → you need `editEvents` on the origin calendar
+- origin `null` (origin calendar was deleted — FK is `SET NULL`) → the creator **or** an editor of any calendar it still lives in may edit
+
+Other verbs are deliberately weaker: anyone who can *view* an event may **link** it into a calendar they can edit, or **fork** it (independent copy, new id + origin). **Delete** unlinks from every calendar the user can edit; if the origin is among them the delete is authoritative and cascades everywhere.
+
+External mirrors marked read-only by the provider (holiday calendars) give even their owner just the `viewer` role.
+
+**Server is the boundary.** Client-side `can()` checks are cosmetic; every mutation re-checks on the server (`assertCan`, `canDo`). Membership is invite-only — joining requires a valid invite token, a calendar id alone is not enough. `creatorID` and `originCalendarID` are immutable through the update endpoint.
+
+## API endpoints (v1)
+
+All routes are prefixed with `/api/v1`. 🔒 = requires a session (`Authorization: Bearer <token>`). Auth itself (sign-in/up, session, password reset) is handled by Better Auth under `/api/auth/*`.
 
 ### Server
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/server` | — | Returns version and `minClientVersion` |
-| `GET` | `/api/server/ok` | — | Health check — returns `200 OK` |
-
-### Calendars
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/calendars` | 🔒 | Get all calendars the user is a member of |
-| `GET` | `/api/calendars/:id` | 🔒 | Get a single calendar by ID |
-| `GET` | `/api/calendars/tokens/:token` | 🔒 | Get calendar data from an invite token |
-| `POST` | `/api/calendars` | 🔒 | Create a new calendar |
-| `POST` | `/api/calendars/members/:calendarId` | 🔒 | Join a calendar (accept invite) |
-| `POST` | `/api/calendars/invites` | 🔒 | Create a shareable invite link |
-| `PUT` | `/api/calendars` | 🔒 | Update a calendar |
-| `DELETE` | `/api/calendars` | 🔒 | Delete a calendar |
-| `DELETE` | `/api/calendars/members/:calendarId` | 🔒 | Leave a calendar |
+| `GET` | `/server` | — | Version info + `minClientVersion` (client update gate) |
+| `GET` | `/server/ok` | — | Health check |
 
 ### Events
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/events` | 🔒 | Get all events across the user's calendars |
-| `POST` | `/api/events` | 🔒 | Create an event |
-| `PUT` | `/api/events` | 🔒 | Update an event |
-| `DELETE` | `/api/events` | 🔒 | Delete an event |
+| `GET` | `/events` | 🔒 | All active events, or a **delta** with `?since=<ISO>`: returns `{ events, deletedIds, serverTime }`; client stores `serverTime` as its next cursor. Deletes arrive as tombstone ids. |
+| `POST` | `/events` | 🔒 | Create — requires `editEvents` on every target calendar |
+| `PUT` | `/events` | 🔒 | Update content + reconcile calendar links (diffs `calendars[]`; added links need `editEvents` on the target). Pushes changes to external providers. |
+| `DELETE` | `/events` | 🔒 | Delete/unlink. Body `{ ...event, unlinkCalendarID? }` — with `unlinkCalendarID` removes from that one calendar; without it unlinks everywhere the user can edit (authoritative cascade if that includes the origin). Tombstones the row once the last link is gone. |
+| `POST` | `/events/:eventId/link` | 🔒 | Propagate into another calendar (`{ calendarID }`) — view access to the event + `editEvents` on the target |
+| `POST` | `/events/:eventId/fork` | 🔒 | Independent copy into a calendar (`{ calendarID }`); rejected if the event already lives there |
 
-### Real-time stream
+Recurring events store exceptions inside `recurrence` (multi-line iCal: `RRULE:…\nEXDATE:…`). "Delete this occurrence" and "end series here" are therefore plain `PUT /events` calls — no dedicated endpoints.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/stream` | 🔒 | SSE stream — server pushes event updates |
-
-The client holds this connection open for the duration of the session. When another user in a shared calendar creates, updates, or deletes an event, the server broadcasts the change to all connected clients in that calendar.
-
-### Settings
+### Calendars
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/users/settings` | 🔒 | Get the current user's settings |
-| `PUT` | `/api/users/settings` | 🔒 | Save settings |
+| `GET` | `/calendars` | 🔒 | User's calendars with members, own `role`, and sync origin (`provider`, `accountId`, `accountLabel`, `serverUrl`) |
+| `GET` | `/calendars/:id` | 🔒 | One calendar + members |
+| `POST` | `/calendars` | 🔒 | Create (creator becomes owner) |
+| `PUT` | `/calendars` | 🔒 | Update name/color — `editCalendar` |
+| `DELETE` | `/calendars` | 🔒 | Delete — `deleteCalendar`; orphaned events are removed |
+| `GET` | `/calendars/google` | 🔒 | Triggers a pull sync of **all** connected providers for the user (name is historical) |
 
-### Users
+### Members & invites
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `DELETE` | `/api/users` | 🔒 | Delete the current user's account |
+| `POST` | `/calendars/invites` | 🔒 | Create an invite token — `invite` permission |
+| `GET` | `/calendars/tokens/:token` | 🔒 | Invite preview: calendar, members, events |
+| `POST` | `/calendars/members/:calendarId` | 🔒 | Join — body `{ token }`, validated against the calendar (invite-only membership) |
+| `DELETE` | `/calendars/members/:calendarId` | 🔒 | Leave — blocked for the owner (transfer or delete instead) |
+| `GET` | `/calendars/:calendarId/members` | 🔒 | List members with roles (any member) |
+| `PUT` | `/calendars/:calendarId/members/:userId` | 🔒 | Set role `viewer` \| `editor` \| `owner` — `manageMembers`; `owner` = **ownership transfer** (current owner only; they drop to editor, `creatorID` moves) |
+| `DELETE` | `/calendars/:calendarId/members/:userId` | 🔒 | Kick — `manageMembers`; the owner can't be kicked |
 
----
+### Users & connections
 
-## Shared packages
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` / `PUT` | `/users/settings` | 🔒 | User settings (view defaults, locale, notifications, `theme`) |
+| `DELETE` | `/users` | 🔒 | Delete account (cascades owned calendars) |
+| `POST` | `/users/reset` | — | Password reset flow entry |
+| `GET` | `/users/connections/google` | 🔒 | Connected Google accounts |
+| `GET` / `POST` / `DELETE` | `/users/connections/caldav` | 🔒 | List / connect / disconnect CalDAV accounts. Connect verifies credentials before storing (iCloud needs an app-specific password); inputs are trimmed server-side. |
+| `POST` | `/users/connections/disconnect` | 🔒 | Generic disconnect `{ provider, accountId }` — removes the account's mirrored calendars, then the credentials |
+| `POST` | `/users/connections/google/revoke` | 🔒 | Revoke the Google OAuth grant |
 
-### `packages/auth`
+## Real-time stream (SSE)
 
-Configures Better Auth and exports the `auth` instance used by the API. Handles:
+`GET /api/v1/stream` 🔒 holds an EventSource connection per client. Handlers emit to affected users after each mutation:
 
-- Email / password sign-in and sign-up
-- Session management via bearer tokens
-- Password reset emails (requires SMTP config)
-- Trusted origins for the Expo client (both dev and production URLs)
-
-**Entry point:** `packages/auth/src/index.ts`
-
-### `packages/db`
-
-Database access via Drizzle ORM. Exports the `db` client and typed query helpers for each domain.
-
-| Path | Purpose |
-|---|---|
-| `src/schema.ts` | Table definitions |
-| `src/queries/calendars.ts` | Calendar CRUD + member management |
-| `src/queries/events.ts` | Event CRUD |
-| `src/queries/invites.ts` | Invite creation |
-| `src/queries/settings.ts` | User settings |
-| `src/queries/users.ts` | User lookup and deletion |
-| `drizzle/` | Migration SQL files |
-
-### `packages/config`
-
-Loads and validates environment variables at startup. Exports a typed `config` object used by `auth`, `db`, and the API server.
-
-### `packages/types`
-
-TypeScript types shared between client and server. The canonical source of truth for the data model — `Calendar`, `Event`, `Invite`, `User`, `Settings`.
-
----
-
-## Environment variables
-
-| Variable | Required | Description |
+| Type | Payload | When |
 |---|---|---|
-| `DATABASE_URL` | ✓ | PostgreSQL connection string |
-| `BETTER_AUTH_SECRET` | ✓ | Secret for signing sessions. Keep this private and stable |
-| `BETTER_AUTH_URL` | ✓ | Origin of the API server — **no trailing slash, no `/api` suffix** |
-| `API_SERVER_PORT` | — | Port to listen on. Defaults to `3000` |
-| `ENVIRONMENT` | — | Set to `dev` to enable localhost CORS. Anything else is treated as production |
-| `SMTP_HOST` | — | SMTP server for transactional email |
-| `SMTP_PORT` | — | SMTP port (typically `587`) |
-| `SMTP_USER` | — | SMTP username |
-| `SMTP_PASS` | — | SMTP password |
-| `FROM_EMAIL` | — | Sender address for password reset emails |
+| `event_created` | full event | create, fork |
+| `event_updated` | full event (with current `calendars[]`) | update, link, partial delete — sent to members of **all** calendars the event lives in |
+| `event_removed` | `{ id, calendars, removed }` | full delete |
+| `calendar_updated` | calendar (personalized: includes the *recipient's* `role`) | calendar edit, role change, ownership transfer |
+| `calendar_removed` | `{ id }` | calendar delete, kick — client also purges the calendar's cached events |
 
-<Aside type="caution">
-`BETTER_AUTH_URL` must be the bare origin only — for example `https://musubi.yourdomain.com`, not `https://musubi.yourdomain.com/api`. Both Better Auth and the client append their own paths to this value. Setting it incorrectly leads to `404` errors on every auth request.
+<Aside type="note">
+`calendar_updated` payloads are **per-recipient** because `role` differs per user. The client merges them into local state (never replaces wholesale), so a payload without some field can't silently wipe it. Users offline during a change catch up via the delta sync — link/unlink operations bump `events.updatedAt` precisely so the delta picks them up.
 </Aside>
 
----
+## Error contract
 
-## Running migrations
-
-```sh
-# Generate a new migration after editing the schema
-pnpm --filter @musubi/db generate
-
-# Apply pending migrations
-pnpm --filter @musubi/db migrate
-# or from the monorepo root:
-pnpm db:migrate
-```
+Handlers throw typed errors (`BadRequestError` 400, `ForbiddenError` 403, `NotFoundError` 404 — `packages/types`); the error middleware maps them to JSON responses. Anything uncaught is a 500.

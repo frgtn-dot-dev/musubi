@@ -2,7 +2,6 @@ import { colors, fonts } from "@/constants/theme";
 import { Switch, View, Text } from "react-native";
 import { Mode } from "@musubi/calendar";
 import { Tap } from "@/components/ui/Tap";
-import { tap } from "@/lib/haptics";
 
 
 type ToggleProps = {
@@ -42,7 +41,7 @@ export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
           false: colors.line,
           true: colors.line3,
         }}
-        onValueChange={() => { tap(); onToggle(); }}
+        onValueChange={onToggle}
         value={toggle}
       />
     </Tap>

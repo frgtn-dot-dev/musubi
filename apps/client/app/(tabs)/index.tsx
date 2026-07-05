@@ -12,6 +12,7 @@ import dayjs from "dayjs";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
 import { Event } from "@musubi/types";
 import { useEventsStore } from "@/store/useEventsStore";
+import { liveEventDetail } from "@/lib/liveEvent";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useApi } from "@/services/api";
@@ -234,7 +235,7 @@ export default function MainTab() {
         visible={eventDetailVisible}
         onClose={() => setEventDetailVisible(false)}
         onEdit={(event: Event) => handlerEventEdit(event)}
-        event={eventDetail}
+        event={liveEventDetail(events, eventDetail)}
       />
     </View>
   );

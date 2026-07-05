@@ -40,17 +40,18 @@ Index on `user_id`.
 
 ### `account`
 
-Stores credential data per auth provider. For email/password auth, `password` holds the bcrypt hash.
+Stores credential data per auth provider. For email/password auth, `password` holds the hash; for Google sign-in, the OAuth token columns are used.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `text` PK | |
 | `account_id` | `text` | Provider-side account ID |
-| `provider_id` | `text` | `"credential"` for email/password |
+| `provider_id` | `text` | `"credential"` for email/password, `"google"` for Google |
 | `user_id` | `text` FK → `user` | Cascade delete |
 | `password` | `text` | Hashed. Email/password auth only |
-| `access_token` | `text` | OAuth only |
-| `refresh_token` | `text` | OAuth only |
+| `access_token` / `refresh_token` / `id_token` | `text` | OAuth only |
+| `access_token_expires_at` / `refresh_token_expires_at` | `timestamp` | OAuth only |
+| `scope` | `text` | OAuth only |
 
 Index on `user_id`.
 
@@ -87,28 +88,36 @@ Index on `identifier`.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PK | |
-| `title` | `text` | Event title |
+| `name` | `text` | Event title (`title` in code) |
 | `color` | `text` | Hex colour for the UI |
-| `start` | `timestamp` | Event start time |
-| `end` | `timestamp` | Event end time |
+| `start_at` | `timestamp` | Event start time |
+| `end_at` | `timestamp` | Event end time |
 | `is_all_day` | `boolean` | |
 | `is_canceled` | `boolean` | |
-| `organizer` | `text` FK → `user` | Currently the same as `creator_id` |
+| `organizer` | `text` | |
 | `creator_id` | `text` FK → `user` | Cascade delete |
 | `description` | `text` | Optional notes |
 | `location` | `text` | Optional location string |
-| `recurrence` | `text` | RFC 5545 RRULE string, e.g. `FREQ=WEEKLY;BYDAY=MO,WE,FR` |
+| `recurrence` | `text` | Bare RRULE or multi-line iCal, see below |
 | `url` | `text` | Optional link |
+| `origin_calendar_id` | `uuid` FK → `calendars` | Home calendar. `ON DELETE SET NULL` |
+| `deleted_at` | `timestamp` | Soft-delete tombstone, `null` = live |
 | `created_at` | `timestamp` | |
-| `updated_at` | `timestamp` | Auto-updated |
+| `updated_at` | `timestamp` | Auto-updated. Drives delta sync |
 
-<Aside type="note">
-Events can belong to **multiple calendars** via the `calendar_events` join table. The `recurrence` field stores an RRULE string; the client expands it into individual occurrences for the visible date range at render time — no pre-expanded occurrences are stored in the database.
+**Home calendar (`origin_calendar_id`).** A shared event lives in many calendars, so editing its content is governed by the `editEvents` permission on its *home* calendar — not whichever calendar the viewer is looking at. Links into other calendars are read-only shares. The FK is `ON DELETE SET NULL`; when it's `null` (legacy event, or the home calendar was deleted), the fallback applies: the creator, or an editor of any calendar the event still lives in, may edit (`apps/api/src/permissions.ts`).
+
+**Recurrence.** The `recurrence` column stores either a bare RRULE string (`FREQ=WEEKLY;BYDAY=MO,WE,FR`) or a multi-line iCal fragment with `EXDATE` lines for per-occurrence exceptions. The client expands it into occurrences for the visible date range at render time — no pre-expanded occurrences are stored.
+
+**Delta sync.** Events are never hard-deleted on removal: `deleted_at` is set instead, and `GET /api/events?since=…` returns rows with `updated_at` past the client's cursor — tombstoned rows arrive as `deletedIds` so offline clients drop them.
+
+<Aside type="caution">
+Because delta sync filters on `events.updated_at`, **any operation that changes an event's calendar membership must bump the event row** — linking/unlinking only touches `calendar_events`, which the delta never looks at. `linkEventToCalendars` / `unlinkEventFromCalendars` in `packages/db/src/queries/external.ts` do this via `touchEvent()`; keep that invariant if you add new link paths, or offline members never learn the membership changed.
 </Aside>
 
 ### `calendar_invites`
 
-An invite record is created when a calendar owner generates a shareable link. The `id` doubles as the invite token — it's the value in the deep link URL.
+An invite record is created when a shareable link is generated. The `id` doubles as the invite token — it's the value in the deep link URL.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -127,10 +136,17 @@ One row per user. Created with defaults on first request if it doesn't exist.
 |---|---|---|---|
 | `id` | `text` PK/FK → `user` | — | Same as user ID |
 | `show_kanji` | `boolean` | `true` | Show Japanese characters in calendar header |
+| `notifications_on_by_default` | `boolean` | `true` | Pre-toggle reminders on new events |
 | `default_calendar_view` | `text` | `"week"` | `"day"`, `"week"`, or `"month"` |
 | `week_starts_on` | `text` | `"monday"` | `"monday"` or `"sunday"` |
+| `time_locale` | `text` | `"en-UK"` | Time formatting locale |
+| `theme` | `text` | `"system"` | `"system"`, `"dark"`, or `"light"` |
 | `created_at` | `timestamp` | | |
 | `updated_at` | `timestamp` | | Auto-updated |
+
+### `user_status`
+
+Per-user flags (`is_sponsor`, `is_premium`).
 
 ---
 
@@ -138,15 +154,18 @@ One row per user. Created with defaults on first request if it doesn't exist.
 
 ### `calendar_members`
 
-Records which users are members of which calendars.
+Records which users are members of which calendars, and with what role.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PK | |
 | `user_id` | `text` FK → `user` | Cascade delete |
 | `calendar_id` | `uuid` FK → `calendars` | Cascade delete |
+| `role` | `text` | `owner`, `editor`, or `viewer`. Default `viewer` |
 | `created_at` | `timestamp` | |
 | `updated_at` | `timestamp` | Auto-updated |
+
+Read-only external mirrors (e.g. subscribed holiday calendars) keep their sole member at `viewer` — the sync engine downgrades the role when the provider reports the calendar as read-only. See the [server reference](/docs/reference/server/) for the full permission model.
 
 ### `calendar_events`
 
@@ -174,6 +193,58 @@ Links events to specific users (attendees or participants beyond calendar member
 
 ---
 
+## External sync tables
+
+Provider-agnostic external calendar sync (Google, CalDAV — including iCloud).
+
+### `external_calendars`
+
+One row per connected external calendar; maps it to the local `calendars` row that mirrors it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `provider` | `text` | `"google"`, `"caldav"`, … |
+| `user_id` | `text` FK → `user` | Cascade delete |
+| `account_id` | `text` | Provider account (OAuth account ID or `caldav_accounts` ID) |
+| `account_label` | `text` | Human-readable account name shown in the UI |
+| `calendar_id` | `uuid` FK → `calendars` | The local mirror calendar. Cascade delete |
+| `external_calendar_id` | `text` | Provider-side calendar ID |
+| `cursor` | `text` | Provider sync cursor (e.g. Google `syncToken`) |
+
+Unique on (`provider`, `account_id`, `external_calendar_id`) — the same external calendar can't be connected twice — and unique on `calendar_id` — a local calendar mirrors at most one external one.
+
+### `external_events`
+
+Maps local events to their provider-side counterparts so two-way sync can match rows.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `provider` | `text` | |
+| `event_id` | `uuid` FK → `events` | Cascade delete |
+| `external_calendar_id` | `text` | Provider-side calendar ID |
+| `external_event_id` | `text` | Provider-side event ID |
+| `etag` | `text` | Change detection (CalDAV) |
+
+Unique on (`provider`, `external_calendar_id`, `external_event_id`).
+
+### `caldav_accounts`
+
+CalDAV credentials (iCloud + generic servers). Multiple accounts per user.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `user_id` | `text` FK → `user` | Cascade delete |
+| `server_url` | `text` | |
+| `username` | `text` | |
+| `encrypted_password` | `text` | AES-GCM encrypted by the app layer — never plaintext |
+
+Unique on (`user_id`, `server_url`, `username`).
+
+---
+
 ## Entity relationships
 
 ```
@@ -181,18 +252,24 @@ user ──< session
 user ──< account
 user ──< verification
 user ──1 user_settings
+user ──1 user_status
 
 user ──< calendars              (creator)
-user ──< calendar_members >──── calendars
+user ──< calendar_members >──── calendars   (role: owner/editor/viewer)
 user ──< events                 (creator)
 user ──< event_users >────────── events
 
 calendars ──< calendar_invites
 calendars ──< calendar_events >── events
+calendars ──1 events.origin_calendar_id     (home calendar, SET NULL)
+
+user ──< caldav_accounts
+user ──< external_calendars ──1 calendars
+events ──< external_events
 ```
 
 <Aside type="note">
-All foreign keys use `onDelete: cascade`. Deleting a user removes their calendars, events, sessions, and settings. Deleting a calendar removes its invites, member links, and event links — but events shared with other calendars are not deleted.
+Foreign keys use `onDelete: cascade`, with one exception: `events.origin_calendar_id` is `SET NULL` so shared events survive their home calendar's deletion. Deleting a user removes their calendars, events, sessions, settings, and external connections. Deleting a calendar removes its invites, member links, event links, and external mapping — but events shared with other calendars are not deleted.
 </Aside>
 
 ---
@@ -201,11 +278,9 @@ All foreign keys use `onDelete: cascade`. Deleting a user removes their calendar
 
 ```sh
 # After editing packages/db/src/schema.ts, generate a new migration:
-pnpm --filter @musubi/db generate
+pnpm db:generate
 
 # Apply pending migrations:
-pnpm --filter @musubi/db migrate
-# or:
 pnpm db:migrate
 ```
 

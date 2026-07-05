@@ -11,10 +11,9 @@ export function tap() {
   if (enabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 }
 
-/** Selection change — moving through options, snapping. */
-export function select() {
-  if (enabled) Haptics.selectionAsync();
-}
+/** Selection change — intentionally a no-op: firing on every pill/option tap
+ *  proved annoying. Kept so callsites stay semantic; re-enable here if missed. */
+export function select() { }
 
 /** Medium thump — primary actions, long-press, drag thresholds. */
 export function thump() {

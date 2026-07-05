@@ -99,9 +99,13 @@ export const useCalendarsStore = create<CalendarStore>((set, get) => ({
   },
 
   localUpdateCalendar: (calendar) => {
+    // MERGE, don't replace: SSE payloads may lack per-user fields (role,
+    // provider) — replacing would silently drop edit rights until a refetch.
+    const existing = get().calendars.find(c => c.id === calendar.id);
+    const merged = existing ? { ...existing, ...calendar } : calendar;
     set((state) => ({
-      calendars: [...state.calendars.filter(c => c.id !== calendar.id), calendar],
+      calendars: [...state.calendars.filter(c => c.id !== calendar.id), merged],
     }));
-    return calendar;
+    return merged;
   },
 }));

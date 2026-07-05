@@ -16,6 +16,7 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { cancelEventPushNotification, getEventsNotificationIdentifier, removeNotification, scheduleEventPushNotification, storeNotification, updateEventPushNotification, updateNotificationTriggerDate } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from 'uuidv7';
+import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
 import { Tap } from "@/components/ui/Tap";
 import { Btn } from "@/components/ui/Btn";
 import * as haptics from "@/lib/haptics";
@@ -163,6 +164,12 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
   const [newLocation, setNewLocation] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>('none');
+  // EXDATE/RDATE lines from the stored recurrence — carried through an edit
+  // untouched so deleting one occurrence survives a later series edit.
+  const [recurrenceExtras, setRecurrenceExtras] = useState<string[]>([]);
+  // UNTIL from "end series here" — the editor UI can't express it (only COUNT),
+  // so carry it through and re-apply unless the user picks a new ending.
+  const [savedUntil, setSavedUntil] = useState<string | null>(null);
   const [advFreq, setAdvFreq] = useState<AdvancedFreq>('WEEKLY');
   const [advInterval, setAdvInterval] = useState(1);
   const [advDays, setAdvDays] = useState<Set<number>>(new Set([1]));
@@ -219,6 +226,8 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
     setUrlError("");
     setDetailsOpen(false);
     setNewRecurrence('none');
+    setRecurrenceExtras([]);
+    setSavedUntil(null);
     setAdvFreq('WEEKLY');
     setAdvInterval(1);
     setAdvDays(new Set([1]));
@@ -240,10 +249,13 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       setNewLocation(event?.location ?? "");
       setNewUrl(event?.url ?? "");
       setDetailsOpen(!!(event?.description || event?.location || event?.url));
-      const option = parseRRule(event?.recurrence);
+      const { rrule, extras } = splitRecurrence(event?.recurrence);
+      setRecurrenceExtras(extras);
+      setSavedUntil(rrule.match(/UNTIL=[^;]+/)?.[0] ?? null);
+      const option = parseRRule(rrule || null);
       setNewRecurrence(option);
       if (option === 'custom') {
-        const adv = parseAdvanced(event?.recurrence);
+        const adv = parseAdvanced(rrule);
         setAdvFreq(adv.freq);
         setAdvInterval(adv.interval);
         setAdvDays(adv.days);
@@ -363,10 +375,14 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
       isCanceled: false, //TODO: Before cal sync we need a system for event status
       description: newDescription,
       location: newLocation,
-      recurrence: buildRRule(newRecurrence, newStart, {
-        freq: advFreq, interval: advInterval, days: advDays,
-        endType: advEndType, count: advCount,
-      }),
+      recurrence: (() => {
+        let rule = buildRRule(newRecurrence, newStart, {
+          freq: advFreq, interval: advInterval, days: advDays,
+          endType: advEndType, count: advCount,
+        });
+        if (rule && savedUntil && !/UNTIL=|COUNT=/.test(rule)) rule += `;${savedUntil}`;
+        return joinRecurrence(rule, recurrenceExtras);
+      })(),
       url: newUrl.toLowerCase()
     }
 
@@ -568,7 +584,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                   <Switch
                     thumbColor={allDayToggle ? colors.accent : colors.bg3}
                     trackColor={{ false: colors.line, true: colors.line3 }}
-                    onValueChange={(v) => { haptics.tap(); setAllDayToggle(v); }}
+                    onValueChange={(v) => { setAllDayToggle(v); }}
                     value={allDayToggle}
                   />
                 </View>
@@ -615,7 +631,7 @@ export function AddEventModal({ visible, startingDate, onClose, onSave, onEdit, 
                         false: colors.line,
                         true: colors.line3,
                       }}
-                      onValueChange={(v) => { haptics.tap(); setNotificationToggle(v); }}
+                      onValueChange={(v) => { setNotificationToggle(v); }}
                       value={notificationToggle}
                     />
                   </View>

@@ -7,6 +7,7 @@ import { eventDay } from "@musubi/calendar";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
+import { liveEventDetail } from "@/lib/liveEvent";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -206,7 +207,7 @@ export default function AgendaTab() {
         visible={eventDetailVisible}
         onClose={() => setEventDetailVisible(false)}
         onEdit={(event: Event) => handlerEventEdit(event)}
-        event={eventDetail}
+        event={liveEventDetail(events, eventDetail)}
       />
     </View>
   );

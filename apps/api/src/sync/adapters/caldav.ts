@@ -48,6 +48,21 @@ function icalToNormalized(obj: { url: string; etag?: string; data?: string }): N
   const organizer = vevent.getFirstPropertyValue("organizer");
   const rruleValue = vevent.getFirstProperty("rrule")?.getFirstValue();
 
+  // EXDATE must survive the round-trip: we push exceptions to the server, and
+  // the full-refetch sync would otherwise overwrite them away locally.
+  const exdates = vevent.getAllProperties("exdate")
+    .map((p) => {
+      const t = p.getFirstValue() as ICAL.Time | null;
+      if (!t) return null;
+      const d = t.isDate ? utcMidnight(t) : t.toJSDate();
+      return `EXDATE:${d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`;
+    })
+    .filter((l): l is string => l !== null);
+
+  const recurrence = rruleValue
+    ? [`RRULE:${rruleValue.toString()}`, ...exdates].join("\n")
+    : null;
+
   return {
     externalId: obj.url, // CalDAV addresses events by resource URL, not UID
     status: "active",
@@ -58,7 +73,7 @@ function icalToNormalized(obj: { url: string; etag?: string; data?: string }): N
     description: ev.description ?? null,
     location: ev.location ?? null,
     organizer: typeof organizer === "string" ? organizer.replace(/^mailto:/i, "") : null,
-    recurrence: rruleValue ? `RRULE:${rruleValue.toString()}` : null,
+    recurrence,
     url: null,
     etag: obj.etag ?? null,
   };
@@ -84,7 +99,23 @@ function toIcal(event: Event): string {
     ev.startDate = ICAL.Time.fromJSDate(event.start, true);
     ev.endDate = ICAL.Time.fromJSDate(event.end, true);
   }
-  // ponytail: recurrence write deferred (like Google push) — add RRULE mapping when needed
+  // Recurrence must round-trip: omitting it here would STRIP the RRULE off the
+  // server copy on every update of a recurring event.
+  if (event.recurrence) {
+    for (const line of event.recurrence.split("\n")) {
+      if (/^(RRULE:)?FREQ=/.test(line)) {
+        vevent.addPropertyWithValue("rrule", ICAL.Recur.fromString(line.replace(/^RRULE:/, "")));
+      } else if (line.startsWith("EXDATE:")) {
+        // Native exception stamps are always UTC (see excludeOccurrence).
+        for (const v of line.slice("EXDATE:".length).split(",")) {
+          const t = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
+          if (!t) continue;
+          const d = new Date(Date.UTC(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +t[6]));
+          vevent.addPropertyWithValue("exdate", event.isAllDay ? allDayTime(d) : ICAL.Time.fromJSDate(d, true));
+        }
+      }
+    }
+  }
 
   vcal.addSubcomponent(vevent);
   return vcal.toString();

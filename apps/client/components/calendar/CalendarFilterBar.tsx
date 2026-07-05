@@ -71,7 +71,9 @@ export const CalendarFilterBar = memo(function CalendarFilterBar({
       }}
       contentContainerStyle={{ padding: 10, gap: 6, alignItems: "center" }}
     >
-      {calendars.map((cal) => {
+      {/* Same order as the Calendars tab: native Musubi first, then synced
+          accounts (stable sort keeps within-group order). */}
+      {[...calendars].sort((a, b) => (a.provider ? 1 : 0) - (b.provider ? 1 : 0)).map((cal) => {
         const active = display.has(cal.id);
         const soloed = localSoloId === cal.id;
         return (

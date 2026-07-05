@@ -17,16 +17,46 @@ Musubi is open source under the MIT licence and welcomes contributions. Whether 
 
 Follow the [Running Locally](/docs/guides/running-locally/) guide to get the full stack running on your machine.
 
-## Making changes
+## Monorepo layout
 
-The project uses **pnpm workspaces** and **Turborepo**. A few things to know:
+The project uses **pnpm workspaces** and **Turborepo**:
 
-- The mobile client lives in `apps/client/` — it's an Expo app with Expo Router
-- The API server lives in `apps/api/` — Express.js with Better Auth and Drizzle
-- Shared types are in `packages/types/` — if you're adding or changing a data model, start here
-- The calendar component is a fork in `packages/calendar/` — changes to calendar rendering go here
+| Workspace | What lives there |
+|---|---|
+| `apps/api` | Express API server — routes, permissions, SSE stream, external sync engine |
+| `apps/client` | Expo mobile app (Expo Router) |
+| `packages/db` | Drizzle ORM schema, queries, and migrations (PostgreSQL) |
+| `packages/types` | Shared Zod schemas and TypeScript types — adding or changing a data model starts here |
+| `packages/calendar` | Vendored calendar UI component, extended with recurrence expansion |
+| `packages/auth` | Better Auth configuration |
+| `packages/config` | Shared environment loading |
+| `packages/docs` | This documentation site (Astro Starlight) |
 
-**Don't hardcode colours or fonts in components.** Use `colors` and `fonts` from `apps/client/constants/theme.ts`. The design system is intentional.
+## Where to read first
+
+- **Client UI work** — use the UI primitives (`Tap`, `Btn`, `Empty`, `confirm()`) and follow the theming rules; hardcoded colours or bare `Pressable`s will be flagged in review. See the [client reference](/docs/reference/client/).
+- **Sync / provider work** — the provider adapters and generic sync engine are documented in the [sync reference](/docs/reference/sync/).
+- **Permissions** — roles, the home-calendar ownership model, and the server-side gates are in the [server reference](/docs/reference/server/).
+
+## Type checking
+
+There is no repo-wide typecheck script yet; run the compiler per workspace:
+
+```sh
+cd apps/client && npx tsc --noEmit --skipLibCheck
+cd apps/api && npx tsc --noEmit --skipLibCheck
+```
+
+## Database migrations
+
+After editing `packages/db/src/schema.ts`:
+
+```sh
+pnpm db:generate   # generate a migration from the schema diff
+pnpm db:migrate    # apply pending migrations
+```
+
+Commit the generated SQL in `packages/db/drizzle/` with your change.
 
 ## Submitting a pull request
 
@@ -44,9 +74,9 @@ The PR description is where context lives — what problem does this solve, what
 The codebase uses TypeScript throughout. A few conventions:
 
 - React components use functional style with hooks
-- State lives in Zustand stores in `apps/client/store/` — components read from stores and call store actions, they don't manage server state locally
+- Server state lives in Zustand stores in `apps/client/store/` — stores are API-first (state and cache are written only after the API call succeeds), and components read from stores rather than holding server state locally
 - Animations use Reanimated v4 — avoid the legacy `Animated` API from React Native
-- No inline magic numbers for colours or spacing — use the theme constants
+- No inline magic numbers for colours — use `colors` and `fonts` from `apps/client/constants/theme.ts` (and read them at render time, never in module-level constants — see [theming pitfalls](/docs/reference/client/#theming))
 
 ## Questions
 

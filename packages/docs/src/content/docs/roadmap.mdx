@@ -1,58 +1,43 @@
 ---
-title: What's Coming
-description: Planned features and integrations for Musubi.
+title: Roadmap
+description: What's done, what's next, and known limitations.
 ---
 
-Musubi is in active development. This page tracks what's planned. Nothing here is promised by a specific date.
+Musubi is in active development, approaching its first public release. This page tracks direction — nothing is promised by a specific date.
 
----
+## Next up
 
-## Onboarding (steps 2 & 3)
+**Microsoft Outlook adapter.** The sync engine is provider-agnostic; Outlook needs a Microsoft Graph adapter (delta queries, structured-recurrence ↔ RRULE mapping). See the [adapter guide](/docs/reference/sync/) — this is a well-scoped contribution.
 
-The sign-up flow is currently step 1 of 3: create an account with name, email, and passphrase.
+**Edit a single occurrence.** Deleting one occurrence and ending a series work today (EXDATE / UNTIL). Editing one occurrence — "move just this Tuesday's session" — needs *detached instances* (an exception event tied to the series), a data-model addition on its own.
 
-**Step 2** — Create your first personal calendar. Giving new users a starting calendar makes the app immediately useful without having to find the "create calendar" flow.
+**Offline mutation queue.** Mutations are API-first: offline changes fail loudly instead of being silently lost, but they aren't retried. A queue (pending-mutation table in the client's SQLite, replayed on reconnect) would make the app fully offline-capable.
 
-**Step 3** — Connect existing calendars. After the external integrations are ready (see below), this step will let you link Outlook, Google, or CalDAV during setup so your schedule is populated from day one.
+**Conflict detection.** Concurrent edits are last-write-wins. A version column + `409 Conflict` precondition would surface conflicts instead of silently overwriting.
 
----
+**Onboarding steps 2 & 3.** Create a first personal calendar during sign-up; connect external calendars during setup.
 
-## External calendar integrations
+## Under consideration
 
-The biggest planned expansion: read and display events from external calendar sources alongside Musubi's own shared calendars.
+- **Per-event permission overrides** — calendar roles are the source of truth today; events may later override (e.g. a viewer-editable signup sheet).
+- **Push notifications from the server** — reminders are currently scheduled locally on-device.
+- **More OAuth sign-in providers** — Google Sign-In works natively today; Apple/Microsoft may follow.
 
-| Integration | Standard |
-|---|---|
-| Google Calendar | Google Calendar API |
-| Microsoft Outlook | Microsoft Graph API |
-| Apple iCloud | CalDAV |
-| Any CalDAV server | CalDAV (RFC 4791) |
+## Done
 
-These will be read-only imports initially — your existing events show up in the app, but you manage them in their original calendars. Two-way sync may follow.
+Recent highlights, newest first:
 
----
+- **Recurring event exceptions** — delete one occurrence, delete "this and following" (series ends, history kept), full-series delete; exceptions round-trip to Google and CalDAV
+- **Light mode** — system-following theme with a manual override (washi-paper light palette)
+- **External calendar sync** — Google Calendar + any CalDAV server (iCloud, Fastmail, Nextcloud…), two-way, multiple accounts per provider, read-only detection (holiday calendars), incremental cursors with 410-reset recovery
+- **Roles & ownership** — owner / editor / viewer per calendar, ownership transfer, invite-token-only membership, live role updates over SSE
+- **Event ownership model** — home (origin) calendar governs editing; link (share by reference) and fork (independent copy) across calendars
+- **Google Sign-In** — native OAuth via Better Auth
+- **Offline-tolerant client cache** — SQLite mirror with delta sync cursor, tombstones, and membership reconciliation
+- Shared calendars with invite links, real-time SSE sync, recurring events (RRULE), calendar filter bar with solo mode, self-hosting via Docker Compose
 
-## User roles and permissions
+## Known limitations
 
-Right now, all calendar members have equal write access. The plan is to add roles:
-
-- **Owner** — can delete the calendar, manage members, assign roles
-- **Editor** — can create and edit events (current default for all members)
-- **Viewer** — read-only access, can see events but not modify them
-
----
-
-## OAuth login
-
-Currently Musubi uses email/password only. OAuth sign-in (Google, Microsoft, Apple) is a likely future addition, though not on an immediate timeline.
-
----
-
-## Things that are done
-
-- Shared calendars with invite links
-- Real-time event sync via SSE
-- Recurring events (RRULE — daily, weekly, custom schedules)
-- Event details: location, notes, URL, all-day toggle
-- Calendar filter bar with solo mode (long-press to isolate)
-- Self-hosting via Docker Compose
+- One occurrence of a recurring event can be removed but not *edited* (see detached instances above).
+- `zonedToUtc` (timezone exception stamps from Google) can be off by an hour in the hour surrounding a DST transition.
+- The theme preference isn't persisted device-side yet — a cold start briefly follows the system scheme until settings load.

@@ -30,4 +30,4 @@ export * from './utils/react'
 
 // Recurrence expansion — call this before passing events to Calendar when you
 // have events with an `recurrence` rrule string.
-export { expandRecurringEvents } from './recurrence'
+export { expandRecurringEvents, splitRecurrence, joinRecurrence, excludeOccurrence, endSeriesBefore } from './recurrence'

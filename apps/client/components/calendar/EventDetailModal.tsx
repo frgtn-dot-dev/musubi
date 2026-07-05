@@ -13,7 +13,8 @@ import { useApi } from "@/services/api";
 import { useState } from "react";
 import CalendarPickerModal from "./CalendarPickerModal";
 import { Tap } from "@/components/ui/Tap";
-import { confirm } from "@/lib/confirm";
+import { chooseOption, confirm } from "@/lib/confirm";
+import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
 
 
 type Props = {
@@ -35,7 +36,7 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
   const { calendars } = useCalendarsStore();
 
   const api = useApi();
-  const { linkEvent, forkEvent, removeEvent } = useEventsStore();
+  const { events, linkEvent, forkEvent, removeEvent, updateEvent } = useEventsStore();
   const [linkVisible, setLinkVisible] = useState(false);
   const [forkVisible, setForkVisible] = useState(false);
   const [unlinkVisible, setUnlinkVisible] = useState(false);
@@ -59,6 +60,28 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
 
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
+
+  // `event` carries the tapped occurrence's start/end; the store row holds the
+  // series master (true anchor times) — updates must be built from the master.
+  const master = events.find(e => e.id === event?.id);
+
+  const deleteAll = () => {
+    if (!event) return;
+    removeEvent(event, api); // cascade from origin
+    handleClose();
+  };
+  const deleteThisOccurrence = () => {
+    if (!event || !master?.recurrence) return deleteAll();
+    updateEvent({ ...master, recurrence: excludeOccurrence(master.recurrence, event.start) }, api);
+    handleClose();
+  };
+  const deleteFollowing = () => {
+    if (!event || !master?.recurrence) return deleteAll();
+    // Ending before the first occurrence would leave an invisible husk.
+    if (event.start.getTime() <= master.start.getTime()) return deleteAll();
+    updateEvent({ ...master, recurrence: endSeriesBefore(master.recurrence, event.start) }, api);
+    handleClose();
+  };
 
   // Identity color: origin calendar first, else first visible linked calendar.
   const accent = (originCal ?? calendars.find(c => event?.calendars.includes(c.id)))?.color ?? colors.fg3;
@@ -113,8 +136,13 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
             </View>
 
             <ScrollView>
-              {/* Where it lives — quiet metadata under the identity block. */}
-              <View style={[styles.fieldContainer, { paddingTop: 12, paddingBottom: 12 }]}>
+              {/* Where it lives — quiet metadata under the identity block. No
+                  bottom border when nothing follows (avoids an empty "section"). */}
+              <View style={[
+                styles.fieldContainer,
+                { paddingTop: 12, paddingBottom: 12 },
+                !(event?.location || event?.url || event?.description) && { borderBottomWidth: 0 },
+              ]}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.horizontalPillView}>
                     {event?.calendars.map((cal) => {
@@ -196,7 +224,10 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                     style={styles.modalActionBtn}
                     disabled={event ? false : true}
                     onPress={() => {
-                      onEdit(event!);
+                      // Recurring: edit the SERIES → prefill with the master's
+                      // anchor times, not the tapped occurrence's (saving those
+                      // would shift the whole series).
+                      onEdit(master ?? event!);
                       handleClose();
                     }}
                   >
@@ -245,16 +276,19 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                     disabled={event ? false : true}
                     onPress={() => {
                       if (!event) return;
-                      confirm({
-                        title: "Delete event",
-                        message: event.recurrence
-                          ? "This deletes the entire recurring series from all calendars."
-                          : "This removes the event from all calendars.",
-                        confirmLabel: "Delete",
-                      }, () => {
-                        removeEvent(event, api); // cascade from origin
-                        handleClose();
-                      });
+                      if (event.recurrence) {
+                        chooseOption("Delete recurring event", undefined, [
+                          { label: "This event only", onPress: deleteThisOccurrence },
+                          { label: "This and following events", onPress: deleteFollowing },
+                          { label: "All events", destructive: true, onPress: deleteAll },
+                        ]);
+                      } else {
+                        confirm({
+                          title: "Delete event",
+                          message: "This removes the event from all calendars.",
+                          confirmLabel: "Delete",
+                        }, deleteAll);
+                      }
                     }}
                   >
                     <Feather size={20} name="trash" color={colors.accent} />

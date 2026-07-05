@@ -17,13 +17,47 @@ async function getAccessToken(userID: string, accountId: string) {
   return accessToken;
 }
 
-// Google sometimes sends FREQ=YEARLY;BYMONTHDAY=X without BYMONTH → RFC 5545
-// expands that to monthly. Anchor it to the start month so it stays annual.
-function sanitizeRecurrence(rrule: string, start: Date): string {
-  if (/FREQ=YEARLY/.test(rrule) && /BYMONTHDAY=/.test(rrule) && !/BYMONTH=/.test(rrule)) {
-    return `${rrule};BYMONTH=${start.getUTCMonth() + 1}`;
-  }
-  return rrule;
+// "What UTC instant is <local wall-clock time> in <tz>?" — via Intl, no tz lib.
+// ponytail: single-iteration approximation; can be 1h off in the hour around a
+// DST transition. Good enough for exception stamps.
+function zonedToUtc(y: number, mo: number, d: number, h: number, mi: number, s: number, tz: string): Date {
+  const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const p = Object.fromEntries(dtf.formatToParts(new Date(guess)).map(x => [x.type, x.value]));
+  const wallAtGuess = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  return new Date(guess - (wallAtGuess - guess));
+}
+
+const toICalUTC = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+
+// Normalize Google's recurrence lines into what our expansion (rrule lib)
+// provably handles — verified empirically:
+//  - EXDATE;TZID=…  → silently IGNORED by rrule → convert to UTC EXDATE here
+//  - EXDATE;VALUE=DATE:… → works (all-day, UTC-midnight anchors) → keep
+//  - FREQ=YEARLY;BYMONTHDAY without BYMONTH → RFC expands monthly → anchor month
+function sanitizeRecurrence(recurrence: string, start: Date): string {
+  return recurrence.split("\n").filter(Boolean).map((line) => {
+    if (/^(RRULE:)?FREQ=/.test(line)) {
+      if (/FREQ=YEARLY/.test(line) && /BYMONTHDAY=/.test(line) && !/BYMONTH=/.test(line)) {
+        return `${line};BYMONTH=${start.getUTCMonth() + 1}`;
+      }
+      return line;
+    }
+    const m = line.match(/^EXDATE;TZID=([^:;]+):(.+)$/i);
+    if (m) {
+      const [, tz, vals] = m;
+      const utc = vals.split(",").map((v) => {
+        const t = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
+        return t ? toICalUTC(zonedToUtc(+t[1], +t[2], +t[3], +t[4], +t[5], +t[6], tz)) : v;
+      });
+      return `EXDATE:${utc.join(",")}`;
+    }
+    return line;
+  }).join("\n");
 }
 
 // Google event JSON -> NormalizedEvent
@@ -67,12 +101,29 @@ function toNormalized(item: any): NormalizedEvent {
   };
 }
 
+// Google wants iCal lines with prefixes; our bare "FREQ=..." needs one.
+// All-day series use DATE-typed dtstart, so EXDATE/UNTIL must be dates too
+// (RFC 5545: exception/until value type must match DTSTART's).
+function toGoogleRecurrence(recurrence: string, isAllDay: boolean): string[] {
+  return recurrence.split("\n").filter(Boolean).map((line) => {
+    if (!/^(RRULE|EXDATE|RDATE|EXRULE)/.test(line)) line = `RRULE:${line}`;
+    if (!isAllDay) return line;
+    if (/^EXDATE:/.test(line)) {
+      const dates = line.slice("EXDATE:".length).split(",").map((v) => v.slice(0, 8));
+      return `EXDATE;VALUE=DATE:${dates.join(",")}`;
+    }
+    return line.replace(/UNTIL=(\d{8})T\d{6}Z?/, "UNTIL=$1");
+  });
+}
+
 // Musubi Event -> Google event JSON
 function toGoogleEvent(event: Event) {
   return {
     summary: event.title,
     description: event.description,
     location: event.location,
+    // null (not undefined) so a removed recurrence clears on PATCH.
+    recurrence: event.recurrence ? toGoogleRecurrence(event.recurrence, event.isAllDay) : null,
     start: event.isAllDay
       ? { date: event.start.toISOString().slice(0, 10) }
       : { dateTime: event.start.toISOString() },
@@ -114,6 +165,7 @@ export const googleAdapter: CalendarAdapter = {
       externalId: c.id,
       name: c.summary,
       color: c.backgroundColor,
+      readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
     }));
   },
 

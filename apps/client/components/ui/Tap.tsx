@@ -6,7 +6,8 @@ import * as haptics from "@/lib/haptics";
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Props = PressableProps & {
-  /** Play a haptic on press-in. Defaults to "tap"; pass false for none. */
+  /** Play a haptic on press-in. Default OFF — haptics are reserved for
+   *  important actions (primary/destructive buttons, FABs), not every row. */
   haptic?: keyof typeof haptics | false;
   /** Press-in scale. 0.97 for buttons/pills, 1 to keep only the dim. */
   scaleTo?: number;
@@ -16,7 +17,7 @@ type Props = PressableProps & {
 // scale on press-in, springs back on release. Replaces bare <Pressable> so
 // every touch in the app answers the finger the same way.
 export const Tap = forwardRef<View, Props>(function Tap(
-  { haptic = "tap", scaleTo = 0.97, onPressIn, onPressOut, style, disabled, ...rest }, ref,
+  { haptic = false, scaleTo = 0.97, onPressIn, onPressOut, style, disabled, ...rest }, ref,
 ) {
   const pressed = useSharedValue(0);
 

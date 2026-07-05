@@ -229,11 +229,17 @@ export async function handlerSetMemberRole(req: Request, res: Response) {
     if (!updated) throw new NotFoundError("Member not found on this calendar...");
     await updateCalendar({ ...calendar, creatorID: targetUserID });
     await setMemberRole(req.user!.id, calendarID, "editor");
+    // Role is per-user → personalized payloads, so open clients update live.
+    notifyCalendarMembers([targetUserID], "calendar_updated", { ...calendar, creatorID: targetUserID, role: "owner" });
+    notifyCalendarMembers([req.user!.id], "calendar_updated", { ...calendar, creatorID: targetUserID, role: "editor" });
     return res.status(200).json({ id: targetUserID, role: "owner" });
   }
 
   const updated = await setMemberRole(targetUserID, calendarID, role);
   if (!updated) throw new NotFoundError("Member not found on this calendar...");
+
+  // Tell the affected user right away — no reload needed to gain/lose edit UI.
+  notifyCalendarMembers([targetUserID], "calendar_updated", { ...calendar, role });
 
   res.status(200).json({ id: targetUserID, role: updated.role });
 }

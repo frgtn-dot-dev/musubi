@@ -383,7 +383,9 @@ function _CalendarContainer<T extends ICalendarEventBase>({
           )
         }}
         onPageChange={handlePageChange}
-        pageBuffer={1}
+        // 3 pre-rendered pages per side: month pages are heavy and a buffer of 1
+        // showed blank/black pages on fast swipes.
+        pageBuffer={3}
       />
     )
   }

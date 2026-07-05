@@ -3,6 +3,7 @@ import { calendarTheme, colors, fonts, styles } from "@/constants/theme";
 import { Calendar, Event, can } from "@musubi/types";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useEventsStore } from "@/store/useEventsStore";
+import { liveEventDetail } from "@/lib/liveEvent";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Text, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -276,7 +277,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
         visible={eventDetailVisible}
         onClose={() => setEventDetailVisible(false)}
         onEdit={(event: Event) => handlerEventEdit(event)}
-        event={eventDetail}
+        event={liveEventDetail(events, eventDetail)}
       />
       <CalendarSettingsModal
         calendar={calendarSettings}

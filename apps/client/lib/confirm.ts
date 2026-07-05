@@ -11,6 +11,40 @@ type Options = {
 // The one way to ask "are you sure?". iOS gets the native action sheet
 // (the platform idiom for destructive choices), Android gets the native
 // alert. Both lead with a warning haptic.
+// Multi-choice variant — e.g. recurring delete scope ("this / following / all").
+// iOS action sheet; Android alert with tap-outside as cancel.
+export function chooseOption(
+  title: string,
+  message: string | undefined,
+  options: { label: string; destructive?: boolean; onPress: () => void }[],
+) {
+  warn();
+  if (Platform.OS === "ios") {
+    const destructiveIdx = options.findIndex(o => o.destructive);
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title,
+        message,
+        options: ["Cancel", ...options.map(o => o.label)],
+        cancelButtonIndex: 0,
+        destructiveButtonIndex: destructiveIdx >= 0 ? destructiveIdx + 1 : undefined,
+      },
+      (i) => { if (i > 0) options[i - 1].onPress(); },
+    );
+  } else {
+    Alert.alert(
+      title,
+      message,
+      options.map(o => ({
+        text: o.label,
+        style: o.destructive ? "destructive" as const : "default" as const,
+        onPress: o.onPress,
+      })),
+      { cancelable: true },
+    );
+  }
+}
+
 export function confirm({ title, message, confirmLabel, destructive = true }: Options, onConfirm: () => void) {
   warn();
   if (Platform.OS === "ios") {

@@ -3,7 +3,6 @@ import { Dimensions, Platform } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import { useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { tap } from "@/lib/haptics";
 
 const isIOS = Platform.OS === 'ios';
 
@@ -16,7 +15,6 @@ export function useModalAnimation(visible: boolean, onClose: () => void) {
   const offScreen = Dimensions.get("screen").height / 5;
   const slideAnim = useSharedValue(offScreen);
   const fadeAnim = useSharedValue(0);
-  const crossedDismiss = useSharedValue(0); // haptic tick when crossing the threshold
   const keyboard = useAnimatedKeyboard();
 
   const gesture = Gesture.Pan()
@@ -25,25 +23,28 @@ export function useModalAnimation(visible: boolean, onClose: () => void) {
       slideAnim.value = ev.translationY > 0
         ? ev.translationY
         : ev.translationY / 12;
-
-      const past = ev.translationY > DISMISS_DISTANCE ? 1 : 0;
-      if (past !== crossedDismiss.value) {
-        crossedDismiss.value = past;
-        scheduleOnRN(tap); // tell the finger it crossed the release point
-      }
     })
     .onEnd((ev) => {
       if (ev.translationY > DISMISS_DISTANCE || ev.velocityY > 900) {
-        fadeAnim.value = withTiming(0, { duration: 180 }, () => scheduleOnRN(onClose));
+        fadeAnim.value = withTiming(0, { duration: 180 });
         slideAnim.value = withSpring(offScreen, { ...SPRING, velocity: ev.velocityY });
+        scheduleOnRN(deferredClose);
       } else {
         slideAnim.value = withSpring(0, { ...SPRING, velocity: ev.velocityY });
       }
     });
 
+  // Close on a plain timer, NOT the animation callback — an interrupted
+  // animation can drop its callback, leaving an invisible "ghost" modal
+  // that blocks all touches.
+  function deferredClose() {
+    setTimeout(onClose, 190);
+  }
+
   async function handleClose() {
     slideAnim.value = withSpring(offScreen, SPRING);
-    fadeAnim.value = withTiming(0, { duration: 180 }, () => scheduleOnRN(onClose));
+    fadeAnim.value = withTiming(0, { duration: 180 });
+    deferredClose();
   }
 
   useEffect(() => {

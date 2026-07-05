@@ -23,13 +23,14 @@ export default defineConfig({
           items: [
             { label: 'Client', slug: 'reference/client' },
             { label: 'Server & API', slug: 'reference/server' },
+            { label: 'Sync & Provider Adapters', slug: 'reference/sync' },
             { label: 'Database Schema', slug: 'reference/schema' },
           ],
         },
         {
           label: 'Roadmap',
           items: [
-            { label: "What's Coming", slug: 'roadmap' },
+            { label: 'Roadmap', slug: 'roadmap' },
           ],
         },
       ],

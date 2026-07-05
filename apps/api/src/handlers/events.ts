@@ -180,8 +180,13 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   const row = await getEvent(eventID);
   const result = { ...row, calendars };
 
-  const members = await getCalendarMembers(calendarID);
-  notifyCalendarMembers(members.map(m => m.userID), "event_updated", result);
+  // Everyone who can see the event needs the new `calendars` list — not just
+  // the target calendar's members (their open detail modal shows the links).
+  const memberIDSeen = new Set<string>();
+  for (const cal of calendars) {
+    for (const member of await getCalendarMembers(cal)) memberIDSeen.add(member.userID);
+  }
+  notifyCalendarMembers([...memberIDSeen], "event_updated", result);
 
   return res.status(200).json(result);
 }

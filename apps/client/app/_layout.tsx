@@ -102,7 +102,6 @@ function AppLoader() {
   const deviceScheme = useColorScheme();
   const themePref = useSettingsStore(s => s.theme);
   const scheme = themePref === 'system' ? (deviceScheme === 'light' ? 'light' : 'dark') : themePref;
-  console.log("[theme] AppLoader render — pref:", themePref, "device:", deviceScheme, "scheme:", scheme);
 
   // Swap the palette BEFORE children render. Plain call, NOT useMemo — the
   // React Compiler assumes memo callbacks are pure and eliminates unused ones,
