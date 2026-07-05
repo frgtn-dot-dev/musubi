@@ -20,6 +20,8 @@ type SettingsStore = {
   setTimeLocale: (value: "en-UK" | "cs-CZ") => void,
   theme: "system" | "dark" | "light",
   setTheme: (value: "system" | "dark" | "light") => void,
+  onboarded: boolean,
+  setOnboarded: (value: boolean) => void,
 }
 
 
@@ -52,5 +54,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   theme: "system",
   setTheme: (value) => set(() => ({
     theme: value,
+  })),
+  // default true so existing sessions never flash the onboarding screen —
+  // the server's value arrives via loadSettings and wins
+  onboarded: true,
+  setOnboarded: (value) => set(() => ({
+    onboarded: value,
   })),
 }));

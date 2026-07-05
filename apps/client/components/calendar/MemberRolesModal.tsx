@@ -34,6 +34,8 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<string | null>(null); // userID being updated
   const canManage = can(calendar?.role, "manageMembers"); // only owners edit roles
+  // Personal calendars can't change owners — hide the transfer option.
+  const assignable = calendar?.isDefault ? ASSIGNABLE.filter(r => r !== "owner") : ASSIGNABLE;
   const swipeRefs = useRef<Map<string, { close: () => void }>>(new Map());
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
                         borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2, gap: 2,
                         opacity: pending === m.id ? 0.4 : 1,
                       }}>
-                        {ASSIGNABLE.map((role) => (
+                        {assignable.map((role) => (
                           <Tap
                             key={role}
                             haptic="select"

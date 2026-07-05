@@ -3,8 +3,9 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useServer } from '@/contexts/ServerContext';
 import { useConnectToEventStream } from '@/hooks/useEventsStream';
 import { Feather } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRefreshData } from '@/hooks/useRefreshData';
 import { useEventsStore } from '@/store/useEventsStore';
@@ -49,6 +50,14 @@ export default function TabLayout() {
   }, [apiUrl, isLoading]);
 
   useConnectToEventStream();
+
+  // First sign-in (any method incl. Google): settings arrive with
+  // onboarded=false → hand over to the onboarding flow once.
+  const onboarded = useSettingsStore(s => s.onboarded);
+  useEffect(() => {
+    // `as any`: expo-router's typed routes regenerate on the next dev run
+    if (dataReady && !onboarded) router.replace('/onboarding' as any);
+  }, [dataReady, onboarded]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

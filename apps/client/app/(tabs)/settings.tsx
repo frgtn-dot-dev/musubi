@@ -36,6 +36,7 @@ export default function SettingsTab() {
     notificationsOnByDefault, setNotificationsOnByDefault,
     timeLocale, setTimeLocale,
     theme, setTheme,
+    onboarded,
   } = useSettingsStore();
 
   const [confrimDeleteVisible, setConfirmDeleteVisible] = useState(false);
@@ -53,7 +54,7 @@ export default function SettingsTab() {
   // `patch` carries the just-changed value (store reads here would be stale).
   const save = (patch: Partial<Settings>) => {
     api.saveSettings({
-      showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn, timeLocale, theme,
+      showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn, timeLocale, theme, onboarded,
       ...patch,
     }).catch((e) => { warn(); console.error("Settings save failed:", e); });
   };

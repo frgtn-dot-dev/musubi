@@ -40,7 +40,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const isExternal = !!calendar?.provider;      // google/caldav mirror — no edit/delete in Musubi
   const isOwner = userID === calendar?.creatorID;
   const showEdit = can(calendar?.role, "editCalendar") && !isExternal;
-  const showDelete = can(calendar?.role, "deleteCalendar") && !isExternal;
+  const showDelete = can(calendar?.role, "deleteCalendar") && !isExternal && !calendar?.isDefault;
   const showInvite = can(calendar?.role, "invite");
   const showLeave = !isOwner;                    // non-owners can leave
 

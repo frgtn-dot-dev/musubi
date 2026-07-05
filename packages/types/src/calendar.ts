@@ -10,6 +10,7 @@ export const CalendarSchema = z.object({
   members: z.array(UserSchema),
   invite: z.string(),
   role: z.string().nullish(), // requesting user's role: owner | editor | viewer
+  isDefault: z.boolean().nullish(), // auto-created personal calendar — no delete/transfer
   // external sync origin — null/absent for native Musubi calendars
   provider: z.string().nullish(),
   accountId: z.string().nullish(),

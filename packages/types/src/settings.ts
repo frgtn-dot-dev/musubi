@@ -10,6 +10,8 @@ export const SettingsSchema = z.object({
   weekStartsOn: z.enum(["monday", "sunday"]),
   timeLocale: z.enum(["en-UK", "cs-CZ"]),
   theme: z.enum(["system", "dark", "light"]).default("system"),
+  // optional (not defaulted): an omitted field must never reset the flag
+  onboarded: z.boolean().optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;

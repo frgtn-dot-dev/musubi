@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { bearer } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db, schema } from '@musubi/db';
+import { createCalendar, db, schema } from '@musubi/db';
 import { config } from '@musubi/config';
 import { sendEmail } from '../../../../apps/api/src/emails';
 import { getPasswordResetHtml } from '../../../../apps/api/src/emails/password_reset';
@@ -54,6 +54,22 @@ export const auth = betterAuth({
     deleteUser: {
       enabled: true,
     }
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        // Every new user (email OR social sign-in) gets a personal calendar —
+        // undeletable, non-transferable, the default home for future features.
+        after: async (user) => {
+          try {
+            await createCalendar({ name: "Personal", color: "#C8553D", creatorID: user.id, isDefault: true });
+          } catch (e) {
+            // Never block registration on this; onboarding self-heals a miss.
+            console.error("Failed to create personal calendar for", user.id, e);
+          }
+        },
+      },
+    },
   },
   plugins: [
     bearer(),

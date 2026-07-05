@@ -30,6 +30,10 @@ export async function handlerRemoveCalendar(req: Request, res: Response) {
   }
   const members = await getCalendarMembers(calendar.id);
   await assertCan(req.user!.id, calendar.id, "deleteCalendar");
+  const existing = await getCalendar(calendar.id);
+  if (existing.isDefault) {
+    throw new BadRequestError("Your personal calendar can't be deleted.");
+  }
   const removedCalendar = await removeCalendar(calendar.id);
 
   if (removedCalendar) {
@@ -62,7 +66,9 @@ export async function handlerUpdateCalendar(req: Request, res: Response) {
   }
 
   await assertCan(req.user!.id, calendar.id, "editCalendar");
-  const updatedCalendar = await updateCalendar({ ...calendar, creatorID: req.user!.id });
+  // isDefault is server-managed — never writable from the client.
+  const { isDefault: _ignored, ...editable } = calendar;
+  const updatedCalendar = await updateCalendar({ ...editable, creatorID: req.user!.id });
 
   if (updatedCalendar) {
 
@@ -224,6 +230,9 @@ export async function handlerSetMemberRole(req: Request, res: Response) {
     // down to editor; creatorID moves so owner-guards keep working.
     if (req.user!.id !== calendar.creatorID) {
       throw new ForbiddenError("Only the owner can transfer ownership.");
+    }
+    if (calendar.isDefault) {
+      throw new BadRequestError("Your personal calendar's ownership can't be transferred.");
     }
     const updated = await setMemberRole(targetUserID, calendarID, "owner");
     if (!updated) throw new NotFoundError("Member not found on this calendar...");

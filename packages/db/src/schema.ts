@@ -121,6 +121,7 @@ export const userSettings = pgTable("user_settings", {
   weekStartsOn: text("week_starts_on").notNull().default("monday"),
   timeLocale: text("time_locale").notNull().default("en-UK"),
   theme: text("theme").notNull().default("system"),
+  onboarded: boolean("onboarded").notNull().default(false),
 });
 
 export type NewSettings = typeof userSettings.$inferInsert;
@@ -143,6 +144,9 @@ export const calendars = pgTable("calendars", {
     .notNull(),
   name: text("name").notNull(),
   color: text("color").notNull(),
+  // Every user gets one auto-created personal calendar — can't be deleted or
+  // transferred; the default home for future features.
+  isDefault: boolean("is_default").notNull().default(false),
 });
 
 export type NewCalendar = typeof calendars.$inferInsert;
