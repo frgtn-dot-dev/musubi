@@ -422,6 +422,9 @@ function TimelinePage({
 
         <ScrollView
           ref={scrollRef as any} // RNGH ScrollView; reanimated scrollTo resolves the native node
+          // start already scrolled to the shared position — the first painted frame
+          // is at 8:45 (or wherever), so there's no top → target snap on open
+          contentOffset={{ x: 0, y: scrollPosRef.current }}
           onLayout={e => { scrollTopSV.value = e.nativeEvent.layout.y; }}
           onScroll={e => { scrollPosRef.current = e.nativeEvent.contentOffset.y; scrollY.value = e.nativeEvent.contentOffset.y; }}
           scrollEventThrottle={16}

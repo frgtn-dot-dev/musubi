@@ -16,7 +16,7 @@ import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-ha
 import { AddEventModal } from "./AddEventModal";
 import { MonthView } from "@/components/cal/MonthView";
 import { TimelineView } from "@/components/cal/TimelineView";
-import { Draft, minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS } from "@/components/cal/layout";
+import { Draft, DRILL_OPEN_MIN, minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS } from "@/components/cal/layout";
 import { ModeSwitch } from "@/components/cal/ModeSwitch";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import EventDetailModal from "./EventDetailModal";
@@ -67,6 +67,8 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   const [startingDate, setStartingDate] = useState<Date | undefined>(undefined);
   const [endingDate, setEndingDate] = useState<Date | undefined>(undefined);
   const scrollPosRef = useRef(Math.max(0, minutesToY(new Date().getHours() * 60 - 60)));
+  // drill-in day view keeps its own scroll memory, reset to noon on each open
+  const drillScrollPosRef = useRef(minutesToY(DRILL_OPEN_MIN));
 
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
@@ -78,6 +80,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
 
   const openDrill = useCallback((date: Date, rect: Rect) => {
     setAnchorDate(date);
+    drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
     setDrill({ date, rect });
     zoom.value = 0;
     zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) });
@@ -338,7 +341,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                         canMoveEvent={canMoveEvent}
                         onMoveEvent={onMoveEvent}
                         onPageChange={setAnchorDate}
-                        scrollPosRef={scrollPosRef}
+                        scrollPosRef={drillScrollPosRef}
                         bottomPad={insets.bottom + 20}
                       />
                     </Animated.View>

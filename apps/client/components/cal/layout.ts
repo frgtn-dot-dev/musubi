@@ -20,6 +20,7 @@ export const GRAB_SPRING = { damping: 30, stiffness: 400 };
 // ── Month → day zoom ─────────────────────────────────────────────────────────
 export const ZOOM_IN_MS = 300;
 export const ZOOM_OUT_MS = 260;
+export const DRILL_OPEN_MIN = 8 * 60 + 45; // minutes-from-midnight the drilled day view scrolls to (08:45)
 
 // ── Timeline pinch zoom ──────────────────────────────────────────────────────
 // HOUR_H is the default; a pinch scales the live hour height between these.

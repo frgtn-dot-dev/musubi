@@ -4,7 +4,7 @@ import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import { MonthView } from "@/components/cal/MonthView";
 import { TimelineView } from "@/components/cal/TimelineView";
-import { Draft, minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS } from "@/components/cal/layout";
+import { Draft, DRILL_OPEN_MIN, minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS } from "@/components/cal/layout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackHandler, View } from "react-native";
 import { expandRecurringEvents, type Mode } from "@musubi/calendar";
@@ -58,8 +58,15 @@ export default function MainTab() {
 
   // month → day zoom: the tapped cell rect grows into a full day view overlay
   const [drill, setDrill] = useState<null | { date: Date; rect: Rect }>(null);
-  // gates the docked sheet: it slides up only AFTER the day zoom-in settles
-  const [drillReady, setDrillReady] = useState(false);
+  // whether the drill's composer should peek: true from the moment a drill opens
+  // (so the day view reserves its space from frame one), false on close so the
+  // sheet ducks out as the day zooms back to the month.
+  const [dockPeekReady, setDockPeekReady] = useState(false);
+  // the drilled day always OPENS with the composer's gap reserved; only once it
+  // has settled (after the zoom) may the gap be cut when the composer is hidden.
+  // Deferring the check means the gap is only ever removed from the bottom of an
+  // already-open view — it never grows into view, so nothing jumps.
+  const [drillSettled, setDrillSettled] = useState(false);
   const zoom = useSharedValue(0);
   const [bodySize, setBodySize] = useState({ w: 0, h: 0 });
 
@@ -71,6 +78,8 @@ export default function MainTab() {
   const [prefilledEvent, setPrefilledEvent] = useState<Event | undefined>(undefined);
   const [eventDetail, setEventDetail] = useState<Event | null>(null);
   const scrollPosRef = useRef(Math.max(0, minutesToY(new Date().getHours() * 60 - 60)));
+  // the drill-in day view has its own scroll memory, always reset to noon on open
+  const drillScrollPosRef = useRef(minutesToY(DRILL_OPEN_MIN));
 
   const refresh = useRefreshData();
   const refreshRef = useRef(refresh);
@@ -85,12 +94,14 @@ export default function MainTab() {
   const openDrill = useCallback((date: Date, rect: Rect) => {
     setDraft(null);
     setDockHidden(false); // a fresh drill always re-shows the composer, even if X hid it last time
-    setDrillReady(false);
+    drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
+    setDockPeekReady(true); // composer present from frame one — no post-zoom slide-in
+    setDrillSettled(false); // open with the gap reserved; allow cutting it only after the zoom
     setAnchorDate(date); // header + composer follow the drilled day (and its swipes)
     setDrill({ date, rect });
     zoom.value = 0;
     zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
-      if (finished) runOnJS(setDrillReady)(true);
+      if (finished) runOnJS(setDrillSettled)(true);
     });
   }, []);
 
@@ -100,7 +111,8 @@ export default function MainTab() {
   }, []);
 
   const closeDrill = useCallback(() => {
-    setDrillReady(false); // sheet ducks out while the day zooms back
+    setDrillSettled(false); // back to gap-reserved while closing
+    setDockPeekReady(false); // sheet ducks out while the day zooms back
     zoom.value = withTiming(0, { duration: ZOOM_OUT_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
       if (finished) runOnJS(clearDrill)();
     });
@@ -209,7 +221,9 @@ export default function MainTab() {
   const dockVisible = calMode !== "month" || !!drill;
   // one truth for "is the sheet peeking" — drives the sheet AND the timeline's
   // bottom padding (no dead gap under midnight when the sheet is hidden)
-  const dockPeeking = !!draft || ((calMode === "day" || (!!drill && drillReady)) && !dockHidden);
+  // The composer peeks the instant a drill opens (not after the zoom) so the day
+  // view is laid out with its space reserved from frame one — no slide-in, no jump.
+  const dockPeeking = !!draft || ((calMode === "day" || (!!drill && dockPeekReady)) && !dockHidden);
 
   // Overlay geometry: tapped cell rect → full calendar body. Content is laid out
   // at full size inside and fades in, so nothing reflows mid-animation.
@@ -308,8 +322,11 @@ export default function MainTab() {
                 canMoveEvent={canMoveEvent}
                 onMoveEvent={onMoveEvent}
                 onPageChange={onPageChange}
-                scrollPosRef={scrollPosRef}
-                bottomPad={!dockHidden || !!draft ? DOCK_PEEK + 14 : 28} // sheet is expected after the zoom — reserve the gap up front
+                scrollPosRef={drillScrollPosRef}
+                // opens with the gap reserved; only after the drill settles may it
+                // be cut (when the composer is hidden) — shrinks from the bottom of
+                // an already-open view, so nothing jumps.
+                bottomPad={drillSettled && dockHidden && !draft ? 28 : DOCK_PEEK + 14}
               />
             </Animated.View>
           </Animated.View>
