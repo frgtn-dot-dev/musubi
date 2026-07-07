@@ -370,8 +370,12 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   useEffect(() => {
     if (visible) {
       setNewTitle(event?.title ?? "");
-      setNewStart(event?.start ?? startingDate ?? new Date());
-      setNewEnd(event?.end ?? endingDate ?? startingDate ?? new Date());
+      // Docked mode owns its own start/end via the anchor effect above (the day
+      // in view + a sensible time) — don't clobber it here with `new Date()`.
+      if (!docked) {
+        setNewStart(event?.start ?? startingDate ?? new Date());
+        setNewEnd(event?.end ?? endingDate ?? startingDate ?? new Date());
+      }
       setSelectedCals(new Set(event?.calendars) ?? new Set<string>);
       setOriginCal(event?.originCalendarID ?? null);
       setNewDescription(event?.description ?? "");
@@ -610,16 +614,18 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
 
             showsHorizontalScrollIndicator={false}>
             <View style={styles.horizontalPillView}>
-              {/* Same order as the Calendars tab, including the user's drag order. */}
-              {sortCalendars(calendars, calendarOrder).map((cal) => {
+              {/* Same order as the Calendars tab (incl. the user's drag order).
+                  Only calendars the user can add events to are offered — no point
+                  showing one you can't link into. */}
+              {sortCalendars(calendars, calendarOrder)
+                .filter((cal) => can(cal.role, "editEvents"))
+                .map((cal) => {
                 const active = selectedCals.has(cal.id);
                 const isOrigin = originEffective === cal.id;
-                const locked = !can(cal.role, "editEvents"); // can't add/remove here
                 return (
                   <Tap
                     key={cal.id}
                     haptic="select"
-                    disabled={locked}
                     onPress={() => toggleCal(cal.id)}
                     onLongPress={() => { // set as home (origin), selecting it if needed
                       setSelectedCals(prev => new Set(prev).add(cal.id));
@@ -629,9 +635,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                   >
                     {isOrigin
                       ? <Ionicons name="star" size={12} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
-                      : locked
-                        ? <Feather name="lock" size={11} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
-                        : <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />}
+                      : <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />}
                     <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
                       {cal.name}
                     </Text>
