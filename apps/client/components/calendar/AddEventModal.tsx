@@ -528,7 +528,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       } else {
         await cancelEventNotification(eventConstruct.id);
       }
-      if (event) {
+      if (event?.id) {
         await onEdit(eventConstruct);
       } else {
         await onSave(eventConstruct);

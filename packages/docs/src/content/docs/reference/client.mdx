@@ -115,10 +115,11 @@ Semantic vocabulary so callsites read as intent: `tap` (light tick), `select` (*
 The root layout resolves the effective scheme from the user's `theme` setting (`system` | `dark` | `light`, with `system` following `useColorScheme()`), calls `applyTheme(scheme)`, and remounts the whole tree via `key={scheme}` so every component re-reads the swapped tokens.
 
 <Aside type="danger">
-Two pitfalls that silently break theme switching:
+Three pitfalls that silently break theme switching:
 
 1. **Never reference `colors.*` in module-level `StyleSheet.create` or module-level constants.** Module scope is evaluated once — the values go stale after a theme switch. Apply colours inline at render time (or inside a function called per render).
 2. **`applyTheme` must be called as a plain statement in the component body, NOT inside `useMemo`.** The React Compiler assumes memo callbacks are pure and eliminates ones whose result is unused — which silently drops the side effect. It's idempotent, so calling it every render is fine.
+3. **Never read `colors` inside a Reanimated worklet** (`useAnimatedStyle`, `useDerivedValue`, …). Reanimated serializes the captured `colors` object to the UI thread and freezes it, so `applyTheme`'s in-place `Object.assign` is rejected (you'll see `[Worklets] Tried to modify key 'bg'…` warnings) and the palette never swaps. Keep colour in the plain style: `style={[animatedStyle, { backgroundColor: colors.x }]}`.
 </Aside>
 
 ### Token roles
