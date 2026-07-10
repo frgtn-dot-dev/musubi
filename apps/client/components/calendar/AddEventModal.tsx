@@ -431,7 +431,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       docked ? dockedDismiss() : handleClose();
     } catch (e: any) {
       haptics.warn();
-      Alert.alert("Failed to save", e?.message ?? "An unexpected error occured.");
+      Alert.alert("Failed to save", e?.message ?? "An unexpected error occurred.");
     } finally {
       setIsLoading(false);
     }
