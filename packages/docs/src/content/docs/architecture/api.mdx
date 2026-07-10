@@ -11,15 +11,15 @@ The backend is a plain **Express** server in `apps/api/`. No framework magic —
 
 `apps/api/src/index.ts` is the front door. It wires the app in this order (order matters):
 
-```
-1. cors()                    whitelist config.api.url + dev localhosts; credentials on
-2. express.json({512kb})     512 KB cap — avatars arrive as base64 JSON
-3. middlewareLogHandler      logs method/path/status
-4. app.all("/api/auth/*")    Better Auth owns sign-in/up, sessions, password reset
-5. app.<verb>("/api/v1/…")   the application routes (see below)
-6. middlewareErrorHandler    MUST be last — catches everything thrown
-7. app.listen(config.api.port)     default 7531
-8. hourly cleanup jobs       expired invites/sessions, purge 30-day-old tombstones
+```mermaid
+flowchart TD
+    A["cors() — origin whitelist + credentials"] --> B["express.json (512 KB cap · base64 avatars)"]
+    B --> C["middlewareLogHandler"]
+    C --> D["/api/auth/* → Better Auth (sign-in/up, sessions, reset)"]
+    D --> E["/api/v1/* → application routes"]
+    E --> F["middlewareErrorHandler — MUST be last"]
+    F --> G["listen(config.api.port · default 7531)"]
+    G --> H["hourly cleanup jobs — expired invites/sessions, purge 30-day tombstones"]
 ```
 
 Two route namespaces exist and never overlap:
@@ -35,9 +35,9 @@ Route order within a namespace matters — Express matches in registration order
 
 Every mutating handler follows the same five beats. Internalise this and the whole backend reads identically:
 
-```
-validate  →  authorise  →  persist  →  sync outward  →  broadcast
-(BadRequest) (Forbidden)  (packages/db) (sync engine)  (SSE / notifyCalendarMembers)
+```mermaid
+flowchart LR
+    V["validate<br/>(BadRequest)"] --> A["authorise<br/>(Forbidden)"] --> P["persist<br/>(packages/db)"] --> S["sync outward<br/>(sync engine)"] --> B["broadcast<br/>(SSE)"]
 ```
 
 A representative handler (`handlerCreateEvent` in `handlers/events.ts`):

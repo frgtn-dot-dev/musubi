@@ -54,10 +54,15 @@ The events column is **`title`**, not `name`. Easy to trip on. And `originCalend
 
 This is where "events beyond calendars" is implemented. **There is no `calendarId` column on `events`.** Instead:
 
-```
- user ──(calendarMembers: role)──► calendars ◄──(calendarEvents)──► events
-                                                                       │
- user ◄────────────(eventUsers: attendees)─────────────────────────────┘
+```mermaid
+erDiagram
+    user ||--o{ calendarMembers : "member + role"
+    calendars ||--o{ calendarMembers : ""
+    calendars ||--o{ calendarEvents : ""
+    events ||--o{ calendarEvents : "linked into (M:N)"
+    events ||--o{ eventUsers : "attendees"
+    user ||--o{ eventUsers : ""
+    calendars ||--o{ events : "originCalendarID (home)"
 ```
 
 | Table | Meaning | Cascade / constraint |

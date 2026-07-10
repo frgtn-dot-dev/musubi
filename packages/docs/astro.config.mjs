@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mermaid from 'astro-mermaid';
 import node from '@astrojs/node';
 
 export default defineConfig({
@@ -10,6 +11,10 @@ export default defineConfig({
   markdown: { gfm: true, smartypants: true },
 
   integrations: [
+    // astro-mermaid must come BEFORE starlight so its rehype step runs first.
+    // Renders client-side (no build-time headless browser) and follows the
+    // active light/dark theme.
+    mermaid({ theme: 'default', autoTheme: true }),
     starlight({
       title: 'Musubi',
       customCss: ['./src/styles/custom.css'],

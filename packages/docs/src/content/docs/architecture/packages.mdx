@@ -88,12 +88,27 @@ function envOrThrow(key: string): string {
 
 ## How the packages depend on each other
 
-```
-packages/config ◄── everything (env)
-packages/types  ◄── apps/client, apps/api, packages/db   (the contract)
-packages/db     ◄── apps/api, packages/auth              (server-side only)
-packages/calendar ◄── apps/client, apps/api              (recurrence)
-packages/auth   ◄── apps/api
+```mermaid
+flowchart TD
+    client[apps/client]
+    api[apps/api]
+    auth[packages/auth]
+    db[packages/db]
+    calendar[packages/calendar]
+    types[packages/types]
+    config[packages/config]
+
+    client --> types
+    client --> calendar
+    api --> types
+    api --> calendar
+    api --> db
+    api --> auth
+    auth --> db
+    db --> types
+    api --> config
+    db --> config
+    auth --> config
 ```
 
 `packages/types` and `packages/config` are the leaves everything leans on — change them thoughtfully.

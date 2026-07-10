@@ -9,15 +9,21 @@ Two-way external calendar sync is Musubi's most distinctive subsystem. It lives 
 
 ## Mental model
 
-```
-                         ┌──────────────── engine.ts ────────────────┐
-   external providers     │  registry: { google, caldav, … }          │   local DB
-   ┌──────────┐  pull     │                                           │  ┌──────────────┐
-   │  Google  │ ───────►  │  syncProvider(adapter, user, account):    │  │ external_*    │
-   │  CalDAV  │           │    1. listCalendars → reconcile mirrors   │─►│ events        │
-   │  (…)     │ ◄───────  │    2. fetchChanges(cursor) → upsert       │  │ calendar_*    │
-   └──────────┘  push     │    3. push local edits via pushCreate/... │  └──────────────┘
-                         └────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph P[External providers]
+      G[Google]
+      C[CalDAV]
+    end
+    subgraph EN[engine.ts]
+      SP["syncProvider(adapter, user, account)<br/>1 · listCalendars → reconcile mirrors<br/>2 · fetchChanges(cursor) → upsert<br/>3 · push local edits (pushCreate/Update/Delete)"]
+    end
+    subgraph DB[Local DB]
+      T["external_* · events · calendar_*"]
+    end
+    P -->|"pull · fetchChanges"| EN
+    EN -->|"push · pushCreate/Update/Delete"| P
+    EN --> DB
 ```
 
 Each connected provider account produces **mirror calendars** — ordinary Musubi calendars with an `externalCalendars` mapping. Their events flow into the unified `events` table like any other event (that's the point of "events beyond calendars"). Sync is bidirectional:
