@@ -7,7 +7,7 @@ Musubi is in active development, approaching its first public release. This page
 
 ## Next up
 
-**Microsoft Outlook adapter.** The sync engine is provider-agnostic; Outlook needs a Microsoft Graph adapter (delta queries, structured-recurrence ↔ RRULE mapping). See the [adapter guide](/docs/reference/sync/) — this is a well-scoped contribution.
+**Microsoft Outlook adapter.** The sync engine is provider-agnostic; Outlook needs a Microsoft Graph adapter (delta queries, structured-recurrence ↔ RRULE mapping). See the [sync engine guide](/docs/architecture/sync/#how-to-add-a-provider) — this is a well-scoped contribution.
 
 **Edit a single occurrence.** Deleting one occurrence and ending a series work today (EXDATE / UNTIL). Editing one occurrence — "move just this Tuesday's session" — needs *detached instances* (an exception event tied to the series), a data-model addition on its own.
 
@@ -26,7 +26,7 @@ Musubi is in active development, approaching its first public release. This page
 Recent highlights, newest first:
 
 - **Guided onboarding** — new sign-ups get a personal calendar created automatically, then step through creating a calendar and connecting external accounts before entering the app
-- **Custom calendar UI** — hand-built month, day and week views replacing the third-party widget: month → day zoom, pinch-to-zoom the timeline, drag-to-create and drag-to-move events, a docked event composer, and drag-to-reorder calendars. See the [client reference](/docs/reference/client/#custom-calendar).
+- **Custom calendar UI** — hand-built month, day and week views replacing the third-party widget: month → day zoom, pinch-to-zoom the timeline, drag-to-create and drag-to-move events, a docked event composer, and drag-to-reorder calendars. See the [client guide](/docs/architecture/client/#the-custom-calendar).
 - **Recurring event exceptions** — delete one occurrence, delete "this and following" (series ends, history kept), full-series delete; exceptions round-trip to Google and CalDAV
 - **Light mode** — system-following theme with a manual override (washi-paper light palette)
 - **External calendar sync** — Google Calendar + any CalDAV server (iCloud, Fastmail, Nextcloud…), two-way, multiple accounts per provider, read-only detection (holiday calendars), incremental cursors with 410-reset recovery
