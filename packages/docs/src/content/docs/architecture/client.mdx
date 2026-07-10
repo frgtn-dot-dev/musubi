@@ -115,7 +115,7 @@ The client has its **own** drizzle schema and migrations (`apps/client/db/schema
 
 ### Realtime
 
-`hooks/useEventsStream.ts` opens an `EventSource` (`react-native-sse`) to `/api/stream` and routes frames to the `local*` store methods. See the [known realtime gap](/docs/architecture/api/#realtime-sse--current-state) — the server route isn't wired yet, so today the app leans on pull-to-refresh. There's no auto-reconnect loop; a dropped stream resyncs on the next manual refresh.
+`hooks/useEventsStream.ts` opens an `EventSource` (`react-native-sse`) to `${apiUrl}/api/stream` — `apiUrl` comes from `ServerContext`, so the stream follows a self-hosted server too — authenticated with the session `Bearer` token. Incoming frames (`event_created`, `event_updated`, …) are routed to the `local*` store methods; see the [server-side broadcast](/docs/architecture/api/#realtime-sse). There's no auto-reconnect loop — a dropped stream is picked back up by the next pull-to-refresh delta sync, which is the durable path.
 
 ## The custom calendar
 

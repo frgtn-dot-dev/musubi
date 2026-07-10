@@ -111,12 +111,14 @@ The two signature endpoints in `handlers/events.ts`, both `POST /api/v1/events/:
 
 Rule of thumb: *Link* to share one truth; *Fork* to claim your own version.
 
-## Realtime (SSE) — current state
+## Realtime (SSE)
 
-The design: `handlers/stream.ts` holds a `Map<userID, Response>` of open [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) connections, and `notifyCalendarMembers(userIds, type, payload)` writes `event_created` / `event_updated` / `event_removed` / `calendar_updated` / `calendar_removed` frames to the affected users. Handlers already call it after every mutation. The client listens via `react-native-sse` (`apps/client/hooks/useEventsStream.ts`).
+`GET /api/stream` is a long-lived [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) connection, registered **outside** the `/api/v1` prefix to match the client's URL. `handlerStream` sets the SSE headers and stores the response in a `Map<userID, Response>`; `notifyCalendarMembers(userIds, type, payload)` writes `event_created` / `event_updated` / `event_removed` / `calendar_updated` / `calendar_removed` frames to the affected users. Every mutating handler calls it after persisting — so a change one member makes appears live for the others.
 
-<Aside type="danger">
-**Known gap — realtime is currently not wired.** `handlerStream` is imported in `index.ts` but **no route is registered for it**, while the client connects to `/api/stream`. That endpoint 404s today, so live updates don't arrive — the client relies on pull-to-refresh delta sync instead. Wiring it is a good first contribution: register `app.get("/api/stream", requireAuth, handlerStream)` (note: it lives *outside* the `/api/v1` prefix, matching the client URL) and verify the `notifyCalendarMembers` broadcasts land. Confirm the SSE auth story, since `<EventSource>` sends a Bearer token.
+It's an authenticated route (`requireAuth`): the client sends its session as a `Bearer` token, which Better Auth's bearer plugin validates. The client subscribes via `react-native-sse` (`apps/client/hooks/useEventsStream.ts`).
+
+<Aside type="note">
+Broadcasts are **best-effort and fire-and-forget** — a member with no open connection (offline, backgrounded) simply catches up on their next pull-to-refresh delta sync (`useRefreshData`). There is no auto-reconnect loop and no server-side replay buffer; the delta sync is the durable path, SSE is the live-nicety on top.
 </Aside>
 
 ## Route map
