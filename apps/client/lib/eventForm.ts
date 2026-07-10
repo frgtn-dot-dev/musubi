@@ -1,10 +1,6 @@
 // Pure validation for the event composer. Mirrors the checks that used to live
-// inline in AddEventModal's save handler.
-//
-// Behavior note: callers apply name/calendars/start/end unconditionally (so a
-// passing field clears its error), but apply `url` only when non-empty — a valid
-// URL does not clear a previously shown url error. This preserves the original
-// inline behavior (the url check had no else-branch).
+// inline in AddEventModal's save handler. Callers apply every returned error
+// unconditionally, so a field that now passes clears its previous error.
 
 export type EventFormInput = {
   title: string;

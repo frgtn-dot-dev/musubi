@@ -408,7 +408,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setCalendarsError(errors.calendars);
     setStartError(errors.start);
     setEndError(errors.end);
-    if (errors.url) setUrlError(errors.url); // valid URL never clears a prior url error (legacy behavior)
+    setUrlError(errors.url); // clears on a now-valid URL, consistent with the other fields
 
     if (!ok) {
       return;
