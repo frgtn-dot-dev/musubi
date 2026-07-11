@@ -143,7 +143,16 @@ This subsystem is intentionally dense; the `eslint-disable react-hooks/exhaustiv
 **All-day vs timed dates.** All-day events are anchored at **UTC midnight** and must be keyed in UTC (`dayKeyOf` / `eventDay` from `@musubi/calendar`); timed events are keyed locally. Mixing the two frames causes off-by-one-day bugs across time zones. Never do raw `new Date()` + `setDate()` arithmetic — use `dayjs`.
 </Aside>
 
-The composer (`components/calendar/AddEventModal.tsx`) is a docked bottom sheet. Its RRULE build/parse logic lives in `lib/rrule.ts` and its validation in `lib/eventForm.ts` (both unit-tested — `npx tsx lib/rrule.test.ts`).
+### The composer (docked vs classic)
+
+`components/calendar/AddEventModal.tsx` has two modes, and knowing which surface uses which matters:
+
+- **Docked** (`docked` prop) — a persistent bottom sheet that *peeks* (title + Save) and expands on pull/focus. This is the **create** path everywhere: the home tab, the agenda (FAB opens it, FAB hides while open), and the calendar-detail view (no FAB — it auto-peeks in day view and rides drag-to-create, mirroring the home model). Docked mode owns its keyboard handling: it lifts by exactly the keyboard's overlap past its resting edge and caps the lift so the sheet's top stays on screen. The resting edge is configurable via `dockBottomInset` (defaults to the tab-bar height; the detail modal passes the safe-area inset because it has no tab bar).
+- **Classic modal** (no `docked`) — used only for **editing** an existing event from its detail. Its keyboard handling lives in `useModalAnimation`.
+
+The [drill](/docs/architecture/glossary/#drill) (month → day zoom) feeds the docked composer: the day view mounts *before* the zoom animation starts (double-`requestAnimationFrame`), the composer peeks only once the zoom settles, and both the drill close and the peek trigger run on **timers, not animation callbacks** — an interrupted Reanimated animation silently drops its callback, which once meant a back-gesture had to be done twice. That rule is documented in `useModalAnimation.ts` and in the [glossary](/docs/architecture/glossary/#timer-not-animation-callback).
+
+The composer's RRULE build/parse logic lives in `lib/rrule.ts` and its validation in `lib/eventForm.ts` (both unit-tested — `npx tsx lib/rrule.test.ts`).
 
 ## Notifications
 
@@ -154,7 +163,9 @@ The composer (`components/calendar/AddEventModal.tsx`) is a docked bottom sheet.
 - **UI primitives** in `components/ui/` — use `Tap` (not bare `Pressable`; it adds press-scale + haptics), `Btn`, `Empty`, `Toast` (`showToast({ message, actionLabel, onAction })`), and `confirm()`. Hand-rolled equivalents get flagged in review.
 - **Theme** (`constants/theme.ts`) is a **mutable singleton**, not context: `colors`/`fonts`/`styles` are objects read at render time; `applyTheme()` swaps them in place and the tree remounts via `key={scheme}`. Read `colors.x` at render time — **never** capture a colour into a module-level constant (it freezes to whichever theme loaded first).
 - **Haptics** via `lib/haptics.ts` (`haptics.success()`, `haptics.warn()`).
-- Magic numbers → named constants (a `layout.ts`-style tuning block or `constants/`).
+- **Year display** uses the shared `YearStamp` (`components/calendar/YearStamp.tsx`) — the two-digit overlined year next to month names and as the agenda's year divider. Don't hand-roll year text.
+- **Timers, not animation callbacks**, for anything that must happen after an animation (closing a sheet, clearing the drill) — interrupted Reanimated animations drop their callbacks. See `useModalAnimation.ts` and the [glossary](/docs/architecture/glossary/#timer-not-animation-callback).
+- Magic numbers → named constants (a `layout.ts`-style tuning block or `constants/`). Animation/gesture feel (zoom durations, snap sizes, hold delays) is all tuned in `components/cal/layout.ts` — change it there, not inline.
 
 ## How to add a screen or feature
 

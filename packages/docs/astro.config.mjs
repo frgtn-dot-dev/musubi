@@ -48,6 +48,7 @@ export default defineConfig({
             { label: 'Sync Engine', slug: 'architecture/sync' },
             { label: 'Federation', slug: 'architecture/federation' },
             { label: 'Shared Packages', slug: 'architecture/packages' },
+            { label: 'Glossary', slug: 'architecture/glossary' },
           ],
         },
         {
