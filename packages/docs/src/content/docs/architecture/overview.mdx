@@ -5,14 +5,16 @@ description: The big picture — how Musubi's monorepo, data flow, and core conc
 
 import { Aside, CardGrid, LinkCard, FileTree } from '@astrojs/starlight/components';
 
-This section is the contributor's map of the codebase. Read this page first — it gives you the mental models that the rest of the code assumes you already have. Then jump to the part you're working on.
+This section is the contributor's map of the codebase. Read this page first — it gives you the mental models that the rest of the code assumes you already have. Then jump to the part you're working on. (Brand new to the project? The [Codebase Onboarding](/docs/guides/onboarding/) course walks you through everything in order, hands-on.)
 
 <CardGrid>
   <LinkCard title="Data Model" href="/docs/architecture/data-model/" description="The database schema and the events-beyond-calendars design." />
   <LinkCard title="API Server" href="/docs/architecture/api/" description="apps/api — request lifecycle, permissions, realtime." />
   <LinkCard title="Client App" href="/docs/architecture/client/" description="apps/client — Expo app, state, offline, custom calendar." />
   <LinkCard title="Sync Engine" href="/docs/architecture/sync/" description="Two-way external sync and provider adapters." />
+  <LinkCard title="Federation" href="/docs/architecture/federation/" description="Musubi ↔ Musubi — cross-server calendar sharing." />
   <LinkCard title="Shared Packages" href="/docs/architecture/packages/" description="types, calendar, auth, config — the shared contract." />
+  <LinkCard title="Glossary" href="/docs/architecture/glossary/" description="Drill, dock, ghost, shadow account… the codebase's vocabulary." />
 </CardGrid>
 
 ## The one idea that explains everything
@@ -118,6 +120,7 @@ The client and server never trust raw JSON. They communicate through **Zod schem
 | **Soft delete** | `deletedAt` tombstone drives delta sync | `packages/db/src/queries/events.ts` |
 | **Delta sync** | Client asks "what changed since T?" | `apps/client/hooks/useRefreshData.ts` |
 | **Mirror calendars** | External (Google/CalDAV) calendars imported as normal calendars | `apps/api/src/sync/` |
+| **Federation** | Cross-server sharing: invite-as-capability + shadow accounts | `apps/api/src/handlers/federation.ts`, `apps/client/services/federation.ts` |
 | **Recurrence** | Stored as iCal RRULE text, expanded at read time | `packages/calendar/src/recurrence.ts` |
 
 <Aside type="tip">

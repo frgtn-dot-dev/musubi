@@ -1,0 +1,241 @@
+---
+title: Codebase Onboarding
+description: A guided course into the Musubi codebase for new contributors — what to run, what to understand, what to read, and how to make your first change with confidence.
+---
+
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+This is a **course, not a reference**. Work through it top to bottom — each step builds on the previous one, and by the end you'll have run the app, traced a real request through every layer, and know exactly where your first change goes. Budget roughly an afternoon. Things repeat here on purpose: hearing the same idea in a second context is how it sticks.
+
+The reference pages ([Architecture](/docs/architecture/overview/), [Glossary](/docs/architecture/glossary/)) go deeper on everything mentioned; this page tells you **in what order** to absorb them.
+
+## Step 0 — Run it
+
+Don't read code you can't run. Follow [Running Locally](/docs/guides/running-locally/) until you have the API and the Expo client up:
+
+```sh
+pnpm install
+cp .env.example .env       # fill DATABASE_URL, BETTER_AUTH_SECRET, BETTER_AUTH_URL, ENVIRONMENT=dev
+pnpm db:migrate
+pnpm dev                    # turbo runs api + client + docs in one TUI
+```
+
+Then, in the app: **create an account, create a calendar, create an event, drag it around in day view.** Everything you just did is the exact flow you'll trace in Step 2.
+
+<Aside type="tip">
+The repo ships an interactive map of itself: `pnpm graph` opens a browsable knowledge graph of every file, its architectural layer, and its connections. Keep it open in a tab while you read — it's the visual companion to this course.
+</Aside>
+
+## Step 1 — The one idea
+
+Musubi has a single load-bearing idea, and the whole codebase is a consequence of it:
+
+> **An event is not owned by a calendar. It is *linked into* one or more calendars.**
+
+Every other calendar app nests events inside calendars. Musubi (結び, *the knot*) inverts that — one dinner, linked into your calendar and your partner's, edited once, visible in both. Concretely, there is **no `calendarId` column on `events`**. Instead, a junction table:
+
+```ts
+// packages/db/src/schema.ts — the heart of the design
+export const calendarEvents = pgTable("calendar_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventID: uuid("event_id").references(() => events.id, { onDelete: "cascade" }).notNull(),
+  calendarID: uuid("calendar_id").references(() => calendars.id, { onDelete: "cascade" }).notNull(),
+});
+```
+
+Three consequences you must internalise before touching anything:
+
+1. **The home calendar governs editing.** `events.originCalendarID` is the one calendar whose editors/owners may edit the event. You can *see* an event through any calendar it's linked into; you can only *edit* it through its home. Server gate: `assertCanEditEvent` (`apps/api/src/permissions.ts`).
+2. **Link vs Fork.** *Link* = the same row gains another junction entry (one truth, more places). *Fork* = a new independent copy with a new owner and home. [Details](/docs/architecture/api/#link-vs-fork).
+3. **Roles live on membership.** `calendar_members` holds `(user, calendar, role)`; the permission matrix is one shared function both apps call:
+
+```ts
+// packages/types/src/permissions.ts — the single source of truth
+const PERMISSIONS: Record<CalendarRole, CalendarAction[]> = {
+  owner:  ["editCalendar", "deleteCalendar", "manageMembers", "editEvents", "invite"],
+  editor: ["editEvents", "invite"],
+  viewer: [],
+};
+export function can(role, action): boolean { … }
+```
+
+The server calls `can()` to gate handlers; the client calls the *same* `can()` to hide buttons. Change the matrix in one place, both sides follow.
+
+**Checkpoint:** you should be able to answer — *"I'm a viewer on calendar A, an editor on B, and an event is linked into both with its home on A. Can I edit it?"* (No — edit rights come from the home calendar A, where you're a viewer. You could **fork** it into B.)
+
+## Step 2 — Trace one request end to end
+
+This is the most valuable hour of your onboarding. We'll follow **"user creates an event"** through every layer. Open the files as you go.
+
+### 2.1 The screen (`apps/client/components/calendar/AddEventModal.tsx`)
+
+The composer is a **docked bottom sheet** ([dock](/docs/architecture/glossary/#dock--docked-composer)) fed by a [draft](/docs/architecture/glossary/#draft) from the calendar grid. On Save it validates with a pure function and hands off to the store:
+
+```ts
+const { ok, errors } = validateEventForm({ title: newTitle, calendarCount: selectedCals.size, … });
+…
+await onSave(eventConstruct);   // ← the screen doesn't know about HTTP at all
+```
+
+### 2.2 The store (`apps/client/store/useEventsStore.ts`)
+
+Stores are **API-first**: they call the server and only write state + cache *after* it succeeds — offline failures are loud, never silent data loss:
+
+```ts
+addEvent: async (event, api) => {
+  const result = await api.createEvent(event);       // 1. server first
+  set(state => ({ events: [...state.events.filter(e => e.id !== result.id), result] })); // 2. then memory
+  await cacheUpsertEvents([result]);                 // 3. then the offline SQLite mirror
+},
+```
+
+Note the sibling `localAddEvent` — the *same* mutation **without** the API call, used when the change already happened elsewhere (an SSE frame, cache hydration). This `x` / `localX` pairing repeats across the stores.
+
+### 2.3 The API client (`apps/client/services/api.ts`)
+
+A thin `useApi()` hook — one method per endpoint over Better Auth's `$fetch`. Two idioms to notice:
+
+```ts
+function throwOnError(error): asserts error is null { … }   // type-narrowing error check
+…
+return { ...data, start: new Date(data.start), end: new Date(data.end) };  // ISO strings → Dates
+```
+
+(And one advanced wrinkle you can ignore for now: calendars shared from another Musubi server route to *their* origin — [Federation](/docs/architecture/federation/).)
+
+### 2.4 The route (`apps/api/src/index.ts`)
+
+```ts
+app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
+```
+
+`requireAuth` resolves the session into `req.user`; `wrap` turns a rejected promise into `next(err)` so handlers can just `throw`.
+
+### 2.5 The handler (`apps/api/src/handlers/events.ts`)
+
+Every mutating handler follows the same **five-beat rhythm** — learn it once, read every handler for free:
+
+```ts
+export async function handlerCreateEvent(req, res) {
+  const event = EventSchema.parse(req.body);                       // 1. validate  → 400
+  event.creatorID = req.user!.id;                                  //    identity is server-set
+  for (const cal of event.calendars)
+    await assertCan(req.user!.id, cal, "editEvents");              // 2. authorise → 403
+  const created = await createEvent(event, event.calendars);       // 3. persist   (packages/db)
+  await pushEventToProviders(created, "create");                   // 4. sync outward (Google/CalDAV)
+  notifyCalendarMembers(memberIds, "event_created", created);      // 5. broadcast (SSE)
+  res.status(201).json(created);
+}
+```
+
+**validate → authorise → persist → sync outward → broadcast.** The server re-checks *everything* — client-side checks are UX only ([details](/docs/architecture/api/#the-server-trusts-nothing-from-the-client)).
+
+### 2.6 The query (`packages/db/src/queries/events.ts`)
+
+Handlers never touch tables — all DB access goes through query modules re-exported from `@musubi/db`. Query functions return data or `undefined`; **throwing NotFound is the handler's job**.
+
+### 2.7 The echo (SSE)
+
+`notifyCalendarMembers` writes an `event_created` frame to every connected member of every linked calendar. Their apps (`hooks/useEventsStream.ts`) route it to `localAddEvent` — and the loop closes: your event appears on their screens without a refresh.
+
+**Exercise:** run two clients (or one + `curl -N -H "Authorization: Bearer <token>" http://localhost:7531/api/stream`), create an event on one, watch the frame arrive on the other. Then read `handlerUpdateEvent` and `handlerRemoveEvent` and find the same five beats.
+
+## Step 3 — Read the data model
+
+Open `packages/db/src/schema.ts` top to bottom — it's organised into six commented domains; the [Data Model page](/docs/architecture/data-model/) annotates each. Reading order:
+
+1. **Auth** (skim — Better Auth owns these)
+2. **Calendars & events** — note `title` (not `name`!), `recurrence` (iCal RRULE text), `deletedAt`
+3. **Link tables** — you met these in Step 1
+4. **External sync** — mirrors of Google/CalDAV calendars
+5. **Federation** — shadow users + tokens (skim for now)
+
+Two mechanics to understand *now* because everything depends on them:
+
+- **Soft delete → delta sync.** Events are tombstoned (`deletedAt`), never hard-deleted on write. The client asks *"what changed since T?"* and gets `{ events, deletedIds, serverTime }` — tombstones are how offline clients learn about deletions. ([Tombstone](/docs/architecture/glossary/#tombstone--soft-delete))
+- **Recurrence is expanded at read time.** `events.recurrence` stores RRULE text (`FREQ=WEEKLY;BYDAY=MO` + `EXDATE:…` lines); `expandRecurringEvents(events, windowStart, windowEnd)` from `@musubi/calendar` produces occurrences for the visible window only. Never store or expand unbounded instances.
+
+<Aside type="caution">
+Schema edits have a strict workflow: edit `schema.ts` → `pnpm db:generate` → **review the SQL** → `pnpm db:migrate` → commit the migration with your change. Renames aren't detected (drizzle emits DROP+CREATE). [Full workflow + gotchas](/docs/architecture/data-model/#migration-workflow).
+</Aside>
+
+## Step 4 — The client's mental models
+
+Five patterns explain almost every client file. Read them here, verify each in the code:
+
+1. **Stores are thin, API-first, and paired** (`x` / `localX`) — Step 2.2. Plus one hard rule: **merge, don't replace** calendars (`{ ...existing, ...incoming }`) — SSE payloads omit per-user fields like `role`, and replacing once shipped a bug where editing a calendar locked its owner out.
+2. **Two databases.** PostgreSQL on the server (`packages/db`), **SQLite on the device** (`apps/client/db/` + `drizzle/`) as an offline mirror. They have separate schemas and separate migrations. Boot order: settings seed *synchronously* from SQLite (theme correct on the very first frame — an async read flashes), then events/calendars hydrate on tabs mount, then a delta refresh reconciles with the server.
+3. **The calendar UI is hand-built and gesture-heavy** (`components/cal/`). Its rules: positions live in Reanimated **shared values**, never React state; gestures read a **live ref** so their deps stay empty; anything that must happen after an animation runs on a **timer, not the animation callback** (interrupted animations drop callbacks — this has bitten twice). Geometry constants live in `layout.ts`. *Read this subsystem before touching it; it's intentionally dense.* ([drill](/docs/architecture/glossary/#drill), [ghost](/docs/architecture/glossary/#ghost))
+4. **UI primitives, not ad-hoc.** `Tap` (never bare `Pressable`), `Btn`, `Empty`, `Toast`, `confirm()`, `YearStamp`. Theme colours are **read at render time** from `constants/theme.ts` — never captured into module-level constants (the palette object is swapped in place on theme change).
+5. **Realtime is a nicety, delta sync is the truth.** SSE frames patch stores live; the durable path is always the next delta refresh. The `external_sync` frame (server's scheduled Google/CalDAV poll found changes) triggers a silent refresh.
+
+**Exercise:** find where the app decides which theme to render on the very first frame (hint: it's *not* in a component — `store/useSettingsStore.ts` seeds itself synchronously). Then find why `AddEventModal` docked mode lifts with the keyboard but the calendar-detail sheet doesn't (`keyboardAware` in `useModalAnimation`).
+
+## Step 5 — The wider map
+
+Skim these now so you know they exist; deep-read when a task touches them:
+
+<CardGrid>
+  <LinkCard title="Sync Engine" href="/docs/architecture/sync/" description="Provider-agnostic two-way sync: adapters (Google, CalDAV), cursors, the scheduled near-realtime poll, and how to add a provider." />
+  <LinkCard title="Federation" href="/docs/architecture/federation/" description="Musubi ↔ Musubi sharing: invite-as-capability, shadow accounts, member tokens, connection roaming." />
+  <LinkCard title="Shared Packages" href="/docs/architecture/packages/" description="The Zod contract (change data shapes HERE first), recurrence, auth, config." />
+  <LinkCard title="Glossary" href="/docs/architecture/glossary/" description="Every internal term — drill, dock, ghost, sweep, tombstone — with file pointers." />
+</CardGrid>
+
+One rule from Shared Packages worth repeating because it orders your work: **when you change a data shape, change the Zod schema in `packages/types` first.** Both apps infer their types from it; there is no duplicated interface to keep in sync.
+
+## Step 6 — Your first contribution
+
+### The recipe (end-to-end feature touching data)
+
+<Steps>
+1. **Types first**: add the field to the Zod schema in `packages/types`.
+2. **Server data**: column in `packages/db/src/schema.ts` → `pnpm db:generate` → review → `pnpm db:migrate`; thread it through the relevant query module.
+3. **Server API**: extend the handler (five-beat rhythm) or add a route in `index.ts` — [checklist](/docs/architecture/api/#how-to-add-an-endpoint).
+4. **Client API**: the `useApi` method (`throwOnError` after the fetch, revive dates).
+5. **Client state**: store action (+ `localX` twin if SSE should carry it); if it's cached, add it to the client SQLite schema + generate a *client* migration too.
+6. **UI**: wire it with the primitives; theme colours at render time.
+7. **Verify**: typecheck both apps, run relevant self-checks, test on both platforms, test *offline* and after a cold restart.
+</Steps>
+
+### The verification loop
+
+```sh
+cd apps/client && npx tsc --noEmit --skipLibCheck   # 0 errors is the baseline
+cd apps/api    && npx tsc --noEmit --skipLibCheck
+cd apps/client && npx tsx lib/rrule.test.ts          # runnable self-checks (no framework)
+```
+
+When you extract pure logic, leave a self-check behind in the same style — `lib/rrule.test.ts` and `lib/eventForm.test.ts` are the pattern.
+
+### What reviewers look for
+
+The condensed checklist (full version in [Contributing](/docs/guides/contributing/#code-style)):
+
+- Data shapes changed in `packages/types` first
+- Handlers follow the five beats; identity fields set server-side; new DB access goes through a query module
+- Stores API-first; calendars merged, not replaced
+- UI primitives used; no module-level colour constants; no magic numbers (named constants, `layout.ts`-style)
+- Reanimated v4; shared values for gesture-driven positions; timers, not animation callbacks
+- Migrations committed with the schema change
+- One focused thing per PR, and the description explains **why**
+
+### Where to find something to do
+
+Check the [GitHub issues](https://github.com/f-tuma/musubi/issues) and the [roadmap](https://github.com/orgs/frgtn-dot-dev/projects/1/views/1). Good first shapes: a UI polish task inside `components/calendar/` (the primitives make these safe), a new user setting end-to-end (the recipe above, all seams well-trodden), or a `ponytail:`-commented shortcut whose upgrade path is spelled out right there in the comment.
+
+## Cheat sheet — the reading order
+
+| When | Read |
+|---|---|
+| First hour | This page, top to bottom, running the app |
+| Before any change | [Architecture Overview](/docs/architecture/overview/) — the map |
+| Touching the backend | [API Server](/docs/architecture/api/) |
+| Touching the app | [Client App](/docs/architecture/client/) |
+| Touching data | [Data Model](/docs/architecture/data-model/) + [Shared Packages](/docs/architecture/packages/) |
+| Touching sync/providers | [Sync Engine](/docs/architecture/sync/) |
+| Touching invites/servers | [Federation](/docs/architecture/federation/) |
+| A term confuses you | [Glossary](/docs/architecture/glossary/) |
+| Ready to open a PR | [Contributing](/docs/guides/contributing/) |
+
+Stuck or unsure about an approach? Open a GitHub issue or discussion *before* investing the time — that's what they're for. Welcome aboard. 結び

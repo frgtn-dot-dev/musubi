@@ -15,6 +15,12 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  // Federation: a "shadow account" for a member whose real account lives on
+  // another Musubi server. isExternal users have no password/session — they
+  // authenticate with a member token (member_tokens) issued on invite accept.
+  // homeServer is their origin server's URL (null for local users).
+  isExternal: boolean("is_external").default(false).notNull(),
+  homeServer: text("home_server"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -440,3 +446,43 @@ export const caldavAccounts = pgTable("caldav_accounts", {
 }, (t) => [unique().on(t.userID, t.serverUrl, t.username)]);
 
 export type NewCaldavAccount = typeof caldavAccounts.$inferInsert;
+
+
+// FEDERATION (Musubi ↔ Musubi)
+
+// Bearer tokens for external (shadow) members. Issued once on invite accept,
+// stored as a SHA-256 hash — the raw token is returned to the remote client
+// exactly once and never persisted. Authentication only: authorization still
+// runs through calendar_members/assertCan, so kicking a member cuts access
+// even while their token row exists.
+export const memberTokens = pgTable("member_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+}, (t) => [index("member_tokens_user_idx").on(t.userID)]);
+
+export type NewMemberToken = typeof memberTokens.$inferInsert;
+
+// Home side: this user's memberships on OTHER Musubi servers. The member token
+// is stored AES-GCM encrypted at the app layer (same scheme + key as CalDAV
+// passwords) so every signed-in device picks the connection up — accepting an
+// invite on one device federates them all.
+export const musubiAccounts = pgTable("musubi_accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  server: text("server").notNull(),          // the origin server's URL
+  remoteUserID: text("remote_user_id").notNull(), // our shadow-user id there
+  encryptedToken: text("encrypted_token").notNull(),
+}, (t) => [unique().on(t.userID, t.server)]);
+
+export type NewMusubiAccount = typeof musubiAccounts.$inferInsert;

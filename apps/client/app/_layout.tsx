@@ -138,6 +138,11 @@ function AppContent() {
 function AppLoader() {
   const { apiUrl } = useServer();
 
+  // Theme comes straight from the settings store, which seeds itself
+  // SYNCHRONOUSLY from the local SQLite snapshot (see useSettingsStore) — the
+  // very first frame is already in the last-known theme, no flash of the
+  // system theme (or a blank window) while anything loads.
+
   // Resolve the theme: user preference wins, "system" follows the device.
   const deviceScheme = useColorScheme();
   const themePref = useSettingsStore(s => s.theme);

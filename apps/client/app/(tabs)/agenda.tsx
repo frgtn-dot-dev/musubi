@@ -13,6 +13,7 @@ import { View, Text, ScrollView } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Tap } from "@/components/ui/Tap";
 import { Empty } from "@/components/ui/Empty";
+import { YearStamp } from "@/components/calendar/YearStamp";
 import { RefreshControl } from "react-native";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { eventColor } from "@/lib/eventColor";
@@ -34,7 +35,8 @@ export default function AgendaTab() {
     syncActiveCals(calendars);
   }, [calendars]);
 
-  const [newEventVisible, setNewEventVisible] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);   // docked composer (FAB)
+  const [newEventVisible, setNewEventVisible] = useState(false); // classic modal (edit from detail)
   const [eventDetailVisible, setEventDetailVisible] = useState<boolean>(false);
   const [prefilledEvent, setPrefilledEvent] = useState<Event | undefined>(undefined);
   const [eventDetail, setEventDetail] = useState<Event | null>(null);
@@ -132,11 +134,18 @@ export default function AgendaTab() {
       >
         {groups.length === 0 && <Empty kanji="静" text="No events ahead" />}
         {
-          groups.slice(0, shown).map((g) => (
+          groups.slice(0, shown).map((g, i, sliced) => (
             <Animated.View
               key={g.date.toISOString()}
               entering={FadeIn.duration(250)}
             >
+              {/* Year divider — once per year in the list (first group + on change). */}
+              {(i === 0 || sliced[i - 1].date.getFullYear() !== g.date.getFullYear()) && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 2 }}>
+                  <YearStamp date={g.date} />
+                  <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+                </View>
+              )}
               <View style={styles.timelineRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.timelineDay}>
@@ -191,14 +200,27 @@ export default function AgendaTab() {
           ))
         }
       </ScrollView>
-      <Animated.View entering={FadeIn.duration(400)}>
-        <Tap style={styles.fab} haptic="thump" onPress={() => {
-          setPrefilledEvent(undefined);
-          setNewEventVisible(true);
-        }}>
-          <Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text>
-        </Tap>
-      </Animated.View>
+      {/* FAB hides while the docked composer is open (mirrors the home screen). */}
+      {!createOpen && (
+        <Animated.View entering={FadeIn.duration(400)}>
+          <Tap style={styles.fab} haptic="thump" onPress={() => setCreateOpen(true)}>
+            <Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text>
+          </Tap>
+        </Animated.View>
+      )}
+      {/* Create — docked composer above the tab bar; its keyboard handling keeps
+          the focused field visible (unlike the classic modal). */}
+      <AddEventModal
+        docked
+        visible
+        peekVisible={createOpen}
+        anchor={new Date()}
+        onClose={() => setCreateOpen(false)}
+        onSave={(e) => addEvent(e, api)}
+        onEdit={(e) => updateEvent(e, api)}
+        calendars={calendars}
+      />
+      {/* Edit — classic modal, opened from an event's detail. */}
       <AddEventModal
         visible={newEventVisible}
         onClose={() => setNewEventVisible(false)}

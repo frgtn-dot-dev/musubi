@@ -1,0 +1,112 @@
+---
+title: Glossary
+description: The codebase's own vocabulary — drill, dock, ghost, knot, shadow account, tombstone and friends — each with a definition and where it lives in the code.
+---
+
+Musubi's code talks in a small internal vocabulary. Most of it is obvious in context, some of it isn't — this page defines every term a contributor might trip over, grouped by where you'll meet it. Each entry says where the thing lives.
+
+## The core idea
+
+### Knot (結び / musubi)
+The founding metaphor: **people first, events tie you together**. Concretely it means an event is not owned by a calendar but *linked into* one or more of them (see [Overview](/docs/architecture/overview/#the-one-idea-that-explains-everything)). When the code or docs say "the knot", they mean this many-to-many linking model.
+
+### Home calendar / origin calendar
+The one calendar that governs **who may edit** an event — stored as `events.originCalendarID`. You can *see* an event through any calendar it's linked into, but you can only *edit* it with an editor/owner role on its home. Set at creation (must be one of the event's linked calendars), immutable afterwards. Enforced by `assertCanEditEvent` (`apps/api/src/permissions.ts`).
+
+### Link vs Fork
+The two ways an event spreads. **Link** = the *same* event row gains another `calendar_events` junction row — one truth, visible in more places, still edited via its home. **Fork** = a brand-new independent copy with a new id, creator and home — "claim your own version". `handlerLinkEvent` / `handlerForkEvent` in `apps/api/src/handlers/events.ts`.
+
+### Origin server
+Federation's version of "home": the one Musubi server a calendar lives on. Other servers' users read and write it *there*; nothing is duplicated (in v1). See [Federation](/docs/architecture/federation/).
+
+## Calendar UI (apps/client/components/cal + calendar)
+
+### Drill
+The month → day zoom: tapping a day cell in month view "drills into" it — the tapped cell's rectangle animates into a full-screen day view overlay. State is `drill: { date, rect }`; opened by `openDrill`, closed by `closeDrill` (zoom back out). Lives in `app/(tabs)/index.tsx` and `CalendarDetailModal.tsx`. The choreography matters: the day view mounts and scrolls **while fully invisible** (the overlay's opacity is gated on `zoom > 0`, and the animation starts a double-`requestAnimationFrame` later), so the zoom runs on already-mounted content and the tapped cell never "blacks out" while the heavy view loads. Both the close and the composer-peek trigger run on timers, not animation callbacks.
+
+### Dock / docked composer
+The event composer (`AddEventModal`) in its **docked** mode: a persistent bottom sheet resting above the tab bar (or the safe-area inset inside the calendar-detail modal), instead of a classic pop-up modal. Used for *creating* events on the home tab, agenda and calendar detail; editing an existing event still uses the classic modal. The docked mode owns its keyboard handling (it lifts by exactly the keyboard overlap and caps so its top stays on screen) — which is why it replaced the FAB-opened modal that pushed the form off-screen.
+
+### Peek
+The docked composer's collapsed state: a sliver (`DOCK_PEEK` px) showing just the title field and Save. Pulling up (or focusing the title) expands to the full form. `peekVisible` prop controls whether the sheet is at peek or slid fully off-screen; `dockPeeking`/`dockPeekReady` in the screens decide *when* it peeks (day view: automatically; drill: once the zoom settles; otherwise: when there's a draft).
+
+### Draft
+The not-yet-saved event range being composed: `{ start, end }` (`Draft` in `components/cal/layout.ts`). Created by tap or drag on the grid, fed live into the docked composer, cleared on save/close.
+
+### Ghost
+The translucent block on the timeline grid visualising the current draft — drag its body to move, its corner dots to resize. Its geometry lives in **minutes** in shared values (`gStartMin`/`gDurMin` in `TimelineView.tsx`) and converts to pixels inside the animated style, so it scales with pinch-zoom exactly like real event blocks.
+
+### Anchor / base
+Pager bookkeeping: `base` is the date the pager's page 0 is built around (changes only on mode switch / Today, so swipes stay cheap); `anchorDate` follows the currently *visible* page and drives the header (month name, year stamp) and the composer's default day.
+
+### Solo (calendar)
+The filter-bar gesture that shows exactly one calendar: `soloCalId` in `useCalendarsStore` — tap-to-toggle vs long-press-to-solo.
+
+### Year stamp
+The two-digit year with a line above it (`‾26`) next to month names and as the agenda's year divider — `components/calendar/YearStamp.tsx`. RN has no `overline` text decoration, so the line is a `borderTop`.
+
+### Live-ref pattern
+Gesture handlers read mutable state through a single `live` ref (`live.current.draft`, `.days`, `.colW`) so their `useMemo` dependency arrays stay empty — gestures never re-mount mid-interaction. Sibling of the **shared-value rule**: anything that moves during a gesture (positions, scroll, zoom) lives in Reanimated `useSharedValue`s, never React state.
+
+## Client data flow (apps/client)
+
+### Hydration
+Filling the in-memory Zustand stores from the local SQLite cache on app start — the app renders instantly from the last known state, then a refresh reconciles with the server. Two moments: **settings seed synchronously at store creation** (`cacheGetSettingsSync` via `sqlite.getFirstSync`), so the very first frame is already in the last-known theme — an async hydrate here flashes the system theme or a blank window; events + calendars hydrate asynchronously on tabs mount (`(tabs)/_layout.tsx`). The settings store is write-through: every change persists to the `syncMeta` blob immediately.
+
+### Delta sync
+"Give me everything that changed since T": `GET /api/v1/events?since=` returns `{ events, deletedIds, serverTime }`; the client upserts, drops the tombstoned ids, and stores `serverTime` as its next cursor. Orchestrated by `hooks/useRefreshData.ts`. A missing/garbage cursor falls back to a full, authoritative re-pull.
+
+### Tombstone / soft delete
+Events are never hard-deleted on write — `removeEvent` sets `deletedAt`. The tombstone is what lets delta sync tell an offline client "this one's gone" (`deletedIds`). Hourly `purgeDeletedEvents` hard-deletes tombstones older than ~30 days.
+
+### `local*` store methods
+`localAddEvent`, `localUpdateCalendar`, … — store mutations that *don't* call the API, used when the change already happened elsewhere (an SSE frame, cache hydration). Their API-calling counterparts (`addEvent`, `updateCalendar`, …) are **API-first**: they write state/cache only after the server accepted.
+
+### Merge, don't replace
+The calendar-update rule: SSE payloads and update responses omit per-user fields (`role`, `provider`), so stores merge `{ ...existing, ...incoming }` instead of replacing — otherwise an edit would silently drop your own edit rights. (This bug shipped once; the rule is load-bearing.)
+
+### `everReady`
+A latched ref in `app/_layout.tsx`: once the app has been ready once, it stays "ready" even when loading flags flicker during session refreshes — gating UI on the raw flags would unmount the whole tree on every blip. Never reset it.
+
+### `keyboardAware`
+`useModalAnimation`'s flag for whether a sheet rides the keyboard. Default on; turned **off** for the calendar-detail sheet because its only keyboard belongs to the nested docked composer, which lifts itself — otherwise both would move.
+
+## Sync & federation (apps/api/src/sync, federation)
+
+### Mirror (calendar)
+A provider's calendar imported as a normal Musubi calendar with an `external_calendars` mapping. Events flow in/out through the sync engine; the provider stays authoritative.
+
+### Adapter
+An implementation of the `CalendarAdapter` contract (`sync/adapter.ts`) translating one provider's API to `NormalizedEvent`s: `google`, `caldav` today. The engine never talks to providers directly.
+
+### Cursor
+The provider's opaque "changes since" token (`external_calendars.cursor`) — Google's `syncToken`, CalDAV's `syncToken` (unused: it full-fetches), the delta `serverTime` on the client. Cursor expiry (`410 Gone`) → the adapter returns `reset: true` and the engine reconciles against the full set (see Sweep).
+
+### Sweep
+The full-set reconciliation (`sweepExternalEvents`): after a `reset: true` fetch, the mirror's events whose external id was **not** in the fetched set get tombstoned — they were deleted on the provider. Paired with etag-aware upserts, it's what lets the [scheduled sync](/docs/architecture/sync/#near-realtime-the-scheduled-sync) tell "nothing changed" from "something changed" and only then wake clients with an SSE `external_sync`.
+
+### Shadow account
+Federation's key trick: a normal `user` row on the origin server (`isExternal`, `homeServer`) standing in for someone whose real account lives elsewhere — so membership, roles and attribution work *natively*, with no changes to the permission model. Created on invite accept.
+
+### Member token
+The bearer credential a federated member uses against the origin server: 32 random bytes, stored only as a SHA-256 hash (`member_tokens`). **Authenticates only** — authorization is always membership (`calendar_members`), so a kick cuts access instantly. Roams across the user's devices via `musubi_accounts` on their home server (AES-GCM encrypted).
+
+### Invite-as-capability
+The design stance that an invite token *is* the credential for everything invite-shaped: previewing the calendar, joining it, and (federation) the accept handshake. Unguessable, expiring, scoped to one calendar.
+
+## Conventions & idioms
+
+### RRULE / EXDATE / RDATE
+iCalendar (RFC 5545) recurrence text stored on `events.recurrence`: the `RRULE` line defines the series, `EXDATE` lines remove single occurrences ("delete just this Tuesday"), `RDATE` adds extra ones. Expanded to concrete occurrences **at read time** by `expandRecurringEvents` (`packages/calendar`), never stored as instances.
+
+### Barrel
+An `index.ts` whose only job is re-exporting a package's modules (`packages/types/src/index.ts`, `packages/db/src/index.ts`) — the reason you import `@musubi/db` instead of deep paths.
+
+### Timer, not animation callback
+A Reanimated `withTiming(…, callback)` callback is **dropped** when the animation gets interrupted — so anything that *must* happen (closing a modal, clearing the drill) runs on a `setTimeout` matched to the duration instead. Documented in `useModalAnimation.ts`; the drill close and dock-peek trigger follow it. Symptom when violated: "I had to do it twice."
+
+### `ponytail:` comments
+`// ponytail: <what was simplified, and when to upgrade>` marks a deliberate shortcut with a known ceiling (e.g. CalDAV's full-fetch sync). They're a debt ledger, not apologies — search for them before assuming something is an oversight.
+
+### wrap()
+The 3-line Express helper in `apps/api/src/index.ts` that turns a rejected handler promise into a `next(err)` call — the reason handlers can just `throw new NotFoundError(...)`.

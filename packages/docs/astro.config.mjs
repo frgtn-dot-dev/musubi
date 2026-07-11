@@ -46,12 +46,15 @@ export default defineConfig({
             { label: 'API Server', slug: 'architecture/api' },
             { label: 'Client App', slug: 'architecture/client' },
             { label: 'Sync Engine', slug: 'architecture/sync' },
+            { label: 'Federation', slug: 'architecture/federation' },
             { label: 'Shared Packages', slug: 'architecture/packages' },
+            { label: 'Glossary', slug: 'architecture/glossary' },
           ],
         },
         {
           label: 'Contributing',
           items: [
+            { label: 'Codebase Onboarding', slug: 'guides/onboarding' },
             { label: 'Contributing Guide', slug: 'guides/contributing' },
           ],
         },

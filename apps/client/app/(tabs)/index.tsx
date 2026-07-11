@@ -10,7 +10,7 @@ import { useFocusEffect } from "expo-router";
 import { BackHandler, View } from "react-native";
 import { expandRecurringEvents, type Mode } from "@musubi/calendar";
 import Animated, {
-  Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
+  Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming,
 } from "react-native-reanimated";
 import dayjs from "dayjs";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
@@ -89,6 +89,7 @@ export default function MainTab() {
   }, []);
 
   const openDrill = useCallback((date: Date, rect: Rect) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current); // don't let a pending close wipe this drill
     setDraft(null);
     setDockHidden(false); // a fresh drill always re-shows the composer, even if X hid it last time
     drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
@@ -101,9 +102,10 @@ export default function MainTab() {
     // already-mounted, already-scrolled content and stays smooth. The composer
     // slides up only once the zoom finishes.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setDockPeekReady)(true);
-      });
+      zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) });
+      // Timer, not the animation callback (interrupted animations drop it) —
+      // harmless if the drill closed meanwhile: dockPeeking requires `drill`.
+      setTimeout(() => setDockPeekReady(true), ZOOM_IN_MS);
     }));
   }, []);
 
@@ -112,11 +114,16 @@ export default function MainTab() {
     setDraft(null);
   }, []);
 
+  // Clear on a plain timer, NOT the animation callback — an interrupted
+  // animation drops its callback (same pitfall as useModalAnimation), which
+  // stranded the drill "open" and made the first back gesture appear to do
+  // nothing (the second one then worked).
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeDrill = useCallback(() => {
     setDockPeekReady(false); // sheet ducks out while the day zooms back
-    zoom.value = withTiming(0, { duration: ZOOM_OUT_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
-      if (finished) runOnJS(clearDrill)();
-    });
+    zoom.value = withTiming(0, { duration: ZOOM_OUT_MS, easing: Easing.in(Easing.cubic) });
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(clearDrill, ZOOM_OUT_MS + 20);
   }, [clearDrill]);
 
   // Android back while drilled into a day → zoom back out to the month.
@@ -251,7 +258,10 @@ export default function MainTab() {
     if (!drill) return { opacity: 0 };
     const r = drill.rect;
     return {
-      opacity: 1,
+      // Invisible until the zoom actually starts — the day view mounts during
+      // the pre-animation frames (zoom exactly 0), and showing the empty
+      // overlay box then read as the tapped cell "blacking out".
+      opacity: zoom.value === 0 ? 0 : 1,
       left: interpolate(zoom.value, [0, 1], [r.x, 0]),
       top: interpolate(zoom.value, [0, 1], [r.y, 0]),
       width: interpolate(zoom.value, [0, 1], [r.w, bodySize.w]),

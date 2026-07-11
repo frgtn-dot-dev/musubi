@@ -79,6 +79,14 @@ if (start > end) throw new BadRequestError("Start must precede end.");
 
 Query modules return `undefined`/`[]` for "not found" — the handler decides whether that's a 404.
 
+### The server trusts nothing from the client
+
+Client-side checks (the composer's validation, the same-server guard, federation routing) are **UX only** — every guarantee is re-established here:
+
+- **`assertCan`/`canDo` double as existence checks.** A calendar id with no membership row yields a null role → `ForbiddenError`. Since every calendar id a mutation touches passes through one of these gates *before* any insert, an unknown or foreign id gets a clean 403 — never an FK violation.
+- **`handlerCreateEvent` validates the event's shape**: at least one calendar, and `originCalendarID` must be **one of the linked calendars** (defaulting to the first). The home calendar governs edit rights, so a client must not be able to smuggle in a foreign calendar as origin — and since the linked calendars are membership-verified, this also proves the origin exists (clean 400 instead of an FK 500).
+- **Identity fields are overwritten server-side** (`creatorID` on create, `creatorID`/`originCalendarID` stripped on update), as described above.
+
 ## Permissions
 
 Two files, two responsibilities:
@@ -113,7 +121,7 @@ Rule of thumb: *Link* to share one truth; *Fork* to claim your own version.
 
 ## Realtime (SSE)
 
-`GET /api/stream` is a long-lived [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) connection, registered **outside** the `/api/v1` prefix to match the client's URL. `handlerStream` sets the SSE headers and stores the response in a `Map<userID, Response>`; `notifyCalendarMembers(userIds, type, payload)` writes `event_created` / `event_updated` / `event_removed` / `calendar_updated` / `calendar_removed` frames to the affected users. Every mutating handler calls it after persisting — so a change one member makes appears live for the others.
+`GET /api/stream` is a long-lived [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) connection, registered **outside** the `/api/v1` prefix to match the client's URL. `handlerStream` sets the SSE headers and stores the response in a `Map<userID, Response>`; `notifyCalendarMembers(userIds, type, payload)` writes `event_created` / `event_updated` / `event_removed` / `calendar_updated` / `calendar_removed` / `external_sync` frames to the affected users. Every mutating handler calls it after persisting — so a change one member makes appears live for the others — and the [scheduled provider sync](/docs/architecture/sync/#near-realtime-the-scheduled-sync) sends `external_sync` when Google/CalDAV changes land, which clients answer with a silent delta refresh.
 
 It's an authenticated route (`requireAuth`): the client sends its session as a `Bearer` token, which Better Auth's bearer plugin validates. The client subscribes via `react-native-sse` (`apps/client/hooks/useEventsStream.ts`).
 
@@ -130,7 +138,10 @@ Broadcasts are **best-effort and fire-and-forget** — a member with no open con
 | Calendars | `GET/POST/PUT/DELETE /api/v1/calendars`, `GET /calendars/:id`, `/calendars/google`, `/calendars/tokens/:token` |
 | Members | `GET /calendars/:id/members`, `POST/DELETE /calendars/members/:id` (join/leave), `PUT/DELETE /calendars/:id/members/:userId` (role/kick) |
 | Users | `GET/PUT /users/settings`, `DELETE /users`, `POST /users/avatar`, `GET /users/:id/avatar` *(public)* |
-| Connections | google check/revoke, caldav check/connect/disconnect, `POST /users/connections/disconnect` |
+| Connections | google check/revoke, caldav check/connect/disconnect, `GET/POST/DELETE /users/connections/musubi` (federated connections, roaming), `POST /users/connections/disconnect` |
+| Federation | `POST /api/v1/federation/accept` *(public — the invite token is the credential)*, `GET /invite/:token` *(public HTML hand-off page, outside `/api`)* — see [Federation](/docs/architecture/federation/) |
+
+Two auth notes: `GET /calendars/tokens/:token` is **public** (possession of the unguessable, expiring invite token is the credential — cross-server invitees have no session here), and `requireAuth` has a second path: when no Better Auth session matches, it hashes the presented `Bearer` and looks it up in `member_tokens` — authenticating a federated **shadow member**. Authorization still runs through `calendar_members` on every route, so this fallback grants nothing by itself.
 
 <Aside type="note">
 `POST /api/v1/users/reset` is public and its inline comment says "password reset entry" — but it maps to `handlerResetUsers`, the **dev-only** full user wipe (guarded by `ENVIRONMENT === "dev"`, throws `Forbidden` otherwise). The comment is misleading; real password reset is a Better Auth route under `/api/auth`. Worth a cleanup.

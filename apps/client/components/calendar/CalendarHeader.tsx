@@ -5,6 +5,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Tap } from "@/components/ui/Tap";
 import { ModeSwitch } from "@/components/cal/ModeSwitch";
+import { YearStamp } from "@/components/calendar/YearStamp";
 import { Mode } from "@musubi/calendar";
 
 
@@ -29,6 +30,7 @@ export function CalendarHeader({ anchorDate, calMode, onModeChange, onTodayPress
           onChange={onModeChange}
           trigger={(open) => (
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+              <YearStamp date={anchorDate} size={26} />
               <Text style={{ fontFamily: fonts.serif, fontSize: 26, color: colors.fg }}>
                 {anchorDate.toLocaleString("en-UK", { month: "long" })}
               </Text>

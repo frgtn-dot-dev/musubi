@@ -13,7 +13,10 @@ const EXIT = { duration: 240, easing: Easing.in(Easing.cubic) };
 const SPRING = { damping: 28, stiffness: 240, mass: 0.8 };
 const DISMISS_DISTANCE = 100;
 
-export function useModalAnimation(visible: boolean, onClose: () => void) {
+// keyboardAware: the sheet rides the keyboard (default). Turn it OFF for a sheet
+// whose only keyboard comes from a nested composer that handles its own lift —
+// otherwise both move (e.g. the calendar detail view with its docked composer).
+export function useModalAnimation(visible: boolean, onClose: () => void, keyboardAware = true) {
   const offScreen = Dimensions.get("screen").height / 5;
   const slideAnim = useSharedValue(offScreen);
   const fadeAnim = useSharedValue(0);
@@ -23,6 +26,7 @@ export function useModalAnimation(visible: boolean, onClose: () => void) {
   // feed a shared value from RN's Keyboard events instead (those DO fire there).
   const keyboardHeight = useSharedValue(0);
   useEffect(() => {
+    if (!keyboardAware) return;
     const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const show = Keyboard.addListener(showEvt, (e) => {
@@ -32,7 +36,7 @@ export function useModalAnimation(visible: boolean, onClose: () => void) {
       keyboardHeight.value = withTiming(0, { duration: 180 });
     });
     return () => { show.remove(); hide.remove(); };
-  }, []);
+  }, [keyboardAware]);
 
   const gesture = Gesture.Pan()
     .onChange((ev) => {

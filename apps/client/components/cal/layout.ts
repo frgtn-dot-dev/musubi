@@ -18,8 +18,10 @@ export const GRAB_SCALE = 1.04;    // "lifted" ghost scale while dragging
 export const GRAB_SPRING = { damping: 30, stiffness: 400 };
 
 // ── Month → day zoom ─────────────────────────────────────────────────────────
-export const ZOOM_IN_MS = 300;
-export const ZOOM_OUT_MS = 260;
+// Short and snappy — the heavy day view is mounted BEFORE the animation starts
+// (openDrill's double-rAF), so the zoom itself can afford to be quick.
+export const ZOOM_IN_MS = 200;
+export const ZOOM_OUT_MS = 170;
 export const DRILL_OPEN_MIN = 8 * 60 + 45; // minutes-from-midnight the drilled day view scrolls to (08:45)
 
 // ── Timeline pinch zoom ──────────────────────────────────────────────────────
