@@ -8,8 +8,8 @@ import { Text, View } from "react-native";
  */
 export function YearStamp({ date, size = 12 }: { date: Date; size?: number }) {
   return (
-    <View style={{ borderTopWidth: 1, borderColor: colors.fg3, paddingTop: 2, alignSelf: "center" }}>
-      <Text style={{ fontFamily: fonts.sansMedium, fontSize: size, color: colors.fg3, letterSpacing: 1 }}>
+    <View style={{ borderTopWidth: 1, borderColor: colors.fg3, paddingTop: 1, alignSelf: "center" }}>
+      <Text style={{ fontFamily: fonts.serif, fontSize: size, color: colors.fg3, letterSpacing: 1 }}>
         {String(date.getFullYear()).slice(-2)}
       </Text>
     </View>

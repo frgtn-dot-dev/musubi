@@ -303,10 +303,10 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                   onChange={switchMode}
                   trigger={(open) => (
                     <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                      <YearStamp date={anchorDate} size={26} />
                       <Text style={{ fontFamily: fonts.serif, fontSize: 26, color: colors.fg }}>
                         {anchorDate.toLocaleString("en-UK", { month: "long" })}
                       </Text>
-                      <YearStamp date={anchorDate} />
                       {showKanji &&
                         <Text style={{ fontFamily: fonts.kanji, fontSize: 14, color: colors.fg3 }}>
                           {MONTH_KANJI[anchorDate.getMonth()]}
