@@ -151,7 +151,10 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     if (!drill) return { opacity: 0 };
     const r = drill.rect;
     return {
-      opacity: 1,
+      // Invisible until the zoom actually starts — the day view mounts during
+      // the pre-animation frames (zoom exactly 0), and showing the empty
+      // overlay box then read as the tapped cell "blacking out".
+      opacity: zoom.value === 0 ? 0 : 1,
       left: interpolate(zoom.value, [0, 1], [r.x, 0]),
       top: interpolate(zoom.value, [0, 1], [r.y, 0]),
       width: interpolate(zoom.value, [0, 1], [r.w, bodySize.w]),
