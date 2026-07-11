@@ -51,7 +51,7 @@ Gesture handlers read mutable state through a single `live` ref (`live.current.d
 ## Client data flow (apps/client)
 
 ### Hydration
-Filling the in-memory Zustand stores from the local SQLite cache on app start — the app renders instantly from the last known state, then a refresh reconciles with the server. Two moments: **settings hydrate first**, in `AppLoader` (`app/_layout.tsx`), *before* the first themed render (the reason the theme doesn't flash from system to your stored preference on cold start); events + calendars hydrate on tabs mount (`(tabs)/_layout.tsx`). The settings store is write-through: every change persists to the `syncMeta` blob immediately.
+Filling the in-memory Zustand stores from the local SQLite cache on app start — the app renders instantly from the last known state, then a refresh reconciles with the server. Two moments: **settings seed synchronously at store creation** (`cacheGetSettingsSync` via `sqlite.getFirstSync`), so the very first frame is already in the last-known theme — an async hydrate here flashes the system theme or a blank window; events + calendars hydrate asynchronously on tabs mount (`(tabs)/_layout.tsx`). The settings store is write-through: every change persists to the `syncMeta` blob immediately.
 
 ### Delta sync
 "Give me everything that changed since T": `GET /api/v1/events?since=` returns `{ events, deletedIds, serverTime }`; the client upserts, drops the tombstoned ids, and stores `serverTime` as its next cursor. Orchestrated by `hooks/useRefreshData.ts`. A missing/garbage cursor falls back to a full, authoritative re-pull.
