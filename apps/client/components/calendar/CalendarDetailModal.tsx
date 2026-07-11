@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Text, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
-  Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
+  Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming,
 } from "react-native-reanimated";
 import { expandRecurringEvents } from "@musubi/calendar";
 import dayjs from "dayjs";
@@ -18,6 +18,7 @@ import { MonthView } from "@/components/cal/MonthView";
 import { TimelineView } from "@/components/cal/TimelineView";
 import { Draft, DRILL_OPEN_MIN, minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS } from "@/components/cal/layout";
 import { ModeSwitch } from "@/components/cal/ModeSwitch";
+import { YearStamp } from "@/components/calendar/YearStamp";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import EventDetailModal from "./EventDetailModal";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -104,9 +105,10 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     // animate a frame later — keeps the heavy mount off the animation's frames.
     // The composer peeks up only once the zoom settles (dockPeekReady).
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setDockPeekReady)(true);
-      });
+      zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) });
+      // Timer, not the animation callback (interrupted animations drop it) —
+      // harmless if the drill closed meanwhile: dockPeeking requires `drill`.
+      setTimeout(() => setDockPeekReady(true), ZOOM_IN_MS);
     }));
   }, []);
 
@@ -304,6 +306,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                       <Text style={{ fontFamily: fonts.serif, fontSize: 26, color: colors.fg }}>
                         {anchorDate.toLocaleString("en-UK", { month: "long" })}
                       </Text>
+                      <YearStamp date={anchorDate} />
                       {showKanji &&
                         <Text style={{ fontFamily: fonts.kanji, fontSize: 14, color: colors.fg3 }}>
                           {MONTH_KANJI[anchorDate.getMonth()]}

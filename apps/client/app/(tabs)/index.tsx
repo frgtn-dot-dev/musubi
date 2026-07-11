@@ -10,7 +10,7 @@ import { useFocusEffect } from "expo-router";
 import { BackHandler, View } from "react-native";
 import { expandRecurringEvents, type Mode } from "@musubi/calendar";
 import Animated, {
-  Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
+  Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming,
 } from "react-native-reanimated";
 import dayjs from "dayjs";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
@@ -102,9 +102,10 @@ export default function MainTab() {
     // already-mounted, already-scrolled content and stays smooth. The composer
     // slides up only once the zoom finishes.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setDockPeekReady)(true);
-      });
+      zoom.value = withTiming(1, { duration: ZOOM_IN_MS, easing: Easing.out(Easing.cubic) });
+      // Timer, not the animation callback (interrupted animations drop it) —
+      // harmless if the drill closed meanwhile: dockPeeking requires `drill`.
+      setTimeout(() => setDockPeekReady(true), ZOOM_IN_MS);
     }));
   }, []);
 

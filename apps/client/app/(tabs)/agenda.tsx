@@ -13,6 +13,7 @@ import { View, Text, ScrollView } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Tap } from "@/components/ui/Tap";
 import { Empty } from "@/components/ui/Empty";
+import { YearStamp } from "@/components/calendar/YearStamp";
 import { RefreshControl } from "react-native";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { eventColor } from "@/lib/eventColor";
@@ -133,11 +134,18 @@ export default function AgendaTab() {
       >
         {groups.length === 0 && <Empty kanji="静" text="No events ahead" />}
         {
-          groups.slice(0, shown).map((g) => (
+          groups.slice(0, shown).map((g, i, sliced) => (
             <Animated.View
               key={g.date.toISOString()}
               entering={FadeIn.duration(250)}
             >
+              {/* Year divider — once per year in the list (first group + on change). */}
+              {(i === 0 || sliced[i - 1].date.getFullYear() !== g.date.getFullYear()) && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 2 }}>
+                  <YearStamp date={g.date} />
+                  <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+                </View>
+              )}
               <View style={styles.timelineRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.timelineDay}>
