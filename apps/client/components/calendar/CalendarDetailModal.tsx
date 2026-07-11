@@ -81,7 +81,9 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   const drillScrollPosRef = useRef(minutesToY(DRILL_OPEN_MIN));
 
   const insets = useSafeAreaInsets();
-  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
+  // keyboardAware off: the docked composer owns the keyboard lift; without this
+  // the detail sheet would ride the keyboard too and both would move.
+  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose, false);
 
   // month → day zoom, same feel as the main tab (see app/(tabs)/index.tsx)
   const [drill, setDrill] = useState<null | { date: Date; rect: Rect }>(null);
