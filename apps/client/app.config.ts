@@ -2,7 +2,7 @@ const expoConfig = {
   name: "Musubi",
   slug: "musubi",
   owner: "frgtn",
-  version: "0.0.12",
+  version: "0.0.13",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "musubi",
