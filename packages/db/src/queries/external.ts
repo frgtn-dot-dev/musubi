@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   caldavAccounts,
   calendarEvents,
@@ -144,6 +144,12 @@ export async function unlinkEventFromCalendars(eventID: string, calendarIDs: str
   await touchEvent(eventID);
 }
 
+/**
+ * Upsert a provider event. Returns TRUE when it actually wrote something —
+ * the scheduled sync uses this to decide whether to wake connected clients.
+ * With an etag (CalDAV) an unchanged, alive event is a verified no-op: no
+ * write, no updatedAt bump, so the delta stays quiet too.
+ */
 export async function upsertExternalEvent(
   provider: string,
   userID: string,
@@ -152,11 +158,12 @@ export async function upsertExternalEvent(
   externalEventID: string,
   values: EventValues,
   etag: string | null = null,
-) {
-  await db.transaction(async (tx) => {
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
     const [map] = await tx
-      .select({ eventID: externalEvents.eventID })
+      .select({ eventID: externalEvents.eventID, etag: externalEvents.etag, deletedAt: events.deletedAt })
       .from(externalEvents)
+      .innerJoin(events, eq(externalEvents.eventID, events.id))
       .where(and(
         eq(externalEvents.provider, provider),
         // scope to THIS mirror — global calendars (Google holidays) share
@@ -166,7 +173,10 @@ export async function upsertExternalEvent(
       ));
 
     if (map) {
-      // revive if it was tombstoned by a reset's clearCalendarEvents
+      // etag match on a live event = nothing changed (CalDAV full-fetches
+      // everything every sync; without this check every poll looks "changed")
+      if (etag !== null && map.etag === etag && map.deletedAt === null) return false;
+      // revive if it was tombstoned by a reset
       await tx.update(events).set({ ...values, deletedAt: null }).where(eq(events.id, map.eventID));
       await tx.update(externalEvents).set({ etag }).where(eq(externalEvents.eventID, map.eventID));
     } else {
@@ -179,17 +189,57 @@ export async function upsertExternalEvent(
       await tx.insert(calendarEvents).values({ eventID: ev.id, calendarID });
       await tx.insert(externalEvents).values({ provider, eventID: ev.id, calendarID, externalCalendarID, externalEventID, etag });
     }
+    return true;
   });
 }
 
-export async function deleteExternalEvent(provider: string, calendarID: string, externalEventID: string) {
-  await db.delete(events).where(inArray(events.id,
-    db.select({ id: externalEvents.eventID }).from(externalEvents).where(and(
+/**
+ * Provider says an event is gone. TOMBSTONE it (deletedAt) rather than hard
+ * delete — the delta sync's `deletedIds` needs the tombstone to tell offline
+ * clients to drop it (a hard delete just vanished and stale caches kept it).
+ * Returns TRUE when a live event was actually tombstoned.
+ */
+export async function deleteExternalEvent(provider: string, calendarID: string, externalEventID: string): Promise<boolean> {
+  const rows = await db.update(events).set({ deletedAt: new Date() }).where(and(
+    isNull(events.deletedAt),
+    inArray(events.id,
+      db.select({ id: externalEvents.eventID }).from(externalEvents).where(and(
+        eq(externalEvents.provider, provider),
+        // scoped to the caller's mirror — never reach into another user's mirror
+        eq(externalEvents.calendarID, calendarID),
+        eq(externalEvents.externalEventID, externalEventID),
+      ))))).returning({ id: events.id });
+  return rows.length > 0;
+}
+
+/**
+ * Full-fetch reconciliation (CalDAV every sync, Google after a 410 reset):
+ * tombstone the mirror's events whose external id was NOT in the fetched set —
+ * they were deleted on the provider. Replaces the old tombstone-everything-
+ * then-revive approach, which churned every event on every sync and made
+ * "did anything change" undetectable. Returns the number tombstoned.
+ */
+export async function sweepExternalEvents(provider: string, calendarID: string, seenExternalEventIDs: string[]): Promise<number> {
+  const mappings = await db
+    .select({ eventID: externalEvents.eventID, externalEventID: externalEvents.externalEventID })
+    .from(externalEvents)
+    .innerJoin(events, eq(externalEvents.eventID, events.id))
+    .where(and(
       eq(externalEvents.provider, provider),
-      // scoped to the caller's mirror — never reach into another user's mirror
       eq(externalEvents.calendarID, calendarID),
-      eq(externalEvents.externalEventID, externalEventID),
-    ))));
+      isNull(events.deletedAt),
+    ));
+  const seen = new Set(seenExternalEventIDs);
+  const gone = mappings.filter(m => !seen.has(m.externalEventID)).map(m => m.eventID);
+  if (gone.length === 0) return 0;
+  await db.update(events).set({ deletedAt: new Date() }).where(inArray(events.id, gone));
+  return gone.length;
+}
+
+/** Users with at least one provider mirror — the scheduled sync's work list. */
+export async function getExternalSyncUserIDs(): Promise<string[]> {
+  const rows = await db.selectDistinct({ userID: externalCalendars.userID }).from(externalCalendars);
+  return rows.map(r => r.userID);
 }
 
 // For push update/delete: find the external id of an already-synced Musubi event.

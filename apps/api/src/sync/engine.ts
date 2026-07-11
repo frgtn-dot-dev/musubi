@@ -1,7 +1,7 @@
 import { Event } from "@musubi/types";
 import {
-  clearCalendarEvents,
   deleteExternalEvent,
+  getCalendarMembers,
   getExternalEventID,
   getExternalLinkForCalendar,
   getUserExternalCalendars,
@@ -11,8 +11,10 @@ import {
   setAccountLabel,
   setCursor,
   setMemberRole,
+  sweepExternalEvents,
   upsertExternalEvent,
 } from "@musubi/db";
+import { notifyCalendarMembers } from "../handlers/stream";
 import { CalendarAdapter, NormalizedEvent } from "./adapter";
 import { googleAdapter } from "./adapters/google";
 import { caldavAdapter } from "./adapters/caldav";
@@ -81,7 +83,10 @@ export async function syncProvider(
     }
   }
 
-  // 2. pull events per (now reconciled) calendar
+  // 2. pull events per (now reconciled) calendar. Track which calendars really
+  // changed so the scheduled sync can wake connected clients — the etag-aware
+  // upsert makes a CalDAV full-fetch a quiet no-op when nothing moved.
+  const changedCalendarIDs: string[] = [];
   for (const link of await getUserExternalCalendars(provider, userID, accountId)) {
     const { changes, nextCursor, reset } = await adapter.fetchChanges(
       userID,
@@ -90,13 +95,14 @@ export async function syncProvider(
       link.cursor,
     );
 
-    if (reset) await clearCalendarEvents(link.calendarID);
-
+    let changed = 0;
+    const seen: string[] = [];
     for (const ev of changes) {
       if (ev.status === "cancelled") {
-        await deleteExternalEvent(provider, link.calendarID, ev.externalId);
+        if (await deleteExternalEvent(provider, link.calendarID, ev.externalId)) changed++;
       } else {
-        await upsertExternalEvent(
+        seen.push(ev.externalId);
+        if (await upsertExternalEvent(
           provider,
           userID,
           link.calendarID,
@@ -104,26 +110,45 @@ export async function syncProvider(
           ev.externalId,
           toEventValues(ev, link.calColor),
           ev.etag ?? null,
-        );
+        )) changed++;
       }
     }
 
+    // reset = the fetch was the FULL set (CalDAV always, Google after 410):
+    // events missing from it were deleted on the provider — tombstone them.
+    if (reset) changed += await sweepExternalEvents(provider, link.calendarID, seen);
+
+    if (changed > 0) changedCalendarIDs.push(link.calendarID);
     await setCursor(link.calendarID, nextCursor);
   }
+  return changedCalendarIDs;
 }
 
 // Sync every connected account of every registered provider. listAccounts returns
 // [] when the provider isn't connected, so unconnected providers are a clean no-op.
+// When anything actually changed, the affected calendars' members get an SSE
+// "external_sync" nudge — connected clients run a silent delta refresh, which is
+// what makes provider changes land in the app without a manual pull-to-refresh.
 export async function syncUser(userID: string) {
+  const changedCalendarIDs: string[] = [];
   for (const adapter of Object.values(adapters)) {
     try {
       for (const account of await adapter.listAccounts(userID)) {
-        await syncProvider(adapter, userID, account);
+        changedCalendarIDs.push(...await syncProvider(adapter, userID, account));
       }
     } catch (e) {
       console.error(`Sync ${adapter.provider} failed:`, e);
     }
   }
+
+  if (changedCalendarIDs.length > 0) {
+    const memberIDs = new Set<string>();
+    for (const cal of changedCalendarIDs) {
+      for (const m of await getCalendarMembers(cal)) memberIDs.add(m.userID);
+    }
+    notifyCalendarMembers([...memberIDs], "external_sync", { calendars: changedCalendarIDs });
+  }
+  return changedCalendarIDs;
 }
 
 // Push a Musubi event out to every provider-linked calendar it belongs to.

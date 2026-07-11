@@ -18,6 +18,8 @@ import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogl
 import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav } from "./handlers/caldav";
 import { handlerDisconnectAccount } from "./handlers/connections";
 import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerGetMusubiAccounts, handlerInvitePage, handlerSaveMusubiAccount } from "./handlers/federation";
+import { syncUser } from "./sync/engine";
+import { getExternalSyncUserIDs } from "@musubi/db";
 
 const app = express()
 const port = config.api.port;
@@ -133,3 +135,21 @@ async function cleanupExpired() {
 }
 cleanupExpired();                          // run once at boot (setInterval's first tick is delayed)
 setInterval(cleanupExpired, 60 * 60 * 1000); // then hourly
+
+// Near-realtime external sync: poll every connected Google/CalDAV account on a
+// schedule; syncUser broadcasts an SSE "external_sync" to affected members when
+// something actually changed, and their clients run a silent delta refresh.
+// Polling is the uniform answer here — true Google push (watch webhooks) needs a
+// public HTTPS endpoint + channel renewal (self-host-unfriendly), and CalDAV has
+// no push protocol at all. EXTERNAL_SYNC_INTERVAL_MIN=0 disables.
+if (config.api.externalSyncIntervalMin > 0) {
+  setInterval(async () => {
+    try {
+      for (const userID of await getExternalSyncUserIDs()) {
+        await syncUser(userID); // per-provider errors are caught inside
+      }
+    } catch (e) {
+      console.error("Scheduled external sync failed:", e);
+    }
+  }, config.api.externalSyncIntervalMin * 60 * 1000);
+}

@@ -1,8 +1,9 @@
 import { useEventsStore } from "@/store/useEventsStore";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import EventSource from "react-native-sse";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useServer } from "@/contexts/ServerContext";
+import { useRefreshData } from "@/hooks/useRefreshData";
 
 export function useConnectToEventStream() {
   // apiUrl comes from ServerContext (SecureStore-backed, self-host aware) — the
@@ -11,6 +12,20 @@ export function useConnectToEventStream() {
   const { authClient, apiUrl } = useServer();
   const { localAddEvent, localUpdateEvent, localRemoveEvent, localRemoveCalendarEvents } = useEventsStore();
   const { localUpdateCalendar, localRemoveCalendar } = useCalendarsStore();
+  // "external_sync" = the server's scheduled provider sync found changes → run a
+  // silent delta refresh (WITHOUT re-triggering the provider sync — that'd loop).
+  // Ref so the SSE effect doesn't resubscribe every render; guarded against overlap.
+  const refresh = useRefreshData();
+  const refreshRef = useRef(refresh);
+  useEffect(() => { refreshRef.current = refresh; });
+  const refreshing = useRef(false);
+  const silentRefresh = async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try { await refreshRef.current({ providerSync: false }); }
+    catch (e) { console.warn("SSE-triggered refresh failed:", e); }
+    finally { refreshing.current = false; }
+  };
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -45,6 +60,9 @@ export function useConnectToEventStream() {
             case "calendar_removed":
               localRemoveCalendar(data.payload);
               localRemoveCalendarEvents(data.payload.id);
+              break;
+            case "external_sync":
+              silentRefresh();
               break;
             default:
               console.warn(`Uknown event type: ${data.type}`);

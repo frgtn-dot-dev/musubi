@@ -20,6 +20,9 @@ type APIConfig = {
   port: number,
   environment: string,
   url: string,
+  // Minutes between scheduled external-provider syncs (Google/CalDAV polling
+  // → SSE broadcast). 0 disables the scheduler.
+  externalSyncIntervalMin: number,
 }
 
 type DBConfig = {
@@ -60,6 +63,9 @@ const apiConfig: APIConfig = {
   port: Number(process.env.API_SERVER_PORT) || 7531,
   environment: envOrThrow("ENVIRONMENT"),
   url: envOrThrow("BETTER_AUTH_URL"),
+  externalSyncIntervalMin: process.env.EXTERNAL_SYNC_INTERVAL_MIN === undefined
+    ? 5
+    : Number(process.env.EXTERNAL_SYNC_INTERVAL_MIN) || 0, // unparsable/0 → disabled
 }
 
 console.log(`USING PORT: ${apiConfig.port}`)

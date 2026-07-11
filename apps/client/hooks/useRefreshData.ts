@@ -12,10 +12,15 @@ export function useRefreshData() {
   const { loadEvents } = useEventsStore();
   const { loadSettings } = useSettingsStore();
 
-  return async () => {
-    // trigger server-side provider sync first, so its imported/changed events
-    // show up in the delta below (best-effort, no-op for unconnected providers)
-    try { await api.getGoogleCalendars(); } catch (e) { console.error("Sync failed:", e); }
+  // providerSync=false: skip triggering the server-side provider sync — used by
+  // the SSE "external_sync" handler, where the server JUST synced (re-triggering
+  // would loop) and the delta below picks up exactly what changed.
+  return async (opts?: { providerSync?: boolean }) => {
+    if (opts?.providerSync !== false) {
+      // trigger server-side provider sync first, so its imported/changed events
+      // show up in the delta below (best-effort, no-op for unconnected providers)
+      try { await api.getGoogleCalendars(); } catch (e) { console.error("Sync failed:", e); }
+    }
 
     // delta: only events changed since our last sync (+ tombstones to drop).
     // Tolerate a garbage stored value → fall back to a full sync (self-heals).
