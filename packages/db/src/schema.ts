@@ -15,6 +15,12 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  // Federation: a "shadow account" for a member whose real account lives on
+  // another Musubi server. isExternal users have no password/session — they
+  // authenticate with a member token (member_tokens) issued on invite accept.
+  // homeServer is their origin server's URL (null for local users).
+  isExternal: boolean("is_external").default(false).notNull(),
+  homeServer: text("home_server"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -440,3 +446,22 @@ export const caldavAccounts = pgTable("caldav_accounts", {
 }, (t) => [unique().on(t.userID, t.serverUrl, t.username)]);
 
 export type NewCaldavAccount = typeof caldavAccounts.$inferInsert;
+
+
+// FEDERATION (Musubi ↔ Musubi)
+
+// Bearer tokens for external (shadow) members. Issued once on invite accept,
+// stored as a SHA-256 hash — the raw token is returned to the remote client
+// exactly once and never persisted. Authentication only: authorization still
+// runs through calendar_members/assertCan, so kicking a member cuts access
+// even while their token row exists.
+export const memberTokens = pgTable("member_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+}, (t) => [index("member_tokens_user_idx").on(t.userID)]);
+
+export type NewMemberToken = typeof memberTokens.$inferInsert;

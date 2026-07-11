@@ -17,6 +17,7 @@ import { handlerServer, handlerServerStatus } from "./handlers/server";
 import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogle } from "./handlers/google";
 import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav } from "./handlers/caldav";
 import { handlerDisconnectAccount } from "./handlers/connections";
+import { handlerFederationAccept, handlerInvitePage } from "./handlers/federation";
 
 const app = express()
 const port = config.api.port;
@@ -61,6 +62,12 @@ app.get("/api/v1/server/ok", handlerServerStatus);
 // registers it for notifyCalendarMembers() broadcasts.
 app.get("/api/stream", requireAuth, wrap(handlerStream));
 
+// Federation (Musubi ↔ Musubi) — cross-server invite accept (public: the invite
+// token is the credential) and the HTML hand-off page for invite links, so every
+// server serves its own deep links (no dependency on the hosted domain).
+app.post("/api/v1/federation/accept", wrap(handlerFederationAccept));
+app.get("/invite/:token", handlerInvitePage(config.api.url));
+
 // Events
 app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
 app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
@@ -72,7 +79,9 @@ app.post("/api/v1/events/:eventId/fork", requireAuth, wrap(handlerForkEvent));
 // Calendars — /google must stay before /:id (both one-segment GETs)
 app.get("/api/v1/calendars", requireAuth, wrap(handlerGetCalendars));
 app.get("/api/v1/calendars/google", requireAuth, wrap(handlerGetGoogleCalendars));
-app.get("/api/v1/calendars/tokens/:token", requireAuth, wrap(handlerGetCalendarFromToken));
+// Public: possession of the (unguessable, expiring) invite token IS the
+// credential — cross-server invitees have no session here yet.
+app.get("/api/v1/calendars/tokens/:token", wrap(handlerGetCalendarFromToken));
 app.get("/api/v1/calendars/:id", requireAuth, wrap(handlerGetCalendar));
 app.post("/api/v1/calendars", requireAuth, wrap(handlerCreateCalendar));
 app.put("/api/v1/calendars", requireAuth, wrap(handlerUpdateCalendar));
