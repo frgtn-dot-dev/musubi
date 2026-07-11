@@ -89,6 +89,7 @@ export default function MainTab() {
   }, []);
 
   const openDrill = useCallback((date: Date, rect: Rect) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current); // don't let a pending close wipe this drill
     setDraft(null);
     setDockHidden(false); // a fresh drill always re-shows the composer, even if X hid it last time
     drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
@@ -112,11 +113,16 @@ export default function MainTab() {
     setDraft(null);
   }, []);
 
+  // Clear on a plain timer, NOT the animation callback — an interrupted
+  // animation drops its callback (same pitfall as useModalAnimation), which
+  // stranded the drill "open" and made the first back gesture appear to do
+  // nothing (the second one then worked).
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeDrill = useCallback(() => {
     setDockPeekReady(false); // sheet ducks out while the day zooms back
-    zoom.value = withTiming(0, { duration: ZOOM_OUT_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
-      if (finished) runOnJS(clearDrill)();
-    });
+    zoom.value = withTiming(0, { duration: ZOOM_OUT_MS, easing: Easing.in(Easing.cubic) });
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(clearDrill, ZOOM_OUT_MS + 20);
   }, [clearDrill]);
 
   // Android back while drilled into a day → zoom back out to the month.
