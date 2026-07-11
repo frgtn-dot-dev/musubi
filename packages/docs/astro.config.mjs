@@ -54,6 +54,7 @@ export default defineConfig({
         {
           label: 'Contributing',
           items: [
+            { label: 'Codebase Onboarding', slug: 'guides/onboarding' },
             { label: 'Contributing Guide', slug: 'guides/contributing' },
           ],
         },
