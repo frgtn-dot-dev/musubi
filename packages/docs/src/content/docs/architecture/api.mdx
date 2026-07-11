@@ -131,6 +131,9 @@ Broadcasts are **best-effort and fire-and-forget** — a member with no open con
 | Members | `GET /calendars/:id/members`, `POST/DELETE /calendars/members/:id` (join/leave), `PUT/DELETE /calendars/:id/members/:userId` (role/kick) |
 | Users | `GET/PUT /users/settings`, `DELETE /users`, `POST /users/avatar`, `GET /users/:id/avatar` *(public)* |
 | Connections | google check/revoke, caldav check/connect/disconnect, `POST /users/connections/disconnect` |
+| Federation | `POST /api/v1/federation/accept` *(public — the invite token is the credential)*, `GET /invite/:token` *(public HTML hand-off page, outside `/api`)* — see [Federation](/docs/architecture/federation/) |
+
+Two auth notes: `GET /calendars/tokens/:token` is **public** (possession of the unguessable, expiring invite token is the credential — cross-server invitees have no session here), and `requireAuth` has a second path: when no Better Auth session matches, it hashes the presented `Bearer` and looks it up in `member_tokens` — authenticating a federated **shadow member**. Authorization still runs through `calendar_members` on every route, so this fallback grants nothing by itself.
 
 <Aside type="note">
 `POST /api/v1/users/reset` is public and its inline comment says "password reset entry" — but it maps to `handlerResetUsers`, the **dev-only** full user wipe (guarded by `ENVIRONMENT === "dev"`, throws `Forbidden` otherwise). The comment is misleading; real password reset is a Better Auth route under `/api/auth`. Worth a cleanup.

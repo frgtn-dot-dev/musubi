@@ -13,13 +13,13 @@ The backend **never** touches tables directly. All database access goes through 
 
 ## The domains
 
-The schema is grouped into five domains by comment banners. Read them in this order.
+The schema is grouped into six domains by comment banners. Read them in this order.
 
 ### 1. Auth (managed by Better Auth)
 
 | Table | Purpose | Notes |
 |---|---|---|
-| `user` | Core identity | `email` unique; cascades to everything the user owns |
+| `user` | Core identity | `email` unique; cascades to everything the user owns. `isExternal` + `homeServer` mark a federated **shadow account** — a member whose real account lives on another Musubi server ([Federation](/docs/architecture/federation/)) |
 | `session` | Bearer/session tokens | `token` unique, indexed on `userId` |
 | `account` | OAuth + email/password credentials | `providerId` e.g. `"google"`; holds `accessToken`/`refreshToken` |
 | `verification` | Email verify + password-reset tokens | indexed on `identifier` |
@@ -90,6 +90,12 @@ erDiagram
 | `caldavAccounts` | CalDAV credentials | `(userID, serverUrl, username)` — multiple accounts per user |
 
 The `(calendarID)` scoping on `externalEvents` is deliberate: two users can mirror the *same* Google calendar (e.g. a shared team calendar) and each keeps an independent mapping. CalDAV passwords in `caldavAccounts.encryptedPassword` are **AES-GCM encrypted at the app layer** — the DB never sees plaintext. Full detail in the [Sync guide](/docs/architecture/sync/).
+
+### 6. Federation
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `memberTokens` | Bearer tokens for federated shadow members | `tokenHash` unique (SHA-256 — the raw token is never stored); cascades from `user`. Authentication only — authorization stays with `calendar_members`, so a kick cuts access. See [Federation](/docs/architecture/federation/). |
 
 ## The custom `bytea` type
 
