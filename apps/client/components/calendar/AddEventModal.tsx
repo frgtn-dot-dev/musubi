@@ -21,6 +21,7 @@ import { uuidv7 } from 'uuidv7';
 import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
 import { AdvancedEndType, AdvancedFreq, AdvancedRRuleConfig, buildRRule, describeAdvanced, parseAdvanced, parseRRule, RecurrenceOption } from "@/lib/rrule";
 import { validateEventForm } from "@/lib/eventForm";
+import { remoteForCalendar } from "@/services/federation";
 import { Tap } from "@/components/ui/Tap";
 import { Btn } from "@/components/ui/Btn";
 import * as haptics from "@/lib/haptics";
@@ -414,6 +415,14 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setStartError(errors.start);
     setEndError(errors.end);
     setUrlError(errors.url); // clears on a now-valid URL, consistent with the other fields
+
+    // Federation: an event lives on ONE server — its calendars must share an
+    // origin (cross-server linking is a future, mirror-based feature).
+    const origins = new Set([...selectedCals].map(id => remoteForCalendar(id)?.server ?? "home"));
+    if (origins.size > 1) {
+      setCalendarsError("These calendars live on different servers — pick calendars from one server.");
+      return;
+    }
 
     if (!ok) {
       return;

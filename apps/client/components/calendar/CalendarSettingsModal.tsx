@@ -26,7 +26,7 @@ type Props = {
 
 export default function CalendarSettingsModal({ calendar, visible, onClose, onDelete, onEdit, onLeave }: Props) {
   const api = useApi();
-  const { authClient } = useServer();
+  const { authClient, apiUrl } = useServer();
   const [waitingForInvite, setWaitingForInvite] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [rolesVisible, setRolesVisible] = useState(false);
@@ -79,8 +79,12 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                         maxUses: 1,
                       }
                       const invite = await api.createInvite(inviteTemplate);
+                      // The calendar's own server serves the invite page — so
+                      // self-hosted (and federated) invites don't depend on the
+                      // hosted domain.
+                      const origin = calendar?.provider === "musubi" && calendar.serverUrl ? calendar.serverUrl : apiUrl;
                       await Share.share({
-                        message: `https://musubi.frgtn.dev/invite/${invite.id}`,
+                        message: `${origin}/invite/${invite.id}`,
                       });
                       setWaitingForInvite(false);
                     }}

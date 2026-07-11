@@ -9,13 +9,21 @@ import { ScrollView, View, Text, StyleSheet } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { Btn } from "@/components/ui/Btn";
 import { success } from "@/lib/haptics";
+import { acceptRemoteInvite, fetchRemoteCalendarPreview } from "@/services/federation";
+import { useRefreshData } from "@/hooks/useRefreshData";
 
 export default function Invite() {
   const api = useApi();
-  const { authClient } = useServer();
+  const { authClient, apiUrl } = useServer();
   const { loadCalendars } = useCalendarsStore();
-  const { token } = useLocalSearchParams();
+  const { token, server } = useLocalSearchParams();
   const router = useRouter();
+  const refresh = useRefreshData();
+
+  // Cross-server invite: the link carries the calendar's origin server (the
+  // invite page appends ?server=). Accepting runs the federation handshake
+  // there instead of the native join here.
+  const remoteServer = typeof server === "string" && server && server !== apiUrl ? server : null;
 
   const { data: session } = authClient.useSession();
   const [calendarData, setCalendarData] = useState<CalendarWithEvents | null>(null);
@@ -23,16 +31,19 @@ export default function Invite() {
 
   useEffect(() => {
     const fetchCalendar = async () => {
-      const data = await api.getCalendarFromToken(token as string);
+      const data = remoteServer
+        ? await fetchRemoteCalendarPreview(remoteServer, token as string)
+        : await api.getCalendarFromToken(token as string);
       setCalendarData(data);
     };
     fetchCalendar();
   }, []);
 
   // If the current user is already a member of this calendar, skip the invite
-  // screen entirely and drop them into the app.
+  // screen entirely and drop them into the app. (Cross-server: members there
+  // are shadow ids, so this never matches — re-accepting is conflict-safe.)
   useEffect(() => {
-    if (!calendarData || !session?.user.id) return;
+    if (!calendarData || !session?.user.id || remoteServer) return;
     const alreadyMember = calendarData.members.some(m => m.id === session.user.id);
     if (alreadyMember) {
       router.replace("/(tabs)");
@@ -122,8 +133,20 @@ export default function Invite() {
           loading={isAccepting}
           onPress={async () => {
             setIsAccepting(true);
-            await api.acceptInvite(calendarData?.id!, token as string);
-            loadCalendars(await api.getCalendars());
+            if (remoteServer) {
+              // Federation handshake on the origin server: shadow account +
+              // member token; the full refresh then pulls the shared calendar.
+              await acceptRemoteInvite(remoteServer, token as string, {
+                name: session?.user.name ?? "Musubi user",
+                email: session?.user.email ?? "",
+                image: session?.user.image ?? null,
+                homeServer: apiUrl!,
+              });
+              await refresh();
+            } else {
+              await api.acceptInvite(calendarData?.id!, token as string);
+              loadCalendars(await api.getCalendars());
+            }
             success();
             router.canGoBack() ? router.back() : router.replace("/(tabs)");
           }}

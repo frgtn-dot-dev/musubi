@@ -1,6 +1,13 @@
 import { Calendar, CalendarWithEvents, Event, Invite, Settings, GoogleCheck } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
+import { fedFetch, remoteForCalendar } from "@/services/federation";
+
+// Federation: calendars shared from another Musubi server live at that server.
+// Calendar-scoped calls check the registry and, when the calendar is remote,
+// run against its origin with our member token — same endpoints, same shapes.
+const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
+const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
 
 // Every endpoint below did the same check inline; keep it in one place.
 // `asserts error is null` preserves the narrowing the inline `if (error) throw`
@@ -60,6 +67,13 @@ export function useApi() {
     },
 
     async createEvent(event: Event) {
+      const remote = remoteOf(eventHome(event));
+      if (remote) {
+        const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
+          method: "POST", body: JSON.stringify(event),
+        });
+        return { ...data, start: new Date(data.start), end: new Date(data.end) };
+      }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
         method: 'POST',
         headers: {
@@ -81,6 +95,13 @@ export function useApi() {
     },
 
     async linkEvent(eventID: string, calendarID: string) {
+      const remote = remoteOf(calendarID);
+      if (remote) {
+        const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events/${eventID}/link`, {
+          method: "POST", body: JSON.stringify({ calendarID }),
+        });
+        return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+      }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/link`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -93,6 +114,13 @@ export function useApi() {
     },
 
     async forkEvent(eventID: string, calendarID: string) {
+      const remote = remoteOf(calendarID);
+      if (remote) {
+        const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events/${eventID}/fork`, {
+          method: "POST", body: JSON.stringify({ calendarID }),
+        });
+        return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+      }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/fork`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -105,6 +133,12 @@ export function useApi() {
     },
 
     async updateCalendar(calendar: Calendar) {
+      const remote = remoteOf(calendar.id);
+      if (remote) {
+        return fedFetch<Calendar>(remote, `/api/${apiVersion}/calendars`, {
+          method: "PUT", body: JSON.stringify(calendar),
+        });
+      }
       const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "PUT",
         headers: {
@@ -118,6 +152,13 @@ export function useApi() {
     },
 
     async removeCalendar(calendar: Calendar) {
+      const remote = remoteOf(calendar.id);
+      if (remote) {
+        const data = await fedFetch<{ id: string }>(remote, `/api/${apiVersion}/calendars`, {
+          method: "DELETE", body: JSON.stringify(calendar),
+        });
+        return data.id;
+      }
       const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "DELETE",
         headers: {
@@ -132,6 +173,12 @@ export function useApi() {
     },
 
     async updateEvent(event: Event) {
+      const remote = remoteOf(eventHome(event));
+      if (remote) {
+        return fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
+          method: "PUT", body: JSON.stringify(event),
+        });
+      }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "PUT",
         headers: {
@@ -145,6 +192,12 @@ export function useApi() {
     },
 
     async removeEvent(event: Event, unlinkCalendarID?: string) {
+      const remote = remoteOf(eventHome(event));
+      if (remote) {
+        return fedFetch<{ id: string; calendars: string[]; removed: boolean }>(remote, `/api/${apiVersion}/events`, {
+          method: "DELETE", body: JSON.stringify({ ...event, unlinkCalendarID }),
+        });
+      }
       const { error, data } = await authClient.$fetch<{ id: string; calendars: string[]; removed: boolean }>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "DELETE",
         headers: {
@@ -174,6 +227,12 @@ export function useApi() {
     },
 
     async createInvite(invite: Invite) {
+      const remote = remoteOf(invite.calendarID);
+      if (remote) {
+        return fedFetch<Invite>(remote, `/api/${apiVersion}/calendars/invites`, {
+          method: "POST", body: JSON.stringify(invite),
+        });
+      }
       const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/${apiVersion}/calendars/invites`, {
         method: "POST",
         headers: {
@@ -211,6 +270,11 @@ export function useApi() {
     },
 
     async leaveCalendar(calendarID: string) {
+      const remote = remoteOf(calendarID);
+      if (remote) {
+        await fedFetch(remote, `/api/${apiVersion}/calendars/members/${calendarID}`, { method: "DELETE" });
+        return true;
+      }
       const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`, {
         method: "DELETE",
       });
@@ -221,6 +285,11 @@ export function useApi() {
     },
 
     async getCalendarMembers(calendarID: string) {
+      const remote = remoteOf(calendarID);
+      if (remote) {
+        return (await fedFetch<{ id: string; name: string; email: string; image?: string | null; role: string }[]>(
+          remote, `/api/${apiVersion}/calendars/${calendarID}/members`, { method: "GET" })) ?? [];
+      }
       const { data, error } = await authClient.$fetch<{ id: string; name: string; email: string; image?: string | null; role: string }[]>(
         `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members`,
         { method: "GET" },
@@ -232,6 +301,13 @@ export function useApi() {
     },
 
     async setMemberRole(calendarID: string, userID: string, role: "viewer" | "editor" | "owner") {
+      const remote = remoteOf(calendarID);
+      if (remote) {
+        await fedFetch(remote, `/api/${apiVersion}/calendars/${calendarID}/members/${userID}`, {
+          method: "PUT", body: JSON.stringify({ role }),
+        });
+        return true;
+      }
       const { error } = await authClient.$fetch(
         `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members/${userID}`,
         { method: "PUT", body: { role } },
@@ -243,6 +319,11 @@ export function useApi() {
     },
 
     async removeMember(calendarID: string, userID: string) {
+      const remote = remoteOf(calendarID);
+      if (remote) {
+        await fedFetch(remote, `/api/${apiVersion}/calendars/${calendarID}/members/${userID}`, { method: "DELETE" });
+        return true;
+      }
       const { error } = await authClient.$fetch(
         `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members/${userID}`,
         { method: "DELETE" },

@@ -3,7 +3,8 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { reconcileEventNotifications } from "@/services/notifications";
-import { cacheDeleteEvents, cacheGetAllEvents, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
+import { syncFederatedAccounts } from "@/services/federation";
+import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
 
 export function useRefreshData() {
   const api = useApi();
@@ -30,13 +31,35 @@ export function useRefreshData() {
     }
     await setLastSync(serverTime);
 
-    const [settings, calendars, all] = await Promise.all([
+    const [settings, homeCalendars] = await Promise.all([
       api.getSettings(),
       api.getCalendars(),
-      cacheGetAllEvents(),
     ]);
     loadSettings(settings);
+
+    // Federated servers: pull shared calendars + events from each connected
+    // Musubi server (v1: full fetch — no delta). A server that's down keeps its
+    // last-cached calendars so the reconcile below doesn't wipe local copies.
+    const fed = await syncFederatedAccounts(await cacheGetCalendars());
+    if (fed.syncedServers.size) {
+      // full-set semantics per synced server: cached events living only in that
+      // server's calendars and absent from the fresh pull were deleted remotely
+      const syncedCalIds = new Set(
+        fed.calendars.filter(c => c.serverUrl && fed.syncedServers.has(c.serverUrl)).map(c => c.id));
+      const fetchedIds = new Set(fed.events.map(e => e.id));
+      const cachedNow = await cacheGetAllEvents();
+      const staleRemote = cachedNow
+        .filter(e => (e.calendars?.length ?? 0) > 0
+          && e.calendars.every(id => syncedCalIds.has(id))
+          && !fetchedIds.has(e.id))
+        .map(e => e.id);
+      if (staleRemote.length) await cacheDeleteEvents(staleRemote);
+    }
+    if (fed.events.length) await cacheUpsertEvents(fed.events);
+
+    const calendars = [...homeCalendars, ...fed.calendars];
     loadCalendars(calendars);
+    const all = await cacheGetAllEvents();
 
     // Reconcile against membership: an offline kick sends no SSE and the delta
     // can't tombstone events we merely lost access to — drop links to calendars
