@@ -79,6 +79,14 @@ if (start > end) throw new BadRequestError("Start must precede end.");
 
 Query modules return `undefined`/`[]` for "not found" — the handler decides whether that's a 404.
 
+### The server trusts nothing from the client
+
+Client-side checks (the composer's validation, the same-server guard, federation routing) are **UX only** — every guarantee is re-established here:
+
+- **`assertCan`/`canDo` double as existence checks.** A calendar id with no membership row yields a null role → `ForbiddenError`. Since every calendar id a mutation touches passes through one of these gates *before* any insert, an unknown or foreign id gets a clean 403 — never an FK violation.
+- **`handlerCreateEvent` validates the event's shape**: at least one calendar, and `originCalendarID` must be **one of the linked calendars** (defaulting to the first). The home calendar governs edit rights, so a client must not be able to smuggle in a foreign calendar as origin — and since the linked calendars are membership-verified, this also proves the origin exists (clean 400 instead of an FK 500).
+- **Identity fields are overwritten server-side** (`creatorID` on create, `creatorID`/`originCalendarID` stripped on update), as described above.
+
 ## Permissions
 
 Two files, two responsibilities:
