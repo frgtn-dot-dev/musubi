@@ -45,7 +45,7 @@ type Props = {
 
 export default function CalendarDetail({ calendar, visible, onClose, onDelete, onEdit }: Props) {
   const { height } = useWindowDimensions();
-  const calendarSpace = height * 0.7;
+  const calendarSpace = height * 0.8;
   const api = useApi();
   const { events, addEvent, updateEvent, localUpdateEvent } = useEventsStore();
   const { calendars, updateCalendar } = useCalendarsStore();
@@ -65,7 +65,8 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     defaultCalendarView === "week" || defaultCalendarView === "day" ? defaultCalendarView : "month");
   const [base, setBase] = useState(new Date());
   const [anchorDate, setAnchorDate] = useState(new Date());
-  const [newEventVisible, setNewEventVisible] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);          // docked composer (FAB + drag-to-create)
+  const [newEventVisible, setNewEventVisible] = useState(false); // classic modal (edit from detail)
   const [newCalendarVisible, setNewCalendarVisible] = useState(false);
   const [eventDetailVisible, setEventDetailVisible] = useState(false);
   const [calendarSettingsVisible, setCalendarSettingsVisible] = useState(false);
@@ -188,7 +189,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     setPrefilledEvent(undefined);
     setStartingDate(d.start);
     setEndingDate(d.end);
-    setNewEventVisible(true);
+    setCreateOpen(true);
   }, [canEditEvents]);
 
   const canMoveEvent = useCallback(
@@ -248,7 +249,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
           <Pressable style={{ flex: 1 }} onPress={handleClose} />
         </Animated.View>
         <GestureDetector gesture={gesture}>
-          <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+          <Animated.View style={[styles.modalSheet, { maxHeight: "95%" }, fadeStyle, slideStyle]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <View style={styles.calendarCircle}>
@@ -362,20 +363,37 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                 )}
               </View>
             </View>
-            {canEditEvents && (
+            {/* FAB matches the agenda tab; hides while the composer is open. */}
+            {canEditEvents && !createOpen && (
               <Tap style={[styles.fab, { bottom: 16 + insets.bottom }]}
                 onPress={() => {
                   setPrefilledEvent(undefined);
                   setStartingDate(undefined);
                   setEndingDate(undefined);
-                  setNewEventVisible(true);
+                  setCreateOpen(true);
                 }}
               >
-                <Feather name="plus" color={colors.bg} size={16} />
+                <Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text>
               </Tap>
             )}
           </Animated.View>
         </GestureDetector>
+        {/* Create — docked composer at the detail sheet's bottom. No tab bar in
+            this modal, so the keyboard inset is the safe area. Lives inside this
+            GestureHandlerRootView (the app-root one is occluded by the Modal). */}
+        <AddEventModal
+          docked
+          visible
+          peekVisible={createOpen}
+          dockBottomInset={insets.bottom}
+          anchor={anchorDate}
+          startingDate={startingDate}
+          endingDate={endingDate}
+          onClose={() => { setCreateOpen(false); setStartingDate(undefined); setEndingDate(undefined); }}
+          onSave={(e) => addEvent(e, api)}
+          onEdit={(e) => updateEvent(e, api)}
+          calendars={calendars}
+        />
       </GestureHandlerRootView>
       <AddEventModal
         visible={newEventVisible}
