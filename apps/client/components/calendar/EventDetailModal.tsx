@@ -9,7 +9,7 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useApi } from "@/services/api";
+import { Attendee, useApi } from "@/services/api";
 import { useEffect, useState } from "react";
 import CalendarPickerModal from "./CalendarPickerModal";
 import { Tap } from "@/components/ui/Tap";
@@ -58,6 +58,17 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
     if (visible && event) api.getEventAttendees(event).then(a => setAttendees(event.id!, a)).catch(() => { });
     // api is a fresh object every render — deps on it would refetch in a loop
   }, [visible, event?.id]);
+
+  // TEST ONLY — 10 fake attendees to eyeball the facepile + expanded list; remove after review.
+  const TEST_ATTENDEES: Attendee[] = [
+    "Aiko Tanaka", "Filip Dvořák", "Hana Musilová", "Jan Svoboda", "Kenji Watanabe",
+    "Lucie Králová", "Marek Horák", "Nina Procházková", "Petr Beneš", "Yuki Sato",
+  ].map((name, i) => ({ id: `test-${i}`, name, image: null }));
+  const shownAttendees = [...(attendees ?? []), ...TEST_ATTENDEES];
+
+  // Collapsed by default on every open; tap the facepile to expand.
+  const [attendeesOpen, setAttendeesOpen] = useState(false);
+  useEffect(() => { setAttendeesOpen(false); }, [visible]);
 
   const isAttending = !!userID && !!attendees?.some(a => a.id === userID);
   const toggleAttendance = async () => {
@@ -179,7 +190,7 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
               <View style={[
                 styles.fieldContainer,
                 { paddingTop: 12, paddingBottom: 12 },
-                !(event?.location || event?.url || event?.description || attendees) && { borderBottomWidth: 0 },
+                !(event?.location || event?.url || event?.description || shownAttendees.length) && { borderBottomWidth: 0 },
               ]}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.horizontalPillView}>
@@ -244,12 +255,12 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                   </View>
                 </View>
               }
-              {attendees && (
+              {shownAttendees.length > 0 && (
                 <View style={[styles.fieldContainer, { borderBottomWidth: 0 }]}>
                   {/* Same row anatomy as MemberRolesModal: label left, pill action right. */}
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans, marginBottom: 0 }]}>
-                      Attendees{attendees.length > 0 ? ` · ${attendees.length}` : ""}
+                      Attendees · {shownAttendees.length}
                     </Text>
                     <Tap
                       onPress={toggleAttendance}
@@ -266,19 +277,49 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                       </View>
                     </Tap>
                   </View>
-                  <View style={{ gap: 12 }}>
-                    {attendees.map(a => (
-                      <View key={a.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <Avatar name={a.name} image={a.image} size={40} />
-                        <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg, flex: 1 }} numberOfLines={1}>
-                          {a.name}
-                        </Text>
-                        {a.id === userID && (
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg3 }}>You</Text>
-                        )}
+                  {/* Collapsed: overlapping facepile; tap toggles the full list. */}
+                  <Tap scaleTo={1} onPress={() => setAttendeesOpen(o => !o)}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      {shownAttendees.slice(0, 7).map((a, i) => (
+                        // bg1 ring separates the overlapping circles from each other
+                        <View key={a.id} style={{ marginLeft: i === 0 ? 0 : -10, borderWidth: 2, borderColor: colors.bg1, borderRadius: 999 }}>
+                          <Avatar name={a.name} image={a.image} size={32} />
+                        </View>
+                      ))}
+                      {shownAttendees.length > 7 && (
+                        <View style={{
+                          marginLeft: -10, width: 36, height: 36, borderRadius: 18,
+                          borderWidth: 2, borderColor: colors.bg1, backgroundColor: colors.bg3,
+                          alignItems: "center", justifyContent: "center",
+                        }}>
+                          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg2 }}>
+                            +{shownAttendees.length - 7}
+                          </Text>
+                        </View>
+                      )}
+                      <Feather
+                        name={attendeesOpen ? "chevron-up" : "chevron-down"}
+                        size={16} color={colors.fg4} style={{ marginLeft: 8 }}
+                      />
+                    </View>
+                  </Tap>
+                  {attendeesOpen && (
+                    <ScrollView style={{ maxHeight: 216, marginTop: 12 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                      <View style={{ gap: 12 }}>
+                        {shownAttendees.map(a => (
+                          <View key={a.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                            <Avatar name={a.name} image={a.image} size={32} />
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg, flex: 1 }} numberOfLines={1}>
+                              {a.name}
+                            </Text>
+                            {a.id === userID && (
+                              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg3 }}>You</Text>
+                            )}
+                          </View>
+                        ))}
                       </View>
-                    ))}
-                  </View>
+                    </ScrollView>
+                  )}
                 </View>
               )}
             </ScrollView>
