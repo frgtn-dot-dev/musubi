@@ -53,8 +53,14 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const handleDelete = () => {
     if (!calendar) return;
     if (!isExternal) {
-      onDelete(calendar);
-      handleClose();
+      confirm({
+        title: `Delete "${calendar.name}"?`,
+        message: "The calendar and all its events will be permanently deleted. This can't be undone.",
+        confirmLabel: "Delete",
+      }, () => {
+        onDelete(calendar);
+        handleClose();
+      });
       return;
     }
     const flavor = providerFlavor(calendar);
