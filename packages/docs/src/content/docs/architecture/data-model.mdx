@@ -69,7 +69,7 @@ erDiagram
 |---|---|---|
 | `calendarMembers` | who is in a calendar + their `role` | cascades from user & calendar; role defaults `"viewer"` |
 | `calendarEvents` | which calendars an event is linked into (M:N) | cascades both sides |
-| `eventUsers` | attendees of an event (creator added on create) | cascades both sides |
+| `eventUsers` | attendees of an event (creator added on create; presence = attending) | cascades both sides; unique `(eventID, userID)` |
 
 **Consequences you must respect:**
 
@@ -78,7 +78,7 @@ erDiagram
 - A shared event linked into 3 calendars is *one* row. Editing it edits it everywhere. That's the feature.
 
 <Aside type="note">
-`eventUsers` currently just tracks the creator. A richer attendee model is stubbed (commented `eventAttendees` in `schema.ts`) but intentionally not built yet — it's a planned feature, leave the stub in place.
+`eventUsers` is the attendee list: presence in the table means attending, and anyone who can *view* the event may join/leave (`GET /events/:id/attendees`, `PUT /events/:id/attendance`). The payload is name + avatar only — no emails, since an event can span calendars whose members aren't mutuals. When real RSVP lands (web), add a `status` column (`yes | no | maybe`) — presence + status needs no rework. External sync inserts events directly (not via `createEvent`), so provider-imported events don't get a phantom creator-attendee.
 </Aside>
 
 ### 5. External sync (provider-agnostic)
