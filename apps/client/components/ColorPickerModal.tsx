@@ -24,6 +24,7 @@ type Props = {
 export default function ColorPickerModal({ visible, value, onConfirm, onClose }: Props) {
   const { fadeStyle, handleClose } = useModalAnimation(visible, onClose);
   const picked = useRef(value);
+  const inputRef = useRef<TextInput>(null);
   // Two-way sync with the hex field: dragging fills the field, typing a full
   // valid hex drives the picker (via its `value` prop).
   const [hexText, setHexText] = useState(value);
@@ -62,18 +63,23 @@ export default function ColorPickerModal({ visible, value, onConfirm, onClose }:
         style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, justifyContent: "center" }}
       >
         <Animated.View style={[{ width: "80%", alignSelf: "center" }, fadeStyle]}>
-          <View style={{ gap: 16, backgroundColor: colors.bg3, padding: 16, borderRadius: 15 }}>
+          {/* Pressable so a tap anywhere outside the hex field drops its caret/keyboard. */}
+          <Pressable
+            style={{ gap: 16, backgroundColor: colors.bg3, padding: 16, borderRadius: 15 }}
+            onPress={() => inputRef.current?.blur()}
+          >
             <Text style={{ color: colors.fg, fontFamily: fonts.serif, fontSize: 18 }}>Custom color</Text>
             <ColorPicker
               value={pickerValue}
               style={{ gap: 14 }}
-              onCompleteJS={({ hex }) => { picked.current = hex; setHexText(hex); }}
+              onCompleteJS={({ hex }) => { picked.current = hex; setHexText(hex); inputRef.current?.blur(); }}
             >
               {/* The preview pill doubles as the hex field: Preview paints the
                   live color, the transparent input on top edits the code. */}
               <View>
                 <Preview hideInitialColor hideText style={{ borderRadius: 10, height: 44 }} />
                 <TextInput
+                  ref={inputRef}
                   value={hexText}
                   onChangeText={onHexInput}
                   autoCapitalize="none"
@@ -95,7 +101,7 @@ export default function ColorPickerModal({ visible, value, onConfirm, onClose }:
               <Btn label="Cancel" variant="secondary" onPress={handleClose} />
               <Btn label="Confirm" onPress={() => { onConfirm(picked.current); handleClose(); }} />
             </View>
-          </View>
+          </Pressable>
         </Animated.View>
       </View>
     </Modal>
