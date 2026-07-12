@@ -9,6 +9,9 @@ import { fedFetch, remoteForCalendar } from "@/services/federation";
 const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
 const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
 
+// Names + avatars only — the API deliberately sends no attendee emails.
+export type Attendee = { id: string; name: string; image?: string | null };
+
 // Every endpoint below did the same check inline; keep it in one place.
 // `asserts error is null` preserves the narrowing the inline `if (error) throw`
 // gave — after the call, TS knows `data` is non-null.
@@ -209,6 +212,38 @@ export function useApi() {
       throwOnError(error);
 
       return data;
+    },
+
+    async getEventAttendees(event: Event) {
+      const remote = remoteOf(eventHome(event));
+      if (remote) {
+        return (await fedFetch<Attendee[]>(remote, `/api/${apiVersion}/events/${event.id}/attendees`, { method: "GET" })) ?? [];
+      }
+      const { error, data } = await authClient.$fetch<Attendee[]>(`${apiUrl}/api/${apiVersion}/events/${event.id}/attendees`, {
+        method: "GET",
+      });
+
+      throwOnError(error);
+
+      return data ?? [];
+    },
+
+    async setAttendance(event: Event, attending: boolean) {
+      const remote = remoteOf(eventHome(event));
+      if (remote) {
+        return (await fedFetch<Attendee[]>(remote, `/api/${apiVersion}/events/${event.id}/attendance`, {
+          method: "PUT", body: JSON.stringify({ attending }),
+        })) ?? [];
+      }
+      const { error, data } = await authClient.$fetch<Attendee[]>(`${apiUrl}/api/${apiVersion}/events/${event.id}/attendance`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ attending }),
+      });
+
+      throwOnError(error);
+
+      return data ?? [];
     },
 
     async getEvents(since?: Date) {
