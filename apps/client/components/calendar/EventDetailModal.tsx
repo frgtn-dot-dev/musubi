@@ -9,10 +9,12 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useApi } from "@/services/api";
-import { useState } from "react";
+import { Attendee, useApi } from "@/services/api";
+import { useEffect, useState } from "react";
 import CalendarPickerModal from "./CalendarPickerModal";
 import { Tap } from "@/components/ui/Tap";
+import { Avatar } from "@/components/Avatar";
+import { useServer } from "@/contexts/ServerContext";
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
 import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
@@ -38,10 +40,37 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
   const { calendars } = useCalendarsStore();
 
   const api = useApi();
+  const { authClient } = useServer();
+  const { data: session } = authClient.useSession();
+  const userID = session?.user.id;
   const { events, linkEvent, forkEvent, removeEvent, updateEvent } = useEventsStore();
   const [linkVisible, setLinkVisible] = useState(false);
   const [forkVisible, setForkVisible] = useState(false);
   const [unlinkVisible, setUnlinkVisible] = useState(false);
+
+  // Attendees are detail-view data: fetched on open, not cached or delta-synced.
+  // null = not loaded (offline / fetch failed) → section stays hidden.
+  const [attendees, setAttendees] = useState<Attendee[] | null>(null);
+  useEffect(() => {
+    setAttendees(null);
+    if (visible && event) api.getEventAttendees(event).then(setAttendees).catch(() => { });
+    // api is a fresh object every render — deps on it would refetch in a loop
+  }, [visible, event?.id]);
+
+  const isAttending = !!userID && !!attendees?.some(a => a.id === userID);
+  const toggleAttendance = async () => {
+    if (!event || !userID || !attendees || !session) return;
+    const next = !isAttending;
+    // Optimistic flip; the server's list replaces it (or we revert on error).
+    setAttendees(next
+      ? [...attendees, { id: userID, name: session.user.name, image: session.user.image }]
+      : attendees.filter(a => a.id !== userID));
+    try {
+      setAttendees(await api.setAttendance(event, next));
+    } catch {
+      setAttendees(attendees);
+    }
+  };
 
   // Editing content (and deleting) is governed by the event's HOME (origin) calendar —
   // same rule the server enforces. Not the calendar you happen to be viewing it in.
@@ -148,7 +177,7 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
               <View style={[
                 styles.fieldContainer,
                 { paddingTop: 12, paddingBottom: 12 },
-                !(event?.location || event?.url || event?.description) && { borderBottomWidth: 0 },
+                !(event?.location || event?.url || event?.description || attendees) && { borderBottomWidth: 0 },
               ]}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.horizontalPillView}>
@@ -213,6 +242,28 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                   </View>
                 </View>
               }
+              {attendees && (
+                <View style={[styles.fieldContainer, { borderBottomWidth: 0 }]}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
+                      Attendees{attendees.length > 0 ? ` · ${attendees.length}` : ""}
+                    </Text>
+                    <Tap onPress={toggleAttendance} haptic={isAttending ? "warn" : "success"} hitSlop={10}>
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: isAttending ? colors.fg3 : colors.accent }}>
+                        {isAttending ? "Leave" : "Attend"}
+                      </Text>
+                    </Tap>
+                  </View>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {attendees.map(a => (
+                      <View key={a.id} style={styles.pill}>
+                        <Avatar name={a.name} image={a.image} size={20} />
+                        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg2 }}>{a.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
             </ScrollView>
             {/* Actions ordered by frequency of use: Edit leads (brightest), sharing
                 verbs sit in the middle, Delete last. */}
