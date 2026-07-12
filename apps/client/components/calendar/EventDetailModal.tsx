@@ -9,12 +9,13 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { Attendee, useApi } from "@/services/api";
+import { useApi } from "@/services/api";
 import { useEffect, useState } from "react";
 import CalendarPickerModal from "./CalendarPickerModal";
 import { Tap } from "@/components/ui/Tap";
 import { Avatar } from "@/components/Avatar";
 import { useServer } from "@/contexts/ServerContext";
+import { useAttendeesStore } from "@/store/useAttendeesStore";
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
 import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
@@ -48,12 +49,13 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
   const [forkVisible, setForkVisible] = useState(false);
   const [unlinkVisible, setUnlinkVisible] = useState(false);
 
-  // Attendees are detail-view data: fetched on open, not cached or delta-synced.
-  // null = not loaded (offline / fetch failed) → section stays hidden.
-  const [attendees, setAttendees] = useState<Attendee[] | null>(null);
+  // Attendees live in a shared store so the SSE "attendance_changed" frame can
+  // update an open modal. Fetched fresh on open (stale entry shows meanwhile);
+  // missing entry (offline / fetch failed) → section stays hidden.
+  const { byEvent, setAttendees } = useAttendeesStore();
+  const attendees = event ? byEvent[event.id] : undefined;
   useEffect(() => {
-    setAttendees(null);
-    if (visible && event) api.getEventAttendees(event).then(setAttendees).catch(() => { });
+    if (visible && event) api.getEventAttendees(event).then(a => setAttendees(event.id!, a)).catch(() => { });
     // api is a fresh object every render — deps on it would refetch in a loop
   }, [visible, event?.id]);
 
@@ -61,14 +63,14 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
   const toggleAttendance = async () => {
     if (!event || !userID || !attendees || !session) return;
     const next = !isAttending;
-    // Optimistic flip; the server's list replaces it (or we revert on error).
-    setAttendees(next
+    // Optimistic flip; the server's list (PUT response or SSE frame) replaces it.
+    setAttendees(event.id!, next
       ? [...attendees, { id: userID, name: session.user.name, image: session.user.image }]
       : attendees.filter(a => a.id !== userID));
     try {
-      setAttendees(await api.setAttendance(event, next));
+      setAttendees(event.id!, await api.setAttendance(event, next));
     } catch {
-      setAttendees(attendees);
+      setAttendees(event.id!, attendees); // revert
     }
   };
 

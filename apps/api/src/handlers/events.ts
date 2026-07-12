@@ -249,15 +249,23 @@ export async function handlerGetAttendees(req: Request, res: Response) {
 
 // PUT desired state ({ attending: boolean }) rather than POST/DELETE — retries
 // are safe and the client just sends what it wants. Returns the fresh list.
-// ponytail: no SSE notify — open detail modals won't live-update attendance;
-// wire into notifyCalendarMembers if that ever matters.
 export async function handlerSetAttendance(req: Request, res: Response) {
   const eventID = req.params.eventId as string;
   const attending = req.body?.attending;
   if (typeof attending !== "boolean") throw new BadRequestError("attending (boolean) is required...");
-  await assertCanViewEvent(req.user!.id, eventID);
+  const eventCalendars = await assertCanViewEvent(req.user!.id, eventID);
   await setAttendance(eventID, req.user!.id, attending);
-  res.status(200).json(await getEventAttendees(eventID));
+  const attendees = await getEventAttendees(eventID);
+
+  // Live-update open detail modals for everyone who can see the event. The actor
+  // gets the frame too — it carries the same list the PUT response does, harmless.
+  const memberIDSeen = new Set<string>();
+  for (const cal of eventCalendars) {
+    for (const member of await getCalendarMembers(cal)) memberIDSeen.add(member.userID);
+  }
+  notifyCalendarMembers([...memberIDSeen], "attendance_changed", { eventID, attendees });
+
+  res.status(200).json(attendees);
 }
 
 export async function handlerGetEvents(req: Request, res: Response) {

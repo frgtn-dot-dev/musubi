@@ -2,6 +2,7 @@ import { useEventsStore } from "@/store/useEventsStore";
 import { useEffect, useRef } from "react";
 import EventSource from "react-native-sse";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
+import { useAttendeesStore } from "@/store/useAttendeesStore";
 import { useServer } from "@/contexts/ServerContext";
 import { useRefreshData } from "@/hooks/useRefreshData";
 
@@ -12,6 +13,7 @@ export function useConnectToEventStream() {
   const { authClient, apiUrl } = useServer();
   const { localAddEvent, localUpdateEvent, localRemoveEvent, localRemoveCalendarEvents } = useEventsStore();
   const { localUpdateCalendar, localRemoveCalendar } = useCalendarsStore();
+  const setAttendees = useAttendeesStore((s) => s.setAttendees);
   // "external_sync" = the server's scheduled provider sync found changes → run a
   // silent delta refresh (WITHOUT re-triggering the provider sync — that'd loop).
   // Ref so the SSE effect doesn't resubscribe every render; guarded against overlap.
@@ -60,6 +62,9 @@ export function useConnectToEventStream() {
             case "calendar_removed":
               localRemoveCalendar(data.payload);
               localRemoveCalendarEvents(data.payload.id);
+              break;
+            case "attendance_changed":
+              setAttendees(data.payload.eventID, data.payload.attendees);
               break;
             case "external_sync":
               silentRefresh();
