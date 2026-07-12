@@ -71,7 +71,7 @@ export default function OnboardingCalendar() {
               />
             ))}
             {/* Custom color — opens the picker; filled with the picked color
-                once chosen, the pencil stays on top. */}
+                once chosen, the plus stays on top. */}
             <Tap
               onPress={() => setPickerOpen(true)}
               style={{
@@ -82,7 +82,7 @@ export default function OnboardingCalendar() {
                 alignItems: "center", justifyContent: "center",
               }}
             >
-              <Feather name="edit-2" size={14} color={isCustomColor ? colors.bg : colors.fg3} />
+              <Feather name="plus" size={16} color={isCustomColor ? colors.bg : colors.fg3} />
             </Tap>
           </View>
         </ScrollView>
