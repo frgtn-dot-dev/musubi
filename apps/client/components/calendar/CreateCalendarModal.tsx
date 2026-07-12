@@ -167,7 +167,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                         </Tap>
                       ))}
                       {/* Custom color — opens the picker; filled with the picked
-                          color once chosen, the pencil stays on top. */}
+                          color once chosen, the plus stays on top. */}
                       <Tap haptic="select" onPress={() => setPickerOpen(true)}>
                         <View style={[styles.calendarCircle, {
                           borderWidth: isCustomColor ? 2 : 1,
@@ -176,7 +176,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                           justifyContent: "center",
                         }]}>
                           {isCustomColor && <View style={[styles.calendarCircleInner, { backgroundColor: newColor }]} />}
-                          <Feather name="edit-2" size={12} color={isCustomColor ? colors.bg : colors.fg3} />
+                          <Feather name="plus" size={14} color={isCustomColor ? colors.bg : colors.fg3} />
                         </View>
                       </Tap>
                     </View>
