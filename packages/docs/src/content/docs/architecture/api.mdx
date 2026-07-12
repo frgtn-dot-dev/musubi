@@ -119,6 +119,10 @@ The two signature endpoints in `handlers/events.ts`, both `POST /api/v1/events/:
 
 Rule of thumb: *Link* to share one truth; *Fork* to claim your own version.
 
+## Attendees
+
+`GET /events/:id/attendees` and `PUT /events/:id/attendance` (`{ attending: boolean }`, idempotent — the client sends desired state). Both gate on `assertCanViewEvent` (membership in *any* linked calendar) — viewers RSVP too. Responses carry `{ id, name, image }` only, no emails: an event can span calendars whose members aren't mutuals. Attendance changes are not SSE-broadcast; the list is fetched when the detail modal opens.
+
 ## Realtime (SSE)
 
 `GET /api/stream` is a long-lived [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) connection, registered **outside** the `/api/v1` prefix to match the client's URL. `handlerStream` sets the SSE headers and stores the response in a `Map<userID, Response>`; `notifyCalendarMembers(userIds, type, payload)` writes `event_created` / `event_updated` / `event_removed` / `calendar_updated` / `calendar_removed` / `external_sync` frames to the affected users. Every mutating handler calls it after persisting — so a change one member makes appears live for the others — and the [scheduled provider sync](/docs/architecture/sync/#near-realtime-the-scheduled-sync) sends `external_sync` when Google/CalDAV changes land, which clients answer with a silent delta refresh.
@@ -134,7 +138,7 @@ Broadcasts are **best-effort and fire-and-forget** — a member with no open con
 | Group | Routes |
 |---|---|
 | Health | `GET /api/v1/server`, `/server/ok` *(public)* |
-| Events | `GET/POST/PUT/DELETE /api/v1/events`, `POST /api/v1/events/:id/link`, `/fork` |
+| Events | `GET/POST/PUT/DELETE /api/v1/events`, `POST /api/v1/events/:id/link`, `/fork`, `GET /events/:id/attendees`, `PUT /events/:id/attendance` |
 | Calendars | `GET/POST/PUT/DELETE /api/v1/calendars`, `GET /calendars/:id`, `/calendars/google`, `/calendars/tokens/:token` |
 | Members | `GET /calendars/:id/members`, `POST/DELETE /calendars/members/:id` (join/leave), `PUT/DELETE /calendars/:id/members/:userId` (role/kick) |
 | Users | `GET/PUT /users/settings`, `DELETE /users`, `POST /users/avatar`, `GET /users/:id/avatar` *(public)* |
