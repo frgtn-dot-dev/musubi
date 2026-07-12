@@ -63,6 +63,7 @@ All in `apps/client/store/`. Stores are **API-first**: they call the server, and
 | `useCalendarsStore` | calendars + `activeCals` filter + solo mode | **merge, don't replace** on update (see below) |
 | `useSettingsStore` | preferences | **write-through persisted**: every change lands in the local SQLite blob (`cacheSetSettings`), and the store **seeds its initial state synchronously** from that snapshot (`cacheGetSettingsSync` via the raw `sqlite.getFirstSync` handle) — the very first frame is already in the last-known theme; any *async* hydrate here flashes the system theme or a blank window. The server copy (via `api.getSettings()`) still wins on refresh. `onboarded` defaults `true` so returning users never flash onboarding |
 | `useImportStore` | pending ICS draft | tiny bridge between `_layout` and the calendar screen |
+| `useAttendeesStore` | ephemeral attendee lists by event id | fetched when a detail modal opens, live-updated by the `attendance_changed` SSE frame; not persisted or delta-synced |
 
 The highest fan-in files in the codebase are `constants/theme.ts` (40+ importers), `services/api.ts`, and these stores — treat their public shapes as load-bearing.
 

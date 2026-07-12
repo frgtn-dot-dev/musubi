@@ -121,6 +121,8 @@ Rule of thumb: *Link* to share one truth; *Fork* to claim your own version.
 
 ## Attendees
 
+Attendance is per-event opt-in: the `events.hasAttendees` flag (set in the composer at create/edit) gates the client UI only — the endpoints below don't check it, and flipping it off is non-destructive (`event_users` rows survive, re-enabling restores the list).
+
 `GET /events/:id/attendees` and `PUT /events/:id/attendance` (`{ attending: boolean }`, idempotent — the client sends desired state). Both gate on `assertCanViewEvent` (membership in *any* linked calendar) — viewers RSVP too. Responses carry `{ id, name, image }` only, no emails: an event can span calendars whose members aren't mutuals. Attendance changes broadcast an `attendance_changed` SSE frame (`{ eventID, attendees }`) to members of all linked calendars, so an open detail modal updates live; the client keeps lists in `useAttendeesStore`, fetched fresh on modal open.
 
 ## Realtime (SSE)

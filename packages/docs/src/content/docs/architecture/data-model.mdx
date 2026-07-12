@@ -43,7 +43,7 @@ You rarely edit these — Better Auth's Drizzle adapter owns them. See [Auth in 
 | Table | Purpose | Key columns |
 |---|---|---|
 | `calendars` | A calendar | `creatorID`, `color`, `isDefault` (one auto-created per user, undeletable) |
-| `events` | An event | `title`, `start`/`end`, `isAllDay`, `recurrence`, `creatorID`, **`originCalendarID`**, `deletedAt` |
+| `events` | An event | `title`, `start`/`end`, `isAllDay`, `hasAttendees`, `recurrence`, `creatorID`, **`originCalendarID`**, `deletedAt` |
 | `calendarInvites` | Share links | `calendarID`, `expiresAt`, `maxUses` |
 
 <Aside type="caution">
