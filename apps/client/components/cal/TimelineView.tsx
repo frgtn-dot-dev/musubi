@@ -289,8 +289,12 @@ function TimelinePage({
     const endMin = startMin + (draft.end.getTime() - draft.start.getTime()) / 60000;
     const h = m2y(endMin - startMin);
     const w = colW - 4; // ghost width
-    const mode = x <= GRAB_DOT_HIT && y <= GRAB_DOT_HIT ? "start"
-      : x >= w - GRAB_DOT_HIT && y >= h - GRAB_DOT_HIT ? "end"
+    // Finger-sized corner zones, but never so big that a short/narrow ghost
+    // loses its movable middle — cap by the ghost's own size.
+    const hitY = Math.min(GRAB_DOT_HIT, Math.max(h / 3, 16));
+    const hitX = Math.min(GRAB_DOT_HIT, w / 2);
+    const mode = x <= hitX && y <= hitY ? "start"
+      : x >= w - hitX && y >= h - hitY ? "end"
         : "move";
     const day = Math.max(days.findIndex(d => isSameDay(d, draft.start)), 0);
     grab.current = { mode, day, startMin, endMin };
@@ -331,6 +335,9 @@ function TimelinePage({
   // scroll (vertical movement starts the scroll and cancels us). Holding still
   // for a beat means the scroll never activates; a quick flick still scrolls.
   const draftGesture = useMemo(() => Gesture.Pan()
+    // The resize dots protrude past the ghost's edges (top/bottom: -6) — without
+    // hitSlop a grab starting just outside the box never reaches the gesture.
+    .hitSlop({ top: 12, bottom: 12 })
     .activateAfterLongPress(HOLD_GRAB_MS)
     .onStart(e => {
       grabbing.value = withSpring(GRAB_SCALE, GRAB_SPRING);

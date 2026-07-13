@@ -13,7 +13,7 @@ export const SNAP_DRAG_MIN = 15;   // minutes — drag resize/move snap
 export const SNAP_TAP_MIN = 30;    // minutes — quick-tap draft snap
 export const HOLD_CREATE_MS = 280; // hold before drag-to-create activates on the grid
 export const HOLD_GRAB_MS = 150;   // hold before an existing draft can be grabbed
-export const GRAB_DOT_HIT = 30;    // draft ghost: corner-box touch zone around each resize dot
+export const GRAB_DOT_HIT = 44;    // draft ghost: corner-box touch zone around each resize dot (finger-sized)
 export const GRAB_SCALE = 1.04;    // "lifted" ghost scale while dragging
 export const GRAB_SPRING = { damping: 30, stiffness: 400 };
 
