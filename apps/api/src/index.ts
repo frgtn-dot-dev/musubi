@@ -9,6 +9,7 @@ import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handler
 import { handlerDeleteUser, handlerGetAvatar, handlerResetUsers, handlerUploadAvatar } from "./handlers/users";
 import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerSetAttendance, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
+import { rateLimit } from "./middleware/rate_limit";
 import { handlerCreateCalendarInvite } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
 import { middlewareLogHandler } from "./middleware/log_handler";
@@ -67,7 +68,8 @@ app.get("/api/stream", requireAuth, wrap(handlerStream));
 // Federation (Musubi ↔ Musubi) — cross-server invite accept (public: the invite
 // token is the credential) and the HTML hand-off page for invite links, so every
 // server serves its own deep links (no dependency on the hosted domain).
-app.post("/api/v1/federation/accept", wrap(handlerFederationAccept));
+// Public + creates accounts/tokens — cap per-IP so tokens can't be farmed or guessed.
+app.post("/api/v1/federation/accept", rateLimit(10, 15 * 60_000), wrap(handlerFederationAccept));
 app.get("/invite/:token", handlerInvitePage(config.api.url));
 // The user's connections to other Musubi servers (member tokens, encrypted at
 // rest) — stored home-side so a connection accepted on one device roams to all.
@@ -90,7 +92,7 @@ app.get("/api/v1/calendars", requireAuth, wrap(handlerGetCalendars));
 app.get("/api/v1/calendars/google", requireAuth, wrap(handlerGetGoogleCalendars));
 // Public: possession of the (unguessable, expiring) invite token IS the
 // credential — cross-server invitees have no session here yet.
-app.get("/api/v1/calendars/tokens/:token", wrap(handlerGetCalendarFromToken));
+app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(handlerGetCalendarFromToken));
 app.get("/api/v1/calendars/:id", requireAuth, wrap(handlerGetCalendar));
 app.post("/api/v1/calendars", requireAuth, wrap(handlerCreateCalendar));
 app.put("/api/v1/calendars", requireAuth, wrap(handlerUpdateCalendar));
