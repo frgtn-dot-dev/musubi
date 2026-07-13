@@ -2,6 +2,7 @@ import { Calendar, CalendarWithEvents, Event, Invite, Settings, GoogleCheck } fr
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar } from "@/services/federation";
+import { notifySessionExpired } from "@/lib/signOut";
 
 // Federation: calendars shared from another Musubi server live at that server.
 // Calendar-scoped calls check the registry and, when the calendar is remote,
@@ -16,7 +17,13 @@ export type Attendee = { id: string; name: string; image?: string | null };
 // `asserts error is null` preserves the narrowing the inline `if (error) throw`
 // gave — after the call, TS knows `data` is non-null.
 function throwOnError(error: { status?: number | string; message?: string; statusText?: string } | null): asserts error is null {
-  if (error) { console.error("API error", error); throw new Error(`${error.status}: ${error.message ?? error.statusText}`); }
+  if (error) {
+    // Dead session — hand off to the recovery flow (registered by the signed-in
+    // layout; a no-op on auth screens). Still throws so the caller fails loudly.
+    if (error.status === 401) notifySessionExpired();
+    console.error("API error", error);
+    throw new Error(`${error.status}: ${error.message ?? error.statusText}`);
+  }
 }
 
 export function useApi() {
