@@ -1,6 +1,6 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Linking, KeyboardAvoidingView, Platform } from "react-native";
 import InputModal from "@/components/TextInputModal";
 import { Btn } from "@/components/ui/Btn";
@@ -25,8 +25,20 @@ function GoogleG({ size = 18 }: { size?: number }) {
 }
 
 export default function Welcome() {
-  const { authClient } = useServer();
+  const { authClient, apiUrl, setNewServerUrl } = useServer();
+  const [socials, setSocials] = useState<string[]>([]);
   const [googleBusy, setGoogleBusy] = useState(false);
+
+  // Ask the (possibly self-hosted) server which social logins it supports and
+  // show only those buttons. Refetches when the user points at a new server.
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/v1/server`)
+      .then(r => r.json())
+      .then(({ socials }) => setSocials(Array.isArray(socials) ? socials : []))
+      .catch(() => setSocials([]));
+  }, [apiUrl]);
+
   const handleGoogle = async () => {
     const wc = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     setGoogleBusy(true);
@@ -61,7 +73,6 @@ export default function Welcome() {
     }
   };
 
-  const { apiUrl, setNewServerUrl } = useServer();
   const [inputModalVisible, setInputModalVisible] = useState(false);
   const router = useRouter();
 
@@ -108,13 +119,15 @@ export default function Welcome() {
         <View style={styles.modalButtonsColumn}>
           {/* No hardcoded background — secondary follows the theme, so the
               label stays readable in both light and dark mode. */}
-          <Btn
-            label="Continue with Google"
-            variant="secondary"
-            icon={<GoogleG size={18} />}
-            loading={googleBusy}
-            onPress={handleGoogle}
-          />
+          {socials.includes("google") && (
+            <Btn
+              label="Continue with Google"
+              variant="secondary"
+              icon={<GoogleG size={18} />}
+              loading={googleBusy}
+              onPress={handleGoogle}
+            />
+          )}
           <Btn
             label="Create account"
             onPress={() => router.push("/(auth)/sign-up")}
