@@ -1,6 +1,6 @@
 import "react-native-get-random-values";
 import { Calendar, Event, can } from "@musubi/types";
-import { colors, fonts, styles } from "@/constants/theme";
+import { activeScheme, colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -581,7 +581,11 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           {calendarsError ? <Text style={styles.errorText}>{calendarsError}</Text> : null}
         </View>
 
-        {datePickerVisible &&
+        {/* Android: a native dialog opened from the date/time chips below. iOS
+            renders its own inline compact picker in the rows (see below) — the
+            community picker ignores `presentation` on iOS and would otherwise
+            render this dialog inline here, up at the top of the sheet. */}
+        {datePickerVisible && Platform.OS !== "ios" &&
           <DateTimePicker
             presentation="dialog"
             value={getDatePickerValue()}
@@ -605,33 +609,54 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             <View key={target}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 }}>
                 <Text style={[styles.fieldValueText, { fontFamily: fonts.sans, color: colors.fg2 }]}>{label}</Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Tap
-                    onPress={() => {
-                      setDatePickerTarget(target);
-                      setDatePickerMode("date");
-                      setDatePickerVisible(true);
-                    }}
-                    style={[local.chip, { backgroundColor: colors.bg3 }]}
-                  >
-                    <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                      {formatDateMedium(value, dateFormat)}
-                    </Text>
-                  </Tap>
-                  {!allDayToggle &&
-                    <Tap
-                      onPress={() => {
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  {Platform.OS === "ios" ? (
+                    // Native iOS compact picker — shows the date (and time, unless
+                    // all-day) inline and opens Apple's own calendar/wheel popover
+                    // on tap. Returns the full Date, so set it directly; set the
+                    // target first so the start<=end effect bumps the right side.
+                    <DateTimePicker
+                      value={value}
+                      mode={allDayToggle ? "date" : "datetime"}
+                      display="compact"
+                      accentColor={colors.accent}
+                      // Follow the app theme, not the phone's system appearance.
+                      themeVariant={activeScheme}
+                      onValueChange={(_event, selectedDate) => {
                         setDatePickerTarget(target);
-                        setDatePickerMode("time");
-                        setDatePickerVisible(true);
+                        target === "start" ? setNewStart(selectedDate) : setNewEnd(selectedDate);
                       }}
-                      style={[local.chip, { backgroundColor: colors.bg3 }]}
-                    >
-                      <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
-                        {formatTime(value, timeFormat)}
-                      </Text>
-                    </Tap>
-                  }
+                    />
+                  ) : (
+                    <>
+                      <Tap
+                        onPress={() => {
+                          setDatePickerTarget(target);
+                          setDatePickerMode("date");
+                          setDatePickerVisible(true);
+                        }}
+                        style={[local.chip, { backgroundColor: colors.bg3 }]}
+                      >
+                        <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                          {formatDateMedium(value, dateFormat)}
+                        </Text>
+                      </Tap>
+                      {!allDayToggle &&
+                        <Tap
+                          onPress={() => {
+                            setDatePickerTarget(target);
+                            setDatePickerMode("time");
+                            setDatePickerVisible(true);
+                          }}
+                          style={[local.chip, { backgroundColor: colors.bg3 }]}
+                        >
+                          <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                            {formatTime(value, timeFormat)}
+                          </Text>
+                        </Tap>
+                      }
+                    </>
+                  )}
                 </View>
               </View>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -643,6 +668,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             <Switch
               thumbColor={allDayToggle ? colors.accent : colors.bg3}
               trackColor={{ false: colors.line, true: colors.line3 }}
+              ios_backgroundColor={colors.line}
               onValueChange={(v) => { setAllDayToggle(v); }}
               value={allDayToggle}
             />
@@ -690,6 +716,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                   false: colors.line,
                   true: colors.line3,
                 }}
+                ios_backgroundColor={colors.line}
                 onValueChange={(v) => { setNotificationToggle(v); }}
                 value={notificationToggle}
               />
@@ -734,6 +761,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             <Switch
               thumbColor={attendeesToggle ? colors.accent : colors.bg3}
               trackColor={{ false: colors.line, true: colors.line3 }}
+              ios_backgroundColor={colors.line}
               onValueChange={(v) => { setAttendeesToggle(v); }}
               value={attendeesToggle}
             />

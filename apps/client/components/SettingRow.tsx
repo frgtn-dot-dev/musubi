@@ -43,6 +43,7 @@ export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
           false: colors.line,
           true: colors.line3,
         }}
+        ios_backgroundColor={colors.line}
         onValueChange={onToggle}
         value={toggle}
       />
