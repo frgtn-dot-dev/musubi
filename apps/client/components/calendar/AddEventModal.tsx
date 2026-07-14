@@ -1,6 +1,6 @@
 import "react-native-get-random-values";
 import { Calendar, Event, can } from "@musubi/types";
-import { colors, fonts, styles } from "@/constants/theme";
+import { activeScheme, colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -620,6 +620,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                       mode={allDayToggle ? "date" : "datetime"}
                       display="compact"
                       accentColor={colors.accent}
+                      // Follow the app theme, not the phone's system appearance.
+                      themeVariant={activeScheme}
                       onValueChange={(_event, selectedDate) => {
                         setDatePickerTarget(target);
                         target === "start" ? setNewStart(selectedDate) : setNewEnd(selectedDate);
@@ -666,6 +668,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             <Switch
               thumbColor={allDayToggle ? colors.accent : colors.bg3}
               trackColor={{ false: colors.line, true: colors.line3 }}
+              ios_backgroundColor={colors.line}
               onValueChange={(v) => { setAllDayToggle(v); }}
               value={allDayToggle}
             />
@@ -713,6 +716,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                   false: colors.line,
                   true: colors.line3,
                 }}
+                ios_backgroundColor={colors.line}
                 onValueChange={(v) => { setNotificationToggle(v); }}
                 value={notificationToggle}
               />
@@ -757,6 +761,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             <Switch
               thumbColor={attendeesToggle ? colors.accent : colors.bg3}
               trackColor={{ false: colors.line, true: colors.line3 }}
+              ios_backgroundColor={colors.line}
               onValueChange={(v) => { setAttendeesToggle(v); }}
               value={attendeesToggle}
             />
