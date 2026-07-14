@@ -1,12 +1,13 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Linking, KeyboardAvoidingView, Platform } from "react-native";
 import InputModal from "@/components/TextInputModal";
 import { Btn } from "@/components/ui/Btn";
 import { warn } from "@/lib/haptics";
 import { useServer } from "@/contexts/ServerContext";
 import { GoogleSignin, isSuccessResponse } from "@react-native-google-signin/google-signin";
+import * as AppleAuthentication from "expo-apple-authentication";
 import Svg, { Path } from "react-native-svg";
 
 GoogleSignin.configure({
@@ -24,9 +25,29 @@ function GoogleG({ size = 18 }: { size?: number }) {
   );
 }
 
+function AppleLogo({ size = 18, color = colors.fg }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path fill={color} d="M17.05 12.04c-.03-2.43 1.99-3.6 2.08-3.66-1.13-1.66-2.89-1.89-3.52-1.92-1.5-.15-2.93.88-3.69.88-.76 0-1.93-.86-3.17-.84-1.63.02-3.13.95-3.97 2.41-1.69 2.94-.43 7.29 1.21 9.68.8 1.17 1.76 2.48 3.01 2.43 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.15.76 1.3-.02 2.12-1.19 2.92-2.36.92-1.35 1.3-2.66 1.32-2.73-.03-.01-2.53-.97-2.56-3.85zM14.63 4.84c.67-.81 1.12-1.94.99-3.07-.96.04-2.13.64-2.82 1.45-.62.72-1.16 1.87-1.02 2.97 1.07.08 2.17-.54 2.85-1.35z" />
+    </Svg>
+  );
+}
+
 export default function Welcome() {
-  const { authClient } = useServer();
+  const { authClient, apiUrl, setNewServerUrl } = useServer();
+  const [socials, setSocials] = useState<string[]>([]);
   const [googleBusy, setGoogleBusy] = useState(false);
+
+  // Ask the (possibly self-hosted) server which social logins it supports and
+  // show only those buttons. Refetches when the user points at a new server.
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/v1/server`)
+      .then(r => r.json())
+      .then(({ socials }) => setSocials(Array.isArray(socials) ? socials : []))
+      .catch(() => setSocials([]));
+  }, [apiUrl]);
+
   const handleGoogle = async () => {
     const wc = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     setGoogleBusy(true);
@@ -61,7 +82,42 @@ export default function Welcome() {
     }
   };
 
-  const { apiUrl, setNewServerUrl } = useServer();
+  const [appleBusy, setAppleBusy] = useState(false);
+  const handleApple = async () => {
+    setAppleBusy(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        warn();
+        alert("No identity token from Apple");
+        return;
+      }
+      // ponytail: no nonce — signature + audience + 1h maxAge already verified
+      // server-side; add a nonce round-trip if replay hardening is needed.
+      const { error } = await authClient.signIn.social({
+        provider: "apple",
+        idToken: { token: credential.identityToken },
+      });
+      if (error) {
+        warn();
+        alert(`Server error: ${error.message ?? JSON.stringify(error)}`);
+      } else {
+        router.replace("/(tabs)");
+      }
+    } catch (e: any) {
+      if (e?.code === "ERR_REQUEST_CANCELED") return; // user backed out — not an error
+      warn();
+      alert(`Apple error: ${e?.message ?? String(e)}`);
+    } finally {
+      setAppleBusy(false);
+    }
+  };
+
   const [inputModalVisible, setInputModalVisible] = useState(false);
   const router = useRouter();
 
@@ -108,13 +164,24 @@ export default function Welcome() {
         <View style={styles.modalButtonsColumn}>
           {/* No hardcoded background — secondary follows the theme, so the
               label stays readable in both light and dark mode. */}
-          <Btn
-            label="Continue with Google"
-            variant="secondary"
-            icon={<GoogleG size={18} />}
-            loading={googleBusy}
-            onPress={handleGoogle}
-          />
+          {socials.includes("google") && (
+            <Btn
+              label="Continue with Google"
+              variant="secondary"
+              icon={<GoogleG size={18} />}
+              loading={googleBusy}
+              onPress={handleGoogle}
+            />
+          )}
+          {Platform.OS === "ios" && socials.includes("apple") && (
+            <Btn
+              label="Continue with Apple"
+              variant="secondary"
+              icon={<AppleLogo size={18} />}
+              loading={appleBusy}
+              onPress={handleApple}
+            />
+          )}
           <Btn
             label="Create account"
             onPress={() => router.push("/(auth)/sign-up")}
