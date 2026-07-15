@@ -27,6 +27,9 @@ const expoConfig = {
     "usesAppleSignIn": true,
     "infoPlist": {
       "ITSAppUsesNonExemptEncryption": false,
+      // We drive the status bar style at runtime from the app theme (root Stack
+      // statusBarStyle) — iOS only honors that with this set to YES.
+      "UIViewControllerBasedStatusBarAppearance": true,
       // Nabídne Musubi v "Otevřít v…" pro .ics soubory/pozvánky (iOS neumí víc — default kalendář nelze).
       "CFBundleDocumentTypes": [
         {
