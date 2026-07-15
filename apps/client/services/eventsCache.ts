@@ -93,14 +93,19 @@ export async function cacheReplaceAllEvents(events: Event[]) {
   }
 }
 
+// Upsert one sync_meta row. drizzle's onConflictDoUpdate emits a bind that
+// expo-sqlite on iOS rejects (InvalidConvertibleException, aborting the whole
+// refresh); a delete-then-insert on the PK is the driver-agnostic equivalent.
+async function setMeta(key: string, value: string) {
+  await db.delete(syncMetaTable).where(eq(syncMetaTable.key, key));
+  await db.insert(syncMetaTable).values({ key, value });
+}
+
 // Calendars are few and have no Date fields → stored as one JSON blob. Cached so
 // the boot hydrate has calendars too (activeCals derives from them; without it,
 // cached events render but get filtered out until calendars arrive over the network).
 export async function cacheSetCalendars(calendars: Calendar[]) {
-  const value = JSON.stringify(calendars);
-  await db.insert(syncMetaTable)
-    .values({ key: "calendars", value })
-    .onConflictDoUpdate({ target: syncMetaTable.key, set: { value } });
+  await setMeta("calendars", JSON.stringify(calendars));
 }
 
 export async function cacheGetCalendars(): Promise<Calendar[]> {
@@ -115,19 +120,14 @@ export async function getLastSync(): Promise<string | null> {
 
 export async function setLastSync(iso: string) {
   if (!iso || isNaN(new Date(iso).getTime())) return; // never persist a garbage cursor
-  await db.insert(syncMetaTable)
-    .values({ key: "lastSync", value: iso })
-    .onConflictDoUpdate({ target: syncMetaTable.key, set: { value: iso } });
+  await setMeta("lastSync", iso);
 }
 
 // Settings snapshot (same blob pattern as calendars). Read back SYNCHRONOUSLY
 // at store creation so the very first frame renders in the last-known theme —
 // any async gap here shows as a flash (system theme, or worse a white window).
 export async function cacheSetSettings(settings: Settings) {
-  const value = JSON.stringify(settings);
-  await db.insert(syncMetaTable)
-    .values({ key: "settings", value })
-    .onConflictDoUpdate({ target: syncMetaTable.key, set: { value } });
+  await setMeta("settings", JSON.stringify(settings));
 }
 
 export function cacheGetSettingsSync(): Settings | null {
