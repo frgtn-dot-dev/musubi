@@ -144,7 +144,7 @@ Handlers never touch tables — all DB access goes through query modules re-expo
 
 Open `packages/db/src/schema.ts` top to bottom — it's organised into six commented domains; the [Data Model page](/docs/architecture/data-model/) annotates each. Reading order:
 
-1. **Auth** (skim — Better Auth owns these)
+1. **Auth** (skim — Better Auth owns these; how sign-in actually works and the iOS setup/gotchas are on the [Authentication](/docs/architecture/authentication/) page)
 2. **Calendars & events** — note `title` (not `name`!), `recurrence` (iCal RRULE text), `deletedAt`
 3. **Link tables** — you met these in Step 1
 4. **External sync** — mirrors of Google/CalDAV calendars
@@ -232,6 +232,7 @@ Check the [GitHub issues](https://github.com/f-tuma/musubi/issues) and the [road
 | Before any change | [Architecture Overview](/docs/architecture/overview/) — the map |
 | Touching the backend | [API Server](/docs/architecture/api/) |
 | Touching the app | [Client App](/docs/architecture/client/) |
+| Touching sign-in / an iOS build | [Authentication](/docs/architecture/authentication/) |
 | Touching data | [Data Model](/docs/architecture/data-model/) + [Shared Packages](/docs/architecture/packages/) |
 | Touching sync/providers | [Sync Engine](/docs/architecture/sync/) |
 | Touching invites/servers | [Federation](/docs/architecture/federation/) |
