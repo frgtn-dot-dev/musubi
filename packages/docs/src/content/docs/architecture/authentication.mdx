@@ -45,6 +45,10 @@ Server side (`packages/auth/src/lib/auth.ts`) — what each provider verifies th
 
 `clientSecret`/the web redirect endpoints are **never exercised** by the native flow. Apple's `appBundleIdentifier` is the load-bearing field; `APPLE_CLIENT_ID` mostly acts as the on/off toggle (see discovery below).
 
+<Aside type="note">
+**Apple names, and no avatar.** Apple returns the user's name **only on the first authorization**, and **not** inside the id token — the client reads `credential.fullName` and forwards it as `idToken.user.name.{firstName,lastName}`, which Better Auth's Apple provider uses to set the new user's name (so it pre-fills onboarding and the personal-calendar name). Later sign-ins carry no name, which is fine — it's already stored. Sign in with Apple **never** returns a profile photo; Google's id token does, so only Google users get an avatar pre-filled.
+</Aside>
+
 ## Server advertises what it can do
 
 Self-hosted servers may have only some providers configured. `GET /api/v1/server` is public and returns:
