@@ -74,6 +74,14 @@ The client loads settings **first and independently** in `useRefreshData` — th
 
 Other Better Auth options in use: **account linking** (`allowDifferentEmails: true`, so a signed-in user can connect a second Google account with a different email), and **user deletion** (`deleteUser.enabled`).
 
+## Password recovery and account deletion
+
+The sign-in screen awaits `authClient.requestPasswordReset` inside the shared `TextInputModal`; the modal remains open and renders a friendly error when the request fails. Success uses non-enumerating copy ("If an account exists…") and the SMTP email links to `musubi.frgtn.dev/reset-password`, which submits the token and new password to Better Auth on the originating server.
+
+Authenticated deletion stays in the app: Settings requires the exact display name, calls `DELETE /api/v1/users` while the session is still live, and only then runs the full local sign-out/reset sequence. `TextInputModal` awaits the deletion, so a server/network failure cannot close the confirmation and pretend it succeeded.
+
+The public `musubi.frgtn.dev/delete-account` route is the fallback for someone who cannot access the app. It submits to the website's `/account/delete-request` endpoint, which emails a manual request to support through Resend. It **does not delete by unauthenticated email address**; support first verifies ownership, then completes deletion within the published 30-day window. Configure `ACCOUNT_REQUEST_FROM_EMAIL` and `ACCOUNT_REQUEST_TO_EMAIL` in the website environment alongside `RESEND_API_KEY`.
+
 ## Calendar connection is *not* sign-in
 
 Signing in with Google gives you an account — it does **not** grant calendar access. Connecting a Google Calendar for [sync](/docs/architecture/sync/) is a separate, explicit action (`SyncCalendarModal` → `authClient.linkSocial({ provider: "google", scopes: ["…/auth/calendar"] })`) that runs the **OAuth authorization-code redirect** with `access_type=offline` + `prompt=consent` to obtain a **refresh token**. The sync engine only syncs Google accounts that have both the calendar scope **and** a refresh token — see `getOAuthAccountIDs`. Outlook connects the same way (`linkSocial({ provider: "microsoft", scopes: ["Calendars.ReadWrite"] })`): `offline_access` is in Microsoft's default scopes so the refresh token comes for free, and the provider sits in `accountLinking.trustedProviders` because Microsoft omits the `email_verified` claim — better-auth would otherwise refuse the link. Apple/iCloud calendars connect over CalDAV with an app-specific password, not Sign in with Apple.
