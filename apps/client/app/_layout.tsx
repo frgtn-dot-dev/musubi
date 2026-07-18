@@ -18,7 +18,6 @@ import * as SystemUI from 'expo-system-ui';
 import semver from "semver";
 import Constants from "expo-constants";
 import UpdateRequiredModal from "@/components/UpdateRequiredModal";
-import { registerForPushNotificationsAsync } from '@/services/notifications';
 import { apiVersion } from '@/constants/url';
 import * as Linking from 'expo-linking';
 import { File } from 'expo-file-system';
@@ -192,12 +191,6 @@ function AppLoader() {
 }
 
 export default function RootLayout() {
-
-  useEffect(() => {
-    registerForPushNotificationsAsync();
-  }, []);
-
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ServerProvider>

@@ -6,6 +6,8 @@ import { db } from "./db";
 import { notificationsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
+const REMINDER_CHANNEL_ID = "musubi-reminders";
+
 // Local event reminders, modeled as DERIVED state: one row per event the user
 // wants a reminder for ({eventID, identifier, offsetMinutes, triggerDate}).
 // Any change to the event — local edit, SSE update, delta sync — goes through
@@ -45,12 +47,27 @@ function nextTrigger(event: Event, offsetMinutes: number): { trigger: Date; occu
 }
 
 async function schedule(event: Event, trigger: Date, occurrenceStart: Date): Promise<string> {
+  await ensureAndroidReminderChannel();
   return Notifications.scheduleNotificationAsync({
     content: {
       title: event.title,
       body: occurrenceStart.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
     },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: trigger,
+      ...(Platform.OS === "android" ? { channelId: REMINDER_CHANNEL_ID } : {}),
+    },
+  });
+}
+
+async function ensureAndroidReminderChannel() {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
+    name: "Event reminders",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#C8553D",
   });
 }
 
@@ -68,23 +85,33 @@ export async function getEventNotification(eventID: string) {
 /** Turn the reminder ON (or change its offset) for an event. */
 export async function upsertEventNotification(event: Event, offsetMinutes: number) {
   const existing = await getRow(event.id);
-  if (existing) await Notifications.cancelScheduledNotificationAsync(existing.identifier).catch(() => { });
 
   const next = nextTrigger(event, offsetMinutes);
   if (!next) { // nothing upcoming — drop any stale row
-    if (existing) await db.delete(notificationsTable).where(eq(notificationsTable.eventID, event.id));
+    if (existing) {
+      await Notifications.cancelScheduledNotificationAsync(existing.identifier).catch(() => { });
+      await db.delete(notificationsTable).where(eq(notificationsTable.eventID, event.id));
+    }
     return;
   }
 
   const identifier = await schedule(event, next.trigger, next.occurrenceStart);
-  if (existing) {
-    await db.update(notificationsTable)
-      .set({ identifier, offsetMinutes, triggerDate: next.trigger.toISOString() })
-      .where(eq(notificationsTable.eventID, event.id));
-  } else {
-    await db.insert(notificationsTable)
-      .values({ identifier, eventID: event.id, offsetMinutes, triggerDate: next.trigger.toISOString() });
+  try {
+    if (existing) {
+      await db.update(notificationsTable)
+        .set({ identifier, offsetMinutes, triggerDate: next.trigger.toISOString() })
+        .where(eq(notificationsTable.eventID, event.id));
+    } else {
+      await db.insert(notificationsTable)
+        .values({ identifier, eventID: event.id, offsetMinutes, triggerDate: next.trigger.toISOString() });
+    }
+  } catch (error) {
+    // Do not leave an orphaned native notification when persisting its local
+    // configuration fails. An existing reminder remains untouched.
+    await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => { });
+    throw error;
   }
+  if (existing) await Notifications.cancelScheduledNotificationAsync(existing.identifier).catch(() => { });
 }
 
 /** Turn the reminder OFF / the event is gone. */
@@ -123,23 +150,16 @@ export async function clearAllEventNotifications() {
   await db.delete(notificationsTable);
 }
 
-export async function registerForPushNotificationsAsync() {
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("musubiChannel", {
-      name: "Musubi Notifications",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7C",
-    });
-  }
+/** Ask only when the user is actively enabling/saving their first reminder. */
+export async function requestEventNotificationPermission() {
+  await ensureAndroidReminderChannel();
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  const existing = await Notifications.getPermissionsAsync();
+  if (existing.status === "granted") return true;
+  if (!existing.canAskAgain) return false;
 
-  if (finalStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  // Denied is a valid choice — no nagging alert on every launch.
-  return finalStatus === "granted";
+  const requested = await Notifications.requestPermissionsAsync();
+  // Denied is a valid choice — future saves return false without reopening the
+  // system prompt. The event itself is still saved normally.
+  return requested.status === "granted";
 }
