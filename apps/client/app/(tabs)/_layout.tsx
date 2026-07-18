@@ -1,5 +1,5 @@
 import { colors } from '@/constants/theme';
-import { TAB_BAR_ITEM_HEIGHT, tabBarBottomInset, tabBarHeight } from '@/constants/layout';
+import { TAB_BAR_ITEM_HEIGHT, TAB_BAR_TOP_INSET, tabBarBottomInset, tabBarHeight } from '@/constants/layout';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useServer } from '@/contexts/ServerContext';
 import { useConnectToEventStream } from '@/hooks/useEventsStream';
@@ -95,6 +95,7 @@ export default function TabLayout() {
             borderTopColor: colors.line,
             borderTopWidth: 1,
             height: tabBarHeight(insets.bottom),
+            paddingTop: TAB_BAR_TOP_INSET,
             paddingBottom: bottomInset,
           },
           tabBarItemStyle: {
