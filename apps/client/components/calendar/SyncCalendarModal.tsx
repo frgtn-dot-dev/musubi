@@ -19,7 +19,7 @@ type Step = "providers" | "apple" | "caldav";
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onConnected: (provider: "google" | "caldav") => void;
+  onConnected: (provider: "google" | "microsoft" | "caldav") => void;
   /** Where the OAuth round-trip lands — onboarding passes its own step so
    *  connecting doesn't dump the user into the app. */
   callbackURL?: string;
@@ -48,25 +48,29 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
 
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, closeSequence);
 
-  const handleGoogle = async () => {
+  // Shared OAuth link flow — Google and Microsoft only differ in the
+  // calendar scope their provider expects.
+  const handleOAuth = async (provider: "google" | "microsoft", scope: string, label: string) => {
     setIsLoading(true);
     try {
       const { error } = await authClient.linkSocial({
-        provider: "google",
-        scopes: ["https://www.googleapis.com/auth/calendar"],
+        provider,
+        scopes: [scope],
         callbackURL,
       });
-      if (error) throw new Error(error.message ?? "Google connect failed");
+      if (error) throw new Error(error.message ?? `${label} connect failed`);
       haptics.success();
-      onConnected("google");
+      onConnected(provider);
       handleClose();
     } catch (e: any) {
       haptics.warn();
-      Alert.alert("Google connect failed", e?.message ?? "An unexpected error occurred.");
+      Alert.alert(`${label} connect failed`, e?.message ?? "An unexpected error occurred.");
     } finally {
       setIsLoading(false);
     }
   };
+  const handleGoogle = () => handleOAuth("google", "https://www.googleapis.com/auth/calendar", "Google");
+  const handleMicrosoft = () => handleOAuth("microsoft", "Calendars.ReadWrite", "Outlook");
 
   // Shared for Apple (fixed iCloud server) and generic CalDAV.
   const handleCaldav = async (url: string) => {
@@ -123,6 +127,13 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
                     icon={<Ionicons name="logo-google" size={16} color={colors.fg2} />}
                     loading={isLoading}
                     onPress={handleGoogle}
+                  />
+                  <Btn
+                    label="Outlook"
+                    variant="secondary"
+                    icon={<Ionicons name="logo-microsoft" size={16} color={colors.fg2} />}
+                    loading={isLoading}
+                    onPress={handleMicrosoft}
                   />
                   <Btn
                     label="Apple / iCloud"

@@ -37,6 +37,7 @@ Edit `.env` with your production values. Key variables:
 | `LOG_LEVEL` | Server verbosity: `debug`, `info`, `warn`, `error`, or `silent`; defaults to `info` |
 | `METRICS_PORT` | Internal Prometheus listener; defaults to `9464`, set `0` to disable |
 | `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in and Google Calendar sync |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Microsoft Entra ID app credentials — needed for Outlook calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/microsoft` as a Web redirect URI on the app registration; `MICROSOFT_TENANT_ID` defaults to `common` |
 | `APPLE_CLIENT_ID` | Enables native Sign in with Apple (iOS) — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |
 | `APPLE_TEAM_ID` | Apple Developer Team ID — serves the apple-app-site-association file so iOS invite links open the app directly (universal links). Optional; unset → the Safari hand-off still works |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset emails |

@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { bearer } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createCalendar, db, getUserSettings, markGoogleAccountActive, schema } from '@musubi/db';
+import { CALENDAR_SCOPE, createCalendar, db, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
 import { sendEmail } from '../../../../apps/api/src/emails';
 import { getPasswordResetHtml } from '../../../../apps/api/src/emails/password_reset';
@@ -40,6 +40,12 @@ export const auth = betterAuth({
       accessType: "offline",
       prompt: "select_account consent",
     },
+    microsoft: {
+      clientId: config.social.microsoftClientID,
+      clientSecret: config.social.microsoftClientSecret,
+      tenantId: config.social.microsoftTenantID,
+      prompt: "select_account",
+    },
     apple: {
       clientId: config.social.appleClientID,
       // Native Sign in with Apple only: the identity token's `aud` claim is the
@@ -72,16 +78,17 @@ export const auth = betterAuth({
     account: {
       update: {
         after: async (account) => {
-          // A successful Google OAuth relink writes a fresh refresh token to
-          // the existing Better Auth account. Re-enable provider sync without
+          // A successful OAuth relink writes a fresh refresh token to the
+          // existing Better Auth account. Re-enable provider sync without
           // requiring the user to delete their mirrored calendars.
+          const calendarScope = CALENDAR_SCOPE[account.providerId];
           if (
-            account.providerId === "google" &&
+            calendarScope &&
             account.refreshToken &&
-            (account.scope ?? "").includes("https://www.googleapis.com/auth/calendar") &&
+            (account.scope ?? "").includes(calendarScope) &&
             account.syncStatus === "reconnect_required"
           ) {
-            await markGoogleAccountActive(account.userId, account.accountId);
+            await markOAuthAccountActive(account.userId, account.providerId, account.accountId);
           }
         },
       },
