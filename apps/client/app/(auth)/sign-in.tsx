@@ -9,6 +9,7 @@ import { success, warn } from "@/lib/haptics";
 import SocialAuthButtons from "@/components/auth/SocialAuthButtons";
 import { userFacingError } from "@/lib/network";
 import { takePendingInviteHref } from "@/lib/pendingInvite";
+import { showToast } from "@/components/ui/Toast";
 
 export default function SignIn() {
   const { authClient } = useServer();
@@ -56,7 +57,18 @@ export default function SignIn() {
   };
 
   const handlePasswordReset = async (email: string) => {
-    authClient.requestPasswordReset({ email });
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      throw new Error("Enter a valid email address.");
+    }
+
+    const result = await authClient.requestPasswordReset({ email: normalized });
+    if (result.error) {
+      throw new Error(userFacingError(result.error, "Could not send the reset email."));
+    }
+
+    success();
+    showToast({ message: "If an account exists for this email, a reset link is on its way." });
   };
 
   return (
@@ -135,7 +147,9 @@ export default function SignIn() {
       <InputModal
         visible={isPasswordResetVisible}
         placeholder="your@email.com"
-        title="Enter your account email..."
+        title="Reset your password"
+        keyboardType="email-address"
+        autoCapitalize="none"
         onConfirm={handlePasswordReset}
         onClose={() => setIsPasswordResetVisible(false)}
       />

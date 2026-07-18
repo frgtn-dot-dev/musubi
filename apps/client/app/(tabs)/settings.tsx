@@ -100,8 +100,22 @@ export default function SettingsTab() {
   const handleSignOut = () => signOutAndReset(authClient);
 
   const handleUserDelete = async () => {
-    await api.deleteUser(); // needs the live session — before the reset
-    await signOutAndReset(authClient);
+    try {
+      await api.deleteUser(); // needs the live session — before the reset
+    } catch (error) {
+      warn();
+      throw new Error(userFacingError(error, "Your account could not be deleted."));
+    }
+
+    success();
+    try {
+      await signOutAndReset(authClient);
+    } catch (error) {
+      // The server-side deletion already succeeded. Do not tell the user it
+      // failed just because local cleanup hit a device-specific problem.
+      console.warn("Account deleted, but local cleanup did not finish:", error);
+      showToast({ message: "Account deleted. Restart Musubi to finish local cleanup." });
+    }
   }
 
   const testDeleteConfirm = async (v: string) => {
@@ -235,7 +249,8 @@ export default function SettingsTab() {
       />
       <InputModal
         visible={confrimDeleteVisible}
-        title="To delete your account, write you name..."
+        isDelete
+        title="Type your exact display name to delete your account"
         placeholder={userSession.data?.user.name!}
         onClose={() => setConfirmDeleteVisible(false)}
         onTest={(value) => testDeleteConfirm(value)}
