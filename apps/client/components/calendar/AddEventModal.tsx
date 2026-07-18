@@ -16,7 +16,7 @@ import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { cancelEventNotification, getEventNotification, upsertEventNotification } from "@/services/notifications";
+import { cancelEventNotification, getEventNotification, requestEventNotificationPermission, upsertEventNotification } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from 'uuidv7';
 import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
@@ -27,6 +27,7 @@ import { Tap } from "@/components/ui/Tap";
 import { Btn } from "@/components/ui/Btn";
 import * as haptics from "@/lib/haptics";
 import { userFacingError } from "@/lib/network";
+import { showToast } from "@/components/ui/Toast";
 
 type Props = {
   visible: boolean;
@@ -470,15 +471,34 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setIsLoading(true);
 
     try {
+      // Permission is requested here, in the context of saving a reminder —
+      // never on app launch. A denial is a valid choice and must not block the
+      // event itself from being created or edited.
+      let reminderAllowed = false;
       if (notificationToggle) {
-        await upsertEventNotification(eventConstruct, notifyBeforeTime);
-      } else {
-        await cancelEventNotification(eventConstruct.id);
+        try { reminderAllowed = await requestEventNotificationPermission(); }
+        catch (error) { console.warn("Could not check notification permission:", error); }
       }
+
       if (event?.id) {
         await onEdit(eventConstruct);
       } else {
         await onSave(eventConstruct);
+      }
+
+      try {
+        if (notificationToggle && reminderAllowed) {
+          await upsertEventNotification(eventConstruct, notifyBeforeTime);
+        } else if (!notificationToggle) {
+          await cancelEventNotification(eventConstruct.id);
+        }
+      } catch (error) {
+        console.warn("Event saved, but its reminder could not be updated:", error);
+        showToast({ message: "Event saved, but the reminder could not be scheduled." });
+      }
+
+      if (notificationToggle && !reminderAllowed) {
+        showToast({ message: "Event saved without a reminder. Allow notifications in system settings to enable it." });
       }
       haptics.success();
       docked ? dockedDismiss() : handleClose();

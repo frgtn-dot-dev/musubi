@@ -141,6 +141,8 @@ The iOS path has several sharp edges that don't exist on Android. If you're new 
 
 An invite is an `https://<server>/invite/<token>` link. Android opens the app directly via an `autoVerify` intent filter. iOS needs **universal links**:
 
+The client does not discard an invite when authentication is required. `app/invite/[token].tsx` saves its token and optional origin server in SecureStore, sends the user through welcome/sign-in/sign-up, and all supported auth methods restore that invite after success. The stored value is consumed on return so normal future sign-ins still open the tabs.
+
 - **`ios.associatedDomains`** in `app.config.ts` (`applinks:musubi.frgtn.dev`, `applinks:dev-musubi.frgtn.dev`) — EAS syncs the Associated Domains capability to the App ID at build time.
 - **An [apple-app-site-association](https://developer.apple.com/documentation/xcode/supporting-associated-domains) file** served at `https://<server>/.well-known/apple-app-site-association` — the API's `handlerAppleAppSiteAssociation` builds it from `APPLE_TEAM_ID` (`<team>.dev.frgtn.musubi` → `/invite/*`). It 404s until `APPLE_TEAM_ID` is set; must be HTTPS, `application/json`, no redirect.
 
