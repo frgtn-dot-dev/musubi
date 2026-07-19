@@ -1,4 +1,4 @@
-import { SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
+import { SettingRowAction, SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { CalendarView, Settings } from "@musubi/types";
@@ -6,7 +6,7 @@ import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useState } from "react";
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from "react-native";
+import { View, Text, ScrollView, RefreshControl, StyleSheet, Linking, Platform } from "react-native";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { Btn } from "@/components/ui/Btn";
 import { Tap } from "@/components/ui/Tap";
@@ -15,6 +15,14 @@ import { Avatar } from "@/components/Avatar";
 import { pickAvatarBase64 } from "@/lib/avatar";
 import { Feather } from "@expo/vector-icons";
 import { signOutAndReset } from "@/lib/signOut";
+import { showToast } from "@/components/ui/Toast";
+import { userFacingError } from "@/lib/network";
+import Constants from "expo-constants";
+
+const SUPPORT_EMAIL = "hello@frgtn.dev";
+const FEEDBACK_URL = "https://feedback.musubi.pro/";
+const PRIVACY_URL = "https://musubi.pro/privacy/";
+const TERMS_URL = "https://musubi.pro/terms/";
 
 
 export default function SettingsTab() {
@@ -28,6 +36,7 @@ export default function SettingsTab() {
     timeFormat, setTimeFormat,
     dateFormat, setDateFormat,
     theme, setTheme,
+    tabBarLabels, setTabBarLabels,
     onboarded,
   } = useSettingsStore();
 
@@ -35,6 +44,34 @@ export default function SettingsTab() {
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const userSession = authClient.useSession();
+  const appVersion = Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? "unknown";
+  const appBuild = Constants.nativeBuildVersion
+    ?? String(Platform.OS === "android" ? Constants.expoConfig?.android?.versionCode ?? "dev" : "dev");
+
+  const openExternal = async (url: string, fallback: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      warn();
+      console.warn("Could not open external link:", error);
+      showToast({ message: fallback });
+    }
+  };
+
+  const openProblemReport = () => {
+    const subject = "Musubi problem report";
+    const intro = "What happened, and what did you expect instead?";
+    const diagnostics = [
+      `Musubi ${appVersion} (${appBuild})`,
+      `${Platform.OS} ${String(Platform.Version)}`,
+      `Server: ${apiUrl ?? "unknown"}`,
+    ].join("\n");
+    const body = `${intro}\n\n\n---\n${diagnostics}`;
+    void openExternal(
+      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      `Email us at ${SUPPORT_EMAIL}.`,
+    );
+  };
 
   const changeAvatar = async () => {
     setAvatarBusy(true);
@@ -47,6 +84,7 @@ export default function SettingsTab() {
     } catch (e) {
       warn();
       console.error("Avatar upload failed:", e);
+      showToast({ message: userFacingError(e, "Could not update your photo.") });
     } finally {
       setAvatarBusy(false);
     }
@@ -61,14 +99,23 @@ export default function SettingsTab() {
     } catch (e) {
       warn();
       console.error("Name update failed:", e);
+      showToast({ message: userFacingError(e, "Could not update your name.") });
     }
   };
 
   const refresh = useRefreshData();
   const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = async () => {
+  const onRefresh = async function runRefresh() {
     setRefreshing(true);
-    try { await refresh(); } catch (e) { console.error(e); }
+    try { await refresh(); }
+    catch (e) {
+      console.error(e);
+      showToast({
+        message: userFacingError(e, "Could not refresh settings."),
+        actionLabel: "Retry",
+        onAction: () => setTimeout(() => { void runRefresh(); }, 320),
+      });
+    }
     finally { setRefreshing(false); }
   };
 
@@ -76,16 +123,34 @@ export default function SettingsTab() {
   // `patch` carries the just-changed value (store reads here would be stale).
   const save = (patch: Partial<Settings>) => {
     api.saveSettings({
-      showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn, timeFormat, dateFormat, theme, onboarded,
+      showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn, timeFormat, dateFormat, theme, onboarded, tabBarLabels,
       ...patch,
-    }).catch((e) => { warn(); console.error("Settings save failed:", e); });
+    }).catch((e) => {
+      warn();
+      console.error("Settings save failed:", e);
+      showToast({ message: userFacingError(e, "This setting could not be saved.") });
+    });
   };
 
   const handleSignOut = () => signOutAndReset(authClient);
 
   const handleUserDelete = async () => {
-    await api.deleteUser(); // needs the live session — before the reset
-    await signOutAndReset(authClient);
+    try {
+      await api.deleteUser(); // needs the live session — before the reset
+    } catch (error) {
+      warn();
+      throw new Error(userFacingError(error, "Your account could not be deleted."));
+    }
+
+    success();
+    try {
+      await signOutAndReset(authClient);
+    } catch (error) {
+      // The server-side deletion already succeeded. Do not tell the user it
+      // failed just because local cleanup hit a device-specific problem.
+      console.warn("Account deleted, but local cleanup did not finish:", error);
+      showToast({ message: "Account deleted. Restart Musubi to finish local cleanup." });
+    }
   }
 
   const testDeleteConfirm = async (v: string) => {
@@ -98,14 +163,17 @@ export default function SettingsTab() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={{ fontFamily: fonts.serif, fontSize: 26, color: colors.fg }}>
-          Settings
-        </Text>
+        <Text style={styles.screenTitle}>Settings</Text>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Who you are — tap the avatar to change the photo, tap the name to rename. */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 20, borderBottomWidth: 1, borderColor: colors.line }}>
-          <Tap onPress={changeAvatar} disabled={avatarBusy} scaleTo={0.95}>
+          <Tap
+            onPress={changeAvatar}
+            disabled={avatarBusy}
+            scaleTo={0.95}
+            accessibilityLabel="Change profile photo"
+          >
             <View style={{ opacity: avatarBusy ? 0.5 : 1 }}>
               <Avatar name={userSession.data?.user.name ?? "?"} image={userSession.data?.user.image} size={52} />
               <View style={{
@@ -118,7 +186,12 @@ export default function SettingsTab() {
               </View>
             </View>
           </Tap>
-          <Tap onPress={() => setNameModalVisible(true)} scaleTo={1} style={{ flex: 1, gap: 2 }}>
+          <Tap
+            onPress={() => setNameModalVisible(true)}
+            scaleTo={1}
+            style={{ flex: 1, gap: 2 }}
+            accessibilityLabel={`Change display name. Current name ${userSession.data?.user.name ?? "unknown"}`}
+          >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontFamily: fonts.serif, fontSize: 19, color: colors.fg }}>
                 {userSession.data?.user.name}
@@ -150,6 +223,14 @@ export default function SettingsTab() {
           onToggle={() => {
             setShowKanji(!showKanji);
             save({ showKanji: !showKanji });
+          }}
+        />
+        <SettingRowToggle
+          label="Tab Labels"
+          toggle={tabBarLabels}
+          onToggle={() => {
+            setTabBarLabels(!tabBarLabels);
+            save({ tabBarLabels: !tabBarLabels });
           }}
         />
         <SettingRowOptions
@@ -200,6 +281,30 @@ export default function SettingsTab() {
           }}
         />
 
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>Help & About</Text>
+        <SettingRowAction
+          label="Feedback & Roadmap"
+          detail="Suggest ideas, vote, and see what is planned"
+          external
+          onPress={() => void openExternal(FEEDBACK_URL, "Feedback is available at feedback.musubi.pro.")}
+        />
+        <SettingRowAction
+          label="Report a Problem"
+          detail="Includes app, device, and server details"
+          onPress={openProblemReport}
+        />
+        <SettingRowAction
+          label="Privacy Policy"
+          external
+          onPress={() => void openExternal(PRIVACY_URL, "Privacy policy is available at musubi.pro/privacy.")}
+        />
+        <SettingRowAction
+          label="Terms of Service"
+          external
+          onPress={() => void openExternal(TERMS_URL, "Terms are available at musubi.pro/terms.")}
+        />
+        <SettingRowAction label="Version" value={`${appVersion} (${appBuild})`} />
+
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
           <Btn label="Sign Out" variant="secondary" onPress={handleSignOut} />
@@ -219,7 +324,8 @@ export default function SettingsTab() {
       />
       <InputModal
         visible={confrimDeleteVisible}
-        title="To delete your account, write you name..."
+        isDelete
+        title="Type your exact display name to delete your account"
         placeholder={userSession.data?.user.name!}
         onClose={() => setConfirmDeleteVisible(false)}
         onTest={(value) => testDeleteConfirm(value)}

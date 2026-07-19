@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { SCREEN_HEADER_HEIGHT } from "@/constants/layout";
 
 
 export const fonts = {
@@ -68,10 +69,18 @@ const makeStyles = () => StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
-    padding: 16,
+    height: SCREEN_HEADER_HEIGHT,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    justifyContent: 'center',
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
     backgroundColor: colors.bg1,
+  },
+  screenTitle: {
+    fontFamily: fonts.serif,
+    fontSize: 20,
+    color: colors.fg,
   },
   pillActive: {
     flexDirection: 'row',
@@ -105,8 +114,8 @@ const makeStyles = () => StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
-    height: 40,
-    minWidth: 40,
+    height: 44,
+    minWidth: 44,
     paddingHorizontal: 16,
     borderRadius: 26,
     backgroundColor: colors.fill,
@@ -117,8 +126,8 @@ const makeStyles = () => StyleSheet.create({
     position: 'absolute',
     left: 16,
     bottom: 16,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 26,
     backgroundColor: colors.fill,
     alignItems: 'center',

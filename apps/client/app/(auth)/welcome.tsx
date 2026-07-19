@@ -5,6 +5,7 @@ import { View, Text, Linking, KeyboardAvoidingView } from "react-native";
 import InputModal from "@/components/TextInputModal";
 import { Btn } from "@/components/ui/Btn";
 import { useServer } from "@/contexts/ServerContext";
+import { fetchWithTimeout, userFacingError } from "@/lib/network";
 
 export default function Welcome() {
   const { apiUrl, setNewServerUrl } = useServer();
@@ -16,9 +17,9 @@ export default function Welcome() {
     let result;
 
     try {
-      result = await fetch(`${value.toLowerCase()}/api/v1/server/ok`);
+      result = await fetchWithTimeout(`${value.toLowerCase()}/api/v1/server/ok`);
     } catch (err) {
-      return { ok: false, error: "Invalid URL..." }
+      return { ok: false, error: userFacingError(err, "Could not reach this server. Check the URL and try again.") }
     }
 
     if (result.ok) {
@@ -74,7 +75,7 @@ export default function Welcome() {
                 color: colors.fg3
               }}
               onPress={() => {
-                Linking.openURL("https://musubi.frgtn.dev/terms/");
+                Linking.openURL("https://musubi.pro/terms/");
               }}
             >
               {" terms of service "}
@@ -85,7 +86,7 @@ export default function Welcome() {
                 color: colors.fg3
               }}
               onPress={() => {
-                Linking.openURL("https://musubi.frgtn.dev/privacy/");
+                Linking.openURL("https://musubi.pro/privacy/");
               }}
             >
               {" privacy policy."}

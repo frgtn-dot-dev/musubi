@@ -45,13 +45,16 @@ Expo Router, file-based:
   - index.tsx          redirect — session ? /(tabs) : /(auth)/welcome
   - (auth)/            welcome, sign-in, sign-up
   - (tabs)/            index (calendar), calendars, agenda, settings + _layout (hydrates stores on mount)
-  - onboarding/        index (profile) → calendar → sync
+  - onboarding/        index (profile) → calendar → sync → share
   - invite/[token].tsx deep-link calendar preview + accept
 </FileTree>
 
-- **Onboarding recovery** survives OAuth round-trips via module-level state in `lib/onboardingState.ts`; `(tabs)/_layout.tsx` routes to it when `settings.onboarded === false`.
+- **Onboarding recovery** survives OAuth round-trips via module-level state in `lib/onboardingState.ts`; `(tabs)/_layout.tsx` routes to it when `settings.onboarded === false`. The final share step offers a native Musubi calendar and opens its invite-link flow immediately after creation; it remains skippable.
+- **Signed-out invite recovery** is persisted in platform SecureStore by `lib/pendingInvite.ts`. The invite route records `{ token, server }` before opening auth; successful email, Google, or Apple auth consumes it and returns to `/invite/[token]?afterAuth=1`. Accept/decline then replaces the auth history with tabs, where a new account can continue into onboarding.
 - **ICS deep links** (opening a `.ics` file) are parsed in `_layout.tsx` and stashed in `useImportStore`; the calendar screen picks up the pending draft and opens the composer prefilled.
 - **Android registers Musubi as a calendar app**: `plugins/withCalendarAppCategory.js` adds `APP_CALENDAR` to the launcher intent filter (default-app picker, assistant), and `app.config.ts` declares the AOSP `VIEW content://com.android.calendar` (`time/epoch`) filter so date/clock widgets offer Musubi. Manifest changes → native rebuild required.
+- **Android home-screen widgets** live in the local Expo module `modules/musubi-agenda-widget/`: Kotlin `AppWidgetProvider` / `RemoteViews` render an adaptive Agenda and Calendar from the persisted snapshot built by `services/agendaWidget.ts`. Day/event/settings taps return through Expo Router, and Calendar visibility is stored per widget instance. See [Home screen widgets](/docs/guides/widgets/) for the full data flow, refresh triggers, install steps, and test checklist.
+- **Shared screen chrome** lives in `constants/layout.ts`: tab headers use one 56 dp height, while the icon-only tab bar derives its total height from a small top inset, a 44 dp item, and the device bottom safe area. The docked composer and root toast use that same calculation; do not reintroduce a hard-coded tab-bar height in either component.
 
 ## State — Zustand stores
 
@@ -81,7 +84,7 @@ const merged = existing ? { ...existing, ...incoming } : incoming;
 
 ### The `useApi` hook
 
-`services/api.ts` exposes `useApi()`, a hook returning one async method per endpoint. It's a thin wrapper over `authClient.$fetch` (Better Auth's client, which injects the session token). Two things to know:
+`services/api.ts` exposes `useApi()`, a hook returning one async method per endpoint. It's a thin wrapper over `authClient.$fetch` (Better Auth's client, which injects the session token). Requests have an 18-second abort deadline; raw and federated fetches use `lib/network.ts`'s matching `fetchWithTimeout`, so a weak connection reaches the normal error UI instead of leaving a spinner forever. Two things to know:
 
 ```ts
 // Collapses the repeated error check AND preserves type narrowing:
@@ -122,6 +125,10 @@ Two traps that bit here (both iOS-only symptoms, both aborted the *whole* refres
 ### Offline cache
 
 `services/eventsCache.ts` mirrors events into local **SQLite** (`services/db.ts` + drizzle, schema in `apps/client/db/schema.ts`). Dates are stored as ISO text, `calendars` as a JSON string. Always `hasValidDates()`-guard before inserting. On sign-out, `cacheClearAll()` wipes it.
+
+Connectivity UX has two layers: `components/ui/NetworkStatusBanner.tsx` watches `expo-network` and keeps an app-wide Offline banner visible while cached data remains usable; user-triggered requests pass failures through `userFacingError()` for consistent offline, timeout, and unavailable-server copy. Pull-to-refresh exposes Retry, and the invite route has explicit loading/error/retry states. If invite acceptance succeeds but its follow-up refresh fails, the app treats the invite as accepted and lets the cache catch up later.
+
+Calendar-day UI that can remain mounted overnight uses `hooks/useCurrentDay.ts`. It schedules the next local midnight recursively (so DST is respected) and also refreshes on foreground, rather than waiting for an unrelated store update. The Home month marker uses a conditionally mounted rounded fill: changing only `backgroundColor` from transparent to accent can lose the existing radius during an Android Fabric style diff.
 
 <Aside type="caution">
 The client has its **own** drizzle schema and migrations (`apps/client/db/schema.ts`, `apps/client/drizzle/`) — separate from `packages/db` (the server's PostgreSQL). If you cache a new field, add it here and run the client's `npx drizzle-kit generate` too.
@@ -178,11 +185,22 @@ The composer's RRULE build/parse logic lives in `lib/rrule.ts` and its validatio
 
 `services/notifications.ts` treats reminders as **derived local state** — one SQLite row per event `{ eventID, identifier, offsetMinutes, triggerDate }`, never sent to the server. `nextTrigger()` reuses `expandRecurringEvents` from `@musubi/calendar` to find the next future occurrence. Any event change calls `syncEventNotification`; a full sync calls `reconcileEventNotifications`; sign-out calls `clearAllEventNotifications`.
 
+Notification permission is **contextual**: the app never prompts at launch. `AddEventModal` calls `requestEventNotificationPermission()` only while saving an event whose reminder toggle is on. The event API write completes before the local reminder is scheduled, so denial or a native scheduling failure cannot fail event creation/editing; the user gets a toast instead. Updating a reminder schedules and persists its replacement before cancelling the old identifier, preserving the working reminder if replacement fails.
+
+## Help and diagnostics
+
+Settings exposes `Feedback & Roadmap`, `Report a Problem`, Privacy, Terms, and the native version/build. Public ideas open `feedback.musubi.pro`, where users can suggest, vote, and follow planned work. Private problem reports open a user-controlled email draft to `hello@frgtn.dev`, prefilled only with app version/build, platform/OS version, and the selected Musubi server. Calendar names, events, account email, and other user content are never attached automatically. Link-opening failures fall back to a toast with a copyable destination.
+
+## Accessibility baseline
+
+`Tap` assigns the button role automatically whenever it has `onPress`; specialized controls override it with `switch` or `radio` and expose `checked`, `selected`, `expanded`, `disabled`, and `busy` state where relevant. Icon-only actions need an explicit `accessibilityLabel`. Keep primary navigation and standalone controls at a 44 dp target; dense pills may preserve their small visual shape with vertical `hitSlop` instead of making the visible pill taller. The portal modal host uses `accessibilityViewIsModal`, and decorative dismiss backdrops are excluded from the accessibility tree so VoiceOver/TalkBack stays on meaningful sheet content.
+
 ## Conventions
 
 - **UI primitives** in `components/ui/` — use `Tap` (not bare `Pressable`; it adds press-scale + haptics), `Btn`, `Empty`, `Toast` (`showToast({ message, actionLabel, onAction })`), `confirm()`, and `ModalPortal`/`Portal` (see below). Hand-rolled equivalents get flagged in review.
 - **Modals go through the Portal host — never RN `<Modal>` directly.** Every modal renders through the root `PortalProvider` (mounted in `app/_layout.tsx`, under `ServerProvider`/`SafeAreaProvider` so portaled content keeps `useServer()`/insets) via **`ModalPortal`** (`components/ui/ModalPortal.tsx`) — a drop-in for RN `<Modal>` with the same props. Why: each RN `<Modal>` is a separate **native window**, and opening one from *inside* another is broken on iOS — the inner one never appears and its transparent layer eats every touch (the app looks frozen). `ModalPortal` renders into **one in-tree host** so modals stack correctly by mount order on both platforms, and it wires the Android hardware back (RN `<Modal>`'s one freebie). Pair it with `useModalAnimation` for the fade/slide + swipe-to-dismiss. A small overlay opened from inside a modal (e.g. `ColorPickerModal`) can instead be a plain in-tree absolute overlay in its parent — same reason, never a nested `<Modal>`.
-- **Theme** (`constants/theme.ts`) is a **mutable singleton**, not context: `colors`/`fonts`/`styles` are objects read at render time; `applyTheme()` swaps them in place and the tree remounts via `key={scheme}`. Read `colors.x` at render time — **never** capture a colour into a module-level constant (it freezes to whichever theme loaded first).
+- **Theme** (`constants/theme.ts`) is a **mutable singleton**, not context: `colors`/`fonts`/`styles` are objects read at render time; `applyTheme()` swaps them in place and the tree remounts via `key={scheme}`. Read `colors.x` at render time — **never** capture a colour into a module-level constant (it freezes to whichever theme loaded first). Native light/dark splash assets and the iOS appearance-specific icons are configured in `app.config.ts`; changing them requires a native rebuild.
+- **Sheet gestures must yield to horizontal children.** The shared `useModalAnimation` pan uses a vertical activation threshold and horizontal fail offset so pagers and pill rows do not wait for the sheet-dismiss gesture. Preserve those direction gates when adding gestures around a horizontally scrollable child.
 - **Haptics** via `lib/haptics.ts` (`haptics.success()`, `haptics.warn()`).
 - **Year display** uses the shared `YearStamp` (`components/calendar/YearStamp.tsx`) — the two-digit overlined year next to month names and as the agenda's year divider. Don't hand-roll year text.
 - **React Compiler is ON** (`transform.reactCompiler`) — it auto-memoizes, so don't reach for `React.memo` by default; and **never wrap an exported component in `React.memo`** — it crashes at runtime (`Object is not a function`). Module-local memo (e.g. `TimelineEventBlock`) works.

@@ -1,4 +1,5 @@
 import { colors, fonts } from '@/constants/theme';
+import { TAB_BAR_ITEM_HEIGHT, TAB_BAR_LABEL_FONT_SIZE, TAB_BAR_TOP_INSET, tabBarBottomInset, tabBarHeight } from '@/constants/layout';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useServer } from '@/contexts/ServerContext';
 import { useConnectToEventStream } from '@/hooks/useEventsStream';
@@ -15,10 +16,15 @@ import { cacheGetAllEvents, cacheGetCalendars } from '@/services/eventsCache';
 import { select } from '@/lib/haptics';
 import { onSessionExpired, signOutAndReset } from '@/lib/signOut';
 import { GlobalEventModals } from '@/components/calendar/GlobalEventModals';
+import { startAgendaWidgetSync } from '@/services/agendaWidget';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 export default function TabLayout() {
   const { apiUrl, isLoading, authClient } = useServer();
+  const insets = useSafeAreaInsets();
+  const tabBarLabels = useSettingsStore(s => s.tabBarLabels);
+  const bottomInset = tabBarBottomInset(insets.bottom, tabBarLabels);
 
   // Expired session → any API call 401s → run the full sign-out flow once and
   // land on welcome, instead of every screen failing silently.
@@ -60,6 +66,14 @@ export default function TabLayout() {
 
   useConnectToEventStream();
 
+  // The native Android widget reads a compact persistent snapshot rather than
+  // depending on a live React process. Start only after the cache hydrate so a
+  // cold launch never replaces the last useful widget data with an empty store.
+  useEffect(() => {
+    if (!dataReady) return;
+    return startAgendaWidgetSync();
+  }, [dataReady]);
+
   // First sign-in (any method incl. Google): settings arrive with
   // onboarded=false → hand over to onboarding, resuming at the last step the
   // user reached (an OAuth connect round-trip lands back here mid-flow).
@@ -81,18 +95,18 @@ export default function TabLayout() {
             backgroundColor: colors.bg1,
             borderTopColor: colors.line,
             borderTopWidth: 1,
-            height: 70,
+            height: tabBarHeight(insets.bottom, tabBarLabels),
+            paddingTop: TAB_BAR_TOP_INSET,
+            paddingBottom: bottomInset,
           },
           tabBarItemStyle: {
-            paddingVertical: 5,
+            height: TAB_BAR_ITEM_HEIGHT,
+            paddingVertical: 0,
           },
+          tabBarShowLabel: tabBarLabels,
+          tabBarLabelStyle: { fontFamily: fonts.sans, fontSize: TAB_BAR_LABEL_FONT_SIZE },
           tabBarActiveTintColor: colors.fg,
           tabBarInactiveTintColor: colors.fg3,
-          tabBarLabelStyle: {
-            fontFamily: fonts.sans,
-            fontSize: 10,
-            letterSpacing: 0.4,
-          },
           headerShown: false,
         }}
       >

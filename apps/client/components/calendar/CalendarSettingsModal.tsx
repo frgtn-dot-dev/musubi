@@ -9,6 +9,7 @@ import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-ha
 import { Calendar, can, providerFlavor } from "@musubi/types";
 import { confirm } from "@/lib/confirm";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
+import { useEventsStore } from "@/store/useEventsStore";
 import { useState } from "react";
 import { useApi } from "@/services/api";
 import { useServer } from "@/contexts/ServerContext";
@@ -19,6 +20,8 @@ import { Btn } from "@/components/ui/Btn";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { warn } from "@/lib/haptics";
+import { showToast } from "@/components/ui/Toast";
+import { userFacingError } from "@/lib/network";
 
 
 type Props = {
@@ -51,6 +54,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
     } catch (e) {
       warn();
       console.error("Calendar export failed:", e);
+      showToast({ message: userFacingError(e, "Could not export this calendar.") });
     } finally {
       setExporting(false);
     }
@@ -59,6 +63,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const insets = useSafeAreaInsets();
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
   const { loadCalendars } = useCalendarsStore();
+  const { localRemoveCalendarEvents } = useEventsStore();
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
 
@@ -113,7 +118,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
+          <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
@@ -193,6 +198,9 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                     onPress={async () => {
                       setIsLeaving(true);
                       await api.leaveCalendar(calendar?.id!);
+                      // Purge the departed calendar's events locally — the leave
+                      // itself sends this device no SSE, so ghosts would linger.
+                      localRemoveCalendarEvents(calendar?.id!);
                       loadCalendars(await api.getCalendars());
                       handleClose();
                       onLeave();

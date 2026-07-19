@@ -16,7 +16,7 @@ import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { cancelEventNotification, getEventNotification, upsertEventNotification } from "@/services/notifications";
+import { cancelEventNotification, getEventNotification, requestEventNotificationPermission, upsertEventNotification } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from 'uuidv7';
 import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
@@ -26,6 +26,9 @@ import { remoteForCalendar } from "@/services/federation";
 import { Tap } from "@/components/ui/Tap";
 import { Btn } from "@/components/ui/Btn";
 import * as haptics from "@/lib/haptics";
+import { userFacingError } from "@/lib/network";
+import { showToast } from "@/components/ui/Toast";
+import { tabBarHeight } from "@/constants/layout";
 
 type Props = {
   visible: boolean;
@@ -86,19 +89,20 @@ const DOCK_HIDDEN_EXTRA = 30;        // pushed this far past its height when hid
 const DOCK_SNAP_VELOCITY = 400;      // fling speed that snaps open/closed regardless of position
 const DOCK_DISMISS_PAST = 60;        // dragged this far past peek = dismiss the sheet entirely
 const DOCK_SPRING = { damping: 28, stiffness: 240, mass: 0.8 };
-const TAB_BAR_H = 70;                // (tabs)/_layout tabBarStyle.height — sheet rests on top of it
 const KB_SHOW_MS = 220;              // keyboard lift in/out timings
 const KB_HIDE_MS = 180;
 
-export function AddEventModal({ visible, startingDate, endingDate, docked, anchor, peekVisible = true, dockRevealProgress, dockBottomInset = TAB_BAR_H, onClose, onSave, onEdit, calendars, event }: Props) {
+export function AddEventModal({ visible, startingDate, endingDate, docked, anchor, peekVisible = true, dockRevealProgress, dockBottomInset, onClose, onSave, onEdit, calendars, event }: Props) {
   const {
     notificationsOnByDefault,
     timeFormat,
     dateFormat,
     calendarOrder,
+    tabBarLabels,
   } = useSettingsStore();
 
   const insets = useSafeAreaInsets();
+  const restingBottomInset = dockBottomInset ?? tabBarHeight(insets.bottom, tabBarLabels);
   const { authClient } = useServer();
 
   const [newTitle, setNewTitle] = useState("");
@@ -173,6 +177,14 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   ]
 
   const closeSequence = () => {
+    // Release the keyboard BEFORE unmount. The overlay (edit) composer isn't a
+    // native Modal — closing it with a focused input skips keyboardDidHide, so
+    // the docked sheet's kbLift stays stuck (its X looks dead) and a retained
+    // focus re-raises the keyboard, pulling the docked sheet back up.
+    // Dismissing here fires the hide event every close path shares.
+    Keyboard.dismiss();
+    kbLift.value = 0;
+    setKbPad(0);
     onClose();
 
     setNewTitle('');
@@ -225,7 +237,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     if (!docked) return;
     const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       e => {
-        const containerBottom = win.height - dockBottomInset; // sheet's resting bottom, window coords
+        const containerBottom = win.height - restingBottomInset; // sheet's resting bottom, window coords
         const overlap = Math.max(containerBottom - e.endCoordinates.screenY, 0);
         kbLift.value = withTiming(overlap, { duration: KB_SHOW_MS });
         setKbPad(overlap);
@@ -233,7 +245,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => { kbLift.value = withTiming(0, { duration: KB_HIDE_MS }); setKbPad(0); });
     return () => { show.remove(); hide.remove(); };
-  }, [docked, win.height, dockBottomInset]);
+  }, [docked, win.height, restingBottomInset]);
 
 
   // Hide/show the docked sheet (week view: appears with the first draft).
@@ -469,25 +481,88 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setIsLoading(true);
 
     try {
+      // Permission is requested here, in the context of saving a reminder —
+      // never on app launch. A denial is a valid choice and must not block the
+      // event itself from being created or edited.
+      let reminderAllowed = false;
       if (notificationToggle) {
-        await upsertEventNotification(eventConstruct, notifyBeforeTime);
-      } else {
-        await cancelEventNotification(eventConstruct.id);
+        try { reminderAllowed = await requestEventNotificationPermission(); }
+        catch (error) { console.warn("Could not check notification permission:", error); }
       }
+
       if (event?.id) {
         await onEdit(eventConstruct);
       } else {
         await onSave(eventConstruct);
       }
+
+      try {
+        if (notificationToggle && reminderAllowed) {
+          await upsertEventNotification(eventConstruct, notifyBeforeTime);
+        } else if (!notificationToggle) {
+          await cancelEventNotification(eventConstruct.id);
+        }
+      } catch (error) {
+        console.warn("Event saved, but its reminder could not be updated:", error);
+        showToast({ message: "Event saved, but the reminder could not be scheduled." });
+      }
+
+      if (notificationToggle && !reminderAllowed) {
+        showToast({ message: "Event saved without a reminder. Allow notifications in system settings to enable it." });
+      }
       haptics.success();
       docked ? dockedDismiss() : handleClose();
     } catch (e: any) {
       haptics.warn();
-      Alert.alert("Failed to save", e?.message ?? "An unexpected error occurred.");
+      Alert.alert("Failed to save", userFacingError(e));
     } finally {
       setIsLoading(false);
     }
   };
+
+  const calendarPicker = (
+    <View style={styles.fieldContainer}>
+      <ScrollView
+        horizontal
+
+        showsHorizontalScrollIndicator={false}>
+        <View style={styles.horizontalPillView}>
+          {/* Same order as the Calendars tab (incl. the user's drag order).
+              Only calendars the user can add events to are offered — no point
+              showing one you can't link into. */}
+          {sortCalendars(calendars, calendarOrder)
+            .filter((cal) => can(cal.role, "editEvents"))
+            .map((cal) => {
+            const active = selectedCals.has(cal.id);
+            const isOrigin = originEffective === cal.id;
+            return (
+              <Tap
+                key={cal.id}
+                haptic="select"
+                onPress={() => toggleCal(cal.id)}
+                onLongPress={() => { // set as home (origin), selecting it if needed
+                  setSelectedCals(prev => new Set(prev).add(cal.id));
+                  setOriginCal(cal.id);
+                }}
+                accessibilityLabel={`${cal.name} calendar`}
+                accessibilityHint="Double tap to include. Long press to make it the primary calendar."
+                accessibilityState={{ selected: active }}
+                style={active ? styles.pillActive : styles.pill}
+              >
+                {isOrigin
+                  ? <Ionicons name="star" size={12} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
+                  : <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />}
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
+                  {cal.name}
+                </Text>
+              </Tap>
+            );
+          })}
+        </View>
+      </ScrollView>
+      {calendarsError ? <Text style={styles.errorText}>{calendarsError}</Text> : null}
+    </View>
+  );
 
   const sheetContent = (
     <>
@@ -500,10 +575,17 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
               {/* actions live up here — no Cancel/Create row in docked mode */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Tap onPress={dockedDismiss} hitSlop={10}>
+                <Tap onPress={dockedDismiss} hitSlop={14} accessibilityLabel="Close event editor">
                   <Feather name="x" size={20} color={colors.fg2} />
                 </Tap>
-                <Tap haptic="thump" onPress={handleSave} disabled={isLoading} style={{
+                <Tap
+                  haptic="thump"
+                  onPress={handleSave}
+                  disabled={isLoading}
+                  hitSlop={{ top: 6, bottom: 6 }}
+                  accessibilityLabel="Save event"
+                  accessibilityState={{ disabled: isLoading, busy: isLoading }}
+                  style={{
                   backgroundColor: colors.fill, borderRadius: 999, borderCurve: "continuous",
                   paddingHorizontal: 20, paddingVertical: 8, minWidth: 68, alignItems: "center",
                 }}>
@@ -531,6 +613,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           )}
         </View>
       </GestureDetector>
+      {/* Docked: the pills peek together with the title, so they sit fixed
+          under it instead of scrolling away with the form. */}
+      {docked && calendarPicker}
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
@@ -554,44 +639,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           </View>
         )}
 
-        <View style={styles.fieldContainer}>
-          <ScrollView
-            horizontal
-
-            showsHorizontalScrollIndicator={false}>
-            <View style={styles.horizontalPillView}>
-              {/* Same order as the Calendars tab (incl. the user's drag order).
-                  Only calendars the user can add events to are offered — no point
-                  showing one you can't link into. */}
-              {sortCalendars(calendars, calendarOrder)
-                .filter((cal) => can(cal.role, "editEvents"))
-                .map((cal) => {
-                const active = selectedCals.has(cal.id);
-                const isOrigin = originEffective === cal.id;
-                return (
-                  <Tap
-                    key={cal.id}
-                    haptic="select"
-                    onPress={() => toggleCal(cal.id)}
-                    onLongPress={() => { // set as home (origin), selecting it if needed
-                      setSelectedCals(prev => new Set(prev).add(cal.id));
-                      setOriginCal(cal.id);
-                    }}
-                    style={active ? styles.pillActive : styles.pill}
-                  >
-                    {isOrigin
-                      ? <Ionicons name="star" size={12} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
-                      : <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />}
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
-                      {cal.name}
-                    </Text>
-                  </Tap>
-                );
-              })}
-            </View>
-          </ScrollView>
-          {calendarsError ? <Text style={styles.errorText}>{calendarsError}</Text> : null}
-        </View>
+        {!docked && calendarPicker}
 
         {/* Android: a native dialog opened from the date/time chips below. iOS
             renders its own inline compact picker in the rows (see below) — the
@@ -647,6 +695,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                           setDatePickerMode("date");
                           setDatePickerVisible(true);
                         }}
+                        hitSlop={{ top: 6, bottom: 6 }}
+                        accessibilityLabel={`Choose ${label.toLowerCase()} date`}
                         style={[local.chip, { backgroundColor: colors.bg3 }]}
                       >
                         <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
@@ -660,6 +710,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                             setDatePickerMode("time");
                             setDatePickerVisible(true);
                           }}
+                          hitSlop={{ top: 6, bottom: 6 }}
+                          accessibilityLabel={`Choose ${label.toLowerCase()} time`}
                           style={[local.chip, { backgroundColor: colors.bg3 }]}
                         >
                           <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
@@ -683,6 +735,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               ios_backgroundColor={colors.line}
               onValueChange={(v) => { setAllDayToggle(v); }}
               value={allDayToggle}
+              accessibilityLabel="All-day event"
             />
           </View>
 
@@ -704,6 +757,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                         setNewStart(withHours(newStart, from));
                         setNewEnd(withHours(newStart, to));
                       }}
+                      hitSlop={{ top: 6, bottom: 6 }}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`${label} time preset`}
+                      accessibilityState={{ checked: active }}
                       style={active ? styles.pillActive : styles.pill}
                     >
                       <Feather name={icon} color={colors.fg2} />
@@ -731,6 +788,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                 ios_backgroundColor={colors.line}
                 onValueChange={(v) => { setNotificationToggle(v); }}
                 value={notificationToggle}
+                accessibilityLabel="Event notification"
               />
             </View>
             {notificationToggle &&
@@ -745,6 +803,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                           key={opt.label}
                           haptic="select"
                           onPress={() => setNotifyBeforeTime(opt.value)}
+                          hitSlop={{ top: 6, bottom: 6 }}
+                          accessibilityRole="radio"
+                          accessibilityLabel={`Notify ${opt.label.toLowerCase()} before`}
+                          accessibilityState={{ checked: active }}
                           style={active ? styles.pillActive : styles.pill}
                         >
                           <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
@@ -776,6 +838,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               ios_backgroundColor={colors.line}
               onValueChange={(v) => { setAttendeesToggle(v); }}
               value={attendeesToggle}
+              accessibilityLabel="Allow attendees"
             />
           </View>
         </View>
@@ -801,6 +864,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                         setAdvCount(10);
                       }
                     }}
+                    hitSlop={{ top: 6, bottom: 6 }}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${isWeekly ? `Weekly on ${weekDay}` : opt.label} recurrence`}
+                    accessibilityState={{ checked: active }}
                     style={active ? styles.pillActive : styles.pill}
                   >
                     <Feather name={opt.icon as any} size={12} color={active ? colors.fg : colors.fg3} />
@@ -846,6 +913,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Tap
                     onPress={() => setAdvInterval(v => Math.max(1, v - 1))}
+                    disabled={advInterval === 1}
+                    hitSlop={9}
+                    accessibilityLabel="Decrease recurrence interval"
+                    accessibilityState={{ disabled: advInterval === 1 }}
                     style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>−</Text>
@@ -855,6 +926,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                   </Text>
                   <Tap
                     onPress={() => setAdvInterval(v => Math.min(99, v + 1))}
+                    disabled={advInterval === 99}
+                    hitSlop={9}
+                    accessibilityLabel="Increase recurrence interval"
+                    accessibilityState={{ disabled: advInterval === 99 }}
                     style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>+</Text>
@@ -868,6 +943,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                       key={f}
                       haptic="select"
                       onPress={() => setAdvFreq(f)}
+                      hitSlop={{ top: 8, bottom: 8 }}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`${label} frequency`}
+                      accessibilityState={{ checked: advFreq === f }}
                       style={{
                         flex: 1, paddingVertical: 5, borderRadius: 8, alignItems: 'center',
                         backgroundColor: advFreq === f ? colors.fill : colors.bg3,
@@ -898,6 +977,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                             else next.add(day);
                             return next;
                           })}
+                          hitSlop={{ top: 3, bottom: 3 }}
+                          accessibilityLabel={['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][i]}
+                          accessibilityState={{ selected: active }}
                           style={{
                             flex: 1, aspectRatio: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
                             backgroundColor: active ? colors.fill : colors.bg3,
@@ -922,6 +1004,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                       key={type}
                       haptic="select"
                       onPress={() => setAdvEndType(type)}
+                      hitSlop={{ top: 6, bottom: 6 }}
+                      accessibilityRole="radio"
+                      accessibilityLabel={type === 'never' ? 'Never ends' : 'Ends after a number of occurrences'}
+                      accessibilityState={{ checked: advEndType === type }}
                       style={advEndType === type ? styles.pillActive : styles.pill}
                     >
                       <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: advEndType === type ? colors.fg : colors.fg3 }}>
@@ -933,6 +1019,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Tap
                         onPress={() => setAdvCount(v => Math.max(1, v - 1))}
+                        disabled={advCount === 1}
+                        hitSlop={9}
+                        accessibilityLabel="Decrease occurrence count"
+                        accessibilityState={{ disabled: advCount === 1 }}
                         style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>−</Text>
@@ -942,6 +1032,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                       </Text>
                       <Tap
                         onPress={() => setAdvCount(v => Math.min(999, v + 1))}
+                        disabled={advCount === 999}
+                        hitSlop={9}
+                        accessibilityLabel="Increase occurrence count"
+                        accessibilityState={{ disabled: advCount === 999 }}
                         style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>+</Text>
@@ -1032,7 +1126,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         <Animated.View
           style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)" }, backdropStyle]}
         >
-          <Pressable style={{ flex: 1 }} onPress={dockCollapse} />
+          <Pressable style={{ flex: 1 }} onPress={dockCollapse} accessible={false} />
         </Animated.View>
         <Animated.View style={[styles.modalSheet, {
           height: DOCK_H, maxHeight: DOCK_H, minHeight: 0,
@@ -1053,7 +1147,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
+          <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
         <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
           {sheetContent}

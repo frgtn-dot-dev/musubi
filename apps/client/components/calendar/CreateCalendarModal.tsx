@@ -21,18 +21,21 @@ import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useApi } from "@/services/api";
 import { useRefreshData } from "@/hooks/useRefreshData";
+import { userFacingError } from "@/lib/network";
 
 
 type Props = {
   calendar?: Calendar,
   visible: boolean,
   onClose: () => void,
-  onCreate: (calendar: Calendar) => Promise<void>;
+  onCreate: (calendar: Calendar) => Promise<Calendar | void>;
+  onCreated?: (calendar: Calendar) => void;
   onEdit: (calendar: Calendar) => Promise<void>;
+  musubiOnly?: boolean;
 }
 
 
-export default function CreateCalendarModal({ calendar, visible, onClose, onCreate, onEdit }: Props) {
+export default function CreateCalendarModal({ calendar, visible, onClose, onCreate, onCreated, onEdit, musubiOnly = false }: Props) {
   const insets = useSafeAreaInsets();
   const { authClient } = useServer();
   const [newName, setNewName] = useState("");
@@ -142,13 +145,14 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
         await api.importCalendar(ics, newName, newColor);
         await refresh(); // pulls the new calendar + its events into stores/cache
       } else {
-        await onCreate(newCalendar);
+        const created = await onCreate(newCalendar);
+        onCreated?.(created ?? newCalendar);
       }
       haptics.success();
       handleClose();
     } catch (e: any) {
       haptics.warn();
-      Alert.alert("Failed to save", e?.message ?? "An unexpected error occurred.");
+      Alert.alert("Failed to save", userFacingError(e));
     } finally {
       setIsLoading(false);
     }
@@ -179,7 +183,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-            <Pressable style={{ flex: 1 }} onPress={handleClose} />
+            <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
           </Animated.View>
           <GestureDetector gesture={gesture}>
             <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
@@ -205,8 +209,9 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                   <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Colors</Text>
                   <ScrollView
                     horizontal
-                  
-  showsHorizontalScrollIndicator={false}>
+                    nestedScrollEnabled
+                    directionalLockEnabled
+                    showsHorizontalScrollIndicator={false}>
                     <View style={styles.horizontalPillView}>
                       {palette.map((c) => (
                         <Tap
@@ -219,6 +224,8 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                             gap: 18,
                           }}
                           onPress={() => setNewColor(c.color)}
+                          accessibilityLabel={`${c.name} calendar color`}
+                          accessibilityState={{ selected: c.color === newColor }}
                         >
                           <View style={[styles.calendarCircle, {
                             borderWidth: c.color === newColor ? 2 : 1,
@@ -232,7 +239,12 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                           color once chosen, the plus stays on top. Outlook
                           calendars are preset-only, so no free picker there. */}
                       {!isMicrosoft && (
-                        <Tap haptic="select" onPress={() => setPickerOpen(true)}>
+                        <Tap
+                          haptic="select"
+                          onPress={() => setPickerOpen(true)}
+                          accessibilityLabel="Choose a custom calendar color"
+                          accessibilityState={{ selected: isCustomColor }}
+                        >
                           <View style={[styles.calendarCircle, {
                             borderWidth: isCustomColor ? 2 : 1,
                             borderColor: isCustomColor ? colors.fg3 : colors.line3,
@@ -251,18 +263,26 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                 {/* Where the calendar lives — this Musubi server, or a connected
                     provider account (created on the provider, then synced in).
                     Only when creating: calendars can't move between accounts. */}
-                {!calendar && accounts.length > 0 && !importFile && (
+                {!calendar && !musubiOnly && accounts.length > 0 && !importFile && (
                   <View style={styles.fieldContainer}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Account</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      <View style={{ flexDirection: "row", gap: 8, paddingVertical: 12 }}>
-                        {[null, ...accounts].map((a) => {
+                    <ScrollView
+                      horizontal
+                      nestedScrollEnabled
+                      directionalLockEnabled
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 8, paddingVertical: 12, paddingRight: 16 }}
+                    >
+                      {[null, ...accounts].map((a) => {
                           const selected = (a?.accountId ?? null) === (account?.accountId ?? null) && (a?.provider ?? null) === (account?.provider ?? null);
                           return (
                             <Tap
                               key={a ? `${a.provider}:${a.accountId}` : "musubi"}
                               haptic="select"
                               onPress={() => setAccount(a)}
+                              accessibilityRole="radio"
+                              accessibilityLabel={a?.label ?? "Musubi"}
+                              accessibilityState={{ checked: selected }}
                               style={{
                                 flexDirection: "row",
                                 alignItems: "center",
@@ -282,14 +302,13 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                             </Tap>
                           );
                         })}
-                      </View>
                     </ScrollView>
                   </View>
                 )}
 
                 {/* Fill the new calendar from an .ics file — native calendars only,
                     so picking a file hides the account choice. Only when creating. */}
-                {!calendar && (
+                {!calendar && !musubiOnly && (
                   <View style={styles.fieldContainer}>
                     <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Import</Text>
                     {importFile ? (
@@ -298,12 +317,16 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                         <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.sans, fontSize: 13, color: colors.fg }}>
                           {importFile.name}
                         </Text>
-                        <Tap hitSlop={10} onPress={() => setImportFile(null)}>
+                        <Tap hitSlop={14} onPress={() => setImportFile(null)} accessibilityLabel="Remove import file">
                           <Feather name="x" size={16} color={colors.fg3} />
                         </Tap>
                       </View>
                     ) : (
-                      <Tap onPress={pickImportFile} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}>
+                      <Tap
+                        onPress={pickImportFile}
+                        accessibilityLabel="Import events from an ICS file"
+                        style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}
+                      >
                         <Feather name="upload" size={14} color={colors.fg2} />
                         <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg2 }}>
                           Import events from an .ics file

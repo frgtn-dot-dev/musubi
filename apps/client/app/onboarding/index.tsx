@@ -11,6 +11,8 @@ import { OnboardingScaffold } from "@/components/OnboardingScaffold";
 import { pickAvatarBase64 } from "@/lib/avatar";
 import * as haptics from "@/lib/haptics";
 import { Feather } from "@expo/vector-icons";
+import { showToast } from "@/components/ui/Toast";
+import { userFacingError } from "@/lib/network";
 
 // Onboarding step 1 — who you are. Google users can override the name and
 // photo that came with their account.
@@ -36,6 +38,7 @@ export default function OnboardingProfile() {
     } catch (e) {
       haptics.warn();
       console.error("Avatar upload failed:", e);
+      showToast({ message: userFacingError(e, "Could not upload your photo.") });
     } finally {
       setAvatarBusy(false);
     }
@@ -51,6 +54,7 @@ export default function OnboardingProfile() {
     } catch (e) {
       haptics.warn();
       console.error("Profile update failed:", e); // don't trap them — fixable later
+      showToast({ message: userFacingError(e, "Your profile will be saved later.") });
     } finally {
       setBusy(false);
       router.push("/onboarding/calendar" as any);
@@ -66,7 +70,12 @@ export default function OnboardingProfile() {
       actions={<Btn label="Continue" onPress={continueNext} loading={busy} />}
     >
       <View style={{ alignItems: "center", paddingBottom: 8 }}>
-        <Tap onPress={pickAvatar} disabled={avatarBusy} scaleTo={0.95}>
+        <Tap
+          onPress={pickAvatar}
+          disabled={avatarBusy}
+          scaleTo={0.95}
+          accessibilityLabel={avatarUri ?? session?.user.image ? "Change profile photo" : "Add profile photo"}
+        >
           <View style={{ opacity: avatarBusy ? 0.5 : 1 }}>
             <Avatar name={shownName || "?"} image={avatarUri ?? session?.user.image} size={96} />
             <View style={{
@@ -92,6 +101,7 @@ export default function OnboardingProfile() {
           placeholder="Your name"
           placeholderTextColor={colors.fg4}
           autoCapitalize="words"
+          accessibilityLabel="Display name"
           style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
         />
         <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg4, marginTop: 8 }}>

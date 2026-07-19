@@ -2,7 +2,7 @@ import { AddEventModal } from "@/components/calendar/AddEventModal";
 import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
 import { colors, fonts, styles } from "@/constants/theme";
 import { Event } from "@musubi/types";
-import { eventDay } from "@musubi/calendar";
+import { eventDay, expandRecurringEvents } from "@musubi/calendar";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
@@ -18,18 +18,28 @@ import { useRefreshData } from "@/hooks/useRefreshData";
 import { eventColor } from "@/lib/eventColor";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { formatTime } from "@/lib/datetimeFormat";
+import { useLocalSearchParams } from "expo-router";
+import * as Linking from "expo-linking";
+import { showToast } from "@/components/ui/Toast";
+import { userFacingError } from "@/lib/network";
+import { useCurrentDay } from "@/hooks/useCurrentDay";
 
 
 
 const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 const PAGE = 14;
+const RECURRENCE_HORIZON_YEARS = 2;
 
 export default function AgendaTab() {
   const api = useApi();
   const { events, addEvent, updateEvent, removeEvent } = useEventsStore();
   const { calendars, activeCals, soloCalId, toggleCal, soloCalendar, syncActiveCals } = useCalendarsStore();
   const timeFormat = useSettingsStore((s) => s.timeFormat);
+  const { eventId, occurrenceStart } = useLocalSearchParams<{
+    eventId?: string;
+    occurrenceStart?: string;
+  }>();
   useEffect(() => {
     syncActiveCals(calendars);
   }, [calendars]);
@@ -38,6 +48,7 @@ export default function AgendaTab() {
 
   const [shown, setShown] = useState(PAGE);
   const scrollRef = useRef<ScrollView>(null);
+  const handledWidgetEvent = useRef<string | null>(null);
   // Filter changed → collapse to the first page and jump to top, so a toggle
   // only ever re-renders PAGE rows instead of the whole (possibly huge) list.
   useEffect(() => {
@@ -47,9 +58,17 @@ export default function AgendaTab() {
 
   const refresh = useRefreshData();
   const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = async () => {
+  const onRefresh = async function runRefresh() {
     setRefreshing(true);
-    try { await refresh(); } catch (e) { console.error(e); }
+    try { await refresh(); }
+    catch (e) {
+      console.error(e);
+      showToast({
+        message: userFacingError(e, "Could not refresh agenda."),
+        actionLabel: "Retry",
+        onAction: () => setTimeout(() => { void runRefresh(); }, 320),
+      });
+    }
     finally { setRefreshing(false); }
   };
 
@@ -58,11 +77,28 @@ export default function AgendaTab() {
     [calendars]
   );
 
-  const todayKey = useMemo(() => dateKey(new Date()), []);
+  const currentDay = useCurrentDay();
+  const todayKey = useMemo(() => dateKey(currentDay), [currentDay]);
 
   const groups = useMemo(() => {
     const now = new Date();
-    const sorted = events
+    const recurrenceStart = eventDay(now).startOf("day").toDate();
+    const recurrenceEnd = new Date(recurrenceStart);
+    recurrenceEnd.setFullYear(recurrenceEnd.getFullYear() + RECURRENCE_HORIZON_YEARS);
+
+    // One-off events can remain visible however far away they are. Recurring
+    // series need a finite window, so materialize their upcoming occurrences
+    // for the next two years before applying the normal agenda filters.
+    const agendaEvents = [
+      ...events.filter(event => !event.recurrence),
+      ...expandRecurringEvents(
+        events.filter(event => !!event.recurrence),
+        recurrenceStart,
+        recurrenceEnd,
+      ),
+    ];
+
+    const sorted = agendaEvents
       .filter(e =>
         (e.isAllDay
           // all-day: keep today or later by CALENDAR day — its raw UTC-midnight
@@ -88,11 +124,54 @@ export default function AgendaTab() {
       }
     }
     return result;
-  }, [events, activeCals]);
+  }, [events, activeCals, currentDay]);
 
   // Store write, not setState — opening the detail must not re-render the
   // (long) agenda list. The modal lives in GlobalEventModals.
   const openEventDetail = useCallback((event: Event) => presentEventDetail(events, event), [events]);
+
+  const openWidgetEvent = useCallback((id: string, startValue?: string): boolean => {
+    const direct = events.find(event => event.id === id);
+    const master = direct ?? events.find(event => event.id === id.replace(/_\d+$/, ""));
+    if (!master) return false;
+
+    const startMs = Number(startValue);
+    const selected = !direct && Number.isFinite(startMs)
+      ? {
+          ...master,
+          id,
+          start: new Date(startMs),
+          end: new Date(startMs + master.end.getTime() - master.start.getTime()),
+        }
+      : master;
+    presentEventDetail(events, selected);
+    return true;
+  }, [events]);
+
+  // Query params cover a cold launch. The URL listener also handles tapping
+  // the same widget row again while Agenda is already mounted.
+  useEffect(() => {
+    if (!eventId) return;
+    const key = `${eventId}:${occurrenceStart ?? ""}`;
+    if (handledWidgetEvent.current === key) return;
+    if (openWidgetEvent(eventId, occurrenceStart)) handledWidgetEvent.current = key;
+  }, [eventId, occurrenceStart, openWidgetEvent]);
+
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      const parsed = Linking.parse(url);
+      if (parsed.hostname !== "agenda") return;
+      const idParam = parsed.queryParams?.eventId;
+      const startParam = parsed.queryParams?.occurrenceStart;
+      const id = Array.isArray(idParam) ? idParam[0] : idParam;
+      const start = Array.isArray(startParam) ? startParam[0] : startParam;
+      if (typeof id !== "string") return;
+      if (openWidgetEvent(id, typeof start === "string" ? start : undefined)) {
+        handledWidgetEvent.current = `${id}:${start ?? ""}`;
+      }
+    });
+    return () => subscription.remove();
+  }, [openWidgetEvent]);
 
   // Year dividers are direct ScrollView children so stickyHeaderIndices can
   // pin them: the year stays at the top until the next year's divider pushes
@@ -141,7 +220,14 @@ export default function AgendaTab() {
         <View>
           {
             g.items.map(e => (
-              <Tap onPress={() => openEventDetail(e)} key={e.id} style={styles.timelineRow}>
+              <Tap
+                onPress={() => openEventDetail(e)}
+                key={e.id}
+                accessibilityLabel={e.isAllDay
+                  ? `All-day event, ${e.title || "Untitled event"}`
+                  : `${e.title || "Untitled event"}, ${formatTime(e.start, timeFormat)} to ${formatTime(e.end, timeFormat)}`}
+                style={styles.timelineRow}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg2 }}>
                     {formatTime(e.start, timeFormat)}
@@ -175,9 +261,7 @@ export default function AgendaTab() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={{ fontFamily: fonts.serif, fontSize: 26, color: colors.fg }}>
-          Agenda
-        </Text>
+        <Text style={styles.screenTitle}>Agenda</Text>
       </View>
       <CalendarFilterBar
         calendars={calendars}
@@ -204,7 +288,12 @@ export default function AgendaTab() {
       {/* FAB hides while the docked composer is open (mirrors the home screen). */}
       {!createOpen && (
         <Animated.View entering={FadeIn.duration(400)}>
-          <Tap style={styles.fab} haptic="thump" onPress={() => setCreateOpen(true)}>
+          <Tap
+            style={styles.fab}
+            haptic="thump"
+            onPress={() => setCreateOpen(true)}
+            accessibilityLabel="Create event"
+          >
             <Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text>
           </Tap>
         </Animated.View>

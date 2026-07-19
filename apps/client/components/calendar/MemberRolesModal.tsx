@@ -15,8 +15,10 @@ import { Avatar } from "@/components/Avatar";
 import { Tap } from "@/components/ui/Tap";
 import { confirm } from "@/lib/confirm";
 import * as haptics from "@/lib/haptics";
+import { showToast } from "@/components/ui/Toast";
+import { userFacingError } from "@/lib/network";
 
-type Member = { id: string; name: string; email: string; image?: string | null; role: string };
+type Member = { id: string; name: string; image?: string | null; role: string };
 
 type Props = {
   calendar: Calendar | null,
@@ -41,7 +43,10 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
 
   useEffect(() => {
     if (!visible || !calendar) return;
-    api.getCalendarMembers(calendar.id).then(setMembers).catch(() => setMembers([]));
+    api.getCalendarMembers(calendar.id).then(setMembers).catch((error) => {
+      setMembers([]);
+      showToast({ message: userFacingError(error, "Could not load calendar members.") });
+    });
   }, [visible, calendar?.id]);
 
   const changeRole = async (userID: string, role: "viewer" | "editor" | "owner") => {
@@ -56,6 +61,9 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
         api.getCalendarMembers(calendar!.id).then(setMembers).catch(() => { });
         api.getCalendars().then(loadCalendars).catch(() => { });
       }
+    } catch (error) {
+      haptics.warn();
+      showToast({ message: userFacingError(error, "Could not update this member.") });
     } finally {
       setPending(null);
     }
@@ -80,6 +88,9 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
       try {
         await api.removeMember(calendar!.id, member.id);
         setMembers(prev => prev.filter(m => m.id !== member.id));
+      } catch (error) {
+        haptics.warn();
+        showToast({ message: userFacingError(error, "Could not remove this member.") });
       } finally {
         setPending(null);
       }
@@ -96,7 +107,7 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
+          <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
@@ -113,7 +124,6 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
                     <Avatar name={m.name} image={m.image} size={40} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg }}>{m.name}</Text>
-                      <Text style={{ fontSize: 11, color: colors.fg3 }}>{m.email}</Text>
                     </View>
                     {isOwner ? (
                       // Non-clickable pill, sized to line up with the role toggle below.

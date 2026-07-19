@@ -1,11 +1,12 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import Animated from "react-native-reanimated";
-import { KeyboardAvoidingView, Platform, Pressable, TextInput, View, Text } from "react-native";
+import { KeyboardAvoidingView, Pressable, TextInput, View, Text, type TextInputProps } from "react-native";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
 import { useState } from "react";
 import { Btn } from "@/components/ui/Btn";
 import * as haptics from "@/lib/haptics";
+import { userFacingError } from "@/lib/network";
 
 
 type Props = {
@@ -13,13 +14,15 @@ type Props = {
   isDelete?: boolean,
   title: string,
   placeholder: string,
-  onConfirm: (value: string) => void,
+  onConfirm: (value: string) => void | Promise<void>,
   onClose: () => void,
   onTest?: (value: string) => Promise<{ ok: boolean, error: string }>,
+  keyboardType?: TextInputProps["keyboardType"],
+  autoCapitalize?: TextInputProps["autoCapitalize"],
 }
 
 
-export default function InputModal({ visible, isDelete, title, placeholder, onConfirm, onClose, onTest }: Props) {
+export default function InputModal({ visible, isDelete, title, placeholder, onConfirm, onClose, onTest, keyboardType, autoCapitalize }: Props) {
   const { fadeStyle, handleClose } = useModalAnimation(visible, onClose);
   const [inputValue, setInputValue] = useState("");
   const [valueError, setValueError] = useState("");
@@ -27,18 +30,25 @@ export default function InputModal({ visible, isDelete, title, placeholder, onCo
 
   const handleConfirm = async (value: string) => {
     setIsWaiting(true);
-    if (onTest) {
-      const { ok, error } = await onTest(value);
-      if (!ok) {
-        haptics.warn();
-        setValueError(error ?? "Uknown error...");
-        setIsWaiting(false);
-        return;
+    setValueError("");
+    try {
+      if (onTest) {
+        const { ok, error } = await onTest(value);
+        if (!ok) {
+          haptics.warn();
+          setValueError(error || "Could not verify this value.");
+          return;
+        }
       }
+      await onConfirm(value);
+      handleClose();
+      setInputValue("");
+    } catch (error) {
+      haptics.warn();
+      setValueError(userFacingError(error, "Could not complete this action."));
+    } finally {
+      setIsWaiting(false);
     }
-    onConfirm(value);
-    handleClose();
-    setIsWaiting(false);
   };
 
   const handleCancel = async () => {
@@ -51,13 +61,13 @@ export default function InputModal({ visible, isDelete, title, placeholder, onCo
   return (
     <Modal
       visible={visible}
-      onRequestClose={handleClose}
+      onRequestClose={() => { if (!isWaiting) void handleCancel(); }}
       animationType="none"
       transparent={true}
       statusBarTranslucent={true}
     >
       <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-        <Pressable style={{ flex: 1 }} />
+        <Pressable style={{ flex: 1 }} accessible={false} />
       </Animated.View>
       <KeyboardAvoidingView
         behavior="padding"
@@ -95,7 +105,16 @@ export default function InputModal({ visible, isDelete, title, placeholder, onCo
             }}
             placeholder={placeholder}
             placeholderTextColor={colors.fg4}
-            onChangeText={(t) => setInputValue(t)}
+            value={inputValue}
+            onChangeText={(t) => {
+              setInputValue(t);
+              if (valueError) setValueError("");
+            }}
+            keyboardType={keyboardType}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={false}
+            editable={!isWaiting}
+            accessibilityLabel={title}
           />
           {valueError ? <Text style={[styles.errorText, { alignSelf: "center" }]}>{valueError}</Text> : null}
           <View style={{
@@ -103,7 +122,7 @@ export default function InputModal({ visible, isDelete, title, placeholder, onCo
             gap: 16,
           }}
           >
-            <Btn label="Cancel" variant="secondary" onPress={handleCancel} />
+            <Btn label="Cancel" variant="secondary" disabled={isWaiting} onPress={handleCancel} />
             <Btn
               label={isDelete ? "Delete" : "Confirm"}
               variant={isDelete ? "destructive" : "primary"}

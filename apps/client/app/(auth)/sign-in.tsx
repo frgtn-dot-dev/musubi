@@ -7,6 +7,9 @@ import { View, Text, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollVie
 import { Btn } from "@/components/ui/Btn";
 import { success, warn } from "@/lib/haptics";
 import SocialAuthButtons from "@/components/auth/SocialAuthButtons";
+import { userFacingError } from "@/lib/network";
+import { takePendingInviteHref } from "@/lib/pendingInvite";
+import { showToast } from "@/components/ui/Toast";
 
 export default function SignIn() {
   const { authClient } = useServer();
@@ -39,22 +42,33 @@ export default function SignIn() {
         const result = await authClient.signIn.email({ email, password });
         if (result.error) {
           warn();
-          Alert.alert("Sign In Failed", result.error.message);
+          Alert.alert("Sign In Failed", userFacingError(result.error, "Check your email and passphrase."));
           setIsLoading(false);
         } else {
           success();
-          router.replace("/(tabs)");
+          router.replace((await takePendingInviteHref() ?? "/(tabs)") as any);
         }
       } catch (e: any) {
         setIsLoading(false);
         warn();
-        Alert.alert("Sign In Failed", e?.message ?? "An unexpected error occurred.");
+        Alert.alert("Sign In Failed", userFacingError(e));
       }
     }
   };
 
   const handlePasswordReset = async (email: string) => {
-    authClient.requestPasswordReset({ email });
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      throw new Error("Enter a valid email address.");
+    }
+
+    const result = await authClient.requestPasswordReset({ email: normalized });
+    if (result.error) {
+      throw new Error(userFacingError(result.error, "Could not send the reset email."));
+    }
+
+    success();
+    showToast({ message: "If an account exists for this email, a reset link is on its way." });
   };
 
   return (
@@ -89,6 +103,7 @@ export default function SignIn() {
                   autoCorrect={false}
                   textContentType="emailAddress"
                   autoComplete="email"
+                  accessibilityLabel="Email"
                   returnKeyType="next"
                   onSubmitEditing={() => passwordRef.current?.focus()}
                 />
@@ -108,6 +123,7 @@ export default function SignIn() {
                   autoCorrect={false}
                   textContentType="password"
                   autoComplete="current-password"
+                  accessibilityLabel="Passphrase"
                   returnKeyType="done"
                   onSubmitEditing={handleSignIn}
                 />
@@ -133,7 +149,9 @@ export default function SignIn() {
       <InputModal
         visible={isPasswordResetVisible}
         placeholder="your@email.com"
-        title="Enter your account email..."
+        title="Reset your password"
+        keyboardType="email-address"
+        autoCapitalize="none"
         onConfirm={handlePasswordReset}
         onClose={() => setIsPasswordResetVisible(false)}
       />

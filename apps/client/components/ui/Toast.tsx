@@ -5,6 +5,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 import { colors, fonts } from "@/constants/theme";
 import { Tap } from "@/components/ui/Tap";
+import { usePathname } from "expo-router";
+import { tabBarHeight } from "@/constants/layout";
+import { useSettingsStore } from "@/store/useSettingsStore";
 
 // A single bottom toast — transient message with an optional action (e.g. Undo).
 // Imperative API so any code can raise one: `showToast({ message, actionLabel, onAction })`.
@@ -28,13 +31,21 @@ export const showToast = (t: Omit<Toast, "id">) => useToastStore.getState().show
 const VISIBLE_MS = 4200;  // auto-dismiss after this
 const REVEAL_MS = 260;    // ease-in-out fade + small rise, both directions
 const TRAVEL = 14;        // it only nudges up a little; the fade does the reveal
-const TAB_BAR_H = 70;     // (tabs)/_layout tabBarStyle.height — rest just above it
+const SIGN_IN_ACTIONS_H = 154; // Forgot + Continue + gap/padding; toast sits above both
+const TAB_PATHS = new Set(["/", "/calendars", "/agenda", "/settings"]);
 
 // Mounted once at the app root; renders whatever toast is currently in the store.
 export function ToastHost() {
   const toast = useToastStore((s) => s.toast);
   const hide = useToastStore((s) => s.hide);
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const tabBarLabels = useSettingsStore((s) => s.tabBarLabels);
+  const bottom = pathname === "/sign-in"
+    ? insets.bottom + SIGN_IN_ACTIONS_H
+    : TAB_PATHS.has(pathname)
+      ? tabBarHeight(insets.bottom, tabBarLabels) + 10
+      : insets.bottom + 16;
   const ty = useSharedValue(TRAVEL);
   const op = useSharedValue(0);
   const reveal = useAnimatedStyle(() => ({ transform: [{ translateY: ty.value }], opacity: op.value }));
@@ -59,14 +70,14 @@ export function ToastHost() {
   if (!toast) return null;
 
   return (
-    <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + TAB_BAR_H + 12, alignItems: "center", paddingHorizontal: 16 }}>
+    <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom, alignItems: "center", paddingHorizontal: 16 }}>
       <Animated.View style={[{
         flexDirection: "row", alignItems: "center", gap: 14,
-        maxWidth: 460, paddingLeft: 18, paddingRight: 8, paddingVertical: 8,
+        maxWidth: 460, paddingLeft: 24, paddingRight: toast.actionLabel ? 8 : 24, paddingVertical: 12,
         backgroundColor: colors.fg, borderRadius: 999, borderCurve: "continuous",
         shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8,
       }, reveal]}>
-        <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: fonts.sans, fontSize: 13, color: colors.bg }}>
+        <Text numberOfLines={2} style={{ flexShrink: 1, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.bg }}>
           {toast.message}
         </Text>
         {toast.actionLabel && (

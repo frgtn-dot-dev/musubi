@@ -25,11 +25,17 @@ const expoConfig = {
     "supportsTablet": true,
     "bundleIdentifier": "dev.frgtn.musubi",
     "usesAppleSignIn": true,
+    // iOS 18 can switch app icons with the system appearance. Keep the warm
+    // paper mark for light mode and the original sumi version for dark mode.
+    "icon": {
+      "light": "./assets/images/icon-light.png",
+      "dark": "./assets/images/icon.png"
+    },
     // Universal links: an https invite link opens the app directly instead of
     // bouncing through Safari. Needs the matching apple-app-site-association
     // file served at each domain's /.well-known/ (see API handler). EAS syncs
     // the Associated Domains capability to the App ID at build time.
-    "associatedDomains": ["applinks:musubi.frgtn.dev", "applinks:dev-musubi.frgtn.dev"],
+    "associatedDomains": ["applinks:musubi.pro", "applinks:dev.musubi.pro"],
     "infoPlist": {
       "ITSAppUsesNonExemptEncryption": false,
       // We drive the status bar style at runtime from the app theme (root Stack
@@ -51,6 +57,13 @@ const expoConfig = {
   },
   android: {
     "package": "dev.frgtn.musubi",
+    // Avatars come only from the system photo picker. Block the camera and
+    // microphone permissions that expo-image-picker otherwise contributes.
+    "blockedPermissions": [
+      "android.permission.CAMERA",
+      "android.permission.RECORD_AUDIO",
+      "android.permission.SYSTEM_ALERT_WINDOW"
+    ],
     "adaptiveIcon": {
       "backgroundColor": "#050507",
       "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -65,7 +78,7 @@ const expoConfig = {
         "data": [
           {
             "scheme": "https",
-            "host": "musubi.frgtn.dev",
+            "host": "musubi.pro",
             "pathPrefix": "/invite"
           }
         ],
@@ -108,11 +121,12 @@ const expoConfig = {
     [
       "expo-splash-screen",
       {
-        "image": "./assets/images/splash-icon.png",
+        "image": "./assets/images/splash-icon-light.png",
         "imageWidth": 200,
         "resizeMode": "contain",
-        "backgroundColor": "#050507",
+        "backgroundColor": "#f4f1e8",
         "dark": {
+          "image": "./assets/images/splash-icon.png",
           "backgroundColor": "#050507"
         }
       }
@@ -138,6 +152,14 @@ const expoConfig = {
       }
     ],
     "expo-image",
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Allow Musubi to choose a profile picture.",
+        "cameraPermission": false,
+        "microphonePermission": false
+      }
+    ],
     "./plugins/withCalendarAppCategory",
     "expo-sharing"
   ],
@@ -153,4 +175,3 @@ const expoConfig = {
 }
 
 export default expoConfig;
-

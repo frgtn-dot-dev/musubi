@@ -27,6 +27,7 @@ import { canEditEvent } from "@/lib/eventPermissions";
 import { warn } from "@/lib/haptics";
 import { showToast, ToastHost } from "@/components/ui/Toast";
 import { Tap } from "@/components/ui/Tap";
+import { userFacingError } from "@/lib/network";
 
 
 type CalMode = "month" | "week" | "day";
@@ -164,7 +165,12 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
       localUpdateEvent(next);
       api.updateEvent(next)
         .then(result => localUpdateEvent(result))
-        .catch(err => { console.error("Move failed:", err); warn(); localUpdateEvent(fallback); });
+        .catch(err => {
+          console.error("Move failed:", err);
+          warn();
+          localUpdateEvent(fallback);
+          showToast({ message: userFacingError(err, "Event could not be moved.") });
+        });
     };
     persist(updated, ev);
     showToast({ message: `“${ev.title || "Event"}” moved`, actionLabel: "Undo", onAction: () => persist(ev, updated) });
@@ -191,6 +197,8 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     [visibleEvents, rangeStart, rangeEnd],
   );
 
+  const onPageChange = useCallback((date: Date) => setAnchorDate(date), []);
+
   // Dock model mirrors app/(tabs)/index.tsx: mounted in day/week (or a drill),
   // and it peeks when there's a draft, in day view, or during a drill — no FAB.
   // Gated on canEditEvents so a viewer never gets a composer.
@@ -207,7 +215,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
+          <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.modalSheet, { maxHeight: "95%" }, fadeStyle, slideStyle]}>
@@ -246,7 +254,7 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
                 weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
                 eventColorOf={eventColorOf}
                 onDayPress={openDrill}
-                onPageChange={setAnchorDate}
+                onPageChange={onPageChange}
                 onPressEvent={openEventDetail}
                 draft={draft}
                 onDraftChange={handleDraftChange}
