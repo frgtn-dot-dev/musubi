@@ -176,6 +176,14 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   ]
 
   const closeSequence = () => {
+    // Release the keyboard BEFORE unmount. The overlay (edit) composer isn't a
+    // native Modal — closing it with a focused input skips keyboardDidHide, so
+    // the docked sheet's kbLift stays stuck (its X looks dead) and a retained
+    // focus re-raises the keyboard, pulling the docked sheet back up.
+    // Dismissing here fires the hide event every close path shares.
+    Keyboard.dismiss();
+    kbLift.value = 0;
+    setKbPad(0);
     onClose();
 
     setNewTitle('');
