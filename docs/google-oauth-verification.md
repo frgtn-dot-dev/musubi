@@ -26,10 +26,10 @@ Google verification should only be submitted when the review build, public websi
 - [x] Musubi can create, update, and delete events.
 - [x] Users can disconnect a connected calendar account.
 - [x] Users can delete their Musubi account in the application.
-- [ ] Musubi can create a Google calendar resource.
-- [ ] Musubi can update Google calendar properties.
-- [ ] Musubi can delete an owned secondary Google calendar.
-- [ ] Musubi can modify supported `calendarList` settings.
+- [x] Musubi can create a Google calendar resource.
+- [x] Musubi can update Google calendar properties (name and color only — not description or time zone).
+- [x] Musubi can delete an owned secondary Google calendar.
+- [x] Musubi can modify a supported `calendarList` setting (per-user calendar color).
 - [x] The normal disconnect flow revokes the Google token before deleting local credentials.
 - [x] Google OAuth refresh tokens have verified encryption at rest appropriate for long-lived credentials.
 
@@ -37,14 +37,16 @@ Google verification should only be submitted when the review build, public websi
 
 Do not submit the OAuth verification request until all required P0 items are complete.
 
+Checkbox legend: `[x]` done, `[ ]` not started, `[~]` partial (implemented in the backend but incomplete, or needs demo confirmation in the review build).
+
 ### P0 — Calendar client functionality
 
-- [ ] Create a secondary Google calendar from Musubi.
-- [ ] Edit the name, description, and time zone of an owned Google calendar.
-- [ ] Delete an owned secondary Google calendar with an explicit destructive-action confirmation.
-- [ ] Implement at least one meaningful write operation for the user's Google calendar list, such as visibility or another supported per-user setting.
-- [ ] Distinguish primary, owner, writer, reader, and free/busy-only access roles.
-- [ ] Disable operations that the connected Google account is not authorized to perform.
+- [x] Create a secondary Google calendar from Musubi.
+- [~] Edit an owned Google calendar — name and color are implemented; description and time zone are not.
+- [~] Delete an owned secondary Google calendar — backend implemented; verify the destructive-action confirmation in the review build.
+- [x] Implement at least one meaningful write operation for the user's Google calendar list (per-user calendar color).
+- [~] Distinguish access roles — only a binary editable/read-only flag today (owner/writer vs everything else); full primary/owner/writer/reader/free-busy taxonomy not implemented.
+- [~] Disable operations that the connected Google account is not authorized to perform — driven by the binary read-only flag; verify coverage in the review build.
 - [ ] Clearly distinguish these actions in the UI:
   - disconnect from Musubi;
   - remove a calendar from the Google calendar list;
@@ -154,10 +156,10 @@ Use this only after the corresponding calendar-management features exist in the 
 |---|---|---:|---|
 | E-01 | Three granular scopes requested by the client | Done | Client calendar connection flow |
 | E-02 | Event read/create/update/delete | Done | Google synchronization adapter |
-| E-03 | Google calendar creation | Missing | Add implementation and test |
-| E-04 | Google calendar property update | Missing | Add implementation and test |
-| E-05 | Google calendar deletion | Missing | Add implementation and test |
-| E-06 | Calendar-list write operation | Missing | Add implementation and test |
+| E-03 | Google calendar creation | Implemented (verify in review build) | `adapter.createCalendar` (handlers/calendars.ts) |
+| E-04 | Google calendar property update | Partial — name + color only | `adapter.updateCalendar`; no description/time zone |
+| E-05 | Google calendar deletion | Implemented (verify in review build) | `adapter.deleteCalendar` (handlers/calendars.ts) |
+| E-06 | Calendar-list write operation | Implemented (verify in review build) | Per-user color via `patchCalendarColor` |
 | E-07 | Token revocation during disconnect | Done | Per-account revoke before local cleanup (handlers/connections.ts) |
 | E-08 | Encryption of long-lived Google credentials | Done | Better Auth `encryptOAuthTokens`; key outside DB; decrypt at sync boundary |
 | E-09 | Homepage, Privacy Policy, and Terms alignment | In progress | Public Musubi website |
