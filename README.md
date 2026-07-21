@@ -53,7 +53,7 @@ Nobody else is building exactly this: **an open calendar designed as social infr
 | 侘 | **Zen aesthetic** | Sumi ink on night / ink on washi paper, spring physics, deliberate haptics, kanji accents |
 | 鈴 | **Notifications** | Local reminders that survive edits, moves, and recurrence — even for synced events |
 | 卓 | **Android home-screen widgets** | Scrollable Agenda + adaptive month Calendar; recurring occurrences, deep-linked event/day detail, per-widget calendar filters, and light/dark themes |
-| 家 | **Self-hosting** | One Postgres + one Node server, `docker-compose.selfhost.yml` included |
+| 家 | **Self-hosting** | One Postgres + one Node server, `docker-compose.yml` included |
 
 ### Sync providers
 
