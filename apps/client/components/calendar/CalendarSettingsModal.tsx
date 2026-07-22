@@ -76,6 +76,11 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const showDelete = can(calendar?.role, "deleteCalendar") && !calendar?.isDefault && (!isExternal || isOwner);
   const showInvite = can(calendar?.role, "invite");
   const showLeave = !isOwner;                    // non-owners can leave
+  // Any external mirror can be disconnected (sync stops, mirror dropped, the
+  // provider calendar is untouched). This is the ONLY way to remove a read-only
+  // mirror — holidays or a calendar you were invited to as viewer — which can't
+  // be deleted and isn't yours to delete on the provider.
+  const showDisconnect = isExternal;
 
   // External delete = two-step confirm: first that it's a provider-synced
   // calendar (and where it lives), then the actual deletion.
@@ -119,6 +124,24 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
       await api.leaveCalendar(calendar.id);
       // Purge the departed calendar's events locally — the leave itself sends
       // this device no SSE, so ghosts would linger.
+      localRemoveCalendarEvents(calendar.id);
+      loadCalendars(await api.getCalendars());
+      handleClose();
+      onLeave();
+    });
+  };
+
+  const handleDisconnect = () => {
+    if (!calendar) return;
+    const flavor = providerFlavor(calendar);
+    const providerName = flavor === "apple" ? "Apple Calendar" : flavor === "google" ? "Google Calendar" : "the CalDAV server";
+    confirm({
+      title: `Disconnect "${calendar.name}"?`,
+      message: `It will stop syncing and its events will be removed from Musubi. The calendar stays untouched in ${providerName}, and you can add it back later from ${providerName}.`,
+      confirmLabel: "Disconnect",
+    }, async () => {
+      setIsLeaving(true);
+      await api.disconnectExternalCalendar(calendar.id);
       localRemoveCalendarEvents(calendar.id);
       loadCalendars(await api.getCalendars());
       handleClose();
@@ -170,7 +193,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                 </View>
               </View>
             </ScrollView>
-            {(showEdit || showDelete || showLeave) && (
+            {(showEdit || showDelete || showLeave || showDisconnect) && (
               <View
                 style={{
                   flexDirection: "row",
@@ -217,6 +240,20 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                   >
                     <Feather size={20} name="arrow-left-circle" color={isLeaving ? colors.fg4 : colors.accent} />
                     <Text style={{ color: isLeaving ? colors.fg4 : colors.accent, fontSize: 10 }}>Leave</Text>
+                  </Tap>
+                )}
+
+                {showDisconnect && (showEdit || showDelete || showLeave) && <View style={styles.modalActionDivider} />}
+
+                {showDisconnect && (
+                  <Tap
+                    style={styles.modalActionBtn}
+                    haptic="warn"
+                    disabled={isLeaving || !calendar}
+                    onPress={handleDisconnect}
+                  >
+                    <Feather size={20} name="cloud-off" color={isLeaving ? colors.fg4 : colors.accent} />
+                    <Text style={{ color: isLeaving ? colors.fg4 : colors.accent, fontSize: 10 }}>Disconnect</Text>
                   </Tap>
                 )}
               </View>
