@@ -15,6 +15,7 @@
     "typecheck": "pnpm --filter @musubi/client exec tsc --noEmit && pnpm exec tsc -p apps/api/tsconfig.json --noEmit --skipLibCheck",
     "test": "pnpm --filter @musubi/client exec tsx lib/eventForm.test.ts && pnpm --filter @musubi/client exec tsx lib/rrule.test.ts && pnpm --filter @musubi/client exec tsx lib/ics.test.ts && pnpm --filter @musubi/api test && pnpm --filter @musubi/db test",
     "test:db:oauth": "pnpm --filter @musubi/api exec tsx src/handlers/connections.integration.test.ts",
+    "test:federation-db": "pnpm --filter @musubi/api exec tsx src/federation.integration.test.ts",
     "check": "pnpm typecheck && pnpm test && pnpm lint && pnpm build",
     "lint": "pnpm --filter @musubi/client lint",
     "db:generate": "pnpm -F @musubi/db exec drizzle-kit generate",

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "npx tsx src/index.ts",
-    "test": "tsx src/handlers/calendars.test.ts && tsx src/request_validation.test.ts && tsx src/scheduling.test.ts && tsx src/sync/oauth.test.ts && tsx src/sync/adapters/microsoft.test.ts"
+    "test": "tsx src/federation.test.ts && tsx src/handlers/calendars.test.ts && tsx src/request_validation.test.ts && tsx src/scheduling.test.ts && tsx src/sync/oauth.test.ts && tsx src/sync/adapters/microsoft.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",
@@ -13,6 +13,7 @@
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "@musubi/auth": "workspace:*",
+    "@musubi/calendar": "workspace:*",
     "@musubi/config": "workspace:*",
     "@musubi/db": "workspace:*",
     "@musubi/types": "workspace:*",
