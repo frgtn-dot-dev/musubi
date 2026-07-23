@@ -21,12 +21,12 @@ provider adapters share a small contract, tombstones make offline deletion
 reliable, secrets are encrypted, request IDs cross subsystem boundaries, and
 backup/restore scripts validate their artifacts.
 
-The calendar-detail P0, database-integrity, quality-gate, and single-replica
-contract findings are resolved. The largest remaining risks are at boundaries:
+The calendar-detail P0, database-integrity, quality-gate, single-replica
+contract, and exact-account OAuth cleanup findings are resolved. The largest
+remaining risks are at boundaries:
 
 1. provider event delivery is best-effort without a durable retry queue;
-2. OAuth fallback cleanup can affect sibling accounts; and
-3. federation identity and long-lived token trust need further hardening.
+2. federation identity and long-lived token trust need further hardening.
 
 ## Priority model
 
@@ -179,6 +179,8 @@ aggregation.
 
 ## P1 — disconnect exactly one OAuth account
 
+**Status: remediated on 2026-07-23.**
+
 **Observed:** the connection handler asks Better Auth to unlink one account. If
 that fails, its fallback calls `cleanUsersOAuthTokens(userID, provider)`, which
 is provider-wide rather than account-specific.
@@ -186,8 +188,16 @@ is provider-wide rather than account-specific.
 **Impact:** disconnecting one of several Google or Microsoft accounts can clear
 tokens for sibling accounts in the fallback path.
 
-**Recommendation:** add an account-ID-scoped database fallback and multi-account
-tests. Never describe provider-wide cleanup as exact account removal.
+**Resolution:** the modern disconnect fallback now calls
+`cleanOAuthAccountTokens(userID, provider, accountID)`, whose update predicate
+contains all three identifiers. Unsupported providers are rejected before any
+cleanup. A disposable-PostgreSQL integration test proves the target row is
+cleared while a sibling account for the same provider, another provider, and
+the same account ID owned by another user remain unchanged.
+
+The old Google revoke endpoint has no account ID and remains explicitly
+provider-wide for backward compatibility; its helper is named
+`cleanProviderOAuthTokens` so it cannot be mistaken for exact-account cleanup.
 
 ## P2 — normalize malformed-input responses
 
@@ -272,10 +282,10 @@ validation on placeholder distribution URLs.
    uniqueness constraints.
 3. **Completed:** establish PR CI and make lint green/enforceable.
 4. Add a durable provider outbox plus visible delivery health.
-5. Decide whether production stays single-replica or fund distributed
-   coordination.
-6. Harden federation/token lifecycle and expand integration testing.
-7. Consolidate toolchain, image, and release versioning.
+5. **Completed:** enforce and document the supported single-replica deployment.
+6. **Completed:** scope modern OAuth disconnect cleanup to one account.
+7. Harden federation/token lifecycle and expand integration testing.
+8. Consolidate toolchain, image, and release versioning.
 
 <Aside type="note">
 Treat this page as a living risk register. When closing an item, link the change
