@@ -13,7 +13,8 @@ copy-pasted commands then work from the same location in local shells and CI.
 
 | Goal | Command |
 |---|---|
-| Install exactly the workspace declared by the lockfile | `pnpm install` |
+| Activate the repository's exact pnpm version | `corepack enable` |
+| Install exactly the workspace declared by the lockfile | `pnpm install --frozen-lockfile` |
 | Start API, client Metro, and docs in the Turbo TUI | `pnpm dev` |
 | Start all dev tasks with copyable logs | `pnpm exec turbo run dev --ui=stream` |
 | Start only the API | `pnpm --filter @musubi/api dev` |
@@ -33,11 +34,13 @@ pnpm check
 
 `check` is the contributor baseline and runs, in order:
 
-1. client TypeScript (`tsc --noEmit`);
-2. API TypeScript (`tsc --noEmit --skipLibCheck`);
-3. twelve assertion-based self-check files;
-4. client ESLint with the repository's locked warning budget; and
-5. the root build (currently the Starlight package is the only workspace with a
+1. release/toolchain metadata validation;
+2. workspace peer-dependency validation;
+3. client TypeScript (`tsc --noEmit`);
+4. API TypeScript (`tsc --noEmit --skipLibCheck`);
+5. twelve assertion-based self-check files;
+6. client ESLint with the repository's locked warning budget; and
+7. the root build (currently the Starlight package is the only workspace with a
    `build` script).
 
 Run an individual layer while iterating:
@@ -50,6 +53,8 @@ Run an individual layer while iterating:
 | Docs production build + Pagefind index | `pnpm docs:build` |
 | Root Turbo build | `pnpm build` |
 | Client ESLint | `pnpm lint` |
+| Workspace peer dependencies | `pnpm peers:check` |
+| Release/toolchain metadata | `pnpm release:verify` |
 
 <Aside type="note" title="The lint gate uses a warning budget">
 `pnpm lint` has zero errors and permits exactly 108 known warnings from React
@@ -177,6 +182,38 @@ step; a successful build alone does not prove every handwritten URL resolves.
 The docs are served under `/docs`, so test that prefix explicitly. The generated
 files live under `packages/docs/dist/` and are ignored.
 
+## Versions and releases
+
+The root `package.json` is the single source for both the Musubi product version
+and pnpm:
+
+- `version` is the user-visible SemVer release. `apps/client/app.config.ts`
+  reads it directly for the native Expo version.
+- `packageManager` pins the pnpm version Corepack uses locally, in CI, and in
+  both Docker builds.
+- workspace manifests are private and intentionally have neither field.
+- EAS keeps platform build numbers remotely; those monotonically increasing
+  numbers are separate from the user-visible product version.
+
+For a release, change only the root `version`, then validate it:
+
+```sh
+pnpm release:verify
+pnpm release:verify 0.1.2
+pnpm check
+```
+
+The optional argument represents the version requested by the release job and
+must match the manifest. The validator also rejects nested toolchain/version
+metadata and distribution placeholders. The manual **Publish Docker image**
+workflow runs the same command before logging in to Docker Hub, publishing an
+image, or creating a tag.
+
+Production iOS builds additionally require
+`EXPO_PUBLIC_IOS_APP_STORE_URL=https://apps.apple.com/.../id<digits>` in the EAS
+build environment. `app.config.ts` rejects a missing or malformed URL for the
+`production` profile so a forced-update screen cannot ship with a dead link.
+
 ## Docker and self-hosting
 
 <Tabs>
@@ -211,10 +248,24 @@ files live under `packages/docs/dist/` and are ignored.
   ```
 
   </TabItem>
+  <TabItem label="Build docs locally">
+
+  ```sh
+  docker build -f packages/docs/Dockerfile -t musubi-docs:local .
+  docker run --rm -p 4321:4321 musubi-docs:local
+  ```
+
+  Open `http://localhost:4321/docs/`.
+
+  </TabItem>
 </Tabs>
 
 Container startup applies PostgreSQL migrations through
 `packages/db/src/migrate.ts` before starting the API.
+Both repository Dockerfiles use the root Corepack pin, a frozen lockfile, a
+production-only dependency closure, and a digest-pinned Node base image. The
+API uses `pnpm deploy` so its runtime does not inherit Expo through Drizzle's
+shared monorepo peer context.
 
 ## Backups
 

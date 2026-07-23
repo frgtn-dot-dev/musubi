@@ -43,21 +43,45 @@ node --version
 pnpm --version
 ```
 
-The root manifest pins `pnpm@11.8.0`. Do not use a package-local
-`packageManager` field as the workspace version; several package manifests still
-contain older metadata and the root is authoritative.
+The root manifest pins `pnpm@11.8.0` and is the only toolchain source:
+
+```sh
+corepack enable
+pnpm --version
+# 11.8.0
+```
+
+Do not install a separate global pnpm or add package-local `packageManager`
+fields.
 
 ### pnpm reports a stale or incompatible install
 
 Run from the repository root:
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 pnpm check
 ```
 
 Do not switch the workspace back to pnpm's isolated linker: Expo and Metro rely
-on the configured `nodeLinker: hoisted`.
+on the configured `nodeLinker: hoisted`. If a dependency change intentionally
+updates the lockfile, run `pnpm install`, inspect `pnpm-lock.yaml`, and commit
+the manifest and lockfile together.
+
+### Production EAS rejects the App Store URL
+
+**Symptom:** config evaluation reports that
+`EXPO_PUBLIC_IOS_APP_STORE_URL` is required or malformed.
+
+Set a direct public listing URL in the production EAS environment:
+
+```dotenv
+EXPO_PUBLIC_IOS_APP_STORE_URL=https://apps.apple.com/app/musubi/id1234567890
+```
+
+The numeric id must be the real App Store Connect app id. Development and
+preview builds can omit the variable and use the public download page fallback;
+production intentionally cannot.
 
 ## PostgreSQL and migrations
 

@@ -23,7 +23,8 @@ backup/restore scripts validate their artifacts.
 
 The calendar-detail P0, database-integrity, quality-gate, single-replica
 contract, exact-account OAuth cleanup, and federation token-lifecycle findings
-are resolved. The largest remaining risks are at boundaries:
+are resolved, as is release/toolchain reproducibility. The largest remaining
+risks are at boundaries:
 
 1. provider event delivery is best-effort without a durable retry queue;
 2. first-contact federation home-server claims are still unverified metadata.
@@ -276,12 +277,11 @@ assertion before treating them as globally verified identity.
 **Status: provider coverage expanded on 2026-07-23; route/offline coverage
 remains open.**
 
-Current self-checks cover selected pure behavior, but not:
+Remaining coverage gaps include:
 
 - PostgreSQL constraints, migrations, transactions, or concurrent writes;
 - route authentication/authorization beyond the calendar-detail regression and
   error mapping;
-- provider cursor reset, token rotation, retry, and partial failure as a suite;
 - signed/callback-based federation identity proof and live transport failures;
   or
 - offline-client behavior beyond the tombstone retention window.
@@ -312,9 +312,9 @@ identity proof and live transport failures; and define/test client behavior
 beyond the tombstone retention window. Live provider credentials remain a
 separate release smoke test.
 
-## P3 — align versions and build reproducibility
+## Resolved P3 — align versions and build reproducibility
 
-**Observed:**
+**Observed before remediation:**
 
 - root pins `pnpm@11.8.0`, while some package metadata/Dockerfiles still declare
   pnpm 10; the API image build prepares pnpm 10 but root metadata still makes
@@ -326,9 +326,14 @@ separate release smoke test.
 - API image installation also relaxes lockfile reproducibility; and
 - the iOS forced-update URL still contains an `<APP_ID>` placeholder.
 
-**Recommendation:** choose one toolchain/version source, use Corepack and a
-frozen lockfile in every image, automate version propagation, and fail release
-validation on placeholder distribution URLs.
+**Resolved on 2026-07-23:** root `package.json` is now the only source for the
+product version and exact pnpm version. Expo reads that product version
+directly; private workspace manifests no longer advertise unrelated versions or
+toolchains. Both images use Corepack, filtered production installs, frozen
+lockfiles, and the same digest-pinned Node base. `pnpm release:verify` protects
+these invariants, the Docker release job requires its requested version to match
+the manifest, and production EAS config rejects a missing/malformed iOS store
+URL.
 
 ## Strengths worth preserving
 
@@ -357,7 +362,8 @@ validation on placeholder distribution URLs.
 7. **Partially completed:** isolate unproved federation identities, add token
    expiry/rotation/revocation, and minimize previews; first-contact server proof
    remains.
-8. Consolidate toolchain, image, and release versioning.
+8. **Completed:** consolidate toolchain, image, and release versioning. Keep
+   `pnpm release:verify` in the required release path.
 
 <Aside type="note">
 Treat this page as a living risk register. When closing an item, link the change

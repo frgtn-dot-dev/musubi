@@ -1,3 +1,6 @@
+import type { ExpoConfig } from "expo/config";
+import rootPackage from "../../package.json";
+
 // Native Google Sign-In on iOS needs the iOS OAuth client id AND its reversed
 // form as a URL scheme, or @react-native-google-signin can't determine the
 // clientID at runtime. With options the plugin takes the no-Firebase path (adds
@@ -5,17 +8,27 @@
 // here). Fall back to the bare plugin when the env is unset so a build without
 // the id still succeeds — iOS Google sign-in just stays off until it's provided.
 const iosGoogleClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const googleSignInPlugin = iosGoogleClientId
+const googleSignInPlugin: NonNullable<ExpoConfig["plugins"]>[number] = iosGoogleClientId
   ? ["@react-native-google-signin/google-signin", {
     iosUrlScheme: `com.googleusercontent.apps.${iosGoogleClientId.replace(/\.apps\.googleusercontent\.com$/, "")}`,
   }]
   : "@react-native-google-signin/google-signin";
 
-const expoConfig = {
+const iosAppStoreUrl = process.env.EXPO_PUBLIC_IOS_APP_STORE_URL;
+const appStoreUrlPattern = /^https:\/\/apps\.apple\.com\/(?:[a-z]{2}\/)?app\/(?:[^/]+\/)?id\d+(?:\?.*)?$/;
+
+if (iosAppStoreUrl && !appStoreUrlPattern.test(iosAppStoreUrl)) {
+  throw new Error("EXPO_PUBLIC_IOS_APP_STORE_URL must be a direct apps.apple.com URL ending in a numeric app id");
+}
+if (process.env.EAS_BUILD_PROFILE === "production" && !iosAppStoreUrl) {
+  throw new Error("EXPO_PUBLIC_IOS_APP_STORE_URL is required for production EAS builds");
+}
+
+const expoConfig: ExpoConfig = {
   name: "Musubi",
   slug: "musubi",
   owner: "frgtn",
-  version: "0.1.1",
+  version: rootPackage.version,
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "musubi",
@@ -168,6 +181,7 @@ const expoConfig = {
     "reactCompiler": true
   },
   extra: {
+    ...(iosAppStoreUrl ? { iosAppStoreUrl } : {}),
     eas: {
       projectId: "4e24bdfa-490c-4c3e-9a76-7abef4efa823",
     },

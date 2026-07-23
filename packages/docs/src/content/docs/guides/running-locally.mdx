@@ -14,7 +14,7 @@ you can run only the layer you are changing.
 | Tool | Version / notes |
 |---|---|
 | Node.js | **22.12 or newer**. Astro 7 requires it. |
-| pnpm | **11.8 or newer**. The repository pins `pnpm@11.8.0`. |
+| pnpm | Use Corepack; the root manifest activates exactly `pnpm@11.8.0`. |
 | PostgreSQL | 15+ locally, or Docker. The bundled Compose stack uses PostgreSQL 17. |
 | Git | Any recent version. |
 | Native client | Android Studio for Android; Xcode on macOS for iOS; or an EAS development build. |
@@ -34,8 +34,13 @@ SQLite. Use a **development build** (`expo run:*` or EAS), not Expo Go.
    ```sh
    git clone https://github.com/frgtn-dot-dev/musubi.git
    cd musubi
-   pnpm install
+   corepack enable
+   pnpm install --frozen-lockfile
    ```
+
+   `package.json` at the repository root is the only package-manager version
+   source. Do not install a separate global pnpm or add package-local
+   `packageManager` fields.
 
 2. **Create the local environment file.**
 
@@ -210,7 +215,8 @@ Before editing code, establish the same baseline contributors use:
 pnpm check
 ```
 
-This runs client + API typechecks, the twelve existing assertion-based self-checks,
+This first validates release/toolchain metadata and peer dependencies, then
+runs client + API typechecks, the twelve existing assertion-based self-checks,
 client lint, and the docs build. Lint has zero errors and a locked budget for
 108 known React Compiler/hook warnings; a net increase fails the command. The
 remaining migration is recorded in the
