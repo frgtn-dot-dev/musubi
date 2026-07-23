@@ -133,7 +133,7 @@ confirm convergence manually.
 - the Docker release workflow builds/publishes images without a preceding
   repository check;
 - root `build` exercises only workspaces that declare a build script;
-- the existing tests are ten direct `tsx` assertion programs with no runner,
+- the existing tests are twelve direct `tsx` assertion programs with no runner,
   coverage, database integration, or authorization matrix; and
 - client lint reports **82 errors and 55 warnings**.
 
@@ -143,7 +143,7 @@ shared values, gesture live refs, and legacy state-reset effects remain visible
 as warnings. `expo lint --max-warnings 108` locks that debt so it can only move
 down, and `pnpm check` now includes lint.
 
-`.github/workflows/quality.yml` runs a frozen install, typechecks, the ten
+`.github/workflows/quality.yml` runs a frozen install, typechecks, the twelve
 self-checks, lint, docs build, Drizzle generation drift detection, and a
 production API Docker build for every pull request and push to `main`. The
 manual Docker publication workflow calls the same reusable gate before it can
@@ -151,7 +151,7 @@ push an image or create a release.
 
 **Follow-up:** migrate Reanimated `.value` access to compiler-compatible
 `get()`/`set()` where supported, resolve effect dependency findings, and lower
-the warning budget with every cleanup. Expand the ten assertion programs into
+the warning budget with every cleanup. Expand the twelve assertion programs into
 route/database integration coverage as tracked below.
 
 ## P1 — make horizontal scaling explicit or coordinated
@@ -273,6 +273,9 @@ assertion before treating them as globally verified identity.
 
 ## P2 — improve provider and database integration coverage
 
+**Status: provider coverage expanded on 2026-07-23; route/offline coverage
+remains open.**
+
 Current self-checks cover selected pure behavior, but not:
 
 - PostgreSQL constraints, migrations, transactions, or concurrent writes;
@@ -286,6 +289,28 @@ Current self-checks cover selected pure behavior, but not:
 Use disposable PostgreSQL in CI, fake provider servers at adapter boundaries,
 and a small route-level test matrix. Keep live sandbox smoke tests as a separate
 release check.
+
+**Resolution so far:** always-on self-checks now run local fake Google and
+Microsoft Graph HTTP servers. They cover pagination, partial-page discard after
+`410`, full-set reset cursors, Graph series-master cache reset/reuse and a safe
+retry after a transient provider response. The new reset assertion exposed and
+fixed a stale-master cache surviving from the discarded delta pages.
+
+Provider/account orchestration is isolated in a dependency-free boundary test:
+one discovery/account failure does not block healthy siblings, retryable
+accounts run again in the next cycle, strict connect flows still throw, and
+provider/account filters stay scoped.
+
+`pnpm test:provider-db` adds a disposable-PostgreSQL OAuth lifecycle test with a
+fake token endpoint. It proves encrypted access/refresh-token rotation,
+account-scoped `invalid_grant` reconnect state, sibling preservation, and a
+transient `503` remaining active and succeeding on retry.
+
+**Remaining:** make disposable PostgreSQL mandatory in CI; add the complete
+route authentication/authorization/error matrix; cover signed federation
+identity proof and live transport failures; and define/test client behavior
+beyond the tombstone retention window. Live provider credentials remain a
+separate release smoke test.
 
 ## P3 — align versions and build reproducibility
 

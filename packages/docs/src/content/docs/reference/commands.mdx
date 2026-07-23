@@ -35,7 +35,7 @@ pnpm check
 
 1. client TypeScript (`tsc --noEmit`);
 2. API TypeScript (`tsc --noEmit --skipLibCheck`);
-3. ten assertion-based self-check files;
+3. twelve assertion-based self-check files;
 4. client ESLint with the repository's locked warning budget; and
 5. the root build (currently the Starlight package is the only workspace with a
    `build` script).
@@ -84,6 +84,8 @@ These are plain Node assertions executed with `tsx`, not a test-runner suite:
 | `apps/client/lib/eventForm.test.ts` | Event-form validation |
 | `apps/client/lib/rrule.test.ts` | RRULE building and parsing |
 | `apps/client/lib/ics.test.ts` | Lightweight client `.ics` import |
+| `apps/api/src/sync/orchestrator.test.ts` | Provider/account failure isolation, retry, strict/scoped modes |
+| `apps/api/src/sync/adapters/provider_http.test.ts` | Fake Google/Graph pagination, `410` reset, partial-page discard, series cache reset/reuse |
 | `apps/api/src/federation.test.ts` | Member-token timing, origin validation, invite-preview minimization |
 | `apps/api/src/request_validation.test.ts` | UUID/timestamp guards and HTTP error classification |
 | `apps/api/src/scheduling.test.ts` | Non-overlapping scheduled execution and guard recovery |
@@ -106,6 +108,22 @@ revocation.
 
 When adding pure logic, follow the current assertion style or introduce a
 project-wide runner as one focused change; do not create a third test convention.
+
+### Provider database integration
+
+```sh
+ENVIRONMENT=test \
+DATABASE_URL=postgresql://... \
+BETTER_AUTH_URL=http://localhost:7531 \
+BETTER_AUTH_SECRET=<test-only-secret> \
+pnpm test:provider-db
+```
+
+Run this only against a disposable, fully migrated PostgreSQL database. The
+test starts its own local fake OAuth token endpoint, scopes fixtures to random
+IDs, and cleans them up. It verifies encrypted token rotation,
+account-specific permanent revocation and transient retry behavior without
+live Google/Microsoft credentials.
 
 ## Database
 

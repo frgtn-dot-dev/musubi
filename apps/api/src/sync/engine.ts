@@ -23,6 +23,7 @@ import { caldavAdapter } from "./adapters/caldav";
 import { microsoftAdapter } from "./adapters/microsoft";
 import { providerAuthErrorFields } from "./errors";
 import { recordExternalSyncFailure } from "../metrics";
+import { ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
 
 // provider -> adapter. Register new providers here.
 const adapters: Record<string, CalendarAdapter> = {
@@ -164,51 +165,25 @@ export async function syncProvider(
 // When anything actually changed, the affected calendars' members get an SSE
 // "external_sync" nudge — connected clients run a silent delta refresh, which is
 // what makes provider changes land in the app without a manual pull-to-refresh.
-type SyncUserOptions = {
-  /** Limit a strict, user-triggered sync to the account that initiated it. */
-  provider?: string;
-  accountId?: string;
-  /** Scheduled sync stays best-effort; connect flows use this to fail loudly. */
-  throwOnError?: boolean;
-};
-
-export async function syncUser(userID: string, options: SyncUserOptions = {}) {
-  const changedCalendarIDs: string[] = [];
-  for (const adapter of Object.values(adapters)) {
-    if (options.provider && adapter.provider !== options.provider) continue;
-
-    let accounts: { id: string; label: string }[];
-    try {
-      accounts = await adapter.listAccounts(userID);
-    } catch (e) {
-      recordExternalSyncFailure("discovery", adapter.provider);
-      logger.error("sync.provider.failed", {
-        provider: adapter.provider,
-        userId: userID,
-        error: e,
-        ...providerAuthErrorFields(e),
-      });
-      if (options.throwOnError) throw e;
-      continue;
-    }
-
-    for (const account of accounts) {
-      if (options.accountId && account.id !== options.accountId) continue;
-      try {
-        changedCalendarIDs.push(...await syncProvider(adapter, userID, account));
-      } catch (e) {
-        recordExternalSyncFailure("account", adapter.provider);
-        logger.error("sync.account.failed", {
-          provider: adapter.provider,
+export async function syncUser(userID: string, options: ProviderSyncOptions = {}) {
+  const changedCalendarIDs = await runProviderSyncs(
+    Object.values(adapters),
+    userID,
+    options,
+    {
+      syncAccount: syncProvider,
+      onFailure: ({ stage, provider, accountId, error }) => {
+        recordExternalSyncFailure(stage, provider);
+        logger.error(stage === "discovery" ? "sync.provider.failed" : "sync.account.failed", {
+          provider,
           userId: userID,
-          accountId: account.id,
-          error: e,
-          ...providerAuthErrorFields(e),
+          ...(accountId ? { accountId } : {}),
+          error,
+          ...providerAuthErrorFields(error),
         });
-        if (options.throwOnError) throw e;
-      }
-    }
-  }
+      },
+    },
+  );
 
   if (changedCalendarIDs.length > 0) {
     const memberIDs = new Set<string>();
