@@ -118,12 +118,12 @@ confirm convergence manually.
 - the Docker release workflow builds/publishes images without a preceding
   repository check;
 - root `build` exercises only workspaces that declare a build script;
-- the existing tests are five direct `tsx` assertion programs with no runner,
+- the existing tests are seven direct `tsx` assertion programs with no runner,
   coverage, database integration, or authorization matrix; and
 - client lint reports **82 errors and 55 warnings**.
 
 The new `pnpm check` command creates a reproducible passing baseline for client
-typecheck, API typecheck, those five self-checks, and docs build. Lint remains
+typecheck, API typecheck, those seven self-checks, and docs build. Lint remains
 separate because its baseline is already red.
 
 **Recommendation:** classify compiler/lint false positives around Reanimated
@@ -187,6 +187,9 @@ than display. Include invite leakage and replay in threat modeling.
 
 ## P2 — improve provider and database integration coverage
 
+**Status: provider coverage expanded on 2026-07-23; route/offline coverage
+remains open.**
+
 Current self-checks cover selected pure behavior, but not:
 
 - PostgreSQL constraints, migrations, transactions, or concurrent writes;
@@ -198,6 +201,27 @@ Current self-checks cover selected pure behavior, but not:
 Use disposable PostgreSQL in CI, fake provider servers at adapter boundaries,
 and a small route-level test matrix. Keep live sandbox smoke tests as a separate
 release check.
+
+**Resolution so far:** always-on self-checks now run local fake Google and
+Microsoft Graph HTTP servers. They cover pagination, partial-page discard after
+`410`, full-set reset cursors, Graph series-master cache reset/reuse and a safe
+retry after a transient provider response. The new reset assertion exposed and
+fixed a stale-master cache surviving from the discarded delta pages.
+
+Provider/account orchestration is isolated in a dependency-free boundary test:
+one discovery/account failure does not block healthy siblings, retryable
+accounts run again in the next cycle, strict connect flows still throw, and
+provider/account filters stay scoped.
+
+`pnpm test:provider-db` adds a disposable-PostgreSQL OAuth lifecycle test with a
+fake token endpoint. It proves encrypted access/refresh-token rotation,
+account-scoped `invalid_grant` reconnect state, sibling preservation, and a
+transient `503` remaining active and succeeding on retry.
+
+**Remaining:** make disposable PostgreSQL mandatory in CI; add the complete
+route authentication/authorization/error matrix; add federation lifecycle
+coverage; and define/test client behavior beyond the tombstone retention
+window. Live provider credentials remain a separate release smoke test.
 
 ## P3 — align versions and build reproducibility
 

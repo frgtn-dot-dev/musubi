@@ -235,6 +235,28 @@ Most sync bugs are recurrence and all-day edge cases. The existing adapters alre
 
 </Steps>
 
+## Testing provider boundaries
+
+`pnpm test` includes two provider-neutral safety nets:
+
+- `sync/orchestrator.test.ts` proves discovery/account failures are isolated,
+  retryable accounts run again on the next cycle, strict connect flows throw,
+  and provider/account filters do not leak work; and
+- `sync/adapters/provider_http.test.ts` runs local fake Google/Graph servers to
+  exercise multi-page deltas, `410` cursor reset, partial-result discard,
+  Microsoft series-master cache reset/reuse and safe caller retry.
+
+For stored credential behavior, run `pnpm test:provider-db` against a disposable
+migrated PostgreSQL database. Its fake token endpoint verifies encrypted access
+and refresh-token rotation, account-scoped `invalid_grant`, sibling preservation
+and transient failure retry. See [Commands](/docs/reference/commands/#provider-database-integration)
+for the required test-only environment.
+
+These checks intentionally do not impersonate a live provider. Before a
+release that changes an adapter, still perform one sandbox round trip with real
+credentials: connect, initial pull, incremental pull, create/update/delete,
+token refresh and disconnect.
+
 ### Adapter checklist
 
 - [ ] Cursor expiry → `reset: true` so the engine wipes and refetches
@@ -258,6 +280,7 @@ For setup and provider-specific debugging, use the dedicated guides:
 | File | Contents |
 |---|---|
 | `sync/engine.ts` | `syncProvider`, `syncUser`, `pushEventToCalendars`, registry |
+| `sync/orchestrator.ts` | Provider/account failure boundary, strict/scoped selection |
 | `sync/adapter.ts` | `NormalizedEvent`, `ExternalCalendarInfo`, `FetchChangesResult`, `CalendarAdapter` |
 | `sync/adapters/google.ts` | Google Calendar adapter |
 | `sync/adapters/microsoft.ts` | Microsoft Outlook adapter (Graph calendarView delta) |

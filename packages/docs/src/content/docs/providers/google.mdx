@@ -128,11 +128,13 @@ When changing this adapter:
 - keep calendar-list colors separate from calendar resources;
 - use the shared OAuth refresh/encryption path;
 - record provider failures with bounded metric labels; and
-- run `pnpm check`, then a real sandbox-account round trip when credentials are
-  available.
+- run `pnpm check` (including the fake Google `410`/pagination server),
+  `pnpm test:provider-db` when touching OAuth lifecycle, then a real
+  sandbox-account round trip when credentials are available.
 
 <Aside type="note">
-The automated repository checks exercise the shared sync contract but do not
-currently provide a live Google integration environment. Treat a provider
-sandbox smoke test as part of release validation.
+The automated repository checks exercise Google pagination, cursor reset,
+partial-page discard and OAuth retry/rotation against local fakes. They do not
+provide a live Google integration environment. Treat a provider sandbox smoke
+test as part of release validation.
 </Aside>
