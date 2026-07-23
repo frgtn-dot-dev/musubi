@@ -21,13 +21,13 @@ provider adapters share a small contract, tombstones make offline deletion
 reliable, secrets are encrypted, request IDs cross subsystem boundaries, and
 backup/restore scripts validate their artifacts.
 
-The largest risks are at boundaries:
+The original calendar-detail P0 is resolved. The largest remaining risks are at
+boundaries:
 
-1. one calendar-detail route lacks a membership authorization check;
-2. several multi-row invariants are not transactionally protected;
-3. provider event delivery is best-effort without a durable retry queue;
-4. the repository has no pull-request CI and lint is not currently enforceable;
-5. process-local schedulers/SSE/rate limiting imply a single API replica.
+1. several multi-row invariants are not transactionally protected;
+2. provider event delivery is best-effort without a durable retry queue;
+3. the repository has no pull-request CI and lint is not currently enforceable;
+4. process-local schedulers/SSE/rate limiting imply a single API replica.
 
 ## Priority model
 
@@ -40,21 +40,25 @@ The largest risks are at boundaries:
 
 ## P0 — authorize calendar detail reads
 
-**Observed:** `GET /api/v1/calendars/:id` uses `requireAuth`, but
-`handlerGetCalendar` reads the calendar and its members without verifying that
+**Status: resolved.** `getCalendarDetailsForUser()` now checks the caller's
+calendar role before loading either the calendar or its members. The
+`calendars.test.ts` regression self-check proves a non-member receives
+`Forbidden` and neither protected database read runs.
+
+**Originally observed:** `GET /api/v1/calendars/:id` used `requireAuth`, but
+`handlerGetCalendar` read the calendar and its members without verifying that
 `req.user` belongs to it. The returned member shape includes names and email
 addresses.
 
-**Impact:** an authenticated user who learns or guesses a calendar UUID can read
-metadata and member contact information for a calendar they do not belong to.
+**Original impact:** an authenticated user who learned a calendar UUID could
+read metadata and member contact information for a calendar they did not belong
+to.
 
 **Source:** `apps/api/src/index.ts` and
 `apps/api/src/handlers/calendars.ts`.
 
-**Recommendation:** call the same membership/view assertion used by protected
-calendar endpoints before any data read. Add an API integration test proving a
-non-member receives `403` and no member data. Audit every route with a
-resource ID using an authorization matrix.
+**Remaining follow-up:** expand the same non-member coverage into a route-level
+authorization matrix for every endpoint that accepts a resource ID.
 
 ## P1 — make multi-row invariants atomic
 
@@ -118,12 +122,12 @@ confirm convergence manually.
 - the Docker release workflow builds/publishes images without a preceding
   repository check;
 - root `build` exercises only workspaces that declare a build script;
-- the existing tests are five direct `tsx` assertion programs with no runner,
+- the existing tests are six direct `tsx` assertion programs with no runner,
   coverage, database integration, or authorization matrix; and
 - client lint reports **82 errors and 55 warnings**.
 
 The new `pnpm check` command creates a reproducible passing baseline for client
-typecheck, API typecheck, those five self-checks, and docs build. Lint remains
+typecheck, API typecheck, those six self-checks, and docs build. Lint remains
 separate because its baseline is already red.
 
 **Recommendation:** classify compiler/lint false positives around Reanimated
@@ -190,7 +194,8 @@ than display. Include invite leakage and replay in threat modeling.
 Current self-checks cover selected pure behavior, but not:
 
 - PostgreSQL constraints, migrations, transactions, or concurrent writes;
-- route authentication/authorization and error mapping;
+- route authentication/authorization beyond the calendar-detail regression and
+  error mapping;
 - provider cursor reset, token rotation, retry, and partial failure as a suite;
 - federation invite/token lifecycle; or
 - offline-client behavior beyond the tombstone retention window.
@@ -232,8 +237,8 @@ validation on placeholder distribution URLs.
 
 ## Suggested remediation sequence
 
-1. Fix the calendar-detail authorization gap and add route-level regression
-   coverage.
+1. **Completed:** protect calendar-detail reads and add a non-member regression
+   self-check.
 2. Add uniqueness constraints and transactions around core database invariants.
 3. Establish PR CI and make lint green/enforceable.
 4. Add a durable provider outbox plus visible delivery health.
