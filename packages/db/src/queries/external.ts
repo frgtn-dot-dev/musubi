@@ -167,11 +167,17 @@ export async function clearCalendarEvents(calendarID: string) {
     db.select({ id: calendarEvents.eventID }).from(calendarEvents).where(eq(calendarEvents.calendarID, calendarID))));
 }
 
-// Link an event into calendars (calendar_events rows). Caller guarantees these are
-// new links (the "added" diff), so no conflict handling needed.
+// Link an event into calendars (calendar_events rows). The added diff normally
+// contains only new links; the constraint + conflict handling also absorb
+// retries and concurrent requests.
 export async function linkEventToCalendars(eventID: string, calendarIDs: string[]) {
   if (calendarIDs.length === 0) return;
-  await db.insert(calendarEvents).values(calendarIDs.map(c => ({ eventID, calendarID: c })));
+  await db
+    .insert(calendarEvents)
+    .values(calendarIDs.map(c => ({ eventID, calendarID: c })))
+    .onConflictDoNothing({
+      target: [calendarEvents.eventID, calendarEvents.calendarID],
+    });
   await touchEvent(eventID);
 }
 

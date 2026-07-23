@@ -21,7 +21,9 @@ export async function createEvent(event: NewEvent, calendars: string[]) {
       calendarID: c,
       eventID: result.id,
     }
-  )));
+  ))).onConflictDoNothing({
+    target: [calendarEvents.eventID, calendarEvents.calendarID],
+  });
 
   return result;
 }
@@ -116,4 +118,3 @@ export async function removeEvent(eventID: string) {
 
   return result;
 }
-
