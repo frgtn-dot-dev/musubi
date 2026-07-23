@@ -204,18 +204,50 @@ export async function handlerGetCalendarFromToken(req: Request, res: Response) {
   });
 }
 
-export async function handlerGetCalendar(req: Request, res: Response) {
-  const result = await getCalendar(req.params.id as string);
+type CalendarDetailDependencies = {
+  getUserRoleForCalendar: typeof getUserRoleForCalendar;
+  getCalendar: typeof getCalendar;
+  getCalendarMembers: typeof getCalendarMembers;
+};
 
-  const members = await getCalendarMembers(req.params.id as string);
+const calendarDetailDependencies: CalendarDetailDependencies = {
+  getUserRoleForCalendar,
+  getCalendar,
+  getCalendarMembers,
+};
 
-  res.status(200).json({
-    ...result, members: members.map(u => ({
+// Load a calendar detail only after proving the caller belongs to it. Keep this
+// authorization before both data reads: the response contains member emails,
+// and an authenticated non-member must not be able to enumerate either the
+// calendar or its membership by UUID.
+export async function getCalendarDetailsForUser(
+  userID: string,
+  calendarID: string,
+  dependencies: CalendarDetailDependencies = calendarDetailDependencies,
+) {
+  const role = await dependencies.getUserRoleForCalendar(userID, calendarID);
+  if (!role) throw new ForbiddenError("You're not a member of this calendar.");
+
+  const result = await dependencies.getCalendar(calendarID);
+  if (!result) throw new NotFoundError("Calendar not found...");
+
+  const members = await dependencies.getCalendarMembers(calendarID);
+  return {
+    ...result,
+    members: members.map(u => ({
       name: u.user.name,
       email: u.user.email,
       id: u.user.id,
     })),
-  });
+  };
+}
+
+export async function handlerGetCalendar(req: Request, res: Response) {
+  const result = await getCalendarDetailsForUser(
+    req.user!.id,
+    req.params.id as string,
+  );
+  res.status(200).json(result);
 }
 
 // Import a whole .ics file as a NEW native calendar. Body is raw iCalendar text

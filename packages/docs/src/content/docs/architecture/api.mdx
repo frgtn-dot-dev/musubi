@@ -146,11 +146,14 @@ Client-side checks (the composer's validation, the same-server guard, federation
 - **Identity fields are overwritten server-side** (`creatorID` on create, `creatorID`/`originCalendarID` stripped on update), as described above.
 
 <Aside type="caution">
-This is the required design rule, not a claim that every current route satisfies
-it. The 2026-07-23 audit found that `GET /api/v1/calendars/:id` authenticates but
-does not verify membership before returning calendar/member details. Treat that
-as a P0 authorization gap; see the
+`requireAuth` proves identity but grants no resource access by itself. The
+calendar-detail route now enforces this through
+`getCalendarDetailsForUser()`: it loads the caller's role first and returns
+`Forbidden` before reading calendar/member data for a non-member. This closes
+the original P0 finding in the
 [codebase audit](/docs/contributing/codebase-audit/#p0--authorize-calendar-detail-reads).
+Every new resource route still needs an explicit authorization gate and a
+non-member regression test.
 </Aside>
 
 ## Permissions
