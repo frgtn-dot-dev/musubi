@@ -12,6 +12,7 @@ WORKDIR /repo
 FROM base AS deploy
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
 COPY apps/api apps/api
+COPY packages/calendar packages/calendar
 COPY packages/db packages/db
 COPY packages/auth packages/auth
 COPY packages/types packages/types

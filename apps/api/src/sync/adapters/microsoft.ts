@@ -140,8 +140,12 @@ export function parseCursor(cursor: string | null): { link: string; windowEnd: n
   return null;
 }
 
-async function graphGet(accessToken: string, url: string): Promise<Response> {
-  return fetch(url, {
+async function graphGet(
+  accessToken: string,
+  url: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> {
+  return fetchImpl(url, {
     headers: { Authorization: `Bearer ${accessToken}`, Prefer: PREFER },
   });
 }
@@ -155,12 +159,91 @@ async function fetchSeriesMaster(
   accessToken: string,
   id: string,
   cache: Map<string, any>,
+  fetchImpl: typeof fetch = fetch,
+  graphBase = GRAPH,
 ): Promise<any> {
   if (cache.has(id)) return cache.get(id);
-  const res = await graphGet(accessToken, `${GRAPH}/me/events/${encodeURIComponent(id)}`);
+  const res = await graphGet(
+    accessToken,
+    `${graphBase}/me/events/${encodeURIComponent(id)}`,
+    fetchImpl,
+  );
   const master = res.ok ? await res.json() : null;
   cache.set(id, master);
   return master;
+}
+
+export async function fetchMicrosoftChanges(
+  accessToken: string,
+  externalCalendarId: string,
+  cursor: string | null,
+  options: {
+    fetchImpl?: typeof fetch;
+    graphBase?: string;
+    now?: number;
+  } = {},
+): Promise<FetchChangesResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const graphBase = options.graphBase ?? GRAPH;
+  const now = options.now ?? Date.now();
+  const changes: NormalizedEvent[] = [];
+
+  let parsed = parseCursor(cursor);
+  // Window edge approaching → start over with a fresh window.
+  if (parsed && parsed.windowEnd - now < WINDOW_RENEW_MARGIN_DAYS * DAY_MS) parsed = null;
+
+  let reset = !parsed && !!cursor; // had a cursor but can't continue from it → wipe
+  let windowEnd = parsed?.windowEnd ?? now + WINDOW_FUTURE_DAYS * DAY_MS;
+  let url = parsed?.link
+    ?? initialDeltaUrl(externalCalendarId, windowEnd, now, graphBase);
+  let deltaLink: string | null = null;
+  const seriesMasters = new Map<string, any>();
+
+  while (!deltaLink) {
+    const res = await graphGet(accessToken, url, fetchImpl);
+
+    // Delta token expired → discard partial incremental pages and restart as a
+    // full set. The engine sweeps mappings missing from the completed result.
+    if (res.status === 410) {
+      reset = true;
+      changes.length = 0;
+      seriesMasters.clear();
+      windowEnd = now + WINDOW_FUTURE_DAYS * DAY_MS;
+      url = initialDeltaUrl(externalCalendarId, windowEnd, now, graphBase);
+      continue;
+    }
+    if (!res.ok) throw await graphError(res);
+
+    const data = await res.json();
+    for (let item of data.value ?? []) {
+      if (item.type === "seriesMaster") continue; // definition only; occurrences carry the instances
+      // Occurrences/exceptions inherit subject, isAllDay, body, … from their
+      // master; backfill them (the occurrence's own start/end/id win on spread).
+      if (item.seriesMasterId && !item["@removed"]) {
+        const master = await fetchSeriesMaster(
+          accessToken,
+          item.seriesMasterId,
+          seriesMasters,
+          fetchImpl,
+          graphBase,
+        );
+        if (master) item = { ...master, ...item };
+      }
+      changes.push(toNormalized(item));
+    }
+
+    if (data["@odata.nextLink"]) {
+      url = data["@odata.nextLink"];
+    } else {
+      deltaLink = data["@odata.deltaLink"] ?? url;
+    }
+  }
+
+  return {
+    changes,
+    nextCursor: JSON.stringify({ link: deltaLink, windowEnd }),
+    reset,
+  };
 }
 
 export const microsoftAdapter: CalendarAdapter = {
@@ -208,51 +291,7 @@ export const microsoftAdapter: CalendarAdapter = {
 
   async fetchChanges(userID, accountId, externalCalendarId, cursor): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
-    const changes: NormalizedEvent[] = [];
-
-    let parsed = parseCursor(cursor);
-    // Window edge approaching → start over with a fresh window.
-    if (parsed && parsed.windowEnd - Date.now() < WINDOW_RENEW_MARGIN_DAYS * DAY_MS) parsed = null;
-
-    let reset = !parsed && !!cursor; // had a cursor but can't continue from it → wipe
-    let windowEnd = parsed?.windowEnd ?? Date.now() + WINDOW_FUTURE_DAYS * DAY_MS;
-    let url = parsed?.link ?? initialDeltaUrl(externalCalendarId, windowEnd);
-    let deltaLink: string | null = null;
-    const seriesMasters = new Map<string, any>();
-
-    while (!deltaLink) {
-      const res = await graphGet(accessToken, url);
-
-      // delta token expired → restart as a full sync and tell core to wipe local first
-      if (res.status === 410) {
-        reset = true;
-        changes.length = 0;
-        windowEnd = Date.now() + WINDOW_FUTURE_DAYS * DAY_MS;
-        url = initialDeltaUrl(externalCalendarId, windowEnd);
-        continue;
-      }
-      if (!res.ok) throw await graphError(res);
-
-      const data = await res.json();
-      for (let item of data.value ?? []) {
-        if (item.type === "seriesMaster") continue; // definition only; occurrences carry the instances
-        // Occurrences/exceptions inherit subject, isAllDay, body, … from their
-        // master; backfill them (the occurrence's own start/end/id win on spread).
-        if (item.seriesMasterId && !item["@removed"]) {
-          const master = await fetchSeriesMaster(accessToken, item.seriesMasterId, seriesMasters);
-          if (master) item = { ...master, ...item };
-        }
-        changes.push(toNormalized(item));
-      }
-
-      if (data["@odata.nextLink"]) {
-        url = data["@odata.nextLink"];
-      } else {
-        deltaLink = data["@odata.deltaLink"] ?? url;
-      }
-    }
-
-    return { changes, nextCursor: JSON.stringify({ link: deltaLink, windowEnd }), reset };
+    return fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
   },
 
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {
@@ -332,8 +371,13 @@ export const microsoftAdapter: CalendarAdapter = {
   },
 };
 
-function initialDeltaUrl(externalCalendarId: string, windowEnd: number): string {
-  const start = new Date(Date.now() - WINDOW_PAST_DAYS * DAY_MS).toISOString();
+function initialDeltaUrl(
+  externalCalendarId: string,
+  windowEnd: number,
+  now = Date.now(),
+  graphBase = GRAPH,
+): string {
+  const start = new Date(now - WINDOW_PAST_DAYS * DAY_MS).toISOString();
   const end = new Date(windowEnd).toISOString();
-  return `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}/calendarView/delta?startDateTime=${start}&endDateTime=${end}`;
+  return `${graphBase}/me/calendars/${encodeURIComponent(externalCalendarId)}/calendarView/delta?startDateTime=${start}&endDateTime=${end}`;
 }

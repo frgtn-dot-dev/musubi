@@ -124,4 +124,6 @@ secrets until the exact redirect and platform type have been verified.
 - cover lightweight occurrence, exception, all-day series, and missing master;
 - keep the fixed-window limitation explicit in UI and docs;
 - reject unsupported recurrence without partial writes; and
-- run the shared checks plus a sandbox-account round trip before release.
+- run `pnpm check` (including fake Graph pagination/`410`/master cache reset),
+  `pnpm test:provider-db` for OAuth changes, plus a sandbox-account round trip
+  before release.

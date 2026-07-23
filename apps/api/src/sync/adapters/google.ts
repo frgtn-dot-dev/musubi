@@ -159,6 +159,59 @@ function toGoogleEvent(event: Event) {
   };
 }
 
+export async function fetchGoogleChanges(
+  accessToken: string,
+  externalCalendarId: string,
+  cursor: string | null,
+  options: {
+    fetchImpl?: typeof fetch;
+    baseUrl?: string;
+  } = {},
+): Promise<FetchChangesResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = options.baseUrl ?? GCAL;
+  const changes: NormalizedEvent[] = [];
+  let currentCursor = cursor;
+  let pageToken: string | undefined;
+  let nextSyncToken: string | undefined;
+  let reset = false;
+  let done = false;
+
+  while (!done) {
+    const params = new URLSearchParams();
+    if (currentCursor) params.set("syncToken", currentCursor);
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const res = await fetchImpl(
+      `${baseUrl}/calendars/${encodeURIComponent(externalCalendarId)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+
+    // Cursor expired → discard any partial incremental pages and restart as a
+    // full set. The engine will sweep provider mappings absent from that set.
+    if (res.status === 410) {
+      reset = true;
+      currentCursor = null;
+      pageToken = undefined;
+      changes.length = 0;
+      continue;
+    }
+    if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
+
+    const data = await res.json();
+    for (const item of data.items ?? []) changes.push(toNormalized(item));
+
+    if (data.nextPageToken) {
+      pageToken = data.nextPageToken;
+    } else {
+      nextSyncToken = data.nextSyncToken;
+      done = true;
+    }
+  }
+
+  return { changes, nextCursor: nextSyncToken ?? currentCursor, reset };
+}
+
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
 
@@ -197,45 +250,7 @@ export const googleAdapter: CalendarAdapter = {
 
   async fetchChanges(userID, accountId, externalCalendarId, cursor): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
-    const changes: NormalizedEvent[] = [];
-    let currentCursor = cursor;
-    let pageToken: string | undefined;
-    let nextSyncToken: string | undefined;
-    let reset = false;
-    let done = false;
-
-    while (!done) {
-      const params = new URLSearchParams();
-      if (currentCursor) params.set("syncToken", currentCursor);
-      if (pageToken) params.set("pageToken", pageToken);
-
-      const res = await fetch(
-        `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events?${params}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-
-      // cursor expired → restart as a full sync and tell core to wipe local first
-      if (res.status === 410) {
-        reset = true;
-        currentCursor = null;
-        pageToken = undefined;
-        changes.length = 0;
-        continue;
-      }
-      if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
-
-      const data = await res.json();
-      for (const item of data.items ?? []) changes.push(toNormalized(item));
-
-      if (data.nextPageToken) {
-        pageToken = data.nextPageToken;
-      } else {
-        nextSyncToken = data.nextSyncToken;
-        done = true;
-      }
-    }
-
-    return { changes, nextCursor: nextSyncToken ?? currentCursor, reset };
+    return fetchGoogleChanges(accessToken, externalCalendarId, cursor);
   },
 
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {

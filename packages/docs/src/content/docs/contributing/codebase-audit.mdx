@@ -21,13 +21,13 @@ provider adapters share a small contract, tombstones make offline deletion
 reliable, secrets are encrypted, request IDs cross subsystem boundaries, and
 backup/restore scripts validate their artifacts.
 
-The largest risks are at boundaries:
+The calendar-detail P0, database-integrity, quality-gate, single-replica
+contract, exact-account OAuth cleanup, and federation token-lifecycle findings
+are resolved, as is release/toolchain reproducibility. The largest remaining
+risks are at boundaries:
 
-1. one calendar-detail route lacks a membership authorization check;
-2. several multi-row invariants are not transactionally protected;
-3. provider event delivery is best-effort without a durable retry queue;
-4. the repository has no pull-request CI and lint is not currently enforceable;
-5. process-local schedulers/SSE/rate limiting imply a single API replica.
+1. provider event delivery is best-effort without a durable retry queue;
+2. first-contact federation home-server claims are still unverified metadata.
 
 ## Priority model
 
@@ -40,59 +40,73 @@ The largest risks are at boundaries:
 
 ## P0 — authorize calendar detail reads
 
-**Observed:** `GET /api/v1/calendars/:id` uses `requireAuth`, but
-`handlerGetCalendar` reads the calendar and its members without verifying that
+**Status: resolved.** `getCalendarDetailsForUser()` now checks the caller's
+calendar role before loading either the calendar or its members. The
+`calendars.test.ts` regression self-check proves a non-member receives
+`Forbidden` and neither protected database read runs.
+
+**Originally observed:** `GET /api/v1/calendars/:id` used `requireAuth`, but
+`handlerGetCalendar` read the calendar and its members without verifying that
 `req.user` belongs to it. The returned member shape includes names and email
 addresses.
 
-**Impact:** an authenticated user who learns or guesses a calendar UUID can read
-metadata and member contact information for a calendar they do not belong to.
+**Original impact:** an authenticated user who learned a calendar UUID could
+read metadata and member contact information for a calendar they did not belong
+to.
 
 **Source:** `apps/api/src/index.ts` and
 `apps/api/src/handlers/calendars.ts`.
 
-**Recommendation:** call the same membership/view assertion used by protected
-calendar endpoints before any data read. Add an API integration test proving a
-non-member receives `403` and no member data. Audit every route with a
-resource ID using an authorization matrix.
+**Remaining follow-up:** expand the same non-member coverage into a route-level
+authorization matrix for every endpoint that accepts a resource ID.
 
 ## P1 — make multi-row invariants atomic
 
-**Observed:** important workflows perform dependent writes separately:
+**Status: resolved for local database writes.** The query layer now commits each
+of these invariants in one Drizzle transaction:
 
-- calendar row, then owner membership;
-- event, attendee, then calendar links;
-- event update, link reconciliation, and provider mappings;
-- ownership transfer across member roles and `creatorID`; and
-- several provider-delete/local-delete combinations.
+- a calendar row and its owner membership;
+- an event, its creator-attendee row, and all initial calendar links;
+- an event edit, link reconciliation, and removed provider mappings;
+- unlinking an event and tombstoning it when the final link disappears;
+- calendar deletion, origin tombstones, cascaded links, and orphan cleanup; and
+- external-mirror disablement or whole-account disconnect plus all local mirror
+  cleanup (including CalDAV credentials).
 
-Some external upsert paths already use transactions, showing the intended
-pattern is available.
+Ownership transfer also locks the calendar row before changing both member roles
+and `creatorID`, so concurrent transfers cannot both proceed from the same owner
+snapshot. Provider mirrors reject ownership transfer because their credentials
+remain scoped to the original connected account.
 
-**Impact:** a database error, process exit, or provider failure between steps can
-leave ownerless calendars, partially linked events, duplicate roles, or local
-and provider state that disagree.
+**Originally observed:** these writes ran as independent statements. A database
+error or process exit between them could leave ownerless calendars, partially
+linked events, stale mappings, or roles that disagreed with `creatorID`.
 
-**Recommendation:** define invariants first, then wrap database-only write sets
-in one Drizzle transaction. For external side effects, use an explicit state
-machine/outbox rather than pretending a database transaction covers the
-provider.
+**Provider boundary:** a PostgreSQL transaction cannot roll back Google,
+Microsoft, or CalDAV. Calendar writes retain their documented provider-first
+ordering, while event delivery remains best-effort. Durable recovery for that
+cross-system boundary is tracked separately under
+[make provider event delivery recoverable](#p1--make-provider-event-delivery-recoverable).
 
 ## P1 — add database constraints for assumed uniqueness
 
-**Observed:**
+**Status: resolved.** Migration `0033_busy_thunderball.sql` removes historical
+duplicates before adding:
 
-- `calendar_events` has no unique constraint on `(event_id, calendar_id)`;
-- `user_settings.id` is treated as one-row-per-user but is not primary/unique;
-  and
-- lazy settings creation is a select-then-insert race.
+- a primary key on `user_settings.id`; and
+- a unique constraint on `calendar_events(event_id, calendar_id)`.
 
-**Impact:** retries or concurrent requests can create duplicate links/settings;
-queries and updates then return ambiguous or multiplied results.
+Settings creation now absorbs a concurrent insert, settings saves use one
+upsert, and event-link inserts use `ON CONFLICT DO NOTHING`. The schema
+self-check asserts both constraints are present in Drizzle metadata.
 
-**Recommendation:** clean any existing duplicates, add unique indexes in a new
-migration, and make inserts conflict-safe. Add concurrency-oriented database
-tests.
+**Originally observed:** neither invariant was enforced by PostgreSQL. Lazy
+settings creation and event-link retries could create duplicate rows, leaving
+reads and updates ambiguous or multiplied.
+
+**Remaining follow-up:** exercise the migration and concurrent writes against
+disposable PostgreSQL in CI as part of
+[provider and database integration coverage](#p2--improve-provider-and-database-integration-coverage).
 
 ## P1 — make provider event delivery recoverable
 
@@ -112,26 +126,38 @@ confirm convergence manually.
 
 ## P1 — restore an enforceable quality gate
 
+**Status: remediated on 2026-07-23.**
+
 **Observed on 2026-07-23:**
 
 - there is no pull-request CI workflow;
 - the Docker release workflow builds/publishes images without a preceding
   repository check;
 - root `build` exercises only workspaces that declare a build script;
-- the existing tests are five direct `tsx` assertion programs with no runner,
+- the existing tests are twelve direct `tsx` assertion programs with no runner,
   coverage, database integration, or authorization matrix; and
 - client lint reports **82 errors and 55 warnings**.
 
-The new `pnpm check` command creates a reproducible passing baseline for client
-typecheck, API typecheck, those five self-checks, and docs build. Lint remains
-separate because its baseline is already red.
+**Resolution:** the genuine lint errors and ordinary hygiene warnings were
+fixed. React Compiler diagnostics that currently reject Reanimated mutable
+shared values, gesture live refs, and legacy state-reset effects remain visible
+as warnings. `expo lint --max-warnings 108` locks that debt so it can only move
+down, and `pnpm check` now includes lint.
 
-**Recommendation:** classify compiler/lint false positives around Reanimated
-refs separately from real defects, burn the count to zero, then add required CI
-for install, generated/schema drift, typecheck, tests, lint, docs build, and
-Docker build. Protect release publication on the same gate.
+`.github/workflows/quality.yml` runs a frozen install, typechecks, the twelve
+self-checks, lint, docs build, Drizzle generation drift detection, and a
+production API Docker build for every pull request and push to `main`. The
+manual Docker publication workflow calls the same reusable gate before it can
+push an image or create a release.
+
+**Follow-up:** migrate Reanimated `.value` access to compiler-compatible
+`get()`/`set()` where supported, resolve effect dependency findings, and lower
+the warning budget with every cleanup. Expand the twelve assertion programs into
+route/database integration coverage as tracked below.
 
 ## P1 — make horizontal scaling explicit or coordinated
+
+**Status: remediated as an enforced single-replica contract on 2026-07-23.**
 
 **Observed:** scheduled provider sync, cleanup timers, SSE clients, rate limits,
 and metrics are process-local. Each API replica starts the timers and sees only
@@ -140,11 +166,21 @@ its own connections/requests.
 **Impact:** multiple replicas can duplicate scheduled work, miss cross-replica
 SSE broadcasts, and apply per-instance rather than global rate limits.
 
-**Recommendation:** keep one documented API replica until job leadership,
-distributed locking, shared pub/sub, and shared rate limiting exist. Add
-overlap prevention even for one process when a sync cycle exceeds its interval.
+**Resolution:** the API now holds a dedicated PostgreSQL session advisory lock
+and refuses to start a second process against the same database. Both Compose
+files explicitly declare one API replica. Cleanup and external sync use a
+tested single-flight wrapper; an overlong run skips the next tick and emits a
+structured warning plus `musubi_scheduled_task_skips_total{task}`. The shipped
+Prometheus rules alert on any skip.
+
+**Follow-up:** horizontal scaling remains intentionally unsupported. Replacing
+the singleton contract still requires job leadership/distributed locking,
+shared pub/sub for SSE, a shared rate limiter, and per-instance metric
+aggregation.
 
 ## P1 — disconnect exactly one OAuth account
+
+**Status: remediated on 2026-07-23.**
 
 **Observed:** the connection handler asks Better Auth to unlink one account. If
 that fails, its fallback calls `cleanUsersOAuthTokens(userID, provider)`, which
@@ -153,10 +189,20 @@ is provider-wide rather than account-specific.
 **Impact:** disconnecting one of several Google or Microsoft accounts can clear
 tokens for sibling accounts in the fallback path.
 
-**Recommendation:** add an account-ID-scoped database fallback and multi-account
-tests. Never describe provider-wide cleanup as exact account removal.
+**Resolution:** the modern disconnect fallback now calls
+`cleanOAuthAccountTokens(userID, provider, accountID)`, whose update predicate
+contains all three identifiers. Unsupported providers are rejected before any
+cleanup. A disposable-PostgreSQL integration test proves the target row is
+cleared while a sibling account for the same provider, another provider, and
+the same account ID owned by another user remain unchanged.
+
+The old Google revoke endpoint has no account ID and remains explicitly
+provider-wide for backward compatibility; its helper is named
+`cleanProviderOAuthTokens` so it cannot be mistaken for exact-account cleanup.
 
 ## P2 — normalize malformed-input responses
+
+**Status: remediated for the observed event paths on 2026-07-23.**
 
 **Observed:**
 
@@ -166,10 +212,23 @@ tests. Never describe provider-wide cleanup as exact account removal.
 **Impact:** malformed client input may surface as `500` instead of a stable
 `400`, polluting error alerts and hiding the actual caller defect.
 
-**Recommendation:** use shared request/query schemas at the route boundary and
-test invalid UUID, body, enum, timestamp, and cursor cases for every endpoint.
+**Resolution:** event create/update/delete share one body parser that converts
+shape failures to `BadRequestError` and validates every event/calendar UUID
+before a query. Event route parameters use the same UUID guard.
+`GET /events?since=` now rejects empty, invalid, array, and object values before
+calling the database. The global error mapper also treats uncaught `ZodError`
+as `400` rather than `500`.
+
+A direct self-check covers malformed UUIDs, timestamps and Zod bodies plus the
+error mapper's `400`/`500` boundary.
+
+**Follow-up:** extend the same route-boundary matrix to calendars, invites,
+federation and user routes, including invalid enum and cursor cases.
 
 ## P2 — review federation identity and token lifecycle
+
+**Status: remediated on 2026-07-23, with the first-contact trust boundary
+documented explicitly.**
 
 **Observed:** invite acceptance trusts the remote profile supplied by the bearer
 of the invite; it does not prove control of the claimed home server. Member
@@ -185,26 +244,81 @@ may be intended capability behavior, but it is a meaningful privacy surface.
 and revocation/rotation, and authenticate remote identity if it is used for more
 than display. Include invite leakage and replay in threat modeling.
 
+**Resolution:** unverified `homeServer + email` claims are no longer used to
+find an existing shadow user. First contact always creates an isolated identity;
+reusing a shadow across later invites requires its current member token as
+proof. This closes the cross-calendar privilege escalation where a holder of
+one invite could claim another shadow's profile and inherit all of its
+memberships.
+
+Member tokens now expire after 90 days. Versioned token values carry a
+client-readable issue time, the client rotates in the final 14 days, and the
+origin performs compare-and-swap rotation so one credential cannot be exchanged
+twice. Expired hashes are purged hourly. Removing a shadow's final membership
+revokes its tokens in the same database transaction.
+
+The invite preview now returns only calendar identity, member names/avatars,
+and minimal event fields for the 30-day UI window. It omits member email,
+event description, location, URL, attribution and unrelated historical
+one-off events.
+
+A pure security self-check covers token format/timing, origin validation and
+preview minimization. A disposable-PostgreSQL integration test covers expiry,
+single-use rotation, unproved profile isolation, proved identity reuse and
+last-membership revocation.
+
+**Remaining boundary:** v1 still does not prove that the first-contact person
+controls the claimed home server. Those claims are display metadata and cannot
+bind to existing access. Add a signed or callback-based server-to-server
+assertion before treating them as globally verified identity.
+
 ## P2 — improve provider and database integration coverage
 
-Current self-checks cover selected pure behavior, but not:
+**Status: provider coverage expanded on 2026-07-23; route/offline coverage
+remains open.**
+
+Remaining coverage gaps include:
 
 - PostgreSQL constraints, migrations, transactions, or concurrent writes;
-- route authentication/authorization and error mapping;
-- provider cursor reset, token rotation, retry, and partial failure as a suite;
-- federation invite/token lifecycle; or
+- route authentication/authorization beyond the calendar-detail regression and
+  error mapping;
+- signed/callback-based federation identity proof and live transport failures;
+  or
 - offline-client behavior beyond the tombstone retention window.
 
 Use disposable PostgreSQL in CI, fake provider servers at adapter boundaries,
 and a small route-level test matrix. Keep live sandbox smoke tests as a separate
 release check.
 
+**Resolution so far:** always-on self-checks now run local fake Google and
+Microsoft Graph HTTP servers. They cover pagination, partial-page discard after
+`410`, full-set reset cursors, Graph series-master cache reset/reuse and a safe
+retry after a transient provider response. The new reset assertion exposed and
+fixed a stale-master cache surviving from the discarded delta pages.
+
+Provider/account orchestration is isolated in a dependency-free boundary test:
+one discovery/account failure does not block healthy siblings, retryable
+accounts run again in the next cycle, strict connect flows still throw, and
+provider/account filters stay scoped.
+
+`pnpm test:provider-db` adds a disposable-PostgreSQL OAuth lifecycle test with a
+fake token endpoint. It proves encrypted access/refresh-token rotation,
+account-scoped `invalid_grant` reconnect state, sibling preservation, and a
+transient `503` remaining active and succeeding on retry.
+
+**Remaining:** make disposable PostgreSQL mandatory in CI; add the complete
+route authentication/authorization/error matrix; cover signed federation
+identity proof and live transport failures; and define/test client behavior
+beyond the tombstone retention window. Live provider credentials remain a
+separate release smoke test.
+
 ## Resolved P3 — align versions and build reproducibility
 
 **Observed before remediation:**
 
 - root pins `pnpm@11.8.0`, while some package metadata/Dockerfiles still declare
-  pnpm 10;
+  pnpm 10; the API image build prepares pnpm 10 but root metadata still makes
+  Corepack download pnpm 11.8.0 during `pnpm install`;
 - root, workspace, docs, and native app versions do not express one clear
   release version;
 - the docs image installs an unpinned global pnpm and the full workspace without
@@ -237,17 +351,19 @@ URL.
 
 ## Suggested remediation sequence
 
-1. Fix the calendar-detail authorization gap and add route-level regression
-   coverage.
-2. Add uniqueness constraints and transactions around core database invariants.
-3. Establish PR CI and make lint green/enforceable.
+1. **Completed:** protect calendar-detail reads and add a non-member regression
+   self-check.
+2. **Completed:** make core writes transactional and enforce the remaining
+   uniqueness constraints.
+3. **Completed:** establish PR CI and make lint green/enforceable.
 4. Add a durable provider outbox plus visible delivery health.
-5. Decide whether production stays single-replica or fund distributed
-   coordination.
-6. Harden federation/token lifecycle and expand integration testing.
-
-Toolchain, image, and release versioning were consolidated as part of this
-audit. Keep `pnpm release:verify` in the required release path.
+5. **Completed:** enforce and document the supported single-replica deployment.
+6. **Completed:** scope modern OAuth disconnect cleanup to one account.
+7. **Partially completed:** isolate unproved federation identities, add token
+   expiry/rotation/revocation, and minimize previews; first-contact server proof
+   remains.
+8. **Completed:** consolidate toolchain, image, and release versioning. Keep
+   `pnpm release:verify` in the required release path.
 
 <Aside type="note">
 Treat this page as a living risk register. When closing an item, link the change

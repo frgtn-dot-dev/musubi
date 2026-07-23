@@ -38,8 +38,9 @@ pnpm check
 2. workspace peer-dependency validation;
 3. client TypeScript (`tsc --noEmit`);
 4. API TypeScript (`tsc --noEmit --skipLibCheck`);
-5. five assertion-based self-check files;
-6. the root build (currently the Starlight package is the only workspace with a
+5. twelve assertion-based self-check files;
+6. client ESLint with the repository's locked warning budget; and
+7. the root build (currently the Starlight package is the only workspace with a
    `build` script).
 
 Run an individual layer while iterating:
@@ -55,14 +56,29 @@ Run an individual layer while iterating:
 | Workspace peer dependencies | `pnpm peers:check` |
 | Release/toolchain metadata | `pnpm release:verify` |
 
-<Aside type="caution" title="Lint has a known failing baseline">
-As of the 2026-07 audit, `pnpm lint` reports 82 errors and 55 warnings, largely
-from React Compiler rules interacting with Reanimated/live-ref patterns plus a
-smaller set of genuine hygiene findings. It is intentionally not hidden inside
-`pnpm check`. Do not claim lint passed; compare your touched files against the
-baseline and avoid adding findings. See the
+<Aside type="note" title="The lint gate uses a warning budget">
+`pnpm lint` has zero errors and permits exactly 108 known warnings from React
+Compiler/hook diagnostics. Most are Reanimated shared-value, gesture live-ref,
+and legacy effect-dependency findings. The three compiler rules that previously
+made lint unusable remain visible as warnings, while `--max-warnings 108`
+prevents the baseline from growing. Fixing a warning lowers the budget in
+`apps/client/package.json`; never raise it to land a change. See the
 [codebase audit](/docs/contributing/codebase-audit/#p1--restore-an-enforceable-quality-gate).
 </Aside>
+
+## Continuous integration
+
+`.github/workflows/quality.yml` runs for every pull request and every push to
+`main`. It has two independent jobs:
+
+1. frozen install → `pnpm check` → regenerate Drizzle migrations and fail if
+   the working tree changes; and
+2. build the production API image without publishing it.
+
+The manual Docker release workflow calls the same reusable quality workflow and
+cannot publish an image or GitHub release until both jobs pass. Keep local
+verification fast with `pnpm check`; CI owns the clean-install, migration-drift,
+and container-build checks.
 
 ### Existing self-checks
 
@@ -73,11 +89,46 @@ These are plain Node assertions executed with `tsx`, not a test-runner suite:
 | `apps/client/lib/eventForm.test.ts` | Event-form validation |
 | `apps/client/lib/rrule.test.ts` | RRULE building and parsing |
 | `apps/client/lib/ics.test.ts` | Lightweight client `.ics` import |
+| `apps/api/src/sync/orchestrator.test.ts` | Provider/account failure isolation, retry, strict/scoped modes |
+| `apps/api/src/sync/adapters/provider_http.test.ts` | Fake Google/Graph pagination, `410` reset, partial-page discard, series cache reset/reuse |
+| `apps/api/src/federation.test.ts` | Member-token timing, origin validation, invite-preview minimization |
+| `apps/api/src/request_validation.test.ts` | UUID/timestamp guards and HTTP error classification |
+| `apps/api/src/scheduling.test.ts` | Non-overlapping scheduled execution and guard recovery |
+| `apps/api/src/handlers/calendars.test.ts` | Calendar-detail membership authorization and data-read ordering |
 | `apps/api/src/sync/oauth.test.ts` | OAuth refresh/revoke helpers and token crypto |
 | `apps/api/src/sync/adapters/microsoft.test.ts` | Graph date/cursor/event conversion |
+| `packages/db/src/schema.test.ts` | One-row settings and event–calendar uniqueness constraints |
+
+Federation also has an opt-in database lifecycle check:
+
+```sh
+ENVIRONMENT=test DATABASE_URL=postgresql://... BETTER_AUTH_URL=http://localhost:7531 \
+  pnpm test:federation-db
+```
+
+Run it only against a disposable, fully migrated PostgreSQL database. It creates
+and removes scoped fixtures, and verifies expiry cleanup, compare-and-swap
+rotation, unproved-profile isolation, proved shadow reuse and final-membership
+revocation.
 
 When adding pure logic, follow the current assertion style or introduce a
 project-wide runner as one focused change; do not create a third test convention.
+
+### Provider database integration
+
+```sh
+ENVIRONMENT=test \
+DATABASE_URL=postgresql://... \
+BETTER_AUTH_URL=http://localhost:7531 \
+BETTER_AUTH_SECRET=<test-only-secret> \
+pnpm test:provider-db
+```
+
+Run this only against a disposable, fully migrated PostgreSQL database. The
+test starts its own local fake OAuth token endpoint, scopes fixtures to random
+IDs, and cleans them up. It verifies encrypted token rotation,
+account-specific permanent revocation and transient retry behavior without
+live Google/Microsoft credentials.
 
 ## Database
 
@@ -88,6 +139,21 @@ project-wide runner as one focused change; do not create a third test convention
 | Start only the bundled database | `docker compose up -d db` |
 | Inspect database service | `docker compose ps db` |
 | Tail database logs | `docker compose logs -f db` |
+
+The account-scoped OAuth fallback has a PostgreSQL integration self-check:
+
+```sh
+ENVIRONMENT=test \
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/musubi_test \
+BETTER_AUTH_URL=http://localhost:7531 \
+pnpm test:db:oauth
+```
+
+<Aside type="caution">
+Use a disposable, migrated test database. The script refuses to run unless
+`ENVIRONMENT=test`, creates uniquely named users/accounts, asserts isolation
+across users, providers, and sibling accounts, then removes its fixtures.
+</Aside>
 
 Always review generated SQL:
 
@@ -226,7 +292,6 @@ script restores into an isolated temporary PostgreSQL container.
 git status --short
 git diff --check
 pnpm check
-pnpm lint          # record/compare the known baseline
 ```
 
 Then run the platform-specific flow you changed. Examples:
