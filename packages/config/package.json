@@ -1,6 +1,6 @@
 {
   "name": "@musubi/config",
-  "version": "1.0.0",
+  "private": true,
   "description": "Shared environment loading and runtime config.",
   "main": "./src/index.ts",
   "exports": {
@@ -12,7 +12,6 @@
   "keywords": [],
   "author": "frgtn.dev",
   "license": "MIT",
-  "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "dotenv": "^17.4.2",
     "dotenv-expand": "^13.0.0"

@@ -1,7 +1,7 @@
 {
   "name": "@musubi/docs",
   "type": "module",
-  "version": "0.0.1",
+  "private": true,
   "description": "Astro Starlight documentation site for Musubi.",
   "author": "frgtn.dev",
   "license": "MIT",

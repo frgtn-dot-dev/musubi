@@ -2,10 +2,15 @@ import { colors, fonts, styles } from "@/constants/theme";
 import { View, Text, Linking, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Btn } from "@/components/ui/Btn";
+import Constants from "expo-constants";
 
-const STORE_URL = Platform.OS === "ios"
-  ? "https://apps.apple.com/app/id<APP_ID>" // TODO: doplnit iOS App Store ID
+const iosAppStoreUrl = Constants.expoConfig?.extra?.iosAppStoreUrl as string | undefined;
+const storeUrl = Platform.OS === "ios"
+  ? iosAppStoreUrl ?? "https://musubi.pro"
   : "https://play.google.com/store/apps/details?id=dev.frgtn.musubi";
+const storeLabel = Platform.OS === "ios"
+  ? iosAppStoreUrl ? "Open App Store" : "Open download page"
+  : "Open Play Store";
 
 type Props = {
   currentVersion: string;
@@ -42,9 +47,9 @@ export default function UpdateRequiredModal({ currentVersion, requiredVersion }:
           </Text>
         </View>
         <Btn
-          label={Platform.OS === "ios" ? "Open App Store" : "Open Play Store"}
+          label={storeLabel}
           style={{ flex: 0, marginTop: 8 }}
-          onPress={() => Linking.openURL(STORE_URL)}
+          onPress={() => Linking.openURL(storeUrl)}
         />
       </View>
     </View>

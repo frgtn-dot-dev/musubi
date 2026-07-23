@@ -105,10 +105,14 @@ but a native build also needs the public values below.
 |---|---|
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Native Google sign-in id-token audience on both platforms |
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | iOS native client id and derived URL scheme |
+| `EXPO_PUBLIC_IOS_APP_STORE_URL` | Direct App Store listing for the forced-update screen |
 
 `EXPO_PUBLIC_*` values are compiled into the app. Changing them requires a new
 native build; restarting the API is not enough. They are identifiers, not
-secrets.
+secrets. `EXPO_PUBLIC_IOS_APP_STORE_URL` is optional for local/development
+builds, which fall back to the Musubi download page. A production EAS build
+requires a direct `https://apps.apple.com/.../id<digits>` URL and fails during
+config evaluation if it is absent or malformed.
 
 See [Authentication](/docs/architecture/authentication/) and the
 [Google provider guide](/docs/providers/google/).
@@ -190,3 +194,4 @@ Use this endpoint during setup before debugging the client UI.
 - [ ] `METRICS_PORT` is reachable only from the monitoring network.
 - [ ] `CALDAV_ENC_KEY` and `BETTER_AUTH_SECRET` are backed up separately from PostgreSQL.
 - [ ] Client `EXPO_PUBLIC_*` ids match the server's OAuth project and production bundle ids.
+- [ ] Production EAS has the final direct `EXPO_PUBLIC_IOS_APP_STORE_URL`.

@@ -4,6 +4,10 @@ packages:
 # Expo/React Native tooling assumes a flat node_modules (config plugins, Metro).
 # pnpm's default isolated layout hides transitive deps like @expo/config-plugins.
 nodeLinker: hoisted
+# Every workspace declares the peers it actually uses. Disabling implicit peer
+# installation keeps filtered production images from inheriting Expo through
+# unrelated optional peer edges, and makes the lockfile settings explicit.
+autoInstallPeers: false
 allowBuilds:
   esbuild: false
   msgpackr-extract: true

@@ -92,10 +92,12 @@ tooling cannot contribute unused release permissions.
 
 ## Before each release
 
-1. Generate or inspect the release manifest and confirm there is no camera,
+1. Bump only the root `package.json` version, then run `pnpm
+   release:verify <version>` and `pnpm check`.
+2. Generate or inspect the release manifest and confirm there is no camera,
    microphone, location, contacts, or broad media permission without a current
    feature that needs it.
-2. Compare every server-bound field and SDK against the table above.
-3. Verify the Privacy, deletion, support, feedback, status, and Play links.
-4. Submit Data Safety changes before or with the build that changes behavior.
-5. Test account deletion from the app and submit one web deletion request.
+3. Compare every server-bound field and SDK against the table above.
+4. Verify the Privacy, deletion, support, feedback, status, and Play links.
+5. Submit Data Safety changes before or with the build that changes behavior.
+6. Test account deletion from the app and submit one web deletion request.

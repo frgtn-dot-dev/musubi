@@ -199,9 +199,9 @@ Use disposable PostgreSQL in CI, fake provider servers at adapter boundaries,
 and a small route-level test matrix. Keep live sandbox smoke tests as a separate
 release check.
 
-## P3 — align versions and build reproducibility
+## Resolved P3 — align versions and build reproducibility
 
-**Observed:**
+**Observed before remediation:**
 
 - root pins `pnpm@11.8.0`, while some package metadata/Dockerfiles still declare
   pnpm 10;
@@ -212,9 +212,14 @@ release check.
 - API image installation also relaxes lockfile reproducibility; and
 - the iOS forced-update URL still contains an `<APP_ID>` placeholder.
 
-**Recommendation:** choose one toolchain/version source, use Corepack and a
-frozen lockfile in every image, automate version propagation, and fail release
-validation on placeholder distribution URLs.
+**Resolved on 2026-07-23:** root `package.json` is now the only source for the
+product version and exact pnpm version. Expo reads that product version
+directly; private workspace manifests no longer advertise unrelated versions or
+toolchains. Both images use Corepack, filtered production installs, frozen
+lockfiles, and the same digest-pinned Node base. `pnpm release:verify` protects
+these invariants, the Docker release job requires its requested version to match
+the manifest, and production EAS config rejects a missing/malformed iOS store
+URL.
 
 ## Strengths worth preserving
 
@@ -240,7 +245,9 @@ validation on placeholder distribution URLs.
 5. Decide whether production stays single-replica or fund distributed
    coordination.
 6. Harden federation/token lifecycle and expand integration testing.
-7. Consolidate toolchain, image, and release versioning.
+
+Toolchain, image, and release versioning were consolidated as part of this
+audit. Keep `pnpm release:verify` in the required release path.
 
 <Aside type="note">
 Treat this page as a living risk register. When closing an item, link the change

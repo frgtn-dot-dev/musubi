@@ -143,6 +143,11 @@ The iOS path has several sharp edges that don't exist on Android. If you're new 
 
 <Aside type="note">
 `app.config.ts` and `eas.json` hold all of the above. The `development`, `preview`, and `production` EAS profiles each carry the `EXPO_PUBLIC_GOOGLE_*` env; for TestFlight use the `production` profile (`distribution: store`) — `preview` is `internal` (ad-hoc) and won't reach TestFlight.
+
+The production profile must also receive a direct
+`EXPO_PUBLIC_IOS_APP_STORE_URL`. It is used by the minimum-version update
+screen, and config evaluation fails when the value is missing or does not end
+in a numeric App Store id.
 </Aside>
 
 ## Invite links (universal links on iOS)

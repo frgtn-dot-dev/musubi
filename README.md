@@ -88,11 +88,13 @@ iOS is in testing now; open testing on the App Store lands shortly.
 
 ## Run it yourself
 
-**Requirements:** Node 22.12+, pnpm 11.8+, Postgres 15+ (or just Docker).
+**Requirements:** Node 22.12+, Corepack, Postgres 15+ (or just Docker). The
+repository selects the exact pnpm version.
 
 ```sh
 git clone https://github.com/frgtn-dot-dev/musubi.git && cd musubi
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 
 cp .env.example .env
 # set DATABASE_URL and BETTER_AUTH_SECRET at minimum
