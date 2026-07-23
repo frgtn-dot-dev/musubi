@@ -21,11 +21,12 @@ provider adapters share a small contract, tombstones make offline deletion
 reliable, secrets are encrypted, request IDs cross subsystem boundaries, and
 backup/restore scripts validate their artifacts.
 
-The calendar-detail P0, database-integrity, and quality-gate findings are
-resolved. The largest remaining risks are at boundaries:
+The calendar-detail P0, database-integrity, quality-gate, and single-replica
+contract findings are resolved. The largest remaining risks are at boundaries:
 
 1. provider event delivery is best-effort without a durable retry queue;
-2. process-local schedulers/SSE/rate limiting imply a single API replica.
+2. OAuth fallback cleanup can affect sibling accounts; and
+3. federation identity and long-lived token trust need further hardening.
 
 ## Priority model
 
@@ -132,7 +133,7 @@ confirm convergence manually.
 - the Docker release workflow builds/publishes images without a preceding
   repository check;
 - root `build` exercises only workspaces that declare a build script;
-- the existing tests are seven direct `tsx` assertion programs with no runner,
+- the existing tests are eight direct `tsx` assertion programs with no runner,
   coverage, database integration, or authorization matrix; and
 - client lint reports **82 errors and 55 warnings**.
 
@@ -142,7 +143,7 @@ shared values, gesture live refs, and legacy state-reset effects remain visible
 as warnings. `expo lint --max-warnings 108` locks that debt so it can only move
 down, and `pnpm check` now includes lint.
 
-`.github/workflows/quality.yml` runs a frozen install, typechecks, the seven
+`.github/workflows/quality.yml` runs a frozen install, typechecks, the eight
 self-checks, lint, docs build, Drizzle generation drift detection, and a
 production API Docker build for every pull request and push to `main`. The
 manual Docker publication workflow calls the same reusable gate before it can
@@ -150,10 +151,12 @@ push an image or create a release.
 
 **Follow-up:** migrate Reanimated `.value` access to compiler-compatible
 `get()`/`set()` where supported, resolve effect dependency findings, and lower
-the warning budget with every cleanup. Expand the seven assertion programs into
+the warning budget with every cleanup. Expand the eight assertion programs into
 route/database integration coverage as tracked below.
 
 ## P1 — make horizontal scaling explicit or coordinated
+
+**Status: remediated as an enforced single-replica contract on 2026-07-23.**
 
 **Observed:** scheduled provider sync, cleanup timers, SSE clients, rate limits,
 and metrics are process-local. Each API replica starts the timers and sees only
@@ -162,9 +165,17 @@ its own connections/requests.
 **Impact:** multiple replicas can duplicate scheduled work, miss cross-replica
 SSE broadcasts, and apply per-instance rather than global rate limits.
 
-**Recommendation:** keep one documented API replica until job leadership,
-distributed locking, shared pub/sub, and shared rate limiting exist. Add
-overlap prevention even for one process when a sync cycle exceeds its interval.
+**Resolution:** the API now holds a dedicated PostgreSQL session advisory lock
+and refuses to start a second process against the same database. Both Compose
+files explicitly declare one API replica. Cleanup and external sync use a
+tested single-flight wrapper; an overlong run skips the next tick and emits a
+structured warning plus `musubi_scheduled_task_skips_total{task}`. The shipped
+Prometheus rules alert on any skip.
+
+**Follow-up:** horizontal scaling remains intentionally unsupported. Replacing
+the singleton contract still requires job leadership/distributed locking,
+shared pub/sub for SSE, a shared rate limiter, and per-instance metric
+aggregation.
 
 ## P1 — disconnect exactly one OAuth account
 
