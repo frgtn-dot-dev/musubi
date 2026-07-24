@@ -17,6 +17,7 @@ COPY packages/db packages/db
 COPY packages/auth packages/auth
 COPY packages/types packages/types
 COPY packages/config packages/config
+COPY packages/emails packages/emails
 RUN pnpm --config.inject-workspace-packages=true --filter @musubi/api \
       deploy --prod --frozen-lockfile /prod/api
 

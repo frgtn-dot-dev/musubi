@@ -1,11 +1,11 @@
 ---
 title: Shared Packages
-description: packages/types, calendar, auth, config — the shared contract, recurrence engine, auth config, and environment loading.
+description: packages/types, calendar, auth, config, emails — the shared contract, recurrence engine, auth config, environment loading, and transactional email.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The `packages/` workspaces hold everything shared between the two apps. `db` has its [own page](/docs/architecture/data-model/); this page covers the other four. The theme running through all of them: **define a thing once, import it everywhere.**
+The `packages/` workspaces hold everything shared between the two apps. `db` has its [own page](/docs/architecture/data-model/); this page covers the other five. The theme running through all of them: **define a thing once, import it everywhere.**
 
 ## types (`packages/types`)
 
@@ -91,6 +91,14 @@ function envOrThrow(key: string): string {
 The config package also exports the process-wide structured `logger`, shared by
 the API and auth hooks.
 
+## emails (`packages/emails`)
+
+Transactional email: `sendEmail()` (a nodemailer SMTP transport built from `config.smtp`) plus the HTML templates `getPasswordResetHtml()` and `getDeleteAccountHtml()`. It lives in its own package so `@musubi/auth` can send reset/delete mails without reaching back into `apps/api` — that cross-package relative import broke the deployed image (the package resolves to `node_modules`, not a sibling of `apps/api`). Depends only on `@musubi/config`.
+
+<Aside type="note">
+Like the SMTP config it uses, sending is **gated at use, not boot**: with SMTP unset, `sendEmail` just fails when called — the server still starts.
+</Aside>
+
 ## How the packages depend on each other
 
 ```mermaid
@@ -102,6 +110,7 @@ flowchart TD
     calendar[packages/calendar]
     types[packages/types]
     config[packages/config]
+    emails[packages/emails]
 
     client --> types
     client --> calendar
@@ -114,6 +123,8 @@ flowchart TD
     api --> config
     db --> config
     auth --> config
+    auth --> emails
+    emails --> config
 ```
 
 `packages/types` and `packages/config` are the leaves everything leans on — change them thoughtfully.

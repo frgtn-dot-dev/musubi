@@ -4,9 +4,7 @@ import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { CALENDAR_SCOPE, createCalendar, db, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
-import { sendEmail } from '../../../../apps/api/src/emails';
-import { getPasswordResetHtml } from '../../../../apps/api/src/emails/password_reset';
-import { getDeleteAccountHtml } from '../../../../apps/api/src/emails/delete_account';
+import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml } from '@musubi/emails';
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {

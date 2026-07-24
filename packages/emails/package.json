@@ -1,8 +1,8 @@
 {
-  "name": "@musubi/auth",
+  "name": "@musubi/emails",
   "private": true,
-  "description": "Better Auth configuration shared between server and client.",
-  "main": "index.js",
+  "description": "Transactional email sending and HTML templates.",
+  "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -13,10 +13,10 @@
   "author": "frgtn.dev",
   "license": "MIT",
   "dependencies": {
-    "@better-auth/expo": "^1.6.23",
     "@musubi/config": "workspace:*",
-    "@musubi/db": "workspace:*",
-    "@musubi/emails": "workspace:*",
-    "better-auth": "^1.6.23"
+    "nodemailer": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.1"
   }
 }
