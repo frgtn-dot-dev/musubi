@@ -1,0 +1,158 @@
+import { z } from "zod";
+
+// A Page is a private per-user calendar view profile: name, chosen view,
+// visible calendars and simple filters. It links to shared data but is never
+// itself shared — two members of the same calendar keep independent Pages.
+// The config is stored as versioned JSONB; unknown future fields on an old
+// client must round-trip untouched, so writers never silently drop them.
+
+const CalendarIdSchema = z.string().uuid();
+
+export const CalendarVisibilitySchema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      mode: z.literal("all"),
+      // `all` shows every accessible calendar; new ones appear automatically,
+      // explicitly hidden ones stay hidden.
+      hiddenCalendarIds: z.array(CalendarIdSchema).max(500),
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("include"),
+      // `include` is the power-user "Work" page: a new calendar never shows up
+      // until the Page is edited.
+      calendarIds: z.array(CalendarIdSchema).max(500),
+    })
+    .strict(),
+]);
+
+const DayViewSchema = z
+  .object({
+    id: z.literal("day"),
+    configVersion: z.literal(1),
+    density: z.enum(["compact", "comfortable"]).default("comfortable"),
+  })
+  .strict();
+
+const WeekViewSchema = z
+  .object({
+    id: z.literal("week"),
+    configVersion: z.literal(1),
+    weekend: z.boolean().default(true),
+    density: z.enum(["compact", "comfortable"]).default("comfortable"),
+  })
+  .strict();
+
+const MonthViewSchema = z
+  .object({
+    id: z.literal("month"),
+    configVersion: z.literal(1),
+    showAdjacentDays: z.boolean().default(true),
+  })
+  .strict();
+
+const AgendaViewSchema = z
+  .object({
+    id: z.literal("agenda"),
+    configVersion: z.literal(1),
+    groupBy: z.literal("day").default("day"),
+  })
+  .strict();
+
+export const BuiltInViewConfigSchema = z.discriminatedUnion("id", [
+  DayViewSchema,
+  WeekViewSchema,
+  MonthViewSchema,
+  AgendaViewSchema,
+]);
+
+export type BuiltInViewConfig = z.infer<typeof BuiltInViewConfigSchema>;
+export type PageViewId = BuiltInViewConfig["id"];
+
+export const PageFilterSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("attendance"),
+      value: z.enum(["all", "attending", "not-attending"]),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("time"),
+      value: z.enum(["all", "timed", "all-day"]),
+    })
+    .strict(),
+]);
+
+export const PageConfigV1Schema = z
+  .object({
+    schemaVersion: z.literal(1),
+    view: BuiltInViewConfigSchema,
+    calendarVisibility: CalendarVisibilitySchema,
+    filters: z.array(PageFilterSchema).max(20).default([]),
+  })
+  .strict();
+
+export const PageDocumentSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().trim().min(1).max(80),
+    position: z.number().int().nonnegative(),
+    isDefault: z.boolean(),
+    config: PageConfigV1Schema,
+    revision: z.number().int().positive(),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+  })
+  .strict();
+
+export const CreatePageRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    config: PageConfigV1Schema,
+  })
+  .strict();
+
+export const SavePageRequestSchema = z
+  .object({
+    baseRevision: z.number().int().positive(),
+    name: z.string().trim().min(1).max(80),
+    config: PageConfigV1Schema,
+  })
+  .strict();
+
+export const ReorderPagesRequestSchema = z
+  .object({
+    // Full ordered id list; position is the array index. An optional default
+    // moves the isDefault flag atomically in the same write.
+    pageIds: z.array(z.string().uuid()).min(1).max(100),
+    defaultPageId: z.string().uuid().optional(),
+  })
+  .strict();
+
+export type PageConfigV1 = z.infer<typeof PageConfigV1Schema>;
+export type PageDocument = z.infer<typeof PageDocumentSchema>;
+export type CreatePageRequest = z.infer<typeof CreatePageRequestSchema>;
+export type SavePageRequest = z.infer<typeof SavePageRequestSchema>;
+export type ReorderPagesRequest = z.infer<typeof ReorderPagesRequestSchema>;
+
+// The default Page shows all calendars in the user's default view. Kept as a
+// factory so both new-user init and the lazy backfill build the same document.
+export function defaultPageConfig(view: PageViewId): PageConfigV1 {
+  const viewConfig = BuiltInViewConfigSchema.parse(
+    view === "week"
+      ? { id: "week", configVersion: 1 }
+      : view === "day"
+        ? { id: "day", configVersion: 1 }
+        : view === "agenda"
+          ? { id: "agenda", configVersion: 1 }
+          : { id: "month", configVersion: 1 },
+  );
+  return {
+    schemaVersion: 1,
+    view: viewConfig,
+    calendarVisibility: { mode: "all", hiddenCalendarIds: [] },
+    filters: [],
+  };
+}

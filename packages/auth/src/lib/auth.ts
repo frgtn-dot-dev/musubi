@@ -2,8 +2,9 @@ import { betterAuth } from 'better-auth';
 import { bearer } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { CALENDAR_SCOPE, createCalendar, db, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
+import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
+import { defaultPageConfig } from '@musubi/types';
 import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml } from '@musubi/emails';
 
 export const auth = betterAuth({
@@ -132,6 +133,16 @@ export const auth = betterAuth({
             await getUserSettings(user.id);
           } catch (e) {
             logger.error("auth.signup.settings_failed", { userId: user.id, error: e });
+          }
+          try {
+            // Give the user their default "My calendar" Page up front. Existing
+            // users self-heal lazily on their first GET /pages instead.
+            await ensureDefaultPage(user.id, {
+              name: "My calendar",
+              config: defaultPageConfig("month"),
+            });
+          } catch (e) {
+            logger.error("auth.signup.default_page_failed", { userId: user.id, error: e });
           }
         },
       },

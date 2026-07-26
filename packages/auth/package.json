@@ -17,6 +17,7 @@
     "@musubi/config": "workspace:*",
     "@musubi/db": "workspace:*",
     "@musubi/emails": "workspace:*",
+    "@musubi/types": "workspace:*",
     "better-auth": "^1.6.23"
   }
 }

@@ -485,3 +485,30 @@ export const musubiAccounts = pgTable("musubi_accounts", {
 }, (t) => [unique().on(t.userID, t.server)]);
 
 export type NewMusubiAccount = typeof musubiAccounts.$inferInsert;
+
+
+// Pages: private per-user calendar view profiles. Not shared with calendar
+// members. The config is versioned JSONB (view + calendar visibility + filters)
+// saved atomically with one revision for compare-and-swap. Soft-deleted so a
+// removed Page can't orphan a client that still holds its id.
+export const pages = pgTable("pages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  position: integer("position").notNull().default(0),
+  isDefault: boolean("is_default").notNull().default(false),
+  schemaVersion: integer("schema_version").notNull().default(1),
+  config: jsonb("config").notNull(),
+  revision: integer("revision").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  deletedAt: timestamp("deleted_at"),
+}, (t) => [index("pages_user_position_idx").on(t.userID, t.position)]);
+
+export type NewPage = typeof pages.$inferInsert;
+export type PageRow = typeof pages.$inferSelect;

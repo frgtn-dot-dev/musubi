@@ -4,6 +4,7 @@ export * from "./calendar";
 export * from "./event";
 export * from "./invite";
 export * from "./settings";
+export * from "./pages";
 export * from "./google";
 export * from "./permissions";
 export * from "./federation";

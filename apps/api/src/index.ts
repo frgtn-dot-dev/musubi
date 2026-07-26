@@ -21,6 +21,14 @@ import {
 } from "./handlers/settings";
 import { handlerAppleAppSiteAssociation, handlerServer, handlerServerStatus } from "./handlers/server";
 import { handlerResetPasswordPage, handlerDeleteAccountPage } from "./handlers/pages";
+import {
+  handlerCreatePage,
+  handlerDeletePage,
+  handlerGetPage,
+  handlerListPages,
+  handlerReorderPages,
+  handlerSavePage,
+} from "./handlers/calendar_pages";
 import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogle } from "./handlers/google";
 import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav } from "./handlers/caldav";
 import { handlerDisconnectAccount, handlerDisconnectExternalCalendar } from "./handlers/connections";
@@ -139,6 +147,16 @@ app.get("/api/v1/users/settings", requireAuth, wrap(handlerGetSettings));
 app.put("/api/v1/users/settings", requireAuth, wrap(handlerSaveSettings));
 app.get("/api/v1/users/settings/document", requireAuth, wrap(handlerGetSettingsDocument));
 app.patch("/api/v1/users/me/settings", requireAuth, wrap(handlerPatchSettings));
+
+// Pages (private per-user view profiles). `reorder` before `:id` so the literal
+// path can't be captured as an id.
+app.get("/api/v1/pages", requireAuth, wrap(handlerListPages));
+app.post("/api/v1/pages", requireAuth, wrap(handlerCreatePage));
+app.put("/api/v1/pages/reorder", requireAuth, wrap(handlerReorderPages));
+app.get("/api/v1/pages/:id", requireAuth, wrap(handlerGetPage));
+app.patch("/api/v1/pages/:id", requireAuth, wrap(handlerSavePage));
+app.delete("/api/v1/pages/:id", requireAuth, wrap(handlerDeletePage));
+
 app.delete("/api/v1/users", requireAuth, wrap(handlerDeleteUser));
 // Public: the emailed confirmation link lands on the website (no session); the
 // token is the proof. Rate-limited against token guessing.

@@ -132,6 +132,13 @@ Current event types:
 | `calendar_removed` | Drop calendar and its orphaned event links |
 | `attendance_changed` | Refresh open attendee state |
 | `external_sync` | Silent delta refresh; do not trigger provider sync again |
+| `settings_updated` | Refetch settings; carries only `{ revision }` |
+| `page_created` | Add the `PageDocument` in `data.page` |
+| `page_updated` | Replace the `PageDocument`; dedupe by `revision` |
+| `page_removed` | Drop the page id in `data.id`; the default may have moved |
+
+Page and settings events fan out only to the acting user's own sessions,
+including the originating one, which discards the duplicate by revision.
 
 SSE is best-effort and has no replay buffer. The durable recovery path is event
 delta sync.
@@ -211,6 +218,8 @@ new membership.
 |---|---|
 | `GET /api/v1/users/settings` | Materializes defaults when missing |
 | `PUT /api/v1/users/settings` | Complete `Settings`; updates or inserts |
+| `GET /api/v1/users/settings/document` | `{ value, revision, updatedAt }` for compare-and-swap clients |
+| `PATCH /api/v1/users/me/settings` | `{ baseRevision, patch }`; `409` with `current` on revision drift |
 | `DELETE /api/v1/users` | Starts email-confirmed Better Auth deletion |
 | `POST /api/v1/users/delete/confirm` | `{ token }`; public completion |
 | `POST /api/v1/users/avatar` | `{ data: "<base64>" }`; JPEG/PNG/WebP, max 256 KB decoded |
@@ -218,6 +227,30 @@ new membership.
 
 `Settings` is defined in `packages/types/src/settings.ts`. Optional fields are
 intentional so older clients cannot reset newer settings when saving.
+
+## Pages
+
+A Page is a private per-user calendar view profile: name, chosen view, visible
+calendars, and simple filters. Pages are never shared with calendar members —
+two members of the same calendar keep independent Pages.
+
+| Method and path | Request / response |
+|---|---|
+| `GET /api/v1/pages` | Active Pages ordered by position; lazily backfills the default Page on first read |
+| `POST /api/v1/pages` | `{ name, config }`; server assigns id, position, and `revision` |
+| `PUT /api/v1/pages/reorder` | `{ pageIds, defaultPageId? }`; atomically renumbers positions and moves the default |
+| `GET /api/v1/pages/:id` | One owned Page; `404` otherwise |
+| `PATCH /api/v1/pages/:id` | `{ baseRevision, name, config }`; explicit save |
+| `DELETE /api/v1/pages/:id` | Soft delete; the default deterministically moves to the next survivor |
+
+`PageDocument`, `PageConfigV1`, and the request schemas are defined in
+`packages/types/src/pages.ts`. The config is versioned JSONB (`schemaVersion`
+plus a discriminated `view` union and `calendarVisibility`) saved atomically
+with one `revision`. Saves are compare-and-swap: a stale `baseRevision` returns
+`409` with `{ error: "PAGE_CONFLICT", current }` and never a silent overwrite.
+Calendar ids inside the config are not foreign keys — reads ignore calendars the
+user can no longer access. A partial unique index enforces at most one active
+default Page per user.
 
 ## Provider connections
 

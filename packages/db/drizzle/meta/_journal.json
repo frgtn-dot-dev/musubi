@@ -246,6 +246,13 @@
       "when": 1785083971438,
       "tag": "0034_steady_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785086307300,
+      "tag": "0035_add_pages",
+      "breakpoints": true
     }
   ]
 }
