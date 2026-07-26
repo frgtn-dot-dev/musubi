@@ -30,12 +30,13 @@ server responses and gate controls through the shared calendar permissions. The
 Calendars dialog manages native calendars — create, rename, recolor and delete —
 gated by the shared `can()` roles (external/provider calendars stay read-only
 here), alongside the existing .ics import/export. A per-calendar Share dialog
-lists members, lets owners change roles (viewer/editor) or remove members,
-creates and revokes invite links (`<origin>/invite/<token>`), and lets a
-non-owner leave — ownership transfer stays deferred. The sidebar profile opens
-an Account dialog to change the display name and photo (Better Auth `updateUser`
-plus the avatar upload endpoint) and to start the email-confirmed account
-deletion, gated behind typing the display name. A Connections dialog lists
+lists members, lets owners change roles (viewer/editor), transfer ownership
+(confirmed; hidden for personal/provider calendars) or remove members, creates
+and revokes invite links (`<origin>/invite/<token>`), and lets a non-owner
+leave. The sidebar profile opens an Account dialog to change the display name
+and photo (Better Auth `updateUser` plus the avatar upload endpoint), request a
+password reset email, and start the email-confirmed account deletion, gated
+behind typing the display name. A Connections dialog lists
 synced accounts (grouped from the calendars list), disconnects or reconnects
 them, and adds new ones — Google/Outlook via Better Auth `linkSocial` with
 calendar scopes, Apple/CalDAV via a credentials form — gated by the server's

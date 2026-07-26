@@ -564,6 +564,9 @@ test("renders and navigates the authenticated Week time grid", async ({
   page,
 }) => {
   await mockAuthenticatedReads(page);
+  // Pin "now" inside the displayed week so the current-time marker is
+  // deterministic regardless of the real date.
+  await page.clock.setFixedTime(new Date("2026-07-26T10:00:00"));
 
   await page.goto("/app/p/my-calendar/week?date=2026-07-26");
 
@@ -1141,6 +1144,49 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   await expect(page.getByText("Sam Rivers", { exact: true })).toHaveCount(0);
 });
 
+test("transfers calendar ownership", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let members = [
+    { id: "user-web-qa", image: null, name: "Web QA", role: "owner" },
+    { id: "member-2", image: null, name: "Sam Rivers", role: "editor" },
+  ];
+  let transferredRole: string | undefined;
+  await page.route("**/api/v1/calendars/*/members/*", (route) => {
+    if (route.request().method() === "PUT") {
+      const role = (route.request().postDataJSON() as { role: string }).role;
+      const memberId = route.request().url().split("/").pop();
+      transferredRole = role;
+      members = members.map((member) =>
+        member.id === memberId ? { ...member, role } : member,
+      );
+      return route.fulfill({ body: "", status: 200 });
+    }
+    return route.fallback();
+  });
+  await page.route("**/api/v1/calendars/*/members", (route) =>
+    respond(route, members),
+  );
+  await page.route("**/api/v1/calendars/*/invites", (route) =>
+    respond(route, []),
+  );
+  page.on("dialog", (dialog) => void dialog.accept());
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Calendars" }).click();
+  await page.getByRole("button", { name: "Share Studio" }).click();
+  await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
+
+  await page
+    .getByRole("combobox", { name: "Sam Rivers role" })
+    .selectOption("owner");
+
+  // The new owner loses the role control (shown as an Owner badge instead).
+  await expect(
+    page.getByRole("combobox", { name: "Sam Rivers role" }),
+  ).toHaveCount(0);
+  expect(transferredRole).toBe("owner");
+});
+
 test("connects and disconnects calendar providers", async ({ page }) => {
   const withExternal = [
     ...calendars,
@@ -1227,6 +1273,9 @@ test("updates the display name and gates account deletion", async ({
   await page.route("**/api/auth/update-user", (route) =>
     respond(route, { status: true }),
   );
+  await page.route("**/api/auth/request-password-reset", (route) =>
+    respond(route, { status: true }),
+  );
   await page.route("**/api/v1/users", (route) => {
     if (route.request().method() === "DELETE") {
       deleteRequested = true;
@@ -1247,6 +1296,11 @@ test("updates the display name and gates account deletion", async ({
   await page.getByRole("button", { name: "Save name" }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Name updated.",
+  );
+
+  await page.getByRole("button", { name: "Reset password" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Check your email for a link to reset your password.",
   );
 
   // Deletion needs the exact display name typed to confirm.

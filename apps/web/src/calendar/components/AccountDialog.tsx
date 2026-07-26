@@ -73,6 +73,18 @@ export function AccountDialog({
     }, "Could not update your photo.");
   }
 
+  async function resetPassword() {
+    if (!user?.email) return;
+    await run(async () => {
+      const result = await authClient.requestPasswordReset({
+        email: user.email,
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (result.error) throw new Error(result.error.message);
+      onNotice("Check your email for a link to reset your password.");
+    }, "Could not start a password reset.");
+  }
+
   async function removeAccount() {
     await run(async () => {
       await deleteAccount();
@@ -149,6 +161,14 @@ export function AccountDialog({
             </label>
             <div className={styles.transferControls}>
               <span className={styles.accountEmail}>{user?.email}</span>
+              <button
+                className={styles.secondaryButton}
+                disabled={busy}
+                type="button"
+                onClick={() => void resetPassword()}
+              >
+                Reset password
+              </button>
               <button
                 className={styles.primaryButton}
                 disabled={busy || !nameDirty}

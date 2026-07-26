@@ -45,7 +45,12 @@ export function useCalendarSharing(userId: string, calendar: Calendar | null) {
   const setRole = useMutation({
     mutationFn: (input: { role: string; userId: string }) =>
       setMemberRole(calendarId, input.userId, input.role),
-    onSuccess: () => void invalidateMembers(),
+    onSuccess: () => {
+      void invalidateMembers();
+      // Ownership transfer demotes the current user, so the calendars list
+      // (which carries our role) must refresh too.
+      void queryClient.invalidateQueries({ queryKey: calendarsKey });
+    },
   });
   const remove = useMutation({
     mutationFn: (memberId: string) => kickMember(calendarId, memberId),

@@ -55,6 +55,26 @@ export function ShareCalendarDialog({
 
   const members = sharing.members.data ?? [];
   const invites = sharing.invites.data ?? [];
+  // Personal and provider-backed calendars can't change hands (the server
+  // rejects it), so only offer the transfer where it can actually happen.
+  const canTransfer = Boolean(
+    calendar && !calendar.isDefault && !calendar.provider,
+  );
+
+  function changeRole(memberId: string, memberName: string, role: string) {
+    if (
+      role === "owner" &&
+      !window.confirm(
+        `Make ${memberName} the owner? You’ll become an editor and lose management access.`,
+      )
+    ) {
+      return;
+    }
+    void run(
+      () => sharing.setMemberRole({ role, userId: memberId }),
+      "Could not change the role.",
+    );
+  }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -124,18 +144,18 @@ export function ShareCalendarDialog({
                             disabled={busy}
                             value={member.role}
                             onChange={(event) =>
-                              void run(
-                                () =>
-                                  sharing.setMemberRole({
-                                    role: event.target.value,
-                                    userId: member.id,
-                                  }),
-                                "Could not change the role.",
+                              changeRole(
+                                member.id,
+                                member.name,
+                                event.target.value,
                               )
                             }
                           >
                             <option value="viewer">Viewer</option>
                             <option value="editor">Editor</option>
+                            {canTransfer ? (
+                              <option value="owner">Owner</option>
+                            ) : null}
                           </select>
                         </label>
                       ) : (
