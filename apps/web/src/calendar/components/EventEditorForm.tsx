@@ -1,10 +1,14 @@
-import type { Calendar } from "@musubi/types";
+import { can, type Calendar } from "@musubi/types";
 import {
   CalendarDays,
   Check,
   ChevronDown,
   Clock3,
+  FileText,
+  Link2,
   MapPin,
+  Repeat2,
+  UsersRound,
 } from "lucide-react";
 import {
   type FormEvent,
@@ -52,6 +56,13 @@ export function EventEditorForm({
   const selectedCalendar = calendars.find(
     (calendar) => calendar.id === values.calendarId,
   );
+  const customRecurrence = ![
+    "",
+    "FREQ=DAILY",
+    "FREQ=WEEKLY",
+    "FREQ=MONTHLY",
+    "FREQ=YEARLY",
+  ].includes(values.recurrence);
 
   function patch(next: Partial<EventFormValues>) {
     setValues((current) => ({ ...current, ...next }));
@@ -135,6 +146,21 @@ export function EventEditorForm({
         <span>All day</span>
       </label>
 
+      {values.isAllDay ? (
+        <label className={styles.formRow}>
+          <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
+          <span className={styles.formHint}>Ends</span>
+          <input
+            disabled={saving}
+            min={values.date}
+            required
+            type="date"
+            value={values.endDate}
+            onChange={(event) => patch({ endDate: event.target.value })}
+          />
+        </label>
+      ) : null}
+
       {!values.isAllDay ? (
         <div className={styles.formRow}>
           <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
@@ -177,6 +203,79 @@ export function EventEditorForm({
         />
       </label>
 
+      <label className={styles.formRow}>
+        <FileText aria-hidden="true" size={17} strokeWidth={1.5} />
+        <span className={styles.srOnly}>Description</span>
+        <input
+          disabled={saving}
+          placeholder="Add notes"
+          value={values.description}
+          onChange={(event) =>
+            patch({ description: event.target.value })
+          }
+        />
+      </label>
+
+      <label className={styles.formRow}>
+        <Link2 aria-hidden="true" size={17} strokeWidth={1.5} />
+        <span className={styles.srOnly}>URL</span>
+        <input
+          disabled={saving}
+          placeholder="Add link"
+          type="url"
+          value={values.url}
+          onChange={(event) => patch({ url: event.target.value })}
+        />
+      </label>
+
+      <label className={styles.formRow}>
+        <Repeat2 aria-hidden="true" size={17} strokeWidth={1.5} />
+        <span className={styles.srOnly}>Repeat</span>
+        <select
+          disabled={saving}
+          value={values.recurrence}
+          onChange={(event) =>
+            patch({ recurrence: event.target.value })
+          }
+        >
+          <option value="">Does not repeat</option>
+          <option value="FREQ=DAILY">Every day</option>
+          <option value="FREQ=WEEKLY">Every week</option>
+          <option value="FREQ=MONTHLY">Every month</option>
+          <option value="FREQ=YEARLY">Every year</option>
+          {customRecurrence ? (
+            <option value={values.recurrence}>Custom recurrence</option>
+          ) : null}
+        </select>
+        <ChevronDown
+          className={styles.selectChevron}
+          aria-hidden="true"
+          size={16}
+          strokeWidth={1.5}
+        />
+      </label>
+
+      <label className={styles.allDayRow}>
+        <span
+          className={`${styles.checkbox} ${
+            values.hasAttendees ? styles.checkboxChecked : ""
+          }`}
+          aria-hidden="true"
+        >
+          {values.hasAttendees ? <Check size={12} strokeWidth={2} /> : null}
+        </span>
+        <input
+          checked={values.hasAttendees}
+          disabled={saving}
+          type="checkbox"
+          onChange={(event) =>
+            patch({ hasAttendees: event.target.checked })
+          }
+        />
+        <UsersRound aria-hidden="true" size={15} strokeWidth={1.5} />
+        <span>Allow attendance</span>
+      </label>
+
       <label
         className={`${styles.formRow} ${
           calendarLocked ? styles.formRowLocked : ""
@@ -192,9 +291,20 @@ export function EventEditorForm({
         <select
           disabled={calendarLocked || saving}
           value={values.calendarId}
-          onChange={(event) =>
-            patch({ calendarId: event.target.value })
-          }
+          onChange={(event) => {
+            const calendarId = event.target.value;
+            const replacingOnlyHome =
+              values.calendarIds.length === 1 &&
+              values.calendarIds[0] === values.calendarId;
+            patch({
+              calendarId,
+              calendarIds: replacingOnlyHome
+                ? [calendarId]
+                : values.calendarIds.includes(calendarId)
+                  ? values.calendarIds
+                  : [...values.calendarIds, calendarId],
+            });
+          }}
         >
           {calendars.map((calendar) => (
             <option key={calendar.id} value={calendar.id}>
@@ -211,6 +321,43 @@ export function EventEditorForm({
           />
         ) : null}
       </label>
+
+      {calendars.length > 1 ? (
+        <fieldset className={styles.calendarChoices}>
+          <legend>Also show in</legend>
+          {calendars.map((calendar) => {
+            const checked = values.calendarIds.includes(calendar.id);
+            const isHome = values.calendarId === calendar.id;
+            const mutable =
+              !calendarLocked || can(calendar.role, "editEvents");
+
+            return (
+              <label key={calendar.id}>
+                <input
+                  checked={checked}
+                  disabled={saving || isHome || !mutable}
+                  type="checkbox"
+                  onChange={(event) =>
+                    patch({
+                      calendarIds: event.target.checked
+                        ? [...values.calendarIds, calendar.id]
+                        : values.calendarIds.filter(
+                            (calendarId) => calendarId !== calendar.id,
+                          ),
+                    })
+                  }
+                />
+                <span
+                  className={styles.calendarDot}
+                  style={{ backgroundColor: calendar.color }}
+                />
+                <span>{calendar.name}</span>
+                {isHome ? <small>Home</small> : null}
+              </label>
+            );
+          })}
+        </fieldset>
+      ) : null}
 
       {error ? (
         <div className={styles.formError} role="alert">

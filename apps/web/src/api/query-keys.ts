@@ -20,6 +20,12 @@ export const queryKeys = {
   calendars: (serverOrigin: string, userId: string) =>
     ["calendars", serverOrigin, userId] as const,
 
+  attendees: (
+    serverOrigin: string,
+    userId: string,
+    eventId: string,
+  ) => ["attendees", serverOrigin, userId, eventId] as const,
+
   eventRange: (input: EventRangeInput) =>
     [
       "events",

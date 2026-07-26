@@ -3,12 +3,18 @@ import { toDateKey } from "./date-key";
 
 export type EventFormValues = {
   calendarId: string;
+  calendarIds: string[];
   date: string;
+  description: string;
+  endDate: string;
   endTime: string;
+  hasAttendees: boolean;
   isAllDay: boolean;
   location: string;
+  recurrence: string;
   startTime: string;
   title: string;
+  url: string;
 };
 
 type NewEventIdentity = {
@@ -47,26 +53,40 @@ export function defaultEventFormValues(
 
   return {
     calendarId,
+    calendarIds: [calendarId],
     date,
+    description: "",
+    endDate: date,
     endTime: toTimeInput(end),
+    hasAttendees: false,
     isAllDay: false,
     location: "",
+    recurrence: "",
     startTime,
     title: "",
+    url: "",
   };
 }
 
 export function eventFormValues(event: Event): EventFormValues {
   return {
     calendarId: event.originCalendarID ?? event.calendars[0] ?? "",
+    calendarIds: event.calendars,
     date: event.isAllDay
       ? allDayDateKey(event.start)
       : toDateKey(event.start),
+    description: event.description ?? "",
+    endDate: event.isAllDay
+      ? allDayDateKey(event.end)
+      : toDateKey(event.end),
     endTime: toTimeInput(event.end),
+    hasAttendees: event.hasAttendees,
     isAllDay: event.isAllDay,
     location: event.location ?? "",
+    recurrence: event.recurrence ?? "",
     startTime: toTimeInput(event.start),
     title: event.title,
+    url: event.url ?? "",
   };
 }
 
@@ -75,12 +95,22 @@ export function validateEventForm(values: EventFormValues) {
     return "Add an event title.";
   }
 
-  if (!values.calendarId) {
+  if (
+    !values.calendarId ||
+    !values.calendarIds.includes(values.calendarId)
+  ) {
     return "Choose a calendar.";
   }
 
   if (!values.date) {
     return "Choose a date.";
+  }
+
+  if (
+    values.isAllDay &&
+    allDayBoundary(values.endDate) < allDayBoundary(values.date)
+  ) {
+    return "End date must be on or after the start date.";
   }
 
   if (
@@ -97,7 +127,7 @@ export function validateEventForm(values: EventFormValues) {
 function eventBoundaries(values: EventFormValues) {
   return values.isAllDay
     ? {
-        end: allDayBoundary(values.date),
+        end: allDayBoundary(values.endDate),
         start: allDayBoundary(values.date),
       }
     : {
@@ -114,22 +144,22 @@ export function createEventFromForm(
   const boundaries = eventBoundaries(values);
 
   return {
-    calendars: [values.calendarId],
+    calendars: values.calendarIds,
     color,
     creatorID: identity.userId,
-    description: null,
+    description: values.description.trim() || null,
     end: boundaries.end,
-    hasAttendees: false,
+    hasAttendees: values.hasAttendees,
     id: crypto.randomUUID(),
     isAllDay: values.isAllDay,
     isCanceled: false,
     location: values.location.trim() || null,
     organizer: identity.email,
     originCalendarID: values.calendarId,
-    recurrence: null,
+    recurrence: values.recurrence || null,
     start: boundaries.start,
     title: values.title.trim(),
-    url: null,
+    url: values.url.trim() || null,
   };
 }
 
@@ -141,10 +171,15 @@ export function updateEventFromForm(
 
   return {
     ...event,
+    calendars: values.calendarIds,
+    description: values.description.trim() || null,
     end: boundaries.end,
+    hasAttendees: values.hasAttendees,
     isAllDay: values.isAllDay,
     location: values.location.trim() || null,
+    recurrence: values.recurrence || null,
     start: boundaries.start,
     title: values.title.trim(),
+    url: values.url.trim() || null,
   };
 }

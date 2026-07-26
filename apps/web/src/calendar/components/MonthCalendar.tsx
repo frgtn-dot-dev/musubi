@@ -32,13 +32,11 @@ export function MonthCalendar({
   anchor,
   calendars,
   events,
-  onNotice,
   onCreateAtDate,
   onMonthChange,
-  onRemoveEvent,
-  onUpdateEvent,
   timeFormat,
   weekStartsOn,
+  ...eventActions
 }: MonthCalendarProps) {
   const days = useMemo(
     () => getMonthGrid(anchor, weekStartsOn),
@@ -204,11 +202,9 @@ export function MonthCalendar({
                         continuesBefore={segment.continuesBefore}
                         event={segment.event}
                         key={segment.event.id}
-                        onNotice={onNotice}
-                        onRemoveEvent={onRemoveEvent}
-                        onUpdateEvent={onUpdateEvent}
                         showLabel={!segment.continuesBefore || dayIndex === 0}
                         timeFormat={timeFormat}
+                        {...eventActions}
                       />
                     ))}
                     {overflow > 0 ? (

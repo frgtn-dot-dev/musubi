@@ -90,10 +90,8 @@ const TimelineEvent = memo(function TimelineEvent({
   calendars,
   dayMode,
   daySegment,
-  onNotice,
-  onRemoveEvent,
-  onUpdateEvent,
   timeFormat,
+  ...eventActions
 }: TimelineEventProps) {
   const { col, cols, endMin, event, startMin } = daySegment;
   const eventColor = calendar?.color ?? event.color;
@@ -108,10 +106,8 @@ const TimelineEvent = memo(function TimelineEvent({
       calendar={calendar}
       calendars={calendars}
       event={event}
-      onNotice={onNotice}
-      onRemoveEvent={onRemoveEvent}
-      onUpdateEvent={onUpdateEvent}
       timeFormat={timeFormat}
+      {...eventActions}
     >
       <button
         className={styles.timelineEvent}
@@ -148,12 +144,10 @@ export function TimeGridView({
   calendars,
   events,
   onCreateAtTime,
-  onNotice,
-  onRemoveEvent,
-  onUpdateEvent,
   timeFormat,
   view,
   weekStartsOn,
+  ...eventActions
 }: TimeGridViewProps) {
   const days = useMemo(
     () => getTimeGridDays(anchor, view, weekStartsOn),
@@ -297,10 +291,8 @@ export function TimeGridView({
                   calendars={calendars}
                   event={span.event}
                   key={span.event.id}
-                  onNotice={onNotice}
-                  onRemoveEvent={onRemoveEvent}
-                  onUpdateEvent={onUpdateEvent}
                   timeFormat={timeFormat}
+                  {...eventActions}
                 >
                   <button
                     className={styles.timeGridAllDayEvent}
@@ -405,10 +397,8 @@ export function TimeGridView({
                     dayMode={dayMode}
                     daySegment={segment}
                     key={segment.event.id}
-                    onNotice={onNotice}
-                    onRemoveEvent={onRemoveEvent}
-                    onUpdateEvent={onUpdateEvent}
                     timeFormat={timeFormat}
+                    {...eventActions}
                   />
                 ))}
                 {today ? (

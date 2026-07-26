@@ -7,6 +7,14 @@ import { z } from "zod";
 
 export const CalendarsResponseSchema = z.array(CalendarSchema);
 
+export const AttendeeSchema = z.object({
+  id: z.string(),
+  image: z.string().nullish(),
+  name: z.string(),
+});
+
+export const AttendeesResponseSchema = z.array(AttendeeSchema);
+
 export const EventsResponseSchema = z.object({
   deletedIds: z.array(z.string()),
   events: z.array(EventSchema),
@@ -22,6 +30,7 @@ export const RemoveEventResponseSchema = z.object({
 export const SettingsResponseSchema = SettingsSchema;
 
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
+export type Attendee = z.infer<typeof AttendeeSchema>;
 export type RemoveEventResponse = z.infer<
   typeof RemoveEventResponseSchema
 >;

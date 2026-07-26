@@ -1173,6 +1173,11 @@
   animation: popover-in var(--motion-standard) ease both;
 }
 
+.detailPopover {
+  max-height: var(--radix-popover-content-available-height);
+  overflow-y: auto;
+}
+
 .quickCreateAnchor {
   position: fixed;
   z-index: 99;
@@ -1204,6 +1209,15 @@
   justify-content: space-between;
   gap: 16px;
   padding: 17px 18px 11px;
+}
+
+.detailPopover > .popoverHeader,
+.createPopover > .popoverHeader {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--surface-canvas);
+  box-shadow: 0 1px var(--border-subtle);
 }
 
 .popoverHeader h2 {
@@ -1262,6 +1276,68 @@
 
 .detailList dd {
   color: var(--text-secondary);
+}
+
+.detailList a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.attendeeSection,
+.linkSection {
+  margin: 0;
+  padding: 11px 18px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.attendeeSection > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.attendeeSection strong {
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.attendeeSection p {
+  margin: 7px 0 9px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.attendeeSection .secondaryButton {
+  min-height: 32px;
+  padding: 0 11px;
+}
+
+.linkSection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.linkSection select,
+.deleteScope {
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.linkSection .textButton {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 5px;
 }
 
 .prototypeNote {
@@ -1323,7 +1399,8 @@
 }
 
 .deleteConfirm .formError,
-.deleteConfirmActions {
+.deleteConfirmActions,
+.deleteScope {
   grid-column: 1 / -1;
 }
 
@@ -1340,6 +1417,8 @@
 
 .createPopover {
   width: min(340px, calc(100vw - 28px));
+  max-height: var(--radix-popover-content-available-height);
+  overflow-y: auto;
   padding-bottom: 8px;
 }
 
@@ -1412,6 +1491,12 @@
   white-space: nowrap;
 }
 
+.formHint {
+  color: var(--text-faint);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
 .allDayRow {
   display: flex;
   min-height: 34px;
@@ -1434,6 +1519,40 @@
   position: absolute;
   right: 12px;
   pointer-events: none;
+}
+
+.calendarChoices {
+  display: grid;
+  gap: 2px;
+  margin: 0 14px 8px;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+}
+
+.calendarChoices legend {
+  padding: 0 4px;
+  color: var(--text-faint);
+  font-size: 0.65rem;
+}
+
+.calendarChoices label {
+  display: grid;
+  min-height: 28px;
+  grid-template-columns: 15px 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.calendarChoices input {
+  accent-color: var(--accent-primary);
+}
+
+.calendarChoices small {
+  color: var(--text-faint);
+  font-size: 0.61rem;
 }
 
 .createActions {

@@ -34,10 +34,8 @@ export function AgendaView({
   anchor,
   calendars,
   events,
-  onNotice,
-  onRemoveEvent,
-  onUpdateEvent,
   timeFormat,
+  ...eventActions
 }: AgendaViewProps) {
   const groups = useMemo(
     () => getAgendaGroups(events, anchor),
@@ -155,10 +153,8 @@ export function AgendaView({
                         calendars={calendars}
                         event={event}
                         key={event.id}
-                        onNotice={onNotice}
-                        onRemoveEvent={onRemoveEvent}
-                        onUpdateEvent={onUpdateEvent}
                         timeFormat={timeFormat}
+                        {...eventActions}
                       >
                         <button
                           className={styles.agendaEvent}

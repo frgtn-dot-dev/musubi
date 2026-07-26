@@ -95,13 +95,17 @@ function WorkspaceRoute() {
   return (
     <Workspace
       activeView={activeView}
+      baseEvents={workspace.events.data.baseEvents}
       calendars={workspace.calendars.data}
       date={date}
       events={workspace.events.data.events}
       isRefreshing={queries.some((query) => query.isFetching)}
       onCreateEvent={eventMutations.createEvent}
+      onForkEvent={eventMutations.forkEvent}
+      onLinkEvent={eventMutations.linkEvent}
       pageId={pageId}
       onRemoveEvent={eventMutations.removeEvent}
+      onSetAttendance={eventMutations.setAttendance}
       settings={workspace.settings.data}
       user={session.data!.user}
       onDateChange={(nextDate) =>

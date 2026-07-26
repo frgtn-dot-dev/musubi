@@ -44,6 +44,35 @@ describe("event form", () => {
     );
   });
 
+  it("creates a recurring multi-calendar, multi-day event", () => {
+    const event = createEventFromForm(
+      {
+        ...defaultEventFormValues("calendar-1", "2026-07-26"),
+        calendarIds: ["calendar-1", "calendar-2"],
+        description: "Bring a tent",
+        endDate: "2026-07-29",
+        hasAttendees: true,
+        isAllDay: true,
+        recurrence: "FREQ=YEARLY",
+        title: "Camp",
+        url: "https://example.com/camp",
+      },
+      { email: "alex@example.com", userId: "user-1" },
+      "#b3492f",
+    );
+
+    expect(event).toMatchObject({
+      calendars: ["calendar-1", "calendar-2"],
+      description: "Bring a tent",
+      hasAttendees: true,
+      recurrence: "FREQ=YEARLY",
+      url: "https://example.com/camp",
+    });
+    expect(event.end.toISOString()).toBe(
+      "2026-07-29T00:00:00.000Z",
+    );
+  });
+
   it("rejects timed events whose end is not after their start", () => {
     expect(
       validateEventForm({

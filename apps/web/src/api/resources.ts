@@ -1,4 +1,5 @@
 import {
+  AttendeesResponseSchema,
   CalendarsResponseSchema,
   EventsResponseSchema,
   RemoveEventResponseSchema,
@@ -49,5 +50,39 @@ export function removeEvent(event: Event) {
     body: event,
     method: "DELETE",
     responseSchema: RemoveEventResponseSchema,
+  });
+}
+
+export function linkEvent(eventId: string, calendarId: string) {
+  return apiRequest(`/api/v1/events/${eventId}/link`, {
+    body: { calendarID: calendarId },
+    method: "POST",
+    responseSchema: EventSchema,
+  });
+}
+
+export function forkEvent(eventId: string, calendarId: string) {
+  return apiRequest(`/api/v1/events/${eventId}/fork`, {
+    body: { calendarID: calendarId },
+    method: "POST",
+    responseSchema: EventSchema,
+  });
+}
+
+export function getEventAttendees(
+  eventId: string,
+  signal?: AbortSignal,
+) {
+  return apiRequest(`/api/v1/events/${eventId}/attendees`, {
+    responseSchema: AttendeesResponseSchema,
+    signal,
+  });
+}
+
+export function setAttendance(eventId: string, attending: boolean) {
+  return apiRequest(`/api/v1/events/${eventId}/attendance`, {
+    body: { attending },
+    method: "PUT",
+    responseSchema: AttendeesResponseSchema,
   });
 }

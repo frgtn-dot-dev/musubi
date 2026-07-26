@@ -1,13 +1,19 @@
 import * as Popover from "@radix-ui/react-popover";
+import {
+  endSeriesBefore,
+  excludeOccurrence,
+} from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import { providerDisplayName } from "@musubi/types";
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
   Clock3,
+  CopyPlus,
   FileText,
+  Link2,
   MapPin,
   Pencil,
   Repeat2,
@@ -15,7 +21,11 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import type { RemoveEventResponse } from "~/api/contracts";
+import type {
+  Attendee,
+  RemoveEventResponse,
+} from "~/api/contracts";
+import { getEventAttendees } from "~/api/resources";
 import {
   getEventDateLabel,
   getEventRangeLabel,
@@ -28,19 +38,33 @@ import {
 import {
   canEditEvent,
   canRemoveEvent,
-  getEventHomeCalendar,
   getEditableCalendars,
+  getEventHomeCalendar,
   getEventMutationError,
-  isQuickEditableEvent,
 } from "../event-permissions";
 import { EventEditorForm } from "./EventEditorForm";
 import styles from "./workspace.module.css";
 
+type TargetMutation = {
+  calendarId: string;
+  eventId: string;
+};
+
 export type EventActionHandlers = {
+  getEventMaster: (event: Event) => Event;
+  onForkEvent: (input: TargetMutation) => Promise<Event>;
+  onLinkEvent: (input: TargetMutation) => Promise<Event>;
   onNotice: (message: string) => void;
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
+  onSetAttendance: (input: {
+    attending: boolean;
+    eventId: string;
+  }) => Promise<Attendee[]>;
   onUpdateEvent: (event: Event) => Promise<Event>;
+  user: { id: string; name: string };
 };
+
+type DeleteScope = "occurrence" | "following" | "series";
 
 type EventDetailsPopoverProps = EventActionHandlers & {
   calendar: Calendar | undefined;
@@ -55,30 +79,61 @@ export function EventDetailsPopover({
   calendars,
   children,
   event,
+  getEventMaster,
+  onForkEvent,
+  onLinkEvent,
   onNotice,
   onRemoveEvent,
+  onSetAttendance,
   onUpdateEvent,
   timeFormat,
+  user,
 }: EventDetailsPopoverProps) {
+  const master = getEventMaster(event);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<{
+  const [deleteScope, setDeleteScope] =
+    useState<DeleteScope>("occurrence");
+  const [busyAction, setBusyAction] = useState<string>();
+  const [actionError, setActionError] = useState<{
     message: string;
     requestId?: string;
   }>();
   const homeCalendar =
-    getEventHomeCalendar(event, calendars) ?? calendar;
+    getEventHomeCalendar(master, calendars) ?? calendar;
   const removeCalendar =
     getEditableCalendars(calendars).find((item) =>
-      event.calendars.includes(item.id),
+      master.calendars.includes(item.id),
     ) ?? homeCalendar;
-  const editable =
-    canEditEvent(event, calendars) && isQuickEditableEvent(event);
-  const removable =
-    canRemoveEvent(event, calendars) && !event.recurrence;
-  const editCalendars = homeCalendar ? [homeCalendar] : [];
+  const editable = canEditEvent(master, calendars);
+  const removable = canRemoveEvent(master, calendars);
+  const targetCalendars = getEditableCalendars(calendars).filter(
+    (item) => !master.calendars.includes(item.id),
+  );
+  const [targetCalendarId, setTargetCalendarId] = useState("");
+  const selectedTargetId =
+    targetCalendarId || targetCalendars[0]?.id || "";
+  const [attendees, setAttendees] = useState<Attendee[]>();
+  const isAttending =
+    attendees?.some((attendee) => attendee.id === user.id) ?? false;
+
+  useEffect(() => {
+    if (!open || !master.hasAttendees) return;
+    const controller = new AbortController();
+    let active = true;
+    getEventAttendees(master.id, controller.signal)
+      .then((nextAttendees) => {
+        if (active) setAttendees(nextAttendees);
+      })
+      .catch(() => {
+        if (active) setAttendees(undefined);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [master.hasAttendees, master.id, open]);
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -86,30 +141,109 @@ export function EventDetailsPopover({
     if (!nextOpen) {
       setEditing(false);
       setConfirmingDelete(false);
-      setDeleteError(undefined);
+      setActionError(undefined);
     }
   }
 
   async function handleUpdate(values: EventFormValues) {
-    await onUpdateEvent(updateEventFromForm(event, values));
-    onNotice("Event updated.");
+    await onUpdateEvent(updateEventFromForm(master, values));
+    onNotice(
+      master.recurrence ? "Recurring series updated." : "Event updated.",
+    );
     handleOpenChange(false);
   }
 
   async function handleDelete() {
-    setDeleting(true);
-    setDeleteError(undefined);
+    setBusyAction("delete");
+    setActionError(undefined);
 
     try {
-      const result = await onRemoveEvent(event);
-      onNotice(result.removed ? "Event deleted." : "Event removed.");
+      if (
+        master.recurrence &&
+        deleteScope !== "series" &&
+        !(
+          deleteScope === "following" &&
+          event.start.getTime() <= master.start.getTime()
+        )
+      ) {
+        const recurrence =
+          deleteScope === "occurrence"
+            ? excludeOccurrence(master.recurrence, event.start)
+            : endSeriesBefore(master.recurrence, event.start);
+        await onUpdateEvent({ ...master, recurrence });
+        onNotice(
+          deleteScope === "occurrence"
+            ? "Occurrence removed."
+            : "Following occurrences removed.",
+        );
+      } else {
+        const result = await onRemoveEvent(master);
+        onNotice(result.removed ? "Event deleted." : "Event removed.");
+      }
       handleOpenChange(false);
     } catch (error) {
-      setDeleteError(
-        getEventMutationError(error, "delete", removeCalendar),
+      setActionError(
+        getEventMutationError(
+          error,
+          master.recurrence && deleteScope !== "series"
+            ? "update"
+            : "delete",
+          removeCalendar,
+        ),
       );
     } finally {
-      setDeleting(false);
+      setBusyAction(undefined);
+    }
+  }
+
+  async function handleTargetAction(action: "link" | "fork") {
+    if (!selectedTargetId) return;
+    setBusyAction(action);
+    setActionError(undefined);
+
+    try {
+      if (action === "link") {
+        await onLinkEvent({
+          calendarId: selectedTargetId,
+          eventId: master.id,
+        });
+        onNotice("Event linked to calendar.");
+      } else {
+        await onForkEvent({
+          calendarId: selectedTargetId,
+          eventId: master.id,
+        });
+        onNotice("Independent event copy created.");
+      }
+      handleOpenChange(false);
+    } catch (error) {
+      setActionError(
+        getEventMutationError(
+          error,
+          "update",
+          calendars.find((item) => item.id === selectedTargetId),
+        ),
+      );
+    } finally {
+      setBusyAction(undefined);
+    }
+  }
+
+  async function handleAttendance() {
+    setBusyAction("attendance");
+    setActionError(undefined);
+
+    try {
+      const nextAttendees = await onSetAttendance({
+        attending: !isAttending,
+        eventId: master.id,
+      });
+      setAttendees(nextAttendees);
+      onNotice(isAttending ? "Attendance removed." : "Attendance confirmed.");
+    } catch (error) {
+      setActionError(getEventMutationError(error, "update", homeCalendar));
+    } finally {
+      setBusyAction(undefined);
     }
   }
 
@@ -118,22 +252,22 @@ export function EventDetailsPopover({
       <Popover.Trigger asChild>{children}</Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className={`${styles.popover} ${styles.detailPopover}`}
           align="start"
           aria-label={event.title}
-          side="bottom"
-          sideOffset={8}
+          className={`${styles.popover} ${styles.detailPopover}`}
           collisionPadding={14}
           onClick={(clickEvent) => clickEvent.stopPropagation()}
+          side="bottom"
+          sideOffset={8}
         >
           {editing ? (
             <>
               <div className={styles.popoverHeader}>
-                <h2>Edit event</h2>
+                <h2>{master.recurrence ? "Edit series" : "Edit event"}</h2>
                 <button
+                  aria-label="Close event editor"
                   className={styles.iconButton}
                   type="button"
-                  aria-label="Close event editor"
                   onClick={() => setEditing(false)}
                 >
                   <X aria-hidden="true" size={17} strokeWidth={1.6} />
@@ -141,8 +275,8 @@ export function EventDetailsPopover({
               </div>
               <EventEditorForm
                 calendarLocked
-                calendars={editCalendars}
-                initialValues={eventFormValues(event)}
+                calendars={calendars}
+                initialValues={eventFormValues(master)}
                 onCancel={() => setEditing(false)}
                 onError={(error) =>
                   getEventMutationError(error, "update", homeCalendar)
@@ -163,14 +297,21 @@ export function EventDetailsPopover({
                         backgroundColor: calendar?.color ?? event.color,
                       }}
                     />
-                    {calendar?.name ?? "Calendar"}
+                    {event.calendars
+                      .map(
+                        (calendarId) =>
+                          calendars.find((item) => item.id === calendarId)
+                            ?.name,
+                      )
+                      .filter(Boolean)
+                      .join(" · ") || "Calendar"}
                   </p>
                 </div>
                 <Popover.Close asChild>
                   <button
+                    aria-label="Close event details"
                     className={styles.iconButton}
                     type="button"
-                    aria-label="Close event details"
                   >
                     <X aria-hidden="true" size={17} strokeWidth={1.6} />
                   </button>
@@ -178,69 +319,124 @@ export function EventDetailsPopover({
               </div>
 
               <dl className={styles.detailList}>
-                <div>
-                  <CalendarDays
-                    aria-hidden="true"
-                    size={17}
-                    strokeWidth={1.5}
-                  />
-                  <dt>Date</dt>
-                  <dd>{getEventDateLabel(event)}</dd>
-                </div>
-                <div>
-                  <Clock3
-                    aria-hidden="true"
-                    size={17}
-                    strokeWidth={1.5}
-                  />
-                  <dt>Time</dt>
-                  <dd>{getEventRangeLabel(event, timeFormat)}</dd>
-                </div>
+                <DetailRow
+                  icon={<CalendarDays size={17} strokeWidth={1.5} />}
+                  label="Date"
+                  value={getEventDateLabel(event)}
+                />
+                <DetailRow
+                  icon={<Clock3 size={17} strokeWidth={1.5} />}
+                  label="Time"
+                  value={getEventRangeLabel(event, timeFormat)}
+                />
                 {event.recurrence ? (
-                  <div>
-                    <Repeat2
-                      aria-hidden="true"
-                      size={17}
-                      strokeWidth={1.5}
-                    />
-                    <dt>Repeat</dt>
-                    <dd>Every week</dd>
-                  </div>
-                ) : null}
-                {event.hasAttendees ? (
-                  <div>
-                    <UsersRound
-                      aria-hidden="true"
-                      size={17}
-                      strokeWidth={1.5}
-                    />
-                    <dt>Attendees</dt>
-                    <dd>Attendee tracking enabled</dd>
-                  </div>
+                  <DetailRow
+                    icon={<Repeat2 size={17} strokeWidth={1.5} />}
+                    label="Repeat"
+                    value="Recurring series"
+                  />
                 ) : null}
                 {event.location ? (
-                  <div>
-                    <MapPin
-                      aria-hidden="true"
-                      size={17}
-                      strokeWidth={1.5}
-                    />
-                    <dt>Location</dt>
-                    <dd>{event.location}</dd>
-                  </div>
+                  <DetailRow
+                    icon={<MapPin size={17} strokeWidth={1.5} />}
+                    label="Location"
+                    value={event.location}
+                  />
+                ) : null}
+                {event.url ? (
+                  <DetailRow
+                    icon={<Link2 size={17} strokeWidth={1.5} />}
+                    label="Link"
+                    value={
+                      <a href={event.url} rel="noreferrer" target="_blank">
+                        Open event link
+                      </a>
+                    }
+                  />
                 ) : null}
                 {event.description ? (
-                  <div>
-                    <FileText
-                      aria-hidden="true"
-                      size={17}
-                      strokeWidth={1.5}
-                    />
-                    <dt>Notes</dt>
-                    <dd>{event.description}</dd>
-                  </div>
+                  <DetailRow
+                    icon={<FileText size={17} strokeWidth={1.5} />}
+                    label="Notes"
+                    value={event.description}
+                  />
                 ) : null}
               </dl>
+
+              {master.hasAttendees ? (
+                <section className={styles.attendeeSection}>
+                  <div>
+                    <UsersRound aria-hidden="true" size={16} />
+                    <strong>
+                      {!attendees
+                        ? "Loading attendees…"
+                        : `${attendees?.length ?? 0} attending`}
+                    </strong>
+                  </div>
+                  {attendees ? (
+                    <>
+                      <p>
+                        {attendees.map((item) => item.name).join(", ") ||
+                          "Be the first to attend."}
+                      </p>
+                      <button
+                        className={styles.secondaryButton}
+                        disabled={busyAction === "attendance"}
+                        type="button"
+                        onClick={() => void handleAttendance()}
+                      >
+                        {isAttending ? "Leave" : "Attend"}
+                      </button>
+                    </>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {targetCalendars.length > 0 ? (
+                <section className={styles.linkSection}>
+                  <select
+                    aria-label="Target calendar"
+                    disabled={Boolean(busyAction)}
+                    value={selectedTargetId}
+                    onChange={(changeEvent) =>
+                      setTargetCalendarId(changeEvent.target.value)
+                    }
+                  >
+                    {targetCalendars.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className={styles.textButton}
+                    disabled={Boolean(busyAction)}
+                    type="button"
+                    onClick={() => void handleTargetAction("link")}
+                  >
+                    <Link2 aria-hidden="true" size={14} />
+                    Link
+                  </button>
+                  <button
+                    className={styles.textButton}
+                    disabled={Boolean(busyAction)}
+                    type="button"
+                    onClick={() => void handleTargetAction("fork")}
+                  >
+                    <CopyPlus aria-hidden="true" size={14} />
+                    Fork
+                  </button>
+                </section>
+              ) : null}
+
+              {actionError ? (
+                <div className={styles.formError} role="alert">
+                  <p>{actionError.message}</p>
+                  {actionError.requestId ? (
+                    <span>Request {actionError.requestId}</span>
+                  ) : null}
+                </div>
+              ) : null}
 
               {confirmingDelete ? (
                 <div className={styles.deleteConfirm}>
@@ -259,18 +455,29 @@ export function EventDetailsPopover({
                         : "This cannot be undone."}
                     </p>
                   </div>
-                  {deleteError ? (
-                    <div className={styles.formError} role="alert">
-                      <p>{deleteError.message}</p>
-                      {deleteError.requestId ? (
-                        <span>Request {deleteError.requestId}</span>
-                      ) : null}
-                    </div>
+                  {master.recurrence ? (
+                    <select
+                      aria-label="Recurring event delete scope"
+                      className={styles.deleteScope}
+                      disabled={busyAction === "delete"}
+                      value={deleteScope}
+                      onChange={(changeEvent) =>
+                        setDeleteScope(
+                          changeEvent.target.value as DeleteScope,
+                        )
+                      }
+                    >
+                      <option value="occurrence">This event</option>
+                      <option value="following">
+                        This and following events
+                      </option>
+                      <option value="series">Entire series</option>
+                    </select>
                   ) : null}
                   <div className={styles.deleteConfirmActions}>
                     <button
                       className={styles.textButton}
-                      disabled={deleting}
+                      disabled={busyAction === "delete"}
                       type="button"
                       onClick={() => setConfirmingDelete(false)}
                     >
@@ -278,11 +485,11 @@ export function EventDetailsPopover({
                     </button>
                     <button
                       className={styles.dangerButton}
-                      disabled={deleting}
+                      disabled={busyAction === "delete"}
                       type="button"
                       onClick={() => void handleDelete()}
                     >
-                      {deleting ? "Deleting…" : "Delete"}
+                      {busyAction === "delete" ? "Deleting…" : "Delete"}
                     </button>
                   </div>
                 </div>
@@ -294,12 +501,8 @@ export function EventDetailsPopover({
                       type="button"
                       onClick={() => setEditing(true)}
                     >
-                      <Pencil
-                        aria-hidden="true"
-                        size={15}
-                        strokeWidth={1.6}
-                      />
-                      Edit
+                      <Pencil aria-hidden="true" size={15} strokeWidth={1.6} />
+                      {master.recurrence ? "Edit series" : "Edit"}
                     </button>
                   ) : null}
                   {removable ? (
@@ -308,20 +511,14 @@ export function EventDetailsPopover({
                       type="button"
                       onClick={() => setConfirmingDelete(true)}
                     >
-                      <Trash2
-                        aria-hidden="true"
-                        size={15}
-                        strokeWidth={1.6}
-                      />
+                      <Trash2 aria-hidden="true" size={15} strokeWidth={1.6} />
                       Delete
                     </button>
                   ) : null}
                 </div>
               ) : (
                 <p className={styles.prototypeNote}>
-                  {event.recurrence
-                    ? "Recurring event changes continue in the full editor."
-                    : "You have view-only access to this event."}
+                  You have view-only access to this event.
                 </p>
               )}
             </>
@@ -330,5 +527,23 @@ export function EventDetailsPopover({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+function DetailRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactElement;
+  label: string;
+  value: ReactElement | string;
+}) {
+  return (
+    <div>
+      <span aria-hidden="true">{icon}</span>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }

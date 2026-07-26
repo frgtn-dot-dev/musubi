@@ -26,11 +26,9 @@ export function EventPopover({
   continuesAfter = false,
   continuesBefore = false,
   event,
-  onNotice,
-  onRemoveEvent,
-  onUpdateEvent,
   showLabel = true,
   timeFormat,
+  ...eventActions
 }: EventPopoverProps) {
   const eventColor = calendar?.color ?? event.color;
 
@@ -39,10 +37,8 @@ export function EventPopover({
       calendar={calendar}
       calendars={calendars}
       event={event}
-      onNotice={onNotice}
-      onRemoveEvent={onRemoveEvent}
-      onUpdateEvent={onUpdateEvent}
       timeFormat={timeFormat}
+      {...eventActions}
     >
       <button
         className={`${styles.eventChip} ${

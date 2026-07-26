@@ -5,15 +5,19 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type {
+  Attendee,
   EventsResponse,
   RemoveEventResponse,
 } from "~/api/contracts";
 import {
   createEvent,
+  forkEvent,
+  linkEvent,
   removeEvent,
+  setAttendance,
   updateEvent,
 } from "~/api/resources";
-import { getServerOrigin } from "~/api/query-keys";
+import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
 function eventQueryPrefix(userId: string) {
   return ["events", getServerOrigin(), userId] as const;
@@ -108,10 +112,54 @@ export function useEventMutations(userId: string) {
       void refreshEvents();
     },
   });
+  const link = useMutation({
+    mutationFn: ({
+      calendarId,
+      eventId,
+    }: {
+      calendarId: string;
+      eventId: string;
+    }) => linkEvent(eventId, calendarId),
+    onSuccess: (event) => {
+      upsertEvent(queryClient, userId, event);
+      void refreshEvents();
+    },
+  });
+  const fork = useMutation({
+    mutationFn: ({
+      calendarId,
+      eventId,
+    }: {
+      calendarId: string;
+      eventId: string;
+    }) => forkEvent(eventId, calendarId),
+    onSuccess: (event) => {
+      upsertEvent(queryClient, userId, event);
+      void refreshEvents();
+    },
+  });
+  const attendance = useMutation({
+    mutationFn: ({
+      attending,
+      eventId,
+    }: {
+      attending: boolean;
+      eventId: string;
+    }) => setAttendance(eventId, attending),
+    onSuccess: (attendees, { eventId }) => {
+      queryClient.setQueryData<Attendee[]>(
+        queryKeys.attendees(getServerOrigin(), userId, eventId),
+        attendees,
+      );
+    },
+  });
 
   return {
     createEvent: create.mutateAsync,
+    forkEvent: fork.mutateAsync,
+    linkEvent: link.mutateAsync,
     removeEvent: remove.mutateAsync,
+    setAttendance: attendance.mutateAsync,
     updateEvent: update.mutateAsync,
   };
 }

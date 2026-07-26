@@ -83,6 +83,7 @@ export function useWorkspaceQueries(
 
       return {
         ...response,
+        baseEvents: activeEvents,
         events:
           view === "agenda"
             ? [

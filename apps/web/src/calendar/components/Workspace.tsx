@@ -1,11 +1,15 @@
 import type { Calendar, Event, Settings, User } from "@musubi/types";
 import { addDays, addMonthPages } from "@musubi/calendar/layout";
-import type { RemoveEventResponse } from "~/api/contracts";
+import type {
+  Attendee,
+  RemoveEventResponse,
+} from "~/api/contracts";
 import {
   type KeyboardEvent,
   useDeferredValue,
   useEffect,
   useMemo,
+  useCallback,
   useState,
 } from "react";
 import { getAgendaLabel } from "../agenda-math";
@@ -34,14 +38,27 @@ import styles from "./workspace.module.css";
 
 type WorkspaceProps = {
   activeView: CalendarViewId;
+  baseEvents?: Event[];
   calendars: Calendar[];
   date: string;
   events: Event[];
   isRefreshing: boolean;
   onCreateEvent: (event: Event) => Promise<Event>;
   onDateChange: (date: string) => void;
+  onForkEvent?: (input: {
+    calendarId: string;
+    eventId: string;
+  }) => Promise<Event>;
+  onLinkEvent?: (input: {
+    calendarId: string;
+    eventId: string;
+  }) => Promise<Event>;
   onPageChange: (pageId: string) => void;
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
+  onSetAttendance?: (input: {
+    attending: boolean;
+    eventId: string;
+  }) => Promise<Attendee[]>;
   onSignOut: () => void;
   onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
@@ -57,16 +74,28 @@ type CreateIntent = {
   startTime?: string;
 };
 
+const unavailableTargetMutation = async (): Promise<Event> => {
+  throw new Error("This event action is unavailable.");
+};
+
+const unavailableAttendance = async (): Promise<Attendee[]> => {
+  throw new Error("Attendance is unavailable.");
+};
+
 export function Workspace({
   activeView,
+  baseEvents,
   calendars,
   date,
   events,
   isRefreshing,
   onCreateEvent,
   onDateChange,
+  onForkEvent = unavailableTargetMutation,
+  onLinkEvent = unavailableTargetMutation,
   onPageChange,
   onRemoveEvent,
+  onSetAttendance = unavailableAttendance,
   onSignOut,
   onUpdateEvent,
   onViewChange,
@@ -87,6 +116,27 @@ export function Workspace({
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
     [calendars],
+  );
+  const sourceEvents = baseEvents ?? events;
+  const eventMasters = useMemo(() => {
+    const masters = new Map(
+      sourceEvents.map((baseEvent) => [baseEvent.id, baseEvent]),
+    );
+    const recurring = sourceEvents.filter((baseEvent) => baseEvent.recurrence);
+
+    for (const visibleEvent of events) {
+      if (masters.has(visibleEvent.id)) continue;
+      const master = recurring.find((baseEvent) =>
+        visibleEvent.id.startsWith(`${baseEvent.id}_`),
+      );
+      if (master) masters.set(visibleEvent.id, master);
+    }
+
+    return masters;
+  }, [sourceEvents, events]);
+  const getEventMaster = useCallback(
+    (event: Event) => eventMasters.get(event.id) ?? event,
+    [eventMasters],
   );
 
   const visibleCalendarIds = useMemo(
@@ -287,16 +337,24 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              getEventMaster={getEventMaster}
+              onForkEvent={onForkEvent}
+              onLinkEvent={onLinkEvent}
               onNotice={setNotice}
               onRemoveEvent={onRemoveEvent}
+              onSetAttendance={onSetAttendance}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
+              user={user}
             />
           ) : activeView === "day" || activeView === "week" ? (
             <TimeGridView
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              getEventMaster={getEventMaster}
+              onForkEvent={onForkEvent}
+              onLinkEvent={onLinkEvent}
               onCreateAtTime={
                 editableCalendars.length > 0
                   ? (nextDate, time, createAnchor) =>
@@ -310,8 +368,10 @@ export function Workspace({
               }
               onNotice={setNotice}
               onRemoveEvent={onRemoveEvent}
+              onSetAttendance={onSetAttendance}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
+              user={user}
               view={activeView}
               weekStartsOn={settings.weekStartsOn}
             />
@@ -320,6 +380,9 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              getEventMaster={getEventMaster}
+              onForkEvent={onForkEvent}
+              onLinkEvent={onLinkEvent}
               onCreateAtDate={
                 editableCalendars.length > 0
                   ? (nextDate, target) =>
@@ -329,8 +392,10 @@ export function Workspace({
               onMonthChange={changePeriod}
               onNotice={setNotice}
               onRemoveEvent={onRemoveEvent}
+              onSetAttendance={onSetAttendance}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
+              user={user}
               weekStartsOn={settings.weekStartsOn}
             />
           )}

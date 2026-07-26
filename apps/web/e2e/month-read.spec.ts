@@ -151,7 +151,7 @@ const events = {
       "#365a92",
       "2026-08-06T14:00:00.000Z",
       "2026-08-06T15:00:00.000Z",
-      { location: "Studio B" },
+      { hasAttendees: true, location: "Studio B" },
     ),
     event(
       "studio-open-day",
@@ -202,6 +202,9 @@ async function mockAuthenticatedReads(
     ...eventResponse,
     events: eventResponse.events.map((item) => ({ ...item })),
   };
+  let attendeeState = [
+    { id: "guest-1", image: null, name: "Guest One" },
+  ];
 
   await page.route("**/api/auth/get-session", (route) =>
     respond(route, authenticated ? session : null),
@@ -273,6 +276,57 @@ async function mockAuthenticatedReads(
     }
 
     return route.abort();
+  });
+  await page.route("**/api/v1/events/*/attendees", (route) =>
+    respond(route, attendeeState),
+  );
+  await page.route("**/api/v1/events/*/attendance", (route) => {
+    const attending = (
+      route.request().postDataJSON() as { attending: boolean }
+    ).attending;
+    attendeeState = attending
+      ? [
+          ...attendeeState,
+          { id: session.user.id, image: null, name: session.user.name },
+        ]
+      : attendeeState.filter((item) => item.id !== session.user.id);
+    return respond(route, attendeeState);
+  });
+  await page.route("**/api/v1/events/*/link", (route) => {
+    const eventId = route.request().url().split("/").at(-2)!;
+    const { calendarID } = route.request().postDataJSON() as {
+      calendarID: string;
+    };
+    const linked = eventState.events.find((item) => item.id === eventId)!;
+    const result = {
+      ...linked,
+      calendars: [...linked.calendars, calendarID],
+    };
+    eventState = {
+      ...eventState,
+      events: eventState.events.map((item) =>
+        item.id === eventId ? result : item,
+      ),
+    };
+    return respond(route, result);
+  });
+  await page.route("**/api/v1/events/*/fork", (route) => {
+    const eventId = route.request().url().split("/").at(-2)!;
+    const { calendarID } = route.request().postDataJSON() as {
+      calendarID: string;
+    };
+    const source = eventState.events.find((item) => item.id === eventId)!;
+    const forked = {
+      ...source,
+      calendars: [calendarID],
+      id: `${eventId}-fork`,
+      originCalendarID: calendarID,
+    };
+    eventState = {
+      ...eventState,
+      events: [...eventState.events, forked],
+    };
+    return respond(route, forked, 201);
   });
   await page.route("**/api/v1/users/settings", (route) =>
     respond(route, settings),
@@ -512,4 +566,53 @@ test("keeps provider failures actionable without assuming a write succeeded", as
     page.getByRole("textbox", { name: "Event title" }),
   ).toHaveValue("Provider check");
   await expectNoAccessibilityViolations(page);
+});
+
+test("handles attendance, linking, forking and recurring delete scopes", async ({
+  page,
+}) => {
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+
+  await mockAuthenticatedReads(page);
+  await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
+
+  await page.getByRole("button", { name: /Design review/ }).click();
+  await expect(page.getByText("Guest One")).toBeVisible();
+  await page.getByRole("button", { name: "Attend" }).click();
+  await expect(page.getByRole("button", { name: "Leave" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Link" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Event linked to calendar.",
+  );
+
+  await page.getByRole("button", { name: /Design review/ }).click();
+  await page.getByRole("button", { name: "Fork" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Independent event copy created.",
+  );
+  await expect(
+    page.getByRole("button", { name: /Design review/ }),
+  ).toHaveCount(2);
+
+  await page.goto("/app/p/my-calendar/week?date=2026-07-26");
+  await page.getByRole("button", { name: /Weekly review/ }).click();
+  await page.getByRole("button", { name: "Delete" }).click();
+  await expect(
+    page.getByRole("combobox", {
+      name: "Recurring event delete scope",
+    }),
+  ).toHaveValue("occurrence");
+  await page.getByRole("button", { name: "Delete" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Occurrence removed.",
+  );
+  await expect(
+    page.getByRole("button", { name: /Weekly review/ }),
+  ).toHaveCount(0);
+  expect(runtimeErrors).toEqual([]);
 });
