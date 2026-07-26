@@ -6,7 +6,10 @@ import { z } from "zod";
 // The config is stored as versioned JSONB; unknown future fields on an old
 // client must round-trip untouched, so writers never silently drop them.
 
-const CalendarIdSchema = z.string().uuid();
+// A calendar id is an opaque reference here, not a trust boundary: reads ignore
+// calendars the user can't access, and calendar endpoints validate real ids. A
+// bounded string keeps the config robust without coupling it to the uuid format.
+const CalendarIdSchema = z.string().min(1).max(128);
 
 export const CalendarVisibilitySchema = z.discriminatedUnion("mode", [
   z

@@ -310,6 +310,24 @@
   white-space: nowrap;
 }
 
+.pageNameInput {
+  min-width: 0;
+  max-width: 260px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-elevated, var(--surface));
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 1.34rem;
+  font-weight: 400;
+}
+
+.pageNameInput:focus {
+  border-color: var(--text-muted);
+  outline: none;
+}
+
 .dirtyStatus {
   display: inline-flex;
   align-items: center;

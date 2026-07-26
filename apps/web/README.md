@@ -27,5 +27,9 @@ the workspace route resolves the `default` sentinel (and any stale id) to the
 canonical default Page, keeping the current view and date. Event quick create,
 edit and delete use the existing Express write endpoints, wait for confirmed
 server responses and gate controls through the shared calendar permissions;
-fixture data remains test-only. Page configuration is read-only for now — the
-explicit editor (visibility, view, filters) lands with the Pages editor PR.
+fixture data remains test-only. Pages have an explicit editor: entering edit
+mode drafts the page name and calendar visibility locally, a sticky save bar
+persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a
+revision conflict offers "save as a copy" instead of a silent overwrite.
+Switching pages or reloading with unsaved edits warns first; `Ctrl/Cmd+S`
+saves. View and filter editing is not wired into the draft yet.

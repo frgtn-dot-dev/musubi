@@ -1,6 +1,8 @@
 import type {
   Calendar,
+  CreatePageRequest,
   Event,
+  PageConfigV1,
   PageDocument,
   Settings,
   SettingsDocument,
@@ -32,6 +34,12 @@ import {
   getTimeGridLabel,
 } from "../time-grid-math";
 import { getEditableCalendars } from "../event-permissions";
+import {
+  calendarIdsForVisibility,
+  toggleCalendarVisibility,
+  visibilityEquals,
+  type SavePageResult,
+} from "../page-editor";
 import type { CalendarViewId } from "../view-registry";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
@@ -40,6 +48,7 @@ import {
   QuickCreate,
   type QuickCreateAnchor,
 } from "./QuickCreate";
+import { SaveBar } from "./SaveBar";
 import { Sidebar } from "./Sidebar";
 import { SettingsDialog } from "./SettingsDialog";
 import { TimeGridView } from "./TimeGridView";
@@ -64,6 +73,13 @@ type WorkspaceProps = {
     eventId: string;
   }) => Promise<Event>;
   onPageChange: (pageId: string) => void;
+  onCreatePage?: (request: CreatePageRequest) => Promise<PageDocument>;
+  onSavePage?: (input: {
+    baseRevision: number;
+    config: PageConfigV1;
+    id: string;
+    name: string;
+  }) => Promise<SavePageResult>;
   onExportCalendar?: (calendarId: string) => Promise<string>;
   onImportCalendar?: (input: {
     color: string;
@@ -119,6 +135,14 @@ const unavailableSettings = async (): Promise<SettingsDocument> => {
   throw new Error("Settings sync is unavailable.");
 };
 
+const unavailablePageSave = async (): Promise<SavePageResult> => {
+  throw new Error("Page editing is unavailable.");
+};
+
+const unavailablePageCreate = async (): Promise<PageDocument> => {
+  throw new Error("Page creation is unavailable.");
+};
+
 const ignoreSettings = () => undefined;
 
 export function Workspace({
@@ -136,8 +160,10 @@ export function Workspace({
   onLinkEvent = unavailableTargetMutation,
   onImportCalendar = unavailableImport,
   onGetSettingsDocument = unavailableSettings,
+  onCreatePage = unavailablePageCreate,
   onPageChange,
   onPatchSettings = unavailableSettings,
+  onSavePage = unavailablePageSave,
   onRemoveEvent,
   onSetAttendance = unavailableAttendance,
   onSignOut,
@@ -150,9 +176,19 @@ export function Workspace({
 }: WorkspaceProps) {
   const anchor = useMemo(() => parseDateKey(date), [date]);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [hiddenCalendarIds, setHiddenCalendarIds] = useState<Set<string>>(
+  // Read-mode calendar toggles are a temporary local filter: a set of ids
+  // flipped from what the Page config resolves to. Cleared when the Page or its
+  // saved visibility changes.
+  const [tempToggles, setTempToggles] = useState<Set<string>>(
     () => new Set(),
   );
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftVisibility, setDraftVisibility] = useState<
+    PageConfigV1["calendarVisibility"]
+  >({ hiddenCalendarIds: [], mode: "all" });
+  const [savingPage, setSavingPage] = useState(false);
+  const [pageConflict, setPageConflict] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -187,16 +223,53 @@ export function Workspace({
     [eventMasters],
   );
 
-  const visibleCalendarIds = useMemo(
-    () =>
-      calendars
-        .map((calendar) => calendar.id)
-        .filter((calendarId) => !hiddenCalendarIds.has(calendarId)),
-    [calendars, hiddenCalendarIds],
+  const activePage = useMemo(
+    () => pages.find((page) => page.id === pageId) ?? pages[0],
+    [pages, pageId],
   );
 
-  const pageTitle =
-    pages.find((page) => page.id === pageId)?.name ?? "My calendar";
+  // Editing shows the live draft; reading shows the saved Page visibility with
+  // the session's temporary toggles layered on top.
+  const visibleCalendarIds = useMemo(() => {
+    if (editing) {
+      return calendarIdsForVisibility(draftVisibility, calendars);
+    }
+    const visible = new Set(
+      calendarIdsForVisibility(activePage.config.calendarVisibility, calendars),
+    );
+    for (const calendarId of tempToggles) {
+      if (visible.has(calendarId)) {
+        visible.delete(calendarId);
+      } else {
+        visible.add(calendarId);
+      }
+    }
+    return calendars
+      .map((calendar) => calendar.id)
+      .filter((calendarId) => visible.has(calendarId));
+  }, [activePage, calendars, draftVisibility, editing, tempToggles]);
+
+  const pageTitle = activePage.name;
+  const pageDirty =
+    editing &&
+    (draftName.trim() !== activePage.name ||
+      !visibilityEquals(
+        draftVisibility,
+        activePage.config.calendarVisibility,
+      ));
+
+  // The route remounts this component per page (key={pageId}), so switching
+  // pages resets editing, conflict and the temporary read filter for free.
+
+  useEffect(() => {
+    if (!pageDirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [pageDirty]);
 
   const visibleEvents = useMemo(() => {
     const normalizedQuery = deferredSearchQuery
@@ -279,6 +352,17 @@ export function Workspace({
 
   function handleWorkspaceKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLocaleLowerCase() === "s"
+    ) {
+      if (editing && pageDirty) {
+        event.preventDefault();
+        void savePageChanges();
+      }
+      return;
+    }
+
+    if (
       event.key.toLocaleLowerCase() !== "c" ||
       event.ctrlKey ||
       event.metaKey ||
@@ -300,7 +384,13 @@ export function Workspace({
   }
 
   function handleToggleCalendar(calendarId: string) {
-    setHiddenCalendarIds((current) => {
+    if (editing) {
+      setDraftVisibility((current) =>
+        toggleCalendarVisibility(current, calendarId, calendars),
+      );
+      return;
+    }
+    setTempToggles((current) => {
       const next = new Set(current);
       if (next.has(calendarId)) {
         next.delete(calendarId);
@@ -309,6 +399,92 @@ export function Workspace({
       }
       return next;
     });
+  }
+
+  function startEditing() {
+    setDraftName(activePage.name);
+    setDraftVisibility(activePage.config.calendarVisibility);
+    setPageConflict(false);
+    setEditing(true);
+  }
+
+  // Explicit discard (Save bar / conflict banner) — the user already chose to
+  // drop the draft, so no extra confirm.
+  function discardEditing() {
+    setEditing(false);
+    setPageConflict(false);
+  }
+
+  // Leaving edit mode via the toolbar toggle confirms first when dirty.
+  function stopEditing() {
+    if (
+      pageDirty &&
+      !window.confirm("Discard your unsaved page changes?")
+    ) {
+      return;
+    }
+    discardEditing();
+  }
+
+  function guardedPageChange(nextPageId: string) {
+    if (
+      pageDirty &&
+      !window.confirm("Discard your unsaved page changes?")
+    ) {
+      return;
+    }
+    setEditing(false);
+    setPageConflict(false);
+    onPageChange(nextPageId);
+  }
+
+  const draftConfig = (): PageConfigV1 => ({
+    ...activePage.config,
+    calendarVisibility: draftVisibility,
+  });
+
+  async function savePageChanges() {
+    if (!pageDirty || savingPage) return;
+    setSavingPage(true);
+    setPageConflict(false);
+    try {
+      const result = await onSavePage({
+        baseRevision: activePage.revision,
+        config: draftConfig(),
+        id: activePage.id,
+        name: draftName.trim(),
+      });
+      if (result.status === "conflict") {
+        setPageConflict(true);
+        setNotice("This page changed on another device.");
+        return;
+      }
+      setEditing(false);
+      setNotice("Page saved.");
+    } catch {
+      setNotice("This page could not be saved.");
+    } finally {
+      setSavingPage(false);
+    }
+  }
+
+  async function savePageAsNew() {
+    if (savingPage) return;
+    setSavingPage(true);
+    try {
+      const created = await onCreatePage({
+        config: draftConfig(),
+        name: `${draftName.trim() || activePage.name} copy`,
+      });
+      setEditing(false);
+      setPageConflict(false);
+      setNotice("Saved as a new page.");
+      onPageChange(created.id);
+    } catch {
+      setNotice("The new page could not be created.");
+    } finally {
+      setSavingPage(false);
+    }
   }
 
   return (
@@ -328,7 +504,7 @@ export function Workspace({
           setSettingsOpen(true);
         }}
         onNotice={setNotice}
-        onPageChange={onPageChange}
+        onPageChange={guardedPageChange}
         onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
         syncLabel={isRefreshing ? "Refreshing server data…" : "Connected to server"}
@@ -344,7 +520,11 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
+          draftName={draftName}
+          editing={editing}
           filtersOpen={filtersOpen}
+          onDraftNameChange={setDraftName}
+          onToggleEdit={editing ? stopEditing : startEditing}
           onCreateEvent={(target) =>
             openCreateAtDate(date, target)
           }
@@ -457,6 +637,44 @@ export function Workspace({
             />
           )}
         </div>
+
+        {pageConflict ? (
+          <div className={styles.saveBar} role="alert">
+            <div className={styles.saveBarCopy}>
+              <strong>This page changed on another device</strong>
+              <span>
+                Your edits weren’t saved. Keep them as a new page, or discard
+                them and use the latest version.
+              </span>
+            </div>
+            <div className={styles.saveBarActions}>
+              <button
+                className={styles.secondaryButton}
+                disabled={savingPage}
+                type="button"
+                onClick={discardEditing}
+              >
+                Discard my changes
+              </button>
+              <button
+                className={styles.primaryButton}
+                disabled={savingPage}
+                type="button"
+                onClick={() => void savePageAsNew()}
+              >
+                Save as a copy
+              </button>
+            </div>
+          </div>
+        ) : editing ? (
+          <SaveBar
+            dirty={pageDirty}
+            onDiscard={discardEditing}
+            onDismiss={discardEditing}
+            onSave={() => void savePageChanges()}
+            onSaveAsNew={() => void savePageAsNew()}
+          />
+        ) : null}
 
         <div className={styles.liveRegion} role="status" aria-live="polite">
           {notice ? <p className={styles.toast}>{notice}</p> : null}

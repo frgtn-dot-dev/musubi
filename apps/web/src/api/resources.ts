@@ -3,6 +3,7 @@ import {
   CalendarsResponseSchema,
   EventsResponseSchema,
   ImportedCalendarSchema,
+  PageResponseSchema,
   PagesResponseSchema,
   RemoveEventResponseSchema,
   SettingsDocumentResponseSchema,
@@ -10,8 +11,10 @@ import {
 } from "./contracts";
 import {
   EventSchema,
+  type CreatePageRequest,
   type Event,
   type PatchSettingsRequest,
+  type SavePageRequest,
 } from "@musubi/types";
 import {
   apiRawJsonRequest,
@@ -37,6 +40,22 @@ export function getPages(signal?: AbortSignal) {
   return apiRequest("/api/v1/pages", {
     responseSchema: PagesResponseSchema,
     signal,
+  });
+}
+
+export function createPage(request: CreatePageRequest) {
+  return apiRequest("/api/v1/pages", {
+    body: request,
+    method: "POST",
+    responseSchema: PageResponseSchema,
+  });
+}
+
+export function savePage(id: string, request: SavePageRequest) {
+  return apiRequest(`/api/v1/pages/${id}`, {
+    body: request,
+    method: "PATCH",
+    responseSchema: PageResponseSchema,
   });
 }
 

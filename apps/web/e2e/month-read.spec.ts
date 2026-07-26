@@ -590,7 +590,7 @@ test("creates, edits and deletes an event through confirmed API writes", async (
   ).toBeVisible();
 
   await page.getByRole("button", { name: /Release check/ }).click();
-  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Event title" })
     .fill("Release readiness");
@@ -856,4 +856,81 @@ test("resolves the default page and switches between pages", async ({
   await page.getByRole("button", { name: "Work" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
+});
+
+test("edits and saves a page's calendar visibility", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let saved: { config?: { calendarVisibility?: unknown } } | undefined;
+  await page.route(
+    `**/api/v1/pages/${DEFAULT_PAGE_ID}`,
+    async (route) => {
+      const body = route.request().postDataJSON() as {
+        config: unknown;
+        name: string;
+      };
+      saved = body;
+      return respond(route, {
+        ...defaultPage,
+        config: body.config,
+        name: body.name,
+        revision: 2,
+      });
+    },
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(
+    page.getByRole("checkbox", { name: "Studio" }),
+  ).toBeChecked();
+
+  await page.getByRole("button", { name: "Edit page" }).click();
+  // The real checkbox is visually collapsed; toggle it through its label text.
+  await page.getByText("Studio", { exact: true }).click();
+  await expect(page.getByText("Unsaved page changes")).toBeVisible();
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Page saved.",
+  );
+  expect(saved?.config?.calendarVisibility).toEqual({
+    hiddenCalendarIds: ["studio"],
+    mode: "all",
+  });
+  // Read mode now reflects the saved visibility.
+  await expect(
+    page.getByRole("checkbox", { name: "Studio" }),
+  ).not.toBeChecked();
+});
+
+test("surfaces a page save conflict without overwriting", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.route(
+    `**/api/v1/pages/${DEFAULT_PAGE_ID}`,
+    (route) =>
+      route.fulfill({
+        body: JSON.stringify({
+          current: { ...defaultPage, revision: 9 },
+          error: "PAGE_CONFLICT",
+          message: "Page changed on another device.",
+          requestId: "page-conflict",
+        }),
+        contentType: "application/json",
+        headers: { "x-request-id": "page-conflict" },
+        status: 409,
+      }),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Edit page" }).click();
+  // The real checkbox is visually collapsed; toggle it through its label text.
+  await page.getByText("Studio", { exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(
+    page.getByText("This page changed on another device", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save as a copy" }),
+  ).toBeVisible();
 });

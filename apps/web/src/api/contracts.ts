@@ -35,6 +35,7 @@ export const RemoveEventResponseSchema = z.object({
 export const SettingsResponseSchema = SettingsSchema;
 export const SettingsDocumentResponseSchema = SettingsDocumentSchema;
 
+export const PageResponseSchema = PageDocumentSchema;
 export const PagesResponseSchema = z.array(PageDocumentSchema);
 
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;

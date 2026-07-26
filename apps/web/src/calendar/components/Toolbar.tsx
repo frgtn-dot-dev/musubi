@@ -1,7 +1,9 @@
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   Menu,
+  PencilLine,
   Plus,
   Search,
   SlidersHorizontal,
@@ -13,13 +15,17 @@ import styles from "./workspace.module.css";
 type ToolbarProps = {
   activeView: CalendarViewId;
   canCreateEvents: boolean;
+  draftName: string;
+  editing: boolean;
   filtersOpen: boolean;
   onCreateEvent: (target: HTMLElement) => void;
+  onDraftNameChange: (name: string) => void;
   onNotice: (message: string) => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
   onSearch: (query: string) => void;
   onToday: () => void;
+  onToggleEdit: () => void;
   onToggleFilters: () => void;
   onViewChange: (view: CalendarViewId) => void;
   pageTitle: string;
@@ -31,13 +37,17 @@ type ToolbarProps = {
 export function Toolbar({
   activeView,
   canCreateEvents,
+  draftName,
+  editing,
   filtersOpen,
   onCreateEvent,
+  onDraftNameChange,
   onNotice,
   onOpenSidebar,
   onPeriodChange,
   onSearch,
   onToday,
+  onToggleEdit,
   onToggleFilters,
   onViewChange,
   pageTitle,
@@ -57,7 +67,31 @@ export function Toolbar({
           >
             <Menu aria-hidden="true" size={18} strokeWidth={1.6} />
           </button>
-          <h1>{pageTitle}</h1>
+          {editing ? (
+            <input
+              aria-label="Page name"
+              className={styles.pageNameInput}
+              value={draftName}
+              onChange={(event) => onDraftNameChange(event.target.value)}
+            />
+          ) : (
+            <h1>{pageTitle}</h1>
+          )}
+          <button
+            className={`${styles.iconButton} ${
+              editing ? styles.buttonSelected : ""
+            }`}
+            type="button"
+            aria-pressed={editing}
+            aria-label={editing ? "Finish editing page" : "Edit page"}
+            onClick={onToggleEdit}
+          >
+            {editing ? (
+              <Check aria-hidden="true" size={17} strokeWidth={1.7} />
+            ) : (
+              <PencilLine aria-hidden="true" size={17} strokeWidth={1.6} />
+            )}
+          </button>
         </div>
         <ThemeToggle />
       </div>

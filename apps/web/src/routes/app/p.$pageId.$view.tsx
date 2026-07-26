@@ -8,6 +8,7 @@ import { authClient } from "~/auth/auth-client";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
 import { useEventMutations } from "~/calendar/event-mutations";
+import { usePageMutations } from "~/calendar/page-editor";
 import { useCalendarTransfers } from "~/calendar/calendar-transfers";
 import { useSettingsMutations } from "~/calendar/settings-mutations";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
@@ -50,6 +51,9 @@ function WorkspaceRoute() {
     session.data?.user.id ?? "anonymous",
   );
   const settingsMutations = useSettingsMutations(
+    session.data?.user.id ?? "anonymous",
+  );
+  const pageMutations = usePageMutations(
     session.data?.user.id ?? "anonymous",
   );
   const queries = [
@@ -144,6 +148,7 @@ function WorkspaceRoute() {
 
   return (
     <Workspace
+      key={pageId}
       activeView={activeView}
       baseEvents={workspace.events.data.baseEvents}
       calendars={workspace.calendars.data}
@@ -158,6 +163,8 @@ function WorkspaceRoute() {
       onImportCalendar={calendarTransfers.importCalendar}
       onGetSettingsDocument={settingsMutations.getSettingsDocument}
       onLinkEvent={eventMutations.linkEvent}
+      onCreatePage={pageMutations.createPage}
+      onSavePage={pageMutations.savePage}
       pageId={pageId}
       onRemoveEvent={eventMutations.removeEvent}
       onPatchSettings={settingsMutations.patchSettings}
