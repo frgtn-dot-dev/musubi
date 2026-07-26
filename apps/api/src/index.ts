@@ -13,7 +13,12 @@ import { rateLimit } from "./middleware/rate_limit";
 import { handlerCreateCalendarInvite, handlerGetCalendarInvites, handlerRevokeInvite } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
 import { middlewareLogHandler } from "./middleware/log_handler";
-import { handlerGetSettings, handlerSaveSettings } from "./handlers/settings";
+import {
+  handlerGetSettings,
+  handlerGetSettingsDocument,
+  handlerPatchSettings,
+  handlerSaveSettings,
+} from "./handlers/settings";
 import { handlerAppleAppSiteAssociation, handlerServer, handlerServerStatus } from "./handlers/server";
 import { handlerResetPasswordPage, handlerDeleteAccountPage } from "./handlers/pages";
 import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogle } from "./handlers/google";
@@ -132,6 +137,8 @@ app.delete("/api/v1/calendars/:calendarId/members/:userId", requireAuth, wrap(ha
 // Users & connections
 app.get("/api/v1/users/settings", requireAuth, wrap(handlerGetSettings));
 app.put("/api/v1/users/settings", requireAuth, wrap(handlerSaveSettings));
+app.get("/api/v1/users/settings/document", requireAuth, wrap(handlerGetSettingsDocument));
+app.patch("/api/v1/users/me/settings", requireAuth, wrap(handlerPatchSettings));
 app.delete("/api/v1/users", requireAuth, wrap(handlerDeleteUser));
 // Public: the emailed confirmation link lands on the website (no session); the
 // token is the proof. Rate-limited against token guessing.

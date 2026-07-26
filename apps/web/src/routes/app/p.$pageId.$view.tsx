@@ -7,6 +7,8 @@ import { authClient } from "~/auth/auth-client";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
 import { useEventMutations } from "~/calendar/event-mutations";
+import { useCalendarTransfers } from "~/calendar/calendar-transfers";
+import { useSettingsMutations } from "~/calendar/settings-mutations";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
 import {
@@ -41,6 +43,12 @@ function WorkspaceRoute() {
     activeView,
   );
   const eventMutations = useEventMutations(
+    session.data?.user.id ?? "anonymous",
+  );
+  const calendarTransfers = useCalendarTransfers(
+    session.data?.user.id ?? "anonymous",
+  );
+  const settingsMutations = useSettingsMutations(
     session.data?.user.id ?? "anonymous",
   );
   const queries = [
@@ -101,10 +109,15 @@ function WorkspaceRoute() {
       events={workspace.events.data.events}
       isRefreshing={queries.some((query) => query.isFetching)}
       onCreateEvent={eventMutations.createEvent}
+      onAdoptSettings={settingsMutations.adoptSettings}
       onForkEvent={eventMutations.forkEvent}
+      onExportCalendar={calendarTransfers.exportCalendar}
+      onImportCalendar={calendarTransfers.importCalendar}
+      onGetSettingsDocument={settingsMutations.getSettingsDocument}
       onLinkEvent={eventMutations.linkEvent}
       pageId={pageId}
       onRemoveEvent={eventMutations.removeEvent}
+      onPatchSettings={settingsMutations.patchSettings}
       onSetAttendance={eventMutations.setAttendance}
       settings={workspace.settings.data}
       user={session.data!.user}

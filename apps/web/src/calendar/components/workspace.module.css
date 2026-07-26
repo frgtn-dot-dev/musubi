@@ -1555,6 +1555,209 @@
   font-size: 0.61rem;
 }
 
+.dialogOverlay {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  background: rgb(0 0 0 / 38%);
+  backdrop-filter: blur(3px);
+  animation: popover-in var(--motion-standard) ease both;
+}
+
+.manageDialog {
+  position: fixed;
+  z-index: 121;
+  top: 50%;
+  left: 50%;
+  width: min(510px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  outline: 0;
+  background: var(--surface-canvas);
+  box-shadow: var(--shadow-overlay);
+  transform: translate(-50%, -50%);
+}
+
+.manageDialogHeader {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 20px 15px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+}
+
+.manageDialogHeader h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.manageDialogHeader p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.transferSection {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+  padding: 18px 20px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.transferHeading {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 7px;
+  color: var(--text-muted);
+}
+
+.transferHeading h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.transferHeading p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 0.67rem;
+}
+
+.transferControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.transferControls label {
+  min-width: 0;
+}
+
+.transferControls input,
+.transferControls select,
+.filePicker {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  outline: 0;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 0.73rem;
+}
+
+.transferControls input,
+.transferControls select {
+  padding: 0 10px;
+}
+
+.transferControls input:focus,
+.transferControls select:focus,
+.filePicker:focus-within {
+  border-color: var(--accent-primary);
+}
+
+.filePicker {
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  cursor: pointer;
+}
+
+.filePicker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.colorPicker {
+  width: 42px;
+}
+
+.colorPicker input {
+  padding: 5px;
+}
+
+.transferSection .formError,
+.manageDialog > .formError {
+  margin: 12px 20px 18px;
+}
+
+.dialogLoading {
+  margin: 0;
+  padding: 28px 20px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.settingsList {
+  display: grid;
+}
+
+.settingRow {
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, auto);
+  align-items: center;
+  gap: 18px;
+  padding: 7px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.settingRow select {
+  min-width: 140px;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.settingRow input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  justify-self: end;
+  accent-color: var(--accent-primary);
+}
+
+@media (max-width: 520px) {
+  .transferControls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .transferControls .secondaryButton,
+  .transferControls .primaryButton {
+    padding-inline: 10px;
+  }
+
+  .settingRow {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+    padding-inline: 16px;
+  }
+
+  .settingRow select {
+    min-width: 120px;
+  }
+}
+
 .createActions {
   display: flex;
   align-items: center;

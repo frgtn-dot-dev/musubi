@@ -1,11 +1,15 @@
 import {
   CalendarSchema,
   EventSchema,
+  SettingsDocumentSchema,
   SettingsSchema,
 } from "@musubi/types";
 import { z } from "zod";
 
 export const CalendarsResponseSchema = z.array(CalendarSchema);
+export const ImportedCalendarSchema = CalendarSchema.extend({
+  imported: z.number().int().nonnegative(),
+});
 
 export const AttendeeSchema = z.object({
   id: z.string(),
@@ -28,9 +32,11 @@ export const RemoveEventResponseSchema = z.object({
 });
 
 export const SettingsResponseSchema = SettingsSchema;
+export const SettingsDocumentResponseSchema = SettingsDocumentSchema;
 
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
 export type Attendee = z.infer<typeof AttendeeSchema>;
+export type ImportedCalendar = z.infer<typeof ImportedCalendarSchema>;
 export type RemoveEventResponse = z.infer<
   typeof RemoveEventResponseSchema
 >;

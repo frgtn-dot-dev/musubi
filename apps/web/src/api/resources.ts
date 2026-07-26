@@ -2,11 +2,21 @@ import {
   AttendeesResponseSchema,
   CalendarsResponseSchema,
   EventsResponseSchema,
+  ImportedCalendarSchema,
   RemoveEventResponseSchema,
+  SettingsDocumentResponseSchema,
   SettingsResponseSchema,
 } from "./contracts";
-import { EventSchema, type Event } from "@musubi/types";
-import { apiRequest } from "./http";
+import {
+  EventSchema,
+  type Event,
+  type PatchSettingsRequest,
+} from "@musubi/types";
+import {
+  apiRawJsonRequest,
+  apiRequest,
+  apiTextRequest,
+} from "./http";
 
 export function getCalendars(signal?: AbortSignal) {
   return apiRequest("/api/v1/calendars", {
@@ -27,6 +37,41 @@ export function getSettings(signal?: AbortSignal) {
     responseSchema: SettingsResponseSchema,
     signal,
   });
+}
+
+export function getSettingsDocument(signal?: AbortSignal) {
+  return apiRequest("/api/v1/users/settings/document", {
+    responseSchema: SettingsDocumentResponseSchema,
+    signal,
+  });
+}
+
+export function patchSettings(request: PatchSettingsRequest) {
+  return apiRequest("/api/v1/users/me/settings", {
+    body: request,
+    method: "PATCH",
+    responseSchema: SettingsDocumentResponseSchema,
+  });
+}
+
+export function importCalendar(
+  ics: string,
+  name: string,
+  color: string,
+) {
+  const query = new URLSearchParams({ color, name });
+  return apiRawJsonRequest(
+    `/api/v1/calendars/import?${query.toString()}`,
+    {
+      body: ics,
+      contentType: "text/calendar",
+      responseSchema: ImportedCalendarSchema,
+    },
+  );
+}
+
+export function exportCalendar(calendarId: string) {
+  return apiTextRequest(`/api/v1/calendars/${calendarId}/export`);
 }
 
 export function createEvent(event: Event) {

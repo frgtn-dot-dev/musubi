@@ -148,6 +148,7 @@ export const userSettings = pgTable("user_settings", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+  revision: integer("revision").notNull().default(1),
   // settings
   showKanji: boolean("show_kanji").notNull().default(true),
   notificationsOnByDefault: boolean("notifications_on_by_default").notNull().default(true),

@@ -16,6 +16,14 @@ type RequestOptions<T> = {
   timeoutMs?: number;
 };
 
+type RawJsonRequestOptions<T> = {
+  body: string;
+  contentType: string;
+  responseSchema: z.ZodType<T>;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
 export class ApiError extends Error {
   readonly requestId?: string;
   readonly status: number;
@@ -62,6 +70,20 @@ async function parseJson(response: Response): Promise<unknown> {
   }
 }
 
+function throwApiError(response: Response, payload: unknown): never {
+  const correlationId = responseRequestId(response, payload);
+  const envelope = ApiErrorEnvelopeSchema.safeParse(payload);
+  const message = envelope.success
+    ? envelope.data.message ?? envelope.data.error
+    : response.statusText || "The Musubi server rejected the request.";
+
+  if (response.status === 401) {
+    notifyAuthExpired();
+  }
+
+  throw new ApiError(message, response.status, correlationId);
+}
+
 export async function apiRequest<T>(
   path: `/api/${string}`,
   {
@@ -97,16 +119,7 @@ export async function apiRequest<T>(
   const correlationId = responseRequestId(response, payload);
 
   if (!response.ok) {
-    const envelope = ApiErrorEnvelopeSchema.safeParse(payload);
-    const message = envelope.success
-      ? envelope.data.message ?? envelope.data.error
-      : response.statusText || "The Musubi server rejected the request.";
-
-    if (response.status === 401) {
-      notifyAuthExpired();
-    }
-
-    throw new ApiError(message, response.status, correlationId);
+    throwApiError(response, payload);
   }
 
   const parsed = responseSchema.safeParse(payload);
@@ -115,4 +128,66 @@ export async function apiRequest<T>(
   }
 
   return parsed.data;
+}
+
+export async function apiRawJsonRequest<T>(
+  path: `/api/${string}`,
+  {
+    body,
+    contentType,
+    responseSchema,
+    signal,
+    timeoutMs = 30_000,
+  }: RawJsonRequestOptions<T>,
+): Promise<T> {
+  const headers = new Headers({
+    accept: "application/json",
+    "content-type": contentType,
+    "x-request-id": requestId(),
+  });
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const response = await fetch(path, {
+    body,
+    credentials: "include",
+    headers,
+    method: "POST",
+    signal: signal
+      ? AbortSignal.any([signal, timeoutSignal])
+      : timeoutSignal,
+  });
+  const payload = await parseJson(response);
+
+  if (!response.ok) {
+    throwApiError(response, payload);
+  }
+
+  const parsed = responseSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new ApiResponseError(responseRequestId(response, payload));
+  }
+
+  return parsed.data;
+}
+
+export async function apiTextRequest(
+  path: `/api/${string}`,
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await fetch(path, {
+    credentials: "include",
+    headers: {
+      accept: "text/calendar",
+      "x-request-id": requestId(),
+    },
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+      : AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    const payload = await parseJson(response);
+    throwApiError(response, payload);
+  }
+
+  return response.text();
 }

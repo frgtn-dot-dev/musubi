@@ -198,6 +198,11 @@ async function mockAuthenticatedReads(
   failWritesForCalendarId?: string,
 ) {
   let authenticated = true;
+  let settingsState = { ...settings };
+  let settingsRevision = 1;
+  let calendarState = calendarResponse.map((calendar) => ({
+    ...calendar,
+  }));
   let eventState = {
     ...eventResponse,
     events: eventResponse.events.map((item) => ({ ...item })),
@@ -214,8 +219,29 @@ async function mockAuthenticatedReads(
     return respond(route, { success: true });
   });
   await page.route("**/api/v1/calendars", (route) =>
-    respond(route, calendarResponse),
+    respond(route, calendarState),
   );
+  await page.route("**/api/v1/calendars/*/export", (route) =>
+    route.fulfill({
+      body: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
+      contentType: "text/calendar",
+      status: 200,
+    }),
+  );
+  await page.route("**/api/v1/calendars/import?*", (route) => {
+    const url = new URL(route.request().url());
+    const imported = {
+      color: url.searchParams.get("color") ?? "#7a9e7e",
+      creatorID: session.user.id,
+      id: "imported-calendar",
+      imported: 1,
+      members: [],
+      name: url.searchParams.get("name") ?? "Imported calendar",
+      role: "owner",
+    };
+    calendarState = [...calendarState, imported];
+    return respond(route, imported, 201);
+  });
   await page.route("**/api/v1/events", async (route) => {
     const method = route.request().method();
 
@@ -329,8 +355,43 @@ async function mockAuthenticatedReads(
     return respond(route, forked, 201);
   });
   await page.route("**/api/v1/users/settings", (route) =>
-    respond(route, settings),
+    respond(route, settingsState),
   );
+  await page.route("**/api/v1/users/settings/document", (route) =>
+    respond(route, {
+      revision: settingsRevision,
+      updatedAt: "2026-07-26T14:00:00.000Z",
+      value: settingsState,
+    }),
+  );
+  await page.route("**/api/v1/users/me/settings", (route) => {
+    const body = route.request().postDataJSON() as {
+      baseRevision: number;
+      patch: Partial<typeof settings>;
+    };
+    if (body.baseRevision !== settingsRevision) {
+      return respond(
+        route,
+        {
+          current: {
+            revision: settingsRevision,
+            updatedAt: "2026-07-26T14:00:00.000Z",
+            value: settingsState,
+          },
+          error: "SettingsConflict",
+          message: "Settings changed on another device.",
+        },
+        409,
+      );
+    }
+    settingsRevision += 1;
+    settingsState = { ...settingsState, ...body.patch };
+    return respond(route, {
+      revision: settingsRevision,
+      updatedAt: "2026-07-26T14:01:00.000Z",
+      value: settingsState,
+    });
+  });
 }
 
 test("redirects an anonymous Month request to sign in", async ({ page }) => {
@@ -614,5 +675,88 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   await expect(
     page.getByRole("button", { name: /Weekly review/ }),
   ).toHaveCount(0);
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("exports and imports iCalendar files from calendar management", async ({
+  page,
+}) => {
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+
+  await mockAuthenticatedReads(page);
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+  await page.getByRole("button", { name: "Calendars" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Calendar files" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("combobox", { name: "Calendar to export" })
+    .selectOption("studio");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export .ics" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("Studio.ics");
+
+  await page
+    .getByLabel("Choose .ics file")
+    .setInputFiles({
+      buffer: Buffer.from(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nSUMMARY:Roadmap\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+      ),
+      mimeType: "text/calendar",
+      name: "roadmap.ics",
+    });
+  await page
+    .getByRole("textbox", { name: "Imported calendar name" })
+    .fill("Roadmap");
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Imported 1 event into Roadmap.",
+  );
+  const importedCalendar = page.getByRole("checkbox", {
+    name: "Roadmap",
+  });
+  const importedCalendarRow = page
+    .locator("label")
+    .filter({ has: importedCalendar });
+  await importedCalendarRow.scrollIntoViewIfNeeded();
+  await expect(importedCalendar).toBeChecked();
+  await expect(importedCalendarRow).toContainText("Roadmap");
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("saves revisioned settings and applies display preferences", async ({
+  page,
+}) => {
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+
+  await mockAuthenticatedReads(page);
+  await page.goto("/app/p/my-calendar/week?date=2026-07-26");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Settings" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("combobox", { name: "Time format" })
+    .selectOption("12h");
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Settings saved.",
+  );
+  await page.getByRole("button", { name: "Close settings" }).click();
+
+  await expect(
+    page.getByRole("button", { name: /Weekly review/ }),
+  ).toHaveAttribute("aria-label", /AM/);
   expect(runtimeErrors).toEqual([]);
 });

@@ -1,7 +1,15 @@
-import type { Calendar, Event, Settings, User } from "@musubi/types";
+import type {
+  Calendar,
+  Event,
+  Settings,
+  SettingsDocument,
+  SettingsPatch,
+  User,
+} from "@musubi/types";
 import { addDays, addMonthPages } from "@musubi/calendar/layout";
 import type {
   Attendee,
+  ImportedCalendar,
   RemoveEventResponse,
 } from "~/api/contracts";
 import {
@@ -26,12 +34,14 @@ import { getEditableCalendars } from "../event-permissions";
 import { pageStubs } from "~/pages/page-stubs";
 import type { CalendarViewId } from "../view-registry";
 import { AgendaView } from "./AgendaView";
+import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import {
   QuickCreate,
   type QuickCreateAnchor,
 } from "./QuickCreate";
 import { Sidebar } from "./Sidebar";
+import { SettingsDialog } from "./SettingsDialog";
 import { TimeGridView } from "./TimeGridView";
 import { Toolbar } from "./Toolbar";
 import styles from "./workspace.module.css";
@@ -54,6 +64,20 @@ type WorkspaceProps = {
     eventId: string;
   }) => Promise<Event>;
   onPageChange: (pageId: string) => void;
+  onExportCalendar?: (calendarId: string) => Promise<string>;
+  onImportCalendar?: (input: {
+    color: string;
+    ics: string;
+    name: string;
+  }) => Promise<ImportedCalendar>;
+  onAdoptSettings?: (document: SettingsDocument) => void;
+  onGetSettingsDocument?: (
+    signal?: AbortSignal,
+  ) => Promise<SettingsDocument>;
+  onPatchSettings?: (request: {
+    baseRevision: number;
+    patch: SettingsPatch;
+  }) => Promise<SettingsDocument>;
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
   onSetAttendance?: (input: {
     attending: boolean;
@@ -82,6 +106,20 @@ const unavailableAttendance = async (): Promise<Attendee[]> => {
   throw new Error("Attendance is unavailable.");
 };
 
+const unavailableExport = async (): Promise<string> => {
+  throw new Error("Calendar export is unavailable.");
+};
+
+const unavailableImport = async (): Promise<ImportedCalendar> => {
+  throw new Error("Calendar import is unavailable.");
+};
+
+const unavailableSettings = async (): Promise<SettingsDocument> => {
+  throw new Error("Settings sync is unavailable.");
+};
+
+const ignoreSettings = () => undefined;
+
 export function Workspace({
   activeView,
   baseEvents,
@@ -90,10 +128,15 @@ export function Workspace({
   events,
   isRefreshing,
   onCreateEvent,
+  onAdoptSettings = ignoreSettings,
   onDateChange,
+  onExportCalendar = unavailableExport,
   onForkEvent = unavailableTargetMutation,
   onLinkEvent = unavailableTargetMutation,
+  onImportCalendar = unavailableImport,
+  onGetSettingsDocument = unavailableSettings,
   onPageChange,
+  onPatchSettings = unavailableSettings,
   onRemoveEvent,
   onSetAttendance = unavailableAttendance,
   onSignOut,
@@ -113,6 +156,9 @@ export function Workspace({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
+  const [calendarTransfersOpen, setCalendarTransfersOpen] =
+    useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
     [calendars],
@@ -270,6 +316,14 @@ export function Workspace({
         calendars={calendars}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onManageCalendars={() => {
+          setSidebarOpen(false);
+          setCalendarTransfersOpen(true);
+        }}
+        onOpenSettings={() => {
+          setSidebarOpen(false);
+          setSettingsOpen(true);
+        }}
         onNotice={setNotice}
         onPageChange={onPageChange}
         onSignOut={onSignOut}
@@ -424,6 +478,22 @@ export function Workspace({
           userId={user.id}
         />
       ) : null}
+      <CalendarTransferDialog
+        calendars={calendars}
+        onExport={onExportCalendar}
+        onImport={onImportCalendar}
+        onNotice={setNotice}
+        onOpenChange={setCalendarTransfersOpen}
+        open={calendarTransfersOpen}
+      />
+      <SettingsDialog
+        onAdopt={onAdoptSettings}
+        onLoad={onGetSettingsDocument}
+        onNotice={setNotice}
+        onOpenChange={setSettingsOpen}
+        onPatch={onPatchSettings}
+        open={settingsOpen}
+      />
     </div>
   );
 }

@@ -23,6 +23,8 @@ type SidebarProps = {
   calendars: Calendar[];
   isOpen: boolean;
   onClose: () => void;
+  onManageCalendars: () => void;
+  onOpenSettings: () => void;
   onNotice: (message: string) => void;
   onPageChange: (pageId: string) => void;
   onSignOut: () => void;
@@ -56,6 +58,8 @@ export function Sidebar({
   calendars,
   isOpen,
   onClose,
+  onManageCalendars,
+  onOpenSettings,
   onNotice,
   onPageChange,
   onSignOut,
@@ -175,18 +179,14 @@ export function Sidebar({
         <nav className={styles.sidebarFooter} aria-label="Manage Musubi">
           <button
             type="button"
-            onClick={() =>
-              onNotice("Calendar management is outside this first UI slice.")
-            }
+            onClick={onManageCalendars}
           >
             <Layers3 aria-hidden="true" size={18} strokeWidth={1.6} />
             <span>Calendars</span>
           </button>
           <button
             type="button"
-            onClick={() =>
-              onNotice("Shared settings arrive with the authenticated shell.")
-            }
+            onClick={onOpenSettings}
           >
             <Settings aria-hidden="true" size={18} strokeWidth={1.6} />
             <span>Settings</span>

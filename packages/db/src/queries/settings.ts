@@ -1,7 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, NewSettings, userSettings } from "..";
 
-type SettingsValues = Omit<NewSettings, "id" | "createdAt" | "updatedAt">;
+type SettingsValues = Omit<
+  NewSettings,
+  "id" | "createdAt" | "revision" | "updatedAt"
+>;
 
 export async function getUserSettings(userID: string) {
   let [result] = await db.select().from(userSettings).where(eq(userSettings.id, userID));
@@ -29,8 +32,43 @@ export async function saveUserSettings(userID: string, settings: SettingsValues)
     .values({ ...settings, id: userID })
     .onConflictDoUpdate({
       target: userSettings.id,
-      set: settings,
+      set: {
+        ...settings,
+        revision: sql`${userSettings.revision} + 1`,
+        updatedAt: new Date(),
+      },
     })
     .returning();
   return saved;
+}
+
+export async function patchUserSettings(
+  userID: string,
+  baseRevision: number,
+  patch: Partial<SettingsValues>,
+) {
+  await getUserSettings(userID);
+  const [saved] = await db
+    .update(userSettings)
+    .set({
+      ...patch,
+      revision: sql`${userSettings.revision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(userSettings.id, userID),
+        eq(userSettings.revision, baseRevision),
+      ),
+    )
+    .returning();
+
+  if (saved) {
+    return { conflict: false as const, settings: saved };
+  }
+
+  return {
+    conflict: true as const,
+    settings: await getUserSettings(userID),
+  };
 }

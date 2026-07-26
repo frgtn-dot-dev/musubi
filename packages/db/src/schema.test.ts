@@ -7,6 +7,11 @@ assert.equal(
   true,
   "user_settings.id must enforce one settings row per user",
 );
+assert.equal(
+  userSettings.revision.default,
+  1,
+  "user_settings.revision must start at one",
+);
 
 const calendarEventUnique = getTableConfig(calendarEvents).uniqueConstraints.find(
   (constraint) => constraint.name === "calendar_events_event_id_calendar_id_unique",
