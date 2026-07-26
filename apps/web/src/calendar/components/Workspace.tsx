@@ -106,13 +106,6 @@ export function Workspace({
     });
   }
 
-  const emptyMessage =
-    events.length === 0
-      ? "Nothing is scheduled in this visible month."
-      : visibleEvents.length === 0
-        ? "No events match the current calendars and search."
-        : "";
-
   return (
     <div className={styles.workspace}>
       <Sidebar
@@ -180,11 +173,6 @@ export function Workspace({
             timeFormat={settings.timeFormat}
             weekStartsOn={settings.weekStartsOn}
           />
-          {emptyMessage ? (
-            <p className={styles.emptyNotice} role="status">
-              {emptyMessage}
-            </p>
-          ) : null}
         </div>
 
         <div className={styles.liveRegion} role="status" aria-live="polite">

@@ -141,7 +141,10 @@ async function expectNoAccessibilityViolations(page: Page) {
   expect(results.violations).toEqual([]);
 }
 
-async function mockAuthenticatedReads(page: Page) {
+async function mockAuthenticatedReads(
+  page: Page,
+  eventResponse: typeof events = events,
+) {
   let authenticated = true;
 
   await page.route("**/api/auth/get-session", (route) =>
@@ -154,7 +157,9 @@ async function mockAuthenticatedReads(page: Page) {
   await page.route("**/api/v1/calendars", (route) =>
     respond(route, calendars),
   );
-  await page.route("**/api/v1/events", (route) => respond(route, events));
+  await page.route("**/api/v1/events", (route) =>
+    respond(route, eventResponse),
+  );
   await page.route("**/api/v1/users/settings", (route) =>
     respond(route, settings),
   );
@@ -200,4 +205,23 @@ test("reads, filters and signs out of the authenticated Month", async ({
 
   await page.getByRole("button", { name: "Sign out Web QA" }).click();
   await expect(page).toHaveURL(/\/login/);
+});
+
+test("keeps an empty Month canvas quiet", async ({ page }) => {
+  await mockAuthenticatedReads(page, {
+    ...events,
+    events: [],
+  });
+
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+
+  await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+  await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
+  await expect(page.getByText("No events match")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Next month" }).click();
+  await expect(page.getByText("August 2026")).toBeVisible();
+  await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
+
+  await expectNoAccessibilityViolations(page);
 });

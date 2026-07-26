@@ -561,23 +561,6 @@
     var(--surface-canvas);
 }
 
-.emptyNotice {
-  position: absolute;
-  z-index: 5;
-  top: 49px;
-  left: 50%;
-  margin: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--border-medium);
-  border-radius: 999px;
-  background: var(--surface-overlay);
-  box-shadow: 0 6px 22px rgb(0 0 0 / 8%);
-  color: var(--text-muted);
-  font-size: 0.69rem;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-
 .monthView {
   display: grid;
   min-width: 680px;
