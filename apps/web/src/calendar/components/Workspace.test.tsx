@@ -55,4 +55,37 @@ describe("Workspace", () => {
     expect(screen.getByRole("button", { name: /Quarterly planning/ })).not.toBeNull();
     expect(screen.queryByRole("button", { name: /Design review/ })).toBeNull();
   });
+
+  it("renders and pages a bounded Agenda window", async () => {
+    const user = userEvent.setup();
+    const onDateChange = vi.fn();
+    const { container } = render(
+      <Workspace
+        {...commonProps}
+        activeView="agenda"
+        onDateChange={onDateChange}
+      />,
+    );
+
+    expect(screen.getByText("Jul 26 – Aug 22, 2026")).not.toBeNull();
+    expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(28);
+    expect(screen.getByRole("button", { name: /Board games/ })).not.toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: "Next agenda window" }),
+    );
+
+    expect(onDateChange).toHaveBeenCalledWith("2026-08-23");
+  });
+
+  it("exposes Agenda as an enabled view", async () => {
+    const user = userEvent.setup();
+    const onViewChange = vi.fn();
+
+    render(<Workspace {...commonProps} onViewChange={onViewChange} />);
+
+    await user.click(screen.getByRole("button", { name: "Agenda" }));
+
+    expect(onViewChange).toHaveBeenCalledWith("agenda");
+  });
 });

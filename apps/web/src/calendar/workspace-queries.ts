@@ -1,7 +1,9 @@
 import { expandRecurringEvents } from "@musubi/calendar";
 import { getMonthGridRange } from "@musubi/calendar/layout";
 import { useQuery } from "@tanstack/react-query";
+import { getAgendaRange } from "./agenda-math";
 import { parseDateKey } from "./calendar-math";
+import type { CalendarViewId } from "./view-registry";
 import { getCalendars, getEvents, getSettings } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
@@ -16,10 +18,20 @@ export function getVisibleMonthRange(date: string) {
   };
 }
 
-export function useMonthQueries(date: string, userId: string) {
+export function getWorkspaceRange(date: string, view: CalendarViewId) {
+  return view === "agenda"
+    ? getAgendaRange(parseDateKey(date))
+    : getVisibleMonthRange(date);
+}
+
+export function useWorkspaceQueries(
+  date: string,
+  userId: string,
+  view: CalendarViewId,
+) {
   const enabled = typeof window !== "undefined";
   const origin = getServerOrigin();
-  const range = getVisibleMonthRange(date);
+  const range = getWorkspaceRange(date, view);
   const calendars = useQuery({
     enabled,
     queryFn: ({ signal }) => getCalendars(signal),

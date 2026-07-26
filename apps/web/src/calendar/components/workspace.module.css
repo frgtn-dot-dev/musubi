@@ -328,7 +328,7 @@
 .toolbarControls {
   display: grid;
   min-height: 72px;
-  grid-template-columns: minmax(320px, 1fr) auto minmax(320px, 1fr);
+  grid-template-columns: minmax(360px, 1.25fr) auto minmax(300px, 0.75fr);
   align-items: center;
   gap: 18px;
   padding: 6px 24px 13px 28px;
@@ -566,6 +566,115 @@
   min-width: 680px;
   min-height: 100%;
   grid-template-rows: 36px minmax(620px, 1fr);
+}
+
+.agendaView {
+  min-height: 100%;
+}
+
+.agendaList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agendaDay {
+  display: grid;
+  min-height: 28px;
+  grid-template-columns: 200px minmax(0, 1fr);
+  padding-left: 28px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.agendaDayToday {
+  background: color-mix(in srgb, var(--accent-primary) 3%, transparent);
+}
+
+.agendaDate {
+  align-self: start;
+  padding-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.61rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.agendaDayToday .agendaDate {
+  color: var(--accent-primary);
+}
+
+.agendaEvents {
+  display: grid;
+  min-width: 0;
+}
+
+.agendaEvent {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 27px;
+  grid-template-columns: 120px 3px minmax(140px, 180px) minmax(90px, 1fr) 28px;
+  align-items: center;
+  gap: 15px;
+  padding: 0 18px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.agendaEvent + .agendaEvent {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.agendaEvent:hover,
+.agendaEvent:focus-visible {
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+  color: var(--text-primary);
+}
+
+.agendaEvent:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+.agendaEventTime {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  white-space: nowrap;
+}
+
+.agendaEventRule {
+  width: 3px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+.agendaEventTitle,
+.agendaEventCalendar {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agendaEventTitle {
+  color: var(--text-primary);
+}
+
+.agendaEventCalendar {
+  color: var(--text-muted);
+}
+
+.agendaEventChevron {
+  justify-self: end;
+  color: var(--text-faint);
 }
 
 .weekdayRow,
@@ -1045,7 +1154,7 @@
 
 @media (max-width: 1260px) {
   .toolbarControls {
-    grid-template-columns: minmax(300px, 1fr) auto minmax(250px, 0.8fr);
+    grid-template-columns: minmax(340px, 1.25fr) auto minmax(220px, 0.75fr);
     gap: 12px;
   }
 
@@ -1081,7 +1190,14 @@
   }
 
   .viewSwitcher {
-    display: none;
+    width: 100%;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+
+  .viewButton {
+    flex: 1;
   }
 
   .toolbarActions {
@@ -1090,6 +1206,16 @@
 
   .toolbarActions .secondaryButton span {
     display: none;
+  }
+
+  .agendaDay {
+    grid-template-columns: 178px minmax(0, 1fr);
+    padding-left: 22px;
+  }
+
+  .agendaEvent {
+    grid-template-columns: 102px 3px minmax(120px, 155px) minmax(76px, 1fr) 22px;
+    gap: 11px;
   }
 }
 
@@ -1182,6 +1308,21 @@
     padding-inline: 14px;
   }
 
+  .agendaDay {
+    grid-template-columns: 150px minmax(0, 1fr);
+    padding-left: 14px;
+  }
+
+  .agendaEvent {
+    grid-template-columns: 94px 3px minmax(0, 1fr) 20px;
+    gap: 9px;
+    padding-right: 10px;
+  }
+
+  .agendaEventCalendar {
+    display: none;
+  }
+
   .monthView {
     min-width: 560px;
     grid-template-rows: 32px minmax(576px, 1fr);
@@ -1243,6 +1384,24 @@
 
   .monthView {
     min-width: 100%;
+  }
+
+  .agendaDay {
+    display: block;
+    min-height: 42px;
+    padding: 0;
+  }
+
+  .agendaDate {
+    display: block;
+    min-height: 25px;
+    padding: 8px 12px 5px;
+  }
+
+  .agendaEvent {
+    min-height: 39px;
+    grid-template-columns: 80px 3px minmax(0, 1fr) 18px;
+    padding: 0 8px 0 12px;
   }
 
   .weekday {

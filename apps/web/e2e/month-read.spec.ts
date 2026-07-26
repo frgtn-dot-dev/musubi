@@ -112,6 +112,24 @@ const events = {
       "2026-07-22T00:00:00.000Z",
       { isAllDay: true },
     ),
+    event(
+      "design-review",
+      "Design review",
+      "family",
+      "#365a92",
+      "2026-08-06T14:00:00.000Z",
+      "2026-08-06T15:00:00.000Z",
+      { location: "Studio B" },
+    ),
+    event(
+      "studio-open-day",
+      "Studio open day",
+      "studio",
+      "#d6b76b",
+      "2026-08-14T00:00:00.000Z",
+      "2026-08-14T00:00:00.000Z",
+      { isAllDay: true },
+    ),
   ],
   serverTime: "2026-07-26T14:00:00.000Z",
 };
@@ -230,4 +248,38 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
   await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 
   await expectNoAccessibilityViolations(page);
+});
+
+test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+
+  await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
+
+  await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+  await expect(page.getByText("Jul 26 – Aug 22, 2026")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Agenda", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("[data-agenda-date]")).toHaveCount(28);
+  await expect(page.locator('[data-agenda-date="2026-07-26"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(4);
+  await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Studio open day/ })).toHaveCount(1);
+
+  await page.getByRole("button", { name: /Design review/ }).click();
+  await expect(page.getByText("Studio B")).toBeVisible();
+  await expect(page.getByText("16:00 – 17:00")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page
+    .locator("label")
+    .filter({ has: page.getByRole("checkbox", { name: "Family" }) })
+    .click();
+  await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(0);
+
+  await expectNoAccessibilityViolations(page);
+
+  await page.getByRole("button", { name: "Next agenda window" }).click();
+  await expect(page).toHaveURL(/[?&]date=2026-08-23/);
+  await expect(page.getByText("Aug 23 – Sep 19, 2026")).toBeVisible();
 });

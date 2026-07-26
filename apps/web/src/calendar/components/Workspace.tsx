@@ -1,6 +1,11 @@
 import type { Calendar, Event, Settings, User } from "@musubi/types";
-import { addMonthPages } from "@musubi/calendar/layout";
+import { addDays, addMonthPages } from "@musubi/calendar/layout";
 import { useEffect, useMemo, useState } from "react";
+import {
+  AGENDA_WINDOW_DAYS,
+  getAgendaRange,
+  getAgendaRangeLabel,
+} from "../agenda-math";
 import {
   getMonthLabel,
   parseDateKey,
@@ -8,6 +13,7 @@ import {
 import { toDateKey } from "../date-key";
 import { pageStubs } from "~/pages/page-stubs";
 import type { CalendarViewId } from "../view-registry";
+import { AgendaView } from "./AgendaView";
 import { MonthCalendar } from "./MonthCalendar";
 import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
@@ -84,8 +90,19 @@ export function Workspace({
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  function changeMonth(offset: number) {
-    onDateChange(toDateKey(addMonthPages(anchor, offset)));
+  const agendaRange = getAgendaRange(anchor);
+  const periodLabel =
+    activeView === "agenda"
+      ? getAgendaRangeLabel(agendaRange.start, agendaRange.end)
+      : getMonthLabel(anchor);
+
+  function changePeriod(offset: number) {
+    const nextDate =
+      activeView === "agenda"
+        ? addDays(anchor, offset * AGENDA_WINDOW_DAYS)
+        : addMonthPages(anchor, offset);
+
+    onDateChange(toDateKey(nextDate));
   }
 
   function openCreateAtDate(nextDate: string) {
@@ -126,8 +143,7 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           filtersOpen={filtersOpen}
-          monthLabel={getMonthLabel(anchor)}
-          onMonthChange={changeMonth}
+          onPeriodChange={changePeriod}
           onNotice={setNotice}
           onOpenSidebar={() => setSidebarOpen(true)}
           onSearch={setSearchQuery}
@@ -135,6 +151,8 @@ export function Workspace({
           onToggleFilters={() => setFiltersOpen((open) => !open)}
           onViewChange={onViewChange}
           pageTitle={pageTitle}
+          periodLabel={periodLabel}
+          periodName={activeView === "agenda" ? "agenda window" : "month"}
           searchQuery={searchQuery}
         />
 
@@ -164,15 +182,24 @@ export function Workspace({
         ) : null}
 
         <div className={styles.calendarArea}>
-          <MonthCalendar
-            anchor={anchor}
-            calendars={calendars}
-            events={visibleEvents}
-            onCreateAtDate={openCreateAtDate}
-            onMonthChange={changeMonth}
-            timeFormat={settings.timeFormat}
-            weekStartsOn={settings.weekStartsOn}
-          />
+          {activeView === "agenda" ? (
+            <AgendaView
+              anchor={anchor}
+              calendars={calendars}
+              events={visibleEvents}
+              timeFormat={settings.timeFormat}
+            />
+          ) : (
+            <MonthCalendar
+              anchor={anchor}
+              calendars={calendars}
+              events={visibleEvents}
+              onCreateAtDate={openCreateAtDate}
+              onMonthChange={changePeriod}
+              timeFormat={settings.timeFormat}
+              weekStartsOn={settings.weekStartsOn}
+            />
+          )}
         </div>
 
         <div className={styles.liveRegion} role="status" aria-live="polite">

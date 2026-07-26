@@ -2,7 +2,7 @@ export const calendarViews = [
   { id: "day", label: "Day", enabled: false },
   { id: "week", label: "Week", enabled: false },
   { id: "month", label: "Month", enabled: true },
-  { id: "agenda", label: "Agenda", enabled: false },
+  { id: "agenda", label: "Agenda", enabled: true },
 ] as const;
 
 export type CalendarViewId = (typeof calendarViews)[number]["id"];

@@ -13,30 +13,32 @@ import styles from "./workspace.module.css";
 type ToolbarProps = {
   activeView: CalendarViewId;
   filtersOpen: boolean;
-  monthLabel: string;
-  onMonthChange: (offset: number) => void;
   onNotice: (message: string) => void;
   onOpenSidebar: () => void;
+  onPeriodChange: (offset: number) => void;
   onSearch: (query: string) => void;
   onToday: () => void;
   onToggleFilters: () => void;
   onViewChange: (view: CalendarViewId) => void;
   pageTitle: string;
+  periodLabel: string;
+  periodName: string;
   searchQuery: string;
 };
 
 export function Toolbar({
   activeView,
   filtersOpen,
-  monthLabel,
-  onMonthChange,
   onNotice,
   onOpenSidebar,
+  onPeriodChange,
   onSearch,
   onToday,
   onToggleFilters,
   onViewChange,
   pageTitle,
+  periodLabel,
+  periodName,
   searchQuery,
 }: ToolbarProps) {
   return (
@@ -64,20 +66,20 @@ export function Toolbar({
           <div className={styles.navPair}>
             <button
               type="button"
-              aria-label="Previous month"
-              onClick={() => onMonthChange(-1)}
+              aria-label={`Previous ${periodName}`}
+              onClick={() => onPeriodChange(-1)}
             >
               <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.6} />
             </button>
             <button
               type="button"
-              aria-label="Next month"
-              onClick={() => onMonthChange(1)}
+              aria-label={`Next ${periodName}`}
+              onClick={() => onPeriodChange(1)}
             >
               <ChevronRight aria-hidden="true" size={18} strokeWidth={1.6} />
             </button>
           </div>
-          <p className={styles.monthTitle}>{monthLabel}</p>
+          <p className={styles.monthTitle}>{periodLabel}</p>
         </div>
 
         <div className={styles.viewSwitcher} aria-label="Calendar view">
