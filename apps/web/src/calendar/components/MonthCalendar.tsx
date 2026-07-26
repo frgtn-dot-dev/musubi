@@ -38,7 +38,19 @@ export function MonthCalendar({
       ),
     [days],
   );
-  const eventsByDay = useMemo(() => bucketEventsByDay(events), [events]);
+  const eventsByDay = useMemo(
+    () =>
+      bucketEventsByDay(
+        events,
+        days[0],
+        new Date(
+          days[days.length - 1]!.getFullYear(),
+          days[days.length - 1]!.getMonth(),
+          days[days.length - 1]!.getDate() + 1,
+        ),
+      ),
+    [days, events],
+  );
   const calendarsById = useMemo(
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars],
@@ -131,11 +143,11 @@ export function MonthCalendar({
             {week.map((day, dayIndex) => {
               const index = weekIndex * 7 + dayIndex;
               const dateKey = toDateKey(day);
-              const dayEvents = eventsByDay.get(dateKey) ?? [];
+              const daySegments = eventsByDay.get(dateKey) ?? [];
               const inMonth = day.getMonth() === anchor.getMonth();
               const isToday = dateKey === todayKey;
-              const visibleEvents = dayEvents.slice(0, 3);
-              const overflow = dayEvents.length - visibleEvents.length;
+              const visibleSegments = daySegments.slice(0, 3);
+              const overflow = daySegments.length - visibleSegments.length;
 
               return (
                 <div
@@ -147,8 +159,8 @@ export function MonthCalendar({
                     cellRefs.current[index] = node;
                   }}
                   role="gridcell"
-                  aria-label={`${getLongDateLabel(day)}, ${dayEvents.length} ${
-                    dayEvents.length === 1 ? "event" : "events"
+                  aria-label={`${getLongDateLabel(day)}, ${daySegments.length} ${
+                    daySegments.length === 1 ? "event" : "events"
                   }`}
                   tabIndex={focusedIndex === index ? 0 : -1}
                   data-day-key={dateKey}
@@ -163,11 +175,16 @@ export function MonthCalendar({
                     ) : null}
                   </div>
                   <div className={styles.dayEvents}>
-                    {visibleEvents.map((event) => (
+                    {visibleSegments.map((segment) => (
                       <EventPopover
-                        calendar={calendarsById.get(event.calendars[0] ?? "")}
-                        event={event}
-                        key={event.id}
+                        calendar={calendarsById.get(
+                          segment.event.calendars[0] ?? "",
+                        )}
+                        continuesAfter={segment.continuesAfter}
+                        continuesBefore={segment.continuesBefore}
+                        event={segment.event}
+                        key={segment.event.id}
+                        showLabel={!segment.continuesBefore || dayIndex === 0}
                       />
                     ))}
                     {overflow > 0 ? (

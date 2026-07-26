@@ -595,6 +595,7 @@
 }
 
 .dayEvents {
+  --event-bleed: 8px;
   display: grid;
   gap: 3px;
   padding-top: 3px;
@@ -602,38 +603,73 @@
 
 .eventChip {
   --event-color: var(--event-indigo);
+  --event-foreground: #000;
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 100%;
   min-width: 0;
   min-height: 21px;
-  grid-template-columns: 5px auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 5px;
   overflow: hidden;
   padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, var(--event-color) 58%, transparent);
+  border: 0;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--event-color) 21%, transparent);
-  color: var(--text-secondary);
+  background: var(--event-color);
+  color: var(--event-foreground);
   text-align: left;
+  transition:
+    filter var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
 }
 
 .eventChip:hover,
 .eventChip:focus-visible {
-  border-color: var(--event-color);
-  background: color-mix(in srgb, var(--event-color) 32%, transparent);
-  color: var(--text-primary);
+  color: var(--event-foreground);
+  filter: saturate(1.1);
+  transform: translateY(-1px);
 }
 
-.eventDot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--event-color);
+.eventChip:focus-visible {
+  outline: 2px solid var(--event-foreground);
+  outline-offset: -3px;
+}
+
+.eventChipAllDay {
+  grid-template-columns: minmax(0, 1fr);
+  font-weight: 500;
+}
+
+.eventChipContinuesBefore {
+  width: calc(100% + var(--event-bleed));
+  margin-left: calc(var(--event-bleed) * -1);
+  border-radius: 0 4px 4px 0;
+}
+
+.eventChipContinuesAfter {
+  width: calc(100% + var(--event-bleed));
+  border-radius: 4px 0 0 4px;
+}
+
+.eventChipContinuesBoth {
+  width: calc(100% + var(--event-bleed) + var(--event-bleed));
+  border-radius: 0;
+}
+
+.eventChipLabelVisible {
+  z-index: 2;
+  overflow: visible;
+}
+
+.eventChipLabelVisible .eventTitle {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .eventTime {
-  color: var(--text-muted);
+  color: var(--event-foreground);
   font-family: var(--font-mono);
   font-size: 0.57rem;
 }
@@ -1098,13 +1134,21 @@
     padding-inline: 4px;
   }
 
+  .dayEvents {
+    --event-bleed: 5px;
+  }
+
   .eventChip {
-    grid-template-columns: 5px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     padding-inline: 4px;
   }
 
   .eventTime {
     display: none;
+  }
+
+  .eventTitle {
+    grid-column: 1;
   }
 
   .saveBar {
@@ -1148,14 +1192,18 @@
     padding: 5px 3px 4px;
   }
 
+  .dayEvents {
+    --event-bleed: 4px;
+  }
+
   .todayLabel {
     display: none;
   }
 
   .eventChip {
-    grid-template-columns: 4px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     min-height: 20px;
-    gap: 3px;
+    gap: 0;
   }
 
   .eventTitle {

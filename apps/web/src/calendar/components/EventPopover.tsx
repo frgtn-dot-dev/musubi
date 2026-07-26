@@ -10,38 +10,65 @@ import {
   X,
 } from "lucide-react";
 import {
+  getEventDateLabel,
   getEventRangeLabel,
-  getLongDateLabel,
 } from "../calendar-math";
+import { getReadableEventTextColor } from "../event-color";
 import styles from "./workspace.module.css";
 
 type EventPopoverProps = {
   calendar: Calendar | undefined;
+  continuesAfter?: boolean;
+  continuesBefore?: boolean;
   event: Event;
+  showLabel?: boolean;
 };
 
-export function EventPopover({ calendar, event }: EventPopoverProps) {
+export function EventPopover({
+  calendar,
+  continuesAfter = false,
+  continuesBefore = false,
+  event,
+  showLabel = true,
+}: EventPopoverProps) {
+  const eventColor = calendar?.color ?? event.color;
+
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
         <button
-          className={styles.eventChip}
-          type="button"
-          aria-label={`${event.title}, ${getEventRangeLabel(event)}, ${
-            calendar?.name ?? "calendar"
+          className={`${styles.eventChip} ${
+            event.isAllDay ? styles.eventChipAllDay : ""
+          } ${continuesBefore ? styles.eventChipContinuesBefore : ""} ${
+            continuesAfter ? styles.eventChipContinuesAfter : ""
+          } ${
+            continuesBefore && continuesAfter
+              ? styles.eventChipContinuesBoth
+              : ""
+          } ${
+            event.isAllDay && showLabel ? styles.eventChipLabelVisible : ""
           }`}
+          type="button"
+          aria-label={`${event.title}, ${getEventDateLabel(
+            event,
+          )}, ${getEventRangeLabel(event)}, ${calendar?.name ?? "calendar"}`}
+          data-event-id={event.id}
           style={
             {
-              "--event-color": calendar?.color ?? event.color,
+              "--event-color": eventColor,
+              "--event-foreground": getReadableEventTextColor(eventColor),
             } as React.CSSProperties
           }
           onClick={(clickEvent) => clickEvent.stopPropagation()}
         >
-          <span className={styles.eventDot} aria-hidden="true" />
-          <span className={styles.eventTime}>
-            {event.isAllDay ? "" : getEventRangeLabel(event).split(" ")[0]}
+          {!event.isAllDay ? (
+            <span className={styles.eventTime} aria-hidden="true">
+              {getEventRangeLabel(event).split(" ")[0]}
+            </span>
+          ) : null}
+          <span className={styles.eventTitle} aria-hidden="true">
+            {showLabel ? event.title : ""}
           </span>
-          <span className={styles.eventTitle}>{event.title}</span>
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -49,7 +76,7 @@ export function EventPopover({ calendar, event }: EventPopoverProps) {
           className={`${styles.popover} ${styles.detailPopover}`}
           align="start"
           aria-label={event.title}
-          side="right"
+          side="bottom"
           sideOffset={8}
           collisionPadding={14}
         >
@@ -79,7 +106,7 @@ export function EventPopover({ calendar, event }: EventPopoverProps) {
             <div>
               <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
               <dt>Date</dt>
-              <dd>{getLongDateLabel(event.start)}</dd>
+              <dd>{getEventDateLabel(event)}</dd>
             </div>
             <div>
               <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
