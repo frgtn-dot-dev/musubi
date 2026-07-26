@@ -177,6 +177,24 @@ const settings = {
   weekStartsOn: "monday",
 };
 
+const DEFAULT_PAGE_ID = "11111111-1111-4111-8111-111111111111";
+
+const defaultPage = {
+  config: {
+    calendarVisibility: { hiddenCalendarIds: [], mode: "all" },
+    filters: [],
+    schemaVersion: 1,
+    view: { configVersion: 1, id: "month", showAdjacentDays: true },
+  },
+  createdAt: "2026-07-01T00:00:00.000Z",
+  id: DEFAULT_PAGE_ID,
+  isDefault: true,
+  name: "My calendar",
+  position: 0,
+  revision: 1,
+  updatedAt: "2026-07-01T00:00:00.000Z",
+};
+
 function respond(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     body: JSON.stringify(body),
@@ -221,6 +239,7 @@ async function mockAuthenticatedReads(
   await page.route("**/api/v1/calendars", (route) =>
     respond(route, calendarState),
   );
+  await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
   await page.route("**/api/v1/calendars/*/export", (route) =>
     route.fulfill({
       body: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
@@ -790,4 +809,51 @@ test("recovers when settings fail to load", async ({ page }) => {
     page.getByRole("combobox", { name: "Theme" }),
   ).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("resolves the default page and switches between pages", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const workPageId = "22222222-2222-4222-8222-222222222222";
+  await page.route("**/api/v1/pages", (route) =>
+    respond(route, [
+      defaultPage,
+      {
+        config: {
+          calendarVisibility: { calendarIds: [], mode: "include" },
+          filters: [],
+          schemaVersion: 1,
+          view: {
+            configVersion: 1,
+            density: "comfortable",
+            id: "week",
+            weekend: true,
+          },
+        },
+        createdAt: "2026-07-01T00:00:00.000Z",
+        id: workPageId,
+        isDefault: false,
+        name: "Work",
+        position: 1,
+        revision: 1,
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]),
+  );
+
+  // The "default" sentinel redirects to the real default Page, keeping view/date.
+  await page.goto("/app/p/default/month?date=2026-07-26");
+  await expect(page).toHaveURL(
+    new RegExp(`/app/p/${DEFAULT_PAGE_ID}/month`),
+  );
+  await expect(page).toHaveURL(/[?&]date=2026-07-26/);
+
+  // Both pages are listed; selecting one navigates without losing the date.
+  await expect(
+    page.getByRole("button", { name: "My calendar" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Work" }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
+  await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 });

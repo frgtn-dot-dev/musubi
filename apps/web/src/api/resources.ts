@@ -3,6 +3,7 @@ import {
   CalendarsResponseSchema,
   EventsResponseSchema,
   ImportedCalendarSchema,
+  PagesResponseSchema,
   RemoveEventResponseSchema,
   SettingsDocumentResponseSchema,
   SettingsResponseSchema,
@@ -28,6 +29,13 @@ export function getCalendars(signal?: AbortSignal) {
 export function getEvents(signal?: AbortSignal) {
   return apiRequest("/api/v1/events", {
     responseSchema: EventsResponseSchema,
+    signal,
+  });
+}
+
+export function getPages(signal?: AbortSignal) {
+  return apiRequest("/api/v1/pages", {
+    responseSchema: PagesResponseSchema,
     signal,
   });
 }

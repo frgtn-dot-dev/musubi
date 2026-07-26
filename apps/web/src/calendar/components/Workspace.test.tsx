@@ -23,6 +23,27 @@ const commonProps = {
   onUpdateEvent: vi.fn(async (event) => event),
   onViewChange: vi.fn(),
   pageId: "my-calendar",
+  pages: [
+    {
+      config: {
+        calendarVisibility: { hiddenCalendarIds: [], mode: "all" as const },
+        filters: [],
+        schemaVersion: 1 as const,
+        view: {
+          configVersion: 1 as const,
+          id: "month" as const,
+          showAdjacentDays: true,
+        },
+      },
+      createdAt: new Date("2026-07-01T00:00:00.000Z"),
+      id: "my-calendar",
+      isDefault: true,
+      name: "My calendar",
+      position: 0,
+      revision: 1,
+      updatedAt: new Date("2026-07-01T00:00:00.000Z"),
+    },
+  ],
   settings: {
     dateFormat: "dmy" as const,
     defaultCalendarView: "month" as const,

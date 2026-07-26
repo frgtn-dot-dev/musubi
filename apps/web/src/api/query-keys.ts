@@ -20,6 +20,9 @@ export const queryKeys = {
   calendars: (serverOrigin: string, userId: string) =>
     ["calendars", serverOrigin, userId] as const,
 
+  pages: (serverOrigin: string, userId: string) =>
+    ["pages", serverOrigin, userId] as const,
+
   attendees: (
     serverOrigin: string,
     userId: string,

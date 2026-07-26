@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useOnlineStatus } from "~/api/online-status";
@@ -54,11 +55,32 @@ function WorkspaceRoute() {
   const queries = [
     workspace.calendars,
     workspace.events,
+    workspace.pages,
     workspace.settings,
   ];
   const pending = queries.some((query) => query.isPending);
   const errorQuery = queries.find((query) => query.error);
   const error = errorQuery?.error;
+
+  // Resolve the URL page id against the loaded pages. Unknown ids (a stale
+  // bookmark or the "default" sentinel from the initial redirect) fall back to
+  // the canonical default Page — real ids are server UUIDs.
+  const pages = workspace.pages.data;
+  const activePage = pages?.find((page) => page.id === pageId);
+  const fallbackPageId =
+    pages && !activePage
+      ? (pages.find((page) => page.isDefault) ?? pages[0])?.id
+      : undefined;
+
+  useEffect(() => {
+    if (!fallbackPageId) return;
+    void navigate({
+      params: { pageId: fallbackPageId, view: activeView },
+      replace: true,
+      search: { date },
+      to: "/app/p/$pageId/$view",
+    });
+  }, [activeView, date, fallbackPageId, navigate]);
 
   if (pending) {
     return (
@@ -74,6 +96,7 @@ function WorkspaceRoute() {
     error ||
     !workspace.calendars.data ||
     !workspace.events.data ||
+    !workspace.pages.data ||
     !workspace.settings.data
   ) {
     const requestId =
@@ -100,11 +123,31 @@ function WorkspaceRoute() {
     );
   }
 
+  if (!activePage) {
+    // Either redirecting to the default Page (fallbackPageId set) or the account
+    // genuinely has no pages (backfill failed) — offer a retry in that case.
+    return fallbackPageId ? (
+      <WorkspaceDataState
+        detail="Opening your default calendar page."
+        kind="loading"
+        title="Preparing your calendar…"
+      />
+    ) : (
+      <WorkspaceDataState
+        detail="Your account has no calendar pages yet. Retry to create the default page."
+        kind="error"
+        onRetry={() => void workspace.pages.refetch()}
+        title="No calendar pages available."
+      />
+    );
+  }
+
   return (
     <Workspace
       activeView={activeView}
       baseEvents={workspace.events.data.baseEvents}
       calendars={workspace.calendars.data}
+      pages={workspace.pages.data}
       date={date}
       events={workspace.events.data.events}
       isRefreshing={queries.some((query) => query.isFetching)}

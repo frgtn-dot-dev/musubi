@@ -1,6 +1,7 @@
 import {
   CalendarSchema,
   EventSchema,
+  PageDocumentSchema,
   SettingsDocumentSchema,
   SettingsSchema,
 } from "@musubi/types";
@@ -33,6 +34,8 @@ export const RemoveEventResponseSchema = z.object({
 
 export const SettingsResponseSchema = SettingsSchema;
 export const SettingsDocumentResponseSchema = SettingsDocumentSchema;
+
+export const PagesResponseSchema = z.array(PageDocumentSchema);
 
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
 export type Attendee = z.infer<typeof AttendeeSchema>;

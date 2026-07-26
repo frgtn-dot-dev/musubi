@@ -1,6 +1,7 @@
 import type {
   Calendar,
   Event,
+  PageDocument,
   Settings,
   SettingsDocument,
   SettingsPatch,
@@ -31,7 +32,6 @@ import {
   getTimeGridLabel,
 } from "../time-grid-math";
 import { getEditableCalendars } from "../event-permissions";
-import { pageStubs } from "~/pages/page-stubs";
 import type { CalendarViewId } from "../view-registry";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
@@ -87,6 +87,7 @@ type WorkspaceProps = {
   onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
   pageId: string;
+  pages: PageDocument[];
   settings: Settings;
   user: Pick<User, "email" | "id" | "name">;
 };
@@ -143,6 +144,7 @@ export function Workspace({
   onUpdateEvent,
   onViewChange,
   pageId,
+  pages,
   settings,
   user,
 }: WorkspaceProps) {
@@ -194,7 +196,7 @@ export function Workspace({
   );
 
   const pageTitle =
-    pageStubs.find((page) => page.id === pageId)?.name ?? "My calendar";
+    pages.find((page) => page.id === pageId)?.name ?? "My calendar";
 
   const visibleEvents = useMemo(() => {
     const normalizedQuery = deferredSearchQuery
@@ -314,6 +316,7 @@ export function Workspace({
       <Sidebar
         activePageId={pageId}
         calendars={calendars}
+        pages={pages}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onManageCalendars={() => {

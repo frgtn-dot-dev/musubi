@@ -16,7 +16,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function safeRedirect(value: string | undefined) {
-  return value?.startsWith("/app/") ? value : "/app/p/my-calendar/month";
+  return value?.startsWith("/app/") ? value : "/app/p/default/month";
 }
 
 function errorMessage(error: { message?: string } | null | undefined) {

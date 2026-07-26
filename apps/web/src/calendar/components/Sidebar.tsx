@@ -1,21 +1,18 @@
 import {
-  BriefcaseBusiness,
   CalendarDays,
   Check,
   CircleCheck,
-  Grid2X2,
   House,
   Layers3,
   LogOut,
+  type LucideIcon,
   Plus,
   Settings,
   X,
 } from "lucide-react";
-import type { Calendar } from "@musubi/types";
-import type { User } from "@musubi/types";
+import type { Calendar, PageDocument, User } from "@musubi/types";
 import { useState, useSyncExternalStore } from "react";
 import { BrandMark } from "~/components/BrandMark";
-import { pageStubs } from "~/pages/page-stubs";
 import styles from "./workspace.module.css";
 
 type SidebarProps = {
@@ -29,16 +26,10 @@ type SidebarProps = {
   onPageChange: (pageId: string) => void;
   onSignOut: () => void;
   onToggleCalendar: (calendarId: string) => void;
+  pages: PageDocument[];
   syncLabel: string;
   user: Pick<User, "email" | "name">;
   visibleCalendarIds: string[];
-};
-
-const pageIcons = {
-  briefcase: BriefcaseBusiness,
-  calendar: CalendarDays,
-  grid: Grid2X2,
-  home: House,
 };
 
 const mobileQuery = "(max-width: 820px)";
@@ -64,6 +55,7 @@ export function Sidebar({
   onPageChange,
   onSignOut,
   onToggleCalendar,
+  pages,
   syncLabel,
   user,
   visibleCalendarIds,
@@ -113,11 +105,11 @@ export function Sidebar({
               Pages
             </h2>
             <div className={styles.pageList}>
-              {pageStubs.map((page) => (
+              {pages.map((page) => (
                 <PageButton
                   key={page.id}
                   active={page.id === activePageId}
-                  icon={page.icon}
+                  icon={page.isDefault ? House : CalendarDays}
                   name={page.name}
                   onSelect={() => {
                     onPageChange(page.id);
@@ -224,17 +216,15 @@ export function Sidebar({
 
 function PageButton({
   active,
-  icon,
+  icon: Icon,
   name,
   onSelect,
 }: {
   active: boolean;
-  icon: keyof typeof pageIcons;
+  icon: LucideIcon;
   name: string;
   onSelect: () => void;
 }) {
-  const Icon = pageIcons[icon];
-
   return (
     <button
       className={`${styles.pageButton} ${active ? styles.pageButtonActive : ""}`}

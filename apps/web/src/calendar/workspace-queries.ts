@@ -8,7 +8,7 @@ import { getAgendaRecurrenceEnd } from "./agenda-math";
 import { parseDateKey } from "./calendar-math";
 import { getTimeGridQueryRange } from "./time-grid-math";
 import type { CalendarViewId } from "./view-registry";
-import { getCalendars, getEvents, getSettings } from "~/api/resources";
+import { getCalendars, getEvents, getPages, getSettings } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
 export function getVisibleMonthRange(date: string) {
@@ -56,6 +56,11 @@ export function useWorkspaceQueries(
     queryFn: ({ signal }) => getSettings(signal),
     queryKey: queryKeys.settings(origin, userId),
   });
+  const pages = useQuery({
+    enabled,
+    queryFn: ({ signal }) => getPages(signal),
+    queryKey: queryKeys.pages(origin, userId),
+  });
   const events = useQuery({
     enabled,
     queryFn: ({ signal }) => getEvents(signal),
@@ -98,6 +103,7 @@ export function useWorkspaceQueries(
   return {
     calendars,
     events,
+    pages,
     range,
     settings,
   };

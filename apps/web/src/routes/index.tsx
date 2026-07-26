@@ -6,7 +6,9 @@ export const Route = createFileRoute("/")({
     throw redirect({
       to: "/app/p/$pageId/$view",
       params: {
-        pageId: "my-calendar",
+        // Sentinel: the workspace route resolves it to the user's real default
+        // Page (a server UUID) once pages load.
+        pageId: "default",
         view: "month",
       },
       search: {
