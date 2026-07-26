@@ -1,0 +1,281 @@
+import { CalendarSchema, EventSchema } from "@musubi/types";
+import { z } from "zod";
+
+export const fixturePages = [
+  { id: "my-calendar", name: "My calendar", icon: "calendar" },
+  { id: "work", name: "Work", icon: "briefcase" },
+  { id: "family", name: "Family", icon: "home" },
+  { id: "planning", name: "Planning", icon: "grid" },
+] as const;
+
+export const fixtureCalendars = z.array(CalendarSchema).parse([
+  {
+    id: "personal",
+    creatorID: "alex",
+    name: "Personal",
+    color: "#c8553d",
+    members: [],
+    role: "owner",
+    isDefault: true,
+  },
+  {
+    id: "studio",
+    creatorID: "alex",
+    name: "Studio",
+    color: "#7a8ba3",
+    members: [],
+    role: "editor",
+  },
+  {
+    id: "client-work",
+    creatorID: "alex",
+    name: "Client work",
+    color: "#d4a574",
+    members: [],
+    role: "owner",
+  },
+  {
+    id: "family-calendar",
+    creatorID: "alex",
+    name: "Family",
+    color: "#6f7d67",
+    members: [],
+    role: "editor",
+  },
+]);
+
+function event(
+  id: string,
+  title: string,
+  calendarId: string,
+  start: string,
+  end: string,
+  extra?: {
+    description?: string;
+    isAllDay?: boolean;
+    location?: string;
+    recurrence?: string;
+  },
+) {
+  const calendar = fixtureCalendars.find((item) => item.id === calendarId);
+
+  return {
+    id,
+    creatorID: "alex",
+    organizer: "alex@example.com",
+    title,
+    color: calendar?.color ?? "#7a8ba3",
+    start,
+    end,
+    calendars: [calendarId],
+    originCalendarID: calendarId,
+    isCanceled: false,
+    isAllDay: extra?.isAllDay ?? false,
+    hasAttendees: title.includes("review") || title.includes("Planning"),
+    description: extra?.description,
+    location: extra?.location,
+    recurrence: extra?.recurrence,
+  };
+}
+
+export const fixtureEvents = z.array(EventSchema).parse([
+  event(
+    "weekly-1",
+    "Weekly 1:1",
+    "studio",
+    "2026-07-06T09:00:00",
+    "2026-07-06T09:30:00",
+    { recurrence: "FREQ=WEEKLY" },
+  ),
+  event(
+    "project-sync",
+    "Project sync",
+    "studio",
+    "2026-07-06T10:00:00",
+    "2026-07-06T11:00:00",
+  ),
+  event(
+    "client-call",
+    "Client call",
+    "client-work",
+    "2026-07-07T10:00:00",
+    "2026-07-07T11:00:00",
+    { location: "Zoom" },
+  ),
+  event(
+    "run-club",
+    "Run club",
+    "family-calendar",
+    "2026-07-07T16:00:00",
+    "2026-07-07T17:00:00",
+    { location: "Riverside" },
+  ),
+  event(
+    "family-check-in",
+    "Family check-in",
+    "client-work",
+    "2026-07-08T09:30:00",
+    "2026-07-08T10:15:00",
+    { location: "Kitchen table" },
+  ),
+  event(
+    "design-review",
+    "Design review",
+    "personal",
+    "2026-07-08T14:00:00",
+    "2026-07-08T15:00:00",
+    {
+      description: "Review the latest direction and prepare the client handoff.",
+      location: "Meeting Room B",
+      recurrence: "FREQ=WEEKLY;BYDAY=WE",
+    },
+  ),
+  event(
+    "planning",
+    "Planning",
+    "studio",
+    "2026-07-09T09:00:00",
+    "2026-07-09T10:00:00",
+    { location: "Studio A" },
+  ),
+  event(
+    "team-lunch",
+    "Team lunch",
+    "client-work",
+    "2026-07-09T12:00:00",
+    "2026-07-09T13:00:00",
+  ),
+  event(
+    "marketing-sync",
+    "Marketing sync",
+    "studio",
+    "2026-07-10T10:00:00",
+    "2026-07-10T11:00:00",
+  ),
+  event(
+    "sprint-review",
+    "Sprint review",
+    "client-work",
+    "2026-07-10T15:00:00",
+    "2026-07-10T16:00:00",
+  ),
+  event(
+    "hiking",
+    "Hiking",
+    "family-calendar",
+    "2026-07-11T10:00:00",
+    "2026-07-11T14:00:00",
+    { location: "Divoká Šárka" },
+  ),
+  event(
+    "brunch",
+    "Brunch",
+    "client-work",
+    "2026-07-12T11:00:00",
+    "2026-07-12T12:30:00",
+  ),
+  event(
+    "roadmap",
+    "Roadmap planning",
+    "studio",
+    "2026-07-14T13:00:00",
+    "2026-07-14T14:30:00",
+  ),
+  event(
+    "quarterly",
+    "Quarterly planning",
+    "studio",
+    "2026-07-15T09:30:00",
+    "2026-07-15T11:00:00",
+    {
+      description: "Set the studio priorities for the next quarter.",
+      location: "Conference Room A",
+    },
+  ),
+  event(
+    "lunch-team",
+    "Lunch with team",
+    "client-work",
+    "2026-07-15T12:30:00",
+    "2026-07-15T13:30:00",
+  ),
+  event(
+    "yoga",
+    "Yoga",
+    "family-calendar",
+    "2026-07-15T17:00:00",
+    "2026-07-15T18:00:00",
+  ),
+  event(
+    "product-review",
+    "Product review",
+    "client-work",
+    "2026-07-17T11:30:00",
+    "2026-07-17T12:30:00",
+  ),
+  event(
+    "board-game",
+    "Board game pub",
+    "client-work",
+    "2026-07-21T17:00:00",
+    "2026-07-21T20:00:00",
+  ),
+  event(
+    "client-presentation",
+    "Client presentation",
+    "client-work",
+    "2026-07-24T13:00:00",
+    "2026-07-24T14:00:00",
+    { location: "Client office" },
+  ),
+  event(
+    "theatre",
+    "Theatre night",
+    "client-work",
+    "2026-07-25T19:00:00",
+    "2026-07-25T22:00:00",
+  ),
+  event(
+    "board-games",
+    "Board games",
+    "family-calendar",
+    "2026-07-27T16:00:00",
+    "2026-07-27T19:00:00",
+  ),
+  event(
+    "design-critique",
+    "Design critique",
+    "studio",
+    "2026-07-28T15:30:00",
+    "2026-07-28T16:30:00",
+  ),
+  event(
+    "stakeholder",
+    "Stakeholder update",
+    "client-work",
+    "2026-07-29T10:00:00",
+    "2026-07-29T11:00:00",
+  ),
+  event(
+    "wrap-up",
+    "Wrap-up",
+    "studio",
+    "2026-07-31T11:00:00",
+    "2026-07-31T11:30:00",
+  ),
+  event(
+    "retro",
+    "Retrospective",
+    "client-work",
+    "2026-07-31T15:00:00",
+    "2026-07-31T16:00:00",
+  ),
+  event(
+    "offsite",
+    "Project offsite",
+    "studio",
+    "2026-07-03T00:00:00",
+    "2026-07-04T00:00:00",
+    { isAllDay: true },
+  ),
+]);

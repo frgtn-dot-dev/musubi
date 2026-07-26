@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { toDateKey } from "~/calendar/date-key";
+import { Workspace } from "~/calendar/components/Workspace";
+import {
+  isCalendarView,
+  type CalendarViewId,
+} from "~/calendar/view-registry";
 
 const searchSchema = z.object({
   date: z
@@ -11,21 +16,40 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/app/p/$pageId/$view")({
   validateSearch: searchSchema,
-  component: WebFoundation,
+  component: WorkspaceRoute,
 });
 
-function WebFoundation() {
+function WorkspaceRoute() {
+  const { pageId, view } = Route.useParams();
+  const { date } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const activeView: CalendarViewId =
+    isCalendarView(view) && view === "month" ? view : "month";
+
   return (
-    <main id="main-content" className="foundation">
-      <span className="foundation__mark" aria-hidden="true">
-        結
-      </span>
-      <p>Musubi Web</p>
-      <h1>The calendar workspace is ready for its first view.</h1>
-      <p>
-        TanStack Start, typed routing, query hydration and the shared theme are
-        connected.
-      </p>
-    </main>
+    <Workspace
+      activeView={activeView}
+      date={date}
+      pageId={pageId}
+      onDateChange={(nextDate) =>
+        void navigate({
+          search: { date: nextDate },
+        })
+      }
+      onPageChange={(nextPageId) =>
+        void navigate({
+          params: { pageId: nextPageId, view: activeView },
+          search: { date },
+          to: "/app/p/$pageId/$view",
+        })
+      }
+      onViewChange={(nextView) =>
+        void navigate({
+          params: { pageId, view: nextView },
+          search: { date },
+          to: "/app/p/$pageId/$view",
+        })
+      }
+    />
   );
 }

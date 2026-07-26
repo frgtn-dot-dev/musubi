@@ -18,10 +18,12 @@ export const Route = createRootRouteWithContext<{
 }>()({
   head: () => ({
     links: [
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "stylesheet", href: tokensCss },
       { rel: "stylesheet", href: globalCss },
     ],
     meta: [
+      { title: "Musubi" },
       { charSet: "utf-8" },
       {
         name: "viewport",
@@ -36,7 +38,6 @@ export const Route = createRootRouteWithContext<{
         content: "Musubi — the open, self-hostable shared calendar.",
       },
     ],
-    title: "Musubi",
   }),
   errorComponent: (props) => (
     <RootDocument>

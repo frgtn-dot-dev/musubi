@@ -39,6 +39,7 @@
   --text-muted: rgba(28, 27, 24, 0.5);
   --text-faint: rgba(28, 27, 24, 0.32);
   --accent-primary: #b3492f;
+  --accent-on-primary: #f4f1e8;
   --control-fill: #4a4741;
   --control-on-fill: #f4f1e8;
   --event-dune: #b3a48a;
@@ -73,6 +74,7 @@
   --text-muted: rgba(232, 228, 217, 0.48);
   --text-faint: rgba(232, 228, 217, 0.28);
   --accent-primary: #c8553d;
+  --accent-on-primary: #000;
   --control-fill: #e8e4d9;
   --control-on-fill: #0c0c0e;
   --shadow-overlay: 0 28px 72px rgba(0, 0, 0, 0.48);
