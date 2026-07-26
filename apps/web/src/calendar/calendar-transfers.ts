@@ -1,8 +1,11 @@
 import type { Calendar } from "@musubi/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  createCalendar,
   exportCalendar,
   importCalendar,
+  removeCalendar,
+  updateCalendar,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
@@ -14,30 +17,82 @@ type ImportInput = {
 
 export function useCalendarTransfers(userId: string) {
   const queryClient = useQueryClient();
-  const calendarsKey = queryKeys.calendars(
-    getServerOrigin(),
-    userId,
-  );
+  const origin = getServerOrigin();
+  const calendarsKey = queryKeys.calendars(origin, userId);
+
+  const setCalendars = (
+    update: (current: Calendar[]) => Calendar[],
+  ) => {
+    queryClient.setQueryData<Calendar[]>(calendarsKey, (current = []) =>
+      update(current),
+    );
+  };
+
   const importMutation = useMutation({
     mutationFn: ({ color, ics, name }: ImportInput) =>
       importCalendar(ics, name, color),
     onSuccess: (calendar) => {
-      queryClient.setQueryData<Calendar[]>(
-        calendarsKey,
-        (current = []) => [
-          ...current.filter((item) => item.id !== calendar.id),
-          calendar,
-        ],
+      setCalendars((current) => [
+        ...current.filter((item) => item.id !== calendar.id),
+        calendar,
+      ]);
+      void queryClient.invalidateQueries({
+        queryKey: ["events", origin, userId],
+      });
+      void queryClient.invalidateQueries({ queryKey: calendarsKey });
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (input: { color: string; name: string }) =>
+      createCalendar({
+        color: input.color,
+        // id/creatorID are server-assigned; members must satisfy the schema.
+        creatorID: userId,
+        id: "new",
+        members: [],
+        name: input.name,
+      }),
+    onSuccess: (calendar) => {
+      setCalendars((current) => [
+        ...current.filter((item) => item.id !== calendar.id),
+        calendar,
+      ]);
+      void queryClient.invalidateQueries({ queryKey: calendarsKey });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (calendar: Calendar) => updateCalendar(calendar),
+    onSuccess: (calendar) => {
+      // Keep the role/members the list already holds if the response omits them.
+      setCalendars((current) =>
+        current.map((item) =>
+          item.id === calendar.id ? { ...item, ...calendar } : item,
+        ),
+      );
+      void queryClient.invalidateQueries({ queryKey: calendarsKey });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (calendar: Calendar) => removeCalendar(calendar),
+    onSuccess: (calendar) => {
+      setCalendars((current) =>
+        current.filter((item) => item.id !== calendar.id),
       );
       void queryClient.invalidateQueries({
-        queryKey: ["events", getServerOrigin(), userId],
+        queryKey: ["events", origin, userId],
       });
       void queryClient.invalidateQueries({ queryKey: calendarsKey });
     },
   });
 
   return {
+    createCalendar: createMutation.mutateAsync,
     exportCalendar,
     importCalendar: importMutation.mutateAsync,
+    removeCalendar: removeMutation.mutateAsync,
+    updateCalendar: updateMutation.mutateAsync,
   };
 }

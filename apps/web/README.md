@@ -26,7 +26,10 @@ validate them with `@musubi/types`. The sidebar lists the user's real Pages and
 the workspace route resolves the `default` sentinel (and any stale id) to the
 canonical default Page, keeping the current view and date. Event quick create,
 edit and delete use the existing Express write endpoints, wait for confirmed
-server responses and gate controls through the shared calendar permissions;
+server responses and gate controls through the shared calendar permissions. The
+Calendars dialog manages native calendars — create, rename, recolor and delete —
+gated by the shared `can()` roles (external/provider calendars stay read-only
+here), alongside the existing .ics import/export;
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a

@@ -86,6 +86,12 @@ type WorkspaceProps = {
     ics: string;
     name: string;
   }) => Promise<ImportedCalendar>;
+  onCreateCalendar?: (input: {
+    color: string;
+    name: string;
+  }) => Promise<Calendar>;
+  onUpdateCalendar?: (calendar: Calendar) => Promise<Calendar>;
+  onRemoveCalendar?: (calendar: Calendar) => Promise<Calendar>;
   onAdoptSettings?: (document: SettingsDocument) => void;
   onGetSettingsDocument?: (
     signal?: AbortSignal,
@@ -131,6 +137,10 @@ const unavailableImport = async (): Promise<ImportedCalendar> => {
   throw new Error("Calendar import is unavailable.");
 };
 
+const unavailableCalendarWrite = async (): Promise<Calendar> => {
+  throw new Error("Calendar management is unavailable.");
+};
+
 const unavailableSettings = async (): Promise<SettingsDocument> => {
   throw new Error("Settings sync is unavailable.");
 };
@@ -159,6 +169,9 @@ export function Workspace({
   onForkEvent = unavailableTargetMutation,
   onLinkEvent = unavailableTargetMutation,
   onImportCalendar = unavailableImport,
+  onCreateCalendar = unavailableCalendarWrite,
+  onUpdateCalendar = unavailableCalendarWrite,
+  onRemoveCalendar = unavailableCalendarWrite,
   onGetSettingsDocument = unavailableSettings,
   onCreatePage = unavailablePageCreate,
   onPageChange,
@@ -706,10 +719,13 @@ export function Workspace({
       ) : null}
       <CalendarTransferDialog
         calendars={calendars}
+        onCreate={onCreateCalendar}
         onExport={onExportCalendar}
         onImport={onImportCalendar}
         onNotice={setNotice}
         onOpenChange={setCalendarTransfersOpen}
+        onRemove={onRemoveCalendar}
+        onUpdate={onUpdateCalendar}
         open={calendarTransfersOpen}
       />
       <SettingsDialog

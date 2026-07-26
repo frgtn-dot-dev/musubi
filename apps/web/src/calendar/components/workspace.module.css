@@ -1641,6 +1641,53 @@
   color: var(--text-muted);
 }
 
+.calendarManageList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendarManageRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: 8px;
+}
+
+.calendarManageRow:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.08));
+}
+
+.calendarManageName {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+input.calendarManageName {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-elevated, var(--surface));
+  color: var(--text);
+}
+
+.calendarBadge {
+  padding: 1px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .transferHeading h3 {
   margin: 0;
   color: var(--text-primary);

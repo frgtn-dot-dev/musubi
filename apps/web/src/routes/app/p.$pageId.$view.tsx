@@ -163,6 +163,9 @@ function WorkspaceRoute() {
       onForkEvent={eventMutations.forkEvent}
       onExportCalendar={calendarTransfers.exportCalendar}
       onImportCalendar={calendarTransfers.importCalendar}
+      onCreateCalendar={calendarTransfers.createCalendar}
+      onUpdateCalendar={calendarTransfers.updateCalendar}
+      onRemoveCalendar={calendarTransfers.removeCalendar}
       onGetSettingsDocument={settingsMutations.getSettingsDocument}
       onLinkEvent={eventMutations.linkEvent}
       onCreatePage={pageMutations.createPage}

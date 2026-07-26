@@ -236,9 +236,39 @@ async function mockAuthenticatedReads(
     authenticated = false;
     return respond(route, { success: true });
   });
-  await page.route("**/api/v1/calendars", (route) =>
-    respond(route, calendarState),
-  );
+  await page.route("**/api/v1/calendars", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") return respond(route, calendarState);
+
+    const body = route.request().postDataJSON() as (typeof calendars)[number];
+    if (method === "POST") {
+      const created = {
+        ...body,
+        creatorID: session.user.id,
+        id: `calendar-${calendarState.length + 1}`,
+        members: [],
+        role: "owner",
+      };
+      calendarState = [...calendarState, created];
+      return respond(route, created, 201);
+    }
+    if (method === "PUT") {
+      calendarState = calendarState.map((calendar) =>
+        calendar.id === body.id ? { ...calendar, ...body } : calendar,
+      );
+      return respond(
+        route,
+        calendarState.find((calendar) => calendar.id === body.id),
+      );
+    }
+    if (method === "DELETE") {
+      calendarState = calendarState.filter(
+        (calendar) => calendar.id !== body.id,
+      );
+      return respond(route, { ...body, members: [] });
+    }
+    return respond(route, calendarState);
+  });
   await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
   // Hold the SSE connection open like the real server so EventSource stays
   // connected instead of reconnect-looping against a closed mock.
@@ -716,7 +746,7 @@ test("exports and imports iCalendar files from calendar management", async ({
   await page.goto("/app/p/my-calendar/month?date=2026-07-26");
   await page.getByRole("button", { name: "Calendars" }).click();
   await expect(
-    page.getByRole("heading", { name: "Calendar files" }),
+    page.getByRole("heading", { name: "Your calendars" }),
   ).toBeVisible();
 
   await page
@@ -984,4 +1014,48 @@ test("applies a realtime page created in another session", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Shared plan" }),
   ).toBeVisible();
+});
+
+test("creates, renames and deletes a calendar", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: "Calendars" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your calendars" }),
+  ).toBeVisible();
+
+  // Create
+  await page.getByPlaceholder("New calendar").fill("Travel");
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Travel created.",
+  );
+  const travelRow = page
+    .getByRole("listitem")
+    .filter({ hasText: "Travel" });
+  await expect(travelRow).toBeVisible();
+
+  // Rename
+  await page.getByRole("button", { name: "Rename Travel" }).click();
+  await page
+    .getByRole("textbox", { name: "Rename Travel" })
+    .fill("Trips");
+  await page.getByRole("button", { name: "Save calendar" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Calendar updated.",
+  );
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "Trips" }),
+  ).toBeVisible();
+
+  // Delete (accepts the confirm dialog)
+  page.on("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Delete Trips" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Trips deleted.",
+  );
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "Trips" }),
+  ).toHaveCount(0);
 });

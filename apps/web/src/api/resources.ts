@@ -10,7 +10,9 @@ import {
   SettingsResponseSchema,
 } from "./contracts";
 import {
+  CalendarSchema,
   EventSchema,
+  type Calendar,
   type CreatePageRequest,
   type Event,
   type PatchSettingsRequest,
@@ -78,6 +80,30 @@ export function patchSettings(request: PatchSettingsRequest) {
     body: request,
     method: "PATCH",
     responseSchema: SettingsDocumentResponseSchema,
+  });
+}
+
+export function createCalendar(calendar: Calendar) {
+  return apiRequest("/api/v1/calendars", {
+    body: calendar,
+    method: "POST",
+    responseSchema: CalendarSchema,
+  });
+}
+
+export function updateCalendar(calendar: Calendar) {
+  return apiRequest("/api/v1/calendars", {
+    body: calendar,
+    method: "PUT",
+    responseSchema: CalendarSchema,
+  });
+}
+
+export function removeCalendar(calendar: Calendar) {
+  return apiRequest("/api/v1/calendars", {
+    body: calendar,
+    method: "DELETE",
+    responseSchema: CalendarSchema,
   });
 }
 
