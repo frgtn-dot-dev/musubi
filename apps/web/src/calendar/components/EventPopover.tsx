@@ -1,5 +1,5 @@
 import * as Popover from "@radix-ui/react-popover";
-import type { Calendar, Event } from "@musubi/types";
+import type { Calendar, Event, Settings } from "@musubi/types";
 import {
   CalendarDays,
   Clock3,
@@ -22,6 +22,7 @@ type EventPopoverProps = {
   continuesBefore?: boolean;
   event: Event;
   showLabel?: boolean;
+  timeFormat: Settings["timeFormat"];
 };
 
 export function EventPopover({
@@ -30,6 +31,7 @@ export function EventPopover({
   continuesBefore = false,
   event,
   showLabel = true,
+  timeFormat,
 }: EventPopoverProps) {
   const eventColor = calendar?.color ?? event.color;
 
@@ -51,7 +53,7 @@ export function EventPopover({
           type="button"
           aria-label={`${event.title}, ${getEventDateLabel(
             event,
-          )}, ${getEventRangeLabel(event)}, ${calendar?.name ?? "calendar"}`}
+          )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
           data-event-id={event.id}
           style={
             {
@@ -63,7 +65,7 @@ export function EventPopover({
         >
           {!event.isAllDay ? (
             <span className={styles.eventTime} aria-hidden="true">
-              {getEventRangeLabel(event).split(" ")[0]}
+              {getEventRangeLabel(event, timeFormat).split(" ")[0]}
             </span>
           ) : null}
           <span className={styles.eventTitle} aria-hidden="true">
@@ -111,7 +113,7 @@ export function EventPopover({
             <div>
               <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
               <dt>Time</dt>
-              <dd>{getEventRangeLabel(event)}</dd>
+              <dd>{getEventRangeLabel(event, timeFormat)}</dd>
             </div>
             {event.recurrence ? (
               <div>
@@ -124,7 +126,7 @@ export function EventPopover({
               <div>
                 <UsersRound aria-hidden="true" size={17} strokeWidth={1.5} />
                 <dt>Attendees</dt>
-                <dd>Alex Kim and 2 more</dd>
+                <dd>Attendee tracking enabled</dd>
               </div>
             ) : null}
             {event.location ? (
@@ -144,7 +146,7 @@ export function EventPopover({
           </dl>
 
           <p className={styles.prototypeNote}>
-            Read-only fixture · editing connects with the event API slice.
+            Read-only data from this Musubi server.
           </p>
           <Popover.Arrow className={styles.popoverArrow} />
         </Popover.Content>

@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { ApiError, ApiResponseError } from "~/api/http";
+import { useOnlineStatus } from "~/api/online-status";
+import { authClient } from "~/auth/auth-client";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
+import { useMonthQueries } from "~/calendar/month-queries";
+import { WorkspaceDataState } from "~/components/WorkspaceDataState";
 import {
   isCalendarView,
   type CalendarViewId,
@@ -23,14 +29,62 @@ function WorkspaceRoute() {
   const { pageId, view } = Route.useParams();
   const { date } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const queryClient = useQueryClient();
+  const online = useOnlineStatus();
+  const session = authClient.useSession();
   const activeView: CalendarViewId =
     isCalendarView(view) && view === "month" ? view : "month";
+  const month = useMonthQueries(date, session.data?.user.id ?? "anonymous");
+  const queries = [month.calendars, month.events, month.settings];
+  const pending = queries.some((query) => query.isPending);
+  const errorQuery = queries.find((query) => query.error);
+  const error = errorQuery?.error;
+
+  if (pending) {
+    return (
+      <WorkspaceDataState
+        detail="Loading calendars, events and your display preferences."
+        kind="loading"
+        title="Preparing the month…"
+      />
+    );
+  }
+
+  if (error || !month.calendars.data || !month.events.data || !month.settings.data) {
+    const requestId =
+      error instanceof ApiError || error instanceof ApiResponseError
+        ? error.requestId
+        : undefined;
+
+    return (
+      <WorkspaceDataState
+        detail={
+          online
+            ? error instanceof Error
+              ? error.message
+              : "The server did not return the complete calendar data."
+            : "Reconnect to the network, then retry this month."
+        }
+        kind={online ? "error" : "offline"}
+        onRetry={() => {
+          void Promise.all(queries.map((query) => query.refetch()));
+        }}
+        requestId={requestId}
+        title={online ? "We could not open this month." : "You are offline."}
+      />
+    );
+  }
 
   return (
     <Workspace
       activeView={activeView}
+      calendars={month.calendars.data}
       date={date}
+      events={month.events.data.events}
+      isRefreshing={queries.some((query) => query.isFetching)}
       pageId={pageId}
+      settings={month.settings.data}
+      user={session.data!.user}
       onDateChange={(nextDate) =>
         void navigate({
           search: { date: nextDate },
@@ -50,6 +104,9 @@ function WorkspaceRoute() {
           to: "/app/p/$pageId/$view",
         })
       }
+      onSignOut={() => {
+        void authClient.signOut().finally(() => queryClient.clear());
+      }}
     />
   );
 }

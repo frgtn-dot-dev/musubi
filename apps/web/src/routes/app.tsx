@@ -1,9 +1,10 @@
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { SessionGate } from "~/auth/SessionGate";
 
 export const Route = createFileRoute("/app")({
   component: AppRoute,
 });
 
 function AppRoute() {
-  return <Outlet />;
+  return <SessionGate />;
 }

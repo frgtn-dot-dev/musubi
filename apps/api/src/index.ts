@@ -31,7 +31,11 @@ const port = config.api.port;
 
 const allowedOrigins = [
   config.api.url,
-  ...(config.api.environment === "dev" ? ["http://localhost:3000", "http://localhost:8081"] : []),
+  ...(config.api.environment === "dev" ? [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8081",
+  ] : []),
 ];
 
 // ── Middleware ────────────────────────────────────────────────────────────────

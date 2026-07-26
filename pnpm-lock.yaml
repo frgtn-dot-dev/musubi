@@ -53,7 +53,7 @@ importers:
         version: 2.8.19
       better-auth:
         specifier: ^1.6.23
-        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0))
+        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -93,7 +93,7 @@ importers:
     dependencies:
       '@better-auth/expo':
         specifier: ^1.6.23
-        version: 1.6.23(c8bedfeee73143b60d11dba1c1d9703c)
+        version: 1.6.23(12a3af561515f0bb573b97179e0921b6)
       '@expo-google-fonts/inter-tight':
         specifier: ^0.4.2
         version: 0.4.2
@@ -132,7 +132,7 @@ importers:
         version: 16.1.2(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       better-auth:
         specifier: ^1.6.23
-        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0))
+        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))
       dayjs:
         specifier: ^1.11.21
         version: 1.11.21
@@ -338,6 +338,9 @@ importers:
       '@tanstack/react-start':
         specifier: 1.168.32
         version: 1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
+      better-auth:
+        specifier: 1.6.23
+        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))
       lucide-react:
         specifier: 1.25.0
         version: 1.25.0(react@19.2.3)
@@ -407,13 +410,13 @@ importers:
         version: 8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0)
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
 
   packages/auth:
     dependencies:
       '@better-auth/expo':
         specifier: ^1.6.23
-        version: 1.6.23(c8bedfeee73143b60d11dba1c1d9703c)
+        version: 1.6.23(12a3af561515f0bb573b97179e0921b6)
       '@musubi/config':
         specifier: workspace:*
         version: link:../config
@@ -425,7 +428,7 @@ importers:
         version: link:../emails
       better-auth:
         specifier: ^1.6.23
-        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0))
+        version: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))
 
   packages/calendar:
     dependencies:
@@ -8279,18 +8282,6 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
-  ws@7.5.11:
-    resolution: {integrity: sha512-zS54Oen9bITtp7kp2XM3AydrCIq1D+HwJOuH+c+e4LfpL/lotP5osijd+UoMnxwAam1GN8R4KtLAyIrIcBNpiA==}
-    engines: {node: '>=8.3.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: ^5.0.2
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
   ws@7.5.13:
     resolution: {integrity: sha512-rsKI6xDBFVf4r/x8XyChGK04QR/XHroxs/jUcoWvtEZM8TPU/X/uIY9B1CsSzYws9ZJb/6bbBu7dPhFW00CAoA==}
     engines: {node: '>=8.3.0'}
@@ -9154,11 +9145,11 @@ snapshots:
     optionalDependencies:
       drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0)
 
-  '@better-auth/expo@1.6.23(c8bedfeee73143b60d11dba1c1d9703c)':
+  '@better-auth/expo@1.6.23(12a3af561515f0bb573b97179e0921b6)':
     dependencies:
       '@better-auth/core': 1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0)
       '@better-fetch/fetch': 1.3.1
-      better-auth: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0))
+      better-auth: 1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))
       better-call: 1.3.7(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
@@ -9921,7 +9912,7 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.5.5
-      browserslist: 4.28.4
+      browserslist: 4.28.7
       chalk: 4.1.2
       debug: 4.4.3
       getenv: 2.0.0
@@ -9930,7 +9921,7 @@ snapshots:
       jsc-safe-url: 0.2.4
       lightningcss: 1.32.0
       picomatch: 4.0.5
-      postcss: 8.5.16
+      postcss: 8.5.23
       resolve-from: 5.0.0
     optionalDependencies:
       expo: 56.0.17(@babel/core@7.29.7)(@expo/metro-runtime@56.0.18)(expo-router@56.2.16)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
@@ -9954,7 +9945,7 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.5.5
-      browserslist: 4.28.4
+      browserslist: 4.28.7
       chalk: 4.1.2
       debug: 4.4.3
       getenv: 2.0.0
@@ -9963,7 +9954,7 @@ snapshots:
       jsc-safe-url: 0.2.4
       lightningcss: 1.32.0
       picomatch: 4.0.5
-      postcss: 8.5.16
+      postcss: 8.5.23
       resolve-from: 5.0.0
     optionalDependencies:
       expo: 56.0.17(@babel/core@7.29.7)(@expo/metro-runtime@56.0.18)(expo-router@56.2.16)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -10922,7 +10913,7 @@ snapshots:
       nullthrows: 1.1.1
       open: 7.4.2
       serve-static: 1.16.3
-      ws: 7.5.11
+      ws: 7.5.13
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -11705,7 +11696,7 @@ snapshots:
 
   '@types/pg@8.20.0':
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
       pg-protocol: 1.15.0
       pg-types: 2.2.0
 
@@ -12472,7 +12463,38 @@ snapshots:
       is-alphanumerical: 2.0.1
       is-decimal: 2.0.1
 
-  better-auth@1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0)):
+  better-auth@1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))):
+    dependencies:
+      '@better-auth/core': 1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0)
+      '@better-auth/drizzle-adapter': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))
+      '@better-auth/kysely-adapter': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(kysely@0.29.2)
+      '@better-auth/memory-adapter': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)
+      '@better-auth/mongo-adapter': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)
+      '@better-auth/prisma-adapter': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)
+      '@better-auth/telemetry': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)
+      '@better-auth/utils': 0.4.2
+      '@better-fetch/fetch': 1.3.1
+      '@noble/ciphers': 2.2.0
+      '@noble/hashes': 2.2.0
+      better-call: 1.3.7(zod@4.4.3)
+      defu: 6.1.7
+      jose: 6.2.3
+      kysely: 0.29.2
+      nanostores: 1.4.0
+      zod: 4.4.3
+    optionalDependencies:
+      '@tanstack/react-start': 1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
+      drizzle-kit: 0.31.10
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0)
+      pg: 8.20.0
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+      vitest: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
+    transitivePeerDependencies:
+      - '@cloudflare/workers-types'
+      - '@opentelemetry/api'
+
+  better-auth@1.6.23(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))(pg@8.20.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))):
     dependencies:
       '@better-auth/core': 1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0)
       '@better-auth/drizzle-adapter': 1.6.23(@better-auth/core@1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(kysely@0.29.2)(pg@8.20.0))
@@ -12498,7 +12520,7 @@ snapshots:
       pg: 8.20.0
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      vitest: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0)
+      vitest: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -12637,7 +12659,7 @@ snapshots:
 
   chrome-launcher@0.15.2:
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 1.4.2
@@ -12646,7 +12668,7 @@ snapshots:
 
   chromium-edge-launcher@0.3.0:
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 1.4.2
@@ -17661,7 +17683,7 @@ snapshots:
     optionalDependencies:
       vite: 8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)
 
-  vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0):
+  vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -17688,20 +17710,9 @@ snapshots:
       '@types/node': 25.9.4
       jsdom: 29.1.1(@noble/hashes@2.2.0)
     transitivePeerDependencies:
-      - '@vitejs/devtools'
-      - esbuild
-      - jiti
-      - less
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
-  vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(terser@5.48.0)(tsx@4.23.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0):
+  vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -17728,18 +17739,7 @@ snapshots:
       '@types/node': 25.9.5
       jsdom: 29.1.1(@noble/hashes@2.2.0)
     transitivePeerDependencies:
-      - '@vitejs/devtools'
-      - esbuild
-      - jiti
-      - less
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
     optional: true
 
   vlq@1.0.1: {}
@@ -17844,8 +17844,6 @@ snapshots:
       strip-ansi: 6.0.1
 
   wrappy@1.0.2: {}
-
-  ws@7.5.11: {}
 
   ws@7.5.13: {}
 

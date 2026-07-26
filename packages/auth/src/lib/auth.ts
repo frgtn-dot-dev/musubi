@@ -17,6 +17,8 @@ export const auth = betterAuth({
     "https://musubi.pro",
     "https://dev.musubi.pro",
     ...(config.api.environment === "dev" ? [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
       "exp://",                      // Trust all Expo URLs (prefix matching)
       "exp://**",                    // Trust all Expo URLs (wildcard matching)
       "exp://192.168.*.*:*/**",      // Trust 192.168.x.x IP range with any port and path

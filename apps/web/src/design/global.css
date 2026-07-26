@@ -97,6 +97,17 @@ button {
   text-transform: uppercase;
 }
 
+.route-state > svg {
+  width: 72px;
+  height: auto;
+  margin: 0 auto 8px;
+}
+
+.route-state__request {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
 .route-state__actions {
   display: flex;
   justify-content: center;

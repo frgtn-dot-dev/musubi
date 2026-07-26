@@ -15,12 +15,12 @@ pnpm --filter @musubi/web build
 pnpm --filter @musubi/web start
 ```
 
-The browser uses relative `/api/*` URLs. Server-side API calls will use
-`API_INTERNAL_URL` once the authenticated data slice is connected.
+The browser uses relative `/api/*` URLs. Vite proxies those requests to the
+local Express API on port 7531; production keeps the same paths on one origin.
 
 ## Current boundary
 
-The first prototype uses local fixtures to stabilize the shell, Month view,
-quick interactions and Page draft behavior before wiring the canonical Express
-contracts. Fixture data must not become a second domain model; production API
-resources belong in TanStack Query and are validated with `@musubi/types`.
+The authenticated Month route reads the canonical Express calendars, events and
+settings contracts through TanStack Query and validates them with
+`@musubi/types`. The Month is intentionally read-only until the following
+mutation slice; fixture data remains test-only UI material.

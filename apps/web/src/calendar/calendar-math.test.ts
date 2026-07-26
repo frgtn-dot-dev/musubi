@@ -39,6 +39,13 @@ describe("calendar month math", () => {
     expect(toDateKey(grid[41]!)).toBe("2026-08-09");
   });
 
+  it("honors a Sunday-first calendar preference", () => {
+    const grid = getMonthGrid(parseDateKey("2026-07-26"), "sunday");
+
+    expect(toDateKey(grid[0]!)).toBe("2026-06-28");
+    expect(toDateKey(grid[41]!)).toBe("2026-08-08");
+  });
+
   it("moves between calendar months without day overflow", () => {
     expect(toDateKey(addMonths(parseDateKey("2026-07-31"), 1))).toBe(
       "2026-08-01",

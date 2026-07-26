@@ -1,4 +1,4 @@
-import type { Calendar, Event } from "@musubi/types";
+import type { Calendar, Event, Settings } from "@musubi/types";
 import {
   type KeyboardEvent,
   useMemo,
@@ -6,10 +6,10 @@ import {
   useState,
 } from "react";
 import {
-  WEEKDAY_LABELS,
   bucketEventsByDay,
   getLongDateLabel,
   getMonthGrid,
+  getWeekdayLabels,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { EventPopover } from "./EventPopover";
@@ -21,6 +21,8 @@ type MonthCalendarProps = {
   events: Event[];
   onCreateAtDate: (date: string) => void;
   onMonthChange: (offset: number) => void;
+  timeFormat: Settings["timeFormat"];
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 export function MonthCalendar({
@@ -29,8 +31,14 @@ export function MonthCalendar({
   events,
   onCreateAtDate,
   onMonthChange,
+  timeFormat,
+  weekStartsOn,
 }: MonthCalendarProps) {
-  const days = useMemo(() => getMonthGrid(anchor), [anchor]);
+  const days = useMemo(
+    () => getMonthGrid(anchor, weekStartsOn),
+    [anchor, weekStartsOn],
+  );
+  const weekdayLabels = getWeekdayLabels(weekStartsOn);
   const weeks = useMemo(
     () =>
       Array.from({ length: 6 }, (_, weekIndex) =>
@@ -127,7 +135,7 @@ export function MonthCalendar({
       })} calendar`}
     >
       <div className={styles.weekdayRow} role="row">
-        {WEEKDAY_LABELS.map((weekday) => (
+        {weekdayLabels.map((weekday) => (
           <div className={styles.weekday} role="columnheader" key={weekday}>
             {weekday}
           </div>
@@ -185,6 +193,7 @@ export function MonthCalendar({
                         event={segment.event}
                         key={segment.event.id}
                         showLabel={!segment.continuesBefore || dayIndex === 0}
+                        timeFormat={timeFormat}
                       />
                     ))}
                     {overflow > 0 ? (

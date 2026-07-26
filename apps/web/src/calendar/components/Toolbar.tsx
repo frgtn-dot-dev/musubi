@@ -1,26 +1,19 @@
-import type { Calendar, Event } from "@musubi/types";
 import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Plus,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
 import { calendarViews, type CalendarViewId } from "../view-registry";
-import { QuickCreate } from "./QuickCreate";
 import { ThemeToggle } from "./ThemeToggle";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
   activeView: CalendarViewId;
-  calendars: Calendar[];
-  createDate: string;
-  createOpen: boolean;
-  dirty: boolean;
   filtersOpen: boolean;
   monthLabel: string;
-  onCreate: (event: Event) => void;
-  onCreateOpenChange: (open: boolean) => void;
   onMonthChange: (offset: number) => void;
   onNotice: (message: string) => void;
   onOpenSidebar: () => void;
@@ -34,14 +27,8 @@ type ToolbarProps = {
 
 export function Toolbar({
   activeView,
-  calendars,
-  createDate,
-  createOpen,
-  dirty,
   filtersOpen,
   monthLabel,
-  onCreate,
-  onCreateOpenChange,
   onMonthChange,
   onNotice,
   onOpenSidebar,
@@ -65,12 +52,6 @@ export function Toolbar({
             <Menu aria-hidden="true" size={18} strokeWidth={1.6} />
           </button>
           <h1>{pageTitle}</h1>
-          {dirty ? (
-            <span className={styles.dirtyStatus}>
-              <span aria-hidden="true" />
-              Page changed
-            </span>
-          ) : null}
         </div>
         <ThemeToggle />
       </div>
@@ -143,13 +124,16 @@ export function Toolbar({
             <SlidersHorizontal aria-hidden="true" size={17} strokeWidth={1.6} />
             <span>Filters</span>
           </button>
-          <QuickCreate
-            calendars={calendars}
-            date={createDate}
-            onCreate={onCreate}
-            onOpenChange={onCreateOpenChange}
-            open={createOpen}
-          />
+          <button
+            className={styles.eventButton}
+            type="button"
+            onClick={() =>
+              onNotice("Event creation arrives in the next authenticated write slice.")
+            }
+          >
+            <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
+            <span>Event</span>
+          </button>
         </div>
       </div>
     </header>

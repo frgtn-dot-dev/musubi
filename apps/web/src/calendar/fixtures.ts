@@ -1,13 +1,6 @@
 import { CalendarSchema, EventSchema } from "@musubi/types";
 import { z } from "zod";
 
-export const fixturePages = [
-  { id: "my-calendar", name: "My calendar", icon: "calendar" },
-  { id: "work", name: "Work", icon: "briefcase" },
-  { id: "family", name: "Family", icon: "home" },
-  { id: "planning", name: "Planning", icon: "grid" },
-] as const;
-
 export const fixtureCalendars = z.array(CalendarSchema).parse([
   {
     id: "personal",

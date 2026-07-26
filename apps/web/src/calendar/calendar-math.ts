@@ -1,7 +1,12 @@
-import type { Event } from "@musubi/types";
+import type { Event, Settings } from "@musubi/types";
 import { toDateKey } from "./date-key";
 
-export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONDAY_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SUNDAY_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function getWeekdayLabels(weekStartsOn: Settings["weekStartsOn"]) {
+  return weekStartsOn === "sunday" ? SUNDAY_WEEKDAYS : MONDAY_WEEKDAYS;
+}
 
 export function parseDateKey(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
@@ -22,10 +27,14 @@ function getEventDay(date: Date, isAllDay: boolean): Date {
     : date;
 }
 
-export function getMonthGrid(anchor: Date): Date[] {
+export function getMonthGrid(
+  anchor: Date,
+  weekStartsOn: Settings["weekStartsOn"] = "monday",
+): Date[] {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-  const mondayOffset = (first.getDay() + 6) % 7;
-  const gridStart = addDays(first, -mondayOffset);
+  const startOffset =
+    weekStartsOn === "sunday" ? first.getDay() : (first.getDay() + 6) % 7;
+  const gridStart = addDays(first, -startOffset);
 
   return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 }
@@ -46,28 +55,34 @@ export function getLongDateLabel(date: Date): string {
   }).format(date);
 }
 
-export function getEventTimeLabel(event: Event): string {
-  if (event.isAllDay) {
-    return "All day";
-  }
-
+function timeFormatter(timeFormat: Settings["timeFormat"]) {
   return new Intl.DateTimeFormat("en", {
     hour: "2-digit",
-    hour12: false,
+    hour12: timeFormat === "12h",
     minute: "2-digit",
-  }).format(event.start);
+  });
 }
 
-export function getEventRangeLabel(event: Event): string {
+export function getEventTimeLabel(
+  event: Event,
+  timeFormat: Settings["timeFormat"] = "24h",
+): string {
   if (event.isAllDay) {
     return "All day";
   }
 
-  const formatter = new Intl.DateTimeFormat("en", {
-    hour: "2-digit",
-    hour12: false,
-    minute: "2-digit",
-  });
+  return timeFormatter(timeFormat).format(event.start);
+}
+
+export function getEventRangeLabel(
+  event: Event,
+  timeFormat: Settings["timeFormat"] = "24h",
+): string {
+  if (event.isAllDay) {
+    return "All day";
+  }
+
+  const formatter = timeFormatter(timeFormat);
 
   return `${formatter.format(event.start)} – ${formatter.format(event.end)}`;
 }

@@ -9,12 +9,25 @@ export default defineConfig({
       srcDirectory: "src",
     }),
     viteReact(),
-    nitro(),
+    nitro({
+      devProxy: {
+        "/api/**": {
+          changeOrigin: true,
+          target: "http://127.0.0.1:7531",
+        },
+      },
+    }),
   ],
   resolve: {
     tsconfigPaths: true,
   },
   server: {
     port: 3000,
+    proxy: {
+      "/api": {
+        changeOrigin: true,
+        target: "http://127.0.0.1:7531",
+      },
+    },
   },
 });

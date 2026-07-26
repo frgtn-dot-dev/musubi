@@ -1,4 +1,4 @@
-import type { Event } from "@musubi/types";
+import type { Calendar, Event, Settings, User } from "@musubi/types";
 import { useEffect, useMemo, useState } from "react";
 import {
   addMonths,
@@ -6,54 +6,61 @@ import {
   parseDateKey,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
-import { fixtureCalendars, fixtureEvents, fixturePages } from "../fixtures";
+import { pageStubs } from "~/pages/page-stubs";
 import type { CalendarViewId } from "../view-registry";
-import {
-  selectCalendarIds,
-  selectPageDirty,
-  usePageDraftStore,
-} from "~/pages/draft-store";
 import { MonthCalendar } from "./MonthCalendar";
-import { SaveBar } from "./SaveBar";
 import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
 import styles from "./workspace.module.css";
 
 type WorkspaceProps = {
   activeView: CalendarViewId;
+  calendars: Calendar[];
   date: string;
+  events: Event[];
+  isRefreshing: boolean;
   onDateChange: (date: string) => void;
   onPageChange: (pageId: string) => void;
+  onSignOut: () => void;
   onViewChange: (view: CalendarViewId) => void;
   pageId: string;
+  settings: Settings;
+  user: Pick<User, "email" | "name">;
 };
 
 export function Workspace({
   activeView,
+  calendars,
   date,
+  events,
+  isRefreshing,
   onDateChange,
   onPageChange,
+  onSignOut,
   onViewChange,
   pageId,
+  settings,
+  user,
 }: WorkspaceProps) {
   const anchor = parseDateKey(date);
-  const [events, setEvents] = useState<Event[]>(fixtureEvents);
-  const [createDate, setCreateDate] = useState(date);
-  const [createOpen, setCreateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [saveBarDismissed, setSaveBarDismissed] = useState(false);
+  const [hiddenCalendarIds, setHiddenCalendarIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notice, setNotice] = useState("");
 
-  const visibleCalendarIds = usePageDraftStore(selectCalendarIds(pageId));
-  const dirty = usePageDraftStore(selectPageDirty(pageId));
-  const discard = usePageDraftStore((state) => state.discard);
-  const save = usePageDraftStore((state) => state.save);
-  const toggleCalendar = usePageDraftStore((state) => state.toggleCalendar);
+  const visibleCalendarIds = useMemo(
+    () =>
+      calendars
+        .map((calendar) => calendar.id)
+        .filter((calendarId) => !hiddenCalendarIds.has(calendarId)),
+    [calendars, hiddenCalendarIds],
+  );
 
   const pageTitle =
-    fixturePages.find((page) => page.id === pageId)?.name ?? "My calendar";
+    pageStubs.find((page) => page.id === pageId)?.name ?? "My calendar";
 
   const visibleEvents = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
@@ -82,44 +89,51 @@ export function Workspace({
   }
 
   function openCreateAtDate(nextDate: string) {
-    setCreateDate(nextDate);
-    setCreateOpen(true);
-  }
-
-  function handleCreate(event: Event) {
-    setEvents((current) => [...current, event]);
-    setNotice(`Saved “${event.title}” to this local prototype.`);
+    setNotice(
+      `Event creation for ${nextDate} arrives in the next authenticated write slice.`,
+    );
   }
 
   function handleToggleCalendar(calendarId: string) {
-    toggleCalendar(pageId, calendarId);
-    setSaveBarDismissed(false);
+    setHiddenCalendarIds((current) => {
+      const next = new Set(current);
+      if (next.has(calendarId)) {
+        next.delete(calendarId);
+      } else {
+        next.add(calendarId);
+      }
+      return next;
+    });
   }
+
+  const emptyMessage =
+    events.length === 0
+      ? "Nothing is scheduled in this visible month."
+      : visibleEvents.length === 0
+        ? "No events match the current calendars and search."
+        : "";
 
   return (
     <div className={styles.workspace}>
       <Sidebar
         activePageId={pageId}
-        calendars={fixtureCalendars}
+        calendars={calendars}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNotice={setNotice}
         onPageChange={onPageChange}
+        onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
+        syncLabel={isRefreshing ? "Refreshing server data…" : "Connected to server"}
+        user={user}
         visibleCalendarIds={visibleCalendarIds}
       />
 
       <main className={styles.main} id="main-content">
         <Toolbar
           activeView={activeView}
-          calendars={fixtureCalendars}
-          createDate={createDate}
-          createOpen={createOpen}
-          dirty={dirty}
           filtersOpen={filtersOpen}
           monthLabel={getMonthLabel(anchor)}
-          onCreate={handleCreate}
-          onCreateOpenChange={setCreateOpen}
           onMonthChange={changeMonth}
           onNotice={setNotice}
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -134,7 +148,7 @@ export function Workspace({
         {filtersOpen ? (
           <div className={styles.filterBar} aria-label="Active calendar filters">
             <span>Visible calendars</span>
-            {fixtureCalendars.map((calendar) => {
+            {calendars.map((calendar) => {
               const active = visibleCalendarIds.includes(calendar.id);
 
               return (
@@ -159,29 +173,19 @@ export function Workspace({
         <div className={styles.calendarArea}>
           <MonthCalendar
             anchor={anchor}
-            calendars={fixtureCalendars}
+            calendars={calendars}
             events={visibleEvents}
             onCreateAtDate={openCreateAtDate}
             onMonthChange={changeMonth}
+            timeFormat={settings.timeFormat}
+            weekStartsOn={settings.weekStartsOn}
           />
+          {emptyMessage ? (
+            <p className={styles.emptyNotice} role="status">
+              {emptyMessage}
+            </p>
+          ) : null}
         </div>
-
-        <SaveBar
-          dirty={dirty && !saveBarDismissed}
-          onDiscard={() => {
-            discard(pageId);
-            setNotice("Page changes discarded.");
-          }}
-          onDismiss={() => setSaveBarDismissed(true)}
-          onSave={() => {
-            save(pageId);
-            setNotice("Page saved in the local prototype.");
-          }}
-          onSaveAsNew={() => {
-            save(pageId);
-            setNotice(`Saved a local copy of “${pageTitle}”.`);
-          }}
-        />
 
         <div className={styles.liveRegion} role="status" aria-live="polite">
           {notice ? <p className={styles.toast}>{notice}</p> : null}

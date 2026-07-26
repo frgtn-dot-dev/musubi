@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
 import { Route as HealthzRouteImport } from './routes/healthz'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppPPageIdViewRouteImport } from './routes/app/p.$pageId.$view'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const HealthzRoute = HealthzRouteImport.update({
   path: '/healthz',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppPPageIdViewRoute = AppPPageIdViewRouteImport.update({
   id: '/p/$pageId/$view',
   path: '/p/$pageId/$view',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/favicon.ico': typeof FaviconDoticoRoute
   '/healthz': typeof HealthzRoute
+  '/login': typeof LoginRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppRouteWithChildren
   '/favicon.ico': typeof FaviconDoticoRoute
   '/healthz': typeof HealthzRoute
+  '/login': typeof LoginRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/favicon.ico': typeof FaviconDoticoRoute
   '/healthz': typeof HealthzRoute
+  '/login': typeof LoginRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/favicon.ico' | '/healthz' | '/app/p/$pageId/$view'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/favicon.ico'
+    | '/healthz'
+    | '/login'
+    | '/app/p/$pageId/$view'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/favicon.ico' | '/healthz' | '/app/p/$pageId/$view'
+  to:
+    | '/'
+    | '/app'
+    | '/favicon.ico'
+    | '/healthz'
+    | '/login'
+    | '/app/p/$pageId/$view'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/favicon.ico'
     | '/healthz'
+    | '/login'
     | '/app/p/$pageId/$view'
   fileRoutesById: FileRoutesById
 }
@@ -82,6 +104,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   FaviconDoticoRoute: typeof FaviconDoticoRoute
   HealthzRoute: typeof HealthzRoute
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -114,6 +137,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HealthzRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/p/$pageId/$view': {
       id: '/app/p/$pageId/$view'
       path: '/p/$pageId/$view'
@@ -139,6 +169,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   FaviconDoticoRoute: FaviconDoticoRoute,
   HealthzRoute: HealthzRoute,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

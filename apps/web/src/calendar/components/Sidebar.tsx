@@ -6,18 +6,16 @@ import {
   Grid2X2,
   House,
   Layers3,
+  LogOut,
   Plus,
   Settings,
   X,
 } from "lucide-react";
 import type { Calendar } from "@musubi/types";
-import { useSyncExternalStore } from "react";
+import type { User } from "@musubi/types";
+import { useState, useSyncExternalStore } from "react";
 import { BrandMark } from "~/components/BrandMark";
-import { fixturePages } from "../fixtures";
-import {
-  selectPageDirty,
-  usePageDraftStore,
-} from "~/pages/draft-store";
+import { pageStubs } from "~/pages/page-stubs";
 import styles from "./workspace.module.css";
 
 type SidebarProps = {
@@ -27,7 +25,10 @@ type SidebarProps = {
   onClose: () => void;
   onNotice: (message: string) => void;
   onPageChange: (pageId: string) => void;
+  onSignOut: () => void;
   onToggleCalendar: (calendarId: string) => void;
+  syncLabel: string;
+  user: Pick<User, "email" | "name">;
   visibleCalendarIds: string[];
 };
 
@@ -57,9 +58,13 @@ export function Sidebar({
   onClose,
   onNotice,
   onPageChange,
+  onSignOut,
   onToggleCalendar,
+  syncLabel,
+  user,
   visibleCalendarIds,
 }: SidebarProps) {
+  const [signingOut, setSigningOut] = useState(false);
   const isMobile = useSyncExternalStore(
     subscribeToMobileViewport,
     getMobileViewport,
@@ -104,12 +109,11 @@ export function Sidebar({
               Pages
             </h2>
             <div className={styles.pageList}>
-              {fixturePages.map((page) => (
+              {pageStubs.map((page) => (
                 <PageButton
                   key={page.id}
                   active={page.id === activePageId}
                   icon={page.icon}
-                  id={page.id}
                   name={page.name}
                   onSelect={() => {
                     onPageChange(page.id);
@@ -189,8 +193,29 @@ export function Sidebar({
           </button>
           <p className={styles.syncStatus}>
             <CircleCheck aria-hidden="true" size={15} strokeWidth={1.6} />
-            Local prototype
+            {syncLabel}
           </p>
+          <div className={styles.profile}>
+            <span className={styles.profileAvatar} aria-hidden="true">
+              {user.name.trim().charAt(0).toLocaleUpperCase() || "M"}
+            </span>
+            <span className={styles.profileCopy}>
+              <strong>{user.name}</strong>
+              <span>{user.email}</span>
+            </span>
+            <button
+              className={styles.profileSignOut}
+              disabled={signingOut}
+              type="button"
+              aria-label={`Sign out ${user.name}`}
+              onClick={() => {
+                setSigningOut(true);
+                onSignOut();
+              }}
+            >
+              <LogOut aria-hidden="true" size={16} strokeWidth={1.6} />
+            </button>
+          </div>
         </nav>
       </aside>
     </>
@@ -200,17 +225,14 @@ export function Sidebar({
 function PageButton({
   active,
   icon,
-  id,
   name,
   onSelect,
 }: {
   active: boolean;
   icon: keyof typeof pageIcons;
-  id: string;
   name: string;
   onSelect: () => void;
 }) {
-  const dirty = usePageDraftStore(selectPageDirty(id));
   const Icon = pageIcons[icon];
 
   return (
@@ -222,9 +244,6 @@ function PageButton({
     >
       <Icon aria-hidden="true" size={18} strokeWidth={1.6} />
       <span>{name}</span>
-      {dirty ? (
-        <span className={styles.pageDirtyDot} aria-label="Unsaved changes" />
-      ) : null}
     </button>
   );
 }
