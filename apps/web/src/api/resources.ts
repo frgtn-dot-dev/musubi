@@ -196,6 +196,23 @@ export function leaveCalendar(calendarId: string) {
   });
 }
 
+export function uploadAvatar(base64: string) {
+  return apiRequest("/api/v1/users/avatar", {
+    body: { data: base64 },
+    method: "POST",
+    responseSchema: z.object({ url: z.string() }),
+  });
+}
+
+export function deleteAccount() {
+  // Starts the email-confirmed Better Auth deletion; the account is only
+  // removed when the user opens the link we email them.
+  return apiRequest("/api/v1/users", {
+    method: "DELETE",
+    responseSchema: z.void(),
+  });
+}
+
 export function createEvent(event: Event) {
   return apiRequest("/api/v1/events", {
     body: event,

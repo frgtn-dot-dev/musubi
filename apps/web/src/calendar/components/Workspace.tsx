@@ -41,6 +41,7 @@ import {
   type SavePageResult,
 } from "../page-editor";
 import type { CalendarViewId } from "../view-registry";
+import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { MonthCalendar } from "./MonthCalendar";
@@ -216,6 +217,7 @@ export function Workspace({
     useState(false);
   const [shareCalendar, setShareCalendar] = useState<Calendar | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
     [calendars],
@@ -515,6 +517,10 @@ export function Workspace({
         pages={pages}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onManageAccount={() => {
+          setSidebarOpen(false);
+          setAccountOpen(true);
+        }}
         onManageCalendars={() => {
           setSidebarOpen(false);
           setCalendarTransfersOpen(true);
@@ -734,6 +740,15 @@ export function Workspace({
         onUpdate={onUpdateCalendar}
         open={calendarTransfersOpen}
       />
+      {accountOpen ? (
+        <AccountDialog
+          onNotice={setNotice}
+          onOpenChange={(open) => {
+            if (!open) setAccountOpen(false);
+          }}
+          open
+        />
+      ) : null}
       {shareCalendar ? (
         <ShareCalendarDialog
           calendar={shareCalendar}

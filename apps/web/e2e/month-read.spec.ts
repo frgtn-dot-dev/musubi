@@ -1140,3 +1140,48 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   await page.getByRole("button", { name: "Remove Sam Rivers" }).click();
   await expect(page.getByText("Sam Rivers", { exact: true })).toHaveCount(0);
 });
+
+test("updates the display name and gates account deletion", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let deleteRequested = false;
+  await page.route("**/api/auth/update-user", (route) =>
+    respond(route, { status: true }),
+  );
+  await page.route("**/api/v1/users", (route) => {
+    if (route.request().method() === "DELETE") {
+      deleteRequested = true;
+      return route.fulfill({ body: "", status: 200 });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Manage account" }).click();
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Account" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("textbox", { name: "Display name" })
+    .fill("Web QA Updated");
+  await page.getByRole("button", { name: "Save name" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Name updated.",
+  );
+
+  // Deletion needs the exact display name typed to confirm.
+  const deleteButton = page.getByRole("button", { name: "Delete account" });
+  await expect(deleteButton).toBeDisabled();
+  await page.getByPlaceholder("Web QA").fill("wrong");
+  await expect(deleteButton).toBeDisabled();
+  await page.getByPlaceholder("Web QA").fill("Web QA");
+  await expect(deleteButton).toBeEnabled();
+  await deleteButton.click();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Check your email",
+  );
+  expect(deleteRequested).toBe(true);
+});

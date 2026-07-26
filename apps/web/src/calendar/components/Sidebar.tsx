@@ -20,6 +20,7 @@ type SidebarProps = {
   calendars: Calendar[];
   isOpen: boolean;
   onClose: () => void;
+  onManageAccount: () => void;
   onManageCalendars: () => void;
   onOpenSettings: () => void;
   onNotice: (message: string) => void;
@@ -49,6 +50,7 @@ export function Sidebar({
   calendars,
   isOpen,
   onClose,
+  onManageAccount,
   onManageCalendars,
   onOpenSettings,
   onNotice,
@@ -188,13 +190,20 @@ export function Sidebar({
             {syncLabel}
           </p>
           <div className={styles.profile}>
-            <span className={styles.profileAvatar} aria-hidden="true">
-              {user.name.trim().charAt(0).toLocaleUpperCase() || "M"}
-            </span>
-            <span className={styles.profileCopy}>
-              <strong>{user.name}</strong>
-              <span>{user.email}</span>
-            </span>
+            <button
+              className={styles.profileMain}
+              type="button"
+              aria-label="Manage account"
+              onClick={onManageAccount}
+            >
+              <span className={styles.profileAvatar} aria-hidden="true">
+                {user.name.trim().charAt(0).toLocaleUpperCase() || "M"}
+              </span>
+              <span className={styles.profileCopy}>
+                <strong>{user.name}</strong>
+                <span>{user.email}</span>
+              </span>
+            </button>
             <button
               className={styles.profileSignOut}
               disabled={signingOut}

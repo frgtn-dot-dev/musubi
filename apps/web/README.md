@@ -32,7 +32,10 @@ gated by the shared `can()` roles (external/provider calendars stay read-only
 here), alongside the existing .ics import/export. A per-calendar Share dialog
 lists members, lets owners change roles (viewer/editor) or remove members,
 creates and revokes invite links (`<origin>/invite/<token>`), and lets a
-non-owner leave — ownership transfer stays deferred;
+non-owner leave — ownership transfer stays deferred. The sidebar profile opens
+an Account dialog to change the display name and photo (Better Auth `updateUser`
+plus the avatar upload endpoint) and to start the email-confirmed account
+deletion, gated behind typing the display name;
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a

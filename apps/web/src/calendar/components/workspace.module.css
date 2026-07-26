@@ -211,12 +211,63 @@
 .profile {
   display: grid;
   min-width: 0;
-  grid-template-columns: 32px minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 34px;
   align-items: center;
   gap: 9px;
   margin-top: 12px;
   padding: 11px 8px 0;
   border-top: 1px solid var(--border-subtle);
+}
+
+.profileMain {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profileMain:hover .profileCopy strong {
+  color: var(--accent-primary);
+}
+
+.accountIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.accountAvatar {
+  display: grid;
+  overflow: hidden;
+  width: 52px;
+  height: 52px;
+  place-content: center;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+}
+
+.accountAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.accountEmail {
+  overflow: hidden;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profileAvatar {
