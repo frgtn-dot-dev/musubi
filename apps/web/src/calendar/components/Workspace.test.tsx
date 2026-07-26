@@ -79,17 +79,17 @@ describe("Workspace", () => {
 
   it("persists calendar visibility through the page editor", async () => {
     const user = userEvent.setup();
-    const onSavePage = vi.fn(
-      async (_input: {
+    const onSavePage = vi.fn<
+      (input: {
         baseRevision: number;
         config: { calendarVisibility: unknown };
         id: string;
         name: string;
-      }) => ({
-        page: commonProps.pages[0]!,
-        status: "saved" as const,
-      }),
-    );
+      }) => Promise<{ page: (typeof commonProps.pages)[0]; status: "saved" }>
+    >(async () => ({
+      page: commonProps.pages[0]!,
+      status: "saved" as const,
+    }));
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 

@@ -33,3 +33,10 @@ persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a
 revision conflict offers "save as a copy" instead of a silent overwrite.
 Switching pages or reloading with unsaved edits warns first; `Ctrl/Cmd+S`
 saves. View and filter editing is not wired into the draft yet.
+
+A same-origin `EventSource` on `/api/stream` keeps sessions in sync: `page_*`
+events upsert or remove pages in the query cache (deduped by revision), and the
+other realtime events invalidate the settings, calendars and event queries.
+Because the editor freezes its base revision when editing starts, a page changed
+in another session while you edit produces a save conflict instead of a silent
+overwrite.

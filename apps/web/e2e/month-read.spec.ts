@@ -240,6 +240,12 @@ async function mockAuthenticatedReads(
     respond(route, calendarState),
   );
   await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
+  // Hold the SSE connection open like the real server so EventSource stays
+  // connected instead of reconnect-looping against a closed mock.
+  await page.route("**/api/stream", () => {
+    // Intentionally never resolved; Playwright aborts it when the page closes.
+    return new Promise<void>(() => {});
+  });
   await page.route("**/api/v1/calendars/*/export", (route) =>
     route.fulfill({
       body: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
@@ -932,5 +938,50 @@ test("surfaces a page save conflict without overwriting", async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Save as a copy" }),
+  ).toBeVisible();
+});
+
+test("applies a realtime page created in another session", async ({ page }) => {
+  // Replace EventSource with a controllable fake so the test can push a server
+  // event deterministically (Playwright can't stream a real SSE response).
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      onmessage: ((event: { data: string }) => void) | null = null;
+      readyState = 1;
+      constructor(public url: string) {
+        (window as unknown as { __sse: FakeEventSource[] }).__sse ??= [];
+        (window as unknown as { __sse: FakeEventSource[] }).__sse.push(this);
+      }
+      close() {
+        this.readyState = 2;
+      }
+      addEventListener() {}
+      removeEventListener() {}
+    }
+    (window as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+  });
+
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(
+    page.getByRole("button", { name: "My calendar" }),
+  ).toBeVisible();
+
+  const sharedPage = {
+    ...defaultPage,
+    id: "33333333-3333-4333-8333-333333333333",
+    isDefault: false,
+    name: "Shared plan",
+    position: 1,
+  };
+  await page.evaluate((data) => {
+    const sockets = (window as unknown as { __sse?: Array<{ onmessage: ((e: { data: string }) => void) | null }> }).__sse;
+    sockets?.[sockets.length - 1]?.onmessage?.({ data });
+  }, JSON.stringify({ payload: { page: sharedPage }, type: "page_created" }));
+
+  // The page created elsewhere shows up without a manual refresh.
+  await expect(
+    page.getByRole("button", { name: "Shared plan" }),
   ).toBeVisible();
 });

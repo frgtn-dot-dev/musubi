@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useOnlineStatus } from "~/api/online-status";
+import { useServerStream } from "~/api/realtime";
 import { authClient } from "~/auth/auth-client";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
@@ -37,6 +38,7 @@ function WorkspaceRoute() {
   const queryClient = useQueryClient();
   const online = useOnlineStatus();
   const session = authClient.useSession();
+  useServerStream(session.data?.user.id ?? "anonymous");
   const activeView: CalendarViewId =
     isCalendarView(view) ? view : "month";
   const workspace = useWorkspaceQueries(

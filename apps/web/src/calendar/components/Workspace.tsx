@@ -187,6 +187,10 @@ export function Workspace({
   const [draftVisibility, setDraftVisibility] = useState<
     PageConfigV1["calendarVisibility"]
   >({ hiddenCalendarIds: [], mode: "all" });
+  // Revision captured when editing started. A realtime update from another
+  // session bumps the cached Page under us; saving against this frozen base then
+  // returns 409 instead of silently overwriting the remote change.
+  const [draftBaseRevision, setDraftBaseRevision] = useState(1);
   const [savingPage, setSavingPage] = useState(false);
   const [pageConflict, setPageConflict] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -404,6 +408,7 @@ export function Workspace({
   function startEditing() {
     setDraftName(activePage.name);
     setDraftVisibility(activePage.config.calendarVisibility);
+    setDraftBaseRevision(activePage.revision);
     setPageConflict(false);
     setEditing(true);
   }
@@ -449,7 +454,7 @@ export function Workspace({
     setPageConflict(false);
     try {
       const result = await onSavePage({
-        baseRevision: activePage.revision,
+        baseRevision: draftBaseRevision,
         config: draftConfig(),
         id: activePage.id,
         name: draftName.trim(),
