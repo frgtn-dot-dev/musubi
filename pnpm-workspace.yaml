@@ -3,6 +3,9 @@ packages:
   - "packages/*"
 catalog:
   expo: ~56.0.17
+  # Hoisted to the root too: root `expo` drags @expo/router-server to the flat
+  # root node_modules, and it needs expo-router (a peer) resolvable there.
+  expo-router: ~56.2.16
 # Expo/React Native tooling assumes a flat node_modules (config plugins, Metro).
 # pnpm's default isolated layout hides transitive deps like @expo/config-plugins.
 nodeLinker: hoisted

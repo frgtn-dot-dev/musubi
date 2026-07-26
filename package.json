@@ -31,6 +31,7 @@
   "packageManager": "pnpm@11.8.0",
   "devDependencies": {
     "expo": "catalog:",
+    "expo-router": "catalog:",
     "turbo": "^2.10.6",
     "typescript": "~5.9.3"
   }
