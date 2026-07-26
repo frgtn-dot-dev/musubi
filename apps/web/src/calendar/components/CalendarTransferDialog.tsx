@@ -4,7 +4,16 @@ import {
   providerDisplayName,
   type Calendar,
 } from "@musubi/types";
-import { Check, Download, FileUp, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Download,
+  FileUp,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -25,6 +34,7 @@ type CalendarTransferDialogProps = {
   onCreate: (input: { color: string; name: string }) => Promise<Calendar>;
   onExport: (calendarId: string) => Promise<string>;
   onImport: (input: ImportInput) => Promise<ImportedCalendar>;
+  onManageMembers: (calendar: Calendar) => void;
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   onRemove: (calendar: Calendar) => Promise<Calendar>;
@@ -56,6 +66,7 @@ export function CalendarTransferDialog({
   onCreate,
   onExport,
   onImport,
+  onManageMembers,
   onNotice,
   onOpenChange,
   onRemove,
@@ -336,6 +347,17 @@ export function CalendarTransferDialog({
                         {providerDisplayName(calendar)}
                       </span>
                     ) : null}
+                    {external ? null : (
+                      <button
+                        aria-label={`Share ${calendar.name}`}
+                        className={styles.iconButton}
+                        disabled={Boolean(busy)}
+                        type="button"
+                        onClick={() => onManageMembers(calendar)}
+                      >
+                        <Users aria-hidden="true" size={15} />
+                      </button>
+                    )}
                     {editable ? (
                       <button
                         aria-label={`Rename ${calendar.name}`}

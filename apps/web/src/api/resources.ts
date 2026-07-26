@@ -1,8 +1,10 @@
 import {
   AttendeesResponseSchema,
+  CalendarMembersResponseSchema,
   CalendarsResponseSchema,
   EventsResponseSchema,
   ImportedCalendarSchema,
+  InvitesResponseSchema,
   PageResponseSchema,
   PagesResponseSchema,
   RemoveEventResponseSchema,
@@ -12,12 +14,14 @@ import {
 import {
   CalendarSchema,
   EventSchema,
+  InviteSchema,
   type Calendar,
   type CreatePageRequest,
   type Event,
   type PatchSettingsRequest,
   type SavePageRequest,
 } from "@musubi/types";
+import { z } from "zod";
 import {
   apiRawJsonRequest,
   apiRequest,
@@ -125,6 +129,71 @@ export function importCalendar(
 
 export function exportCalendar(calendarId: string) {
   return apiTextRequest(`/api/v1/calendars/${calendarId}/export`);
+}
+
+export function getCalendarMembers(
+  calendarId: string,
+  signal?: AbortSignal,
+) {
+  return apiRequest(`/api/v1/calendars/${calendarId}/members`, {
+    responseSchema: CalendarMembersResponseSchema,
+    signal,
+  });
+}
+
+export function getCalendarInvites(
+  calendarId: string,
+  signal?: AbortSignal,
+) {
+  return apiRequest(`/api/v1/calendars/${calendarId}/invites`, {
+    responseSchema: InvitesResponseSchema,
+    signal,
+  });
+}
+
+export function createInvite(input: {
+  calendarID: string;
+  expiresAt: Date | null;
+  maxUses: number | null;
+}) {
+  return apiRequest("/api/v1/calendars/invites", {
+    // id/uses are server-assigned; the schema still requires them on the wire.
+    body: { ...input, id: "new", uses: 0 },
+    method: "POST",
+    responseSchema: InviteSchema,
+  });
+}
+
+export function revokeInvite(inviteId: string) {
+  return apiRequest(`/api/v1/calendars/invites/${inviteId}`, {
+    method: "DELETE",
+    responseSchema: z.void(),
+  });
+}
+
+export function setMemberRole(
+  calendarId: string,
+  userId: string,
+  role: string,
+) {
+  return apiRequest(
+    `/api/v1/calendars/${calendarId}/members/${userId}`,
+    { body: { role }, method: "PUT", responseSchema: z.void() },
+  );
+}
+
+export function kickMember(calendarId: string, userId: string) {
+  return apiRequest(
+    `/api/v1/calendars/${calendarId}/members/${userId}`,
+    { method: "DELETE", responseSchema: z.void() },
+  );
+}
+
+export function leaveCalendar(calendarId: string) {
+  return apiRequest(`/api/v1/calendars/members/${calendarId}`, {
+    method: "DELETE",
+    responseSchema: z.void(),
+  });
 }
 
 export function createEvent(event: Event) {

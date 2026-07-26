@@ -1,6 +1,7 @@
 import {
   CalendarSchema,
   EventSchema,
+  InviteSchema,
   PageDocumentSchema,
   SettingsDocumentSchema,
   SettingsSchema,
@@ -37,6 +38,17 @@ export const SettingsDocumentResponseSchema = SettingsDocumentSchema;
 
 export const PageResponseSchema = PageDocumentSchema;
 export const PagesResponseSchema = z.array(PageDocumentSchema);
+
+export const CalendarMemberSchema = z.object({
+  id: z.string(),
+  image: z.string().nullish(),
+  name: z.string(),
+  role: z.string(),
+});
+export const CalendarMembersResponseSchema = z.array(CalendarMemberSchema);
+export const InvitesResponseSchema = z.array(InviteSchema);
+
+export type CalendarMember = z.infer<typeof CalendarMemberSchema>;
 
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
 export type Attendee = z.infer<typeof AttendeeSchema>;

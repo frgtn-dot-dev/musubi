@@ -23,6 +23,12 @@ export const queryKeys = {
   pages: (serverOrigin: string, userId: string) =>
     ["pages", serverOrigin, userId] as const,
 
+  members: (serverOrigin: string, userId: string, calendarId: string) =>
+    ["members", serverOrigin, userId, calendarId] as const,
+
+  invites: (serverOrigin: string, userId: string, calendarId: string) =>
+    ["invites", serverOrigin, userId, calendarId] as const,
+
   attendees: (
     serverOrigin: string,
     userId: string,

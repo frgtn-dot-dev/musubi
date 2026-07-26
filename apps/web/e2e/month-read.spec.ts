@@ -1059,3 +1059,84 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
     page.getByRole("listitem").filter({ hasText: "Trips" }),
   ).toHaveCount(0);
 });
+
+test("manages members and invite links for a calendar", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let members = [
+    { id: "user-web-qa", image: null, name: "Web QA", role: "owner" },
+    { id: "member-2", image: null, name: "Sam Rivers", role: "viewer" },
+  ];
+  let invites: Array<{ id: string }> = [];
+  let inviteSeq = 0;
+  const empty = (route: Route) =>
+    route.fulfill({ body: "", status: 200 });
+
+  await page.route("**/api/v1/calendars/*/members/*", (route) => {
+    const method = route.request().method();
+    const memberId = route.request().url().split("/").pop();
+    if (method === "PUT") {
+      const role = (route.request().postDataJSON() as { role: string }).role;
+      members = members.map((member) =>
+        member.id === memberId ? { ...member, role } : member,
+      );
+      return empty(route);
+    }
+    if (method === "DELETE") {
+      members = members.filter((member) => member.id !== memberId);
+      return empty(route);
+    }
+    return route.fallback();
+  });
+  await page.route("**/api/v1/calendars/*/members", (route) =>
+    respond(route, members),
+  );
+  await page.route("**/api/v1/calendars/*/invites", (route) =>
+    respond(route, invites),
+  );
+  await page.route("**/api/v1/calendars/invites", (route) => {
+    inviteSeq += 1;
+    const created = {
+      calendarID: "44444444-4444-4444-8444-444444444444",
+      expiresAt: null,
+      id: `invite-${inviteSeq}`,
+      maxUses: null,
+      uses: 0,
+    };
+    invites = [...invites, created];
+    return respond(route, created, 201);
+  });
+  await page.route("**/api/v1/calendars/invites/*", (route) => {
+    const inviteId = route.request().url().split("/").pop();
+    invites = invites.filter((invite) => invite.id !== inviteId);
+    return empty(route);
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Calendars" }).click();
+  await page.getByRole("button", { name: "Share Studio" }).click();
+
+  await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
+  await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
+
+  // Promote Sam to editor.
+  await page
+    .getByRole("combobox", { name: "Sam Rivers role" })
+    .selectOption("editor");
+  await expect(
+    page.getByRole("combobox", { name: "Sam Rivers role" }),
+  ).toHaveValue("editor");
+
+  // Create then revoke an invite link.
+  await page.getByRole("button", { name: "Create invite link" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Invite link" }),
+  ).toHaveValue(/\/invite\/invite-1$/);
+  await page.getByRole("button", { name: "Revoke invite link" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Invite link" }),
+  ).toHaveCount(0);
+
+  // Remove Sam entirely.
+  await page.getByRole("button", { name: "Remove Sam Rivers" }).click();
+  await expect(page.getByText("Sam Rivers", { exact: true })).toHaveCount(0);
+});

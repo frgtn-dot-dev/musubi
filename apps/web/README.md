@@ -29,7 +29,10 @@ edit and delete use the existing Express write endpoints, wait for confirmed
 server responses and gate controls through the shared calendar permissions. The
 Calendars dialog manages native calendars — create, rename, recolor and delete —
 gated by the shared `can()` roles (external/provider calendars stay read-only
-here), alongside the existing .ics import/export;
+here), alongside the existing .ics import/export. A per-calendar Share dialog
+lists members, lets owners change roles (viewer/editor) or remove members,
+creates and revokes invite links (`<origin>/invite/<token>`), and lets a
+non-owner leave — ownership transfer stays deferred;
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a

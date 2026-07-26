@@ -49,6 +49,7 @@ import {
   type QuickCreateAnchor,
 } from "./QuickCreate";
 import { SaveBar } from "./SaveBar";
+import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
 import { SettingsDialog } from "./SettingsDialog";
 import { TimeGridView } from "./TimeGridView";
@@ -213,6 +214,7 @@ export function Workspace({
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
   const [calendarTransfersOpen, setCalendarTransfersOpen] =
     useState(false);
+  const [shareCalendar, setShareCalendar] = useState<Calendar | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
@@ -722,12 +724,26 @@ export function Workspace({
         onCreate={onCreateCalendar}
         onExport={onExportCalendar}
         onImport={onImportCalendar}
+        onManageMembers={(calendar) => {
+          setCalendarTransfersOpen(false);
+          setShareCalendar(calendar);
+        }}
         onNotice={setNotice}
         onOpenChange={setCalendarTransfersOpen}
         onRemove={onRemoveCalendar}
         onUpdate={onUpdateCalendar}
         open={calendarTransfersOpen}
       />
+      {shareCalendar ? (
+        <ShareCalendarDialog
+          calendar={shareCalendar}
+          onNotice={setNotice}
+          onOpenChange={(open) => {
+            if (!open) setShareCalendar(null);
+          }}
+          userId={user.id}
+        />
+      ) : null}
       <SettingsDialog
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}
