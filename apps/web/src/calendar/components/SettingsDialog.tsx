@@ -44,6 +44,7 @@ export function SettingsDialog({
   open,
 }: SettingsDialogProps) {
   const [settings, setSettings] = useState<SettingsDocument>();
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -53,7 +54,10 @@ export function SettingsDialog({
     let active = true;
     onLoad(controller.signal)
       .then((document) => {
-        if (active) setSettings(document);
+        if (active) {
+          setError("");
+          setSettings(document);
+        }
       })
       .catch((loadError: unknown) => {
         if (active) {
@@ -68,7 +72,15 @@ export function SettingsDialog({
       active = false;
       controller.abort();
     };
-  }, [onLoad, open]);
+  }, [loadAttempt, onLoad, open]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      setError("");
+      setSettings(undefined);
+    }
+    onOpenChange(nextOpen);
+  }
 
   async function save(patch: SettingsPatch) {
     if (!settings || saving) return;
@@ -135,7 +147,7 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className={styles.dialogOverlay} />
         <Dialog.Content
@@ -160,9 +172,9 @@ export function SettingsDialog({
             </Dialog.Close>
           </header>
 
-          {!settings ? (
+          {!settings && !error ? (
             <p className={styles.dialogLoading}>Loading settings…</p>
-          ) : (
+          ) : settings ? (
             <div className={styles.settingsList}>
               <SettingSelect
                 disabled={saving}
@@ -258,6 +270,17 @@ export function SettingsDialog({
                 label="Show mobile tab labels"
                 onChange={(tabBarLabels) => void save({ tabBarLabels })}
               />
+            </div>
+          ) : (
+            <div className={styles.settingsLoadFailure}>
+              <p>Settings could not be loaded.</p>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              >
+                Retry
+              </button>
             </div>
           )}
 

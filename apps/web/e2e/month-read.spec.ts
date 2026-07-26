@@ -760,3 +760,34 @@ test("saves revisioned settings and applies display preferences", async ({
   ).toHaveAttribute("aria-label", /AM/);
   expect(runtimeErrors).toEqual([]);
 });
+
+test("recovers when settings fail to load", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let attempts = 0;
+  await page.route(
+    "**/api/v1/users/settings/document",
+    async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await route.fulfill({
+          body: "Cannot GET /api/v1/users/settings/document",
+          contentType: "text/plain",
+          status: 404,
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+
+  await page.goto("/app/p/my-calendar/week?date=2026-07-26");
+  await page.getByRole("button", { name: "Settings" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("Not Found");
+  await expect(page.getByText("Loading settings…")).toHaveCount(0);
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "Theme" }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});

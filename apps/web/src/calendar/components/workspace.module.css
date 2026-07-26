@@ -1704,6 +1704,21 @@
   font-size: 0.75rem;
 }
 
+.settingsLoadFailure {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.settingsLoadFailure p {
+  margin: 0;
+}
+
 .settingsList {
   display: grid;
 }
