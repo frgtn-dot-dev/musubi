@@ -1,0 +1,79 @@
+@font-face {
+  font-display: swap;
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 400;
+  src: url("@expo-google-fonts/inter-tight/400Regular/InterTight_400Regular.ttf")
+    format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 500;
+  src: url("@expo-google-fonts/inter-tight/500Medium/InterTight_500Medium.ttf")
+    format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "Noto Serif";
+  font-style: normal;
+  font-weight: 400;
+  src: url("@expo-google-fonts/noto-serif/400Regular/NotoSerif_400Regular.ttf")
+    format("truetype");
+}
+
+:root {
+  color-scheme: light;
+  --surface-canvas: #f4f1e8;
+  --surface-panel: #efebe0;
+  --surface-raised: #e8e3d5;
+  --surface-overlay: rgba(244, 241, 232, 0.94);
+  --border-subtle: rgba(28, 27, 24, 0.08);
+  --border-medium: rgba(28, 27, 24, 0.13);
+  --border-strong: rgba(28, 27, 24, 0.24);
+  --text-primary: #1c1b18;
+  --text-secondary: rgba(28, 27, 24, 0.74);
+  --text-muted: rgba(28, 27, 24, 0.5);
+  --text-faint: rgba(28, 27, 24, 0.32);
+  --accent-primary: #b3492f;
+  --control-fill: #4a4741;
+  --control-on-fill: #f4f1e8;
+  --event-dune: #b3a48a;
+  --event-moss: #6f7d67;
+  --event-ochre: #d4a574;
+  --event-indigo: #7a8ba3;
+  --shadow-overlay: 0 24px 64px rgba(47, 41, 31, 0.16);
+  --font-sans: "Inter Tight", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Serif", Georgia, serif;
+  --font-kanji: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius-sm: 5px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --sidebar-width: 244px;
+  --toolbar-height: 132px;
+  --motion-fast: 140ms;
+  --motion-standard: 220ms;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-canvas: #0c0c0e;
+  --surface-panel: #131316;
+  --surface-raised: #1a1a1e;
+  --surface-overlay: rgba(19, 19, 22, 0.96);
+  --border-subtle: rgba(232, 228, 217, 0.06);
+  --border-medium: rgba(232, 228, 217, 0.1);
+  --border-strong: rgba(232, 228, 217, 0.18);
+  --text-primary: #e8e4d9;
+  --text-secondary: rgba(232, 228, 217, 0.72);
+  --text-muted: rgba(232, 228, 217, 0.48);
+  --text-faint: rgba(232, 228, 217, 0.28);
+  --accent-primary: #c8553d;
+  --control-fill: #e8e4d9;
+  --control-on-fill: #0c0c0e;
+  --shadow-overlay: 0 28px 72px rgba(0, 0, 0, 0.48);
+}

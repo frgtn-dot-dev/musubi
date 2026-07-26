@@ -52,6 +52,8 @@ coverage
 
 # Builds
 dist
+.output/
+.tanstack/
 
 # AI tooling
 .claude/
