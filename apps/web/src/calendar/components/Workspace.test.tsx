@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { ApiError } from "~/api/http";
 import { fixtureCalendars, fixtureEvents } from "../fixtures";
 import { Workspace } from "./Workspace";
 
@@ -10,9 +11,16 @@ const commonProps = {
   date: "2026-07-26",
   events: fixtureEvents,
   isRefreshing: false,
+  onCreateEvent: vi.fn(async (event) => event),
   onDateChange: vi.fn(),
   onPageChange: vi.fn(),
+  onRemoveEvent: vi.fn(async (event) => ({
+    calendars: [],
+    id: event.id,
+    removed: true,
+  })),
   onSignOut: vi.fn(),
+  onUpdateEvent: vi.fn(async (event) => event),
   onViewChange: vi.fn(),
   pageId: "my-calendar",
   settings: {
@@ -26,6 +34,7 @@ const commonProps = {
   },
   user: {
     email: "alex@example.com",
+    id: "alex",
     name: "Alex",
   },
 };
@@ -150,5 +159,141 @@ describe("Workspace", () => {
     expect(
       screen.getByRole("button", { name: /All-day event, Family holiday/ }),
     ).not.toBeNull();
+  });
+
+  it("creates an event through the anchored quick form", async () => {
+    const user = userEvent.setup();
+    const onCreateEvent = vi.fn(async (event) => event);
+
+    render(
+      <Workspace
+        {...commonProps}
+        onCreateEvent={onCreateEvent}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /^Event$/ }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Event title" }),
+      "Release check",
+    );
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    expect(onCreateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        calendars: ["personal"],
+        creatorID: "alex",
+        title: "Release check",
+      }),
+    );
+    expect(screen.getByRole("status").textContent).toContain(
+      "Event created.",
+    );
+  });
+
+  it("edits and deletes an event when its home calendar is writable", async () => {
+    const user = userEvent.setup();
+    const onUpdateEvent = vi.fn(async (event) => event);
+    const onRemoveEvent = vi.fn(async (event) => ({
+      calendars: [],
+      id: event.id,
+      removed: true,
+    }));
+
+    render(
+      <Workspace
+        {...commonProps}
+        onRemoveEvent={onRemoveEvent}
+        onUpdateEvent={onUpdateEvent}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Board game pub/ }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const title = screen.getByRole("textbox", { name: "Event title" });
+    await user.clear(title);
+    await user.type(title, "Board games");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onUpdateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "board-game", title: "Board games" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /Board game pub/ }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(onRemoveEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "board-game" }),
+    );
+  });
+
+  it("does not expose write controls for viewer-only calendars", async () => {
+    const user = userEvent.setup();
+    const viewerCalendars = fixtureCalendars.map((calendar) => ({
+      ...calendar,
+      role: "viewer",
+    }));
+
+    render(
+      <Workspace
+        {...commonProps}
+        calendars={viewerCalendars}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /^Event$/ }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Board game pub/ }));
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(screen.getByText("view-only access", { exact: false })).not.toBeNull();
+  });
+
+  it("keeps a provider-backed form open after an unconfirmed save", async () => {
+    const user = userEvent.setup();
+    const providerCalendar = {
+      ...fixtureCalendars[0]!,
+      provider: "google",
+    };
+    const onCreateEvent = vi.fn().mockRejectedValue(
+      new ApiError("Provider unavailable", 502, "provider-request"),
+    );
+
+    render(
+      <Workspace
+        {...commonProps}
+        calendars={[providerCalendar]}
+        events={[]}
+        onCreateEvent={onCreateEvent}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /^Event$/ }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Event title" }),
+      "Provider event",
+    );
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Google Calendar did not confirm this change",
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "provider-request",
+    );
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "Event title",
+        }) as HTMLInputElement
+      ).value,
+    ).toBe("Provider event");
   });
 });

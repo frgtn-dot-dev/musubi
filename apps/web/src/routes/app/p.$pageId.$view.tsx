@@ -6,6 +6,7 @@ import { useOnlineStatus } from "~/api/online-status";
 import { authClient } from "~/auth/auth-client";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
+import { useEventMutations } from "~/calendar/event-mutations";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
 import {
@@ -38,6 +39,9 @@ function WorkspaceRoute() {
     date,
     session.data?.user.id ?? "anonymous",
     activeView,
+  );
+  const eventMutations = useEventMutations(
+    session.data?.user.id ?? "anonymous",
   );
   const queries = [
     workspace.calendars,
@@ -95,7 +99,9 @@ function WorkspaceRoute() {
       date={date}
       events={workspace.events.data.events}
       isRefreshing={queries.some((query) => query.isFetching)}
+      onCreateEvent={eventMutations.createEvent}
       pageId={pageId}
+      onRemoveEvent={eventMutations.removeEvent}
       settings={workspace.settings.data}
       user={session.data!.user}
       onDateChange={(nextDate) =>
@@ -120,6 +126,7 @@ function WorkspaceRoute() {
       onSignOut={() => {
         void authClient.signOut().finally(() => queryClient.clear());
       }}
+      onUpdateEvent={eventMutations.updateEvent}
     />
   );
 }

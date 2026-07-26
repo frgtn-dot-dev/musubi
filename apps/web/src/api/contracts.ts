@@ -13,6 +13,15 @@ export const EventsResponseSchema = z.object({
   serverTime: z.string(),
 });
 
+export const RemoveEventResponseSchema = z.object({
+  calendars: z.array(z.string()),
+  id: z.string(),
+  removed: z.boolean(),
+});
+
 export const SettingsResponseSchema = SettingsSchema;
 
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
+export type RemoveEventResponse = z.infer<
+  typeof RemoveEventResponseSchema
+>;

@@ -11,10 +11,13 @@ import {
   getEventRangeLabel,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
-import { EventDetailsPopover } from "./EventDetailsPopover";
+import {
+  EventDetailsPopover,
+  type EventActionHandlers,
+} from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
 
-type AgendaViewProps = {
+type AgendaViewProps = EventActionHandlers & {
   anchor: Date;
   calendars: Calendar[];
   events: Event[];
@@ -31,6 +34,9 @@ export function AgendaView({
   anchor,
   calendars,
   events,
+  onNotice,
+  onRemoveEvent,
+  onUpdateEvent,
   timeFormat,
 }: AgendaViewProps) {
   const groups = useMemo(
@@ -146,8 +152,12 @@ export function AgendaView({
                     return (
                       <EventDetailsPopover
                         calendar={calendar}
+                        calendars={calendars}
                         event={event}
                         key={event.id}
+                        onNotice={onNotice}
+                        onRemoveEvent={onRemoveEvent}
+                        onUpdateEvent={onUpdateEvent}
                         timeFormat={timeFormat}
                       >
                         <button

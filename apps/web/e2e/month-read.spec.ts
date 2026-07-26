@@ -177,12 +177,12 @@ const settings = {
   weekStartsOn: "monday",
 };
 
-function respond(route: Route, body: unknown) {
+function respond(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     body: JSON.stringify(body),
     contentType: "application/json",
     headers: { "x-request-id": "playwright-fixture" },
-    status: 200,
+    status,
   });
 }
 
@@ -194,8 +194,14 @@ async function expectNoAccessibilityViolations(page: Page) {
 async function mockAuthenticatedReads(
   page: Page,
   eventResponse: typeof events = events,
+  calendarResponse: typeof calendars = calendars,
+  failWritesForCalendarId?: string,
 ) {
   let authenticated = true;
+  let eventState = {
+    ...eventResponse,
+    events: eventResponse.events.map((item) => ({ ...item })),
+  };
 
   await page.route("**/api/auth/get-session", (route) =>
     respond(route, authenticated ? session : null),
@@ -205,11 +211,69 @@ async function mockAuthenticatedReads(
     return respond(route, { success: true });
   });
   await page.route("**/api/v1/calendars", (route) =>
-    respond(route, calendars),
+    respond(route, calendarResponse),
   );
-  await page.route("**/api/v1/events", (route) =>
-    respond(route, eventResponse),
-  );
+  await page.route("**/api/v1/events", async (route) => {
+    const method = route.request().method();
+
+    if (method === "GET") {
+      return respond(route, eventState);
+    }
+
+    const body = route.request().postDataJSON() as (typeof events.events)[number];
+    const homeCalendarId =
+      body.originCalendarID ?? body.calendars[0];
+
+    if (
+      failWritesForCalendarId &&
+      homeCalendarId === failWritesForCalendarId
+    ) {
+      return route.fulfill({
+        body: JSON.stringify({
+          error: "ProviderUnavailable",
+          message: "Provider unavailable",
+          requestId: "provider-write-failed",
+        }),
+        contentType: "application/json",
+        headers: { "x-request-id": "provider-write-failed" },
+        status: 502,
+      });
+    }
+
+    if (method === "POST") {
+      eventState = {
+        ...eventState,
+        events: [...eventState.events, body],
+      };
+      return respond(route, body, 201);
+    }
+
+    if (method === "PUT") {
+      eventState = {
+        ...eventState,
+        events: eventState.events.map((item) =>
+          item.id === body.id ? body : item,
+        ),
+      };
+      return respond(route, body);
+    }
+
+    if (method === "DELETE") {
+      eventState = {
+        ...eventState,
+        events: eventState.events.filter(
+          (item) => item.id !== body.id,
+        ),
+      };
+      return respond(route, {
+        calendars: [],
+        id: body.id,
+        removed: true,
+      });
+    }
+
+    return route.abort();
+  });
   await page.route("**/api/v1/users/settings", (route) =>
     respond(route, settings),
   );
@@ -253,9 +317,10 @@ test("reads, filters and signs out of the authenticated Month", async ({
   await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Event", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "next authenticated write slice",
-  );
+  await expect(
+    page.getByRole("dialog", { name: "Create event" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await expectNoAccessibilityViolations(page);
 
@@ -371,4 +436,80 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
   await page.getByRole("button", { name: "Next day" }).click();
   await expect(page).toHaveURL(/[?&]date=2026-07-24/);
   await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
+});
+
+test("creates, edits and deletes an event through confirmed API writes", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Release check");
+  await page.getByRole("button", { name: "Create" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event created.");
+  await expect(
+    page.getByRole("button", { name: /Release check/ }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: /Release check/ }).click();
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Release readiness");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event updated.");
+  await expect(
+    page.getByRole("button", { name: /Release readiness/ }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: /Release readiness/ }).click();
+  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event deleted.");
+  await expect(
+    page.getByRole("button", { name: /Release readiness/ }),
+  ).toHaveCount(0);
+});
+
+test("keeps provider failures actionable without assuming a write succeeded", async ({
+  page,
+}) => {
+  const providerCalendars = calendars.map((calendar) =>
+    calendar.id === "studio"
+      ? { ...calendar, provider: "google" }
+      : calendar,
+  );
+  await mockAuthenticatedReads(
+    page,
+    events,
+    providerCalendars,
+    "studio",
+  );
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Provider check");
+  await page
+    .getByRole("combobox", { name: "Calendar" })
+    .selectOption("studio");
+  await page.getByRole("button", { name: "Create" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Google Calendar did not confirm this change",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "provider-write-failed",
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Provider check");
+  await expectNoAccessibilityViolations(page);
 });

@@ -24,7 +24,10 @@ import {
   getTimeGridDays,
   type TimeGridViewId,
 } from "../time-grid-math";
-import { EventDetailsPopover } from "./EventDetailsPopover";
+import {
+  EventDetailsPopover,
+  type EventActionHandlers,
+} from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
 
 const HOUR_HEIGHT = 64;
@@ -44,17 +47,23 @@ const timeZoneFormatter = new Intl.DateTimeFormat("en", {
   timeZoneName: "shortOffset",
 });
 
-type TimeGridViewProps = {
+type TimeGridViewProps = EventActionHandlers & {
   anchor: Date;
   calendars: Calendar[];
   events: Event[];
+  onCreateAtTime?: (
+    date: string,
+    time: string,
+    anchor: { returnFocus: HTMLElement; x: number; y: number },
+  ) => void;
   timeFormat: Settings["timeFormat"];
   view: TimeGridViewId;
   weekStartsOn: Settings["weekStartsOn"];
 };
 
-type TimelineEventProps = {
+type TimelineEventProps = EventActionHandlers & {
   calendar: Calendar | undefined;
+  calendars: Calendar[];
   dayMode: boolean;
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
   timeFormat: Settings["timeFormat"];
@@ -78,8 +87,12 @@ function timeZoneLabel(date: Date) {
 
 const TimelineEvent = memo(function TimelineEvent({
   calendar,
+  calendars,
   dayMode,
   daySegment,
+  onNotice,
+  onRemoveEvent,
+  onUpdateEvent,
   timeFormat,
 }: TimelineEventProps) {
   const { col, cols, endMin, event, startMin } = daySegment;
@@ -93,7 +106,11 @@ const TimelineEvent = memo(function TimelineEvent({
   return (
     <EventDetailsPopover
       calendar={calendar}
+      calendars={calendars}
       event={event}
+      onNotice={onNotice}
+      onRemoveEvent={onRemoveEvent}
+      onUpdateEvent={onUpdateEvent}
       timeFormat={timeFormat}
     >
       <button
@@ -130,6 +147,10 @@ export function TimeGridView({
   anchor,
   calendars,
   events,
+  onCreateAtTime,
+  onNotice,
+  onRemoveEvent,
+  onUpdateEvent,
   timeFormat,
   view,
   weekStartsOn,
@@ -273,8 +294,12 @@ export function TimeGridView({
               return (
                 <EventDetailsPopover
                   calendar={calendar}
+                  calendars={calendars}
                   event={span.event}
                   key={span.event.id}
+                  onNotice={onNotice}
+                  onRemoveEvent={onRemoveEvent}
+                  onUpdateEvent={onUpdateEvent}
                   timeFormat={timeFormat}
                 >
                   <button
@@ -338,15 +363,51 @@ export function TimeGridView({
                 className={styles.timeGridColumn}
                 data-time-grid-column={dayKey(day)}
                 key={dayKey(day)}
+                tabIndex={-1}
+                onClick={(event) => {
+                  if (
+                    !onCreateAtTime ||
+                    event.target instanceof Element &&
+                      event.target.closest("button")
+                  ) {
+                    return;
+                  }
+
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  const rawMinutes =
+                    ((event.clientY - bounds.top) / HOUR_HEIGHT) * 60;
+                  const minutes = Math.max(
+                    0,
+                    Math.min(23 * 60 + 30, Math.round(rawMinutes / 30) * 30),
+                  );
+                  const hour = Math.floor(minutes / 60);
+                  const minute = minutes % 60;
+
+                  onCreateAtTime(
+                    dayKey(day),
+                    `${String(hour).padStart(2, "0")}:${String(
+                      minute,
+                    ).padStart(2, "0")}`,
+                    {
+                      returnFocus: event.currentTarget,
+                      x: event.clientX,
+                      y: event.clientY,
+                    },
+                  );
+                }}
               >
                 {segmentsByDay[dayIndex]?.map((segment) => (
                   <TimelineEvent
                     calendar={calendarsById.get(
                       segment.event.calendars[0] ?? "",
                     )}
+                    calendars={calendars}
                     dayMode={dayMode}
                     daySegment={segment}
                     key={segment.event.id}
+                    onNotice={onNotice}
+                    onRemoveEvent={onRemoveEvent}
+                    onUpdateEvent={onUpdateEvent}
                     timeFormat={timeFormat}
                   />
                 ))}

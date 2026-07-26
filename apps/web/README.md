@@ -20,7 +20,8 @@ local Express API on port 7531; production keeps the same paths on one origin.
 
 ## Current boundary
 
-The authenticated Month route reads the canonical Express calendars, events and
-settings contracts through TanStack Query and validates them with
-`@musubi/types`. The Month is intentionally read-only until the following
-mutation slice; fixture data remains test-only UI material.
+The authenticated Month, Day, Week and Agenda routes read the canonical Express
+calendars, events and settings contracts through TanStack Query and validate
+them with `@musubi/types`. Event quick create, edit and delete use the existing
+Express write endpoints, wait for confirmed server responses and gate controls
+through the shared calendar permissions; fixture data remains test-only.

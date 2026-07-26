@@ -1,168 +1,118 @@
 import * as Popover from "@radix-ui/react-popover";
 import type { Calendar, Event } from "@musubi/types";
-import { CalendarDays, ChevronDown, Clock3, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { X } from "lucide-react";
+import {
+  createEventFromForm,
+  defaultEventFormValues,
+  type EventFormValues,
+} from "../event-form";
+import { getEventMutationError } from "../event-permissions";
+import { EventEditorForm } from "./EventEditorForm";
 import styles from "./workspace.module.css";
 
+export type QuickCreateAnchor = {
+  returnFocus?: HTMLElement | null;
+  x: number;
+  y: number;
+};
+
 type QuickCreateProps = {
+  anchor: QuickCreateAnchor;
   calendars: Calendar[];
   date: string;
-  onCreate: (event: Event) => void;
+  email: string;
+  onCreate: (event: Event) => Promise<Event>;
+  onCreated: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  startTime?: string;
+  userId: string;
 };
 
 export function QuickCreate({
+  anchor,
   calendars,
   date,
+  email,
   onCreate,
+  onCreated,
   onOpenChange,
   open,
+  startTime,
+  userId,
 }: QuickCreateProps) {
-  const [title, setTitle] = useState("");
-  const [eventDate, setEventDate] = useState(date);
-  const [time, setTime] = useState("12:00");
-  const [calendarId, setCalendarId] = useState(
-    calendars[0]?.id ?? "personal",
+  const defaultCalendar =
+    calendars.find((calendar) => calendar.isDefault) ?? calendars[0];
+  const initialValues = defaultEventFormValues(
+    defaultCalendar?.id ?? "",
+    date,
+    startTime,
   );
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const start = new Date(`${eventDate}T${time}:00`);
-    const end = new Date(start.getTime() + 60 * 60 * 1_000);
-    const calendar = calendars.find((item) => item.id === calendarId);
-
-    onCreate({
-      id: crypto.randomUUID(),
-      calendars: [calendarId],
-      color: calendar?.color ?? "#7a8ba3",
-      creatorID: "prototype-user",
-      end,
-      hasAttendees: false,
-      isAllDay: false,
-      isCanceled: false,
-      organizer: "prototype@musubi.local",
-      originCalendarID: calendarId,
-      start,
-      title: title.trim(),
-    });
-
-    setTitle("");
+  async function handleSubmit(values: EventFormValues) {
+    const calendar = calendars.find(
+      (item) => item.id === values.calendarId,
+    );
+    const event = createEventFromForm(
+      values,
+      { email, userId },
+      calendar?.color ?? "#7a8ba3",
+    );
+    const created = await onCreate(event);
+    onCreated(created);
     onOpenChange(false);
   }
 
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Trigger asChild>
-        <button
-          className={styles.eventButton}
-          type="button"
-          aria-label="Create event"
-        >
-          <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
-          <span>Event</span>
-        </button>
-      </Popover.Trigger>
+      <Popover.Anchor asChild>
+        <span
+          className={styles.quickCreateAnchor}
+          style={{ left: anchor.x, top: anchor.y }}
+        />
+      </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
           className={`${styles.popover} ${styles.createPopover}`}
-          align="end"
+          align="start"
+          side="bottom"
           sideOffset={10}
           collisionPadding={14}
           aria-label="Create event"
+          onClick={(clickEvent) => clickEvent.stopPropagation()}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            anchor.returnFocus?.focus();
+          }}
         >
-          <form onSubmit={handleSubmit}>
-            <div className={styles.popoverHeader}>
-              <h2>New event</h2>
-              <Popover.Close asChild>
-                <button
-                  className={styles.iconButton}
-                  type="button"
-                  aria-label="Close new event"
-                >
-                  <X aria-hidden="true" size={17} strokeWidth={1.6} />
-                </button>
-              </Popover.Close>
-            </div>
-
-            <label className={styles.srOnly} htmlFor="quick-title">
-              Event title
-            </label>
-            <input
-              autoFocus
-              className={styles.titleInput}
-              id="quick-title"
-              placeholder="Event title"
-              required
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-
-            <label className={styles.formRow}>
-              <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
-              <span className={styles.srOnly}>Date</span>
-              <input
-                required
-                type="date"
-                value={eventDate}
-                onChange={(event) => setEventDate(event.target.value)}
-              />
-            </label>
-
-            <label className={styles.formRow}>
-              <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
-              <span className={styles.srOnly}>Start time</span>
-              <input
-                required
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-              />
-              <span className={styles.duration}>1 hour</span>
-            </label>
-
-            <label className={styles.formRow}>
-              <span
-                className={styles.calendarDot}
-                style={{
-                  backgroundColor:
-                    calendars.find((item) => item.id === calendarId)?.color ??
-                    "#7a8ba3",
-                }}
-              />
-              <span className={styles.srOnly}>Calendar</span>
-              <select
-                value={calendarId}
-                onChange={(event) => setCalendarId(event.target.value)}
-              >
-                {calendars.map((calendar) => (
-                  <option key={calendar.id} value={calendar.id}>
-                    {calendar.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                className={styles.selectChevron}
-                aria-hidden="true"
-                size={16}
-                strokeWidth={1.5}
-              />
-            </label>
-
-            <div className={styles.createActions}>
+          <div className={styles.popoverHeader}>
+            <h2>New event</h2>
+            <Popover.Close asChild>
               <button
-                className={styles.textButton}
+                className={styles.iconButton}
                 type="button"
-                onClick={() => onOpenChange(false)}
+                aria-label="Close new event"
               >
-                More options
+                <X aria-hidden="true" size={17} strokeWidth={1.6} />
               </button>
-              <button className={styles.primaryButton} type="submit">
-                Save
-              </button>
-            </div>
-          </form>
+            </Popover.Close>
+          </div>
+          <EventEditorForm
+            calendars={calendars}
+            initialValues={initialValues}
+            onCancel={() => onOpenChange(false)}
+            onError={(error, values) =>
+              getEventMutationError(
+                error,
+                "create",
+                calendars.find(
+                  (calendar) => calendar.id === values.calendarId,
+                ),
+              )
+            }
+            onSubmit={handleSubmit}
+            submitLabel="Create"
+          />
           <Popover.Arrow className={styles.popoverArrow} />
         </Popover.Content>
       </Popover.Portal>

@@ -15,13 +15,14 @@ import {
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { EventPopover } from "./EventPopover";
+import type { EventActionHandlers } from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
 
-type MonthCalendarProps = {
+type MonthCalendarProps = EventActionHandlers & {
   anchor: Date;
   calendars: Calendar[];
   events: Event[];
-  onCreateAtDate: (date: string) => void;
+  onCreateAtDate?: (date: string, target: HTMLElement) => void;
   onMonthChange: (offset: number) => void;
   timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
@@ -31,8 +32,11 @@ export function MonthCalendar({
   anchor,
   calendars,
   events,
+  onNotice,
   onCreateAtDate,
   onMonthChange,
+  onRemoveEvent,
+  onUpdateEvent,
   timeFormat,
   weekStartsOn,
 }: MonthCalendarProps) {
@@ -121,9 +125,12 @@ export function MonthCalendar({
     } else if (event.key === "PageDown") {
       event.preventDefault();
       onMonthChange(1);
-    } else if (event.key === "Enter" || event.key === " ") {
+    } else if (
+      onCreateAtDate &&
+      (event.key === "Enter" || event.key === " ")
+    ) {
       event.preventDefault();
-      onCreateAtDate(toDateKey(days[index]!));
+      onCreateAtDate(toDateKey(days[index]!), event.currentTarget);
     }
   }
 
@@ -174,7 +181,9 @@ export function MonthCalendar({
                   }`}
                   tabIndex={focusedIndex === index ? 0 : -1}
                   data-day-key={dateKey}
-                  onClick={() => onCreateAtDate(dateKey)}
+                  onClick={(event) =>
+                    onCreateAtDate?.(dateKey, event.currentTarget)
+                  }
                   onFocus={() => setFocusedIndex(index)}
                   onKeyDown={(event) => handleGridKeyDown(event, index)}
                 >
@@ -190,10 +199,14 @@ export function MonthCalendar({
                         calendar={calendarsById.get(
                           segment.event.calendars[0] ?? "",
                         )}
+                        calendars={calendars}
                         continuesAfter={segment.continuesAfter}
                         continuesBefore={segment.continuesBefore}
                         event={segment.event}
                         key={segment.event.id}
+                        onNotice={onNotice}
+                        onRemoveEvent={onRemoveEvent}
+                        onUpdateEvent={onUpdateEvent}
                         showLabel={!segment.continuesBefore || dayIndex === 0}
                         timeFormat={timeFormat}
                       />

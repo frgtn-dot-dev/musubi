@@ -4,11 +4,15 @@ import {
   getEventRangeLabel,
 } from "../calendar-math";
 import { getReadableEventTextColor } from "../event-color";
-import { EventDetailsPopover } from "./EventDetailsPopover";
+import {
+  EventDetailsPopover,
+  type EventActionHandlers,
+} from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
 
-type EventPopoverProps = {
+type EventPopoverProps = EventActionHandlers & {
   calendar: Calendar | undefined;
+  calendars: Calendar[];
   continuesAfter?: boolean;
   continuesBefore?: boolean;
   event: Event;
@@ -18,9 +22,13 @@ type EventPopoverProps = {
 
 export function EventPopover({
   calendar,
+  calendars,
   continuesAfter = false,
   continuesBefore = false,
   event,
+  onNotice,
+  onRemoveEvent,
+  onUpdateEvent,
   showLabel = true,
   timeFormat,
 }: EventPopoverProps) {
@@ -29,7 +37,11 @@ export function EventPopover({
   return (
     <EventDetailsPopover
       calendar={calendar}
+      calendars={calendars}
       event={event}
+      onNotice={onNotice}
+      onRemoveEvent={onRemoveEvent}
+      onUpdateEvent={onUpdateEvent}
       timeFormat={timeFormat}
     >
       <button

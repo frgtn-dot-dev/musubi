@@ -1,0 +1,243 @@
+import type { Calendar } from "@musubi/types";
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  Clock3,
+  MapPin,
+} from "lucide-react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useId,
+  useState,
+} from "react";
+import {
+  type EventFormValues,
+  validateEventForm,
+} from "../event-form";
+import styles from "./workspace.module.css";
+
+type FormError = {
+  message: string;
+  requestId?: string;
+};
+
+type EventEditorFormProps = {
+  calendarLocked?: boolean;
+  calendars: Calendar[];
+  initialValues: EventFormValues;
+  onCancel: () => void;
+  onError: (
+    error: unknown,
+    values: EventFormValues,
+  ) => FormError;
+  onSubmit: (values: EventFormValues) => Promise<void>;
+  submitLabel: string;
+};
+
+export function EventEditorForm({
+  calendarLocked = false,
+  calendars,
+  initialValues,
+  onCancel,
+  onError,
+  onSubmit,
+  submitLabel,
+}: EventEditorFormProps) {
+  const id = useId();
+  const [values, setValues] = useState(initialValues);
+  const [error, setError] = useState<FormError>();
+  const [saving, setSaving] = useState(false);
+  const selectedCalendar = calendars.find(
+    (calendar) => calendar.id === values.calendarId,
+  );
+
+  function patch(next: Partial<EventFormValues>) {
+    setValues((current) => ({ ...current, ...next }));
+    setError(undefined);
+  }
+
+  async function handleSubmit(
+    submitEvent: FormEvent<HTMLFormElement>,
+  ) {
+    submitEvent.preventDefault();
+    const validationError = validateEventForm(values);
+
+    if (validationError) {
+      setError({ message: validationError });
+      return;
+    }
+
+    setSaving(true);
+    setError(undefined);
+
+    try {
+      await onSubmit(values);
+    } catch (submitError) {
+      setError(onError(submitError, values));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.requestSubmit();
+    }
+  }
+
+  return (
+    <form onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
+      <label className={styles.srOnly} htmlFor={`${id}-title`}>
+        Event title
+      </label>
+      <input
+        autoFocus
+        className={styles.titleInput}
+        disabled={saving}
+        id={`${id}-title`}
+        placeholder="Event title"
+        value={values.title}
+        onChange={(event) => patch({ title: event.target.value })}
+      />
+
+      <label className={styles.formRow}>
+        <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
+        <span className={styles.srOnly}>Date</span>
+        <input
+          disabled={saving}
+          required
+          type="date"
+          value={values.date}
+          onChange={(event) => patch({ date: event.target.value })}
+        />
+      </label>
+
+      <label className={styles.allDayRow}>
+        <span
+          className={`${styles.checkbox} ${
+            values.isAllDay ? styles.checkboxChecked : ""
+          }`}
+          aria-hidden="true"
+        >
+          {values.isAllDay ? <Check size={12} strokeWidth={2} /> : null}
+        </span>
+        <input
+          checked={values.isAllDay}
+          disabled={saving}
+          type="checkbox"
+          onChange={(event) =>
+            patch({ isAllDay: event.target.checked })
+          }
+        />
+        <span>All day</span>
+      </label>
+
+      {!values.isAllDay ? (
+        <div className={styles.formRow}>
+          <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
+          <label>
+            <span className={styles.srOnly}>Start time</span>
+            <input
+              disabled={saving}
+              required
+              type="time"
+              value={values.startTime}
+              onChange={(event) =>
+                patch({ startTime: event.target.value })
+              }
+            />
+          </label>
+          <span className={styles.timeSeparator}>to</span>
+          <label>
+            <span className={styles.srOnly}>End time</span>
+            <input
+              disabled={saving}
+              required
+              type="time"
+              value={values.endTime}
+              onChange={(event) =>
+                patch({ endTime: event.target.value })
+              }
+            />
+          </label>
+        </div>
+      ) : null}
+
+      <label className={styles.formRow}>
+        <MapPin aria-hidden="true" size={17} strokeWidth={1.5} />
+        <span className={styles.srOnly}>Location</span>
+        <input
+          disabled={saving}
+          placeholder="Add location"
+          value={values.location}
+          onChange={(event) => patch({ location: event.target.value })}
+        />
+      </label>
+
+      <label
+        className={`${styles.formRow} ${
+          calendarLocked ? styles.formRowLocked : ""
+        }`}
+      >
+        <span
+          className={styles.calendarDot}
+          style={{
+            backgroundColor: selectedCalendar?.color ?? "#7a8ba3",
+          }}
+        />
+        <span className={styles.srOnly}>Calendar</span>
+        <select
+          disabled={calendarLocked || saving}
+          value={values.calendarId}
+          onChange={(event) =>
+            patch({ calendarId: event.target.value })
+          }
+        >
+          {calendars.map((calendar) => (
+            <option key={calendar.id} value={calendar.id}>
+              {calendar.name}
+            </option>
+          ))}
+        </select>
+        {!calendarLocked ? (
+          <ChevronDown
+            className={styles.selectChevron}
+            aria-hidden="true"
+            size={16}
+            strokeWidth={1.5}
+          />
+        ) : null}
+      </label>
+
+      {error ? (
+        <div className={styles.formError} role="alert">
+          <p>{error.message}</p>
+          {error.requestId ? (
+            <span>Request {error.requestId}</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className={styles.createActions}>
+        <button
+          className={styles.textButton}
+          disabled={saving}
+          type="button"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          className={styles.primaryButton}
+          disabled={saving}
+          type="submit"
+        >
+          {saving ? "Saving…" : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}

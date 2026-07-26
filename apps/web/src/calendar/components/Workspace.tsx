@@ -1,6 +1,8 @@
 import type { Calendar, Event, Settings, User } from "@musubi/types";
 import { addDays, addMonthPages } from "@musubi/calendar/layout";
+import type { RemoveEventResponse } from "~/api/contracts";
 import {
+  type KeyboardEvent,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -16,10 +18,15 @@ import {
   getTimeGridDays,
   getTimeGridLabel,
 } from "../time-grid-math";
+import { getEditableCalendars } from "../event-permissions";
 import { pageStubs } from "~/pages/page-stubs";
 import type { CalendarViewId } from "../view-registry";
 import { AgendaView } from "./AgendaView";
 import { MonthCalendar } from "./MonthCalendar";
+import {
+  QuickCreate,
+  type QuickCreateAnchor,
+} from "./QuickCreate";
 import { Sidebar } from "./Sidebar";
 import { TimeGridView } from "./TimeGridView";
 import { Toolbar } from "./Toolbar";
@@ -31,13 +38,23 @@ type WorkspaceProps = {
   date: string;
   events: Event[];
   isRefreshing: boolean;
+  onCreateEvent: (event: Event) => Promise<Event>;
   onDateChange: (date: string) => void;
   onPageChange: (pageId: string) => void;
+  onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
   onSignOut: () => void;
+  onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
   pageId: string;
   settings: Settings;
-  user: Pick<User, "email" | "name">;
+  user: Pick<User, "email" | "id" | "name">;
+};
+
+type CreateIntent = {
+  anchor: QuickCreateAnchor;
+  date: string;
+  id: number;
+  startTime?: string;
 };
 
 export function Workspace({
@@ -46,9 +63,12 @@ export function Workspace({
   date,
   events,
   isRefreshing,
+  onCreateEvent,
   onDateChange,
   onPageChange,
+  onRemoveEvent,
   onSignOut,
+  onUpdateEvent,
   onViewChange,
   pageId,
   settings,
@@ -63,6 +83,11 @@ export function Workspace({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [createIntent, setCreateIntent] = useState<CreateIntent>();
+  const editableCalendars = useMemo(
+    () => getEditableCalendars(calendars),
+    [calendars],
+  );
 
   const visibleCalendarIds = useMemo(
     () =>
@@ -130,10 +155,50 @@ export function Workspace({
     onDateChange(toDateKey(nextDate));
   }
 
-  function openCreateAtDate(nextDate: string) {
-    setNotice(
-      `Event creation for ${nextDate} arrives in the next authenticated write slice.`,
-    );
+  function openCreateAtDate(
+    nextDate: string,
+    target: HTMLElement,
+    startTime?: string,
+    point?: Pick<QuickCreateAnchor, "x" | "y">,
+  ) {
+    if (editableCalendars.length === 0) {
+      setNotice("You need edit access to a calendar to create events.");
+      return;
+    }
+
+    const bounds = target.getBoundingClientRect();
+    setCreateIntent({
+      anchor: {
+        returnFocus: target,
+        x: point?.x ?? bounds.left + Math.min(bounds.width / 2, 180),
+        y: point?.y ?? bounds.top + Math.min(bounds.height, 48),
+      },
+      date: nextDate,
+      id: Date.now(),
+      startTime,
+    });
+  }
+
+  function handleWorkspaceKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (
+      event.key.toLocaleLowerCase() !== "c" ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLSelectElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLButtonElement
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    openCreateAtDate(date, event.currentTarget, undefined, {
+      x: bounds.left + bounds.width / 2,
+      y: bounds.top + 92,
+    });
   }
 
   function handleToggleCalendar(calendarId: string) {
@@ -164,10 +229,18 @@ export function Workspace({
         visibleCalendarIds={visibleCalendarIds}
       />
 
-      <main className={styles.main} id="main-content">
+      <main
+        className={styles.main}
+        id="main-content"
+        onKeyDown={handleWorkspaceKeyDown}
+      >
         <Toolbar
           activeView={activeView}
+          canCreateEvents={editableCalendars.length > 0}
           filtersOpen={filtersOpen}
+          onCreateEvent={(target) =>
+            openCreateAtDate(date, target)
+          }
           onPeriodChange={changePeriod}
           onNotice={setNotice}
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -214,6 +287,9 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              onNotice={setNotice}
+              onRemoveEvent={onRemoveEvent}
+              onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
             />
           ) : activeView === "day" || activeView === "week" ? (
@@ -221,6 +297,20 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              onCreateAtTime={
+                editableCalendars.length > 0
+                  ? (nextDate, time, createAnchor) =>
+                      openCreateAtDate(
+                        nextDate,
+                        createAnchor.returnFocus,
+                        time,
+                        createAnchor,
+                      )
+                  : undefined
+              }
+              onNotice={setNotice}
+              onRemoveEvent={onRemoveEvent}
+              onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               view={activeView}
               weekStartsOn={settings.weekStartsOn}
@@ -230,8 +320,16 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
-              onCreateAtDate={openCreateAtDate}
+              onCreateAtDate={
+                editableCalendars.length > 0
+                  ? (nextDate, target) =>
+                      openCreateAtDate(nextDate, target)
+                  : undefined
+              }
               onMonthChange={changePeriod}
+              onNotice={setNotice}
+              onRemoveEvent={onRemoveEvent}
+              onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               weekStartsOn={settings.weekStartsOn}
             />
@@ -242,6 +340,25 @@ export function Workspace({
           {notice ? <p className={styles.toast}>{notice}</p> : null}
         </div>
       </main>
+      {createIntent ? (
+        <QuickCreate
+          anchor={createIntent.anchor}
+          calendars={editableCalendars}
+          date={createIntent.date}
+          email={user.email}
+          key={createIntent.id}
+          onCreate={onCreateEvent}
+          onCreated={() => setNotice("Event created.")}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCreateIntent(undefined);
+            }
+          }}
+          open
+          startTime={createIntent.startTime}
+          userId={user.id}
+        />
+      ) : null}
     </div>
   );
 }

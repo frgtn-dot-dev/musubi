@@ -12,7 +12,9 @@ import styles from "./workspace.module.css";
 
 type ToolbarProps = {
   activeView: CalendarViewId;
+  canCreateEvents: boolean;
   filtersOpen: boolean;
+  onCreateEvent: (target: HTMLElement) => void;
   onNotice: (message: string) => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
@@ -28,7 +30,9 @@ type ToolbarProps = {
 
 export function Toolbar({
   activeView,
+  canCreateEvents,
   filtersOpen,
+  onCreateEvent,
   onNotice,
   onOpenSidebar,
   onPeriodChange,
@@ -126,16 +130,17 @@ export function Toolbar({
             <SlidersHorizontal aria-hidden="true" size={17} strokeWidth={1.6} />
             <span>Filters</span>
           </button>
-          <button
-            className={styles.eventButton}
-            type="button"
-            onClick={() =>
-              onNotice("Event creation arrives in the next authenticated write slice.")
-            }
-          >
-            <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
-            <span>Event</span>
-          </button>
+          {canCreateEvents ? (
+            <button
+              aria-label="Event"
+              className={styles.eventButton}
+              type="button"
+              onClick={(event) => onCreateEvent(event.currentTarget)}
+            >
+              <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
+              <span>Event</span>
+            </button>
+          ) : null}
         </div>
       </div>
     </header>
