@@ -33,9 +33,7 @@ function WorkspaceRoute() {
   const online = useOnlineStatus();
   const session = authClient.useSession();
   const activeView: CalendarViewId =
-    isCalendarView(view) && (view === "month" || view === "agenda")
-      ? view
-      : "month";
+    isCalendarView(view) ? view : "month";
   const workspace = useWorkspaceQueries(
     date,
     session.data?.user.id ?? "anonymous",

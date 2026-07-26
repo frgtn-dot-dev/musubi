@@ -1,8 +1,12 @@
 import { expandRecurringEvents } from "@musubi/calendar";
-import { getMonthGridRange } from "@musubi/calendar/layout";
+import {
+  getMonthGridRange,
+  startOfDay,
+} from "@musubi/calendar/layout";
 import { useQuery } from "@tanstack/react-query";
-import { getAgendaRange } from "./agenda-math";
+import { getAgendaRecurrenceEnd } from "./agenda-math";
 import { parseDateKey } from "./calendar-math";
+import { getTimeGridQueryRange } from "./time-grid-math";
 import type { CalendarViewId } from "./view-registry";
 import { getCalendars, getEvents, getSettings } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -19,9 +23,19 @@ export function getVisibleMonthRange(date: string) {
 }
 
 export function getWorkspaceRange(date: string, view: CalendarViewId) {
-  return view === "agenda"
-    ? getAgendaRange(parseDateKey(date))
-    : getVisibleMonthRange(date);
+  const anchor = parseDateKey(date);
+
+  if (view === "agenda") {
+    const start = startOfDay(anchor);
+
+    return { end: getAgendaRecurrenceEnd(start), start };
+  }
+
+  if (view === "day" || view === "week") {
+    return getTimeGridQueryRange(anchor, view);
+  }
+
+  return getVisibleMonthRange(date);
 }
 
 export function useWorkspaceQueries(
@@ -50,19 +64,34 @@ export function useWorkspaceQueries(
       // This sentinel is replaced by exact IDs when the range endpoint lands.
       calendarIds: ["@all"],
       end: range.end,
-      filterFingerprint: "all",
+      filterFingerprint: view,
       serverOrigin: origin,
       start: range.start,
       userId,
     }),
-    select: (response) => ({
-      ...response,
-      events: expandRecurringEvents(
-        response.events.filter((event) => !event.isCanceled),
+    select: (response) => {
+      const activeEvents = response.events.filter(
+        (event) => !event.isCanceled,
+      );
+      const recurringEvents = expandRecurringEvents(
+        view === "agenda"
+          ? activeEvents.filter((event) => event.recurrence)
+          : activeEvents,
         range.start,
         new Date(range.end.getTime() - 1),
-      ),
-    }),
+      );
+
+      return {
+        ...response,
+        events:
+          view === "agenda"
+            ? [
+                ...activeEvents.filter((event) => !event.recurrence),
+                ...recurringEvents,
+              ]
+            : recurringEvents,
+      };
+    },
   });
 
   return {

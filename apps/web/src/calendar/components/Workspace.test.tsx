@@ -56,7 +56,7 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: /Design review/ })).toBeNull();
   });
 
-  it("renders and pages a bounded Agenda window", async () => {
+  it("renders only future event days and pages the Agenda anchor", async () => {
     const user = userEvent.setup();
     const onDateChange = vi.fn();
     const { container } = render(
@@ -67,12 +67,15 @@ describe("Workspace", () => {
       />,
     );
 
-    expect(screen.getByText("Jul 26 – Aug 22, 2026")).not.toBeNull();
-    expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(28);
+    expect(screen.getByText("From Jul 26, 2026")).not.toBeNull();
+    expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(5);
+    expect(
+      container.querySelector('[data-agenda-date="2026-07-26"]'),
+    ).toBeNull();
     expect(screen.getByRole("button", { name: /Board games/ })).not.toBeNull();
 
     await user.click(
-      screen.getByRole("button", { name: "Next agenda window" }),
+      screen.getByRole("button", { name: "Next agenda start" }),
     );
 
     expect(onDateChange).toHaveBeenCalledWith("2026-08-23");
@@ -87,5 +90,65 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: "Agenda" }));
 
     expect(onViewChange).toHaveBeenCalledWith("agenda");
+  });
+
+  it("limits the initial Agenda DOM to fourteen event-day groups", () => {
+    const manyEvents = Array.from({ length: 20 }, (_, index) => {
+      const start = new Date(2026, 6, 27 + index, 10);
+      const end = new Date(2026, 6, 27 + index, 11);
+
+      return {
+        ...fixtureEvents[1]!,
+        end,
+        id: `agenda-${index}`,
+        recurrence: null,
+        start,
+        title: `Agenda item ${index}`,
+      };
+    });
+    const { container } = render(
+      <Workspace
+        {...commonProps}
+        activeView="agenda"
+        events={manyEvents}
+      />,
+    );
+
+    expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(14);
+    expect(
+      container.querySelector("[data-agenda-sentinel]"),
+    ).not.toBeNull();
+  });
+
+  it("renders one shared time grid for Day and pages by one day", async () => {
+    const user = userEvent.setup();
+    const onDateChange = vi.fn();
+    const { container } = render(
+      <Workspace
+        {...commonProps}
+        activeView="day"
+        date="2026-07-27"
+        onDateChange={onDateChange}
+      />,
+    );
+
+    expect(screen.getByText("Monday, July 27, 2026")).not.toBeNull();
+    expect(container.querySelectorAll("[data-time-grid-day]")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Board games/ })).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Next day" }));
+    expect(onDateChange).toHaveBeenCalledWith("2026-07-28");
+  });
+
+  it("renders seven Week columns with a continuous all-day span", () => {
+    const { container } = render(
+      <Workspace {...commonProps} activeView="week" />,
+    );
+
+    expect(screen.getByText("Jul 20 – 26, 2026")).not.toBeNull();
+    expect(container.querySelectorAll("[data-time-grid-day]")).toHaveLength(7);
+    expect(
+      screen.getByRole("button", { name: /All-day event, Family holiday/ }),
+    ).not.toBeNull();
   });
 });

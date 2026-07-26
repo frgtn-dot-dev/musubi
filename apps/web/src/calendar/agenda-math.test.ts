@@ -1,14 +1,14 @@
 import type { Event } from "@musubi/types";
 import { describe, expect, it } from "vitest";
 import {
-  AGENDA_WINDOW_DAYS,
-  getAgendaDays,
-  getAgendaEventsByDay,
-  getAgendaRange,
-  getAgendaRangeLabel,
+  AGENDA_GROUP_PAGE,
+  AGENDA_RECURRENCE_HORIZON_YEARS,
+  getAgendaGroups,
+  getAgendaLabel,
+  getAgendaRecurrenceEnd,
+  getAgendaStart,
 } from "./agenda-math";
 import { parseDateKey } from "./calendar-math";
-import { toDateKey } from "./date-key";
 
 function event(
   id: string,
@@ -37,72 +37,82 @@ function event(
 }
 
 describe("agenda math", () => {
-  it("builds a bounded 28-day window from the selected date", () => {
-    const range = getAgendaRange(parseDateKey("2026-07-26"));
-    const days = getAgendaDays(range.start, range.end);
+  it("starts at the current instant for today and midnight for another date", () => {
+    const now = new Date("2026-07-26T15:30:00");
 
-    expect(days).toHaveLength(AGENDA_WINDOW_DAYS);
-    expect(toDateKey(days[0]!)).toBe("2026-07-26");
-    expect(toDateKey(days[27]!)).toBe("2026-08-22");
-    expect(toDateKey(range.end)).toBe("2026-08-23");
+    expect(getAgendaStart(parseDateKey("2026-07-26"), now)).toEqual(now);
+    expect(
+      getAgendaStart(parseDateKey("2026-07-27"), now).getHours(),
+    ).toBe(0);
   });
 
-  it("formats same-month, cross-month and cross-year ranges", () => {
-    expect(
-      getAgendaRangeLabel(
-        parseDateKey("2026-07-01"),
-        parseDateKey("2026-07-29"),
-      ),
-    ).toBe("Jul 1 – 28, 2026");
-    expect(
-      getAgendaRangeLabel(
-        parseDateKey("2026-07-26"),
-        parseDateKey("2026-08-23"),
-      ),
-    ).toBe("Jul 26 – Aug 22, 2026");
-    expect(
-      getAgendaRangeLabel(
-        parseDateKey("2026-12-20"),
-        parseDateKey("2027-01-17"),
-      ),
-    ).toBe("Dec 20, 2026 – Jan 16, 2027");
-  });
-
-  it("groups only event starts inside the visible window", () => {
+  it("bounds recurring expansion to the same two-year horizon as mobile", () => {
     const start = parseDateKey("2026-07-26");
-    const end = parseDateKey("2026-08-23");
-    const buckets = getAgendaEventsByDay(
+    const end = getAgendaRecurrenceEnd(start);
+
+    expect(AGENDA_RECURRENCE_HORIZON_YEARS).toBe(2);
+    expect(end.getFullYear()).toBe(2028);
+    expect(end.getMonth()).toBe(6);
+    expect(end.getDate()).toBe(26);
+  });
+
+  it("groups only future event dates and keeps all-day events for today", () => {
+    const anchor = parseDateKey("2026-07-26");
+    const now = new Date("2026-07-26T15:30:00");
+    const groups = getAgendaGroups(
       [
         event(
-          "before",
-          "2026-07-25T10:00:00",
-          "2026-07-25T11:00:00",
+          "past",
+          "2026-07-26T14:00:00",
+          "2026-07-26T15:00:00",
         ),
         event(
-          "timed",
-          "2026-07-27T11:00:00",
-          "2026-07-27T12:00:00",
+          "today-later",
+          "2026-07-26T16:00:00",
+          "2026-07-26T17:00:00",
         ),
         event(
           "all-day",
-          "2026-07-27T00:00:00Z",
-          "2026-07-29T00:00:00Z",
+          "2026-07-26T00:00:00Z",
+          "2026-07-26T00:00:00Z",
           true,
         ),
         event(
-          "after",
-          "2026-08-23T10:00:00",
-          "2026-08-23T11:00:00",
+          "tomorrow",
+          "2026-07-27T09:00:00",
+          "2026-07-27T10:00:00",
         ),
       ],
-      start,
-      end,
+      anchor,
+      now,
     );
 
-    expect([...buckets.keys()]).toEqual(["2026-07-27"]);
-    expect(buckets.get("2026-07-27")?.map((item) => item.id)).toEqual([
-      "all-day",
-      "timed",
+    expect(groups.map((group) => group.key)).toEqual([
+      "2026-07-26",
+      "2026-07-27",
     ]);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      "all-day",
+      "today-later",
+    ]);
+  });
+
+  it("keeps distant one-off events and formats the visible anchor", () => {
+    const anchor = parseDateKey("2026-07-26");
+    const groups = getAgendaGroups(
+      [
+        event(
+          "distant",
+          "2030-01-01T10:00:00",
+          "2030-01-01T11:00:00",
+        ),
+      ],
+      anchor,
+      new Date("2026-07-26T15:30:00"),
+    );
+
+    expect(groups[0]?.items[0]?.id).toBe("distant");
+    expect(getAgendaLabel(anchor)).toBe("From Jul 26, 2026");
+    expect(AGENDA_GROUP_PAGE).toBe(14);
   });
 });

@@ -578,12 +578,37 @@
   list-style: none;
 }
 
+.agendaYear {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  min-height: 31px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: 0.83rem;
+}
+
+.agendaYear::after {
+  height: 1px;
+  flex: 1;
+  background: var(--border-subtle);
+  content: "";
+}
+
 .agendaDay {
   display: grid;
-  min-height: 28px;
+  min-height: 44px;
   grid-template-columns: 200px minmax(0, 1fr);
   padding-left: 28px;
   border-bottom: 1px solid var(--border-subtle);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
 }
 
 .agendaDayToday {
@@ -592,7 +617,7 @@
 
 .agendaDate {
   align-self: start;
-  padding-top: 8px;
+  padding-top: 14px;
   color: var(--text-muted);
   font-size: 0.61rem;
   font-weight: 500;
@@ -614,7 +639,7 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  min-height: 27px;
+  min-height: 43px;
   grid-template-columns: 120px 3px minmax(140px, 180px) minmax(90px, 1fr) 28px;
   align-items: center;
   gap: 15px;
@@ -652,7 +677,7 @@
 
 .agendaEventRule {
   width: 3px;
-  height: 20px;
+  height: 25px;
   border-radius: 999px;
 }
 
@@ -675,6 +700,277 @@
 .agendaEventChevron {
   justify-self: end;
   color: var(--text-faint);
+}
+
+.agendaSentinel {
+  height: 1px;
+}
+
+.timeGridView {
+  --timeline-gutter: 64px;
+  --day-count: 7;
+  --all-day-height: 32px;
+  min-width: 820px;
+  min-height: calc(24 * 64px + 92px);
+  outline-offset: -2px;
+}
+
+.timeGridView:focus-visible {
+  outline: 2px solid var(--accent-primary);
+}
+
+.timeGridViewDay {
+  min-width: 100%;
+}
+
+.timeGridSticky {
+  position: sticky;
+  z-index: 8;
+  top: 0;
+  background: var(--surface-canvas);
+}
+
+.timeGridDayHeader,
+.timeGridAllDay {
+  display: grid;
+  grid-template-columns:
+    var(--timeline-gutter)
+    repeat(var(--day-count), minmax(0, 1fr));
+}
+
+.timeGridDayHeader {
+  min-height: 45px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.timeGridDayHeader > div:first-child {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.timeGridDayHeader time {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.timeGridDayHeader time:last-child {
+  border-right: 0;
+}
+
+.timeGridDayHeader time span {
+  overflow: hidden;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeGridDayHeader time strong {
+  display: grid;
+  min-width: 23px;
+  height: 23px;
+  place-content: center;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.timeGridDayHeader .timeGridDayToday {
+  color: var(--accent-primary);
+}
+
+.timeGridDayHeader .timeGridDayToday strong {
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+}
+
+.timeGridAllDay {
+  min-height: var(--all-day-height);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.timeGridAllDayLabel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 9px 10px 0 4px;
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+}
+
+.timeGridAllDayTrack {
+  position: relative;
+  min-width: 0;
+  grid-column: 2 / -1;
+}
+
+.timeGridAllDayEvent {
+  --event-color: var(--event-indigo);
+  --event-foreground: #000;
+  position: absolute;
+  display: block;
+  height: 20px;
+  overflow: hidden;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--event-color);
+  color: var(--event-foreground);
+  font-size: 0.66rem;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeGridAllDayEvent:hover,
+.timeGridAllDayEvent:focus-visible {
+  filter: saturate(1.08);
+}
+
+.timeGridAllDayEvent:focus-visible {
+  outline: 2px solid var(--event-foreground);
+  outline-offset: -3px;
+}
+
+.timeGridAllDayMore {
+  position: absolute;
+  right: 5px;
+  bottom: 3px;
+  color: var(--text-muted);
+  font-size: 0.61rem;
+}
+
+.timeGridCanvas {
+  position: relative;
+  height: calc(24 * 64px);
+}
+
+.timeGridHour {
+  position: absolute;
+  right: 0;
+  left: var(--timeline-gutter);
+  height: 1px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.timeGridHour span {
+  position: absolute;
+  top: -7px;
+  right: calc(100% + 9px);
+  width: calc(var(--timeline-gutter) - 12px);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.59rem;
+  text-align: right;
+}
+
+.timeGridZone {
+  position: absolute;
+  top: 490px;
+  left: 0;
+  width: calc(var(--timeline-gutter) - 10px);
+  color: var(--text-faint);
+  font-size: 0.57rem;
+  text-align: right;
+}
+
+.timeGridColumns {
+  position: absolute;
+  inset: 0 0 0 var(--timeline-gutter);
+  display: grid;
+  grid-template-columns: repeat(var(--day-count), minmax(0, 1fr));
+}
+
+.timeGridColumn {
+  position: relative;
+  min-width: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.timeGridColumn:first-child {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.timeGridColumn:last-child {
+  border-right: 0;
+}
+
+.timelineEvent {
+  --event-color: var(--event-indigo);
+  --event-foreground: #000;
+  position: absolute;
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 2px;
+  overflow: hidden;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--event-color);
+  color: var(--event-foreground);
+  text-align: left;
+  transition:
+    filter var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.timelineEvent:hover,
+.timelineEvent:focus-visible {
+  color: var(--event-foreground);
+  filter: saturate(1.08);
+  transform: translateY(-1px);
+}
+
+.timelineEvent:focus-visible {
+  outline: 2px solid var(--event-foreground);
+  outline-offset: -3px;
+}
+
+.timelineEventTime {
+  overflow: hidden;
+  color: var(--event-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.57rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timelineEventTitle {
+  overflow: hidden;
+  color: var(--event-foreground);
+  font-size: 0.67rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeGridNow {
+  position: absolute;
+  z-index: 6;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent-primary);
+  pointer-events: none;
+}
+
+.timeGridNow span {
+  position: absolute;
+  top: -2.5px;
+  left: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-primary);
 }
 
 .weekdayRow,
@@ -1152,7 +1448,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1260px) {
+@media (max-width: 1360px) {
   .toolbarControls {
     grid-template-columns: minmax(340px, 1.25fr) auto minmax(220px, 0.75fr);
     gap: 12px;
@@ -1323,6 +1619,18 @@
     display: none;
   }
 
+  .agendaYear {
+    padding-inline: 14px;
+  }
+
+  .timeGridView {
+    min-width: 760px;
+  }
+
+  .timeGridViewDay {
+    min-width: 100%;
+  }
+
   .monthView {
     min-width: 560px;
     grid-template-rows: 32px minmax(576px, 1fr);
@@ -1402,6 +1710,27 @@
     min-height: 39px;
     grid-template-columns: 80px 3px minmax(0, 1fr) 18px;
     padding: 0 8px 0 12px;
+  }
+
+  .agendaYear {
+    padding-inline: 12px;
+  }
+
+  .timeGridView {
+    --timeline-gutter: 52px;
+    min-width: 700px;
+  }
+
+  .timeGridViewDay {
+    min-width: 100%;
+  }
+
+  .timeGridDayHeader time {
+    gap: 3px;
+  }
+
+  .timelineEvent {
+    padding-inline: 4px;
   }
 
   .weekday {

@@ -1,21 +1,27 @@
 import type { Calendar, Event, Settings, User } from "@musubi/types";
 import { addDays, addMonthPages } from "@musubi/calendar/layout";
-import { useEffect, useMemo, useState } from "react";
 import {
-  AGENDA_WINDOW_DAYS,
-  getAgendaRange,
-  getAgendaRangeLabel,
-} from "../agenda-math";
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { getAgendaLabel } from "../agenda-math";
 import {
   getMonthLabel,
   parseDateKey,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
+import {
+  getTimeGridDays,
+  getTimeGridLabel,
+} from "../time-grid-math";
 import { pageStubs } from "~/pages/page-stubs";
 import type { CalendarViewId } from "../view-registry";
 import { AgendaView } from "./AgendaView";
 import { MonthCalendar } from "./MonthCalendar";
 import { Sidebar } from "./Sidebar";
+import { TimeGridView } from "./TimeGridView";
 import { Toolbar } from "./Toolbar";
 import styles from "./workspace.module.css";
 
@@ -48,12 +54,13 @@ export function Workspace({
   settings,
   user,
 }: WorkspaceProps) {
-  const anchor = parseDateKey(date);
+  const anchor = useMemo(() => parseDateKey(date), [date]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hiddenCalendarIds, setHiddenCalendarIds] = useState<Set<string>>(
     () => new Set(),
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -69,7 +76,9 @@ export function Workspace({
     pageStubs.find((page) => page.id === pageId)?.name ?? "My calendar";
 
   const visibleEvents = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+    const normalizedQuery = deferredSearchQuery
+      .trim()
+      .toLocaleLowerCase();
 
     return events.filter(
       (event) =>
@@ -79,7 +88,7 @@ export function Workspace({
         (normalizedQuery.length === 0 ||
           event.title.toLocaleLowerCase().includes(normalizedQuery)),
     );
-  }, [events, searchQuery, visibleCalendarIds]);
+  }, [deferredSearchQuery, events, visibleCalendarIds]);
 
   useEffect(() => {
     if (!notice) {
@@ -90,17 +99,33 @@ export function Workspace({
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const agendaRange = getAgendaRange(anchor);
+  const timeGridDays =
+    activeView === "day" || activeView === "week"
+      ? getTimeGridDays(anchor, activeView, settings.weekStartsOn)
+      : [];
   const periodLabel =
     activeView === "agenda"
-      ? getAgendaRangeLabel(agendaRange.start, agendaRange.end)
-      : getMonthLabel(anchor);
+      ? getAgendaLabel(anchor)
+      : activeView === "day" || activeView === "week"
+        ? getTimeGridLabel(timeGridDays, activeView)
+        : getMonthLabel(anchor);
 
   function changePeriod(offset: number) {
-    const nextDate =
-      activeView === "agenda"
-        ? addDays(anchor, offset * AGENDA_WINDOW_DAYS)
-        : addMonthPages(anchor, offset);
+    const nextDate = (() => {
+      if (activeView === "day") {
+        return addDays(anchor, offset);
+      }
+
+      if (activeView === "week") {
+        return addDays(anchor, offset * 7);
+      }
+
+      if (activeView === "agenda") {
+        return addDays(anchor, offset * 28);
+      }
+
+      return addMonthPages(anchor, offset);
+    })();
 
     onDateChange(toDateKey(nextDate));
   }
@@ -152,7 +177,9 @@ export function Workspace({
           onViewChange={onViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
-          periodName={activeView === "agenda" ? "agenda window" : "month"}
+          periodName={
+            activeView === "agenda" ? "agenda start" : activeView
+          }
           searchQuery={searchQuery}
         />
 
@@ -188,6 +215,15 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               timeFormat={settings.timeFormat}
+            />
+          ) : activeView === "day" || activeView === "week" ? (
+            <TimeGridView
+              anchor={anchor}
+              calendars={calendars}
+              events={visibleEvents}
+              timeFormat={settings.timeFormat}
+              view={activeView}
+              weekStartsOn={settings.weekStartsOn}
             />
           ) : (
             <MonthCalendar

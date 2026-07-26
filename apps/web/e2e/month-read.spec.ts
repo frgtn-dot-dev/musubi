@@ -113,6 +113,38 @@ const events = {
       { isAllDay: true },
     ),
     event(
+      "project-check-in",
+      "Project check-in",
+      "personal",
+      "#b3492f",
+      "2026-07-23T07:30:00.000Z",
+      "2026-07-23T08:30:00.000Z",
+    ),
+    event(
+      "overlap-call",
+      "Partner call",
+      "studio",
+      "#d6b76b",
+      "2026-07-23T08:00:00.000Z",
+      "2026-07-23T09:00:00.000Z",
+    ),
+    event(
+      "client-presentation",
+      "Client presentation",
+      "studio",
+      "#d6b76b",
+      "2026-07-24T11:00:00.000Z",
+      "2026-07-24T12:00:00.000Z",
+    ),
+    event(
+      "theatre-night",
+      "Theatre night",
+      "family",
+      "#365a92",
+      "2026-07-25T17:00:00.000Z",
+      "2026-07-25T20:00:00.000Z",
+    ),
+    event(
       "design-review",
       "Design review",
       "family",
@@ -256,13 +288,13 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
   await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
 
   await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
-  await expect(page.getByText("Jul 26 – Aug 22, 2026")).toBeVisible();
+  await expect(page.getByText("From Jul 26, 2026")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Agenda", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("[data-agenda-date]")).toHaveCount(28);
-  await expect(page.locator('[data-agenda-date="2026-07-26"]')).toBeVisible();
-  await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(4);
+  await expect(page.locator("[data-agenda-date]")).toHaveCount(14);
+  await expect(page.locator('[data-agenda-date="2026-07-26"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(12);
   await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Studio open day/ })).toHaveCount(1);
 
@@ -270,6 +302,15 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
   await expect(page.getByText("Studio B")).toBeVisible();
   await expect(page.getByText("16:00 – 17:00")).toBeVisible();
   await page.keyboard.press("Escape");
+
+  await page.getByRole("region", { name: /From Jul 26, 2026 agenda/ }).evaluate(
+    (agenda) => {
+      agenda.parentElement?.scrollTo({
+        top: agenda.parentElement.scrollHeight,
+      });
+    },
+  );
+  await expect(page.locator("[data-agenda-date]")).toHaveCount(28);
 
   await page
     .locator("label")
@@ -279,7 +320,55 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
 
   await expectNoAccessibilityViolations(page);
 
-  await page.getByRole("button", { name: "Next agenda window" }).click();
+  await page.getByRole("button", { name: "Next agenda start" }).click();
   await expect(page).toHaveURL(/[?&]date=2026-08-23/);
-  await expect(page.getByText("Aug 23 – Sep 19, 2026")).toBeVisible();
+  await expect(page.getByText("From Aug 23, 2026")).toBeVisible();
+});
+
+test("renders and navigates the authenticated Week time grid", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+
+  await page.goto("/app/p/my-calendar/week?date=2026-07-26");
+
+  await expect(page.getByText("Jul 20 – 26, 2026")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Week", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("[data-time-grid-day]")).toHaveCount(7);
+  await expect(
+    page.getByRole("button", { name: /All-day event, Family holiday/ }),
+  ).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Project check-in/ })).toHaveCount(1);
+  await expect(page.locator("[data-current-time]")).toHaveCount(1);
+
+  await page.getByRole("button", { name: /Weekly review/ }).click();
+  await expect(page.getByText("11:00 – 12:00")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Next week" }).click();
+  await expect(page).toHaveURL(/[?&]date=2026-08-02/);
+  await expect(page.getByText("Jul 27 – Aug 2, 2026")).toBeVisible();
+
+  await expectNoAccessibilityViolations(page);
+});
+
+test("uses the shared time grid as a one-column Day", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+
+  await page.goto("/app/p/my-calendar/day?date=2026-07-23");
+
+  await expect(page.getByText("Thursday, July 23, 2026")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Day", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("[data-time-grid-day]")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Project check-in/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Partner call/ })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Next day" }).click();
+  await expect(page).toHaveURL(/[?&]date=2026-07-24/);
+  await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });

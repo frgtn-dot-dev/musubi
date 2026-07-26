@@ -1,12 +1,10 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
-import { dayKey } from "@musubi/calendar/layout";
 import { ChevronRight } from "lucide-react";
-import { useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
-  getAgendaDays,
-  getAgendaEventsByDay,
-  getAgendaRange,
-  getAgendaRangeLabel,
+  AGENDA_GROUP_PAGE,
+  getAgendaGroups,
+  getAgendaLabel,
 } from "../agenda-math";
 import {
   getEventDateLabel,
@@ -35,45 +33,107 @@ export function AgendaView({
   events,
   timeFormat,
 }: AgendaViewProps) {
-  const range = useMemo(() => getAgendaRange(anchor), [anchor]);
-  const days = useMemo(
-    () => getAgendaDays(range.start, range.end),
-    [range.end, range.start],
-  );
-  const eventsByDay = useMemo(
-    () => getAgendaEventsByDay(events, range.start, range.end),
-    [events, range.end, range.start],
+  const groups = useMemo(
+    () => getAgendaGroups(events, anchor),
+    [anchor, events],
   );
   const calendarsById = useMemo(
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars],
   );
+  const groupFingerprint = useMemo(
+    () =>
+      `${anchor.getTime()}:${events.map((event) => event.id).join("|")}`,
+    [anchor, events],
+  );
+  const [pagination, setPagination] = useState({
+    fingerprint: groupFingerprint,
+    shown: AGENDA_GROUP_PAGE,
+  });
+  const shown =
+    pagination.fingerprint === groupFingerprint
+      ? pagination.shown
+      : AGENDA_GROUP_PAGE;
+  const rootRef = useRef<HTMLElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const visibleGroups = groups.slice(0, shown);
   const todayKey = toDateKey(new Date());
+
+  useEffect(() => {
+    const scrollRoot = rootRef.current?.parentElement;
+
+    if (scrollRoot && typeof scrollRoot.scrollTo === "function") {
+      scrollRoot.scrollTo({ behavior: "auto", top: 0 });
+    }
+  }, [groupFingerprint]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+
+    if (
+      !sentinel ||
+      shown >= groups.length ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setPagination((current) => ({
+            fingerprint: groupFingerprint,
+            shown: Math.min(
+              (current.fingerprint === groupFingerprint
+                ? current.shown
+                : AGENDA_GROUP_PAGE) + AGENDA_GROUP_PAGE,
+              groups.length,
+            ),
+          }));
+        }
+      },
+      {
+        root: rootRef.current?.parentElement ?? null,
+        rootMargin: "0px",
+      },
+    );
+    observer.observe(sentinel);
+
+    return () => observer.disconnect();
+  }, [groupFingerprint, groups.length, shown]);
 
   return (
     <section
       className={styles.agendaView}
-      aria-label={`${getAgendaRangeLabel(range.start, range.end)} agenda`}
+      aria-label={`${getAgendaLabel(anchor)} agenda`}
+      ref={rootRef}
     >
       <ol className={styles.agendaList}>
-        {days.map((day) => {
-          const dateKey = dayKey(day);
-          const dayEvents = eventsByDay.get(dateKey) ?? [];
+        {visibleGroups.map((group, groupIndex) => {
+          const isNewYear =
+            groupIndex === 0 ||
+            visibleGroups[groupIndex - 1]?.date.getFullYear() !==
+              group.date.getFullYear();
+          const isToday = group.key === todayKey;
 
           return (
-            <li
-              className={`${styles.agendaDay} ${
-                dateKey === todayKey ? styles.agendaDayToday : ""
-              }`}
-              data-agenda-date={dateKey}
-              key={dateKey}
-            >
-              <time className={styles.agendaDate} dateTime={dateKey}>
-                {dayFormatter.format(day)}
-              </time>
-              {dayEvents.length > 0 ? (
+            <Fragment key={group.key}>
+              {isNewYear ? (
+                <li className={styles.agendaYear} aria-hidden="true">
+                  <span>{group.date.getFullYear()}</span>
+                </li>
+              ) : null}
+              <li
+                className={`${styles.agendaDay} ${
+                  isToday ? styles.agendaDayToday : ""
+                }`}
+                data-agenda-date={group.key}
+              >
+                <time className={styles.agendaDate} dateTime={group.key}>
+                  {dayFormatter.format(group.date)}
+                </time>
                 <div className={styles.agendaEvents}>
-                  {dayEvents.map((event) => {
+                  {group.items.map((event) => {
                     const calendar = calendarsById.get(
                       event.calendars[0] ?? "",
                     );
@@ -125,11 +185,20 @@ export function AgendaView({
                     );
                   })}
                 </div>
-              ) : null}
-            </li>
+              </li>
+            </Fragment>
           );
         })}
       </ol>
+      {shown < groups.length ? (
+        <div
+          className={styles.agendaSentinel}
+          data-agenda-sentinel
+          ref={sentinelRef}
+          role="status"
+          aria-label="Loading more events"
+        />
+      ) : null}
     </section>
   );
 }

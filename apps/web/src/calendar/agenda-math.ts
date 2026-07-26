@@ -1,95 +1,75 @@
 import type { Event } from "@musubi/types";
 import {
-  addDays,
-  dayKey,
+  eventDayDate,
   eventDayKey,
+  isSameDay,
   startOfDay,
 } from "@musubi/calendar/layout";
 
-export const AGENDA_WINDOW_DAYS = 28;
+export const AGENDA_GROUP_PAGE = 14;
+export const AGENDA_RECURRENCE_HORIZON_YEARS = 2;
 
-export function getAgendaRange(anchor: Date) {
-  const start = startOfDay(anchor);
+export type AgendaGroup = {
+  date: Date;
+  items: Event[];
+  key: string;
+};
 
-  return {
-    end: addDays(start, AGENDA_WINDOW_DAYS),
-    start,
-  };
+export function getAgendaStart(anchor: Date, now = new Date()): Date {
+  return isSameDay(anchor, now) ? now : startOfDay(anchor);
 }
 
-export function getAgendaDays(start: Date, endExclusive: Date): Date[] {
-  const days: Date[] = [];
-
-  for (
-    let cursor = startOfDay(start);
-    cursor < endExclusive;
-    cursor = addDays(cursor, 1)
-  ) {
-    days.push(cursor);
-  }
-
-  return days;
+export function getAgendaRecurrenceEnd(start: Date): Date {
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + AGENDA_RECURRENCE_HORIZON_YEARS);
+  return end;
 }
 
-export function getAgendaRangeLabel(
-  start: Date,
-  endExclusive: Date,
-): string {
-  const end = addDays(endExclusive, -1);
-  const startMonth = new Intl.DateTimeFormat("en", {
+export function getAgendaLabel(anchor: Date): string {
+  return `From ${new Intl.DateTimeFormat("en", {
+    day: "numeric",
     month: "short",
-  }).format(start);
-  const endMonth = new Intl.DateTimeFormat("en", {
-    month: "short",
-  }).format(end);
-
-  if (start.getFullYear() !== end.getFullYear()) {
-    return `${startMonth} ${start.getDate()}, ${start.getFullYear()} – ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
-  }
-
-  if (start.getMonth() === end.getMonth()) {
-    return `${startMonth} ${start.getDate()} – ${end.getDate()}, ${end.getFullYear()}`;
-  }
-
-  return `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
+    year: "numeric",
+  }).format(anchor)}`;
 }
 
-export function getAgendaEventsByDay(
+export function getAgendaGroups(
   events: Event[],
-  start: Date,
-  endExclusive: Date,
-): Map<string, Event[]> {
-  const buckets = new Map<string, Event[]>();
-  const firstDayKey = dayKey(start);
-  const endDayKey = dayKey(endExclusive);
-
-  for (const event of events) {
-    const eventKey = eventDayKey(event.start, event.isAllDay);
-
-    if (eventKey < firstDayKey || eventKey >= endDayKey) {
-      continue;
-    }
-
-    const bucket = buckets.get(eventKey);
-
-    if (bucket) {
-      bucket.push(event);
-    } else {
-      buckets.set(eventKey, [event]);
-    }
-  }
-
-  for (const bucket of buckets.values()) {
-    bucket.sort((left, right) => {
-      if (left.isAllDay !== right.isAllDay) {
-        return left.isAllDay ? -1 : 1;
+  anchor: Date,
+  now = new Date(),
+): AgendaGroup[] {
+  const agendaStart = getAgendaStart(anchor, now);
+  const firstDayKey = eventDayKey(agendaStart, false);
+  const sorted = events
+    .filter((event) => {
+      if (event.isAllDay) {
+        return eventDayKey(event.start, true) >= firstDayKey;
       }
 
-      const startDifference = left.start.getTime() - right.start.getTime();
+      return event.start > agendaStart;
+    })
+    .toSorted(
+      (left, right) =>
+        left.start.getTime() - right.start.getTime() ||
+        Number(right.isAllDay) - Number(left.isAllDay) ||
+        left.title.localeCompare(right.title),
+    );
+  const groups: AgendaGroup[] = [];
 
-      return startDifference || left.title.localeCompare(right.title);
-    });
+  for (const event of sorted) {
+    const key = eventDayKey(event.start, event.isAllDay);
+    const current = groups[groups.length - 1];
+
+    if (current?.key === key) {
+      current.items.push(event);
+    } else {
+      groups.push({
+        date: eventDayDate(event.start, event.isAllDay),
+        items: [event],
+        key,
+      });
+    }
   }
 
-  return buckets;
+  return groups;
 }
