@@ -35,7 +35,11 @@ creates and revokes invite links (`<origin>/invite/<token>`), and lets a
 non-owner leave — ownership transfer stays deferred. The sidebar profile opens
 an Account dialog to change the display name and photo (Better Auth `updateUser`
 plus the avatar upload endpoint) and to start the email-confirmed account
-deletion, gated behind typing the display name;
+deletion, gated behind typing the display name. A Connections dialog lists
+synced accounts (grouped from the calendars list), disconnects or reconnects
+them, and adds new ones — Google/Outlook via Better Auth `linkSocial` with
+calendar scopes, Apple/CalDAV via a credentials form — gated by the server's
+advertised `syncProviders`;
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a

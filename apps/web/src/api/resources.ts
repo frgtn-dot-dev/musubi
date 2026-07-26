@@ -8,6 +8,7 @@ import {
   PageResponseSchema,
   PagesResponseSchema,
   RemoveEventResponseSchema,
+  ServerCapabilitiesSchema,
   SettingsDocumentResponseSchema,
   SettingsResponseSchema,
 } from "./contracts";
@@ -201,6 +202,36 @@ export function uploadAvatar(base64: string) {
     body: { data: base64 },
     method: "POST",
     responseSchema: z.object({ url: z.string() }),
+  });
+}
+
+export function getServerCapabilities(signal?: AbortSignal) {
+  return apiRequest("/api/v1/server", {
+    responseSchema: ServerCapabilitiesSchema,
+    signal,
+  });
+}
+
+export function connectCaldav(input: {
+  password: string;
+  serverUrl: string;
+  username: string;
+}) {
+  return apiRequest("/api/v1/users/connections/caldav", {
+    body: input,
+    method: "POST",
+    responseSchema: z.unknown(),
+  });
+}
+
+export function disconnectAccount(input: {
+  accountId: string;
+  provider: string;
+}) {
+  return apiRequest("/api/v1/users/connections/disconnect", {
+    body: input,
+    method: "POST",
+    responseSchema: z.unknown(),
   });
 }
 

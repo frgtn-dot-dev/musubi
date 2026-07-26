@@ -44,6 +44,7 @@ import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
+import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import {
   QuickCreate,
@@ -218,6 +219,7 @@ export function Workspace({
   const [shareCalendar, setShareCalendar] = useState<Calendar | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
     [calendars],
@@ -525,6 +527,10 @@ export function Workspace({
           setSidebarOpen(false);
           setCalendarTransfersOpen(true);
         }}
+        onManageConnections={() => {
+          setSidebarOpen(false);
+          setConnectionsOpen(true);
+        }}
         onOpenSettings={() => {
           setSidebarOpen(false);
           setSettingsOpen(true);
@@ -740,6 +746,17 @@ export function Workspace({
         onUpdate={onUpdateCalendar}
         open={calendarTransfersOpen}
       />
+      {connectionsOpen ? (
+        <ConnectionsDialog
+          calendars={calendars}
+          onNotice={setNotice}
+          onOpenChange={(open) => {
+            if (!open) setConnectionsOpen(false);
+          }}
+          open
+          userId={user.id}
+        />
+      ) : null}
       {accountOpen ? (
         <AccountDialog
           onNotice={setNotice}

@@ -50,6 +50,17 @@ export const InvitesResponseSchema = z.array(InviteSchema);
 
 export type CalendarMember = z.infer<typeof CalendarMemberSchema>;
 
+export const ServerCapabilitiesSchema = z
+  .object({
+    email: z.boolean().default(false),
+    minClientVersion: z.string().optional(),
+    socials: z.array(z.string()).default([]),
+    syncProviders: z.array(z.string()).default([]),
+  })
+  .loose();
+
+export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>;
+
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
 export type Attendee = z.infer<typeof AttendeeSchema>;
 export type ImportedCalendar = z.infer<typeof ImportedCalendarSchema>;

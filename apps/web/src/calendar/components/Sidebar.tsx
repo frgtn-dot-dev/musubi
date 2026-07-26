@@ -4,6 +4,7 @@ import {
   CircleCheck,
   House,
   Layers3,
+  Link2,
   LogOut,
   type LucideIcon,
   Plus,
@@ -22,6 +23,7 @@ type SidebarProps = {
   onClose: () => void;
   onManageAccount: () => void;
   onManageCalendars: () => void;
+  onManageConnections: () => void;
   onOpenSettings: () => void;
   onNotice: (message: string) => void;
   onPageChange: (pageId: string) => void;
@@ -52,6 +54,7 @@ export function Sidebar({
   onClose,
   onManageAccount,
   onManageCalendars,
+  onManageConnections,
   onOpenSettings,
   onNotice,
   onPageChange,
@@ -177,6 +180,13 @@ export function Sidebar({
           >
             <Layers3 aria-hidden="true" size={18} strokeWidth={1.6} />
             <span>Calendars</span>
+          </button>
+          <button
+            type="button"
+            onClick={onManageConnections}
+          >
+            <Link2 aria-hidden="true" size={18} strokeWidth={1.6} />
+            <span>Connections</span>
           </button>
           <button
             type="button"

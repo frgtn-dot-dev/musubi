@@ -1700,6 +1700,36 @@
   list-style: none;
 }
 
+.connectionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.caldavForm {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.caldavForm input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-elevated, var(--surface));
+  color: var(--text);
+}
+
+.caldavHint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
 .calendarManageRow {
   display: flex;
   align-items: center;

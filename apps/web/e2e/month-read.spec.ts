@@ -1141,6 +1141,84 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   await expect(page.getByText("Sam Rivers", { exact: true })).toHaveCount(0);
 });
 
+test("connects and disconnects calendar providers", async ({ page }) => {
+  const withExternal = [
+    ...calendars,
+    {
+      accountId: "acc-1",
+      accountLabel: "work@gmail.com",
+      color: "#4285f4",
+      creatorID: "user-web-qa",
+      id: "g-cal-1",
+      members: [],
+      name: "Work (Google)",
+      provider: "google",
+      role: "owner",
+      syncStatus: "active",
+    },
+  ];
+  await mockAuthenticatedReads(page, events, withExternal);
+  let disconnectBody: unknown;
+  let caldavBody: unknown;
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, {
+      email: true,
+      minClientVersion: "0.1.2",
+      socials: ["google"],
+      syncProviders: ["google", "microsoft", "caldav"],
+    }),
+  );
+  await page.route("**/api/v1/users/connections/disconnect", (route) => {
+    disconnectBody = route.request().postDataJSON();
+    return route.fulfill({ body: "", status: 200 });
+  });
+  await page.route("**/api/v1/users/connections/caldav", (route) => {
+    if (route.request().method() === "POST") {
+      caldavBody = route.request().postDataJSON();
+      return route.fulfill({ body: "", status: 200 });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Connections" }).click();
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Connections" }),
+  ).toBeVisible();
+
+  // Capability-gated add buttons.
+  await expect(
+    page.getByRole("button", { name: "Connect Google Calendar" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Connect Apple / iCloud" }),
+  ).toBeVisible();
+
+  // Connected account shows and disconnects.
+  await expect(page.getByText("work@gmail.com")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Disconnect work@gmail.com" })
+    .click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "work@gmail.com disconnected.",
+  );
+  expect(disconnectBody).toEqual({ accountId: "acc-1", provider: "google" });
+
+  // CalDAV/Apple connect form.
+  await page.getByRole("button", { name: "Connect Apple / iCloud" }).click();
+  await page.getByPlaceholder("Apple ID email").fill("me@icloud.com");
+  await page.getByPlaceholder("Password").fill("app-specific-pw");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Calendar connected.",
+  );
+  expect(caldavBody).toEqual({
+    password: "app-specific-pw",
+    serverUrl: "https://caldav.icloud.com",
+    username: "me@icloud.com",
+  });
+});
+
 test("updates the display name and gates account deletion", async ({
   page,
 }) => {
