@@ -100,7 +100,7 @@ const events = {
       "studio",
       "#d6b76b",
       "2026-07-06T00:00:00.000Z",
-      "2026-07-11T00:00:00.000Z",
+      "2026-07-10T00:00:00.000Z",
       { isAllDay: true, location: "Kokořínsko" },
     ),
     event(
@@ -109,7 +109,7 @@ const events = {
       "family",
       "#365a92",
       "2026-07-17T00:00:00.000Z",
-      "2026-07-23T00:00:00.000Z",
+      "2026-07-22T00:00:00.000Z",
       { isAllDay: true },
     ),
   ],
@@ -186,9 +186,15 @@ test("reads, filters and signs out of the authenticated Month", async ({
   await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
   await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Studio retreat/ }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Family holiday/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(5);
+  await expect(page.getByRole("button", { name: /Family holiday/ })).toHaveCount(6);
   await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(5);
+
+  await page.getByRole("button", { name: /Studio retreat/ }).first().click();
+  await expect(
+    page.getByText(/Monday, July 6, 2026.*Friday, July 10, 2026/),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page
     .locator("label")

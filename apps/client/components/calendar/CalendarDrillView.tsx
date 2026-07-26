@@ -2,9 +2,14 @@ import { colors, fonts } from "@/constants/theme";
 import { MonthView } from "@/components/cal/MonthView";
 import { TimelineView } from "@/components/cal/TimelineView";
 import {
-  bucketByDay, dayKey, Draft, DRILL_OPEN_MIN, GUTTER, HOUR_H,
-  isSameDay, minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS,
+  Draft, DRILL_OPEN_MIN, GUTTER, HOUR_H,
+  minutesToY, Rect, ZOOM_IN_MS, ZOOM_OUT_MS,
 } from "@/components/cal/layout";
+import {
+  bucketEventsByDay as bucketByDay,
+  dayKey,
+  isSameDay,
+} from "@musubi/calendar/layout";
 import { Event } from "@musubi/types";
 import {
   memo, MutableRefObject, useCallback, useEffect, useMemo, useRef, useState,

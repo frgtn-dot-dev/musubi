@@ -1,16 +1,18 @@
 import { expandRecurringEvents } from "@musubi/calendar";
+import { getMonthGridRange } from "@musubi/calendar/layout";
 import { useQuery } from "@tanstack/react-query";
-import { addDays, getMonthGrid, parseDateKey } from "./calendar-math";
+import { parseDateKey } from "./calendar-math";
 import { getCalendars, getEvents, getSettings } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
 export function getVisibleMonthRange(date: string) {
-  const days = getMonthGrid(parseDateKey(date));
+  const range = getMonthGridRange(parseDateKey(date), "monday", 1);
+
   return {
     // One day of padding covers both Sunday- and Monday-first user settings
     // without waiting for settings before the three initial reads can start.
-    end: addDays(days[days.length - 1]!, 2),
-    start: addDays(days[0]!, -1),
+    end: range.endExclusive,
+    start: range.start,
   };
 }
 

@@ -1,7 +1,7 @@
 import type { Calendar, Event, Settings, User } from "@musubi/types";
+import { addMonthPages } from "@musubi/calendar/layout";
 import { useEffect, useMemo, useState } from "react";
 import {
-  addMonths,
   getMonthLabel,
   parseDateKey,
 } from "../calendar-math";
@@ -85,7 +85,7 @@ export function Workspace({
   }, [notice]);
 
   function changeMonth(offset: number) {
-    onDateChange(toDateKey(addMonths(anchor, offset)));
+    onDateChange(toDateKey(addMonthPages(anchor, offset)));
   }
 
   function openCreateAtDate(nextDate: string) {

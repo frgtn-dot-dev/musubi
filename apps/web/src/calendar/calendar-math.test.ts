@@ -1,9 +1,11 @@
 import type { Event } from "@musubi/types";
+import {
+  addMonthPages,
+  getMonthGrid,
+  segmentEventsByDay,
+} from "@musubi/calendar/layout";
 import { describe, expect, it } from "vitest";
 import {
-  addMonths,
-  bucketEventsByDay,
-  getMonthGrid,
   getMonthLabel,
   parseDateKey,
 } from "./calendar-math";
@@ -32,7 +34,7 @@ function allDayEvent(start: string, end: string): Event {
 
 describe("calendar month math", () => {
   it("builds a six-week Monday-first grid", () => {
-    const grid = getMonthGrid(parseDateKey("2026-07-26"));
+    const grid = getMonthGrid(parseDateKey("2026-07-26"), "monday");
 
     expect(grid).toHaveLength(42);
     expect(toDateKey(grid[0]!)).toBe("2026-06-29");
@@ -47,7 +49,7 @@ describe("calendar month math", () => {
   });
 
   it("moves between calendar months without day overflow", () => {
-    expect(toDateKey(addMonths(parseDateKey("2026-07-31"), 1))).toBe(
+    expect(toDateKey(addMonthPages(parseDateKey("2026-07-31"), 1))).toBe(
       "2026-08-01",
     );
   });
@@ -56,12 +58,12 @@ describe("calendar month math", () => {
     expect(getMonthLabel(parseDateKey("2026-07-26"))).toBe("July 2026");
   });
 
-  it("expands UTC-midnight all-day ranges with an exclusive end", () => {
-    const buckets = bucketEventsByDay(
+  it("expands UTC-midnight all-day ranges with an inclusive end date", () => {
+    const buckets = segmentEventsByDay(
       [
         allDayEvent(
           "2026-07-17T00:00:00Z",
-          "2026-07-22T00:00:00Z",
+          "2026-07-21T00:00:00Z",
         ),
       ],
       parseDateKey("2026-07-01"),
@@ -89,9 +91,9 @@ describe("calendar month math", () => {
     });
   });
 
-  it("keeps a one-day all-day event on its start date only", () => {
-    const buckets = bucketEventsByDay([
-      allDayEvent("2026-07-03T00:00:00Z", "2026-07-04T00:00:00Z"),
+  it("keeps an inclusive one-day all-day event on its date only", () => {
+    const buckets = segmentEventsByDay([
+      allDayEvent("2026-07-03T00:00:00Z", "2026-07-03T00:00:00Z"),
     ]);
 
     expect([...buckets.keys()]).toEqual(["2026-07-03"]);

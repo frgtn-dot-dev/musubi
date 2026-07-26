@@ -1,14 +1,16 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
+  getMonthGrid,
+  segmentEventsByDay as bucketEventsByDay,
+} from "@musubi/calendar/layout";
+import {
   type KeyboardEvent,
   useMemo,
   useRef,
   useState,
 } from "react";
 import {
-  bucketEventsByDay,
   getLongDateLabel,
-  getMonthGrid,
   getWeekdayLabels,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
