@@ -185,19 +185,30 @@ pro B** (snap potřebuje px/min jako data, ne magickou konstantu).
 
 Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živý.
 
-### Fáze B — Přímá manipulace (jádro pocitu)
+### Fáze B — Přímá manipulace
 
-- Pointer state machine z §4 (threshold, ne okamžitý drag).
-- Drag-to-move: ghost, elevace, snap 15 min, **živý čas u objektu**, highlight
-  cílového dne, auto-scroll u okrajů, Escape = rollback, transform (ne reflow).
-- Resize: samostatné handles (nahoře start, dole end), živý čas, snap.
-- Drag-to-create: výběr intervalu → QuickCreate ukotvený u výsledku.
-- Klávesnicová alternativa: „Přesunout"/„Změnit délku" příkaz + modifikované
-  šipky po snap intervalu, oznámeno screen readeru.
-- Žádná síťová mutace během pointer move.
+**B1 — drag-to-move + resize: HOTOVO** (2026-07-27)
 
-*Hotovo když:* drag/resize mají snap, čas, auto-scroll, Escape a rollback;
-klávesnicová cesta existuje; DST/přes-půlnoc scénáře otestované.
+- Pointer automat v `use-time-grid-drag.ts` podle §4: press → threshold (4 px) →
+  drag/resize → commit/rollback. Listenery se navěšují **při stisku**, ne
+  z effectu (jinak by se re-registrovaly při každém pohybu ghostu).
+- Čistá matematika v `time-grid-drag.ts` (+16 testů): absolutní snap na 15 min
+  (event mimo mřížku se srovná), zachování délky u move, **nikdy neinvertuje**
+  event při resize (jeden interval vždy zůstane), clamp na hranice dne,
+  auto-scroll s rampou u okraje, day index z pointeru.
+- Živý čas přímo v bloku (ukazuje čas dropu, ne původní), elevace + `grab`
+  kurzor, **highlight cílového dne** při přesunu mezi dny, `ns-resize` úchyty
+  8 px nahoře/dole (zvýrazní se až při hoveru).
+- Escape ruší drag (`stopPropagation`, aby nezavřel celou obrazovku), pointer
+  cancel taky; nulová síťová mutace během pohybu — commit až po dropu, chyba
+  vrátí blok na serverovou pravdu a řekne to.
+- Gating: `canEditEvent` + žádný drag u **opakovaných** eventů, protože update
+  dnes mění celou sérii — tichý přesun série je přesně ten skrytý dopad, který
+  pravidla zakazují. Scope dialog patří do C, kde se dialogy staví.
+
+**B2 — zbývá:** drag-to-create (tažení přes interval → QuickCreate) a
+klávesnicová alternativa („Přesunout"/„Změnit délku", modifikované šipky,
+oznámení screen readeru). Bez B2 není B hotová podle §R10.
 
 ### Fáze C — Vratnost
 

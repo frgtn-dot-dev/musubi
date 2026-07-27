@@ -1,14 +1,17 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
+  addDays,
   bucketEventsByDay,
   dayKey,
   getAllDaySpans,
   getDaySegments,
   isSameDay,
+  startOfDay,
 } from "@musubi/calendar/layout";
 import {
   type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   memo,
   useEffect,
   useMemo,
@@ -26,6 +29,12 @@ import {
   yToMinutes,
   type TimeGeometry,
 } from "../time-geometry";
+import { canEditEvent } from "../event-permissions";
+import type { DragMode, DragTimes } from "../time-grid-drag";
+import {
+  useTimeGridDrag,
+  type BeginDragInput,
+} from "../use-time-grid-drag";
 import {
   getTimeGridDays,
   type TimeGridViewId,
@@ -57,6 +66,16 @@ type TimeGridViewProps = EventActionHandlers & {
   calendars: Calendar[];
   events: Event[];
   geometry: TimeGeometry;
+  /**
+   * Commit a drag or resize. Absent (or returning without moving) leaves the
+   * grid read-only for direct manipulation.
+   */
+  onMoveEvent?: (input: {
+    dayOffset: number;
+    end: Date;
+    event: Event;
+    start: Date;
+  }) => Promise<unknown>;
   /** Page presentation: a five-column working week when false. */
   showWeekend?: boolean;
   onCreateAtTime?: (
@@ -72,9 +91,14 @@ type TimeGridViewProps = EventActionHandlers & {
 type TimelineEventProps = EventActionHandlers & {
   calendar: Calendar | undefined;
   calendars: Calendar[];
+  dayIndex: number;
   dayMode: boolean;
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
+  /** Live times while this event is being dragged, else undefined. */
+  dragTimes?: DragTimes;
+  draggable: boolean;
   geometry: TimeGeometry;
+  onBeginDrag: (input: BeginDragInput) => void;
   timeFormat: Settings["timeFormat"];
 };
 
@@ -84,6 +108,24 @@ function hourLabel(hour: number, timeFormat: Settings["timeFormat"]) {
   }
 
   return hour12Formatter.format(new Date(2026, 0, 1, hour));
+}
+
+/** A minute of the day as a clock time, for live drag feedback. */
+function minuteLabel(
+  minutes: number,
+  timeFormat: Settings["timeFormat"],
+): string {
+  const hour = Math.floor(minutes / 60) % 24;
+  const minute = Math.floor(minutes % 60);
+
+  if (timeFormat === "12h") {
+    return new Intl.DateTimeFormat("en", {
+      hour: "numeric",
+      hour12: true,
+      minute: "2-digit",
+    }).format(new Date(2026, 0, 1, hour, minute));
+  }
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function timeZoneLabel(date: Date) {
@@ -97,15 +139,40 @@ function timeZoneLabel(date: Date) {
 const TimelineEvent = memo(function TimelineEvent({
   calendar,
   calendars,
+  dayIndex,
   dayMode,
   daySegment,
+  dragTimes,
+  draggable,
   geometry,
+  onBeginDrag,
   timeFormat,
   ...eventActions
 }: TimelineEventProps) {
-  const { col, cols, endMin, event, startMin } = daySegment;
+  const { col, cols, event } = daySegment;
+  // While dragging, the block follows the ghost times rather than the data.
+  const startMin = dragTimes?.startMinutes ?? daySegment.startMin;
+  const endMin = dragTimes?.endMinutes ?? daySegment.endMin;
   const eventColor = calendar?.color ?? event.color;
   const duration = endMin - startMin;
+
+  function startDrag(
+    pointerEvent: ReactPointerEvent<HTMLElement>,
+    mode: DragMode,
+  ) {
+    // Only the primary button, and only where a move is actually allowed.
+    if (!draggable || pointerEvent.button !== 0) return;
+    onBeginDrag({
+      dayIndex,
+      endMinutes: daySegment.endMin,
+      event,
+      mode,
+      pointerId: pointerEvent.pointerId,
+      startMinutes: daySegment.startMin,
+      x: pointerEvent.clientX,
+      y: pointerEvent.clientY,
+    });
+  }
   const left = dayMode ? `${(col / cols) * 100}%` : `${Math.min(col, 3) * 8}px`;
   const width = dayMode
     ? `calc(${100 / cols}% - 3px)`
@@ -125,7 +192,10 @@ const TimelineEvent = memo(function TimelineEvent({
         aria-label={`${event.title}, ${getEventDateLabel(
           event,
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
+        data-dragging={dragTimes ? "" : undefined}
+        data-draggable={draggable ? "" : undefined}
         data-time-event={event.id}
+        onPointerDown={(pointerEvent) => startDrag(pointerEvent, "move")}
         style={
           {
             "--event-color": eventColor,
@@ -143,10 +213,39 @@ const TimelineEvent = memo(function TimelineEvent({
       >
         {duration >= 30 ? (
           <span className={styles.timelineEventTime}>
-            {getEventRangeLabel(event, timeFormat).replace(" – ", "–")}
+            {/* While dragging, show the time the drop would produce — the
+                answer the user is actually looking for. */}
+            {dragTimes
+              ? `${minuteLabel(startMin, timeFormat)}–${minuteLabel(
+                  endMin,
+                  timeFormat,
+                )}`
+              : getEventRangeLabel(event, timeFormat).replace(" – ", "–")}
           </span>
         ) : null}
         <span className={styles.timelineEventTitle}>{event.title}</span>
+        {draggable ? (
+          <>
+            {/* Resize has its own handles and its own state, so a move can
+                never be mistaken for a length change. */}
+            <span
+              aria-hidden="true"
+              className={styles.resizeHandleTop}
+              onPointerDown={(pointerEvent) => {
+                pointerEvent.stopPropagation();
+                startDrag(pointerEvent, "resize-start");
+              }}
+            />
+            <span
+              aria-hidden="true"
+              className={styles.resizeHandleBottom}
+              onPointerDown={(pointerEvent) => {
+                pointerEvent.stopPropagation();
+                startDrag(pointerEvent, "resize-end");
+              }}
+            />
+          </>
+        ) : null}
       </button>
     </EventDetailsPopover>
   );
@@ -158,6 +257,7 @@ export function TimeGridView({
   events,
   geometry,
   onCreateAtTime,
+  onMoveEvent,
   showWeekend = true,
   timeFormat,
   view,
@@ -199,9 +299,37 @@ export function TimeGridView({
   const [now, setNow] = useState(() => new Date());
   const hasToday = days.some((day) => isSameDay(day, now));
   const rootRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   // Last applied geometry, so a density change can rescale scroll instead of
   // resetting it.
   const geometryRef = useRef(geometry);
+
+  const { begin: beginDrag, drag } = useTimeGridDrag({
+    columns: () => {
+      const bounds = canvasRef.current?.getBoundingClientRect();
+      // The time gutter is part of the canvas but is not a day column.
+      const gutter = bounds ? Math.min(64, bounds.width) : 0;
+      const width = bounds ? (bounds.width - gutter) / days.length : 0;
+      return {
+        count: days.length,
+        left: (bounds?.left ?? 0) + gutter,
+        width,
+      };
+    },
+    geometry,
+    onCommit: async ({ dayOffset, event, times }) => {
+      if (!onMoveEvent) return;
+      const day = addDays(startOfDay(event.start), dayOffset);
+      await onMoveEvent({
+        dayOffset,
+        end: new Date(day.getTime() + times.endMinutes * 60_000),
+        event,
+        start: new Date(day.getTime() + times.startMinutes * 60_000),
+      });
+    },
+    onError: eventActions.onNotice,
+    scrollRoot: () => rootRef.current?.parentElement,
+  });
   const dayMode = view === "day";
   const layoutStyle = {
     "--day-count": days.length,
@@ -369,7 +497,7 @@ export function TimeGridView({
         </div>
       </div>
 
-      <div className={styles.timeGridCanvas}>
+      <div className={styles.timeGridCanvas} ref={canvasRef}>
         {Array.from({ length: 24 }, (_, hour) => (
           <div
             className={styles.timeGridHour}
@@ -392,6 +520,11 @@ export function TimeGridView({
             return (
               <div
                 className={styles.timeGridColumn}
+                data-drop-target={
+                  drag && drag.mode === "move" && drag.dayIndex === dayIndex
+                    ? ""
+                    : undefined
+                }
                 data-time-grid-column={dayKey(day)}
                 key={dayKey(day)}
                 tabIndex={-1}
@@ -433,10 +566,28 @@ export function TimeGridView({
                       segment.event.calendars[0] ?? "",
                     )}
                     calendars={calendars}
+                    dayIndex={dayIndex}
                     dayMode={dayMode}
                     daySegment={segment}
+                    dragTimes={
+                      // The ghost stays in the event's own column and shows the
+                      // new time; the target day is highlighted separately, so a
+                      // cross-day drag still reads clearly.
+                      drag?.event.id === segment.event.id
+                        ? drag.times
+                        : undefined
+                    }
+                    draggable={
+                      Boolean(onMoveEvent) &&
+                      !segment.event.recurrence &&
+                      canEditEvent(
+                        eventActions.getEventMaster(segment.event),
+                        calendars,
+                      )
+                    }
                     geometry={geometry}
                     key={segment.event.id}
+                    onBeginDrag={beginDrag}
                     timeFormat={timeFormat}
                     {...eventActions}
                   />

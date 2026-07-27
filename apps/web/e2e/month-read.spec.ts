@@ -901,6 +901,104 @@ test("resolves the default page and switches between pages", async ({
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 });
 
+test("moves and resizes an event by dragging it", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ end: string; start: string }> = [];
+  // Record the write, then let the shared mock apply it to its event state —
+  // otherwise the refetch that follows would undo the move.
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as {
+        end: string;
+        start: string;
+      };
+      writes.push({ end: body.end, start: body.start });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+  // "Project check-in" is 07:30–08:30 UTC on this day.
+  const block = page.getByRole("button", { name: /Project check-in/ }).first();
+  await expect(block).toBeVisible();
+  const before = (await block.boundingBox())!;
+
+  // A drag has to travel past the threshold, so step the pointer.
+  await page.mouse.move(before.x + before.width / 2, before.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width / 2, before.y + 40, {
+    steps: 6,
+  });
+  await page.mouse.up();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Event moved.",
+  );
+  expect(writes).toHaveLength(1);
+  // Moved later in the day, and the duration is preserved.
+  const moved = writes[0]!;
+  expect(new Date(moved.start).getTime()).toBeGreaterThan(
+    new Date("2026-07-23T07:30:00.000Z").getTime(),
+  );
+  expect(
+    new Date(moved.end).getTime() - new Date(moved.start).getTime(),
+  ).toBe(60 * 60_000);
+
+  // Resizing from the bottom edge changes only the end.
+  const afterMove = (await block.boundingBox())!;
+  await page.mouse.move(
+    afterMove.x + afterMove.width / 2,
+    afterMove.y + afterMove.height - 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    afterMove.x + afterMove.width / 2,
+    afterMove.y + afterMove.height + 40,
+    { steps: 6 },
+  );
+  await page.mouse.up();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Event resized.",
+  );
+  expect(writes).toHaveLength(2);
+  const resized = writes[1]!;
+  expect(resized.start).toBe(moved.start);
+  expect(new Date(resized.end).getTime()).toBeGreaterThan(
+    new Date(moved.end).getTime(),
+  );
+});
+
+test("cancels a drag with Escape and leaves the event alone", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let writes = 0;
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") writes += 1;
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+  const block = page.getByRole("button", { name: /Project check-in/ }).first();
+  await expect(block).toBeVisible();
+  const before = (await block.boundingBox())!;
+
+  await page.mouse.move(before.x + before.width / 2, before.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width / 2, before.y + 60, {
+    steps: 6,
+  });
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+
+  // Escape cancels the drag, not the screen: nothing is written and the block
+  // returns to where it was.
+  expect(writes).toBe(0);
+  const after = (await block.boundingBox())!;
+  expect(Math.abs(after.y - before.y)).toBeLessThan(2);
+});
+
 test("changes time grid density from the page editor", async ({ page }) => {
   await mockAuthenticatedReads(page);
   let savedDensity: string | undefined;

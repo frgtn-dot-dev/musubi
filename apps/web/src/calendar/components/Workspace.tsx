@@ -694,6 +694,17 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               geometry={geometry}
+              onMoveEvent={async ({ end, event, start }) => {
+                // The grid already shows the new position; this confirms it.
+                // A rejection propagates so the drag reports it and the block
+                // snaps back to the server's truth.
+                await onUpdateEvent({ ...event, end, start });
+                setNotice(
+                  start.getTime() === event.start.getTime()
+                    ? "Event resized."
+                    : "Event moved.",
+                );
+              }}
               showWeekend={showWeekend}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}

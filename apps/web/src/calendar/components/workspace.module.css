@@ -943,6 +943,56 @@
   height: calc(24 * var(--hour-height));
 }
 
+/* Direct manipulation ------------------------------------------------------ */
+
+.timelineEvent[data-draggable] {
+  cursor: grab;
+}
+
+/* Elevated and slightly translucent while held, so the grid underneath stays
+   readable and it is obvious the block is in hand rather than committed. */
+.timelineEvent[data-dragging] {
+  z-index: 40 !important;
+  box-shadow: var(--shadow-overlay);
+  cursor: grabbing;
+  opacity: 0.92;
+}
+
+/* Which day a cross-column move would land on. */
+.timeGridColumn[data-drop-target] {
+  background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
+}
+
+.resizeHandleTop,
+.resizeHandleBottom {
+  position: absolute;
+  left: 0;
+  /* Comfortably grabbable without swallowing the block's own click area. */
+  height: 8px;
+  width: 100%;
+  cursor: ns-resize;
+}
+
+.resizeHandleTop {
+  top: 0;
+}
+
+.resizeHandleBottom {
+  bottom: 0;
+}
+
+/* Only hint at the handles once the pointer is on the event. */
+.timelineEvent[data-draggable]:hover .resizeHandleTop,
+.timelineEvent[data-draggable]:hover .resizeHandleBottom {
+  background: color-mix(in srgb, var(--event-foreground) 28%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timelineEvent[data-dragging] {
+    opacity: 1;
+  }
+}
+
 .timeGridHour {
   position: absolute;
   right: 0;
