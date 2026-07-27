@@ -8,6 +8,7 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
+import type { RefObject } from "react";
 import { calendarViews, type CalendarViewId } from "../view-registry";
 import type { Density } from "../time-geometry";
 import { ThemeToggle } from "./ThemeToggle";
@@ -40,6 +41,8 @@ type ToolbarProps = {
   periodLabel: string;
   periodName: string;
   searchQuery: string;
+  /** So the "/" shortcut can put the caret in the field. */
+  searchRef?: RefObject<HTMLInputElement | null>;
 };
 
 export function Toolbar({
@@ -68,6 +71,7 @@ export function Toolbar({
   periodLabel,
   periodName,
   searchQuery,
+  searchRef,
 }: ToolbarProps) {
   return (
     <header className={styles.toolbar}>
@@ -205,6 +209,7 @@ export function Toolbar({
             <span className={styles.srOnly}>Search events</span>
             <input
               placeholder="Search"
+              ref={searchRef}
               type="search"
               value={searchQuery}
               onChange={(event) => onSearch(event.target.value)}

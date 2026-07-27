@@ -59,6 +59,125 @@
   scrollbar-width: thin;
 }
 
+.miniCalendar {
+  padding: 14px 14px 4px;
+}
+
+.miniHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.miniHeader h2 {
+  margin: 0;
+}
+
+.miniGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.miniWeekdays,
+.miniWeek {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.miniWeekdays abbr {
+  padding-bottom: 3px;
+  color: var(--text-faint);
+  font-size: 0.6rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.miniDay {
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.66rem;
+  cursor: pointer;
+}
+
+.miniDay:hover {
+  background: var(--surface-raised);
+}
+
+.miniDay[data-outside] {
+  color: var(--text-faint);
+}
+
+.miniDay[data-today] {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+/* Selected outranks today, and keeps the text readable on the fill. */
+.miniDay[data-selected] {
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+  font-weight: 600;
+}
+
+.shortcutGroups {
+  display: grid;
+  padding: 4px 18px 18px;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* Not the sidebar's uppercase micro-label: at 10 px muted it misses 4.5:1. */
+.shortcutGroupTitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.shortcutList {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 0;
+  gap: 5px;
+  font-size: 0.74rem;
+}
+
+.shortcutList > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shortcutList dt {
+  color: var(--text-secondary);
+}
+
+.shortcutList dd {
+  margin: 0;
+}
+
+.shortcutList kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
 .sidebarSection {
   padding: 16px 14px;
 }
@@ -1805,8 +1924,10 @@
 
 .manageDialogHeader p {
   margin: 5px 0 0;
-  color: var(--text-muted);
-  font-size: 0.7rem;
+  /* Muted fails 4.5:1 at this size — secondary is the smallest step that
+     passes, and this text is the dialog's only explanation. */
+  color: var(--text-secondary);
+  font-size: 0.72rem;
   line-height: 1.45;
 }
 

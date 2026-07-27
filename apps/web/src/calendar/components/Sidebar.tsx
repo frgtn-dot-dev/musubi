@@ -11,16 +11,25 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import type { Calendar, PageDocument, User } from "@musubi/types";
+import type {
+  Calendar,
+  PageDocument,
+  Settings as UserSettings,
+  User,
+} from "@musubi/types";
 import { useState, useSyncExternalStore } from "react";
 import { BrandMark } from "~/components/BrandMark";
+import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
 
 type SidebarProps = {
   activePageId: string;
+  /** The date the main view is on, so the mini calendar can mark it. */
+  anchor: Date;
   calendars: Calendar[];
   isOpen: boolean;
   onClose: () => void;
+  onDateChange: (date: string) => void;
   onManageAccount: () => void;
   onManageCalendars: () => void;
   onManageConnections: () => void;
@@ -33,6 +42,7 @@ type SidebarProps = {
   syncLabel: string;
   user: Pick<User, "email" | "name">;
   visibleCalendarIds: string[];
+  weekStartsOn: UserSettings["weekStartsOn"];
 };
 
 const mobileQuery = "(max-width: 820px)";
@@ -49,6 +59,7 @@ function getMobileViewport() {
 
 export function Sidebar({
   activePageId,
+  anchor,
   calendars,
   isOpen,
   onClose,
@@ -57,6 +68,7 @@ export function Sidebar({
   onManageConnections,
   onOpenSettings,
   onNotice,
+  onDateChange,
   onPageChange,
   onSignOut,
   onToggleCalendar,
@@ -64,6 +76,7 @@ export function Sidebar({
   syncLabel,
   user,
   visibleCalendarIds,
+  weekStartsOn,
 }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false);
   const isMobile = useSyncExternalStore(
@@ -105,6 +118,11 @@ export function Sidebar({
         </div>
 
         <div className={styles.sidebarScroll}>
+          <MiniCalendar
+            anchor={anchor}
+            onDateChange={onDateChange}
+            weekStartsOn={weekStartsOn}
+          />
           <nav className={styles.sidebarSection} aria-labelledby="pages-label">
             <h2 className={styles.sectionLabel} id="pages-label">
               Pages

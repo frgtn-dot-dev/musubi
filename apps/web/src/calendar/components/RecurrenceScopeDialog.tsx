@@ -18,11 +18,17 @@ const OPTIONS: Array<{ label: string; scope: EditScope }> = [
  */
 export function RecurrenceScopeDialog({
   onResolve,
+  returnFocus,
   timeLabel,
   title,
 }: {
   /** The chosen scope, or undefined when dismissed. */
   onResolve: (scope: EditScope | undefined) => void;
+  /**
+   * Where focus was when the gesture happened. There is no trigger to return to
+   * — a drag or Alt+arrow opened this — so it is carried in.
+   */
+  returnFocus?: HTMLElement | null;
   timeLabel: string;
   title: string;
 }) {
@@ -33,6 +39,11 @@ export function RecurrenceScopeDialog({
         <Dialog.Content
           aria-describedby="recurrence-scope-description"
           className={styles.scopeDialog}
+          onCloseAutoFocus={(event) => {
+            if (!returnFocus?.isConnected) return;
+            event.preventDefault();
+            returnFocus.focus();
+          }}
         >
           <Dialog.Title>Change recurring event</Dialog.Title>
           <Dialog.Description id="recurrence-scope-description">

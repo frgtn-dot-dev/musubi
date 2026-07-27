@@ -16,11 +16,11 @@ import type {
   RemoveEventResponse,
 } from "~/api/contracts";
 import {
-  type KeyboardEvent,
   useDeferredValue,
   useEffect,
   useMemo,
   useCallback,
+  useRef,
   useState,
 } from "react";
 import { getAgendaLabel } from "../agenda-math";
@@ -34,6 +34,7 @@ import { getTimeGridDays, getTimeGridLabel } from "../time-grid-math";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
 import { seriesEditWrites, type EditScope } from "../recurrence-edit";
+import { shortcutFor } from "../shortcuts";
 import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
@@ -50,6 +51,7 @@ import { MonthCalendar } from "./MonthCalendar";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import { SaveBar } from "./SaveBar";
+import { ShortcutsDialog } from "./ShortcutsDialog";
 import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
 import { SettingsDialog } from "./SettingsDialog";
@@ -246,12 +248,20 @@ export function Workspace({
   }
 
   function askScope(occurrence: Event, start: Date, end: Date) {
+    // Captured before the dialog steals focus, so Alt+arrow keyboard editing
+    // lands back on the event block it started from.
+    const returnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
     return new Promise<EditScope | undefined>((resolve) => {
       setScopeRequest({
         resolve: (scope) => {
           setScopeRequest(undefined);
           resolve(scope);
         },
+        returnFocus,
         timeLabel: getEventRangeLabel(
           { ...occurrence, end, start },
           settings.timeFormat,
@@ -317,6 +327,7 @@ export function Workspace({
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
   const [scopeRequest, setScopeRequest] = useState<{
     resolve: (scope: EditScope | undefined) => void;
+    returnFocus: HTMLElement | null;
     timeLabel: string;
     title: string;
   }>();
@@ -325,6 +336,9 @@ export function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
     [calendars],
@@ -516,37 +530,85 @@ export function Workspace({
     });
   }
 
-  function handleWorkspaceKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (
-      (event.metaKey || event.ctrlKey) &&
-      event.key.toLocaleLowerCase() === "s"
-    ) {
-      if (editing && pageDirty) {
-        event.preventDefault();
-        void savePageChanges();
-      }
+  function handleWorkspaceKeyDown(event: globalThis.KeyboardEvent) {
+    const target = event.target;
+    // An open layer owns the keyboard: a letter behind a dialog must not switch
+    // the view under it. Radix gives popovers and dialogs both role="dialog".
+    if (target instanceof Element && target.closest('[role="dialog"]')) {
       return;
     }
 
-    if (
-      event.key.toLocaleLowerCase() !== "c" ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey ||
-      event.target instanceof HTMLInputElement ||
-      event.target instanceof HTMLSelectElement ||
-      event.target instanceof HTMLTextAreaElement ||
-      event.target instanceof HTMLButtonElement
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    openCreateAtDate(date, event.currentTarget, undefined, {
-      point: { x: bounds.left + bounds.width / 2, y: bounds.top + 92 },
+    const command = shortcutFor(event, {
+      // A button is not typing, but Space and Enter are its own, and a letter
+      // pressed on it is not aimed at the calendar either.
+      typing:
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLButtonElement,
     });
+    if (!command) {
+      return;
+    }
+
+    // Every shortcut runs the same path as its control, so the two cannot drift.
+    switch (command.kind) {
+      case "create": {
+        const main = mainRef.current;
+        if (!main) return;
+        event.preventDefault();
+        const bounds = main.getBoundingClientRect();
+        openCreateAtDate(date, main, undefined, {
+          point: { x: bounds.left + bounds.width / 2, y: bounds.top + 92 },
+        });
+        return;
+      }
+      case "help":
+        event.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      case "next":
+        event.preventDefault();
+        changePeriod(1);
+        return;
+      case "previous":
+        event.preventDefault();
+        changePeriod(-1);
+        return;
+      case "save":
+        if (editing && pageDirty) {
+          event.preventDefault();
+          void savePageChanges();
+        }
+        return;
+      case "search":
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      case "today":
+        event.preventDefault();
+        onDateChange(toDateKey(new Date()));
+        return;
+      case "view":
+        event.preventDefault();
+        onViewChange(command.view);
+        return;
+    }
   }
+
+  // Shortcuts listen on the window, not on the workspace element: an app-level
+  // key has to work when nothing in particular is focused. The handler is read
+  // through a ref so it always sees current state without re-registering.
+  const keyHandlerRef = useRef(handleWorkspaceKeyDown);
+  useEffect(() => {
+    keyHandlerRef.current = handleWorkspaceKeyDown;
+  });
+  useEffect(() => {
+    const listener = (event: globalThis.KeyboardEvent) =>
+      keyHandlerRef.current(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
 
   function handleToggleCalendar(calendarId: string) {
     if (editing) {
@@ -653,10 +715,15 @@ export function Workspace({
     <div className={styles.workspace}>
       <Sidebar
         activePageId={pageId}
+        anchor={anchor}
         calendars={calendars}
         pages={pages}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onDateChange={(nextDate) => {
+          onDateChange(nextDate);
+          setSidebarOpen(false);
+        }}
         onManageAccount={() => {
           setSidebarOpen(false);
           setAccountOpen(true);
@@ -681,14 +748,11 @@ export function Workspace({
           isRefreshing ? "Refreshing server data…" : "Connected to server"
         }
         user={user}
+        weekStartsOn={settings.weekStartsOn}
         visibleCalendarIds={visibleCalendarIds}
       />
 
-      <main
-        className={styles.main}
-        id="main-content"
-        onKeyDown={handleWorkspaceKeyDown}
-      >
+      <main className={styles.main} id="main-content" ref={mainRef}>
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
@@ -735,6 +799,7 @@ export function Workspace({
           periodLabel={periodLabel}
           periodName={activeView === "agenda" ? "agenda start" : activeView}
           searchQuery={searchQuery}
+          searchRef={searchRef}
         />
 
         {filtersOpen ? (
@@ -915,9 +980,15 @@ export function Workspace({
           />
         ) : null}
 
+        <ShortcutsDialog
+          onOpenChange={setShortcutsOpen}
+          open={shortcutsOpen}
+        />
+
         {scopeRequest ? (
           <RecurrenceScopeDialog
             onResolve={scopeRequest.resolve}
+            returnFocus={scopeRequest.returnFocus}
             timeLabel={scopeRequest.timeLabel}
             title={scopeRequest.title}
           />

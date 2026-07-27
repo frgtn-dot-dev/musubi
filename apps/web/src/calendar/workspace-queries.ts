@@ -4,7 +4,7 @@ import {
   getMonthGridRange,
   startOfDay,
 } from "@musubi/calendar/layout";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useFederatedWorkspace } from "./federated-workspace";
 import { getAgendaRecurrenceEnd } from "./agenda-math";
@@ -90,6 +90,12 @@ export function useWorkspaceQueries(
   });
   const events = useQuery({
     enabled,
+    // Changing date or view changes the key. Without this the query is pending
+    // again and the workspace is replaced by a loading screen — losing the
+    // calendar, the focused element and the scroll position on every step
+    // through the year. The stale range stays on screen, marked as refreshing,
+    // until the new one arrives.
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) => getEvents(signal),
     queryKey: queryKeys.eventRange({
       // The current endpoint is user-scoped rather than calendar-filtered.

@@ -514,7 +514,10 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
   await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
   await expect(page.getByText("No events match")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Next month" }).click();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Next month" })
+    .click();
   await expect(page.getByText("August 2026")).toBeVisible();
   await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 
@@ -2032,7 +2035,7 @@ test("drags across month days to create an all-day range", async ({ page }) => {
   await page.mouse.up();
 
   // Quick create opens pre-filled as an all-day event spanning the range.
-  await expect(page.getByLabel("Date")).toHaveValue("2026-07-28");
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-07-28");
   await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
   // The days stay highlighted while the popover is up.
   await expect(page.locator("[data-range-selected]")).toHaveCount(3);
@@ -2065,7 +2068,7 @@ test("dragging backwards across month days still creates a forward range", async
   );
   await page.mouse.up();
 
-  await expect(page.getByLabel("Date")).toHaveValue("2026-07-28");
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-07-28");
   await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
 });
 
@@ -2126,4 +2129,93 @@ test("asks which occurrences a dragged series should change", async ({
   const created = writes.find((write) => write.method === "POST")!;
   expect(created.body.recurrence).toBeNull();
   expect(created.body.id).not.toBe("weekly-review");
+});
+
+test("navigates by keyboard and documents the map behind ?", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.getByText("July 2026")).toBeVisible();
+
+  // View switching, period paging and Today all run the same path as the
+  // controls, so the URL follows.
+  await page.keyboard.press("w");
+  await expect(page).toHaveURL(/\/week\?/);
+  await page.keyboard.press("p");
+  await expect(page).toHaveURL(/date=2026-07-19/);
+  await page.keyboard.press("n");
+  await expect(page).toHaveURL(/date=2026-07-26/);
+  await page.keyboard.press("m");
+  await expect(page).toHaveURL(/\/month\?/);
+
+  // "/" puts the caret in search rather than typing a shortcut.
+  await page.keyboard.press("/");
+  await expect(page.getByRole("searchbox")).toBeFocused();
+  await page.keyboard.type("client");
+  await expect(page.getByRole("searchbox")).toHaveValue("client");
+  await page.keyboard.press("Escape");
+
+  // "?" opens the overlay listing the same shortcuts.
+  await page.getByRole("searchbox").blur();
+  await page.keyboard.press("?");
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("New event");
+  await expect(dialog).toContainText("Alt + arrows");
+  await expectNoAccessibilityViolations(page);
+});
+
+test("jumps to a date from the mini calendar without changing the view", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-26`);
+
+  const mini = page.getByRole("region", { name: "Jump to date" });
+  await expect(mini).toContainText("Jul 2026");
+  // One tab stop: the day the view is on.
+  await expect(
+    mini.getByRole("gridcell", { name: /July 26, 2026/ }),
+  ).toHaveAttribute("tabindex", "0");
+
+  await mini.getByRole("gridcell", { name: /July 9, 2026/ }).click();
+  await expect(page).toHaveURL(/\/week\?date=2026-07-09/);
+
+  // Paging the mini leaves the main view where it is.
+  await mini.getByRole("button", { name: "Next month in date picker" }).click();
+  await expect(mini).toContainText("Aug 2026");
+  await expect(page).toHaveURL(/date=2026-07-09/);
+});
+
+test("keeps the calendar on screen while the next range loads", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.getByText("July 2026")).toBeVisible();
+
+  // Hold the next range's read open, so the transition is observable.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/events**", async (route) => {
+    if (route.request().method() === "GET") await held;
+    return route.fallback();
+  });
+
+  await page.keyboard.press("n");
+  // The old month stays up, marked as refreshing — no loading screen swap.
+  await expect(page.getByText("Preparing your calendar…")).toHaveCount(0);
+  await expect(page.getByText("Refreshing server data…")).toBeVisible();
+  // The grid, the toolbar and the day cells are all still there.
+  await expect(page.getByText("August 2026")).toBeVisible();
+  await expect(page.locator('[data-day-key="2026-08-05"]')).toBeVisible();
+
+  release();
+  // August's own occurrences arrive once the read completes.
+  await expect(
+    page.getByRole("button", { name: /Weekly review/ }).first(),
+  ).toBeVisible();
 });

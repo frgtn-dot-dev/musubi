@@ -283,14 +283,40 @@ obnovit celý draft i edit mód); editace série přes formulář zapisuje celou
 — tlačítko to říká („Edit series“), scope se tam ale hodí. Error copy podle čtyř
 otázek projít napříč.
 
-### Fáze D — Orientace a kontinuita
+### Fáze D — Orientace a kontinuita — **HOTOVO** (2026-07-28)
 
-- Mini calendar v sidebaru (klik = změna anchor date, zachová view/filtry/scroll).
-- Viditelná selection layer.
-- Plná klávesová mapa + `?` overlay se zkratkami; zkratky spouštějí **stejné
-  commandy** jako GUI.
-- Roving tabindex v gridu (šipky hýbou focus buňkou, ne scrollem).
-- Audit návratu focusu po zavření každé vrstvy.
+- **Mini calendar** (`MiniCalendar.tsx`) v sidebaru: klik změní jen anchor date,
+  view/filtry zůstanou. Jeden tab stop (den, na kterém view stojí), šipky hýbou
+  focusem, šipka za hranu přelistuje měsíc — 42 tab stopů v sidebaru by pohřbilo
+  všechno pod ním. Měsíc jde listovat samostatně a znovu se naváže na anchor,
+  když se změní pod ním. Hlavička je „Aug 2026“, ne „August 2026“ — toolbar to
+  už píše celé.
+- **Klávesová mapa** (`shortcuts.ts`) jako **čistá funkce** `shortcutFor`, ne
+  rozstřílená po handlerech: `d/w/m/a` view, `n/j` a `p/k` období, `t` dnes,
+  `c` nový event, `/` hledání, `?` overlay, `Ctrl/⌘+S` uložení. Overlay
+  (`ShortcutsDialog`) čte **tentýž** `SHORTCUT_GROUPS`, takže nemůže popisovat
+  něco jiného, než co se posílá dál.
+- Listener je na `window`, ne na elementu workspace: zkratka aplikace musí
+  fungovat, i když není nic konkrétního zafokusované. Handler se čte přes ref,
+  takže vidí aktuální stav bez re-registrace. Otevřená vrstva (`[role="dialog"]`,
+  tedy i Radix popover) klávesy vlastní — písmeno za dialogem nesmí přepnout
+  view pod ním.
+- **Kontinuita při změně rozsahu**: `placeholderData: keepPreviousData` na event
+  query. Předtím každá změna data/view udělala nový query key → `isPending` →
+  celý workspace se vyměnil za loading screen a ztratil focus, scroll i
+  stisknuté klávesy. Teď zůstane grid i toolbar, jen se ukáže „Refreshing“.
+  (Chycené jako flake v e2e — byla to skutečná chyba, ne test.)
+- **Focus po zavření**: Radix vrací focus na trigger sám; výjimky jsou vrstvy
+  bez triggeru — quick create (`anchor.returnFocus`) a scope dialog, který si
+  bere `document.activeElement` z okamžiku gesta, aby Alt+šipky vrátily focus na
+  blok eventu.
+- Roving tabindex v Month gridu byl už z fáze A/B; mini calendar ho má stejný.
+- Kontrast: `.manageDialogHeader p` a nadpisy skupin v overlayi měly na 10 px
+  `--text-muted` (3.22:1). Axe to zachytil v e2e; obojí je teď
+  `--text-secondary`.
+
+*Zbývá:* samostatná viditelná selection layer (dnes ji nese `pendingCreate` +
+`data-range-selected`, což na R1 stačí).
 
 ### Fáze E — Craft eventu
 
