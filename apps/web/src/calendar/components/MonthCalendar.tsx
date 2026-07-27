@@ -24,6 +24,11 @@ type MonthCalendarProps = EventActionHandlers & {
   events: Event[];
   onCreateAtDate?: (date: string, target: HTMLElement) => void;
   onMonthChange: (offset: number) => void;
+  /**
+   * Page presentation. When false, cells belonging to the neighbouring months
+   * render empty — the cell itself stays so the month never changes height.
+   */
+  showAdjacentDays?: boolean;
   timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
 };
@@ -34,6 +39,7 @@ export function MonthCalendar({
   events,
   onCreateAtDate,
   onMonthChange,
+  showAdjacentDays = true,
   timeFormat,
   weekStartsOn,
   ...eventActions
@@ -161,8 +167,13 @@ export function MonthCalendar({
               const daySegments = eventsByDay.get(dateKey) ?? [];
               const inMonth = day.getMonth() === anchor.getMonth();
               const isToday = dateKey === todayKey;
-              const visibleSegments = daySegments.slice(0, 3);
-              const overflow = daySegments.length - visibleSegments.length;
+              // A hidden adjacent day keeps its cell (so the month keeps its
+              // height) but shows nothing and takes no clicks.
+              const muted = !inMonth && !showAdjacentDays;
+              const visibleSegments = muted ? [] : daySegments.slice(0, 3);
+              const overflow = muted
+                ? 0
+                : daySegments.length - visibleSegments.length;
 
               return (
                 <div
@@ -174,19 +185,26 @@ export function MonthCalendar({
                     cellRefs.current[index] = node;
                   }}
                   role="gridcell"
-                  aria-label={`${getLongDateLabel(day)}, ${daySegments.length} ${
-                    daySegments.length === 1 ? "event" : "events"
-                  }`}
+                  aria-label={
+                    muted
+                      ? getLongDateLabel(day)
+                      : `${getLongDateLabel(day)}, ${daySegments.length} ${
+                          daySegments.length === 1 ? "event" : "events"
+                        }`
+                  }
                   tabIndex={focusedIndex === index ? 0 : -1}
                   data-day-key={dateKey}
-                  onClick={(event) =>
-                    onCreateAtDate?.(dateKey, event.currentTarget)
-                  }
+                  onClick={(event) => {
+                    if (muted) return;
+                    onCreateAtDate?.(dateKey, event.currentTarget);
+                  }}
                   onFocus={() => setFocusedIndex(index)}
                   onKeyDown={(event) => handleGridKeyDown(event, index)}
                 >
                   <div className={styles.dayHeader}>
-                    <span className={styles.dayNumber}>{day.getDate()}</span>
+                    {muted ? null : (
+                      <span className={styles.dayNumber}>{day.getDate()}</span>
+                    )}
                     {isToday ? (
                       <span className={styles.todayLabel}>Today</span>
                     ) : null}

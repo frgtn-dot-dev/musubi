@@ -57,6 +57,8 @@ type TimeGridViewProps = EventActionHandlers & {
   calendars: Calendar[];
   events: Event[];
   geometry: TimeGeometry;
+  /** Page presentation: a five-column working week when false. */
+  showWeekend?: boolean;
   onCreateAtTime?: (
     date: string,
     time: string,
@@ -156,14 +158,18 @@ export function TimeGridView({
   events,
   geometry,
   onCreateAtTime,
+  showWeekend = true,
   timeFormat,
   view,
   weekStartsOn,
   ...eventActions
 }: TimeGridViewProps) {
   const days = useMemo(
-    () => getTimeGridDays(anchor, view, weekStartsOn),
-    [anchor, view, weekStartsOn],
+    () =>
+      getTimeGridDays(anchor, view, weekStartsOn, {
+        includeWeekend: showWeekend,
+      }),
+    [anchor, showWeekend, view, weekStartsOn],
   );
   const eventsByDay = useMemo(() => bucketEventsByDay(events), [events]);
   const segmentsByDay = useMemo(

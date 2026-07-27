@@ -17,10 +17,14 @@ type ToolbarProps = {
   activeView: CalendarViewId;
   canCreateEvents: boolean;
   draftName: string;
-  /** Present only while editing a page whose view supports density. */
+  /** Present only while editing a page whose view supports the option. */
   draftDensity?: Density;
+  draftShowAdjacentDays?: boolean;
+  draftShowWeekend?: boolean;
   editing: boolean;
   onDraftDensityChange?: (density: Density) => void;
+  onDraftShowAdjacentDaysChange?: (show: boolean) => void;
+  onDraftShowWeekendChange?: (show: boolean) => void;
   filtersOpen: boolean;
   onCreateEvent: (target: HTMLElement) => void;
   onDraftNameChange: (name: string) => void;
@@ -43,11 +47,15 @@ export function Toolbar({
   canCreateEvents,
   draftDensity,
   draftName,
+  draftShowAdjacentDays,
+  draftShowWeekend,
   editing,
   filtersOpen,
   onCreateEvent,
   onDraftDensityChange,
   onDraftNameChange,
+  onDraftShowAdjacentDaysChange,
+  onDraftShowWeekendChange,
   onNotice,
   onOpenSidebar,
   onPeriodChange,
@@ -162,6 +170,34 @@ export function Toolbar({
                 <option value="comfortable">Comfortable</option>
                 <option value="spacious">Spacious</option>
               </select>
+            </label>
+          ) : null}
+          {editing &&
+          draftShowWeekend !== undefined &&
+          onDraftShowWeekendChange ? (
+            <label className={styles.presentationToggle}>
+              <input
+                checked={draftShowWeekend}
+                type="checkbox"
+                onChange={(event) =>
+                  onDraftShowWeekendChange(event.target.checked)
+                }
+              />
+              <span>Weekend</span>
+            </label>
+          ) : null}
+          {editing &&
+          draftShowAdjacentDays !== undefined &&
+          onDraftShowAdjacentDaysChange ? (
+            <label className={styles.presentationToggle}>
+              <input
+                checked={draftShowAdjacentDays}
+                type="checkbox"
+                onChange={(event) =>
+                  onDraftShowAdjacentDaysChange(event.target.checked)
+                }
+              />
+              <span>Nearby months</span>
             </label>
           ) : null}
           <label className={styles.searchField}>

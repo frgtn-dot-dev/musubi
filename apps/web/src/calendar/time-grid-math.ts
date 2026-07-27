@@ -11,14 +11,21 @@ export function getTimeGridDays(
   anchor: Date,
   view: TimeGridViewId,
   weekStartsOn: Settings["weekStartsOn"],
+  // A page can hide the weekend to get a five-column working week.
+  { includeWeekend = true }: { includeWeekend?: boolean } = {},
 ): Date[] {
   const start =
     view === "day"
       ? startOfDay(anchor)
       : startOfWeek(anchor, weekStartsOn);
   const length = view === "day" ? 1 : 7;
+  const days = Array.from({ length }, (_, index) => addDays(start, index));
 
-  return Array.from({ length }, (_, index) => addDays(start, index));
+  // Filtered by actual weekday, so it holds for both week starts. A single day
+  // is never dropped — the user navigated to it deliberately.
+  return includeWeekend || view === "day"
+    ? days
+    : days.filter((day) => day.getDay() !== 0 && day.getDay() !== 6);
 }
 
 export function getTimeGridQueryRange(

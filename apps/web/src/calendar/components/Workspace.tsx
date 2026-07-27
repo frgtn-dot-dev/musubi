@@ -303,6 +303,16 @@ export function Workspace({
     [activePage.config, draftView, editing],
   );
 
+  // Presentation flags from the same config the geometry came from, so edit mode
+  // previews them together.
+  const presentationView = editing ? draftView : activePage.config.view;
+  const showWeekend =
+    "weekend" in presentationView ? presentationView.weekend : true;
+  const showAdjacentDays =
+    "showAdjacentDays" in presentationView
+      ? presentationView.showAdjacentDays
+      : true;
+
   const pageTitle = activePage.name;
   const pageDirty =
     editing &&
@@ -598,6 +608,26 @@ export function Workspace({
             )
           }
           onDraftNameChange={setDraftName}
+          draftShowWeekend={
+            "weekend" in draftView ? draftView.weekend : undefined
+          }
+          onDraftShowWeekendChange={(weekend) =>
+            setDraftView((current) =>
+              "weekend" in current ? { ...current, weekend } : current,
+            )
+          }
+          draftShowAdjacentDays={
+            "showAdjacentDays" in draftView
+              ? draftView.showAdjacentDays
+              : undefined
+          }
+          onDraftShowAdjacentDaysChange={(showAdjacentDays) =>
+            setDraftView((current) =>
+              "showAdjacentDays" in current
+                ? { ...current, showAdjacentDays }
+                : current,
+            )
+          }
           onToggleEdit={editing ? stopEditing : startEditing}
           onCreateEvent={(target) =>
             openCreateAtDate(date, target)
@@ -664,6 +694,7 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               geometry={geometry}
+              showWeekend={showWeekend}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}
@@ -692,6 +723,7 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              showAdjacentDays={showAdjacentDays}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}

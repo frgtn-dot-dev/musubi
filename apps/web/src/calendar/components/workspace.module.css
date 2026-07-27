@@ -361,6 +361,15 @@
   white-space: nowrap;
 }
 
+.presentationToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
 .densityField select {
   height: 32px;
   padding: 0 var(--space-2);

@@ -8,6 +8,28 @@ import { parseDateKey } from "./calendar-math";
 import { toDateKey } from "./date-key";
 
 describe("time grid math", () => {
+  it("drops the weekend for a five-column working week", () => {
+    const anchor = parseDateKey("2026-07-26"); // a Sunday
+
+    // Filtered by weekday, so it holds for either week start.
+    for (const weekStartsOn of ["monday", "sunday"] as const) {
+      const days = getTimeGridDays(anchor, "week", weekStartsOn, {
+        includeWeekend: false,
+      });
+      expect(days).toHaveLength(5);
+      expect(days.some((day) => day.getDay() === 0 || day.getDay() === 6)).toBe(
+        false,
+      );
+    }
+
+    // A single day the user navigated to is never dropped, weekend or not.
+    expect(
+      getTimeGridDays(anchor, "day", "monday", { includeWeekend: false }).map(
+        toDateKey,
+      ),
+    ).toEqual(["2026-07-26"]);
+  });
+
   it("builds Day and preference-aware Week columns", () => {
     const anchor = parseDateKey("2026-07-26");
 

@@ -178,7 +178,12 @@ pro B** (snap potřebuje px/min jako data, ne magickou konstantu).
 - Testy: 11 unit testů geometrie (round-trip ve všech hustotách, snap, clamp,
   min height) + e2e, že density mění výšku mřížky a uloží se.
 
-Zbývá z A: zapojit `weekend` a `showAdjacentDays` (drobné, nezávislé).
+- `weekend` a `showAdjacentDays` zapojené: weekend filtruje **podle dne v týdnu**
+  (platí pro oba week starty), den nikdy nezmizí; skrytý cizí měsíc si nechá
+  buňku (výška měsíce se nemění), jen nemá obsah, klik ani počet eventů v SR
+  názvu. Oba přepínače v edit módu.
+
+Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živý.
 
 ### Fáze B — Přímá manipulace (jádro pocitu)
 
