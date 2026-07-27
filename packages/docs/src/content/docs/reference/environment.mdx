@@ -63,11 +63,15 @@ directly:
 | `POSTGRES_USER` | Yes | Example uses `musubi` |
 | `POSTGRES_DB` | Yes | Example uses `musubi` |
 | `POSTGRES_PASSWORD` | Yes | Compose refuses to start when missing |
-| `MUSUBI_TAG` | No | `latest`; pin a published image tag for controlled upgrades |
+| `MUSUBI_TAG` | No | `latest`; pin a published image tag for controlled upgrades. One tag covers both the API and web images, so they can't end up mismatched |
+| `PUBLIC_HOST` | Full stack only | Hostname the gateway serves — a domain gets automatic HTTPS, `:80` serves plain HTTP behind another proxy. Defaults to `:80` |
+| `PUBLIC_HTTP_PORT`, `PUBLIC_HTTPS_PORT` | No | Host ports the gateway publishes; default `80` and `443` |
 
 The plain Compose stack publishes `API_SERVER_PORT`. The Dokploy stack exposes
 it only to Docker networks and attaches the stable `musubi-api` alias to
-`dokploy-network`.
+`dokploy-network`. The full stack (`docker-compose.full.yml`) publishes only the
+gateway: the web and API containers stay on the Compose network, so there is no
+second origin that could bypass it.
 
 ## Email
 
@@ -148,12 +152,23 @@ The HTML hand-off page and `musubi://` deep link still work.
 | Variable | Required when | Format |
 |---|---|---|
 | `CALDAV_ENC_KEY` | Connecting CalDAV accounts or storing federated Musubi connections | 32 random bytes as 64 hexadecimal characters |
+| `FEDERATION_ALLOW_PRIVATE_HOSTS` | Only to federate with a Musubi server on a private address | `true` to allow; anything else refuses. Defaults to allowed outside `ENVIRONMENT=prod` |
 
-Generate it with:
+Generate the key with:
 
 ```sh
 openssl rand -hex 32
 ```
+
+<Aside type="caution" title="Why private hosts are refused">
+Accepting a federated invite makes this API fetch the other server on a user's
+behalf, so an unvalidated address would let any signed-in user aim your server at
+your internal network (including cloud metadata endpoints). Loopback, private,
+CGNAT and link-local targets are therefore refused in production. Set
+`FEDERATION_ALLOW_PRIVATE_HOSTS=true` only when the internal target is
+legitimate — two Musubi servers on one LAN or one box — and understand that it
+re-opens that surface to everyone with an account.
+</Aside>
 
 The key protects CalDAV passwords and remote Musubi member tokens with
 AES-256-GCM. The database stores only ciphertext.

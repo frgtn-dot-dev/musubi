@@ -7,6 +7,9 @@
 **/build
 **/.next
 **/.expo
+# Nitro build output — the web image builds it inside the image, so shipping a
+# local copy into the context only slows the build down.
+**/.output
 **/*.log
 **/coverage
 **/.nyc_output

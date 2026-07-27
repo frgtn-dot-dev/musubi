@@ -58,7 +58,7 @@ jobs:
             type=raw,value=${{ steps.ver.outputs.minor }}
             type=raw,value=latest
 
-      # 1. Build & push the image FIRST.
+      # 1. Build & push the images FIRST.
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -67,10 +67,32 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
 
-      # 2. Only now — image is in the registry — create the tag + release. This is
+      # The web image carries the SAME tags, so one MUSUBI_TAG in a self-hoster's
+      # .env can never pin mismatched web and API versions.
+      - id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: frgtndev/musubi-web
+          tags: |
+            type=raw,value=${{ steps.ver.outputs.full }}
+            type=raw,value=${{ steps.ver.outputs.minor }}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      # 2. Only now — both images are in the registry — create the tag + release. This is
       #    Dokploy's deploy signal, so the image is guaranteed to exist first.
       - uses: softprops/action-gh-release@v2
         with:
