@@ -901,6 +901,57 @@ test("resolves the default page and switches between pages", async ({
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 });
 
+test("changes time grid density from the page editor", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let savedDensity: string | undefined;
+  const weekPage = {
+    ...defaultPage,
+    config: {
+      ...defaultPage.config,
+      view: {
+        configVersion: 1,
+        density: "comfortable",
+        id: "week",
+        weekend: true,
+      },
+    },
+  };
+  await page.route("**/api/v1/pages", (route) => respond(route, [weekPage]));
+  await page.route(`**/api/v1/pages/${DEFAULT_PAGE_ID}`, async (route) => {
+    const body = route.request().postDataJSON() as {
+      config: { view: { density?: string } };
+    };
+    savedDensity = body.config.view.density;
+    return respond(route, { ...weekPage, config: body.config, revision: 2 });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-26`);
+
+  // The grid height is derived from the same geometry as the event maths, so a
+  // density change has to move it.
+  const canvas = page.locator('[class*="timeGridCanvas"]');
+  await expect(canvas).toBeVisible();
+  const canvasHeight = async () =>
+    (await canvas.boundingBox())?.height ?? 0;
+
+  const comfortable = await canvasHeight();
+  expect(comfortable).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Edit page" }).click();
+  await page
+    .getByRole("combobox", { name: "Row height" })
+    .selectOption("compact");
+
+  const compact = await canvasHeight();
+  expect(compact).toBeLessThan(comfortable);
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Page saved.",
+  );
+  expect(savedDensity).toBe("compact");
+});
+
 test("edits and saves a page's calendar visibility", async ({ page }) => {
   await mockAuthenticatedReads(page);
   let saved: { config?: { calendarVisibility?: unknown } } | undefined;

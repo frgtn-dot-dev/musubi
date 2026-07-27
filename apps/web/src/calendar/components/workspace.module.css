@@ -361,6 +361,16 @@
   white-space: nowrap;
 }
 
+.densityField select {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
 .pageNameInput {
   min-width: 0;
   max-width: 260px;
@@ -780,7 +790,9 @@
   --day-count: 7;
   --all-day-height: 32px;
   min-width: 820px;
-  min-height: calc(24 * 64px + 92px);
+  /* --hour-height is set per density by TimeGridView, from the same geometry the
+     event maths uses. */
+  min-height: calc(24 * var(--hour-height) + 92px);
   outline-offset: -2px;
 }
 
@@ -919,7 +931,7 @@
 
 .timeGridCanvas {
   position: relative;
-  height: calc(24 * 64px);
+  height: calc(24 * var(--hour-height));
 }
 
 .timeGridHour {

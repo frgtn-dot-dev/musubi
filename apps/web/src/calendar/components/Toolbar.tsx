@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { calendarViews, type CalendarViewId } from "../view-registry";
+import type { Density } from "../time-geometry";
 import { ThemeToggle } from "./ThemeToggle";
 import styles from "./workspace.module.css";
 
@@ -16,7 +17,10 @@ type ToolbarProps = {
   activeView: CalendarViewId;
   canCreateEvents: boolean;
   draftName: string;
+  /** Present only while editing a page whose view supports density. */
+  draftDensity?: Density;
   editing: boolean;
+  onDraftDensityChange?: (density: Density) => void;
   filtersOpen: boolean;
   onCreateEvent: (target: HTMLElement) => void;
   onDraftNameChange: (name: string) => void;
@@ -37,10 +41,12 @@ type ToolbarProps = {
 export function Toolbar({
   activeView,
   canCreateEvents,
+  draftDensity,
   draftName,
   editing,
   filtersOpen,
   onCreateEvent,
+  onDraftDensityChange,
   onDraftNameChange,
   onNotice,
   onOpenSidebar,
@@ -143,6 +149,21 @@ export function Toolbar({
         </div>
 
         <div className={styles.toolbarActions}>
+          {editing && draftDensity && onDraftDensityChange ? (
+            <label className={styles.densityField}>
+              <span className={styles.srOnly}>Row height</span>
+              <select
+                value={draftDensity}
+                onChange={(event) =>
+                  onDraftDensityChange(event.target.value as Density)
+                }
+              >
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+                <option value="spacious">Spacious</option>
+              </select>
+            </label>
+          ) : null}
           <label className={styles.searchField}>
             <Search aria-hidden="true" size={17} strokeWidth={1.6} />
             <span className={styles.srOnly}>Search events</span>

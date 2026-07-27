@@ -34,7 +34,11 @@ const DayViewSchema = z
   .object({
     id: z.literal("day"),
     configVersion: z.literal(1),
-    density: z.enum(["compact", "comfortable"]).default("comfortable"),
+    // Three steps: two don't cover the spread of monitors, working hours and
+    // eyesight (see docs/ui/calendar-ui.md).
+    density: z
+      .enum(["compact", "comfortable", "spacious"])
+      .default("comfortable"),
   })
   .strict();
 
@@ -43,7 +47,11 @@ const WeekViewSchema = z
     id: z.literal("week"),
     configVersion: z.literal(1),
     weekend: z.boolean().default(true),
-    density: z.enum(["compact", "comfortable"]).default("comfortable"),
+    // Three steps: two don't cover the spread of monitors, working hours and
+    // eyesight (see docs/ui/calendar-ui.md).
+    density: z
+      .enum(["compact", "comfortable", "spacious"])
+      .default("comfortable"),
   })
   .strict();
 

@@ -159,18 +159,26 @@ míchat — to je zdroj náhodných popoverů a ztraceného focusu.
 Pořadí je dané prioritou z §1 a tím, co odemyká „pocit". **Fáze A je předpoklad
 pro B** (snap potřebuje px/min jako data, ne magickou konstantu).
 
-### Fáze A — Geometrie a tokeny (malé, odemyká vše ostatní)
+### Fáze A — Geometrie a tokeny — **HOTOVO** (2026-07-27)
 
-- Doplnit tokeny z §3.
-- `HOUR_HEIGHT` → `TimeGeometry` objekt (`pxPerMinute`, `snapMinutes`,
-  `minEventHeight`, `visibleDayStart/End`, `dayColumnWidth`), čtený gridem,
-  event layoutem, hit-testingem i (budoucím) dragem.
-- **Zapojit `density` z Page configu** (G4) → 3 stupně hodinové výšky.
-  Kontrakt už existuje, netřeba migraci.
-- Zapojit `weekend` a `showAdjacentDays`.
+- Tokeny z §3 doplněné (`--space-*`, `--hour-height`, `--date-header-height`,
+  `--event-radius`, `--focus-ring`, `--popover-width`, `--motion-slow`).
+- `HOUR_HEIGHT = 64` → `time-geometry.ts`: `TimeGeometry` + čisté funkce
+  (`minutesToY`, `yToMinutes`, `durationToHeight`, `gridHeight`). Čte to grid,
+  event layout, hodinové linky, now marker, klávesnicový scroll **i
+  pointer→čas** (dřív měl vlastní snap na 30 min, teď sdílených 15).
+  CSS bere výšku z `--hour-height`, které nastavuje komponenta ze stejné
+  geometrie → jedno číslo pro JS i CSS.
+- **`density` z Page configu zapojená**, rozšířená na 3 stupně
+  (`compact 44 / comfortable 64 / spacious 88`); přepínač v edit módu, ukládá se
+  s Page. Draft ukazuje náhled živě.
+- Scroll: jeden effect vlastní pozici. Změna rozsahu → ukotví u pracovní hodiny;
+  změna density → **přepočítá scrollTop**, aby zůstal vidět stejný čas (jinak
+  by stejný pixel ukazoval jinou hodinu).
+- Testy: 11 unit testů geometrie (round-trip ve všech hustotách, snap, clamp,
+  min height) + e2e, že density mění výšku mřížky a uloží se.
 
-*Hotovo když:* změna density přepočítá grid i eventy konzistentně; pointer→čas
-zůstane přesný ve všech stupních; testy geometrie mimo DOM.
+Zbývá z A: zapojit `weekend` a `showAdjacentDays` (drobné, nezávislé).
 
 ### Fáze B — Přímá manipulace (jádro pocitu)
 

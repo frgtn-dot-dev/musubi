@@ -54,10 +54,30 @@
   --radius-sm: 5px;
   --radius-md: 9px;
   --radius-lg: 14px;
+  --event-radius: 6px;
+
+  /* Spacing scale — no ad-hoc gaps. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
   --sidebar-width: 244px;
   --toolbar-height: 132px;
+  --date-header-height: 48px;
+  --popover-width: 360px;
+  /* One hour of the time grid. TimeGridView overrides it per density; the CSS
+     grid and the JS geometry must derive from the same number or the cursor
+     drifts against the time it points at. */
+  --hour-height: 64px;
+
+  --focus-ring: 2px solid var(--accent-primary);
+
   --motion-fast: 140ms;
   --motion-standard: 220ms;
+  --motion-slow: 300ms;
 }
 
 :root[data-theme="dark"] {

@@ -21,6 +21,12 @@ import {
 } from "../calendar-math";
 import { getReadableEventTextColor } from "../event-color";
 import {
+  durationToHeight,
+  minutesToY,
+  yToMinutes,
+  type TimeGeometry,
+} from "../time-geometry";
+import {
   getTimeGridDays,
   type TimeGridViewId,
 } from "../time-grid-math";
@@ -30,7 +36,6 @@ import {
 } from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
 
-const HOUR_HEIGHT = 64;
 const INITIAL_SCROLL_HOUR = 7;
 const ALL_DAY_LANES = 3;
 const longWeekdayFormatter = new Intl.DateTimeFormat("en", {
@@ -51,6 +56,7 @@ type TimeGridViewProps = EventActionHandlers & {
   anchor: Date;
   calendars: Calendar[];
   events: Event[];
+  geometry: TimeGeometry;
   onCreateAtTime?: (
     date: string,
     time: string,
@@ -66,6 +72,7 @@ type TimelineEventProps = EventActionHandlers & {
   calendars: Calendar[];
   dayMode: boolean;
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
+  geometry: TimeGeometry;
   timeFormat: Settings["timeFormat"];
 };
 
@@ -90,6 +97,7 @@ const TimelineEvent = memo(function TimelineEvent({
   calendars,
   dayMode,
   daySegment,
+  geometry,
   timeFormat,
   ...eventActions
 }: TimelineEventProps) {
@@ -120,9 +128,12 @@ const TimelineEvent = memo(function TimelineEvent({
           {
             "--event-color": eventColor,
             "--event-foreground": getReadableEventTextColor(eventColor),
-            height: `${Math.max((duration / 60) * HOUR_HEIGHT - 2, 20)}px`,
+            height: `${Math.max(
+              durationToHeight(duration, geometry) - 2,
+              geometry.minEventHeight,
+            )}px`,
             left,
-            top: `${(startMin / 60) * HOUR_HEIGHT}px`,
+            top: `${minutesToY(startMin, geometry)}px`,
             width,
             zIndex: col + 1,
           } as CSSProperties
@@ -143,6 +154,7 @@ export function TimeGridView({
   anchor,
   calendars,
   events,
+  geometry,
   onCreateAtTime,
   timeFormat,
   view,
@@ -181,20 +193,35 @@ export function TimeGridView({
   const [now, setNow] = useState(() => new Date());
   const hasToday = days.some((day) => isSameDay(day, now));
   const rootRef = useRef<HTMLElement>(null);
+  // Last applied geometry, so a density change can rescale scroll instead of
+  // resetting it.
+  const geometryRef = useRef(geometry);
   const dayMode = view === "day";
   const layoutStyle = {
     "--day-count": days.length,
     "--all-day-height": `${allDayLaneCount * 24 + 8}px`,
+    // The CSS grid derives its height from the same number as the event maths.
+    "--hour-height": `${geometry.hourHeight}px`,
   } as CSSProperties;
 
+  // One effect owns where the grid is scrolled.
+  //
+  // Opening a range anchors near the working day rather than midnight. A density
+  // change is different: it rewrites the pixel↔time mapping, so keeping the same
+  // scrollTop would silently show a different hour. Then we rescale instead,
+  // because the visible *time* is what the user is holding onto.
   useEffect(() => {
     const scrollRoot = rootRef.current?.parentElement;
+    const previousHourHeight = geometryRef.current.hourHeight;
+    geometryRef.current = geometry;
 
-    if (scrollRoot) {
-      scrollRoot.scrollTop =
-        INITIAL_SCROLL_HOUR * HOUR_HEIGHT - 12;
-    }
-  }, [anchor, view, weekStartsOn]);
+    if (!scrollRoot) return;
+
+    scrollRoot.scrollTop =
+      previousHourHeight === geometry.hourHeight
+        ? minutesToY(INITIAL_SCROLL_HOUR * 60, geometry) - 12
+        : scrollRoot.scrollTop * (geometry.hourHeight / previousHourHeight);
+  }, [anchor, geometry, view, weekStartsOn]);
 
   useEffect(() => {
     if (!hasToday) {
@@ -220,13 +247,19 @@ export function TimeGridView({
       event.preventDefault();
       scrollRoot.scrollBy({
         behavior: "smooth",
-        top: event.key === "PageDown" ? 4 * HOUR_HEIGHT : HOUR_HEIGHT,
+        top:
+          event.key === "PageDown"
+            ? 4 * geometry.hourHeight
+            : geometry.hourHeight,
       });
     } else if (event.key === "ArrowUp" || event.key === "PageUp") {
       event.preventDefault();
       scrollRoot.scrollBy({
         behavior: "smooth",
-        top: event.key === "PageUp" ? -4 * HOUR_HEIGHT : -HOUR_HEIGHT,
+        top:
+          event.key === "PageUp"
+            ? -4 * geometry.hourHeight
+            : -geometry.hourHeight,
       });
     } else if (event.key === "Home") {
       event.preventDefault();
@@ -335,7 +368,7 @@ export function TimeGridView({
           <div
             className={styles.timeGridHour}
             key={hour}
-            style={{ top: `${hour * HOUR_HEIGHT}px` }}
+            style={{ top: `${minutesToY(hour * 60, geometry)}px` }}
           >
             {hour > 0 ? (
               <span>{hourLabel(hour, timeFormat)}</span>
@@ -366,11 +399,11 @@ export function TimeGridView({
                   }
 
                   const bounds = event.currentTarget.getBoundingClientRect();
-                  const rawMinutes =
-                    ((event.clientY - bounds.top) / HOUR_HEIGHT) * 60;
-                  const minutes = Math.max(
-                    0,
-                    Math.min(23 * 60 + 30, Math.round(rawMinutes / 30) * 30),
+                  // Same geometry the grid is drawn with, so the created time is
+                  // the time the user pointed at (snapped and clamped there).
+                  const minutes = yToMinutes(
+                    event.clientY - bounds.top,
+                    geometry,
                   );
                   const hour = Math.floor(minutes / 60);
                   const minute = minutes % 60;
@@ -396,6 +429,7 @@ export function TimeGridView({
                     calendars={calendars}
                     dayMode={dayMode}
                     daySegment={segment}
+                    geometry={geometry}
                     key={segment.event.id}
                     timeFormat={timeFormat}
                     {...eventActions}
@@ -406,7 +440,7 @@ export function TimeGridView({
                     className={styles.timeGridNow}
                     data-current-time
                     style={{
-                      top: `${(nowMinutes / 60) * HOUR_HEIGHT}px`,
+                      top: `${minutesToY(nowMinutes, geometry)}px`,
                     }}
                   >
                     <span />

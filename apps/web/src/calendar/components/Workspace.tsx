@@ -35,6 +35,10 @@ import {
 } from "../time-grid-math";
 import { getEditableCalendars } from "../event-permissions";
 import {
+  createTimeGeometry,
+  densityFromPageConfig,
+} from "../time-geometry";
+import {
   calendarIdsForVisibility,
   toggleCalendarVisibility,
   visibilityEquals,
@@ -209,6 +213,13 @@ export function Workspace({
   const [draftVisibility, setDraftVisibility] = useState<
     PageConfigV1["calendarVisibility"]
   >({ hiddenCalendarIds: [], mode: "all" });
+  // The view config carries presentation options (density, weekend,
+  // showAdjacentDays); drafting it lets edit mode preview them live.
+  const [draftView, setDraftView] = useState<PageConfigV1["view"]>({
+    configVersion: 1,
+    id: "month",
+    showAdjacentDays: true,
+  });
   // Revision captured when editing started. A realtime update from another
   // session bumps the cached Page under us; saving against this frozen base then
   // returns 409 instead of silently overwriting the remote change.
@@ -278,6 +289,20 @@ export function Workspace({
       .filter((calendarId) => visible.has(calendarId));
   }, [activePage, calendars, draftVisibility, editing, tempToggles]);
 
+  // Density lives in the Page config, so "this page shows time grids compactly"
+  // is saved with the page rather than being a device preference.
+  const geometry = useMemo(
+    () =>
+      createTimeGeometry(
+        densityFromPageConfig(
+          editing
+            ? { ...activePage.config, view: draftView }
+            : activePage.config,
+        ),
+      ),
+    [activePage.config, draftView, editing],
+  );
+
   const pageTitle = activePage.name;
   const pageDirty =
     editing &&
@@ -285,7 +310,8 @@ export function Workspace({
       !visibilityEquals(
         draftVisibility,
         activePage.config.calendarVisibility,
-      ));
+      ) ||
+      JSON.stringify(draftView) !== JSON.stringify(activePage.config.view));
 
   // The route remounts this component per page (key={pageId}), so switching
   // pages resets editing, conflict and the temporary read filter for free.
@@ -433,6 +459,7 @@ export function Workspace({
   function startEditing() {
     setDraftName(activePage.name);
     setDraftVisibility(activePage.config.calendarVisibility);
+    setDraftView(activePage.config.view);
     setDraftBaseRevision(activePage.revision);
     setPageConflict(false);
     setEditing(true);
@@ -471,6 +498,7 @@ export function Workspace({
   const draftConfig = (): PageConfigV1 => ({
     ...activePage.config,
     calendarVisibility: draftVisibility,
+    view: draftView,
   });
 
   async function savePageChanges() {
@@ -558,9 +586,17 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
+          draftDensity={
+            "density" in draftView ? draftView.density : undefined
+          }
           draftName={draftName}
           editing={editing}
           filtersOpen={filtersOpen}
+          onDraftDensityChange={(density) =>
+            setDraftView((current) =>
+              "density" in current ? { ...current, density } : current,
+            )
+          }
           onDraftNameChange={setDraftName}
           onToggleEdit={editing ? stopEditing : startEditing}
           onCreateEvent={(target) =>
@@ -627,6 +663,7 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
+              geometry={geometry}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}
