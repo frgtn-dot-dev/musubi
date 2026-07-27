@@ -1,7 +1,6 @@
 {
   "name": "@musubi/web",
   "private": true,
-  "version": "0.1.2",
   "description": "Musubi web calendar workspace.",
   "type": "module",
   "sideEffects": [
