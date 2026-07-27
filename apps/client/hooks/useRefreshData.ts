@@ -3,7 +3,7 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { reconcileEventNotifications } from "@/services/notifications";
-import { setFederatedAccounts, syncFederatedAccounts } from "@/services/federation";
+import { syncFederatedAccounts } from "@/services/federation";
 import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
 
 export function useRefreshData() {
@@ -51,20 +51,12 @@ export function useRefreshData() {
 
     const homeCalendars = await api.getCalendars();
 
-    // Federated servers: the registry's source of truth is the HOME server
-    // (connections roam across devices); SecureStore is the offline fallback.
-    try { await setFederatedAccounts(await api.getMusubiAccounts()); }
-    catch { /* home unreachable or pre-federation server → cached registry */ }
-    // Pull shared calendars + events from each connected Musubi server (v1:
-    // full fetch — no delta). A server that's down keeps its last-cached
-    // calendars so the reconcile below doesn't wipe local copies.
+    // Pull shared calendars + events from each connected Musubi server through
+    // the home gateway (v1: full fetch — no delta). The registry is refreshed
+    // from the home server inside, falling back to the offline cache; token
+    // rotation now happens server-side (ADR-005). A server that's down keeps
+    // its last-cached calendars so the reconcile below doesn't wipe local copies.
     const fed = await syncFederatedAccounts(await cacheGetCalendars());
-    // Rotation succeeds at the origin first. Roam the replacement token back
-    // through the home server so other signed-in devices inherit it.
-    for (const account of fed.rotatedAccounts) {
-      try { await api.saveMusubiAccount(account); }
-      catch (e) { console.warn("Could not persist rotated federation token:", e); }
-    }
     if (fed.syncedServers.size) {
       // full-set semantics per synced server: cached events living only in that
       // server's calendars and absent from the fresh pull were deleted remotely

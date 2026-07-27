@@ -2,8 +2,8 @@ import { getMusubiAccounts } from "@musubi/db";
 import { BadRequestError, NotFoundError } from "@musubi/types";
 import { Request, Response } from "express";
 import { logger } from "@musubi/config";
-import { decryptSecret } from "../sync/crypto";
 import { assertPublicOrigin, canonicalHttpOrigin } from "../federation_origin";
+import { connectionMemberToken } from "../federation_connections";
 
 // Federation gateway (ADR-005). Clients never hold the member token: they call
 // their OWN server with their normal session and this forwards the request to
@@ -73,7 +73,9 @@ export async function handlerFederationProxy(req: Request, res: Response) {
   // and Authorization is replaced with the member token.
   const headers = new Headers({
     accept: req.get("accept") ?? "application/json",
-    authorization: `Bearer ${decryptSecret(account.encryptedToken)}`,
+    // Rotates the credential first when it is close to expiry — clients no
+    // longer own that lifecycle.
+    authorization: `Bearer ${await connectionMemberToken(req.user!.id, account, origin)}`,
   });
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   if (hasBody) headers.set("content-type", "application/json");

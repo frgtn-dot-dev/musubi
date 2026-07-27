@@ -22,6 +22,7 @@ import * as Sharing from "expo-sharing";
 import { warn } from "@/lib/haptics";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
+import { disconnectFederatedServer } from "@/services/federation";
 
 
 type Props = {
@@ -67,29 +68,40 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
 
-  const isExternal = !!calendar?.provider;      // google/caldav mirror — edits/deletes push to the provider
+  // A federated calendar is a NATIVE calendar on another Musubi server, not a
+  // provider mirror: management is allowed by role and routed to that server.
+  // Its creatorID is a shadow-user id there, so the local owner check never
+  // matches and must not gate anything.
+  const isFederated = calendar?.provider === "musubi";
+  const isProviderMirror = !!calendar?.provider && !isFederated; // google/caldav — edits push to the provider
   const isOwner = userID === calendar?.creatorID;
-  // External mirrors: only the connection owner may edit/delete (the server
+  // Provider mirrors: only the connection owner may edit/delete (the server
   // enforces this too); provider-side read-only mirrors have role "viewer",
   // so can() already blocks them.
-  const showEdit = can(calendar?.role, "editCalendar") && (!isExternal || isOwner);
-  const showDelete = can(calendar?.role, "deleteCalendar") && !calendar?.isDefault && (!isExternal || isOwner);
+  const showEdit = can(calendar?.role, "editCalendar") && (!isProviderMirror || isOwner);
+  const showDelete = can(calendar?.role, "deleteCalendar") && !calendar?.isDefault && (!isProviderMirror || isOwner);
   const showInvite = can(calendar?.role, "invite");
   const showLeave = !isOwner;                    // non-owners can leave
-  // Any external mirror can be disconnected (sync stops, mirror dropped, the
+  // Any provider mirror can be disconnected (sync stops, mirror dropped, the
   // provider calendar is untouched). This is the ONLY way to remove a read-only
   // mirror — holidays or a calendar you were invited to as viewer — which can't
-  // be deleted and isn't yours to delete on the provider.
-  const showDisconnect = isExternal;
+  // be deleted and isn't yours to delete on the provider. For a federated
+  // calendar this disconnects the whole origin server instead.
+  const showDisconnect = isProviderMirror || isFederated;
 
   // External delete = two-step confirm: first that it's a provider-synced
   // calendar (and where it lives), then the actual deletion.
   const handleDelete = () => {
     if (!calendar) return;
-    if (!isExternal) {
+    // Only provider mirrors need the "this also changes it at the provider"
+    // step. A federated calendar is deleted on its own Musubi server, which is
+    // the same operation as here — just say where it happens.
+    if (!isProviderMirror) {
       confirm({
         title: `Delete "${calendar.name}"?`,
-        message: "The calendar and all its events will be permanently deleted. This can't be undone.",
+        message: isFederated
+          ? `The calendar and all its events will be permanently deleted on ${providerDisplayName(calendar)}, for everyone it's shared with. This can't be undone.`
+          : "The calendar and all its events will be permanently deleted. This can't be undone.",
         confirmLabel: "Delete",
       }, () => {
         onDelete(calendar);
@@ -133,13 +145,25 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const handleDisconnect = () => {
     if (!calendar) return;
     const providerName = providerDisplayName(calendar);
-    confirm({
-      title: `Disconnect "${calendar.name}"?`,
-      message: `It will stop syncing and its events will be removed from Musubi. The calendar stays untouched in ${providerName}, and you can add it back later from ${providerName}.`,
-      confirmLabel: "Disconnect",
-    }, async () => {
+    // Federation has no per-calendar mirror to drop: the connection is to the
+    // whole server, so say so instead of implying only this calendar goes away.
+    confirm(isFederated
+      ? {
+        title: `Disconnect ${providerName}?`,
+        message: `Every calendar shared from ${providerName} will be removed from Musubi, and you'll need a new invite to get them back. Nothing is deleted on that server.`,
+        confirmLabel: "Disconnect",
+      }
+      : {
+        title: `Disconnect "${calendar.name}"?`,
+        message: `It will stop syncing and its events will be removed from Musubi. The calendar stays untouched in ${providerName}, and you can add it back later from ${providerName}.`,
+        confirmLabel: "Disconnect",
+      }, async () => {
       setIsLeaving(true);
-      await api.disconnectExternalCalendar(calendar.id);
+      if (isFederated && calendar.serverUrl) {
+        await disconnectFederatedServer(calendar.serverUrl);
+      } else {
+        await api.disconnectExternalCalendar(calendar.id);
+      }
       localRemoveCalendarEvents(calendar.id);
       loadCalendars(await api.getCalendars());
       handleClose();

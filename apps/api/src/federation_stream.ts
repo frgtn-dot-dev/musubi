@@ -1,7 +1,7 @@
 import { getMusubiAccounts } from "@musubi/db";
 import { logger } from "@musubi/config";
-import { decryptSecret } from "./sync/crypto";
 import { assertPublicOrigin, canonicalHttpOrigin } from "./federation_origin";
+import { connectionMemberToken } from "./federation_connections";
 
 // Federated realtime fan-in (ADR-005 phase 2).
 //
@@ -47,7 +47,12 @@ export function parseSseFrames(buffer: string): {
 
 async function streamOne(
   userID: string,
-  connection: { encryptedToken: string; id: string; server: string },
+  connection: {
+    encryptedToken: string;
+    id: string;
+    remoteUserID: string;
+    server: string;
+  },
   abort: AbortController,
   emit: (userID: string, type: string, payload: Record<string, unknown>) => void,
 ) {
@@ -60,7 +65,7 @@ async function streamOne(
       const response = await fetch(`${origin}/api/stream`, {
         headers: {
           accept: "text/event-stream",
-          authorization: `Bearer ${decryptSecret(connection.encryptedToken)}`,
+          authorization: `Bearer ${await connectionMemberToken(userID, connection, origin)}`,
         },
         redirect: "manual",
         signal: abort.signal,

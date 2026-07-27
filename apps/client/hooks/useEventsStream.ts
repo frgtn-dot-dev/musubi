@@ -6,7 +6,6 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useAttendeesStore } from "@/store/useAttendeesStore";
 import { useServer } from "@/contexts/ServerContext";
 import { useRefreshData } from "@/hooks/useRefreshData";
-import { loadFederatedAccounts } from "@/services/federation";
 
 export function useConnectToEventStream() {
   // apiUrl comes from ServerContext (SecureStore-backed, self-host aware) — the
@@ -78,6 +77,12 @@ export function useConnectToEventStream() {
         case "external_sync":
           silentRefresh();
           break;
+        // A connected Musubi server changed something; the home server relays it
+        // (ADR-005). Remote rows are pulled per server, so refresh rather than
+        // patching a payload from a foreign origin into the local stores.
+        case "federated_sync":
+          silentRefresh();
+          break;
         default:
           console.warn(`Uknown event type: ${data.type}`);
       }
@@ -99,20 +104,17 @@ export function useConnectToEventStream() {
       sources.push(sse);
     };
 
+    // One stream, to the home server. Federated servers used to get a stream
+    // each (member token as bearer); since ADR-005 the home server subscribes to
+    // them on our behalf and relays their events as `federated_sync`, so remote
+    // calendars stay live without this device holding a credential — and a
+    // freshly accepted server starts streaming immediately instead of on the
+    // next app start.
     const connect = async () => {
       const { data } = await authClient.getSession();
       const token = data?.session?.token;
       if (cancelled || !token) return;
       subscribe(apiUrl, token);
-
-      // Federated servers stream too (member token as bearer — the server's
-      // requireAuth fallback authenticates it), so events and attendance on
-      // remote calendars update live, same as home ones.
-      // ponytail: registry read once per mount — a freshly accepted server
-      // starts streaming on the next app start; until then pulls cover it.
-      for (const acc of await loadFederatedAccounts()) {
-        if (!cancelled) subscribe(acc.server, acc.token);
-      }
     }
     connect();
     return () => { cancelled = true; sources.forEach(s => s.close()); };

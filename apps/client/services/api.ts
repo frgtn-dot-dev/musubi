@@ -1,7 +1,7 @@
 import { Calendar, CalendarInvitePreview, Event, Invite, Settings, GoogleCheck } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
-import { fedFetch, remoteForCalendar } from "@/services/federation";
+import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
 import { notifySessionExpired } from "@/lib/signOut";
 import { fetchWithTimeout } from "@/lib/network";
 
@@ -44,6 +44,19 @@ export function useApi() {
       }
     },
   };
+
+  // Federation talks to the home server now (the gateway holds the member
+  // token), so hand the registry an authenticated requester. Path-based, so the
+  // federation module needs neither apiUrl nor the auth client.
+  setHomeRequester(async <T,>(path: string, init?: RequestInit) => {
+    const { error, data } = await authClient.$fetch<T>(`${apiUrl}${path}`, {
+      method: init?.method ?? "GET",
+      ...(init?.headers ? { headers: init.headers } : {}),
+      ...(init?.body ? { body: init.body } : {}),
+    });
+    throwOnError(error);
+    return data as T;
+  });
 
   return {
     async createCalendar(calendar: Calendar) {
@@ -328,11 +341,17 @@ export function useApi() {
     },
 
     // Returns raw ICS text — plain fetch, not $fetch/fedFetch (both assume JSON).
+    // A remote calendar is exported through the home gateway, so the home
+    // session authenticates it and the member token stays server-side.
     async exportCalendar(calendarID: string): Promise<string> {
       const remote = remoteOf(calendarID);
-      const url = `${remote?.server ?? apiUrl}/api/${apiVersion}/calendars/${calendarID}/export`;
-      const token = remote?.token ?? (await baseAuthClient.getSession()).data?.session?.token;
-      const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } });
+      const path = remote
+        ? `/api/${apiVersion}/federation/s/${remote.id}/api/${apiVersion}/calendars/${calendarID}/export`
+        : `/api/${apiVersion}/calendars/${calendarID}/export`;
+      const token = (await baseAuthClient.getSession()).data?.session?.token;
+      const res = await fetchWithTimeout(`${apiUrl}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error(`${res.status}: export failed`);
       return res.text();
     },
@@ -548,25 +567,10 @@ export function useApi() {
       throwOnError(error);
     },
 
-    // Federated Musubi connections live on the HOME server (encrypted at rest)
-    // so they roam across devices — always home-routed, never federated.
-    async getMusubiAccounts() {
-      const { error, data } = await authClient.$fetch<{ accounts: { server: string; userID: string; token: string }[] }>(
-        `${apiUrl}/api/${apiVersion}/users/connections/musubi`, { method: "GET" });
-      throwOnError(error);
-      return data.accounts;
-    },
-
-    async saveMusubiAccount(account: { server: string; userID: string; token: string }) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/musubi`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(account),
-      });
-      throwOnError(error);
-      return true;
-    },
-
+    // Federated connections live on the HOME server. Listing and writing them
+    // with the raw member token is gone (ADR-005): the registry is read from
+    // `/federation/connections`, and the connection is created by
+    // `/federation/connect`, both without a credential ever reaching this device.
     async deleteMusubiAccount(server: string) {
       const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/musubi`, {
         method: "DELETE",
