@@ -25,20 +25,16 @@ import {
 } from "react";
 import { getAgendaLabel } from "../agenda-math";
 import {
+  getEventRangeLabel,
   getMonthLabel,
   parseDateKey,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
-import {
-  getTimeGridDays,
-  getTimeGridLabel,
-} from "../time-grid-math";
+import { getTimeGridDays, getTimeGridLabel } from "../time-grid-math";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
-import {
-  createTimeGeometry,
-  densityFromPageConfig,
-} from "../time-geometry";
+import { seriesEditWrites, type EditScope } from "../recurrence-edit";
+import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
   toggleCalendarVisibility,
@@ -51,10 +47,8 @@ import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
-import {
-  QuickCreate,
-  type QuickCreateAnchor,
-} from "./QuickCreate";
+import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
+import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import { SaveBar } from "./SaveBar";
 import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
@@ -104,9 +98,7 @@ type WorkspaceProps = {
   onUpdateCalendar?: (calendar: Calendar) => Promise<Calendar>;
   onRemoveCalendar?: (calendar: Calendar) => Promise<Calendar>;
   onAdoptSettings?: (document: SettingsDocument) => void;
-  onGetSettingsDocument?: (
-    signal?: AbortSignal,
-  ) => Promise<SettingsDocument>;
+  onGetSettingsDocument?: (signal?: AbortSignal) => Promise<SettingsDocument>;
   onPatchSettings?: (request: {
     baseRevision: number;
     patch: SettingsPatch;
@@ -210,9 +202,7 @@ export function Workspace({
   // Read-mode calendar toggles are a temporary local filter: a set of ids
   // flipped from what the Page config resolves to. Cleared when the Page or its
   // saved visibility changes.
-  const [tempToggles, setTempToggles] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [tempToggles, setTempToggles] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftVisibility, setDraftVisibility] = useState<
@@ -254,9 +244,83 @@ export function Workspace({
       notify("That change could not be undone.");
     }
   }
+
+  function askScope(occurrence: Event, start: Date, end: Date) {
+    return new Promise<EditScope | undefined>((resolve) => {
+      setScopeRequest({
+        resolve: (scope) => {
+          setScopeRequest(undefined);
+          resolve(scope);
+        },
+        timeLabel: getEventRangeLabel(
+          { ...occurrence, end, start },
+          settings.timeFormat,
+        ),
+        title: occurrence.title,
+      });
+    });
+  }
+
+  /**
+   * Write a new time for an event, whatever gesture produced it. A series first
+   * asks which occurrences it applies to; dismissing that writes nothing, and
+   * the block is already back where it was.
+   */
+  async function commitEventTimes({
+    end,
+    event,
+    start,
+  }: {
+    end: Date;
+    event: Event;
+    start: Date;
+  }) {
+    const master = getEventMaster(event);
+    let scope: EditScope = "series";
+
+    if (master.recurrence) {
+      const chosen = await askScope(event, start, end);
+      if (!chosen) return;
+      scope = chosen;
+    }
+
+    const { creates, updates } = seriesEditWrites({
+      end,
+      master,
+      occurrence: event,
+      scope,
+      start,
+    });
+
+    // Sequential: the update carries the exclusion that keeps the created event
+    // from briefly showing twice.
+    for (const update of updates) {
+      await onUpdateEvent(update);
+    }
+    const created: Event[] = [];
+    for (const create of creates) {
+      created.push(await onCreateEvent(create));
+    }
+
+    notify(
+      start.getTime() === event.start.getTime()
+        ? "Event resized."
+        : "Event moved.",
+      async () => {
+        for (const event of created) {
+          await onRemoveEvent(event);
+        }
+        await onUpdateEvent(master);
+      },
+    );
+  }
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
-  const [calendarTransfersOpen, setCalendarTransfersOpen] =
-    useState(false);
+  const [scopeRequest, setScopeRequest] = useState<{
+    resolve: (scope: EditScope | undefined) => void;
+    timeLabel: string;
+    title: string;
+  }>();
+  const [calendarTransfersOpen, setCalendarTransfersOpen] = useState(false);
   const [shareCalendar, setShareCalendar] = useState<Calendar | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -361,9 +425,7 @@ export function Workspace({
   }, [pageDirty]);
 
   const visibleEvents = useMemo(() => {
-    const normalizedQuery = deferredSearchQuery
-      .trim()
-      .toLocaleLowerCase();
+    const normalizedQuery = deferredSearchQuery.trim().toLocaleLowerCase();
 
     return events.filter(
       (event) =>
@@ -522,20 +584,14 @@ export function Workspace({
 
   // Leaving edit mode via the toolbar toggle confirms first when dirty.
   function stopEditing() {
-    if (
-      pageDirty &&
-      !window.confirm("Discard your unsaved page changes?")
-    ) {
+    if (pageDirty && !window.confirm("Discard your unsaved page changes?")) {
       return;
     }
     discardEditing();
   }
 
   function guardedPageChange(nextPageId: string) {
-    if (
-      pageDirty &&
-      !window.confirm("Discard your unsaved page changes?")
-    ) {
+    if (pageDirty && !window.confirm("Discard your unsaved page changes?")) {
       return;
     }
     setEditing(false);
@@ -621,7 +677,9 @@ export function Workspace({
         onPageChange={guardedPageChange}
         onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
-        syncLabel={isRefreshing ? "Refreshing server data…" : "Connected to server"}
+        syncLabel={
+          isRefreshing ? "Refreshing server data…" : "Connected to server"
+        }
         user={user}
         visibleCalendarIds={visibleCalendarIds}
       />
@@ -634,9 +692,7 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
-          draftDensity={
-            "density" in draftView ? draftView.density : undefined
-          }
+          draftDensity={"density" in draftView ? draftView.density : undefined}
           draftName={draftName}
           editing={editing}
           filtersOpen={filtersOpen}
@@ -667,9 +723,7 @@ export function Workspace({
             )
           }
           onToggleEdit={editing ? stopEditing : startEditing}
-          onCreateEvent={(target) =>
-            openCreateAtDate(date, target)
-          }
+          onCreateEvent={(target) => openCreateAtDate(date, target)}
           onPeriodChange={changePeriod}
           onNotice={notify}
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -679,14 +733,15 @@ export function Workspace({
           onViewChange={onViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
-          periodName={
-            activeView === "agenda" ? "agenda start" : activeView
-          }
+          periodName={activeView === "agenda" ? "agenda start" : activeView}
           searchQuery={searchQuery}
         />
 
         {filtersOpen ? (
-          <div className={styles.filterBar} aria-label="Active calendar filters">
+          <div
+            className={styles.filterBar}
+            aria-label="Active calendar filters"
+          >
             <span>Visible calendars</span>
             {calendars.map((calendar) => {
               const active = visibleCalendarIds.includes(calendar.id);
@@ -742,18 +797,10 @@ export function Workspace({
                     }
                   : undefined
               }
-              onMoveEvent={async ({ end, event, start }) => {
-                // The grid already shows the new position; this confirms it.
-                // A rejection propagates so the drag reports it and the block
-                // snaps back to the server's truth.
-                await onUpdateEvent({ ...event, end, start });
-                notify(
-                  start.getTime() === event.start.getTime()
-                    ? "Event resized."
-                    : "Event moved.",
-                  () => onUpdateEvent(event),
-                );
-              }}
+              // The grid already shows the new position; this confirms it. A
+              // rejection propagates so the drag reports it and the block snaps
+              // back to the server's truth.
+              onMoveEvent={commitEventTimes}
               showWeekend={showWeekend}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
@@ -795,12 +842,11 @@ export function Workspace({
                     event.start.getMonth(),
                     event.start.getDate(),
                   ).getTime();
-                await onUpdateEvent({
-                  ...event,
+                await commitEventTimes({
                   end: new Date(event.end.getTime() + shift),
+                  event,
                   start: new Date(event.start.getTime() + shift),
                 });
-                notify("Event moved.", () => onUpdateEvent(event));
               }}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
@@ -866,6 +912,14 @@ export function Workspace({
             onDismiss={discardEditing}
             onSave={() => void savePageChanges()}
             onSaveAsNew={() => void savePageAsNew()}
+          />
+        ) : null}
+
+        {scopeRequest ? (
+          <RecurrenceScopeDialog
+            onResolve={scopeRequest.resolve}
+            timeLabel={scopeRequest.timeLabel}
+            title={scopeRequest.title}
           />
         ) : null}
 

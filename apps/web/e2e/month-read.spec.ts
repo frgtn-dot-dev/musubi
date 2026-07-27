@@ -2068,3 +2068,62 @@ test("dragging backwards across month days still creates a forward range", async
   await expect(page.getByLabel("Date")).toHaveValue("2026-07-28");
   await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
 });
+
+test("asks which occurrences a dragged series should change", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ method: string; body: Record<string, unknown> }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    const method = route.request().method();
+    if (method === "PUT" || method === "POST") {
+      writes.push({
+        body: route.request().postDataJSON() as Record<string, unknown>,
+        method,
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const chip = page.getByRole("button", { name: /Weekly review/ }).first();
+  await expect(chip).toBeVisible();
+  const from = (await chip.boundingBox())!;
+  const target = page.locator('[data-day-key="2026-07-29"]');
+  const to = (await target.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  // Nothing is written until the scope is answered.
+  const dialog = page.getByRole("dialog", { name: "Change recurring event" });
+  await expect(dialog).toBeVisible();
+  expect(writes).toHaveLength(0);
+
+  // Dismissing writes nothing at all.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  expect(writes).toHaveLength(0);
+
+  // Drag again and detach this one occurrence.
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "This event" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event moved.");
+  // The series keeps its rule minus this date, and the moved occurrence is a
+  // new standalone event.
+  const updated = writes.find((write) => write.method === "PUT")!;
+  expect(updated.body.recurrence).toContain("EXDATE:");
+  const created = writes.find((write) => write.method === "POST")!;
+  expect(created.body.recurrence).toBeNull();
+  expect(created.body.id).not.toBe("weekly-review");
+});

@@ -3,16 +3,8 @@ import {
   getMonthGrid,
   segmentEventsByDay as bucketEventsByDay,
 } from "@musubi/calendar/layout";
-import {
-  type KeyboardEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  getLongDateLabel,
-  getWeekdayLabels,
-} from "../calendar-math";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
+import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { canEditEvent } from "../event-permissions";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
@@ -70,7 +62,8 @@ export function MonthCalendar({
   } = useDayRangeCreate({
     onSelected: ({ fromKey, toKey }, cell) => {
       // Dragging backwards is as valid as forwards.
-      const [start, end] = fromKey <= toKey ? [fromKey, toKey] : [toKey, fromKey];
+      const [start, end] =
+        fromKey <= toKey ? [fromKey, toKey] : [toKey, fromKey];
       onCreateAtDate?.(start, cell, end);
     },
   });
@@ -85,7 +78,9 @@ export function MonthCalendar({
         : undefined;
     if (!source) return undefined;
     const [first, second] = source as [string, string];
-    return first <= second ? { from: first, to: second } : { from: second, to: first };
+    return first <= second
+      ? { from: first, to: second }
+      : { from: second, to: first };
   }, [pendingCreate, range]);
 
   const { begin: beginMonthDrag, drag } = useMonthDrag({
@@ -179,10 +174,7 @@ export function MonthCalendar({
     } else if (event.key === "PageDown") {
       event.preventDefault();
       onMonthChange(1);
-    } else if (
-      onCreateAtDate &&
-      (event.key === "Enter" || event.key === " ")
-    ) {
+    } else if (onCreateAtDate && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       onCreateAtDate(toDateKey(days[index]!), event.currentTarget);
     }
@@ -301,11 +293,7 @@ export function MonthCalendar({
                         event={segment.event}
                         key={segment.event.id}
                         onBeginDrag={
-                          // Same gating as the time grid: a recurring event
-                          // would move its whole series, which needs the scope
-                          // dialog first.
                           onMoveEventToDate &&
-                          !segment.event.recurrence &&
                           canEditEvent(
                             eventActions.getEventMaster(segment.event),
                             calendars,

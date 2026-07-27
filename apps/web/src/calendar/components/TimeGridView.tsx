@@ -19,10 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  getEventDateLabel,
-  getEventRangeLabel,
-} from "../calendar-math";
+import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
 import { getReadableEventTextColor } from "../event-color";
 import {
   durationToHeight,
@@ -31,16 +28,17 @@ import {
   type TimeGeometry,
 } from "../time-geometry";
 import { canEditEvent } from "../event-permissions";
-import { nextDragTimes, type DragMode, type DragTimes } from "../time-grid-drag";
+import {
+  nextDragTimes,
+  type DragMode,
+  type DragTimes,
+} from "../time-grid-drag";
 import {
   useDragToCreate,
   useTimeGridDrag,
   type BeginDragInput,
 } from "../use-time-grid-drag";
-import {
-  getTimeGridDays,
-  type TimeGridViewId,
-} from "../time-grid-math";
+import { getTimeGridDays, type TimeGridViewId } from "../time-grid-math";
 import {
   EventDetailsPopover,
   type EventActionHandlers,
@@ -196,8 +194,7 @@ const TimelineEvent = memo(function TimelineEvent({
 
     keyEvent.preventDefault();
     keyEvent.stopPropagation();
-    const step =
-      (keyEvent.key === "ArrowDown" ? 1 : -1) * geometry.snapMinutes;
+    const step = (keyEvent.key === "ArrowDown" ? 1 : -1) * geometry.snapMinutes;
     const times = nextDragTimes({
       deltaMinutes: step,
       geometry,
@@ -351,8 +348,7 @@ export function TimeGridView({
   const visibleAllDaySpans = allDaySpans.filter(
     (span) => span.lane < ALL_DAY_LANES,
   );
-  const hiddenAllDayCount =
-    allDaySpans.length - visibleAllDaySpans.length;
+  const hiddenAllDayCount = allDaySpans.length - visibleAllDaySpans.length;
   const allDayLaneCount = Math.min(
     Math.max(...allDaySpans.map((span) => span.lane + 1), 1),
     ALL_DAY_LANES,
@@ -583,9 +579,7 @@ export function TimeGridView({
           <span className={styles.timeGridAllDayLabel}>All day</span>
           <div className={styles.timeGridAllDayTrack}>
             {visibleAllDaySpans.map((span) => {
-              const calendar = calendarsById.get(
-                span.event.calendars[0] ?? "",
-              );
+              const calendar = calendarsById.get(span.event.calendars[0] ?? "");
               const eventColor = calendar?.color ?? span.event.color;
 
               return (
@@ -612,8 +606,7 @@ export function TimeGridView({
                         left: `${(span.startCol / days.length) * 100}%`,
                         top: `${span.lane * 24 + 4}px`,
                         width: `${
-                          ((span.endCol - span.startCol + 1) /
-                            days.length) *
+                          ((span.endCol - span.startCol + 1) / days.length) *
                           100
                         }%`,
                       } as CSSProperties
@@ -640,9 +633,7 @@ export function TimeGridView({
             key={hour}
             style={{ top: `${minutesToY(hour * 60, geometry)}px` }}
           >
-            {hour > 0 ? (
-              <span>{hourLabel(hour, timeFormat)}</span>
-            ) : null}
+            {hour > 0 ? <span>{hourLabel(hour, timeFormat)}</span> : null}
           </div>
         ))}
         <span className={styles.timeGridZone} aria-hidden="true">
@@ -703,9 +694,10 @@ export function TimeGridView({
 
                   onCreateAtTime(
                     dayKey(day),
-                    `${String(hour).padStart(2, "0")}:${String(
-                      minute,
-                    ).padStart(2, "0")}`,
+                    `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+                      2,
+                      "0",
+                    )}`,
                     {
                       returnFocus: event.currentTarget,
                       x: event.clientX,
@@ -753,7 +745,6 @@ export function TimeGridView({
                     }
                     draggable={
                       Boolean(onMoveEvent) &&
-                      !segment.event.recurrence &&
                       canEditEvent(
                         eventActions.getEventMaster(segment.event),
                         calendars,

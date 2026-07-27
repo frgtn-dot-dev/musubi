@@ -81,6 +81,31 @@ export function endSeriesBefore(recurrence: string, occurrenceStart: Date): stri
   return joinRecurrence([...parts, `UNTIL=${until}`].join(';'), extras)!
 }
 
+/**
+ * "This and following": the rule the split-off series carries.
+ *
+ * UNTIL is an absolute date, so it survives a split untouched. COUNT does not —
+ * both halves would otherwise claim the full count — so it is reduced by the
+ * occurrences the original half keeps.
+ */
+export function remainderRule(
+  recurrence: string,
+  seriesStart: Date,
+  occurrenceStart: Date,
+): string {
+  const { rrule, extras } = splitRecurrence(recurrence)
+  const count = /COUNT=(\d+)/.exec(rrule)
+  if (!count) return joinRecurrence(rrule, extras)!
+
+  const kept = getRule(recurrence, seriesStart).between(
+    seriesStart,
+    new Date(occurrenceStart.getTime() - 1000),
+    true /* inclusive */,
+  ).length
+  const remaining = Math.max(1, Number(count[1]) - kept)
+  return joinRecurrence(rrule.replace(/COUNT=\d+/, `COUNT=${remaining}`), extras)!
+}
+
 export function expandRecurringEvents<T extends ICalendarEventBase>(
   events: T[],
   rangeStart: Date,

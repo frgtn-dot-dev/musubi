@@ -249,14 +249,39 @@ Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 
 ### Fáze C — Vratnost
 
-- Command model: `optimisticPatch` + `rollbackPatch`.
-- Snackbar s akcí **Zpět** (time-limited queue).
-- Nahradit `window.confirm` tam, kde Undo stačí (mazání eventu, discard draftu).
-- Dialogy nechat pro: rozsah série, nevratné, externí dopad (hosté).
-- Error copy podle R8 (čtyři otázky).
+**C1 — Undo v toastu: HOTOVO** (2026-07-28)
 
-*Hotovo když:* běžné mazání i přesun jde vrátit; dialog zůstal jen tam, kde ho
-Undo nezastoupí.
+- `Notify = (message, undo?) => void` (`src/calendar/notice.ts`). Undo se
+  nepřidával jako abstraktní command model — reverzní akce je closure u místa,
+  které mutaci provedlo, protože jen ono ví, co byl původní stav.
+- Toast s Undo žije 9 s (bez Undo 3,5 s): nabídka platí jen tehdy, když tam je
+  ještě v okamžiku, kdy si chybu všimneš. Klik Undo nabídku hned sundá, aby se
+  reverzace nedala přehrát dvakrát.
+- Undo má: přesun a resize (time grid i month, včetně Alt+šipek), mazání eventu,
+  odebrání jednoho výskytu / následujících.
+- **Mazání běžného eventu je na jeden klik**, bez potvrzovacího kroku. Confirm
+  zůstal jen tam, kde ho Undo nezastoupí: série (potřebuje rozsah) a kalendář
+  s providerem (změna už odešla jinam, restore by tam vznikl jako nový event).
+
+**C2 — Rozsah série + drag opakovaných: HOTOVO** (2026-07-28)
+
+- `seriesEditWrites` (`src/calendar/recurrence-edit.ts`) vrací **data, ne
+  volání** — `{ creates, updates }` — takže se každý rozsah dá zkontrolovat bez
+  serveru a volající si řídí pořadí i undo.
+- Tři rozsahy: `series` (posune master o stejný delta; resize hýbe jen taženou
+  hranou), `occurrence` (EXDATE + odpojená kopie), `following`
+  (`endSeriesBefore` + nová série). `remainderRule` v `@musubi/calendar` sníží
+  `COUNT`, aby rozdělením série nevznikly occurrences dvakrát; `UNTIL` je
+  absolutní, takže se nechává.
+- Tím padlo gating v TimeGridView i MonthCalendar — **opakované eventy se dají
+  táhnout**.
+- Dialog se ptá **před** zápisem a v textu **říká nový čas**, protože kalendář za
+  ním pořád ukazuje starý (nic se nezapsalo). Zavření dialogu nezapíše nic.
+
+*Zbývá v C:* discard draftu stránky pořád `window.confirm` (Undo by muselo
+obnovit celý draft i edit mód); editace série přes formulář zapisuje celou sérii
+— tlačítko to říká („Edit series“), scope se tam ale hodí. Error copy podle čtyř
+otázek projít napříč.
 
 ### Fáze D — Orientace a kontinuita
 
