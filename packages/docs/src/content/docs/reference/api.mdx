@@ -136,6 +136,7 @@ Current event types:
 | `page_created` | Add the `PageDocument` in `data.page` |
 | `page_updated` | Replace the `PageDocument`; dedupe by `revision` |
 | `page_removed` | Drop the page id in `data.id`; the default may have moved |
+| `federated_sync` | Something changed on the connected server in `data.server`; refetch that server's data |
 
 Page and settings events fan out only to the acting user's own sessions,
 including the originating one, which discards the duplicate by revision.

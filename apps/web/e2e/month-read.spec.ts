@@ -1444,6 +1444,83 @@ test("routes federated event writes through the gateway", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("refreshes federated calendars on a realtime federated_sync", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      onmessage: ((event: { data: string }) => void) | null = null;
+      readyState = 1;
+      constructor(public url: string) {
+        (window as unknown as { __sse: FakeEventSource[] }).__sse ??= [];
+        (window as unknown as { __sse: FakeEventSource[] }).__sse.push(this);
+      }
+      close() {
+        this.readyState = 2;
+      }
+      addEventListener() {}
+      removeEventListener() {}
+    }
+    (window as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+  });
+
+  await mockAuthenticatedReads(page);
+  let remoteName = "Book club";
+  await page.route("**/api/v1/federation/connections", (route) =>
+    respond(route, [
+      { id: "conn-1", label: "friends.example", remoteUserID: "fed_1", server: "https://friends.example" },
+    ]),
+  );
+  await page.route(
+    "**/api/v1/federation/s/conn-1/api/v1/calendars",
+    (route) =>
+      respond(route, [
+        {
+          color: "#8a6fae",
+          creatorID: "remote-owner",
+          id: "remote-cal-1",
+          members: [],
+          name: remoteName,
+          role: "viewer",
+        },
+      ]),
+  );
+  await page.route("**/api/v1/federation/s/conn-1/api/v1/events", (route) =>
+    respond(route, {
+      deletedIds: [],
+      events: [],
+      serverTime: "2026-07-26T14:00:00.000Z",
+    }),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(
+    page.getByRole("checkbox", { name: "Book club" }),
+  ).toBeChecked();
+
+  // The remote calendar is renamed on its own server; our server relays the
+  // change as federated_sync and the snapshot refetches.
+  remoteName = "Book club (Thursdays)";
+  await page.evaluate(() => {
+    const sockets = (
+      window as unknown as {
+        __sse?: Array<{ onmessage: ((e: { data: string }) => void) | null }>;
+      }
+    ).__sse;
+    sockets?.[sockets.length - 1]?.onmessage?.({
+      data: JSON.stringify({
+        payload: { server: "https://friends.example" },
+        type: "federated_sync",
+      }),
+    });
+  });
+
+  await expect(
+    page.getByRole("checkbox", { name: "Book club (Thursdays)" }),
+  ).toBeChecked();
+});
+
 test("joins a calendar from a pasted cross-server invite link", async ({
   page,
 }) => {

@@ -32,6 +32,7 @@ export function useServerStream(userId: string) {
     const pagesKey = queryKeys.pages(origin, userId);
     const settingsKey = queryKeys.settings(origin, userId);
     const calendarsKey = queryKeys.calendars(origin, userId);
+    const federatedKey = queryKeys.federated(origin, userId);
     // Event ranges share this prefix; a prefix match invalidates every window.
     const eventsPrefix = ["events", origin, userId] as const;
 
@@ -66,6 +67,11 @@ export function useServerStream(userId: string) {
           break;
         case "settings_updated":
           void queryClient.invalidateQueries({ queryKey: settingsKey });
+          break;
+        // Something changed on a connected Musubi server. Its rows live in the
+        // federation snapshot, so refetch that rather than patching local caches.
+        case "federated_sync":
+          void queryClient.invalidateQueries({ queryKey: federatedKey });
           break;
         case "calendar_updated":
         case "calendar_removed":
