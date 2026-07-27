@@ -360,8 +360,23 @@ export function ConnectionsDialog({
                       {server.label}
                     </span>
                     <span className={styles.calendarBadge}>
-                      {server.reachable ? "Connected" : "Unreachable"}
+                      {server.state === "active"
+                        ? "Connected"
+                        : server.state === "unauthorized"
+                          ? "Needs a new invite"
+                          : "Unreachable"}
                     </span>
+                    {server.state === "unreachable" ? (
+                      <button
+                        aria-label={`Retry ${server.label}`}
+                        className={styles.iconButton}
+                        disabled={busy}
+                        type="button"
+                        onClick={() => void federated.refetch()}
+                      >
+                        <RefreshCw aria-hidden="true" size={15} />
+                      </button>
+                    ) : null}
                     <button
                       aria-label={`Disconnect ${server.label}`}
                       className={styles.iconButton}

@@ -1,6 +1,7 @@
 import type { Calendar, Event } from "@musubi/types";
 import { useQuery } from "@tanstack/react-query";
 import type { FederationConnection } from "~/api/contracts";
+import { ApiError } from "~/api/http";
 import {
   getFederatedCalendars,
   getFederatedEvents,
@@ -16,12 +17,31 @@ import { getServerOrigin, queryKeys } from "~/api/query-keys";
 // row instead of failing the whole workspace — the home calendar must never go
 // dark because someone else's server is down.
 
+/**
+ * `unauthorized` and `unreachable` need different words and different actions:
+ * a dead or revoked member token can only be replaced by accepting a new invite,
+ * while an unreachable server just needs another try.
+ */
+export type FederatedServerState =
+  | "active"
+  | "unauthorized"
+  | "unreachable";
+
 export type FederatedServerStatus = {
   connectionId: string;
   label: string;
-  reachable: boolean;
   server: string;
+  state: FederatedServerState;
 };
+
+function failureState(error: unknown): FederatedServerState {
+  // The gateway relays the origin's status, and turns an unreachable origin into
+  // 502 — so 401/403 really did come from the origin rejecting our credential.
+  return error instanceof ApiError &&
+    (error.status === 401 || error.status === 403)
+    ? "unauthorized"
+    : "unreachable";
+}
 
 export type FederatedWorkspace = {
   calendars: Calendar[];
@@ -67,19 +87,19 @@ async function loadFederatedWorkspace(
           status: {
             connectionId: connection.id,
             label: connection.label,
-            reachable: true,
             server: connection.server,
+            state: "active" as FederatedServerState,
           },
         };
-      } catch {
+      } catch (error) {
         return {
           calendars: [],
           events: [],
           status: {
             connectionId: connection.id,
             label: connection.label,
-            reachable: false,
             server: connection.server,
+            state: failureState(error),
           },
         };
       }

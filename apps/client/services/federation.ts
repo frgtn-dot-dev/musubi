@@ -169,6 +169,7 @@ export async function syncFederatedAccounts(fallbackCalendars: Calendar[]) {
         serverUrl: acc.server,    // lets the app show + route by origin
         accountId: acc.id,        // per-server grouping in the calendar list
         accountLabel: acc.label,
+        syncStatus: "active" as const,
       }));
       const { events: evs } = await fedFetch<{ events: any[] }>(acc, "/api/v1/events");
       for (const c of tagged) calendarOrigin.set(c.id, acc);
@@ -177,8 +178,18 @@ export async function syncFederatedAccounts(fallbackCalendars: Calendar[]) {
       syncedServers.add(acc.server);
     } catch (e) {
       console.warn(`Federated sync failed for ${acc.label}:`, e);
-      // keep the last known calendars so the reconcile pass doesn't drop them
-      const cached = fallbackCalendars.filter(c => c.provider === "musubi" && c.serverUrl === acc.server);
+      // Keep the last known calendars so the reconcile pass doesn't drop them,
+      // but mark them when the ORIGIN rejected us: a dead or revoked member
+      // token can only be replaced by accepting a new invite, so that needs
+      // saying. A merely unreachable server is transient — showing "expired"
+      // for a dropped connection would send the user chasing a non-problem.
+      // The gateway relays the origin's status and turns unreachable into 502.
+      const rejected = /^(401|403):/.test(String((e as Error)?.message ?? ""));
+      const cached = fallbackCalendars
+        .filter(c => c.provider === "musubi" && c.serverUrl === acc.server)
+        .map(c => rejected
+          ? { ...c, syncStatus: "reconnect_required" as const, syncErrorCode: "federation_unauthorized" }
+          : c);
       for (const c of cached) calendarOrigin.set(c.id, acc);
       calendars.push(...cached);
     }

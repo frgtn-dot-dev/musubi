@@ -166,7 +166,12 @@ export default function CalendarsTab() {
           eventCount={eventCountByCal}
           onOpen={handleOpenCalendar}
           onDisconnect={(g) => handleDisconnect(g.provider!, g.accountId!, g.title)}
-          onReconnect={() => setSyncModalVisible(true)}
+          onReconnect={(g) => g.provider === "musubi"
+            // Federation has no re-authorization: the member token is only
+            // replaced by accepting a new invite, so the sync modal (OAuth /
+            // CalDAV providers) would be a dead end here.
+            ? showToast({ message: `Ask for a new invite link to ${g.title} and open it to reconnect.` })
+            : setSyncModalVisible(true)}
           onReorder={persistOrder}
         />
       </ScrollView>

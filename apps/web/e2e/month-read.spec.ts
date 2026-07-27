@@ -1349,6 +1349,10 @@ test("shows federated calendars and reports an unreachable server", async ({
     .getByRole("listitem")
     .filter({ hasText: "dead.example" });
   await expect(deadRow).toContainText("Unreachable");
+  // Transient failures offer a retry, not a re-invite.
+  await expect(
+    page.getByRole("button", { name: "Retry dead.example" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("listitem").filter({ hasText: "friends.example" }),
   ).toContainText("Connected");
@@ -1441,6 +1445,41 @@ test("routes federated event writes through the gateway", async ({ page }) => {
   expect(homeWrites).toBe(0);
   await expect(
     page.getByRole("button", { name: /Book club — new venue/ }),
+  ).toBeVisible();
+});
+
+test("distinguishes a revoked federated token from an outage", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/federation/connections", (route) =>
+    respond(route, [
+      { id: "conn-1", label: "revoked.example", remoteUserID: "fed_1", server: "https://revoked.example" },
+    ]),
+  );
+  // The origin rejects our member token (kicked, or the token expired). The
+  // gateway relays that status unchanged.
+  await page.route("**/api/v1/federation/s/conn-1/**", (route) =>
+    route.fulfill({
+      body: JSON.stringify({ error: "Unauthorized", message: "Unauthorized" }),
+      contentType: "application/json",
+      status: 401,
+    }),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Connections" }).click();
+
+  const row = page
+    .getByRole("listitem")
+    .filter({ hasText: "revoked.example" });
+  // A dead credential needs a new invite — retrying would never fix it.
+  await expect(row).toContainText("Needs a new invite");
+  await expect(
+    page.getByRole("button", { name: "Retry revoked.example" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Disconnect revoked.example" }),
   ).toBeVisible();
 });
 
