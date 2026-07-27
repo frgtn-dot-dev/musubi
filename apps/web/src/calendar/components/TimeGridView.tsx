@@ -28,6 +28,7 @@ import {
   type TimeGeometry,
 } from "../time-geometry";
 import { canEditEvent } from "../event-permissions";
+import { EventMarks } from "./EventMarks";
 import {
   nextDragTimes,
   type DragMode,
@@ -63,6 +64,8 @@ const timeZoneFormatter = new Intl.DateTimeFormat("en", {
 
 type TimeGridViewProps = EventActionHandlers & {
   anchor: Date;
+  /** The event a write is in flight for, so its block can say so. */
+  busyEventId?: string;
   calendars: Calendar[];
   events: Event[];
   geometry: TimeGeometry;
@@ -108,6 +111,8 @@ type TimelineEventProps = EventActionHandlers & {
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
   /** Live times while this event is being dragged, else undefined. */
   dragTimes?: DragTimes;
+  /** A write for this event is in flight. */
+  pending?: boolean;
   draggable: boolean;
   geometry: TimeGeometry;
   onBeginDrag: (input: BeginDragInput) => void;
@@ -172,11 +177,16 @@ const TimelineEvent = memo(function TimelineEvent({
   draggable,
   geometry,
   onBeginDrag,
+  pending = false,
   onKeyboardAdjust,
   timeFormat,
   ...eventActions
 }: TimelineEventProps) {
   const { col, cols, event } = daySegment;
+  const editable = canEditEvent(
+    eventActions.getEventMaster(event),
+    calendars,
+  );
   // While dragging, the block follows the ghost times rather than the data.
   const startMin = dragTimes?.startMinutes ?? daySegment.startMin;
   const endMin = dragTimes?.endMinutes ?? daySegment.endMin;
@@ -248,8 +258,11 @@ const TimelineEvent = memo(function TimelineEvent({
         aria-label={`${event.title}, ${getEventDateLabel(
           event,
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
+        aria-busy={pending || undefined}
         data-dragging={dragTimes ? "" : undefined}
         data-draggable={draggable ? "" : undefined}
+        data-pending={pending ? "" : undefined}
+        data-readonly={editable ? undefined : ""}
         data-time-event={event.id}
         onKeyDown={handleKeyDown}
         onPointerDown={(pointerEvent) => startDrag(pointerEvent, "move")}
@@ -268,19 +281,27 @@ const TimelineEvent = memo(function TimelineEvent({
           } as CSSProperties
         }
       >
-        {duration >= 30 ? (
-          <span className={styles.timelineEventTime}>
-            {/* While dragging, show the time the drop would produce — the
-                answer the user is actually looking for. */}
-            {dragTimes
-              ? `${minuteLabel(startMin, timeFormat)}–${minuteLabel(
-                  endMin,
-                  timeFormat,
-                )}`
-              : getEventRangeLabel(event, timeFormat).replace(" – ", "–")}
-          </span>
+        {/* What fits is the block's own business: the rows below are all
+            rendered and the container queries in CSS drop them as the box gets
+            shorter. A JS threshold on duration would disagree with the box the
+            moment density or zoom changed it. */}
+        <span className={styles.timelineEventTime}>
+          {/* While dragging, show the time the drop would produce — the
+              answer the user is actually looking for. */}
+          {dragTimes
+            ? `${minuteLabel(startMin, timeFormat)}–${minuteLabel(
+                endMin,
+                timeFormat,
+              )}`
+            : getEventRangeLabel(event, timeFormat).replace(" – ", "–")}
+        </span>
+        <span className={styles.timelineEventTitle}>
+          {event.title}
+          <EventMarks event={event} readOnly={!editable} />
+        </span>
+        {event.location ? (
+          <span className={styles.timelineEventMeta}>{event.location}</span>
         ) : null}
-        <span className={styles.timelineEventTitle}>{event.title}</span>
         {draggable ? (
           <>
             {/* Resize has its own handles and its own state, so a move can
@@ -315,6 +336,7 @@ export function TimeGridView({
   geometry,
   onCreateAtTime,
   onMoveEvent,
+  busyEventId,
   pendingCreate,
   showWeekend = true,
   timeFormat,
@@ -728,6 +750,11 @@ export function TimeGridView({
                 ) : null}
                 {segmentsByDay[dayIndex]?.map((segment) => (
                   <TimelineEvent
+                    pending={
+                      busyEventId !== undefined &&
+                      (segment.event.id === busyEventId ||
+                        segment.event.id.startsWith(`${busyEventId}_`))
+                    }
                     calendar={calendarsById.get(
                       segment.event.calendars[0] ?? "",
                     )}

@@ -14,6 +14,8 @@ import styles from "./workspace.module.css";
 
 type MonthCalendarProps = EventActionHandlers & {
   anchor: Date;
+  /** The event a write is in flight for, so its chip can say so. */
+  busyEventId?: string;
   calendars: Calendar[];
   events: Event[];
   onCreateAtDate?: (
@@ -44,6 +46,7 @@ type MonthCalendarProps = EventActionHandlers & {
 
 export function MonthCalendar({
   anchor,
+  busyEventId,
   calendars,
   events,
   onCreateAtDate,
@@ -291,6 +294,11 @@ export function MonthCalendar({
                         continuesBefore={segment.continuesBefore}
                         dragging={drag?.event.id === segment.event.id}
                         event={segment.event}
+                        pending={
+                          busyEventId !== undefined &&
+                          (segment.event.id === busyEventId ||
+                            segment.event.id.startsWith(`${busyEventId}_`))
+                        }
                         key={segment.event.id}
                         onBeginDrag={
                           onMoveEventToDate &&

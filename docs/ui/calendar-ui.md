@@ -318,11 +318,23 @@ otázek projít napříč.
 *Zbývá:* samostatná viditelná selection layer (dnes ji nese `pendingCreate` +
 `data-range-selected`, což na R1 stačí).
 
-### Fáze E — Craft eventu
+### Fáze E — Craft eventu — **HOTOVO** (2026-07-28)
 
-- Container queries: podle výšky `title` → `+ čas` → `+ místo/status`.
-- Kompletní stavy z R11, včetně `pending`, `error`, `read_only`.
-- Barva + ikona/text (R9).
+- **Container queries na bloku** (`container: timelineEvent / size`): blok se ptá
+  své vlastní výšky, ne délky eventu. `title` vždy → `+ čas` od 30 px →
+  dvouřádkový title od 44 px → `+ místo` od 58 px. Předtím o čase rozhodoval
+  `duration >= 30` v JS, což přestane platit v okamžiku, kdy density nebo zoom
+  změní výšku boxu při stejné délce.
+- **`EventMarks`** (R9): opakování `Repeat`, hosté `Users`, read-only `Lock`.
+  `aria-hidden`, protože label tlačítka to už říká — je to redundance pro oči,
+  ne druhé oznámení. Barva zůstává jen identita kalendáře.
+- **`pending`**: `data-pending` + `aria-busy` na bloku i chipu, dokud je zápis
+  času v letu (`busyEventId` ve Workspace — jedno gesto, jedno id). Puls, který
+  respektuje `prefers-reduced-motion`.
+- **`read_only`**: `data-readonly` + zámek na bloku, ne až v popoveru.
+- **`error` záměrně nemá stav bloku.** Chyba zápisu se vrátí (rollback) a řekne
+  toastem; zaseknutý červený blok by tvrdil, že data jsou v nějakém rozbitém
+  stavu, což nejsou — server o změně neví.
 
 ### Fáze F — Responzivita
 

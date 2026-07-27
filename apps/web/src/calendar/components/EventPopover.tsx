@@ -8,6 +8,7 @@ import {
   EventDetailsPopover,
   type EventActionHandlers,
 } from "./EventDetailsPopover";
+import { EventMarks } from "./EventMarks";
 import styles from "./workspace.module.css";
 
 type EventPopoverProps = EventActionHandlers & {
@@ -20,6 +21,8 @@ type EventPopoverProps = EventActionHandlers & {
   event: Event;
   /** Absent when the event may not be moved by dragging. */
   onBeginDrag?: (pointerEvent: React.PointerEvent<HTMLElement>) => void;
+  /** A write for this event is in flight. */
+  pending?: boolean;
   showLabel?: boolean;
   timeFormat: Settings["timeFormat"];
 };
@@ -32,6 +35,7 @@ export function EventPopover({
   dragging = false,
   event,
   onBeginDrag,
+  pending = false,
   showLabel = true,
   timeFormat,
   ...eventActions
@@ -62,8 +66,10 @@ export function EventPopover({
         aria-label={`${event.title}, ${getEventDateLabel(
           event,
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
+        aria-busy={pending || undefined}
         data-dragging={dragging ? "" : undefined}
         data-draggable={onBeginDrag ? "" : undefined}
+        data-pending={pending ? "" : undefined}
         data-event-id={event.id}
         onPointerDown={onBeginDrag}
         style={
@@ -82,6 +88,7 @@ export function EventPopover({
         <span className={styles.eventTitle} aria-hidden="true">
           {showLabel ? event.title : ""}
         </span>
+        {showLabel ? <EventMarks event={event} /> : null}
       </button>
     </EventDetailsPopover>
   );

@@ -2219,3 +2219,65 @@ test("keeps the calendar on screen while the next range loads", async ({
     page.getByRole("button", { name: /Weekly review/ }).first(),
   ).toBeVisible();
 });
+
+test("scales what an event block shows to the height it has", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+
+  const block = page.locator("[data-time-event]").first();
+  await expect(block).toBeVisible();
+  const time = block.locator('[class*="timelineEventTime"]');
+  // An hour-long block at comfortable density has room for the time.
+  await expect(time).toBeVisible();
+
+  // Shrink it to a sliver: the title stays, the time drops out. No JS threshold
+  // is involved — the block queries its own box.
+  await block.evaluate((element: HTMLElement) => {
+    element.style.height = "18px";
+  });
+  await expect(time).toBeHidden();
+  await expect(block.locator('[class*="timelineEventTitle"]')).toBeVisible();
+
+  await block.evaluate((element: HTMLElement) => {
+    element.style.height = "120px";
+  });
+  await expect(time).toBeVisible();
+});
+
+test("marks a recurring event with more than its colour", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const recurring = page.getByRole("button", { name: /Weekly review/ }).first();
+  await expect(recurring.locator("svg.lucide-repeat")).toBeVisible();
+  // A one-off event carries no mark.
+  const single = page.getByRole("button", { name: /Client call/ }).first();
+  await expect(single.locator('[class*="eventMarks"]')).toHaveCount(0);
+});
+
+test("says an event is unsettled while its write is in flight", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") await held;
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+  const block = page.getByRole("button", { name: /Project check-in/ }).first();
+  await block.focus();
+  await page.keyboard.press("Alt+ArrowDown");
+
+  await expect(block).toHaveAttribute("aria-busy", "true");
+  await expect(block).toHaveAttribute("data-pending", "");
+
+  release();
+  await expect(block).not.toHaveAttribute("data-pending", "");
+});

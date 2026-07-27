@@ -1203,6 +1203,10 @@
 .timelineEvent {
   --event-color: var(--event-indigo);
   --event-foreground: #000;
+  /* The block is its own container: its height is set from geometry, so what
+     fits inside is answered by the box rather than by a duration threshold in
+     JS that stops agreeing the moment density or zoom changes. */
+  container: timelineEvent / size;
   position: absolute;
   display: grid;
   min-width: 0;
@@ -1232,13 +1236,54 @@
   outline-offset: -3px;
 }
 
-.timelineEventTime {
+.timelineEventTime,
+.timelineEventMeta {
+  display: none;
   overflow: hidden;
   color: var(--event-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.57rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.timelineEventTime {
+  font-family: var(--font-mono);
+  font-size: 0.57rem;
+}
+
+.timelineEventMeta {
+  font-size: 0.58rem;
+  opacity: 0.82;
+}
+
+.eventMarks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  opacity: 0.85;
+  vertical-align: -1px;
+}
+
+/* A write is in flight: the block is still readable and still there, just
+   visibly not settled. */
+.timelineEvent[data-pending],
+.eventChip[data-pending] {
+  animation: event-pending 1.1s ease-in-out infinite;
+  cursor: progress;
+}
+
+@keyframes event-pending {
+  50% {
+    opacity: 0.62;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timelineEvent[data-pending],
+  .eventChip[data-pending] {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 
 .timelineEventTitle {
@@ -1248,6 +1293,29 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Title only at the shortest sizes; time next; location last. */
+@container timelineEvent (min-height: 30px) {
+  .timelineEventTime {
+    display: block;
+  }
+}
+
+@container timelineEvent (min-height: 58px) {
+  .timelineEventMeta {
+    display: block;
+  }
+}
+
+/* Two lines of title once there is room for them. */
+@container timelineEvent (min-height: 44px) {
+  .timelineEventTitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
 }
 
 .timeGridNow {

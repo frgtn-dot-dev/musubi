@@ -294,6 +294,7 @@ export function Workspace({
       scope = chosen;
     }
 
+    const created: Event[] = [];
     const { creates, updates } = seriesEditWrites({
       end,
       master,
@@ -302,14 +303,18 @@ export function Workspace({
       start,
     });
 
-    // Sequential: the update carries the exclusion that keeps the created event
-    // from briefly showing twice.
-    for (const update of updates) {
-      await onUpdateEvent(update);
-    }
-    const created: Event[] = [];
-    for (const create of creates) {
-      created.push(await onCreateEvent(create));
+    setBusyEventId(master.id);
+    try {
+      // Sequential: the update carries the exclusion that keeps the created
+      // event from briefly showing twice.
+      for (const update of updates) {
+        await onUpdateEvent(update);
+      }
+      for (const create of creates) {
+        created.push(await onCreateEvent(create));
+      }
+    } finally {
+      setBusyEventId(undefined);
     }
 
     notify(
@@ -337,6 +342,8 @@ export function Workspace({
   const [accountOpen, setAccountOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The event a time write is in flight for. One gesture at a time, so one id.
+  const [busyEventId, setBusyEventId] = useState<string>();
   const searchRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const editableCalendars = useMemo(
@@ -850,6 +857,7 @@ export function Workspace({
           ) : activeView === "day" || activeView === "week" ? (
             <TimeGridView
               anchor={anchor}
+              busyEventId={busyEventId}
               calendars={calendars}
               events={visibleEvents}
               geometry={geometry}
@@ -894,6 +902,7 @@ export function Workspace({
           ) : (
             <MonthCalendar
               anchor={anchor}
+              busyEventId={busyEventId}
               calendars={calendars}
               events={visibleEvents}
               showAdjacentDays={showAdjacentDays}

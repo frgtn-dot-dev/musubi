@@ -376,6 +376,27 @@ describe("Workspace", () => {
     expect(screen.getByText("view-only access", { exact: false })).not.toBeNull();
   });
 
+  it("marks a read-only block in the grid, not only in its popover", () => {
+    const { container } = render(
+      <Workspace
+        {...commonProps}
+        activeView="day"
+        date="2026-07-06"
+        calendars={fixtureCalendars.map((calendar) => ({
+          ...calendar,
+          role: "viewer",
+        }))}
+      />,
+    );
+
+    const blocks = container.querySelectorAll("[data-time-event]");
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const block of blocks) {
+      expect(block.getAttribute("data-readonly")).toBe("");
+      expect(block.querySelector(".lucide-lock")).not.toBeNull();
+    }
+  });
+
   it("keeps a provider-backed form open after an unconfirmed save", async () => {
     const user = userEvent.setup();
     const providerCalendar = {
