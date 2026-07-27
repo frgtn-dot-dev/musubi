@@ -1444,6 +1444,102 @@ test("routes federated event writes through the gateway", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("joins a calendar from a pasted cross-server invite link", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const token = "0f9c1d2e3a4b5c6d7e8f9a0b1c2d3e4f";
+  let previewQuery: string | undefined;
+  let connectBody: unknown;
+
+  await page.route("**/api/v1/federation/preview?*", (route) => {
+    previewQuery = new URL(route.request().url()).search;
+    return respond(route, {
+      color: "#8a6fae",
+      events: [
+        {
+          end: "2026-07-28T18:00:00.000Z",
+          id: "remote-1",
+          isAllDay: false,
+          start: "2026-07-28T17:00:00.000Z",
+          title: "Book club",
+        },
+      ],
+      id: "remote-cal-1",
+      members: [{ id: "remote-owner", image: null, name: "Sam Rivers" }],
+      name: "Book club",
+    });
+  });
+  await page.route("**/api/v1/federation/connect", (route) => {
+    connectBody = route.request().postDataJSON();
+    return respond(route, { calendar: null, server: "https://friends.example" });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Connections" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Join a shared calendar" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("textbox", { name: "Invite link" })
+    .fill(`https://friends.example/invite/${token}`);
+  await page.getByRole("button", { name: "Open invite" }).click();
+
+  // Preview is fetched through the home server, and shows what we're joining.
+  await expect(page.getByText("1 member · 1 event")).toBeVisible();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "friends.example" }),
+  ).toHaveCount(0); // not connected yet
+  expect(previewQuery).toContain("server=https%3A%2F%2Ffriends.example");
+  expect(previewQuery).toContain(`token=${token}`);
+
+  await page.getByRole("button", { name: "Join calendar" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Joined Book club.",
+  );
+  // The handshake runs server-side — no member token is sent by the browser.
+  expect(connectBody).toEqual({
+    server: "https://friends.example",
+    token,
+  });
+});
+
+test("joins a calendar from an invite link on this server", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const token = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d";
+  let joinedCalendarId: string | undefined;
+
+  await page.route(`**/api/v1/calendars/tokens/${token}`, (route) =>
+    respond(route, {
+      color: "#b3492f",
+      events: [],
+      id: "shared-cal",
+      members: [{ id: "owner-1", image: null, name: "Ada" }],
+      name: "Shared plans",
+    }),
+  );
+  await page.route("**/api/v1/calendars/members/shared-cal", (route) => {
+    joinedCalendarId = "shared-cal";
+    return respond(route, {});
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Connections" }).click();
+  // A bare token is accepted too.
+  await page.getByRole("textbox", { name: "Invite link" }).fill(token);
+  await page.getByRole("button", { name: "Open invite" }).click();
+
+  await expect(page.getByText("Shared plans", { exact: true })).toBeVisible();
+  await expect(page.getByText("This server")).toBeVisible();
+
+  await page.getByRole("button", { name: "Join calendar" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Joined Shared plans.",
+  );
+  expect(joinedCalendarId).toBe("shared-cal");
+});
+
 test("updates the display name and gates account deletion", async ({
   page,
 }) => {

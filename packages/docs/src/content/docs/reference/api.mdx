@@ -285,6 +285,9 @@ Provider behavior and limitations:
 | `GET /api/v1/users/connections/musubi` | Session | Decrypted remote connections for the owner — **deprecated**, see the gateway below |
 | `POST /api/v1/users/connections/musubi` | Session | `{ server, userID, token }`; the origin is SSRF-checked before it is stored |
 | `DELETE /api/v1/users/connections/musubi` | Session | `{ server }` |
+| `GET /api/v1/federation/connections` | Session | The caller's federated connections **without** the credential: `[{ id, label, remoteUserID, server }]` |
+| `GET /api/v1/federation/preview?server=&token=` | Session | Fetches another server's public invite preview on the caller's behalf; rate-limited |
+| `POST /api/v1/federation/connect` | Session | `{ server, token }` — runs the accept handshake server-side and stores the connection; returns `{ server, calendar }` and **never a token** |
 | `ANY /api/v1/federation/s/:connectionId/api/v1/*` | Session | Gateway: forwards to the connected server with the member token attached |
 
 The gateway (ADR-005) exists so a client never holds a cross-server credential.
@@ -293,7 +296,10 @@ origin is read from the database and cannot be influenced by the request; only
 `/api/v1/*` paths are forwarded, the home session cookie is dropped, upstream
 status codes are relayed unchanged, and an unreachable origin returns `502`
 `FederatedServerUnreachable`. Private, loopback and link-local targets are
-refused unless `FEDERATION_ALLOW_PRIVATE_HOSTS=true` (LAN self-hosting).
+refused unless `FEDERATION_ALLOW_PRIVATE_HOSTS=true` (LAN self-hosting). The
+preview and connect routes take the origin from the request rather than the
+database, so the SSRF guard is the only boundary there — hence the tighter rate
+limits.
 Returning the decrypted token from `GET …/connections/musubi` stays only until
 the mobile client has migrated onto the gateway.
 

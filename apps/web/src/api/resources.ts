@@ -5,6 +5,7 @@ import {
   EventsResponseSchema,
   FederationConnectionsResponseSchema,
   ImportedCalendarSchema,
+  InvitePreviewSchema,
   InvitesResponseSchema,
   PageResponseSchema,
   PagesResponseSchema,
@@ -231,6 +232,45 @@ export function uploadAvatar(base64: string) {
     body: { data: base64 },
     method: "POST",
     responseSchema: z.object({ url: z.string() }),
+  });
+}
+
+/** Invite preview on this server (the token is the capability — no session needed). */
+export function getInvitePreview(token: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/calendars/tokens/${token}`, {
+    responseSchema: InvitePreviewSchema,
+    signal,
+  });
+}
+
+/** Join a calendar on this server. */
+export function joinCalendar(calendarId: string, token: string) {
+  return apiRequest(`/api/v1/calendars/members/${calendarId}`, {
+    body: { token },
+    method: "POST",
+    responseSchema: z.unknown(),
+  });
+}
+
+// Cross-server invites: the home server previews and accepts on our behalf, so
+// the member token it receives never reaches the browser (ADR-005).
+export function getFederatedInvitePreview(
+  server: string,
+  token: string,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ server, token });
+  return apiRequest(`/api/v1/federation/preview?${query.toString()}`, {
+    responseSchema: InvitePreviewSchema,
+    signal,
+  });
+}
+
+export function connectFederatedServer(server: string, token: string) {
+  return apiRequest("/api/v1/federation/connect", {
+    body: { server, token },
+    method: "POST",
+    responseSchema: z.object({ server: z.string() }).loose(),
   });
 }
 

@@ -1,11 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   connectCaldav,
+  connectFederatedServer,
   disconnectAccount,
   disconnectFederatedServer,
+  getInvitePreview,
   getServerCapabilities,
+  joinCalendar,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
+import type { ParsedInvite } from "./invite-link";
 
 // Calendar scopes are requested at connect time — distinct from sign-in, which
 // only needs identity. Better Auth links the extra account server-side.
@@ -58,7 +62,22 @@ export function useConnections(userId: string) {
     onSuccess: refreshCalendars,
   });
 
+  // Accepting an invite: a link for this server is a plain join, one for another
+  // server runs the federation handshake on the home server.
+  const acceptInvite = useMutation({
+    mutationFn: async (invite: ParsedInvite) => {
+      if (invite.server) {
+        await connectFederatedServer(invite.server, invite.token);
+        return;
+      }
+      const preview = await getInvitePreview(invite.token);
+      await joinCalendar(preview.id, invite.token);
+    },
+    onSuccess: refreshCalendars,
+  });
+
   return {
+    acceptInvite: acceptInvite.mutateAsync,
     capabilities,
     connectCaldav: connect.mutateAsync,
     disconnectAccount: disconnect.mutateAsync,

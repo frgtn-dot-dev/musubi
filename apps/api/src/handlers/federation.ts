@@ -9,6 +9,7 @@ import { BadRequestError, UnauthorizedError } from "@musubi/types";
 import { decryptSecret, encryptSecret } from "../sync/crypto";
 import { bearerMemberToken, hashMemberToken, issueMemberToken } from "../federation_tokens";
 import { assertPublicOrigin, canonicalHttpOrigin } from "../federation_origin";
+import { config, logger } from "@musubi/config";
 
 // Federation (Musubi ↔ Musubi), v1: an invite token doubles as the cross-server
 // capability. A user from another server accepts an invite here and becomes a
@@ -125,6 +126,136 @@ export async function handlerGetMusubiAccounts(req: Request, res: Response) {
     // the raw token to talk to the origin server directly
     accounts: rows.map(r => ({ server: r.server, userID: r.remoteUserID, token: decryptSecret(r.encryptedToken) })),
   });
+}
+
+const REMOTE_TIMEOUT_MS = 20_000;
+
+/** Validate a client-supplied server origin before this API fetches it. */
+async function safeRemoteOrigin(value: unknown): Promise<string> {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new BadRequestError("server is required...");
+  }
+  const origin = canonicalHttpOrigin(value.trim());
+  if (!origin) throw new BadRequestError("server must be an http(s) origin...");
+  // Unlike the gateway, this origin comes from the request, so the SSRF guard is
+  // the only thing standing between it and the internal network.
+  try {
+    await assertPublicOrigin(origin);
+  } catch (error) {
+    throw new BadRequestError(
+      error instanceof Error ? error.message : "Unreachable server origin.",
+    );
+  }
+  return origin;
+}
+
+/**
+ * GET /api/v1/federation/preview?server=&token= — fetch another server's public
+ * invite preview on the caller's behalf.
+ *
+ * Browsers cannot read it directly (no CORS on the origin server), and the
+ * preview is what the join screen renders before anyone commits.
+ */
+export async function handlerFederationPreview(req: Request, res: Response) {
+  const origin = await safeRemoteOrigin(req.query.server);
+  const token = String(req.query.token ?? "");
+  if (!/^[0-9a-f-]{16,64}$/i.test(token)) {
+    throw new BadRequestError("token must be a valid invite token...");
+  }
+
+  let upstream: globalThis.Response;
+  try {
+    upstream = await fetch(`${origin}/api/v1/calendars/tokens/${token}`, {
+      headers: { accept: "application/json" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS),
+    });
+  } catch {
+    throw new BadRequestError("That Musubi server could not be reached.");
+  }
+
+  const payload = await upstream.text();
+  res.status(upstream.status).type("application/json").send(payload);
+}
+
+/**
+ * POST /api/v1/federation/connect — accept an invite on ANOTHER Musubi server.
+ *
+ * The handshake runs here, not in the client: the member token it returns is
+ * encrypted straight into `musubi_accounts` and never sent to the browser
+ * (ADR-005). An existing connection's token is presented as proof so the origin
+ * reuses our shadow account instead of creating a second one.
+ */
+export async function handlerFederationConnect(req: Request, res: Response) {
+  const origin = await safeRemoteOrigin(req.body?.server);
+  const token = req.body?.token;
+  if (!token || typeof token !== "string") {
+    throw new BadRequestError("token is required...");
+  }
+  if (origin === canonicalHttpOrigin(config.api.url)) {
+    throw new BadRequestError(
+      "That invite belongs to this server — join it directly.",
+    );
+  }
+
+  const existing = (await getMusubiAccounts(req.user!.id)).find(
+    (row) => row.server === origin,
+  );
+  const headers = new Headers({
+    accept: "application/json",
+    "content-type": "application/json",
+  });
+  if (existing) {
+    headers.set("authorization", `Bearer ${decryptSecret(existing.encryptedToken)}`);
+  }
+
+  let upstream: globalThis.Response;
+  try {
+    upstream = await fetch(`${origin}/api/v1/federation/accept`, {
+      body: JSON.stringify({
+        profile: {
+          email: req.user!.email,
+          homeServer: config.api.url,
+          image: req.user!.image ?? null,
+          name: req.user!.name,
+        },
+        token,
+      }),
+      headers,
+      method: "POST",
+      redirect: "manual",
+      signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS),
+    });
+  } catch {
+    throw new BadRequestError("That Musubi server could not be reached.");
+  }
+
+  const payload = (await upstream.json().catch(() => null)) as {
+    calendar?: unknown;
+    memberToken?: string;
+    message?: string;
+    userID?: string;
+  } | null;
+
+  if (!upstream.ok || !payload?.memberToken || !payload.userID) {
+    logger.warn("federation.connect.rejected", {
+      server: origin,
+      status: upstream.status,
+    });
+    throw new BadRequestError(
+      payload?.message ?? "That server rejected the invite.",
+    );
+  }
+
+  await upsertMusubiAccount(
+    req.user!.id,
+    origin,
+    payload.userID,
+    encryptSecret(payload.memberToken),
+  );
+
+  // Deliberately no token in the response.
+  res.status(200).json({ calendar: payload.calendar ?? null, server: origin });
 }
 
 /**

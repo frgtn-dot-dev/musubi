@@ -49,7 +49,12 @@ instead of taking the workspace down. Writes and management follow the calendar:
 event create/edit/delete, attendance, members, roles, invites, rename and export
 are routed to the server that owns the calendar (`federation-routing.ts`), and
 because each origin only knows its own calendars, an event may not span two
-servers — the editor refuses that combination;
+servers — the editor refuses that combination. Invites are accepted by pasting
+the link into the Connections dialog: it previews the calendar first, then
+either joins it here or, for another server, has the home server run the
+federation handshake (pasting is the entry point because the origin server's
+`/invite/:token` page hands off to the mobile app and cannot know which Musubi
+server the visitor belongs to);
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a

@@ -50,6 +50,33 @@ export const InvitesResponseSchema = z.array(InviteSchema);
 
 export type CalendarMember = z.infer<typeof CalendarMemberSchema>;
 
+// What an invite reveals before anyone commits: labels and a 30-day agenda.
+export const InvitePreviewSchema = z.object({
+  color: z.string(),
+  events: z.array(
+    z
+      .object({
+        end: z.coerce.date(),
+        id: z.string(),
+        isAllDay: z.boolean(),
+        start: z.coerce.date(),
+        title: z.string(),
+      })
+      .loose(),
+  ),
+  id: z.string(),
+  members: z.array(
+    z.object({
+      id: z.string(),
+      image: z.string().nullish(),
+      name: z.string(),
+    }),
+  ),
+  name: z.string(),
+});
+
+export type InvitePreview = z.infer<typeof InvitePreviewSchema>;
+
 export const FederationConnectionSchema = z.object({
   id: z.string(),
   label: z.string(),

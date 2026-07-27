@@ -34,6 +34,7 @@ import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav
 import { handlerDisconnectAccount, handlerDisconnectExternalCalendar } from "./handlers/connections";
 import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerFederationRotateToken, handlerGetFederationConnections, handlerGetMusubiAccounts, handlerInvitePage, handlerSaveMusubiAccount } from "./handlers/federation";
 import { handlerFederationProxy } from "./handlers/federation_proxy";
+import { handlerFederationConnect, handlerFederationPreview } from "./handlers/federation";
 import { syncUser } from "./sync/engine";
 import { getExternalSyncUserIDs } from "@musubi/db";
 import { middlewareMetrics, recordExternalSyncFailure, recordScheduledTaskSkip, startMetricsServer } from "./metrics";
@@ -96,6 +97,10 @@ app.get("/api/stream", requireAuth, wrap(handlerStream));
 app.post("/api/v1/federation/accept", rateLimit(10, 15 * 60_000), wrap(handlerFederationAccept));
 app.post("/api/v1/federation/token/rotate", requireAuth, wrap(handlerFederationRotateToken));
 app.get("/api/v1/federation/connections", requireAuth, wrap(handlerGetFederationConnections));
+// Preview + accept an invite on ANOTHER server. Both make this API fetch a
+// request-supplied origin, so they are authenticated, SSRF-guarded and rate-limited.
+app.get("/api/v1/federation/preview", requireAuth, rateLimit(30, 15 * 60_000), wrap(handlerFederationPreview));
+app.post("/api/v1/federation/connect", requireAuth, rateLimit(10, 15 * 60_000), wrap(handlerFederationConnect));
 // Federation gateway (ADR-005): clients reach a connected server through their
 // own origin, so the member token never leaves the API. Rate-limited because it
 // makes this server perform outbound requests.

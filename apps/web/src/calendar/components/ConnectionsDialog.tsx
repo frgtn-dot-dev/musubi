@@ -3,9 +3,18 @@ import {
   providerDisplayName,
   type Calendar,
 } from "@musubi/types";
-import { Link2, Plus, RefreshCw, Unlink, X } from "lucide-react";
+import { Link2, Plus, RefreshCw, Unlink, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import type { InvitePreview } from "~/api/contracts";
+import {
+  getFederatedInvitePreview,
+  getInvitePreview,
+} from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
+import {
+  parseInviteLink,
+  type ParsedInvite,
+} from "~/calendar/invite-link";
 import {
   GOOGLE_CALENDAR_SCOPES,
   MICROSOFT_CALENDAR_SCOPES,
@@ -73,6 +82,11 @@ export function ConnectionsDialog({
     serverUrl: string;
     username: string;
   }>();
+  const [inviteValue, setInviteValue] = useState("");
+  const [invite, setInvite] = useState<{
+    parsed: ParsedInvite;
+    preview: InvitePreview;
+  }>();
 
   const providers = connections.capabilities.data?.syncProviders ?? [];
   const accounts = connectedAccounts(calendars);
@@ -118,6 +132,33 @@ export function ConnectionsDialog({
         username: "",
       });
     }
+  }
+
+  async function previewInvite(submitEvent: FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault();
+    const parsed = parseInviteLink(inviteValue, window.location.origin);
+    if (!parsed) {
+      setError("Paste a Musubi invite link.");
+      return;
+    }
+    await run(async () => {
+      const preview = parsed.server
+        ? await getFederatedInvitePreview(parsed.server, parsed.token)
+        : await getInvitePreview(parsed.token);
+      setInvite({ parsed, preview });
+      setBusy(false);
+    }, "That invite could not be opened. It may have expired.");
+  }
+
+  async function acceptInvite() {
+    if (!invite) return;
+    await run(async () => {
+      await connections.acceptInvite(invite.parsed);
+      onNotice(`Joined ${invite.preview.name}.`);
+      setInvite(undefined);
+      setInviteValue("");
+      setBusy(false);
+    }, "Could not join that calendar.");
   }
 
   async function submitCaldav(event: FormEvent<HTMLFormElement>) {
@@ -220,6 +261,81 @@ export function ConnectionsDialog({
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          <section className={styles.transferSection}>
+            <div className={styles.transferHeading}>
+              <Users aria-hidden="true" size={17} />
+              <div>
+                <h3>Join a shared calendar</h3>
+                <p>
+                  Paste an invite link. If it belongs to another Musubi server,
+                  your server connects to it for you.
+                </p>
+              </div>
+            </div>
+            {invite ? (
+              <div className={styles.caldavForm}>
+                <div className={styles.calendarManageRow}>
+                  <span
+                    className={styles.calendarDot}
+                    style={{ backgroundColor: invite.preview.color }}
+                  />
+                  <span className={styles.calendarManageName}>
+                    {invite.preview.name}
+                  </span>
+                  <span className={styles.calendarBadge}>
+                    {invite.parsed.server
+                      ? new URL(invite.parsed.server).host
+                      : "This server"}
+                  </span>
+                </div>
+                <p className={styles.caldavHint}>
+                  {invite.preview.members.length} member
+                  {invite.preview.members.length === 1 ? "" : "s"} ·{" "}
+                  {invite.preview.events.length} event
+                  {invite.preview.events.length === 1 ? "" : "s"} in the next 30
+                  days. You join as a viewer.
+                </p>
+                <div className={styles.transferControls}>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={busy}
+                    type="button"
+                    onClick={() => setInvite(undefined)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className={styles.primaryButton}
+                    disabled={busy}
+                    type="button"
+                    onClick={() => void acceptInvite()}
+                  >
+                    {busy ? "Joining…" : "Join calendar"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form className={styles.transferControls} onSubmit={previewInvite}>
+                <label>
+                  <span className={styles.srOnly}>Invite link</span>
+                  <input
+                    disabled={busy}
+                    placeholder="https://server/invite/…"
+                    value={inviteValue}
+                    onChange={(event) => setInviteValue(event.target.value)}
+                  />
+                </label>
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy || !inviteValue.trim()}
+                  type="submit"
+                >
+                  {busy ? "Opening…" : "Open invite"}
+                </button>
+              </form>
             )}
           </section>
 
