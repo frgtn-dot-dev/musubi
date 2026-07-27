@@ -45,7 +45,11 @@ through the home federation gateway (ADR-005), so the browser never holds a
 cross-server member token: the sidebar and views merge them like any other
 calendar, the Connections dialog lists each server with a reachable/unreachable
 badge and can disconnect it, and one unreachable server degrades to a status row
-instead of taking the workspace down;
+instead of taking the workspace down. Writes and management follow the calendar:
+event create/edit/delete, attendance, members, roles, invites, rename and export
+are routed to the server that owns the calendar (`federation-routing.ts`), and
+because each origin only knows its own calendars, an event may not span two
+servers — the editor refuses that combination;
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a

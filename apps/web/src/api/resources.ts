@@ -30,6 +30,22 @@ import {
   apiTextRequest,
 } from "./http";
 
+/**
+ * Route a request at a connected Musubi server instead of the home one.
+ *
+ * Passing a `connectionId` sends it through the home federation gateway, which
+ * attaches the member token server-side (ADR-005) — the browser never holds a
+ * cross-server credential, and the request stays same-origin.
+ */
+function route(
+  connectionId: string | undefined,
+  path: `/api/v1/${string}`,
+): `/api/${string}` {
+  return connectionId
+    ? `/api/v1/federation/s/${connectionId}${path}`
+    : path;
+}
+
 export function getCalendars(signal?: AbortSignal) {
   return apiRequest("/api/v1/calendars", {
     responseSchema: CalendarsResponseSchema,
@@ -97,16 +113,16 @@ export function createCalendar(calendar: Calendar) {
   });
 }
 
-export function updateCalendar(calendar: Calendar) {
-  return apiRequest("/api/v1/calendars", {
+export function updateCalendar(calendar: Calendar, connectionId?: string) {
+  return apiRequest(route(connectionId, "/api/v1/calendars"), {
     body: calendar,
     method: "PUT",
     responseSchema: CalendarSchema,
   });
 }
 
-export function removeCalendar(calendar: Calendar) {
-  return apiRequest("/api/v1/calendars", {
+export function removeCalendar(calendar: Calendar, connectionId?: string) {
+  return apiRequest(route(connectionId, "/api/v1/calendars"), {
     body: calendar,
     method: "DELETE",
     responseSchema: CalendarSchema,
@@ -129,36 +145,43 @@ export function importCalendar(
   );
 }
 
-export function exportCalendar(calendarId: string) {
-  return apiTextRequest(`/api/v1/calendars/${calendarId}/export`);
+export function exportCalendar(calendarId: string, connectionId?: string) {
+  return apiTextRequest(
+    route(connectionId, `/api/v1/calendars/${calendarId}/export`),
+  );
 }
 
 export function getCalendarMembers(
   calendarId: string,
   signal?: AbortSignal,
+  connectionId?: string,
 ) {
-  return apiRequest(`/api/v1/calendars/${calendarId}/members`, {
-    responseSchema: CalendarMembersResponseSchema,
-    signal,
-  });
+  return apiRequest(
+    route(connectionId, `/api/v1/calendars/${calendarId}/members`),
+    { responseSchema: CalendarMembersResponseSchema, signal },
+  );
 }
 
 export function getCalendarInvites(
   calendarId: string,
   signal?: AbortSignal,
+  connectionId?: string,
 ) {
-  return apiRequest(`/api/v1/calendars/${calendarId}/invites`, {
-    responseSchema: InvitesResponseSchema,
-    signal,
-  });
+  return apiRequest(
+    route(connectionId, `/api/v1/calendars/${calendarId}/invites`),
+    { responseSchema: InvitesResponseSchema, signal },
+  );
 }
 
-export function createInvite(input: {
-  calendarID: string;
-  expiresAt: Date | null;
-  maxUses: number | null;
-}) {
-  return apiRequest("/api/v1/calendars/invites", {
+export function createInvite(
+  input: {
+    calendarID: string;
+    expiresAt: Date | null;
+    maxUses: number | null;
+  },
+  connectionId?: string,
+) {
+  return apiRequest(route(connectionId, "/api/v1/calendars/invites"), {
     // id/uses are server-assigned; the schema still requires them on the wire.
     body: { ...input, id: "new", uses: 0 },
     method: "POST",
@@ -166,36 +189,41 @@ export function createInvite(input: {
   });
 }
 
-export function revokeInvite(inviteId: string) {
-  return apiRequest(`/api/v1/calendars/invites/${inviteId}`, {
-    method: "DELETE",
-    responseSchema: z.void(),
-  });
+export function revokeInvite(inviteId: string, connectionId?: string) {
+  return apiRequest(
+    route(connectionId, `/api/v1/calendars/invites/${inviteId}`),
+    { method: "DELETE", responseSchema: z.void() },
+  );
 }
 
 export function setMemberRole(
   calendarId: string,
   userId: string,
   role: string,
+  connectionId?: string,
 ) {
   return apiRequest(
-    `/api/v1/calendars/${calendarId}/members/${userId}`,
+    route(connectionId, `/api/v1/calendars/${calendarId}/members/${userId}`),
     { body: { role }, method: "PUT", responseSchema: z.void() },
   );
 }
 
-export function kickMember(calendarId: string, userId: string) {
+export function kickMember(
+  calendarId: string,
+  userId: string,
+  connectionId?: string,
+) {
   return apiRequest(
-    `/api/v1/calendars/${calendarId}/members/${userId}`,
+    route(connectionId, `/api/v1/calendars/${calendarId}/members/${userId}`),
     { method: "DELETE", responseSchema: z.void() },
   );
 }
 
-export function leaveCalendar(calendarId: string) {
-  return apiRequest(`/api/v1/calendars/members/${calendarId}`, {
-    method: "DELETE",
-    responseSchema: z.void(),
-  });
+export function leaveCalendar(calendarId: string, connectionId?: string) {
+  return apiRequest(
+    route(connectionId, `/api/v1/calendars/members/${calendarId}`),
+    { method: "DELETE", responseSchema: z.void() },
+  );
 }
 
 export function uploadAvatar(base64: string) {
@@ -284,40 +312,48 @@ export function deleteAccount() {
   });
 }
 
-export function createEvent(event: Event) {
-  return apiRequest("/api/v1/events", {
+export function createEvent(event: Event, connectionId?: string) {
+  return apiRequest(route(connectionId, "/api/v1/events"), {
     body: event,
     method: "POST",
     responseSchema: EventSchema,
   });
 }
 
-export function updateEvent(event: Event) {
-  return apiRequest("/api/v1/events", {
+export function updateEvent(event: Event, connectionId?: string) {
+  return apiRequest(route(connectionId, "/api/v1/events"), {
     body: event,
     method: "PUT",
     responseSchema: EventSchema,
   });
 }
 
-export function removeEvent(event: Event) {
-  return apiRequest("/api/v1/events", {
+export function removeEvent(event: Event, connectionId?: string) {
+  return apiRequest(route(connectionId, "/api/v1/events"), {
     body: event,
     method: "DELETE",
     responseSchema: RemoveEventResponseSchema,
   });
 }
 
-export function linkEvent(eventId: string, calendarId: string) {
-  return apiRequest(`/api/v1/events/${eventId}/link`, {
+export function linkEvent(
+  eventId: string,
+  calendarId: string,
+  connectionId?: string,
+) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/link`), {
     body: { calendarID: calendarId },
     method: "POST",
     responseSchema: EventSchema,
   });
 }
 
-export function forkEvent(eventId: string, calendarId: string) {
-  return apiRequest(`/api/v1/events/${eventId}/fork`, {
+export function forkEvent(
+  eventId: string,
+  calendarId: string,
+  connectionId?: string,
+) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/fork`), {
     body: { calendarID: calendarId },
     method: "POST",
     responseSchema: EventSchema,
@@ -327,17 +363,25 @@ export function forkEvent(eventId: string, calendarId: string) {
 export function getEventAttendees(
   eventId: string,
   signal?: AbortSignal,
+  connectionId?: string,
 ) {
-  return apiRequest(`/api/v1/events/${eventId}/attendees`, {
-    responseSchema: AttendeesResponseSchema,
-    signal,
-  });
+  return apiRequest(
+    route(connectionId, `/api/v1/events/${eventId}/attendees`),
+    { responseSchema: AttendeesResponseSchema, signal },
+  );
 }
 
-export function setAttendance(eventId: string, attending: boolean) {
-  return apiRequest(`/api/v1/events/${eventId}/attendance`, {
-    body: { attending },
-    method: "PUT",
-    responseSchema: AttendeesResponseSchema,
-  });
+export function setAttendance(
+  eventId: string,
+  attending: boolean,
+  connectionId?: string,
+) {
+  return apiRequest(
+    route(connectionId, `/api/v1/events/${eventId}/attendance`),
+    {
+      body: { attending },
+      method: "PUT",
+      responseSchema: AttendeesResponseSchema,
+    },
+  );
 }

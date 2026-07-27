@@ -26,6 +26,7 @@ import type {
   RemoveEventResponse,
 } from "~/api/contracts";
 import { getEventAttendees } from "~/api/resources";
+import { connectionOfCalendar } from "../federation-routing";
 import {
   getEventDateLabel,
   getEventRangeLabel,
@@ -58,6 +59,7 @@ export type EventActionHandlers = {
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
   onSetAttendance: (input: {
     attending: boolean;
+    calendarId?: string;
     eventId: string;
   }) => Promise<Attendee[]>;
   onUpdateEvent: (event: Event) => Promise<Event>;
@@ -102,6 +104,9 @@ export function EventDetailsPopover({
   }>();
   const homeCalendar =
     getEventHomeCalendar(master, calendars) ?? calendar;
+  // A primitive, so the attendees effect can depend on it without re-running on
+  // every re-render of the calendar list.
+  const homeConnectionId = connectionOfCalendar(homeCalendar);
   const removeCalendar =
     getEditableCalendars(calendars).find((item) =>
       master.calendars.includes(item.id),
@@ -122,7 +127,7 @@ export function EventDetailsPopover({
     if (!open || !master.hasAttendees) return;
     const controller = new AbortController();
     let active = true;
-    getEventAttendees(master.id, controller.signal)
+    getEventAttendees(master.id, controller.signal, homeConnectionId)
       .then((nextAttendees) => {
         if (active) setAttendees(nextAttendees);
       })
@@ -133,7 +138,7 @@ export function EventDetailsPopover({
       active = false;
       controller.abort();
     };
-  }, [master.hasAttendees, master.id, open]);
+  }, [homeConnectionId, master.hasAttendees, master.id, open]);
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -236,6 +241,7 @@ export function EventDetailsPopover({
     try {
       const nextAttendees = await onSetAttendance({
         attending: !isAttending,
+        calendarId: homeCalendar?.id,
         eventId: master.id,
       });
       setAttendees(nextAttendees);

@@ -1361,6 +1361,89 @@ test("shows federated calendars and reports an unreachable server", async ({
   expect(disconnectedServer).toEqual({ server: "https://dead.example" });
 });
 
+test("routes federated event writes through the gateway", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const remoteCalendar = {
+    color: "#8a6fae",
+    creatorID: "user-web-qa",
+    id: "remote-cal-1",
+    members: [],
+    name: "Book club",
+    role: "owner",
+  };
+  let remoteEvents = [
+    event(
+      "remote-book-club",
+      "Book club meetup",
+      "remote-cal-1",
+      "#8a6fae",
+      "2026-07-23T17:00:00.000Z",
+      "2026-07-23T18:30:00.000Z",
+    ),
+  ];
+  let homeWrites = 0;
+  const gatewayWrites: string[] = [];
+
+  // Registered first: a later route wins in Playwright, and the gateway paths
+  // below also end in /api/v1/events. Any home write here would be a routing bug.
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() !== "GET") {
+      homeWrites += 1;
+      return respond(route, {}, 500);
+    }
+    return route.fallback();
+  });
+
+  await page.route("**/api/v1/federation/connections", (route) =>
+    respond(route, [
+      { id: "conn-1", label: "friends.example", remoteUserID: "fed_1", server: "https://friends.example" },
+    ]),
+  );
+  await page.route(
+    "**/api/v1/federation/s/conn-1/api/v1/calendars",
+    (route) => respond(route, [remoteCalendar]),
+  );
+  await page.route(
+    "**/api/v1/federation/s/conn-1/api/v1/events",
+    async (route) => {
+      const method = route.request().method();
+      if (method === "GET") {
+        return respond(route, {
+          deletedIds: [],
+          events: remoteEvents,
+          serverTime: "2026-07-26T14:00:00.000Z",
+        });
+      }
+      gatewayWrites.push(method);
+      const body = route.request().postDataJSON() as (typeof remoteEvents)[number];
+      if (method === "PUT") {
+        remoteEvents = remoteEvents.map((item) =>
+          item.id === body.id ? body : item,
+        );
+        return respond(route, body);
+      }
+      return respond(route, body);
+    },
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: /Book club meetup/ }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Book club — new venue");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Event updated.",
+  );
+  expect(gatewayWrites).toEqual(["PUT"]);
+  expect(homeWrites).toBe(0);
+  await expect(
+    page.getByRole("button", { name: /Book club — new venue/ }),
+  ).toBeVisible();
+});
+
 test("updates the display name and gates account deletion", async ({
   page,
 }) => {

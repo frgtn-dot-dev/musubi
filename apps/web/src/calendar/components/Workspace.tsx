@@ -83,7 +83,10 @@ type WorkspaceProps = {
     id: string;
     name: string;
   }) => Promise<SavePageResult>;
-  onExportCalendar?: (calendarId: string) => Promise<string>;
+  onExportCalendar?: (
+    calendarId: string,
+    connectionId?: string,
+  ) => Promise<string>;
   onImportCalendar?: (input: {
     color: string;
     ics: string;
@@ -106,6 +109,9 @@ type WorkspaceProps = {
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
   onSetAttendance?: (input: {
     attending: boolean;
+    // Identifies the owning calendar so a federated event is routed to its
+    // server instead of the home one.
+    calendarId?: string;
     eventId: string;
   }) => Promise<Attendee[]>;
   onSignOut: () => void;

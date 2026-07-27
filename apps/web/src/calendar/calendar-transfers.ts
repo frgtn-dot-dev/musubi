@@ -8,6 +8,7 @@ import {
   updateCalendar,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
+import { connectionOfCalendar } from "./federation-routing";
 
 type ImportInput = {
   color: string;
@@ -62,9 +63,21 @@ export function useCalendarTransfers(userId: string) {
     },
   });
 
+  // A federated calendar is edited on the server that owns it, via the gateway;
+  // its rows live in the federation snapshot rather than the home calendar list.
+  const invalidateFederated = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.federated(origin, userId),
+    });
+
   const updateMutation = useMutation({
-    mutationFn: (calendar: Calendar) => updateCalendar(calendar),
-    onSuccess: (calendar) => {
+    mutationFn: (calendar: Calendar) =>
+      updateCalendar(calendar, connectionOfCalendar(calendar)),
+    onSuccess: (calendar, input) => {
+      if (connectionOfCalendar(input)) {
+        void invalidateFederated();
+        return;
+      }
       // Keep the role/members the list already holds if the response omits them.
       setCalendars((current) =>
         current.map((item) =>
@@ -76,8 +89,13 @@ export function useCalendarTransfers(userId: string) {
   });
 
   const removeMutation = useMutation({
-    mutationFn: (calendar: Calendar) => removeCalendar(calendar),
-    onSuccess: (calendar) => {
+    mutationFn: (calendar: Calendar) =>
+      removeCalendar(calendar, connectionOfCalendar(calendar)),
+    onSuccess: (calendar, input) => {
+      if (connectionOfCalendar(input)) {
+        void invalidateFederated();
+        return;
+      }
       setCalendars((current) =>
         current.filter((item) => item.id !== calendar.id),
       );

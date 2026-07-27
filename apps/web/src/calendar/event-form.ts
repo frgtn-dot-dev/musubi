@@ -1,5 +1,9 @@
 import type { Event } from "@musubi/types";
 import { toDateKey } from "./date-key";
+import {
+  spansMultipleServers,
+  type ConnectionMap,
+} from "./federation-routing";
 
 export type EventFormValues = {
   calendarId: string;
@@ -90,7 +94,11 @@ export function eventFormValues(event: Event): EventFormValues {
   };
 }
 
-export function validateEventForm(values: EventFormValues) {
+export function validateEventForm(
+  values: EventFormValues,
+  // Optional so callers without federated calendars stay unchanged.
+  connections?: ConnectionMap,
+) {
   if (!values.title.trim()) {
     return "Add an event title.";
   }
@@ -100,6 +108,12 @@ export function validateEventForm(values: EventFormValues) {
     !values.calendarIds.includes(values.calendarId)
   ) {
     return "Choose a calendar.";
+  }
+
+  // Each server only knows its own calendars, so a cross-server event would
+  // silently lose the other side's links.
+  if (connections && spansMultipleServers(connections, values.calendarIds)) {
+    return "These calendars live on different servers. Pick calendars from one server.";
   }
 
   if (!values.date) {

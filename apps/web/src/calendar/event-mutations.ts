@@ -18,6 +18,13 @@ import {
   updateEvent,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
+import { useMemo } from "react";
+import { useFederatedWorkspace } from "./federated-workspace";
+import {
+  connectionForCalendar,
+  connectionForEvent,
+  federatedConnectionMap,
+} from "./federation-routing";
 
 function eventQueryPrefix(userId: string) {
   return ["events", getServerOrigin(), userId] as const;
@@ -88,26 +95,52 @@ function applyRemoval(
 export function useEventMutations(userId: string) {
   const queryClient = useQueryClient();
   const prefix = eventQueryPrefix(userId);
+  // Cached by useWorkspaceQueries — reading it here keeps the routing decision
+  // out of every call site.
+  const federated = useFederatedWorkspace(userId);
+  const connections = useMemo(
+    () => federatedConnectionMap(federated.data?.calendars ?? []),
+    [federated.data],
+  );
+  const federatedKey = queryKeys.federated(getServerOrigin(), userId);
+
   const refreshEvents = () =>
     queryClient.invalidateQueries({ queryKey: prefix });
+  const refreshFederated = () =>
+    queryClient.invalidateQueries({ queryKey: federatedKey });
+
+  // Federated events live in the federation query, not the home event cache, so
+  // a remote write refetches that server instead of patching local rows.
+  const applyWrite = (event: Event, connectionId?: string) => {
+    if (connectionId) {
+      void refreshFederated();
+      return;
+    }
+    upsertEvent(queryClient, userId, event);
+    void refreshEvents();
+  };
 
   const create = useMutation({
-    mutationFn: createEvent,
-    onSuccess: (event) => {
-      upsertEvent(queryClient, userId, event);
-      void refreshEvents();
-    },
+    mutationFn: (event: Event) =>
+      createEvent(event, connectionForEvent(connections, event)),
+    onSuccess: (event, input) =>
+      applyWrite(event, connectionForEvent(connections, input)),
   });
   const update = useMutation({
-    mutationFn: updateEvent,
-    onSuccess: (event) => {
-      upsertEvent(queryClient, userId, event);
-      void refreshEvents();
-    },
+    mutationFn: (event: Event) =>
+      updateEvent(event, connectionForEvent(connections, event)),
+    onSuccess: (event, input) =>
+      applyWrite(event, connectionForEvent(connections, input)),
   });
   const remove = useMutation({
-    mutationFn: removeEvent,
+    mutationFn: (event: Event) =>
+      removeEvent(event, connectionForEvent(connections, event)),
     onSuccess: (result, event) => {
+      const connectionId = connectionForEvent(connections, event);
+      if (connectionId) {
+        void refreshFederated();
+        return;
+      }
       applyRemoval(queryClient, userId, event, result);
       void refreshEvents();
     },
@@ -119,11 +152,14 @@ export function useEventMutations(userId: string) {
     }: {
       calendarId: string;
       eventId: string;
-    }) => linkEvent(eventId, calendarId),
-    onSuccess: (event) => {
-      upsertEvent(queryClient, userId, event);
-      void refreshEvents();
-    },
+    }) =>
+      linkEvent(
+        eventId,
+        calendarId,
+        connectionForCalendar(connections, calendarId),
+      ),
+    onSuccess: (event, { calendarId }) =>
+      applyWrite(event, connectionForCalendar(connections, calendarId)),
   });
   const fork = useMutation({
     mutationFn: ({
@@ -132,20 +168,30 @@ export function useEventMutations(userId: string) {
     }: {
       calendarId: string;
       eventId: string;
-    }) => forkEvent(eventId, calendarId),
-    onSuccess: (event) => {
-      upsertEvent(queryClient, userId, event);
-      void refreshEvents();
-    },
+    }) =>
+      forkEvent(
+        eventId,
+        calendarId,
+        connectionForCalendar(connections, calendarId),
+      ),
+    onSuccess: (event, { calendarId }) =>
+      applyWrite(event, connectionForCalendar(connections, calendarId)),
   });
   const attendance = useMutation({
     mutationFn: ({
       attending,
+      calendarId,
       eventId,
     }: {
       attending: boolean;
+      calendarId?: string;
       eventId: string;
-    }) => setAttendance(eventId, attending),
+    }) =>
+      setAttendance(
+        eventId,
+        attending,
+        connectionForCalendar(connections, calendarId),
+      ),
     onSuccess: (attendees, { eventId }) => {
       queryClient.setQueryData<Attendee[]>(
         queryKeys.attendees(getServerOrigin(), userId, eventId),

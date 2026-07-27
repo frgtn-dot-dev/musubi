@@ -21,6 +21,7 @@ import {
 } from "react";
 import type { ImportedCalendar } from "~/api/contracts";
 import { ApiError, ApiResponseError } from "~/api/http";
+import { connectionOfCalendar } from "../federation-routing";
 import styles from "./workspace.module.css";
 
 type ImportInput = {
@@ -32,7 +33,7 @@ type ImportInput = {
 type CalendarTransferDialogProps = {
   calendars: Calendar[];
   onCreate: (input: { color: string; name: string }) => Promise<Calendar>;
-  onExport: (calendarId: string) => Promise<string>;
+  onExport: (calendarId: string, connectionId?: string) => Promise<string>;
   onImport: (input: ImportInput) => Promise<ImportedCalendar>;
   onManageMembers: (calendar: Calendar) => void;
   onNotice: (message: string) => void;
@@ -218,7 +219,10 @@ export function CalendarTransferDialog({
     setBusy("export");
     setError(undefined);
     try {
-      const text = await onExport(calendar.id);
+      const text = await onExport(
+        calendar.id,
+        connectionOfCalendar(calendar),
+      );
       const url = URL.createObjectURL(
         new Blob([text], { type: "text/calendar;charset=utf-8" }),
       );
@@ -274,7 +278,13 @@ export function CalendarTransferDialog({
             </div>
             <ul className={styles.calendarManageList}>
               {calendars.map((calendar) => {
-                const external = Boolean(calendar.provider);
+                // A federated calendar is a native calendar on another Musubi
+                // server: management is allowed by role and routed there. Only
+                // provider mirrors (Google/Outlook/CalDAV) stay read-only here,
+                // because those writes must go through the provider first.
+                const federatedId = connectionOfCalendar(calendar);
+                const external =
+                  Boolean(calendar.provider) && !federatedId;
                 const editable =
                   !external && can(calendar.role, "editCalendar");
                 const deletable =
@@ -342,7 +352,7 @@ export function CalendarTransferDialog({
                     {calendar.isDefault ? (
                       <span className={styles.calendarBadge}>Personal</span>
                     ) : null}
-                    {external ? (
+                    {calendar.provider ? (
                       <span className={styles.calendarBadge}>
                         {providerDisplayName(calendar)}
                       </span>

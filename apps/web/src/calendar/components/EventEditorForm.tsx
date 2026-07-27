@@ -20,6 +20,7 @@ import {
   type EventFormValues,
   validateEventForm,
 } from "../event-form";
+import { federatedConnectionMap } from "../federation-routing";
 import styles from "./workspace.module.css";
 
 type FormError = {
@@ -73,7 +74,10 @@ export function EventEditorForm({
     submitEvent: FormEvent<HTMLFormElement>,
   ) {
     submitEvent.preventDefault();
-    const validationError = validateEventForm(values);
+    const validationError = validateEventForm(
+      values,
+      federatedConnectionMap(calendars),
+    );
 
     if (validationError) {
       setError({ message: validationError });
