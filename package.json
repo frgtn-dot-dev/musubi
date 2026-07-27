@@ -19,6 +19,7 @@
     "test:db:oauth": "pnpm --filter @musubi/api exec tsx src/handlers/connections.integration.test.ts",
     "test:db:pages": "pnpm --filter @musubi/api exec tsx src/handlers/calendar_pages.integration.test.ts",
     "test:federation-db": "pnpm --filter @musubi/api exec tsx src/federation.integration.test.ts",
+    "test:db:federation-gateway": "pnpm --filter @musubi/api exec tsx src/federation_gateway.integration.test.ts",
     "test:provider-db": "pnpm --filter @musubi/api exec tsx src/sync/oauth.integration.test.ts",
     "check": "pnpm release:verify && pnpm peers:check && pnpm typecheck && pnpm test && pnpm lint && pnpm build",
     "lint": "pnpm --filter @musubi/client lint && pnpm --filter @musubi/web lint",

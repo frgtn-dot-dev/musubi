@@ -33,6 +33,7 @@ import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogl
 import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav } from "./handlers/caldav";
 import { handlerDisconnectAccount, handlerDisconnectExternalCalendar } from "./handlers/connections";
 import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerFederationRotateToken, handlerGetMusubiAccounts, handlerInvitePage, handlerSaveMusubiAccount } from "./handlers/federation";
+import { handlerFederationProxy } from "./handlers/federation_proxy";
 import { syncUser } from "./sync/engine";
 import { getExternalSyncUserIDs } from "@musubi/db";
 import { middlewareMetrics, recordExternalSyncFailure, recordScheduledTaskSkip, startMetricsServer } from "./metrics";
@@ -94,6 +95,10 @@ app.get("/api/stream", requireAuth, wrap(handlerStream));
 // Public + creates accounts/tokens — cap per-IP so tokens can't be farmed or guessed.
 app.post("/api/v1/federation/accept", rateLimit(10, 15 * 60_000), wrap(handlerFederationAccept));
 app.post("/api/v1/federation/token/rotate", requireAuth, wrap(handlerFederationRotateToken));
+// Federation gateway (ADR-005): clients reach a connected server through their
+// own origin, so the member token never leaves the API. Rate-limited because it
+// makes this server perform outbound requests.
+app.all("/api/v1/federation/s/:connectionId/{*rest}", requireAuth, rateLimit(300, 60_000), wrap(handlerFederationProxy));
 app.get("/invite/:token", handlerInvitePage(config.api.url));
 // Self-hosted auth pages — the reset/delete emails link here on this API's own
 // origin, so nothing depends on the central website. Public, no auth (the token

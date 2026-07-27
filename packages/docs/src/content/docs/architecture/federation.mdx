@@ -113,9 +113,13 @@ callback-based home-server assertion.
 
 **v1 (this)**: the remote calendar lives *only* at its origin. The invitee's app reads and writes it there directly; a full pull per refresh keeps a device-local cache (SQLite) like any other calendar, and the app also holds an SSE stream to each federated server (member token as bearer), so remote events and attendance update live. If the origin is unreachable, the app shows the last synced copy and edits fail loudly.
 
-**v2 — mirror (planned)**: reuse the external-provider engine (`external_calendars` / `external_events`, cursors, `upsertExternalEvent`) with a `musubi` adapter, so server B keeps a *server-side* mirror of the shared calendar. The origin stays **authoritative** — B pulls and pushes back exactly like the Google adapter, reusing the delta endpoint (`GET /events?since` → `{events, deletedIds, serverTime}`) as the cursor. No master-master merging; conflicts stay last-write-wins. This buys offline resilience (and if an origin ever disappears for good, the fork mechanic can promote a mirror into a native calendar).
+**v1.5 — home-server gateway (in progress; `docs/adr/ADR-005-federation-gateway.md`)**: the member token stops being handed to clients. Instead the home server exposes `ANY /api/v1/federation/s/:connectionId/api/v1/*`, forwarding to the connected origin with the decrypted token attached. `:connectionId` is a `musubi_accounts` row id, so **the target origin comes from the database, never from the request** — that plus an SSRF guard (private/loopback/metadata ranges refused, revalidated per request) is what keeps it from being an open proxy. The origin server is unchanged, so this works against already-released servers. Clients then share one API surface, which is how the web client reaches parity without a 90-day cross-server credential living in browser JS.
 
-**v3 — cross-server linking**: falls out of v2 almost for free — once the shared event is a real local row on B, linking it into B's own calendars is a normal in-server link. Until then the composer enforces one-origin-per-event.
+Trade-off: the home server is now in the data path — if it is down, federated calendars are unavailable even when the origin is up. Accepted, since without the home server there is no session or home data either.
+
+**v2 — mirror (reconsidered, not planned)**: reusing the external-provider engine with a `musubi` adapter was the original plan, but `CalendarAdapter` only models calendars and events — it cannot carry attendance, members, roles or invites. Mirroring would demote federation from *collaboration* to a read-ish copy, which is the opposite of its purpose. Mirroring stays right for Google/CalDAV (genuinely external systems) and remains available later as a pure offline/latency optimisation on top of the gateway.
+
+**v3 — cross-server linking**: still open. Until then the composer enforces one-origin-per-event.
 
 ## Testing it locally
 
@@ -127,4 +131,8 @@ callback-based home-server assertion.
 5. Run `pnpm test:federation-db` against a disposable migrated PostgreSQL database
    with `ENVIRONMENT=test` to verify expiry, rotation, identity isolation and
    last-membership revocation.
+6. Run `pnpm test:db:federation-gateway` (same setup, plus `CALDAV_ENC_KEY`) to
+   verify the gateway attaches the member token, drops the home cookie, relays
+   upstream status codes and returns `502` for a dead origin. The pure SSRF and
+   path-escape guards are covered by `pnpm --filter @musubi/api test`.
 </Steps>

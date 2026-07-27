@@ -8,7 +8,7 @@ import {
 import { BadRequestError, UnauthorizedError } from "@musubi/types";
 import { decryptSecret, encryptSecret } from "../sync/crypto";
 import { bearerMemberToken, hashMemberToken, issueMemberToken } from "../federation_tokens";
-import { canonicalHttpOrigin } from "../federation_origin";
+import { assertPublicOrigin, canonicalHttpOrigin } from "../federation_origin";
 
 // Federation (Musubi ↔ Musubi), v1: an invite token doubles as the cross-server
 // capability. A user from another server accepts an invite here and becomes a
@@ -133,6 +133,13 @@ export async function handlerSaveMusubiAccount(req: Request, res: Response) {
   if (!server || !userID || !token) throw new BadRequestError("server, userID and token are required...");
   const origin = canonicalHttpOrigin(server);
   if (!origin) throw new BadRequestError("server must be an http(s) origin...");
+  // The gateway will fetch this origin later (ADR-005) — refuse internal targets
+  // here as well as per-request, so they never get stored in the first place.
+  try {
+    await assertPublicOrigin(origin);
+  } catch (error) {
+    throw new BadRequestError(error instanceof Error ? error.message : "Unreachable server origin.");
+  }
   await upsertMusubiAccount(req.user!.id, origin, userID, encryptSecret(token));
   res.sendStatus(200);
 }

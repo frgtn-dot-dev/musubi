@@ -71,6 +71,10 @@ type SocialConfig = {
 
 type SecurityConfig = {
   caldavEncKey: string,
+  // Federation gateway SSRF guard: private/loopback targets are refused by
+  // default. Self-hosters federating two servers on a LAN (or one box) must
+  // opt in explicitly. Auto-enabled outside prod for the two-server dev setup.
+  federationAllowPrivateHosts: boolean,
 }
 
 type Config = {
@@ -120,6 +124,9 @@ const socialConfig: SocialConfig = {
 
 const securityConfig: SecurityConfig = {
   caldavEncKey: process.env.CALDAV_ENC_KEY ?? "", // validated at use in the crypto helper
+  federationAllowPrivateHosts:
+    process.env.FEDERATION_ALLOW_PRIVATE_HOSTS === "true"
+    || envOrThrow("ENVIRONMENT") !== "prod",
 }
 
 export const config: Config = {

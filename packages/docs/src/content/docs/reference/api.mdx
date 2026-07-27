@@ -282,9 +282,20 @@ Provider behavior and limitations:
 |---|---:|---|
 | `POST /api/v1/federation/accept` | Invite token; optional current member bearer proves an existing shadow | `{ token, profile: { name, email, homeServer, image? } }` → `{ memberToken, memberTokenExpiresAt, userID, calendar }` |
 | `POST /api/v1/federation/token/rotate` | Member token | Compare-and-swap exchange → `{ memberToken, memberTokenExpiresAt }` |
-| `GET /api/v1/users/connections/musubi` | Session | Decrypted remote connections for the owner |
-| `POST /api/v1/users/connections/musubi` | Session | `{ server, userID, token }` |
+| `GET /api/v1/users/connections/musubi` | Session | Decrypted remote connections for the owner — **deprecated**, see the gateway below |
+| `POST /api/v1/users/connections/musubi` | Session | `{ server, userID, token }`; the origin is SSRF-checked before it is stored |
 | `DELETE /api/v1/users/connections/musubi` | Session | `{ server }` |
+| `ANY /api/v1/federation/s/:connectionId/api/v1/*` | Session | Gateway: forwards to the connected server with the member token attached |
+
+The gateway (ADR-005) exists so a client never holds a cross-server credential.
+`:connectionId` is a `musubi_accounts` row id owned by the caller, so the target
+origin is read from the database and cannot be influenced by the request; only
+`/api/v1/*` paths are forwarded, the home session cookie is dropped, upstream
+status codes are relayed unchanged, and an unreachable origin returns `502`
+`FederatedServerUnreachable`. Private, loopback and link-local targets are
+refused unless `FEDERATION_ALLOW_PRIVATE_HOSTS=true` (LAN self-hosting).
+Returning the decrypted token from `GET …/connections/musubi` stays only until
+the mobile client has migrated onto the gateway.
 
 The returned member token is shown once; the origin stores only its SHA-256
 hash. It expires after 90 days and the client rotates it in the final 14 days.
