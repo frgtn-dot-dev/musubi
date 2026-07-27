@@ -969,6 +969,76 @@ test("moves and resizes an event by dragging it", async ({ page }) => {
   );
 });
 
+test("drags an empty interval to pre-fill quick create", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-30`);
+
+  const column = page.locator("[data-time-grid-column]").first();
+  await expect(column).toBeVisible();
+  // The grid opens scrolled near the working day, which would put 02:00 above
+  // the viewport.
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '[class*="calendarArea"]',
+    );
+    if (scroller) scroller.scrollTop = 0;
+  });
+  const bounds = (await column.boundingBox())!;
+  // 64px per hour at comfortable density: 128px down is 02:00, dragging 96px
+  // further selects three quarters of an hour past that.
+  const from = bounds.y + 128;
+
+  await page.mouse.move(bounds.x + bounds.width / 2, from);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2, from + 96, { steps: 8 });
+
+  // The chosen interval is visible before the popover opens.
+  await expect(page.getByText("02:00–03:30")).toBeVisible();
+  await page.mouse.up();
+
+  // Quick create opens with the dragged length, not a default hour.
+  const start = page.getByLabel("Start time");
+  const end = page.getByLabel("End time");
+  await expect(start).toHaveValue("02:00");
+  await expect(end).toHaveValue("03:30");
+});
+
+test("moves an event with the keyboard", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ end: string; start: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as {
+        end: string;
+        start: string;
+      };
+      writes.push({ end: body.end, start: body.start });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+  const block = page.getByRole("button", { name: /Project check-in/ }).first();
+  await block.focus();
+
+  // Alt+Down moves by one snap interval; the change is announced.
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(page.locator('[aria-live="polite"]')).toContainText("now ");
+  expect(writes).toHaveLength(1);
+  expect(
+    new Date(writes[0]!.end).getTime() - new Date(writes[0]!.start).getTime(),
+  ).toBe(60 * 60_000);
+
+  // Alt+Shift+Down lengthens it instead of moving it.
+  await block.focus();
+  await page.keyboard.press("Alt+Shift+ArrowDown");
+  expect(writes).toHaveLength(2);
+  expect(writes[1]!.start).toBe(writes[0]!.start);
+  expect(new Date(writes[1]!.end).getTime()).toBeGreaterThan(
+    new Date(writes[0]!.end).getTime(),
+  );
+});
+
 test("cancels a drag with Escape and leaves the event alone", async ({
   page,
 }) => {

@@ -206,9 +206,21 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   dnes mění celou sérii — tichý přesun série je přesně ten skrytý dopad, který
   pravidla zakazují. Scope dialog patří do C, kde se dialogy staví.
 
-**B2 — zbývá:** drag-to-create (tažení přes interval → QuickCreate) a
-klávesnicová alternativa („Přesunout"/„Změnit délku", modifikované šipky,
-oznámení screen readeru). Bez B2 není B hotová podle §R10.
+**B2 — drag-to-create + klávesnice: HOTOVO** (2026-07-27)
+
+- `useDragToCreate`: tažení přes prázdnou mřížku vybere interval (funguje i
+  nahoru), **selection layer je vidět dřív, než se popover otevře** (§R4, G9),
+  s časovým rozsahem. Po uvolnění se délka přenese do QuickCreate — `endTime`
+  prošlo až do `defaultEventFormValues`, takže se místo výchozí hodiny použije
+  vytažený interval.
+- Klik zůstal klikem: po dragu se trailing click **spolkne** (`consumeClick`),
+  jinak by uvolnění vytvořilo druhý event.
+- **Klávesnicová alternativa** (§R10): `Alt+↑/↓` posune o snap interval,
+  `Alt+Shift+↑/↓` mění délku. Používá **stejnou** `nextDragTimes` matematiku
+  jako myš, a výsledek se **oznámí** do notice live regionu — bez toho by
+  screen-reader uživatel neměl potvrzení.
+
+Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 
 ### Fáze C — Vratnost
 

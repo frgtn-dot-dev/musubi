@@ -130,6 +130,8 @@ type WorkspaceProps = {
 type CreateIntent = {
   anchor: QuickCreateAnchor;
   date: string;
+  /** Set when the interval was dragged, so the length carries over. */
+  endTime?: string;
   id: number;
   startTime?: string;
 };
@@ -396,6 +398,7 @@ export function Workspace({
     target: HTMLElement,
     startTime?: string,
     point?: Pick<QuickCreateAnchor, "x" | "y">,
+    endTime?: string,
   ) {
     if (editableCalendars.length === 0) {
       setNotice("You need edit access to a calendar to create events.");
@@ -410,6 +413,7 @@ export function Workspace({
         y: point?.y ?? bounds.top + Math.min(bounds.height, 48),
       },
       date: nextDate,
+      endTime,
       id: Date.now(),
       startTime,
     });
@@ -711,12 +715,13 @@ export function Workspace({
               onLinkEvent={onLinkEvent}
               onCreateAtTime={
                 editableCalendars.length > 0
-                  ? (nextDate, time, createAnchor) =>
+                  ? (nextDate, time, createAnchor, endTime) =>
                       openCreateAtDate(
                         nextDate,
                         createAnchor.returnFocus,
                         time,
                         createAnchor,
+                        endTime,
                       )
                   : undefined
               }
@@ -804,6 +809,7 @@ export function Workspace({
           calendars={editableCalendars}
           date={createIntent.date}
           email={user.email}
+          endTime={createIntent.endTime}
           key={createIntent.id}
           onCreate={onCreateEvent}
           onCreated={() => setNotice("Event created.")}

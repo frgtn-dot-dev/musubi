@@ -963,6 +963,28 @@
   background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
 }
 
+/* The interval a drag has chosen, before quick create opens. */
+.timeGridSelection {
+  position: absolute;
+  z-index: 30;
+  left: 2px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: calc(100% - 4px);
+  padding: 2px 4px;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--event-radius);
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  pointer-events: none;
+}
+
+.timeGridSelection span {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
 .resizeHandleTop,
 .resizeHandleBottom {
   position: absolute;

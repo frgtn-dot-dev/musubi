@@ -24,6 +24,7 @@ type QuickCreateProps = {
   onCreate: (event: Event) => Promise<Event>;
   onCreated: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
+  endTime?: string;
   open: boolean;
   startTime?: string;
   userId: string;
@@ -37,6 +38,7 @@ export function QuickCreate({
   onCreate,
   onCreated,
   onOpenChange,
+  endTime,
   open,
   startTime,
   userId,
@@ -47,6 +49,7 @@ export function QuickCreate({
     defaultCalendar?.id ?? "",
     date,
     startTime,
+    endTime,
   );
 
   async function handleSubmit(values: EventFormValues) {

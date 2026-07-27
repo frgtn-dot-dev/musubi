@@ -51,6 +51,9 @@ export function defaultEventFormValues(
   calendarId: string,
   date: string,
   startTime = "12:00",
+  // Dragging across an interval derives the length; a plain click falls back to
+  // an hour.
+  endTime?: string,
 ): EventFormValues {
   const start = timedBoundary(date, startTime);
   const end = new Date(start.getTime() + 60 * 60 * 1_000);
@@ -61,7 +64,7 @@ export function defaultEventFormValues(
     date,
     description: "",
     endDate: date,
-    endTime: toTimeInput(end),
+    endTime: endTime ?? toTimeInput(end),
     hasAttendees: false,
     isAllDay: false,
     location: "",

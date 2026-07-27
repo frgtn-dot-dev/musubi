@@ -11,6 +11,7 @@ import {
 import {
   type CSSProperties,
   type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   memo,
   useEffect,
@@ -30,8 +31,9 @@ import {
   type TimeGeometry,
 } from "../time-geometry";
 import { canEditEvent } from "../event-permissions";
-import type { DragMode, DragTimes } from "../time-grid-drag";
+import { nextDragTimes, type DragMode, type DragTimes } from "../time-grid-drag";
 import {
+  useDragToCreate,
   useTimeGridDrag,
   type BeginDragInput,
 } from "../use-time-grid-drag";
@@ -82,6 +84,8 @@ type TimeGridViewProps = EventActionHandlers & {
     date: string,
     time: string,
     anchor: { returnFocus: HTMLElement; x: number; y: number },
+    /** Present when the interval was dragged rather than clicked. */
+    endTime?: string,
   ) => void;
   timeFormat: Settings["timeFormat"];
   view: TimeGridViewId;
@@ -99,6 +103,7 @@ type TimelineEventProps = EventActionHandlers & {
   draggable: boolean;
   geometry: TimeGeometry;
   onBeginDrag: (input: BeginDragInput) => void;
+  onKeyboardAdjust: (event: Event, times: DragTimes) => void;
   timeFormat: Settings["timeFormat"];
 };
 
@@ -108,6 +113,13 @@ function hourLabel(hour: number, timeFormat: Settings["timeFormat"]) {
   }
 
   return hour12Formatter.format(new Date(2026, 0, 1, hour));
+}
+
+/** A minute of the day as an `HH:MM` form value. */
+function clockValue(minutes: number): string {
+  const hour = Math.floor(minutes / 60) % 24;
+  const minute = Math.floor(minutes % 60);
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 /** A minute of the day as a clock time, for live drag feedback. */
@@ -146,6 +158,7 @@ const TimelineEvent = memo(function TimelineEvent({
   draggable,
   geometry,
   onBeginDrag,
+  onKeyboardAdjust,
   timeFormat,
   ...eventActions
 }: TimelineEventProps) {
@@ -155,6 +168,36 @@ const TimelineEvent = memo(function TimelineEvent({
   const endMin = dragTimes?.endMinutes ?? daySegment.endMin;
   const eventColor = calendar?.color ?? event.color;
   const duration = endMin - startMin;
+
+  /**
+   * Keyboard equivalent of dragging (docs/ui/calendar-ui.md R10): Alt+Up/Down
+   * moves by one snap interval, adding Shift changes the length instead. Without
+   * this, direct manipulation would be mouse-only.
+   */
+  function handleKeyDown(keyEvent: ReactKeyboardEvent<HTMLElement>) {
+    if (!draggable || !keyEvent.altKey) return;
+    if (keyEvent.key !== "ArrowUp" && keyEvent.key !== "ArrowDown") return;
+
+    keyEvent.preventDefault();
+    keyEvent.stopPropagation();
+    const step =
+      (keyEvent.key === "ArrowDown" ? 1 : -1) * geometry.snapMinutes;
+    const times = nextDragTimes({
+      deltaMinutes: step,
+      geometry,
+      mode: keyEvent.shiftKey ? "resize-end" : "move",
+      originEndMinutes: daySegment.endMin,
+      originStartMinutes: daySegment.startMin,
+    });
+
+    if (
+      times.startMinutes === daySegment.startMin &&
+      times.endMinutes === daySegment.endMin
+    ) {
+      return;
+    }
+    onKeyboardAdjust(event, times);
+  }
 
   function startDrag(
     pointerEvent: ReactPointerEvent<HTMLElement>,
@@ -195,6 +238,7 @@ const TimelineEvent = memo(function TimelineEvent({
         data-dragging={dragTimes ? "" : undefined}
         data-draggable={draggable ? "" : undefined}
         data-time-event={event.id}
+        onKeyDown={handleKeyDown}
         onPointerDown={(pointerEvent) => startDrag(pointerEvent, "move")}
         style={
           {
@@ -329,6 +373,58 @@ export function TimeGridView({
     },
     onError: eventActions.onNotice,
     scrollRoot: () => rootRef.current?.parentElement,
+  });
+
+  /**
+   * Apply a keyboard nudge. Announced through the notice live region, because a
+   * screen-reader user gets no visual confirmation from the block moving.
+   */
+  async function adjustByKeyboard(event: Event, times: DragTimes) {
+    if (!onMoveEvent) return;
+    const day = startOfDay(event.start);
+    try {
+      await onMoveEvent({
+        dayOffset: 0,
+        end: new Date(day.getTime() + times.endMinutes * 60_000),
+        event,
+        start: new Date(day.getTime() + times.startMinutes * 60_000),
+      });
+      eventActions.onNotice(
+        `${event.title} now ${minuteLabel(
+          times.startMinutes,
+          timeFormat,
+        )}–${minuteLabel(times.endMinutes, timeFormat)}.`,
+      );
+    } catch (error) {
+      eventActions.onNotice(
+        error instanceof Error
+          ? error.message
+          : "That change could not be saved. The original time was restored.",
+      );
+    }
+  }
+
+  const {
+    begin: beginCreateDrag,
+    consumeClick,
+    selection,
+  } = useDragToCreate({
+    geometry,
+    onSelected: (dragged, column) => {
+      const day = days[dragged.dayIndex];
+      if (!day || !onCreateAtTime) return;
+      const bounds = column.getBoundingClientRect();
+      onCreateAtTime(
+        dayKey(day),
+        clockValue(dragged.startMinutes),
+        {
+          returnFocus: column,
+          x: bounds.left + bounds.width / 2,
+          y: bounds.top + minutesToY(dragged.startMinutes, geometry),
+        },
+        clockValue(dragged.endMinutes),
+      );
+    },
   });
   const dayMode = view === "day";
   const layoutStyle = {
@@ -528,11 +624,29 @@ export function TimeGridView({
                 data-time-grid-column={dayKey(day)}
                 key={dayKey(day)}
                 tabIndex={-1}
+                onPointerDown={(pointerEvent) => {
+                  if (
+                    !onCreateAtTime ||
+                    pointerEvent.button !== 0 ||
+                    (pointerEvent.target instanceof Element &&
+                      pointerEvent.target.closest("button"))
+                  ) {
+                    return;
+                  }
+                  beginCreateDrag({
+                    clientY: pointerEvent.clientY,
+                    column: pointerEvent.currentTarget,
+                    dayIndex,
+                    pointerId: pointerEvent.pointerId,
+                  });
+                }}
                 onClick={(event) => {
                   if (
                     !onCreateAtTime ||
-                    event.target instanceof Element &&
-                      event.target.closest("button")
+                    // A drag already answered "when" — don't create twice.
+                    consumeClick() ||
+                    (event.target instanceof Element &&
+                      event.target.closest("button"))
                   ) {
                     return;
                   }
@@ -560,6 +674,26 @@ export function TimeGridView({
                   );
                 }}
               >
+                {/* Selection layer: the chosen interval is visible before the
+                    quick-create popover even opens. */}
+                {selection?.dayIndex === dayIndex ? (
+                  <div
+                    aria-hidden="true"
+                    className={styles.timeGridSelection}
+                    style={{
+                      height: `${durationToHeight(
+                        selection.endMinutes - selection.startMinutes,
+                        geometry,
+                      )}px`,
+                      top: `${minutesToY(selection.startMinutes, geometry)}px`,
+                    }}
+                  >
+                    <span>
+                      {minuteLabel(selection.startMinutes, timeFormat)}–
+                      {minuteLabel(selection.endMinutes, timeFormat)}
+                    </span>
+                  </div>
+                ) : null}
                 {segmentsByDay[dayIndex]?.map((segment) => (
                   <TimelineEvent
                     calendar={calendarsById.get(
@@ -588,6 +722,7 @@ export function TimeGridView({
                     geometry={geometry}
                     key={segment.event.id}
                     onBeginDrag={beginDrag}
+                    onKeyboardAdjust={adjustByKeyboard}
                     timeFormat={timeFormat}
                     {...eventActions}
                   />

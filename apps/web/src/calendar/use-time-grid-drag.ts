@@ -1,6 +1,6 @@
 import type { Event } from "@musubi/types";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TimeGeometry } from "./time-geometry";
+import { yToMinutes, type TimeGeometry } from "./time-geometry";
 import {
   autoScrollStep,
   exceedsDragThreshold,
@@ -283,4 +283,150 @@ export function useTimeGridDrag({
   useEffect(() => finish, [finish]);
 
   return { begin, drag };
+}
+
+export type CreateSelection = {
+  dayIndex: number;
+  endMinutes: number;
+  startMinutes: number;
+};
+
+/**
+ * Dragging across empty grid to choose an interval.
+ *
+ * A plain click stays a click — the column's own handler deals with that — so
+ * this only reports once the pointer has actually travelled. `consumedRef` lets
+ * the caller suppress the click that follows a drag, otherwise releasing would
+ * both finish the selection and create a second event.
+ */
+export function useDragToCreate({
+  geometry,
+  onSelected,
+}: {
+  geometry: TimeGeometry;
+  onSelected: (selection: CreateSelection, origin: HTMLElement) => void;
+}) {
+  const [selection, setSelection] = useState<CreateSelection>();
+  const pressRef = useRef<
+    | {
+        anchorMinutes: number;
+        column: HTMLElement;
+        dayIndex: number;
+        gridTop: number;
+        pointerId: number;
+        startY: number;
+      }
+    | undefined
+  >(undefined);
+  const selectionRef = useRef<CreateSelection | undefined>(undefined);
+  const consumedRef = useRef(false);
+  const detachRef = useRef<(() => void) | undefined>(undefined);
+  const optionsRef = useRef({ geometry, onSelected });
+  useEffect(() => {
+    optionsRef.current = { geometry, onSelected };
+  });
+
+  const finish = useCallback(() => {
+    pressRef.current = undefined;
+    selectionRef.current = undefined;
+    detachRef.current?.();
+    detachRef.current = undefined;
+    setSelection(undefined);
+  }, []);
+
+  const begin = useCallback(
+    (pointerEvent: {
+      clientY: number;
+      column: HTMLElement;
+      dayIndex: number;
+      pointerId: number;
+    }) => {
+      const bounds = pointerEvent.column.getBoundingClientRect();
+      const anchorMinutes = yToMinutes(
+        pointerEvent.clientY - bounds.top,
+        optionsRef.current.geometry,
+      );
+      pressRef.current = {
+        anchorMinutes,
+        column: pointerEvent.column,
+        dayIndex: pointerEvent.dayIndex,
+        gridTop: bounds.top,
+        pointerId: pointerEvent.pointerId,
+        startY: pointerEvent.clientY,
+      };
+
+      function handleMove(nativeEvent: PointerEvent) {
+        const press = pressRef.current;
+        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+        if (
+          !selectionRef.current &&
+          !exceedsDragThreshold(
+            { x: 0, y: press.startY },
+            { x: 0, y: nativeEvent.clientY },
+          )
+        ) {
+          return;
+        }
+
+        nativeEvent.preventDefault();
+        const current = yToMinutes(
+          nativeEvent.clientY - press.gridTop,
+          optionsRef.current.geometry,
+        );
+        // Dragging upwards is as valid as downwards.
+        const startMinutes = Math.min(press.anchorMinutes, current);
+        const endMinutes = Math.max(
+          startMinutes + optionsRef.current.geometry.snapMinutes,
+          Math.max(press.anchorMinutes, current),
+        );
+        const next = { dayIndex: press.dayIndex, endMinutes, startMinutes };
+        selectionRef.current = next;
+        setSelection(next);
+      }
+
+      function handleUp(nativeEvent: PointerEvent) {
+        const press = pressRef.current;
+        const active = selectionRef.current;
+        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+
+        const column = press.column;
+        const report = optionsRef.current.onSelected;
+        // Tell the click handler to stand down — a drag already answered "when".
+        consumedRef.current = Boolean(active);
+        finish();
+        if (active) report(active, column);
+      }
+
+      function handleKey(nativeEvent: KeyboardEvent) {
+        if (nativeEvent.key !== "Escape") return;
+        nativeEvent.stopPropagation();
+        consumedRef.current = true;
+        finish();
+      }
+
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("pointercancel", finish);
+      window.addEventListener("keydown", handleKey, true);
+
+      detachRef.current = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("pointercancel", finish);
+        window.removeEventListener("keydown", handleKey, true);
+      };
+    },
+    [finish],
+  );
+
+  /** True once per drag, so the caller can skip the trailing click. */
+  const consumeClick = useCallback(() => {
+    const consumed = consumedRef.current;
+    consumedRef.current = false;
+    return consumed;
+  }, []);
+
+  useEffect(() => finish, [finish]);
+
+  return { begin, consumeClick, selection };
 }
