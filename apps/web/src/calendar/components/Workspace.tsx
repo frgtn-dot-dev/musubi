@@ -130,6 +130,8 @@ type WorkspaceProps = {
 type CreateIntent = {
   anchor: QuickCreateAnchor;
   date: string;
+  /** Set when days were dragged across in the month grid: an all-day range. */
+  endDate?: string;
   /** Set when the interval was dragged, so the length carries over. */
   endTime?: string;
   id: number;
@@ -397,8 +399,15 @@ export function Workspace({
     nextDate: string,
     target: HTMLElement,
     startTime?: string,
-    point?: Pick<QuickCreateAnchor, "x" | "y">,
-    endTime?: string,
+    {
+      endDate,
+      endTime,
+      point,
+    }: {
+      endDate?: string;
+      endTime?: string;
+      point?: Pick<QuickCreateAnchor, "x" | "y">;
+    } = {},
   ) {
     if (editableCalendars.length === 0) {
       setNotice("You need edit access to a calendar to create events.");
@@ -413,6 +422,7 @@ export function Workspace({
         y: point?.y ?? bounds.top + Math.min(bounds.height, 48),
       },
       date: nextDate,
+      endDate,
       endTime,
       id: Date.now(),
       startTime,
@@ -447,8 +457,7 @@ export function Workspace({
     event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
     openCreateAtDate(date, event.currentTarget, undefined, {
-      x: bounds.left + bounds.width / 2,
-      y: bounds.top + 92,
+      point: { x: bounds.left + bounds.width / 2, y: bounds.top + 92 },
     });
   }
 
@@ -729,8 +738,7 @@ export function Workspace({
                         nextDate,
                         createAnchor.returnFocus,
                         time,
-                        createAnchor,
-                        endTime,
+                        { endTime, point: createAnchor },
                       )
                   : undefined
               }
@@ -771,11 +779,18 @@ export function Workspace({
               onLinkEvent={onLinkEvent}
               onCreateAtDate={
                 editableCalendars.length > 0
-                  ? (nextDate, target) =>
-                      openCreateAtDate(nextDate, target)
+                  ? (nextDate, target, endDate) =>
+                      openCreateAtDate(nextDate, target, undefined, {
+                        endDate,
+                      })
                   : undefined
               }
               onMonthChange={changePeriod}
+              pendingCreate={
+                createIntent
+                  ? { date: createIntent.date, endDate: createIntent.endDate }
+                  : undefined
+              }
               onNotice={setNotice}
               onRemoveEvent={onRemoveEvent}
               onSetAttendance={onSetAttendance}
@@ -835,7 +850,9 @@ export function Workspace({
           calendars={editableCalendars}
           date={createIntent.date}
           email={user.email}
+          endDate={createIntent.endDate}
           endTime={createIntent.endTime}
+          isAllDay={Boolean(createIntent.endDate)}
           key={createIntent.id}
           onCreate={onCreateEvent}
           onCreated={() => setNotice("Event created.")}

@@ -964,6 +964,11 @@
   background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
 }
 
+/* Days being dragged across to create an all-day event. */
+.dayCell[data-range-selected] {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
 .eventChip[data-draggable] {
   cursor: grab;
 }

@@ -416,6 +416,134 @@ export function useMonthDrag({
   return { begin, drag: state };
 }
 
+export type DayRangeSelection = { fromKey: string; toKey: string };
+
+/**
+ * Dragging across empty day cells in the month grid to create a multi-day event.
+ *
+ * A month cell has no time axis, so the result is an all-day range rather than an
+ * interval — the same thing dragging across days gives you in other calendars. A
+ * plain click still falls through to the cell's own click handler, and the
+ * trailing click after a drag is swallowed via `consumeClick`.
+ */
+export function useDayRangeCreate({
+  onSelected,
+}: {
+  onSelected: (range: DayRangeSelection, origin: HTMLElement) => void;
+}) {
+  const [range, setRange] = useState<DayRangeSelection>();
+  const pressRef = useRef<
+    | {
+        cell: HTMLElement;
+        fromKey: string;
+        pointerId: number;
+        startX: number;
+        startY: number;
+      }
+    | undefined
+  >(undefined);
+  const rangeRef = useRef<DayRangeSelection | undefined>(undefined);
+  const consumedRef = useRef(false);
+  const detachRef = useRef<(() => void) | undefined>(undefined);
+  const onSelectedRef = useRef(onSelected);
+  useEffect(() => {
+    onSelectedRef.current = onSelected;
+  });
+
+  const finish = useCallback(() => {
+    pressRef.current = undefined;
+    rangeRef.current = undefined;
+    detachRef.current?.();
+    detachRef.current = undefined;
+    setRange(undefined);
+  }, []);
+
+  const begin = useCallback(
+    (input: {
+      cell: HTMLElement;
+      dayKey: string;
+      pointerId: number;
+      x: number;
+      y: number;
+    }) => {
+      pressRef.current = {
+        cell: input.cell,
+        fromKey: input.dayKey,
+        pointerId: input.pointerId,
+        startX: input.x,
+        startY: input.y,
+      };
+
+      function handleMove(nativeEvent: PointerEvent) {
+        const press = pressRef.current;
+        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+        if (
+          !rangeRef.current &&
+          !exceedsDragThreshold(
+            { x: press.startX, y: press.startY },
+            { x: nativeEvent.clientX, y: nativeEvent.clientY },
+          )
+        ) {
+          return;
+        }
+
+        nativeEvent.preventDefault();
+        const hovered = document
+          .elementFromPoint(nativeEvent.clientX, nativeEvent.clientY)
+          ?.closest<HTMLElement>("[data-day-key]")?.dataset.dayKey;
+        const toKey = hovered ?? rangeRef.current?.toKey ?? press.fromKey;
+        const next = { fromKey: press.fromKey, toKey };
+        rangeRef.current = next;
+        setRange(next);
+      }
+
+      function handleUp(nativeEvent: PointerEvent) {
+        const press = pressRef.current;
+        const active = rangeRef.current;
+        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+
+        const cell = press.cell;
+        const report = onSelectedRef.current;
+        // Only a real multi-day drag counts; a click keeps its own path.
+        const dragged = Boolean(active && active.toKey !== active.fromKey);
+        consumedRef.current = dragged;
+        finish();
+        if (dragged && active) report(active, cell);
+      }
+
+      function handleKey(nativeEvent: KeyboardEvent) {
+        if (nativeEvent.key !== "Escape") return;
+        nativeEvent.stopPropagation();
+        consumedRef.current = true;
+        finish();
+      }
+
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("pointercancel", finish);
+      window.addEventListener("keydown", handleKey, true);
+
+      detachRef.current = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("pointercancel", finish);
+        window.removeEventListener("keydown", handleKey, true);
+      };
+    },
+    [finish],
+  );
+
+  const consumeClick = useCallback(() => {
+    const consumed = consumedRef.current;
+    consumedRef.current = false;
+    return consumed;
+  }, []);
+
+  useEffect(() => finish, [finish]);
+
+  return { begin, consumeClick, range };
+}
+
 export type CreateSelection = {
   dayIndex: number;
   endMinutes: number;

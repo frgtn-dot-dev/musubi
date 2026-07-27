@@ -51,9 +51,16 @@ export function defaultEventFormValues(
   calendarId: string,
   date: string,
   startTime = "12:00",
-  // Dragging across an interval derives the length; a plain click falls back to
-  // an hour.
-  endTime?: string,
+  /**
+   * What a gesture derived. Dragging a time interval gives `endTime`; dragging
+   * across days in the month grid gives an all-day range. A plain click gives
+   * neither and falls back to a one-hour timed event.
+   */
+  {
+    endDate,
+    endTime,
+    isAllDay = false,
+  }: { endDate?: string; endTime?: string; isAllDay?: boolean } = {},
 ): EventFormValues {
   const start = timedBoundary(date, startTime);
   const end = new Date(start.getTime() + 60 * 60 * 1_000);
@@ -63,10 +70,10 @@ export function defaultEventFormValues(
     calendarIds: [calendarId],
     date,
     description: "",
-    endDate: date,
+    endDate: endDate ?? date,
     endTime: endTime ?? toTimeInput(end),
     hasAttendees: false,
-    isAllDay: false,
+    isAllDay,
     location: "",
     recurrence: "",
     startTime,

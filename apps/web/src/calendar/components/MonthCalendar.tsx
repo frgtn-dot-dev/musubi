@@ -15,7 +15,7 @@ import {
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { canEditEvent } from "../event-permissions";
-import { useMonthDrag } from "../use-time-grid-drag";
+import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
@@ -24,7 +24,14 @@ type MonthCalendarProps = EventActionHandlers & {
   anchor: Date;
   calendars: Calendar[];
   events: Event[];
-  onCreateAtDate?: (date: string, target: HTMLElement) => void;
+  onCreateAtDate?: (
+    date: string,
+    target: HTMLElement,
+    /** Set when days were dragged across: an all-day range. */
+    endDate?: string,
+  ) => void;
+  /** The slot a quick-create popover is open for, so its days stay highlighted. */
+  pendingCreate?: { date: string; endDate?: string };
   onMonthChange: (offset: number) => void;
   /**
    * Move an event to another day, keeping its time. Absent leaves the month
@@ -50,11 +57,37 @@ export function MonthCalendar({
   onCreateAtDate,
   onMonthChange,
   onMoveEventToDate,
+  pendingCreate,
   showAdjacentDays = true,
   timeFormat,
   weekStartsOn,
   ...eventActions
 }: MonthCalendarProps) {
+  const {
+    begin: beginRangeCreate,
+    consumeClick,
+    range,
+  } = useDayRangeCreate({
+    onSelected: ({ fromKey, toKey }, cell) => {
+      // Dragging backwards is as valid as forwards.
+      const [start, end] = fromKey <= toKey ? [fromKey, toKey] : [toKey, fromKey];
+      onCreateAtDate?.(start, cell, end);
+    },
+  });
+
+  // Highlight the dragged days, and keep them highlighted while the popover the
+  // drag opened is still up.
+  const selectedRange = useMemo(() => {
+    const source = range
+      ? [range.fromKey, range.toKey]
+      : pendingCreate?.endDate && pendingCreate.endDate !== pendingCreate.date
+        ? [pendingCreate.date, pendingCreate.endDate]
+        : undefined;
+    if (!source) return undefined;
+    const [first, second] = source as [string, string];
+    return first <= second ? { from: first, to: second } : { from: second, to: first };
+  }, [pendingCreate, range]);
+
   const { begin: beginMonthDrag, drag } = useMonthDrag({
     onCommit: async ({ dayKey: targetKey, event }) => {
       await onMoveEventToDate?.({ dayKey: targetKey, event });
@@ -204,6 +237,31 @@ export function MonthCalendar({
                   data-drop-target={
                     drag && drag.dayKey === dateKey ? "" : undefined
                   }
+                  data-range-selected={
+                    selectedRange &&
+                    dateKey >= selectedRange.from &&
+                    dateKey <= selectedRange.to
+                      ? ""
+                      : undefined
+                  }
+                  onPointerDown={(pointerEvent) => {
+                    if (
+                      muted ||
+                      !onCreateAtDate ||
+                      pointerEvent.button !== 0 ||
+                      (pointerEvent.target instanceof Element &&
+                        pointerEvent.target.closest("button"))
+                    ) {
+                      return;
+                    }
+                    beginRangeCreate({
+                      cell: pointerEvent.currentTarget,
+                      dayKey: dateKey,
+                      pointerId: pointerEvent.pointerId,
+                      x: pointerEvent.clientX,
+                      y: pointerEvent.clientY,
+                    });
+                  }}
                   role="gridcell"
                   aria-label={
                     muted
@@ -215,7 +273,8 @@ export function MonthCalendar({
                   tabIndex={focusedIndex === index ? 0 : -1}
                   data-day-key={dateKey}
                   onClick={(event) => {
-                    if (muted) return;
+                    // A drag already opened quick create for its range.
+                    if (muted || consumeClick()) return;
                     onCreateAtDate?.(dateKey, event.currentTarget);
                   }}
                   onFocus={() => setFocusedIndex(index)}

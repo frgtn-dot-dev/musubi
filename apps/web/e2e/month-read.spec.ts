@@ -1999,3 +1999,66 @@ test("updates the display name and gates account deletion", async ({
   );
   expect(deleteRequested).toBe(true);
 });
+
+test("drags across month days to create an all-day range", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const from = page.locator('[data-day-key="2026-07-28"]');
+  const to = page.locator('[data-day-key="2026-07-30"]');
+  await expect(from).toBeVisible();
+  const fromBox = (await from.boundingBox())!;
+  const toBox = (await to.boundingBox())!;
+
+  // Press near the bottom of the cell, clear of the day number and any chips.
+  await page.mouse.move(
+    fromBox.x + fromBox.width / 2,
+    fromBox.y + fromBox.height - 6,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    toBox.x + toBox.width / 2,
+    toBox.y + toBox.height - 6,
+    { steps: 8 },
+  );
+  // Every day in the range is highlighted while dragging.
+  await expect(page.locator("[data-range-selected]")).toHaveCount(3);
+  await page.mouse.up();
+
+  // Quick create opens pre-filled as an all-day event spanning the range.
+  await expect(page.getByLabel("Date")).toHaveValue("2026-07-28");
+  await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
+  // The days stay highlighted while the popover is up.
+  await expect(page.locator("[data-range-selected]")).toHaveCount(3);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-range-selected]")).toHaveCount(0);
+});
+
+test("dragging backwards across month days still creates a forward range", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const from = page.locator('[data-day-key="2026-07-30"]');
+  const to = page.locator('[data-day-key="2026-07-28"]');
+  await expect(from).toBeVisible();
+  const fromBox = (await from.boundingBox())!;
+  const toBox = (await to.boundingBox())!;
+
+  await page.mouse.move(
+    fromBox.x + fromBox.width / 2,
+    fromBox.y + fromBox.height - 6,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    toBox.x + toBox.width / 2,
+    toBox.y + toBox.height - 6,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+
+  await expect(page.getByLabel("Date")).toHaveValue("2026-07-28");
+  await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
+});

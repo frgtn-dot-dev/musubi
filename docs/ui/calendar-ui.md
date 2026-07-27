@@ -231,8 +231,19 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
-**Zbývá v Month:** tažení přes více buněk pro vytvoření vícedenního/all-day
-eventu. Odloženo — potřebuje all-day model, ne jen day offset.
+**B4 — Month drag-to-create: HOTOVO** (2026-07-27)
+
+- `useDayRangeCreate`: pointerdown na prázdné místo buňky → sleduje
+  `[data-day-key]` pod kurzorem → normalizovaný rozsah (tažení dozadu je stejně
+  platné). Buňka nemá časovou osu, takže výsledek je **all-day rozsah**, ne
+  interval — quick create se otevře s `isAllDay: true`, `date` = začátek,
+  `endDate` = konec.
+- Rozsah je zvýrazněný během tažení i po dobu, co je popover otevřený
+  (`data-range-selected`, stejný zdroj `pendingCreate` jako v B3).
+- Prostý klik si drží svou cestu (jednodenní timed event); trailing click po
+  tažení se spolkne přes `consumeClick`.
+- `defaultEventFormValues` 4. parametr je teď objekt `{ endDate, endTime,
+  isAllDay }` — gesto předá to, co odvodilo, zbytek má default.
 
 Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 
