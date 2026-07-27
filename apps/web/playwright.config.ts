@@ -16,8 +16,11 @@ export default defineConfig({
   webServer: {
     command: "pnpm dev --host 127.0.0.1",
     reuseExistingServer: true,
-    timeout: 30_000,
-    url: "http://127.0.0.1:3000/healthz",
+    timeout: 60_000,
+    // A real page, not /healthz: that route answers before Vite has finished
+    // optimizing client deps, so tests would start against a server that still
+    // 504s the client entry ("Outdated Optimize Dep").
+    url: "http://127.0.0.1:3000/login",
   },
   projects: [
     {

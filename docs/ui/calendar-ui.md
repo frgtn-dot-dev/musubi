@@ -220,6 +220,20 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   jako myš, a výsledek se **oznámí** do notice live regionu — bez toho by
   screen-reader uživatel neměl potvrzení.
 
+**B3 — Month + persistence selection: HOTOVO** (2026-07-27, po zpětné vazbě)
+
+- **Month drag-to-move** (`useMonthDrag`): tažení chipu na jinou buňku změní
+  **jen datum**, čas a délka zůstanou; cílová buňka se zvýrazní (`data-drop-target`
+  jako v time gridu), Escape ruší, chyba vrátí. Stejné gating (role + žádné
+  opakované). Resize v Month nemá smysl (buňka není časová osa).
+- **Selection zůstává vidět, dokud je quick create otevřený.** Odvozuje se
+  z `pendingCreate` (otevřený intent), ne z drag stavu — takže platí i pro
+  **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
+  bylo proti §8.2.
+
+**Zbývá v Month:** tažení přes více buněk pro vytvoření vícedenního/all-day
+eventu. Odloženo — potřebuje all-day model, ne jen day offset.
+
 Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 
 ### Fáze C — Vratnost

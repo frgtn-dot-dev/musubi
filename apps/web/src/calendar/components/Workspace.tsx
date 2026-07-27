@@ -698,6 +698,15 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               geometry={geometry}
+              pendingCreate={
+                createIntent
+                  ? {
+                      date: createIntent.date,
+                      endTime: createIntent.endTime,
+                      startTime: createIntent.startTime,
+                    }
+                  : undefined
+              }
               onMoveEvent={async ({ end, event, start }) => {
                 // The grid already shows the new position; this confirms it.
                 // A rejection propagates so the drag reports it and the block
@@ -740,6 +749,23 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               showAdjacentDays={showAdjacentDays}
+              onMoveEventToDate={async ({ dayKey, event }) => {
+                // Only the date changes; the time of day and length are kept.
+                const target = parseDateKey(dayKey);
+                const shift =
+                  target.getTime() -
+                  new Date(
+                    event.start.getFullYear(),
+                    event.start.getMonth(),
+                    event.start.getDate(),
+                  ).getTime();
+                await onUpdateEvent({
+                  ...event,
+                  end: new Date(event.end.getTime() + shift),
+                  start: new Date(event.start.getTime() + shift),
+                });
+                setNotice("Event moved.");
+              }}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}

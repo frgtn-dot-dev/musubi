@@ -959,8 +959,19 @@
 }
 
 /* Which day a cross-column move would land on. */
-.timeGridColumn[data-drop-target] {
+.timeGridColumn[data-drop-target],
+.dayCell[data-drop-target] {
   background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
+}
+
+.eventChip[data-draggable] {
+  cursor: grab;
+}
+
+.eventChip[data-dragging] {
+  box-shadow: var(--shadow-overlay);
+  cursor: grabbing;
+  opacity: 0.72;
 }
 
 /* The interval a drag has chosen, before quick create opens. */

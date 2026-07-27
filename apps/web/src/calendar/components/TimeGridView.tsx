@@ -78,6 +78,16 @@ type TimeGridViewProps = EventActionHandlers & {
     event: Event;
     start: Date;
   }) => Promise<unknown>;
+  /**
+   * The slot a quick-create popover is currently open for. The selection stays
+   * visible for as long as the popover is, so the interval being described never
+   * disappears out from under it.
+   */
+  pendingCreate?: {
+    date: string;
+    endTime?: string;
+    startTime?: string;
+  };
   /** Page presentation: a five-column working week when false. */
   showWeekend?: boolean;
   onCreateAtTime?: (
@@ -113,6 +123,12 @@ function hourLabel(hour: number, timeFormat: Settings["timeFormat"]) {
   }
 
   return hour12Formatter.format(new Date(2026, 0, 1, hour));
+}
+
+/** `HH:MM` back to a minute of the day. */
+function clockMinutes(value: string): number {
+  const [hour, minute] = value.split(":");
+  return Number(hour ?? 0) * 60 + Number(minute ?? 0);
 }
 
 /** A minute of the day as an `HH:MM` form value. */
@@ -302,6 +318,7 @@ export function TimeGridView({
   geometry,
   onCreateAtTime,
   onMoveEvent,
+  pendingCreate,
   showWeekend = true,
   timeFormat,
   view,
@@ -407,7 +424,7 @@ export function TimeGridView({
   const {
     begin: beginCreateDrag,
     consumeClick,
-    selection,
+    selection: liveSelection,
   } = useDragToCreate({
     geometry,
     onSelected: (dragged, column) => {
@@ -427,6 +444,29 @@ export function TimeGridView({
     },
   });
   const dayMode = view === "day";
+
+  // While dragging, the live gesture wins. Once released, the open popover's slot
+  // keeps the same interval highlighted — including for a plain click, which also
+  // deserves to show what "when" it picked.
+  const selection = useMemo(() => {
+    if (liveSelection) return liveSelection;
+    if (!pendingCreate?.startTime) return undefined;
+
+    const dayIndex = days.findIndex(
+      (day) => dayKey(day) === pendingCreate.date,
+    );
+    if (dayIndex < 0) return undefined;
+
+    const startMinutes = clockMinutes(pendingCreate.startTime);
+    const endMinutes = pendingCreate.endTime
+      ? clockMinutes(pendingCreate.endTime)
+      : startMinutes + 60;
+    return {
+      dayIndex,
+      endMinutes: Math.max(startMinutes + geometry.snapMinutes, endMinutes),
+      startMinutes,
+    };
+  }, [days, geometry.snapMinutes, liveSelection, pendingCreate]);
   const layoutStyle = {
     "--day-count": days.length,
     "--all-day-height": `${allDayLaneCount * 24 + 8}px`,

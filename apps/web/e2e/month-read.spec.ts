@@ -1003,6 +1003,78 @@ test("drags an empty interval to pre-fill quick create", async ({ page }) => {
   await expect(end).toHaveValue("03:30");
 });
 
+test("keeps the chosen interval visible while quick create is open", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-30`);
+  const column = page.locator("[data-time-grid-column]").first();
+  // Wait for the grid before scrolling it, or the scroll lands on nothing and
+  // the click falls outside the columns.
+  await expect(column).toBeVisible();
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '[class*="calendarArea"]',
+    );
+    if (scroller) scroller.scrollTop = 0;
+  });
+
+  const bounds = (await column.boundingBox())!;
+  // A plain click, not a drag: the slot it picked should still be shown.
+  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + 192);
+
+  await expect(page.getByLabel("Start time")).toHaveValue("03:00");
+  await expect(page.getByText("03:00–04:00")).toBeVisible();
+
+  // Dismissing the popover clears it again.
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("03:00–04:00")).toHaveCount(0);
+});
+
+test("moves an event to another day in the month grid", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ end: string; start: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as {
+        end: string;
+        start: string;
+      };
+      writes.push({ end: body.end, start: body.start });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const chip = page
+    .getByRole("button", { name: /Project check-in/ })
+    .first();
+  await expect(chip).toBeVisible();
+  const from = (await chip.boundingBox())!;
+  const target = page.locator('[data-day-key="2026-07-27"]');
+  const to = (await target.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await expect(target).toHaveAttribute("data-drop-target", "");
+  await page.mouse.up();
+
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "Event moved.",
+  );
+  expect(writes).toHaveLength(1);
+  // The date moved by a day and the time of day is preserved.
+  const moved = writes[0]!;
+  expect(new Date(moved.start).toISOString()).toContain("2026-07-27");
+  expect(new Date(moved.start).getUTCHours()).toBe(7);
+  expect(
+    new Date(moved.end).getTime() - new Date(moved.start).getTime(),
+  ).toBe(60 * 60_000);
+});
+
 test("moves an event with the keyboard", async ({ page }) => {
   await mockAuthenticatedReads(page);
   const writes: Array<{ end: string; start: string }> = [];

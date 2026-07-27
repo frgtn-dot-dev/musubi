@@ -285,6 +285,137 @@ export function useTimeGridDrag({
   return { begin, drag };
 }
 
+/**
+ * Dragging an event between days in the month grid.
+ *
+ * Simpler than the time grid: only the date changes, the time of day is kept, so
+ * there is no snapping or resizing — the drop target is whichever day cell the
+ * pointer is over. The same movement threshold applies, so clicking a chip still
+ * opens its preview.
+ */
+export function useMonthDrag({
+  onCommit,
+  onError,
+}: {
+  onCommit: (input: { dayKey: string; event: Event }) => Promise<unknown>;
+  onError: (message: string) => void;
+}) {
+  const [state, setState] = useState<{ dayKey: string; event: Event }>();
+  const pressRef = useRef<
+    | {
+        event: Event;
+        originDayKey: string;
+        pointerId: number;
+        startX: number;
+        startY: number;
+      }
+    | undefined
+  >(undefined);
+  const stateRef = useRef<{ dayKey: string; event: Event } | undefined>(
+    undefined,
+  );
+  const detachRef = useRef<(() => void) | undefined>(undefined);
+  const optionsRef = useRef({ onCommit, onError });
+  useEffect(() => {
+    optionsRef.current = { onCommit, onError };
+  });
+
+  const finish = useCallback(() => {
+    pressRef.current = undefined;
+    stateRef.current = undefined;
+    detachRef.current?.();
+    detachRef.current = undefined;
+    setState(undefined);
+  }, []);
+
+  const begin = useCallback(
+    (input: {
+      event: Event;
+      originDayKey: string;
+      pointerId: number;
+      x: number;
+      y: number;
+    }) => {
+      pressRef.current = {
+        event: input.event,
+        originDayKey: input.originDayKey,
+        pointerId: input.pointerId,
+        startX: input.x,
+        startY: input.y,
+      };
+
+      function handleMove(nativeEvent: PointerEvent) {
+        const press = pressRef.current;
+        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+        if (
+          !stateRef.current &&
+          !exceedsDragThreshold(
+            { x: press.startX, y: press.startY },
+            { x: nativeEvent.clientX, y: nativeEvent.clientY },
+          )
+        ) {
+          return;
+        }
+
+        nativeEvent.preventDefault();
+        // The cell under the pointer is the drop target.
+        const cell = document
+          .elementFromPoint(nativeEvent.clientX, nativeEvent.clientY)
+          ?.closest<HTMLElement>("[data-day-key]");
+        const dayKey = cell?.dataset.dayKey ?? stateRef.current?.dayKey;
+        if (!dayKey) return;
+
+        const next = { dayKey, event: press.event };
+        stateRef.current = next;
+        setState(next);
+      }
+
+      function handleUp(nativeEvent: PointerEvent) {
+        const press = pressRef.current;
+        const active = stateRef.current;
+        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+
+        const commit = optionsRef.current.onCommit;
+        const reportError = optionsRef.current.onError;
+        const unchanged = !active || active.dayKey === press.originDayKey;
+        finish();
+        if (unchanged || !active) return;
+
+        void commit(active).catch((error: unknown) => {
+          reportError(
+            error instanceof Error
+              ? error.message
+              : "That change could not be saved. The original date was restored.",
+          );
+        });
+      }
+
+      function handleKey(nativeEvent: KeyboardEvent) {
+        if (nativeEvent.key !== "Escape") return;
+        nativeEvent.stopPropagation();
+        finish();
+      }
+
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("pointercancel", finish);
+      window.addEventListener("keydown", handleKey, true);
+
+      detachRef.current = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("pointercancel", finish);
+        window.removeEventListener("keydown", handleKey, true);
+      };
+    },
+    [finish],
+  );
+
+  useEffect(() => finish, [finish]);
+
+  return { begin, drag: state };
+}
+
 export type CreateSelection = {
   dayIndex: number;
   endMinutes: number;

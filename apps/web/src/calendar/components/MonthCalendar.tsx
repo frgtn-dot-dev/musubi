@@ -14,6 +14,8 @@ import {
   getWeekdayLabels,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
+import { canEditEvent } from "../event-permissions";
+import { useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
@@ -24,6 +26,14 @@ type MonthCalendarProps = EventActionHandlers & {
   events: Event[];
   onCreateAtDate?: (date: string, target: HTMLElement) => void;
   onMonthChange: (offset: number) => void;
+  /**
+   * Move an event to another day, keeping its time. Absent leaves the month
+   * read-only for direct manipulation.
+   */
+  onMoveEventToDate?: (input: {
+    dayKey: string;
+    event: Event;
+  }) => Promise<unknown>;
   /**
    * Page presentation. When false, cells belonging to the neighbouring months
    * render empty — the cell itself stays so the month never changes height.
@@ -39,11 +49,18 @@ export function MonthCalendar({
   events,
   onCreateAtDate,
   onMonthChange,
+  onMoveEventToDate,
   showAdjacentDays = true,
   timeFormat,
   weekStartsOn,
   ...eventActions
 }: MonthCalendarProps) {
+  const { begin: beginMonthDrag, drag } = useMonthDrag({
+    onCommit: async ({ dayKey: targetKey, event }) => {
+      await onMoveEventToDate?.({ dayKey: targetKey, event });
+    },
+    onError: eventActions.onNotice,
+  });
   const days = useMemo(
     () => getMonthGrid(anchor, weekStartsOn),
     [anchor, weekStartsOn],
@@ -184,6 +201,9 @@ export function MonthCalendar({
                   ref={(node) => {
                     cellRefs.current[index] = node;
                   }}
+                  data-drop-target={
+                    drag && drag.dayKey === dateKey ? "" : undefined
+                  }
                   role="gridcell"
                   aria-label={
                     muted
@@ -218,8 +238,31 @@ export function MonthCalendar({
                         calendars={calendars}
                         continuesAfter={segment.continuesAfter}
                         continuesBefore={segment.continuesBefore}
+                        dragging={drag?.event.id === segment.event.id}
                         event={segment.event}
                         key={segment.event.id}
+                        onBeginDrag={
+                          // Same gating as the time grid: a recurring event
+                          // would move its whole series, which needs the scope
+                          // dialog first.
+                          onMoveEventToDate &&
+                          !segment.event.recurrence &&
+                          canEditEvent(
+                            eventActions.getEventMaster(segment.event),
+                            calendars,
+                          )
+                            ? (pointerEvent) => {
+                                if (pointerEvent.button !== 0) return;
+                                beginMonthDrag({
+                                  event: segment.event,
+                                  originDayKey: dateKey,
+                                  pointerId: pointerEvent.pointerId,
+                                  x: pointerEvent.clientX,
+                                  y: pointerEvent.clientY,
+                                });
+                              }
+                            : undefined
+                        }
                         showLabel={!segment.continuesBefore || dayIndex === 0}
                         timeFormat={timeFormat}
                         {...eventActions}

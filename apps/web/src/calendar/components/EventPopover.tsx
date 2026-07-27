@@ -15,7 +15,11 @@ type EventPopoverProps = EventActionHandlers & {
   calendars: Calendar[];
   continuesAfter?: boolean;
   continuesBefore?: boolean;
+  /** Set while this chip is being dragged to another day. */
+  dragging?: boolean;
   event: Event;
+  /** Absent when the event may not be moved by dragging. */
+  onBeginDrag?: (pointerEvent: React.PointerEvent<HTMLElement>) => void;
   showLabel?: boolean;
   timeFormat: Settings["timeFormat"];
 };
@@ -25,7 +29,9 @@ export function EventPopover({
   calendars,
   continuesAfter = false,
   continuesBefore = false,
+  dragging = false,
   event,
+  onBeginDrag,
   showLabel = true,
   timeFormat,
   ...eventActions
@@ -56,7 +62,10 @@ export function EventPopover({
         aria-label={`${event.title}, ${getEventDateLabel(
           event,
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
+        data-dragging={dragging ? "" : undefined}
+        data-draggable={onBeginDrag ? "" : undefined}
         data-event-id={event.id}
+        onPointerDown={onBeginDrag}
         style={
           {
             "--event-color": eventColor,
