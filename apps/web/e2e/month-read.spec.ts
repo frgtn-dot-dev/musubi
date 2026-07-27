@@ -270,6 +270,10 @@ async function mockAuthenticatedReads(
     return respond(route, calendarState);
   });
   await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
+  // No federated servers by default; the federation test overrides this.
+  await page.route("**/api/v1/federation/connections", (route) =>
+    respond(route, []),
+  );
   // Hold the SSE connection open like the real server so EventSource stays
   // connected instead of reconnect-looping against a closed mock.
   await page.route("**/api/stream", () => {
@@ -1263,6 +1267,98 @@ test("connects and disconnects calendar providers", async ({ page }) => {
     serverUrl: "https://caldav.icloud.com",
     username: "me@icloud.com",
   });
+});
+
+test("shows federated calendars and reports an unreachable server", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let disconnectedServer: unknown;
+  await page.route("**/api/v1/federation/connections", (route) =>
+    respond(route, [
+      { id: "conn-1", label: "friends.example", remoteUserID: "fed_1", server: "https://friends.example" },
+      { id: "conn-2", label: "dead.example", remoteUserID: "fed_2", server: "https://dead.example" },
+    ]),
+  );
+  // Reachable server: one shared calendar with one event.
+  await page.route(
+    "**/api/v1/federation/s/conn-1/api/v1/calendars",
+    (route) =>
+      respond(route, [
+        {
+          color: "#8a6fae",
+          creatorID: "remote-owner",
+          id: "remote-cal-1",
+          members: [],
+          name: "Book club",
+          role: "editor",
+        },
+      ]),
+  );
+  await page.route("**/api/v1/federation/s/conn-1/api/v1/events", (route) =>
+    respond(route, {
+      deletedIds: [],
+      events: [
+        event(
+          "remote-book-club",
+          "Book club meetup",
+          "remote-cal-1",
+          "#8a6fae",
+          "2026-07-23T17:00:00.000Z",
+          "2026-07-23T18:30:00.000Z",
+        ),
+      ],
+      serverTime: "2026-07-26T14:00:00.000Z",
+    }),
+  );
+  // Unreachable server: the gateway reports 502.
+  await page.route("**/api/v1/federation/s/conn-2/**", (route) =>
+    route.fulfill({
+      body: JSON.stringify({
+        error: "FederatedServerUnreachable",
+        message: "The connected Musubi server could not be reached.",
+      }),
+      contentType: "application/json",
+      status: 502,
+    }),
+  );
+  await page.route("**/api/v1/users/connections/musubi", (route) => {
+    disconnectedServer = route.request().postDataJSON();
+    return route.fulfill({ body: "", status: 200 });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // The remote calendar and its event render like any other.
+  await expect(
+    page.getByRole("checkbox", { name: "Book club" }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("button", { name: /Book club meetup/ }),
+  ).toBeVisible();
+  // A dead server must not take the home calendar down with it.
+  await expect(
+    page.getByRole("button", { name: /Weekly review/ }).first(),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Connections" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Musubi servers" }),
+  ).toBeVisible();
+  const deadRow = page
+    .getByRole("listitem")
+    .filter({ hasText: "dead.example" });
+  await expect(deadRow).toContainText("Unreachable");
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "friends.example" }),
+  ).toContainText("Connected");
+
+  // Disconnecting a federated server uses its own endpoint, not provider disconnect.
+  await page.getByRole("button", { name: "Disconnect dead.example" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    "dead.example disconnected.",
+  );
+  expect(disconnectedServer).toEqual({ server: "https://dead.example" });
 });
 
 test("updates the display name and gates account deletion", async ({

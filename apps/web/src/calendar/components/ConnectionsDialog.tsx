@@ -11,6 +11,7 @@ import {
   MICROSOFT_CALENDAR_SCOPES,
   useConnections,
 } from "~/calendar/connections";
+import { useFederatedWorkspace } from "~/calendar/federated-workspace";
 import styles from "./workspace.module.css";
 
 type ConnectionsDialogProps = {
@@ -33,6 +34,9 @@ const APPLE_CALDAV_URL = "https://caldav.icloud.com";
 function connectedAccounts(calendars: Calendar[]): ConnectedAccount[] {
   const map = new Map<string, ConnectedAccount>();
   for (const calendar of calendars) {
+    // Federated servers are listed from their own status source below, so they
+    // show up even when the server is unreachable and returns no calendars.
+    if (calendar.provider === "musubi") continue;
     if (!calendar.provider || !calendar.accountId) continue;
     const key = `${calendar.provider}:${calendar.accountId}`;
     const reconnect = calendar.syncStatus === "reconnect_required";
@@ -60,6 +64,7 @@ export function ConnectionsDialog({
   userId,
 }: ConnectionsDialogProps) {
   const connections = useConnections(userId);
+  const federated = useFederatedWorkspace(userId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [caldav, setCaldav] = useState<{
@@ -71,6 +76,7 @@ export function ConnectionsDialog({
 
   const providers = connections.capabilities.data?.syncProviders ?? [];
   const accounts = connectedAccounts(calendars);
+  const federatedServers = federated.data?.servers ?? [];
 
   async function run(action: () => Promise<unknown>, failure: string) {
     setBusy(true);
@@ -216,6 +222,52 @@ export function ConnectionsDialog({
               </ul>
             )}
           </section>
+
+          {federatedServers.length > 0 ? (
+            <section className={styles.transferSection}>
+              <div className={styles.transferHeading}>
+                <div>
+                  <h3>Musubi servers</h3>
+                  <p>
+                    Calendars shared with you from another Musubi server. Your
+                    server talks to them for you.
+                  </p>
+                </div>
+              </div>
+              <ul className={styles.calendarManageList}>
+                {federatedServers.map((server) => (
+                  <li
+                    className={styles.calendarManageRow}
+                    key={server.connectionId}
+                  >
+                    <span className={styles.calendarManageName}>
+                      {server.label}
+                    </span>
+                    <span className={styles.calendarBadge}>
+                      {server.reachable ? "Connected" : "Unreachable"}
+                    </span>
+                    <button
+                      aria-label={`Disconnect ${server.label}`}
+                      className={styles.iconButton}
+                      disabled={busy}
+                      type="button"
+                      onClick={() =>
+                        void run(async () => {
+                          await connections.disconnectFederatedServer(
+                            server.server,
+                          );
+                          onNotice(`${server.label} disconnected.`);
+                          setBusy(false);
+                        }, "Could not disconnect the server.")
+                      }
+                    >
+                      <Unlink aria-hidden="true" size={15} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className={styles.transferSection}>
             <div className={styles.transferHeading}>

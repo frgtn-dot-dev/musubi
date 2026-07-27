@@ -32,7 +32,7 @@ import {
 import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogle } from "./handlers/google";
 import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav } from "./handlers/caldav";
 import { handlerDisconnectAccount, handlerDisconnectExternalCalendar } from "./handlers/connections";
-import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerFederationRotateToken, handlerGetMusubiAccounts, handlerInvitePage, handlerSaveMusubiAccount } from "./handlers/federation";
+import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerFederationRotateToken, handlerGetFederationConnections, handlerGetMusubiAccounts, handlerInvitePage, handlerSaveMusubiAccount } from "./handlers/federation";
 import { handlerFederationProxy } from "./handlers/federation_proxy";
 import { syncUser } from "./sync/engine";
 import { getExternalSyncUserIDs } from "@musubi/db";
@@ -95,6 +95,7 @@ app.get("/api/stream", requireAuth, wrap(handlerStream));
 // Public + creates accounts/tokens — cap per-IP so tokens can't be farmed or guessed.
 app.post("/api/v1/federation/accept", rateLimit(10, 15 * 60_000), wrap(handlerFederationAccept));
 app.post("/api/v1/federation/token/rotate", requireAuth, wrap(handlerFederationRotateToken));
+app.get("/api/v1/federation/connections", requireAuth, wrap(handlerGetFederationConnections));
 // Federation gateway (ADR-005): clients reach a connected server through their
 // own origin, so the member token never leaves the API. Rate-limited because it
 // makes this server perform outbound requests.

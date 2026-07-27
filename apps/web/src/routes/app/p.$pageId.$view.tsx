@@ -152,11 +152,11 @@ function WorkspaceRoute() {
     <Workspace
       key={pageId}
       activeView={activeView}
-      baseEvents={workspace.events.data.baseEvents}
-      calendars={workspace.calendars.data}
+      baseEvents={workspace.mergedEvents?.baseEvents}
+      calendars={workspace.mergedCalendars}
       pages={workspace.pages.data}
       date={date}
-      events={workspace.events.data.events}
+      events={workspace.mergedEvents?.events ?? []}
       isRefreshing={queries.some((query) => query.isFetching)}
       onCreateEvent={eventMutations.createEvent}
       onAdoptSettings={settingsMutations.adoptSettings}

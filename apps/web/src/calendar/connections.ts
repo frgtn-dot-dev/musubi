@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   connectCaldav,
   disconnectAccount,
+  disconnectFederatedServer,
   getServerCapabilities,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -32,6 +33,9 @@ export function useConnections(userId: string) {
     void queryClient.invalidateQueries({
       queryKey: ["events", origin, userId],
     });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.federated(origin, userId),
+    });
   };
 
   const connect = useMutation({
@@ -49,9 +53,15 @@ export function useConnections(userId: string) {
     onSuccess: refreshCalendars,
   });
 
+  const disconnectFederated = useMutation({
+    mutationFn: (server: string) => disconnectFederatedServer(server),
+    onSuccess: refreshCalendars,
+  });
+
   return {
     capabilities,
     connectCaldav: connect.mutateAsync,
     disconnectAccount: disconnect.mutateAsync,
+    disconnectFederatedServer: disconnectFederated.mutateAsync,
   };
 }

@@ -1,9 +1,12 @@
 import { expandRecurringEvents } from "@musubi/calendar";
+import type { Event } from "@musubi/types";
 import {
   getMonthGridRange,
   startOfDay,
 } from "@musubi/calendar/layout";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useFederatedWorkspace } from "./federated-workspace";
 import { getAgendaRecurrenceEnd } from "./agenda-math";
 import { parseDateKey } from "./calendar-math";
 import { getTimeGridQueryRange } from "./time-grid-math";
@@ -38,6 +41,29 @@ export function getWorkspaceRange(date: string, view: CalendarViewId) {
   return getVisibleMonthRange(date);
 }
 
+// Expand recurrence for one range/view. Shared so home and federated events go
+// through identical logic — a federated event must render like any other.
+export function expandForView(
+  activeEvents: Event[],
+  range: { end: Date; start: Date },
+  view: CalendarViewId,
+) {
+  const recurringEvents = expandRecurringEvents(
+    view === "agenda"
+      ? activeEvents.filter((event) => event.recurrence)
+      : activeEvents,
+    range.start,
+    new Date(range.end.getTime() - 1),
+  );
+
+  return view === "agenda"
+    ? [
+        ...activeEvents.filter((event) => !event.recurrence),
+        ...recurringEvents,
+      ]
+    : recurringEvents;
+}
+
 export function useWorkspaceQueries(
   date: string,
   userId: string,
@@ -45,7 +71,8 @@ export function useWorkspaceQueries(
 ) {
   const enabled = typeof window !== "undefined";
   const origin = getServerOrigin();
-  const range = getWorkspaceRange(date, view);
+  // Memoized so downstream memos (and the event query key) see a stable object.
+  const range = useMemo(() => getWorkspaceRange(date, view), [date, view]);
   const calendars = useQuery({
     enabled,
     queryFn: ({ signal }) => getCalendars(signal),
@@ -78,31 +105,41 @@ export function useWorkspaceQueries(
       const activeEvents = response.events.filter(
         (event) => !event.isCanceled,
       );
-      const recurringEvents = expandRecurringEvents(
-        view === "agenda"
-          ? activeEvents.filter((event) => event.recurrence)
-          : activeEvents,
-        range.start,
-        new Date(range.end.getTime() - 1),
-      );
 
       return {
         ...response,
         baseEvents: activeEvents,
-        events:
-          view === "agenda"
-            ? [
-                ...activeEvents.filter((event) => !event.recurrence),
-                ...recurringEvents,
-              ]
-            : recurringEvents,
+        events: expandForView(activeEvents, range, view),
       };
     },
   });
+  // Calendars on other Musubi servers. Kept as its own query so an unreachable
+  // server degrades to a status row instead of failing the whole workspace.
+  const federated = useFederatedWorkspace(userId);
+
+  const mergedCalendars = useMemo(
+    () => [...(calendars.data ?? []), ...(federated.data?.calendars ?? [])],
+    [calendars.data, federated.data],
+  );
+  const mergedEvents = useMemo(() => {
+    const home = events.data;
+    const remote = federated.data?.events ?? [];
+    if (!home) return undefined;
+    if (remote.length === 0) return home;
+
+    return {
+      ...home,
+      baseEvents: [...home.baseEvents, ...remote],
+      events: [...home.events, ...expandForView(remote, range, view)],
+    };
+  }, [events.data, federated.data, range, view]);
 
   return {
     calendars,
     events,
+    federated,
+    mergedCalendars,
+    mergedEvents,
     pages,
     range,
     settings,

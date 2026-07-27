@@ -50,6 +50,18 @@ export const InvitesResponseSchema = z.array(InviteSchema);
 
 export type CalendarMember = z.infer<typeof CalendarMemberSchema>;
 
+export const FederationConnectionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  remoteUserID: z.string(),
+  server: z.string(),
+});
+export const FederationConnectionsResponseSchema = z.array(
+  FederationConnectionSchema,
+);
+
+export type FederationConnection = z.infer<typeof FederationConnectionSchema>;
+
 export const ServerCapabilitiesSchema = z
   .object({
     email: z.boolean().default(false),

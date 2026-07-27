@@ -127,6 +127,25 @@ export async function handlerGetMusubiAccounts(req: Request, res: Response) {
   });
 }
 
+/**
+ * GET /api/v1/federation/connections — the caller's federated connections
+ * WITHOUT the credential. This is what browser clients use: they reach the
+ * connected servers through the gateway, so they never need the raw token
+ * (ADR-005). `id` is the gateway's `:connectionId`.
+ */
+export async function handlerGetFederationConnections(req: Request, res: Response) {
+  const rows = await getMusubiAccounts(req.user!.id);
+  res.status(200).json(
+    rows.map((row) => ({
+      id: row.id,
+      // Host only — a full origin is noisy as a UI label.
+      label: row.server.replace(/^https?:\/\//, "").replace(/[/:].*$/, ""),
+      remoteUserID: row.remoteUserID,
+      server: row.server,
+    })),
+  );
+}
+
 /** POST /api/v1/users/connections/musubi — store/refresh one connection. */
 export async function handlerSaveMusubiAccount(req: Request, res: Response) {
   const { server, userID, token } = req.body ?? {};

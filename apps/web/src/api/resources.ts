@@ -3,6 +3,7 @@ import {
   CalendarMembersResponseSchema,
   CalendarsResponseSchema,
   EventsResponseSchema,
+  FederationConnectionsResponseSchema,
   ImportedCalendarSchema,
   InvitesResponseSchema,
   PageResponseSchema,
@@ -205,6 +206,35 @@ export function uploadAvatar(base64: string) {
   });
 }
 
+export function getFederationConnections(signal?: AbortSignal) {
+  return apiRequest("/api/v1/federation/connections", {
+    responseSchema: FederationConnectionsResponseSchema,
+    signal,
+  });
+}
+
+// Reads on a connected Musubi server go through the home gateway (ADR-005): the
+// member token stays server-side, and the browser stays same-origin.
+export function getFederatedCalendars(
+  connectionId: string,
+  signal?: AbortSignal,
+) {
+  return apiRequest(
+    `/api/v1/federation/s/${connectionId}/api/v1/calendars`,
+    { responseSchema: CalendarsResponseSchema, signal },
+  );
+}
+
+export function getFederatedEvents(
+  connectionId: string,
+  signal?: AbortSignal,
+) {
+  return apiRequest(
+    `/api/v1/federation/s/${connectionId}/api/v1/events`,
+    { responseSchema: EventsResponseSchema, signal },
+  );
+}
+
 export function getServerCapabilities(signal?: AbortSignal) {
   return apiRequest("/api/v1/server", {
     responseSchema: ServerCapabilitiesSchema,
@@ -220,6 +250,16 @@ export function connectCaldav(input: {
   return apiRequest("/api/v1/users/connections/caldav", {
     body: input,
     method: "POST",
+    responseSchema: z.unknown(),
+  });
+}
+
+// Federated servers are not provider accounts — they have their own connection
+// record, so disconnecting one takes the origin rather than a provider+account.
+export function disconnectFederatedServer(server: string) {
+  return apiRequest("/api/v1/users/connections/musubi", {
+    body: { server },
+    method: "DELETE",
     responseSchema: z.unknown(),
   });
 }

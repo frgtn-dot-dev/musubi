@@ -40,7 +40,12 @@ behind typing the display name. A Connections dialog lists
 synced accounts (grouped from the calendars list), disconnects or reconnects
 them, and adds new ones — Google/Outlook via Better Auth `linkSocial` with
 calendar scopes, Apple/CalDAV via a credentials form — gated by the server's
-advertised `syncProviders`;
+advertised `syncProviders`. Calendars shared from another Musubi server are read
+through the home federation gateway (ADR-005), so the browser never holds a
+cross-server member token: the sidebar and views merge them like any other
+calendar, the Connections dialog lists each server with a reachable/unreachable
+badge and can disconnect it, and one unreachable server degrades to a status row
+instead of taking the workspace down;
 fixture data remains test-only. Pages have an explicit editor: entering edit
 mode drafts the page name and calendar visibility locally, a sticky save bar
 persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a
