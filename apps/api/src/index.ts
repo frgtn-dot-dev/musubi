@@ -32,7 +32,7 @@ import {
 import { handlerCheckGoogleStatus, handlerGetGoogleCalendars, handlerRevokeGoogle } from "./handlers/google";
 import { handlerCheckCaldavStatus, handlerConnectCaldav, handlerDisconnectCaldav } from "./handlers/caldav";
 import { handlerDisconnectAccount, handlerDisconnectExternalCalendar } from "./handlers/connections";
-import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerFederationRotateToken, handlerGetFederationConnections, handlerGetMusubiAccounts, handlerInvitePage, handlerSaveMusubiAccount } from "./handlers/federation";
+import { handlerDeleteMusubiAccount, handlerFederationAccept, handlerFederationRotateToken, handlerGetFederationConnections, handlerInvitePage } from "./handlers/federation";
 import { handlerFederationProxy } from "./handlers/federation_proxy";
 import { handlerFederationConnect, handlerFederationPreview } from "./handlers/federation";
 import { syncUser } from "./sync/engine";
@@ -115,8 +115,12 @@ app.get("/delete-account", handlerDeleteAccountPage);
 app.get("/.well-known/apple-app-site-association", handlerAppleAppSiteAssociation);
 // The user's connections to other Musubi servers (member tokens, encrypted at
 // rest) — stored home-side so a connection accepted on one device roams to all.
-app.get("/api/v1/users/connections/musubi", requireAuth, wrap(handlerGetMusubiAccounts));
-app.post("/api/v1/users/connections/musubi", requireAuth, wrap(handlerSaveMusubiAccount));
+// Reading connections with their decrypted member token, and storing a
+// client-supplied one, are gone (ADR-005 phase 4): `/federation/connections`
+// lists them without a credential and `/federation/connect` is the only way one
+// is created. A client that still calls the removed routes gets a 404 and falls
+// back to its local registry, which is gentler than handing it token-less rows
+// it would cache as valid.
 app.delete("/api/v1/users/connections/musubi", requireAuth, wrap(handlerDeleteMusubiAccount));
 
 // Events

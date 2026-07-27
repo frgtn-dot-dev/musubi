@@ -283,9 +283,7 @@ Provider behavior and limitations:
 |---|---:|---|
 | `POST /api/v1/federation/accept` | Invite token; optional current member bearer proves an existing shadow | `{ token, profile: { name, email, homeServer, image? } }` → `{ memberToken, memberTokenExpiresAt, userID, calendar }` |
 | `POST /api/v1/federation/token/rotate` | Member token | Compare-and-swap exchange → `{ memberToken, memberTokenExpiresAt }` |
-| `GET /api/v1/users/connections/musubi` | Session | Decrypted remote connections for the owner — **deprecated**, see the gateway below |
-| `POST /api/v1/users/connections/musubi` | Session | `{ server, userID, token }`; the origin is SSRF-checked before it is stored |
-| `DELETE /api/v1/users/connections/musubi` | Session | `{ server }` |
+| `DELETE /api/v1/users/connections/musubi` | Session | `{ server }` — drop a federated connection |
 | `GET /api/v1/federation/connections` | Session | The caller's federated connections **without** the credential: `[{ id, label, remoteUserID, server }]` |
 | `GET /api/v1/federation/preview?server=&token=` | Session | Fetches another server's public invite preview on the caller's behalf; rate-limited |
 | `POST /api/v1/federation/connect` | Session | `{ server, token }` — runs the accept handshake server-side and stores the connection; returns `{ server, calendar }` and **never a token** |
@@ -301,8 +299,12 @@ refused unless `FEDERATION_ALLOW_PRIVATE_HOSTS=true` (LAN self-hosting). The
 preview and connect routes take the origin from the request rather than the
 database, so the SSRF guard is the only boundary there — hence the tighter rate
 limits.
-Returning the decrypted token from `GET …/connections/musubi` stays only until
-the mobile client has migrated onto the gateway.
+
+The member token has no route out of the server: reading connections with their
+decrypted token, and storing a client-supplied one, were both removed once the
+clients moved onto the gateway. `POST /api/v1/federation/connect` is the only way
+a connection is created, so a credential can only ever be one this server
+obtained itself.
 
 The returned member token is shown once; the origin stores only its SHA-256
 hash. It expires after 90 days and the client rotates it in the final 14 days.

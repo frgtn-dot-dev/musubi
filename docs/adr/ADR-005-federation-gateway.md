@@ -42,9 +42,11 @@ ANY /api/v1/federation/s/:connectionId/api/v1/*   (vyžaduje home session)
 1. **Gateway + SSRF hardening** (aditivní, nic nerozbíjí) → odblokuje web.
 2. **SSE fan-in**: A drží jedno upstream SSE spojení na federovanou connection per uživatel a přeposílá eventy do svého existujícího hubu (`notifyCalendarMembers`). Klienti mají jeden stream.
 3. **Agregace čtení**: A slučuje federované kalendáře/eventy do vlastních `/calendars` a `/events` odpovědí, tagne je `provider:"musubi"`, `accountId=connectionId`, `accountLabel=host`, `syncStatus`, a přidá per-server stav. Mutace zůstávají passthrough.
-4. **Mobil se odstřihne od custody** (zmizí SecureStore registry i client-side rotace); až potom `GET /users/connections/musubi` přestane vracet plaintext token.
+4. **Mobil se odstřihne od custody** (zmizí SecureStore token registry i client-side rotace); až potom se plaintext token přestane vydávat.
 
-Plaintext token se **nesmí** přestat vracet dřív než ve fázi 4 — vydaný mobil na něm závisí (handoff pravidlo o zpětné kompatibilitě).
+**Stav: všechny čtyři fáze hotové (2026-07-27).** Ve fázi 4 byly odstraněny `GET` i `POST /api/v1/users/connections/musubi` — tedy jak čtení connections s dešifrovaným tokenem, tak ukládání tokenu dodaného klientem. `DELETE` zůstává (odpojení serveru). Tím má member token **jedinou** cestu do systému: `POST /federation/connect`, kde ho získá server sám.
+
+Odstranění (404) je vůči starým nasazeným klientům šetrnější než vracet řádky bez tokenu: starý mobil má `getMusubiAccounts()` v try/catch a při chybě padá na lokální registry s platnými tokeny, kterou jeho vlastní rotace proti nezměněnému originu drží živou. Tokenless odpověď by mu tu funkční cache přepsala nepoužitelnými záznamy. `minClientVersion` (vynucený v `app/_layout.tsx`) zůstává k dispozici, pokud by starší klienty bylo potřeba vyloučit tvrdě.
 
 ### Parita
 
@@ -85,7 +87,7 @@ Fáze 3 většinu z nich řeší strukturálně: jednotné tagování zapne exis
 | **SSRF** — čtení interních služeb / cloud metadat | Gateway fetchuje na URL ovlivněnou uživatelem | Origin jen z DB (ne z requestu); validace při ukládání connection **i** při každém requestu; deny loopback/private/link-local/CGNAT/unique-local rozsahy (`127/8`, `10/8`, `172.16/12`, `192.168/16`, `169.254/16` ← metadata, `100.64/10`, `::1`, `fc00::/7`, `fe80::/10`); jen `http`/`https`; bez credentials v URL |
 | **DNS rebinding** — origin projde validací, pak se přeloží na interní IP | TTL manipulace mezi kontrolou a connectem | Revalidace při **každém** requestu (ne jen při ukládání). **Zbytkové riziko přijato:** validujeme přeložené adresy, ale connect jde přes hostname — pinnutí IP by rozbilo TLS SNI. Zneužití vyžaduje autentizovaného uživatele, který zkoumá síť svého vlastního domácího serveru; `FEDERATION_ALLOW_PRIVATE_HOSTS` je pro nasazení, kde jsou interní cíle legitimní |
 | **Confused deputy** — A přiloží silný credential na cestu zvolenou klientem | Klient/XSS volá gateway na libovolnou cestu na B | Není eskalace: uživatel má dnes tuto schopnost přímo tokenem, a XSS na webu má i domácí session. Zmírnění: same-origin only, `requireAuth`, path allowlist `/api/v1/`, žádné proxování `/api/auth/*` |
-| **Token exfiltrace** | XSS v prohlížeči | Token není v JS ani v žádné odpovědi (po fázi 4 ani v `/connections/musubi`) |
+| **Token exfiltrace** | XSS v prohlížeči | Token není v JS ani v žádné odpovědi — endpointy, které ho vydávaly/přijímaly, jsou odstraněné |
 | **Token at rest** | Přístup k DB | AES-GCM přes `CALDAV_ENC_KEY`, stejná třída jako CalDAV hesla |
 | **Admin domácího serveru jedná za uživatele na B** | Admin má DB + `CALDAV_ENC_KEY` | **Nezměněno vůči v1** — vědomě přijaté a zdokumentované; gateway to nezhoršuje (token už dnes leží na A) |
 | **Amplifikace / A jako open proxy** | Zneužití gateway k útoku na třetí stranu | Cíl jen z vlastních connection řádků callera; rate-limit na gateway; timeout a cap na velikost body |
@@ -101,6 +103,5 @@ Fáze 3 většinu z nich řeší strukturálně: jednotné tagování zapne exis
 ## Otevřené / odložené
 
 - **Fáze 3 partial-failure semantika** (co vrací `/calendars` když je B nedostupný) — návrh: home data vždy + per-server `syncStatus`.
-- **Fáze 4 deprecation** plaintext tokenu — až po vydání mobilu na gateway.
 - **v3 cross-server linking** — postavitelné nad gateway; mimo scope tohoto ADR.
 - **S2S ověření identity serveru** (že B je opravdu Musubi a `homeServer` claim je pravdivý) zůstává nevyřešené z v1; gateway to nemění.

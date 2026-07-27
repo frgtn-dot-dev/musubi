@@ -117,16 +117,10 @@ export async function handlerFederationRotateToken(req: Request, res: Response) 
 // ── Home side: the user's connections to OTHER Musubi servers ────────────────
 // Stored here (member token AES-GCM encrypted, same key as CalDAV passwords) so
 // the connection roams: accepting an invite on one device federates them all.
-
-/** GET /api/v1/users/connections/musubi — the caller's federated connections. */
-export async function handlerGetMusubiAccounts(req: Request, res: Response) {
-  const rows = await getMusubiAccounts(req.user!.id);
-  res.status(200).json({
-    // decrypted only for the authenticated owner, over TLS — the client needs
-    // the raw token to talk to the origin server directly
-    accounts: rows.map(r => ({ server: r.server, userID: r.remoteUserID, token: decryptSecret(r.encryptedToken) })),
-  });
-}
+//
+// The token itself never leaves this process (ADR-005): clients list connections
+// through `/federation/connections`, create one through `/federation/connect`,
+// and reach the origin through the gateway.
 
 const REMOTE_TIMEOUT_MS = 20_000;
 
@@ -275,23 +269,6 @@ export async function handlerGetFederationConnections(req: Request, res: Respons
       server: row.server,
     })),
   );
-}
-
-/** POST /api/v1/users/connections/musubi — store/refresh one connection. */
-export async function handlerSaveMusubiAccount(req: Request, res: Response) {
-  const { server, userID, token } = req.body ?? {};
-  if (!server || !userID || !token) throw new BadRequestError("server, userID and token are required...");
-  const origin = canonicalHttpOrigin(server);
-  if (!origin) throw new BadRequestError("server must be an http(s) origin...");
-  // The gateway will fetch this origin later (ADR-005) — refuse internal targets
-  // here as well as per-request, so they never get stored in the first place.
-  try {
-    await assertPublicOrigin(origin);
-  } catch (error) {
-    throw new BadRequestError(error instanceof Error ? error.message : "Unreachable server origin.");
-  }
-  await upsertMusubiAccount(req.user!.id, origin, userID, encryptSecret(token));
-  res.sendStatus(200);
 }
 
 /** DELETE /api/v1/users/connections/musubi — drop a connection. */
