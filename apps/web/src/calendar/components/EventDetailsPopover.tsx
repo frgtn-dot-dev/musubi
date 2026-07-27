@@ -43,6 +43,7 @@ import {
   getEventHomeCalendar,
   getEventMutationError,
 } from "../event-permissions";
+import type { Notify } from "../notice";
 import { EventEditorForm } from "./EventEditorForm";
 import styles from "./workspace.module.css";
 
@@ -55,8 +56,13 @@ export type EventActionHandlers = {
   getEventMaster: (event: Event) => Event;
   onForkEvent: (input: TargetMutation) => Promise<Event>;
   onLinkEvent: (input: TargetMutation) => Promise<Event>;
-  onNotice: (message: string) => void;
+  onNotice: Notify;
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
+  /**
+   * Puts a deleted event back. Absent means a delete cannot be offered as
+   * undoable, so it has to be confirmed up front instead.
+   */
+  onRestoreEvent?: (event: Event) => Promise<unknown>;
   onSetAttendance: (input: {
     attending: boolean;
     calendarId?: string;
@@ -86,6 +92,7 @@ export function EventDetailsPopover({
   onLinkEvent,
   onNotice,
   onRemoveEvent,
+  onRestoreEvent,
   onSetAttendance,
   onUpdateEvent,
   timeFormat,
@@ -111,6 +118,12 @@ export function EventDetailsPopover({
     getEditableCalendars(calendars).find((item) =>
       master.calendars.includes(item.id),
     ) ?? homeCalendar;
+  // A delete only needs confirming when Undo cannot honestly cover it: a series
+  // needs a scope first, and a provider-backed event has already left for the
+  // other system, where a restore lands as a new event rather than the old one.
+  const undoableDelete = Boolean(
+    onRestoreEvent && !master.recurrence && !removeCalendar?.provider,
+  );
   const editable = canEditEvent(master, calendars);
   const removable = canRemoveEvent(master, calendars);
   const targetCalendars = getEditableCalendars(calendars).filter(
@@ -180,10 +193,16 @@ export function EventDetailsPopover({
           deleteScope === "occurrence"
             ? "Occurrence removed."
             : "Following occurrences removed.",
+          // Only the rule changed, so putting the old one back restores the
+          // occurrences exactly.
+          () => onUpdateEvent(master),
         );
       } else {
         const result = await onRemoveEvent(master);
-        onNotice(result.removed ? "Event deleted." : "Event removed.");
+        onNotice(
+          result.removed ? "Event deleted." : "Event removed.",
+          undoableDelete ? () => onRestoreEvent!(master) : undefined,
+        );
       }
       handleOpenChange(false);
     } catch (error) {
@@ -514,8 +533,13 @@ export function EventDetailsPopover({
                   {removable ? (
                     <button
                       className={styles.deleteTextButton}
+                      disabled={busyAction === "delete"}
                       type="button"
-                      onClick={() => setConfirmingDelete(true)}
+                      onClick={() =>
+                        undoableDelete
+                          ? void handleDelete()
+                          : setConfirmingDelete(true)
+                      }
                     >
                       <Trash2 aria-hidden="true" size={15} strokeWidth={1.6} />
                       Delete

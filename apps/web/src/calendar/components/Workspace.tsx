@@ -34,6 +34,7 @@ import {
   getTimeGridLabel,
 } from "../time-grid-math";
 import { getEditableCalendars } from "../event-permissions";
+import type { Notify } from "../notice";
 import {
   createTimeGeometry,
   densityFromPageConfig,
@@ -233,7 +234,26 @@ export function Workspace({
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{
+    message: string;
+    undo?: () => Promise<unknown> | void;
+  }>();
+  const notify = useCallback<Notify>(
+    (message, undo) => setNotice({ message, undo }),
+    [],
+  );
+
+  async function runUndo(undo: NonNullable<typeof notice>["undo"]) {
+    // Take the offer away first: the toast is gone either way, and a second
+    // click would replay the reversal.
+    setNotice(undefined);
+    try {
+      await undo?.();
+      notify("Change undone.");
+    } catch {
+      notify("That change could not be undone.");
+    }
+  }
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
   const [calendarTransfersOpen, setCalendarTransfersOpen] =
     useState(false);
@@ -360,7 +380,12 @@ export function Workspace({
       return;
     }
 
-    const timeout = window.setTimeout(() => setNotice(""), 3_500);
+    // An offer to undo has to outlive a plain acknowledgement: it is only real
+    // if it is still there when you notice the mistake.
+    const timeout = window.setTimeout(
+      () => setNotice(undefined),
+      notice.undo ? 9_000 : 3_500,
+    );
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -410,7 +435,7 @@ export function Workspace({
     } = {},
   ) {
     if (editableCalendars.length === 0) {
-      setNotice("You need edit access to a calendar to create events.");
+      notify("You need edit access to a calendar to create events.");
       return;
     }
 
@@ -537,13 +562,13 @@ export function Workspace({
       });
       if (result.status === "conflict") {
         setPageConflict(true);
-        setNotice("This page changed on another device.");
+        notify("This page changed on another device.");
         return;
       }
       setEditing(false);
-      setNotice("Page saved.");
+      notify("Page saved.");
     } catch {
-      setNotice("This page could not be saved.");
+      notify("This page could not be saved.");
     } finally {
       setSavingPage(false);
     }
@@ -559,10 +584,10 @@ export function Workspace({
       });
       setEditing(false);
       setPageConflict(false);
-      setNotice("Saved as a new page.");
+      notify("Saved as a new page.");
       onPageChange(created.id);
     } catch {
-      setNotice("The new page could not be created.");
+      notify("The new page could not be created.");
     } finally {
       setSavingPage(false);
     }
@@ -592,7 +617,7 @@ export function Workspace({
           setSidebarOpen(false);
           setSettingsOpen(true);
         }}
-        onNotice={setNotice}
+        onNotice={notify}
         onPageChange={guardedPageChange}
         onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
@@ -646,7 +671,7 @@ export function Workspace({
             openCreateAtDate(date, target)
           }
           onPeriodChange={changePeriod}
-          onNotice={setNotice}
+          onNotice={notify}
           onOpenSidebar={() => setSidebarOpen(true)}
           onSearch={setSearchQuery}
           onToday={() => onDateChange(toDateKey(new Date()))}
@@ -694,8 +719,9 @@ export function Workspace({
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}
-              onNotice={setNotice}
+              onNotice={notify}
               onRemoveEvent={onRemoveEvent}
+              onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
@@ -721,10 +747,11 @@ export function Workspace({
                 // A rejection propagates so the drag reports it and the block
                 // snaps back to the server's truth.
                 await onUpdateEvent({ ...event, end, start });
-                setNotice(
+                notify(
                   start.getTime() === event.start.getTime()
                     ? "Event resized."
                     : "Event moved.",
+                  () => onUpdateEvent(event),
                 );
               }}
               showWeekend={showWeekend}
@@ -742,8 +769,9 @@ export function Workspace({
                       )
                   : undefined
               }
-              onNotice={setNotice}
+              onNotice={notify}
               onRemoveEvent={onRemoveEvent}
+              onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
@@ -772,7 +800,7 @@ export function Workspace({
                   end: new Date(event.end.getTime() + shift),
                   start: new Date(event.start.getTime() + shift),
                 });
-                setNotice("Event moved.");
+                notify("Event moved.", () => onUpdateEvent(event));
               }}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
@@ -791,8 +819,9 @@ export function Workspace({
                   ? { date: createIntent.date, endDate: createIntent.endDate }
                   : undefined
               }
-              onNotice={setNotice}
+              onNotice={notify}
               onRemoveEvent={onRemoveEvent}
+              onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
@@ -841,7 +870,20 @@ export function Workspace({
         ) : null}
 
         <div className={styles.liveRegion} role="status" aria-live="polite">
-          {notice ? <p className={styles.toast}>{notice}</p> : null}
+          {notice ? (
+            <div className={styles.toast}>
+              <p>{notice.message}</p>
+              {notice.undo ? (
+                <button
+                  className={styles.toastAction}
+                  type="button"
+                  onClick={() => void runUndo(notice.undo!)}
+                >
+                  Undo
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </main>
       {createIntent ? (
@@ -855,7 +897,7 @@ export function Workspace({
           isAllDay={Boolean(createIntent.endDate)}
           key={createIntent.id}
           onCreate={onCreateEvent}
-          onCreated={() => setNotice("Event created.")}
+          onCreated={() => notify("Event created.")}
           onOpenChange={(open) => {
             if (!open) {
               setCreateIntent(undefined);
@@ -875,7 +917,7 @@ export function Workspace({
           setCalendarTransfersOpen(false);
           setShareCalendar(calendar);
         }}
-        onNotice={setNotice}
+        onNotice={notify}
         onOpenChange={setCalendarTransfersOpen}
         onRemove={onRemoveCalendar}
         onUpdate={onUpdateCalendar}
@@ -884,7 +926,7 @@ export function Workspace({
       {connectionsOpen ? (
         <ConnectionsDialog
           calendars={calendars}
-          onNotice={setNotice}
+          onNotice={notify}
           onOpenChange={(open) => {
             if (!open) setConnectionsOpen(false);
           }}
@@ -894,7 +936,7 @@ export function Workspace({
       ) : null}
       {accountOpen ? (
         <AccountDialog
-          onNotice={setNotice}
+          onNotice={notify}
           onOpenChange={(open) => {
             if (!open) setAccountOpen(false);
           }}
@@ -904,7 +946,7 @@ export function Workspace({
       {shareCalendar ? (
         <ShareCalendarDialog
           calendar={shareCalendar}
-          onNotice={setNotice}
+          onNotice={notify}
           onOpenChange={(open) => {
             if (!open) setShareCalendar(null);
           }}
@@ -914,7 +956,7 @@ export function Workspace({
       <SettingsDialog
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}
-        onNotice={setNotice}
+        onNotice={notify}
         onOpenChange={setSettingsOpen}
         onPatch={onPatchSettings}
         open={settingsOpen}

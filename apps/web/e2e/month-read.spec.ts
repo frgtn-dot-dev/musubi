@@ -646,12 +646,18 @@ test("creates, edits and deletes an event through confirmed API writes", async (
 
   await page.getByRole("button", { name: /Release readiness/ }).click();
   await page.getByRole("button", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete" }).click();
 
   await expect(page.getByRole("status")).toContainText("Event deleted.");
   await expect(
     page.getByRole("button", { name: /Release readiness/ }),
   ).toHaveCount(0);
+
+  // Undo brings it back rather than a confirm step keeping it from going.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("status")).toContainText("Change undone.");
+  await expect(
+    page.getByRole("button", { name: /Release readiness/ }),
+  ).toBeVisible();
 });
 
 test("keeps provider failures actionable without assuming a write succeeded", async ({

@@ -302,13 +302,54 @@ describe("Workspace", () => {
       expect.objectContaining({ id: "board-game", title: "Board games" }),
     );
 
+    // A plain event deletes on the first click: Undo, not a confirm step, is
+    // what makes it safe.
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
-    await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(onRemoveEvent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "board-game" }),
     );
+
+    // Undo puts it back, and the reversal is announced.
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(commonProps.onCreateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "board-game" }),
+    );
+    expect(screen.getByRole("status").textContent).toContain(
+      "Change undone.",
+    );
+  });
+
+  it("still confirms a delete that Undo cannot cover", async () => {
+    const user = userEvent.setup();
+    const onRemoveEvent = vi.fn(async (event) => ({
+      calendars: [],
+      id: event.id,
+      removed: true,
+    }));
+    // A provider-backed calendar: the delete leaves for the other system, so a
+    // restore would land there as a new event.
+    const providerCalendars = fixtureCalendars.map((calendar) => ({
+      ...calendar,
+      provider: "google" as const,
+    }));
+
+    render(
+      <Workspace
+        {...commonProps}
+        calendars={providerCalendars}
+        onRemoveEvent={onRemoveEvent}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Board game pub/ }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onRemoveEvent).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onRemoveEvent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
   it("does not expose write controls for viewer-only calendars", async () => {

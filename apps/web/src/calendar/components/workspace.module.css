@@ -2155,6 +2155,32 @@ input.calendarManageName {
   color: var(--text-primary);
   font-size: 0.72rem;
   animation: toast-in var(--motion-standard) ease both;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast p {
+  margin: 0;
+}
+
+/* The live region ignores pointer events; the one thing in it that is clickable
+   has to opt back in. */
+.toastAction {
+  flex: none;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.toastAction:hover {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 @keyframes toast-in {
