@@ -1899,49 +1899,6 @@
   padding-bottom: 8px;
 }
 
-.titleInput {
-  composes: titleInput from "./styles/primitives.module.css";
-}
-
-.formRow {
-  composes: formRow from "./styles/primitives.module.css";
-}
-
-.formRowLocked {
-  composes: formRowLocked from "./styles/primitives.module.css";
-}
-
-.timeSeparator {
-  composes: timeSeparator from "./styles/primitives.module.css";
-}
-
-.timePresets {
-  display: none;
-}
-
-.formHint {
-  composes: formHint from "./styles/primitives.module.css";
-}
-
-@media (max-width: 599px) {
-  .timePresets {
-    display: block;
-    margin: 0 14px 7px;
-  }
-}
-
-.allDayRow {
-  composes: allDayRow from "./styles/primitives.module.css";
-}
-
-.selectChevron {
-  composes: selectChevron from "./styles/primitives.module.css";
-}
-
-.calendarChoices {
-  composes: calendarChoices from "./styles/primitives.module.css";
-}
-
 .dialogOverlay {
   composes: dialogOverlay from "./styles/primitives.module.css";
 }
@@ -2101,10 +2058,6 @@
   .settingRow select {
     min-width: 120px;
   }
-}
-
-.createActions {
-  composes: createActions from "./styles/primitives.module.css";
 }
 
 .formError {

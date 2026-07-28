@@ -6,18 +6,20 @@ import {
 } from "@musubi/types";
 import {
   CalendarDays,
-  Check,
-  ChevronDown,
   Clock3,
-  FileText,
   Link2,
   MapPin,
   Repeat2,
   UsersRound,
 } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, useId, useState } from "react";
+import { Button } from "~/ui/Button";
+import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
+import { Field } from "~/ui/Field";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { Segmented } from "~/ui/Segmented";
+import { Select } from "~/ui/Select";
 import {
   minutesToTime,
   TimePicker,
@@ -26,7 +28,7 @@ import {
 import { type EventFormValues, validateEventForm } from "../event-form";
 import { federatedConnectionMap } from "../federation-routing";
 import { createTimeGeometry } from "../time-geometry";
-import styles from "./workspace.module.css";
+import styles from "./styles/event-editor.module.css";
 
 type FormError = {
   message: string;
@@ -194,155 +196,141 @@ export function EventEditorForm({
   }
 
   return (
-    <form onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
-      <label className={styles.srOnly} htmlFor={`${id}-title`}>
-        Event title
-      </label>
-      <input
-        autoFocus
-        className={styles.titleInput}
-        disabled={saving}
-        id={`${id}-title`}
-        placeholder="Event title"
-        value={values.title}
-        onChange={(event) => patch({ title: event.target.value })}
-      />
-
-      <div className={styles.formRow}>
-        <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
-        <DatePicker
-          disabled={saving}
-          label="Date"
-          value={values.date}
-          weekStartsOn={weekStartsOn}
-          onChange={(date) => patch({ date })}
-        />
-      </div>
-
-      <label className={styles.allDayRow}>
-        <span
-          className={`${styles.checkbox} ${
-            values.isAllDay ? styles.checkboxChecked : ""
-          }`}
-          aria-hidden="true"
-        >
-          {values.isAllDay ? <Check size={12} strokeWidth={2} /> : null}
-        </span>
+    <form
+      aria-busy={saving || undefined}
+      className={styles.form}
+      data-compact={!expanded ? "" : undefined}
+      onKeyDown={handleKeyDown}
+      onSubmit={handleSubmit}
+    >
+      <Field
+        className={styles.titleField}
+        label="Event title"
+        labelHidden
+      >
         <input
-          checked={values.isAllDay}
+          autoFocus
           disabled={saving}
-          type="checkbox"
-          onChange={(event) => patch({ isAllDay: event.target.checked })}
+          placeholder="Event title"
+          value={values.title}
+          onChange={(event) => patch({ title: event.target.value })}
         />
-        <span>All day</span>
-      </label>
+      </Field>
 
-      {values.isAllDay ? (
-        <div className={styles.formRow}>
+      <section
+        aria-labelledby={`${id}-when-heading`}
+        className={styles.section}
+      >
+        <SectionLabel
+          className={styles.sectionLabel}
+          id={`${id}-when-heading`}
+        >
+          When
+        </SectionLabel>
+        <div className={styles.pickerRow}>
           <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
-          <span className={styles.formHint}>Ends</span>
+          <span aria-hidden="true" className={styles.pickerLabel}>
+            Date
+          </span>
           <DatePicker
             disabled={saving}
-            label="Ends"
-            min={values.date}
-            value={values.endDate}
+            label="Date"
+            value={values.date}
             weekStartsOn={weekStartsOn}
-            onChange={(endDate) => patch({ endDate })}
+            onChange={(date) => patch({ date })}
           />
         </div>
-      ) : null}
 
-      {!values.isAllDay ? (
-        <>
-          <div className={styles.formRow}>
-            <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
-            <TimePicker
+        {!values.isAllDay ? (
+          <>
+            <div className={styles.timeRow}>
+              <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
+              <TimePicker
+                disabled={saving}
+                label="Start time"
+                max={LATEST_START_TIME}
+                timeFormat={timeFormat}
+                value={values.startTime}
+                onChange={changeStartTime}
+              />
+              <span className={styles.timeSeparator}>to</span>
+              <TimePicker
+                disabled={saving}
+                label="End time"
+                max={LATEST_END_TIME}
+                min={minutesToTime(
+                  Math.min(
+                    LAST_MINUTE,
+                    (timeToMinutes(values.startTime) ?? 0) +
+                      TIME_SNAP_MINUTES,
+                  ),
+                )}
+                relativeTo={values.startTime}
+                timeFormat={timeFormat}
+                value={values.endTime}
+                onChange={(endTime) => patch({ endTime })}
+              />
+            </div>
+            <div className={styles.timePresets}>
+              <Segmented
+                disabled={saving}
+                label="Time range presets"
+                options={TIME_PRESETS}
+                value={`${values.startTime}–${values.endTime}`}
+                onChange={(presetValue) => {
+                  const preset = TIME_PRESETS.find(
+                    (option) => option.value === presetValue,
+                  );
+                  if (!preset) return;
+                  patch({
+                    endTime: preset.endTime,
+                    startTime: preset.startTime,
+                  });
+                }}
+              />
+            </div>
+          </>
+        ) : null}
+
+        <Checkbox
+          checked={values.isAllDay}
+          className={styles.toggleRow}
+          disabled={saving}
+          label="All day"
+          onChange={(event) =>
+            patch({ isAllDay: event.target.checked })
+          }
+        />
+
+        {values.isAllDay ? (
+          <div className={styles.pickerRow}>
+            <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
+            <span aria-hidden="true" className={styles.pickerLabel}>
+              Ends
+            </span>
+            <DatePicker
               disabled={saving}
-              label="Start time"
-              max={LATEST_START_TIME}
-              timeFormat={timeFormat}
-              value={values.startTime}
-              onChange={changeStartTime}
-            />
-            <span className={styles.timeSeparator}>to</span>
-            <TimePicker
-              disabled={saving}
-              label="End time"
-              max={LATEST_END_TIME}
-              min={minutesToTime(
-                Math.min(
-                  LAST_MINUTE,
-                  (timeToMinutes(values.startTime) ?? 0) +
-                    TIME_SNAP_MINUTES,
-                ),
-              )}
-              relativeTo={values.startTime}
-              timeFormat={timeFormat}
-              value={values.endTime}
-              onChange={(endTime) => patch({ endTime })}
+              label="Ends"
+              min={values.date}
+              value={values.endDate}
+              weekStartsOn={weekStartsOn}
+              onChange={(endDate) => patch({ endDate })}
             />
           </div>
-          <div className={styles.timePresets}>
-            <Segmented
-              disabled={saving}
-              label="Time range presets"
-              options={TIME_PRESETS}
-              value={`${values.startTime}–${values.endTime}`}
-              onChange={(presetValue) => {
-                const preset = TIME_PRESETS.find(
-                  (option) => option.value === presetValue,
-                );
-                if (!preset) return;
-                patch({
-                  endTime: preset.endTime,
-                  startTime: preset.startTime,
-                });
-              }}
-            />
-          </div>
-        </>
-      ) : null}
+        ) : null}
 
-      {expanded ? (
-        <>
-          <label className={styles.formRow}>
-            <MapPin aria-hidden="true" size={17} strokeWidth={1.5} />
-            <span className={styles.srOnly}>Location</span>
-            <input
-              disabled={saving}
-              placeholder="Add location"
-              value={values.location}
-              onChange={(event) => patch({ location: event.target.value })}
-            />
-          </label>
-
-          <label className={styles.formRow}>
-            <FileText aria-hidden="true" size={17} strokeWidth={1.5} />
-            <span className={styles.srOnly}>Description</span>
-            <input
-              disabled={saving}
-              placeholder="Add notes"
-              value={values.description}
-              onChange={(event) => patch({ description: event.target.value })}
-            />
-          </label>
-
-          <label className={styles.formRow}>
-            <Link2 aria-hidden="true" size={17} strokeWidth={1.5} />
-            <span className={styles.srOnly}>URL</span>
-            <input
-              disabled={saving}
-              placeholder="Add link"
-              type="url"
-              value={values.url}
-              onChange={(event) => patch({ url: event.target.value })}
-            />
-          </label>
-
-          <label className={styles.formRow}>
-            <Repeat2 aria-hidden="true" size={17} strokeWidth={1.5} />
-            <span className={styles.srOnly}>Repeat</span>
-            <select
+        {expanded ? (
+          <Field
+            className={styles.inlineField}
+            label={
+              <span className={styles.fieldLabel}>
+                <Repeat2 aria-hidden="true" size={16} strokeWidth={1.5} />
+                Repeat
+              </span>
+            }
+            layout="inline"
+          >
+            <Select
               disabled={saving}
               value={values.recurrence}
               onChange={(event) => patch({ recurrence: event.target.value })}
@@ -355,99 +343,163 @@ export function EventEditorForm({
               {customRecurrence ? (
                 <option value={values.recurrence}>Custom recurrence</option>
               ) : null}
-            </select>
-            <ChevronDown
-              className={styles.selectChevron}
-              aria-hidden="true"
-              size={16}
-              strokeWidth={1.5}
-            />
-          </label>
+            </Select>
+          </Field>
+        ) : null}
+      </section>
 
-          <label className={styles.allDayRow}>
-            <span
-              className={`${styles.checkbox} ${
-                values.hasAttendees ? styles.checkboxChecked : ""
-              }`}
-              aria-hidden="true"
-            >
-              {values.hasAttendees ? <Check size={12} strokeWidth={2} /> : null}
-            </span>
+      {expanded ? (
+        <section
+          aria-labelledby={`${id}-details-heading`}
+          className={styles.section}
+        >
+          <SectionLabel
+            className={styles.sectionLabel}
+            id={`${id}-details-heading`}
+          >
+            Details
+          </SectionLabel>
+          <Checkbox
+            checked={values.hasAttendees}
+            className={styles.toggleRow}
+            description="Guests can respond to this event."
+            disabled={saving}
+            label={
+              <span className={styles.fieldLabel}>
+                <UsersRound aria-hidden="true" size={16} strokeWidth={1.5} />
+                Allow attendance
+              </span>
+            }
+            onChange={(event) =>
+              patch({ hasAttendees: event.target.checked })
+            }
+          />
+          <Field
+            label={
+              <span className={styles.fieldLabel}>
+                <MapPin aria-hidden="true" size={16} strokeWidth={1.5} />
+                Location
+              </span>
+            }
+          >
             <input
-              checked={values.hasAttendees}
               disabled={saving}
-              type="checkbox"
+              placeholder="Add location"
+              value={values.location}
               onChange={(event) =>
-                patch({ hasAttendees: event.target.checked })
+                patch({ location: event.target.value })
               }
             />
-            <UsersRound aria-hidden="true" size={15} strokeWidth={1.5} />
-            <span>Allow attendance</span>
-          </label>
-        </>
+          </Field>
+          <Field
+            label={
+              <span className={styles.fieldLabel}>
+                <Link2 aria-hidden="true" size={16} strokeWidth={1.5} />
+                Link
+              </span>
+            }
+          >
+            <input
+              disabled={saving}
+              placeholder="Add link"
+              type="url"
+              value={values.url}
+              onChange={(event) => patch({ url: event.target.value })}
+            />
+          </Field>
+          <Field label="Description">
+            <textarea
+              disabled={saving}
+              placeholder="Add notes"
+              rows={3}
+              value={values.description}
+              onChange={(event) =>
+                patch({ description: event.target.value })
+              }
+            />
+          </Field>
+        </section>
       ) : null}
 
-      <label
-        className={`${styles.formRow} ${
-          calendarLocked ? styles.formRowLocked : ""
-        }`}
+      <section
+        aria-labelledby={`${id}-calendar-heading`}
+        className={styles.section}
       >
-        <span
-          className={styles.calendarDot}
-          style={{
-            backgroundColor:
-              selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
-          }}
-        />
-        <span className={styles.srOnly}>Calendar</span>
-        <select
-          disabled={calendarLocked || saving}
-          value={values.calendarId}
-          onChange={(event) => {
-            const calendarId = event.target.value;
-            const replacingOnlyHome =
-              values.calendarIds.length === 1 &&
-              values.calendarIds[0] === values.calendarId;
-            patch({
-              calendarId,
-              calendarIds: replacingOnlyHome
-                ? [calendarId]
-                : values.calendarIds.includes(calendarId)
-                  ? values.calendarIds
-                  : [...values.calendarIds, calendarId],
-            });
-          }}
+        <SectionLabel
+          className={styles.sectionLabel}
+          id={`${id}-calendar-heading`}
         >
-          {calendars.map((calendar) => (
-            <option key={calendar.id} value={calendar.id}>
-              {calendar.name}
-            </option>
-          ))}
-        </select>
-        {!calendarLocked ? (
-          <ChevronDown
-            className={styles.selectChevron}
-            aria-hidden="true"
-            size={16}
-            strokeWidth={1.5}
-          />
-        ) : null}
-      </label>
+          Calendar
+        </SectionLabel>
+        <Field
+          className={styles.inlineField}
+          label={
+            <span className={styles.fieldLabel}>
+              <span
+                aria-hidden="true"
+                className={styles.calendarDot}
+                style={{
+                  backgroundColor:
+                    selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
+                }}
+              />
+              Calendar
+            </span>
+          }
+          layout="inline"
+        >
+          <Select
+            disabled={calendarLocked || saving}
+            value={values.calendarId}
+            onChange={(event) => {
+              const calendarId = event.target.value;
+              const replacingOnlyHome =
+                values.calendarIds.length === 1 &&
+                values.calendarIds[0] === values.calendarId;
+              patch({
+                calendarId,
+                calendarIds: replacingOnlyHome
+                  ? [calendarId]
+                  : values.calendarIds.includes(calendarId)
+                    ? values.calendarIds
+                    : [...values.calendarIds, calendarId],
+              });
+            }}
+          >
+            {calendars.map((calendar) => (
+              <option key={calendar.id} value={calendar.id}>
+                {calendar.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
-      {expanded && calendars.length > 1 ? (
-        <fieldset className={styles.calendarChoices}>
-          <legend>Also show in</legend>
-          {calendars.map((calendar) => {
-            const checked = values.calendarIds.includes(calendar.id);
-            const isHome = values.calendarId === calendar.id;
-            const mutable = !calendarLocked || can(calendar.role, "editEvents");
+        {expanded && calendars.length > 1 ? (
+          <fieldset className={styles.calendarChoices}>
+            <legend>Also show in</legend>
+            {calendars.map((calendar) => {
+              const checked = values.calendarIds.includes(calendar.id);
+              const isHome = values.calendarId === calendar.id;
+              const mutable =
+                !calendarLocked || can(calendar.role, "editEvents");
 
-            return (
-              <label key={calendar.id}>
-                <input
+              return (
+                <Checkbox
                   checked={checked}
+                  className={styles.calendarChoice}
+                  description={isHome ? "Home calendar" : undefined}
                   disabled={saving || isHome || !mutable}
-                  type="checkbox"
+                  key={calendar.id}
+                  label={
+                    <span className={styles.calendarChoiceLabel}>
+                      <span
+                        aria-hidden="true"
+                        className={styles.calendarDot}
+                        style={{ backgroundColor: calendar.color }}
+                      />
+                      {calendar.name}
+                    </span>
+                  }
                   onChange={(event) =>
                     patch({
                       calendarIds: event.target.checked
@@ -458,17 +510,11 @@ export function EventEditorForm({
                     })
                   }
                 />
-                <span
-                  className={styles.calendarDot}
-                  style={{ backgroundColor: calendar.color }}
-                />
-                <span>{calendar.name}</span>
-                {isHome ? <small>Home</small> : null}
-              </label>
-            );
-          })}
-        </fieldset>
-      ) : null}
+              );
+            })}
+          </fieldset>
+        ) : null}
+      </section>
 
       {error ? (
         <div className={styles.formError} role="alert">
@@ -477,36 +523,31 @@ export function EventEditorForm({
         </div>
       ) : null}
 
-      <div className={styles.createActions}>
+      <div className={styles.actions}>
         {expanded ? (
-          <button
-            className={styles.textButton}
+          <Button
             disabled={saving}
-            type="button"
+            variant="text"
             onClick={onCancel}
           >
             Cancel
-          </button>
+          </Button>
         ) : (
           // One disclosure, in place: the draft carries over because it is the
           // same form state, not a second editor.
-          <button
-            className={styles.textButton}
-            type="button"
+          <Button
+            disabled={saving}
+            variant="text"
             onClick={() =>
               onExpand ? onExpand(values) : setExpanded(true)
             }
           >
             More options
-          </button>
+          </Button>
         )}
-        <button
-          className={styles.primaryButton}
-          disabled={saving}
-          type="submit"
-        >
+        <Button loading={saving} type="submit">
           {saving ? "Saving…" : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -2714,15 +2714,16 @@ test("asks for a name and a time first, the rest on request", async ({
   await expect(
     bubble.getByRole("combobox", { name: "Calendar" }),
   ).toBeVisible();
+  await expectNoAccessibilityViolations(page);
   // Everything else is out of the way until asked for.
   await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
   await expect(page.getByPlaceholder("Add notes")).toHaveCount(0);
   await expect(page.getByLabel("Repeat")).toHaveCount(0);
   await expect(page.getByText("Also show in")).toHaveCount(0);
 
-  // The short way out is still one click.
+  // The documented keyboard path submits without leaving the title field.
   await page.getByRole("textbox", { name: "Event title" }).fill("Studio time");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.keyboard.press("Control+Enter");
   await expect(page.getByRole("status")).toContainText("Event created.");
 });
 
@@ -2737,6 +2738,19 @@ test("keeps the full editor whole when editing an event", async ({ page }) => {
   await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
   await expect(page.getByPlaceholder("Add location")).toBeVisible();
   await expect(page.getByLabel("Repeat")).toBeVisible();
+  const orderedControls = [
+    page.getByLabel("Repeat"),
+    page.getByRole("checkbox", { name: /Allow attendance/ }),
+    page.getByPlaceholder("Add location"),
+    page.getByPlaceholder("Add link"),
+    page.getByPlaceholder("Add notes"),
+    page.getByRole("combobox", { name: "Calendar" }),
+  ];
+  const controlTops = await Promise.all(
+    orderedControls.map(async (control) => (await control.boundingBox())!.y),
+  );
+  expect(controlTops).toEqual([...controlTops].sort((a, b) => a - b));
+  await expectNoAccessibilityViolations(page);
 });
 
 test("hands the draft to a full editor page and back", async ({ page }) => {
