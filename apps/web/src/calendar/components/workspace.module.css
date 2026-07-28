@@ -454,30 +454,11 @@
   background: color-mix(in srgb, var(--surface-canvas) 96%, transparent);
 }
 
+/* Only rendered while editing a page: the row that carries the rename field. */
 .toolbarTop {
   display: flex;
-  min-height: 58px;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 10px 24px 4px 28px;
-}
-
-.pageTitleGroup {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.pageTitleGroup h1 {
-  overflow: hidden;
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: 1.34rem;
-  font-weight: 400;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 10px 24px 0 28px;
 }
 
 .presentationToggle {
@@ -515,21 +496,6 @@
 .pageNameInput:focus {
   border-color: var(--text-muted);
   outline: none;
-}
-
-.dirtyStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-muted);
-  font-size: 0.71rem;
-}
-
-.dirtyStatus > span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-primary);
 }
 
 .toolbarControls {
@@ -2550,18 +2516,7 @@ input.calendarManageName {
   }
 
   .toolbarTop {
-    min-height: 54px;
-    padding: 8px 14px 2px;
-  }
-
-  .pageTitleGroup {
-    gap: 9px;
-  }
-
-  .dirtyStatus {
-    width: 6px;
-    overflow: hidden;
-    gap: 0;
+    padding: 8px 14px 0;
   }
 
   .toolbarControls {

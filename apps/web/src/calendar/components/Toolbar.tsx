@@ -11,7 +11,6 @@ import {
 import type { RefObject } from "react";
 import { calendarViews, type CalendarViewId } from "../view-registry";
 import type { Density } from "../time-geometry";
-import { ThemeToggle } from "./ThemeToggle";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
@@ -75,8 +74,23 @@ export function Toolbar({
 }: ToolbarProps) {
   return (
     <header className={styles.toolbar}>
-      <div className={styles.toolbarTop}>
-        <div className={styles.pageTitleGroup}>
+      {/* The page name lives in the sidebar and the theme in Settings, so read
+          mode has no strip here at all. Edit mode still needs a field to rename
+          the page, and it is the only thing that row carries. */}
+      <h1 className={styles.srOnly}>{pageTitle}</h1>
+      {editing ? (
+        <div className={styles.toolbarTop}>
+          <input
+            aria-label="Page name"
+            className={styles.pageNameInput}
+            value={draftName}
+            onChange={(event) => onDraftNameChange(event.target.value)}
+          />
+        </div>
+      ) : null}
+
+      <div className={styles.toolbarControls}>
+        <div className={styles.dateControls}>
           <button
             className={`${styles.iconButton} ${styles.sidebarMenuButton}`}
             type="button"
@@ -85,37 +99,6 @@ export function Toolbar({
           >
             <Menu aria-hidden="true" size={18} strokeWidth={1.6} />
           </button>
-          {editing ? (
-            <input
-              aria-label="Page name"
-              className={styles.pageNameInput}
-              value={draftName}
-              onChange={(event) => onDraftNameChange(event.target.value)}
-            />
-          ) : (
-            <h1>{pageTitle}</h1>
-          )}
-          <button
-            className={`${styles.iconButton} ${
-              editing ? styles.buttonSelected : ""
-            }`}
-            type="button"
-            aria-pressed={editing}
-            aria-label={editing ? "Finish editing page" : "Edit page"}
-            onClick={onToggleEdit}
-          >
-            {editing ? (
-              <Check aria-hidden="true" size={17} strokeWidth={1.7} />
-            ) : (
-              <PencilLine aria-hidden="true" size={17} strokeWidth={1.6} />
-            )}
-          </button>
-        </div>
-        <ThemeToggle />
-      </div>
-
-      <div className={styles.toolbarControls}>
-        <div className={styles.dateControls}>
           <button className={styles.secondaryButton} type="button" onClick={onToday}>
             Today
           </button>
@@ -215,6 +198,21 @@ export function Toolbar({
               onChange={(event) => onSearch(event.target.value)}
             />
           </label>
+          <button
+            className={`${styles.iconButton} ${
+              editing ? styles.buttonSelected : ""
+            }`}
+            type="button"
+            aria-pressed={editing}
+            aria-label={editing ? "Finish editing page" : "Edit page"}
+            onClick={onToggleEdit}
+          >
+            {editing ? (
+              <Check aria-hidden="true" size={17} strokeWidth={1.7} />
+            ) : (
+              <PencilLine aria-hidden="true" size={17} strokeWidth={1.6} />
+            )}
+          </button>
           <button
             className={`${styles.secondaryButton} ${
               filtersOpen ? styles.buttonSelected : ""

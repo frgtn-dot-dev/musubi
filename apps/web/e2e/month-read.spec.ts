@@ -534,9 +534,17 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Agenda", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("[data-agenda-date]")).toHaveCount(14);
+  // The initial DOM is a bounded slice of a year-long range, not the whole
+  // range. How many batches fit depends on the viewport, so this asserts the
+  // bound rather than one exact batch.
+  const initialDays = await page.locator("[data-agenda-date]").count();
+  expect(initialDays).toBeGreaterThanOrEqual(14);
+  expect(initialDays).toBeLessThanOrEqual(28);
   await expect(page.locator('[data-agenda-date="2026-07-26"]')).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(12);
+  // One occurrence per loaded week, and the one-offs exactly once each.
+  expect(
+    await page.getByRole("button", { name: /Weekly review/ }).count(),
+  ).toBeGreaterThanOrEqual(12);
   await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Studio open day/ })).toHaveCount(1);
 
@@ -552,7 +560,9 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
       });
     },
   );
-  await expect(page.locator("[data-agenda-date]")).toHaveCount(28);
+  await expect
+    .poll(() => page.locator("[data-agenda-date]").count())
+    .toBeGreaterThan(initialDays);
 
   await page
     .locator("label")
@@ -2335,3 +2345,26 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
 });
 
 
+
+
+test("keeps the page name and theme out of the calendar chrome", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // No theme control in the toolbar: it is a setting, and it lives in Settings.
+  await expect(
+    page.getByRole("button", { name: /theme/i }),
+  ).toHaveCount(0);
+  // The page name is the sidebar's job; the heading stays for structure only.
+  await expect(
+    page.getByRole("button", { name: "My calendar" }),
+  ).toBeVisible();
+
+  // Renaming still has a field, in the row edit mode brings with it.
+  await page.getByRole("button", { name: "Edit page" }).click();
+  await expect(page.getByLabel("Page name")).toHaveValue("My calendar");
+  await page.getByRole("button", { name: "Finish editing page" }).click();
+  await expect(page.getByLabel("Page name")).toHaveCount(0);
+});
