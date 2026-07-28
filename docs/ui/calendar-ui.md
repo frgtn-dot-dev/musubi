@@ -234,6 +234,20 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
+**B6 — Quick create je konečně quick: HOTOVO** (2026-07-28)
+
+Bublina pro tvorbu byla celý editor v popoveru (~700 px, deset bloků) — což je
+proti R3: lehká akce nesmí otevřít těžkou vrstvu.
+
+- `EventEditorForm` má `compact`: viditelné zůstane **jen to, bez čeho event
+  nemůže existovat** — název, kdy, do kterého kalendáře. Místo, poznámky, odkaz,
+  opakování, hosté a „Also show in" jsou za jedním **More options**.
+- Není to druhý formulář. Stejná komponenta, stejná validace, stejný submit —
+  odhalení mění jen kolik je na obrazovce, takže rozepsaný draft přechodem
+  nemůže zmizet (R5). Full editor (edit eventu) zůstává celý, bez disclosure:
+  tam je vysoká závaznost na místě.
+- Výška bubliny ~700 → ~360 px, primární akce je vidět bez scrollu.
+
 **B5 — Draft jako položený, uchopitelný blok: HOTOVO** (2026-07-28)
 
 Předtím byl výsledek drag-to-create jen zvýrazněný pruh: co jsi vytáhl, to jsi

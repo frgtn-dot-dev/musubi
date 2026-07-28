@@ -10,16 +10,8 @@ import {
   Repeat2,
   UsersRound,
 } from "lucide-react";
-import {
-  type FormEvent,
-  type KeyboardEvent,
-  useId,
-  useState,
-} from "react";
-import {
-  type EventFormValues,
-  validateEventForm,
-} from "../event-form";
+import { type FormEvent, type KeyboardEvent, useId, useState } from "react";
+import { type EventFormValues, validateEventForm } from "../event-form";
 import { federatedConnectionMap } from "../federation-routing";
 import styles from "./workspace.module.css";
 
@@ -37,6 +29,12 @@ export type EventWhen = Pick<
 type EventEditorFormProps = {
   calendarLocked?: boolean;
   calendars: Calendar[];
+  /**
+   * Quick create: only what a new event cannot do without — name, when, which
+   * calendar — with the rest behind one disclosure. Same form, same validation,
+   * same submit; only how much of it is on screen differs (R3, R5).
+   */
+  compact?: boolean;
   initialValues: EventFormValues;
   /**
    * A new "when" from outside the form — the draft block being dragged on the
@@ -45,10 +43,7 @@ type EventEditorFormProps = {
    */
   when?: EventWhen;
   onCancel: () => void;
-  onError: (
-    error: unknown,
-    values: EventFormValues,
-  ) => FormError;
+  onError: (error: unknown, values: EventFormValues) => FormError;
   onSubmit: (values: EventFormValues) => Promise<void>;
   submitLabel: string;
 };
@@ -56,6 +51,7 @@ type EventEditorFormProps = {
 export function EventEditorForm({
   calendarLocked = false,
   calendars,
+  compact = false,
   initialValues,
   onCancel,
   onError,
@@ -65,6 +61,7 @@ export function EventEditorForm({
 }: EventEditorFormProps) {
   const id = useId();
   const [values, setValues] = useState(initialValues);
+  const [expanded, setExpanded] = useState(!compact);
   // Adjusted during render rather than from an effect: the form must never
   // paint a time the grid has already moved on from.
   const whenSignature = when ? Object.values(when).join("|") : "";
@@ -91,9 +88,7 @@ export function EventEditorForm({
     setError(undefined);
   }
 
-  async function handleSubmit(
-    submitEvent: FormEvent<HTMLFormElement>,
-  ) {
+  async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
     const validationError = validateEventForm(
       values,
@@ -164,9 +159,7 @@ export function EventEditorForm({
           checked={values.isAllDay}
           disabled={saving}
           type="checkbox"
-          onChange={(event) =>
-            patch({ isAllDay: event.target.checked })
-          }
+          onChange={(event) => patch({ isAllDay: event.target.checked })}
         />
         <span>All day</span>
       </label>
@@ -196,9 +189,7 @@ export function EventEditorForm({
               required
               type="time"
               value={values.startTime}
-              onChange={(event) =>
-                patch({ startTime: event.target.value })
-              }
+              onChange={(event) => patch({ startTime: event.target.value })}
             />
           </label>
           <span className={styles.timeSeparator}>to</span>
@@ -209,97 +200,95 @@ export function EventEditorForm({
               required
               type="time"
               value={values.endTime}
-              onChange={(event) =>
-                patch({ endTime: event.target.value })
-              }
+              onChange={(event) => patch({ endTime: event.target.value })}
             />
           </label>
         </div>
       ) : null}
 
-      <label className={styles.formRow}>
-        <MapPin aria-hidden="true" size={17} strokeWidth={1.5} />
-        <span className={styles.srOnly}>Location</span>
-        <input
-          disabled={saving}
-          placeholder="Add location"
-          value={values.location}
-          onChange={(event) => patch({ location: event.target.value })}
-        />
-      </label>
+      {expanded ? (
+        <>
+          <label className={styles.formRow}>
+            <MapPin aria-hidden="true" size={17} strokeWidth={1.5} />
+            <span className={styles.srOnly}>Location</span>
+            <input
+              disabled={saving}
+              placeholder="Add location"
+              value={values.location}
+              onChange={(event) => patch({ location: event.target.value })}
+            />
+          </label>
 
-      <label className={styles.formRow}>
-        <FileText aria-hidden="true" size={17} strokeWidth={1.5} />
-        <span className={styles.srOnly}>Description</span>
-        <input
-          disabled={saving}
-          placeholder="Add notes"
-          value={values.description}
-          onChange={(event) =>
-            patch({ description: event.target.value })
-          }
-        />
-      </label>
+          <label className={styles.formRow}>
+            <FileText aria-hidden="true" size={17} strokeWidth={1.5} />
+            <span className={styles.srOnly}>Description</span>
+            <input
+              disabled={saving}
+              placeholder="Add notes"
+              value={values.description}
+              onChange={(event) => patch({ description: event.target.value })}
+            />
+          </label>
 
-      <label className={styles.formRow}>
-        <Link2 aria-hidden="true" size={17} strokeWidth={1.5} />
-        <span className={styles.srOnly}>URL</span>
-        <input
-          disabled={saving}
-          placeholder="Add link"
-          type="url"
-          value={values.url}
-          onChange={(event) => patch({ url: event.target.value })}
-        />
-      </label>
+          <label className={styles.formRow}>
+            <Link2 aria-hidden="true" size={17} strokeWidth={1.5} />
+            <span className={styles.srOnly}>URL</span>
+            <input
+              disabled={saving}
+              placeholder="Add link"
+              type="url"
+              value={values.url}
+              onChange={(event) => patch({ url: event.target.value })}
+            />
+          </label>
 
-      <label className={styles.formRow}>
-        <Repeat2 aria-hidden="true" size={17} strokeWidth={1.5} />
-        <span className={styles.srOnly}>Repeat</span>
-        <select
-          disabled={saving}
-          value={values.recurrence}
-          onChange={(event) =>
-            patch({ recurrence: event.target.value })
-          }
-        >
-          <option value="">Does not repeat</option>
-          <option value="FREQ=DAILY">Every day</option>
-          <option value="FREQ=WEEKLY">Every week</option>
-          <option value="FREQ=MONTHLY">Every month</option>
-          <option value="FREQ=YEARLY">Every year</option>
-          {customRecurrence ? (
-            <option value={values.recurrence}>Custom recurrence</option>
-          ) : null}
-        </select>
-        <ChevronDown
-          className={styles.selectChevron}
-          aria-hidden="true"
-          size={16}
-          strokeWidth={1.5}
-        />
-      </label>
+          <label className={styles.formRow}>
+            <Repeat2 aria-hidden="true" size={17} strokeWidth={1.5} />
+            <span className={styles.srOnly}>Repeat</span>
+            <select
+              disabled={saving}
+              value={values.recurrence}
+              onChange={(event) => patch({ recurrence: event.target.value })}
+            >
+              <option value="">Does not repeat</option>
+              <option value="FREQ=DAILY">Every day</option>
+              <option value="FREQ=WEEKLY">Every week</option>
+              <option value="FREQ=MONTHLY">Every month</option>
+              <option value="FREQ=YEARLY">Every year</option>
+              {customRecurrence ? (
+                <option value={values.recurrence}>Custom recurrence</option>
+              ) : null}
+            </select>
+            <ChevronDown
+              className={styles.selectChevron}
+              aria-hidden="true"
+              size={16}
+              strokeWidth={1.5}
+            />
+          </label>
 
-      <label className={styles.allDayRow}>
-        <span
-          className={`${styles.checkbox} ${
-            values.hasAttendees ? styles.checkboxChecked : ""
-          }`}
-          aria-hidden="true"
-        >
-          {values.hasAttendees ? <Check size={12} strokeWidth={2} /> : null}
-        </span>
-        <input
-          checked={values.hasAttendees}
-          disabled={saving}
-          type="checkbox"
-          onChange={(event) =>
-            patch({ hasAttendees: event.target.checked })
-          }
-        />
-        <UsersRound aria-hidden="true" size={15} strokeWidth={1.5} />
-        <span>Allow attendance</span>
-      </label>
+          <label className={styles.allDayRow}>
+            <span
+              className={`${styles.checkbox} ${
+                values.hasAttendees ? styles.checkboxChecked : ""
+              }`}
+              aria-hidden="true"
+            >
+              {values.hasAttendees ? <Check size={12} strokeWidth={2} /> : null}
+            </span>
+            <input
+              checked={values.hasAttendees}
+              disabled={saving}
+              type="checkbox"
+              onChange={(event) =>
+                patch({ hasAttendees: event.target.checked })
+              }
+            />
+            <UsersRound aria-hidden="true" size={15} strokeWidth={1.5} />
+            <span>Allow attendance</span>
+          </label>
+        </>
+      ) : null}
 
       <label
         className={`${styles.formRow} ${
@@ -347,14 +336,13 @@ export function EventEditorForm({
         ) : null}
       </label>
 
-      {calendars.length > 1 ? (
+      {expanded && calendars.length > 1 ? (
         <fieldset className={styles.calendarChoices}>
           <legend>Also show in</legend>
           {calendars.map((calendar) => {
             const checked = values.calendarIds.includes(calendar.id);
             const isHome = values.calendarId === calendar.id;
-            const mutable =
-              !calendarLocked || can(calendar.role, "editEvents");
+            const mutable = !calendarLocked || can(calendar.role, "editEvents");
 
             return (
               <label key={calendar.id}>
@@ -387,21 +375,31 @@ export function EventEditorForm({
       {error ? (
         <div className={styles.formError} role="alert">
           <p>{error.message}</p>
-          {error.requestId ? (
-            <span>Request {error.requestId}</span>
-          ) : null}
+          {error.requestId ? <span>Request {error.requestId}</span> : null}
         </div>
       ) : null}
 
       <div className={styles.createActions}>
-        <button
-          className={styles.textButton}
-          disabled={saving}
-          type="button"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
+        {expanded ? (
+          <button
+            className={styles.textButton}
+            disabled={saving}
+            type="button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        ) : (
+          // One disclosure, in place: the draft carries over because it is the
+          // same form state, not a second editor.
+          <button
+            className={styles.textButton}
+            type="button"
+            onClick={() => setExpanded(true)}
+          >
+            More options
+          </button>
+        )}
         <button
           className={styles.primaryButton}
           disabled={saving}

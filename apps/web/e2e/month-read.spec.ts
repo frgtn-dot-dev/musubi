@@ -2498,3 +2498,52 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 });
 
 
+
+
+test("asks for a name and a time first, the rest behind one disclosure", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.locator('[data-day-key="2026-07-15"]').click();
+
+  const bubble = page.getByRole("dialog", { name: "Create event" });
+  await expect(bubble).toBeVisible();
+  // What a new event cannot do without: name, when, which calendar.
+  await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
+  await expect(page.getByLabel("Date", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Start time")).toBeVisible();
+  await expect(bubble.getByRole("combobox")).toBeVisible();
+  // Everything else is out of the way until asked for.
+  await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
+  await expect(page.getByPlaceholder("Add notes")).toHaveCount(0);
+  await expect(page.getByLabel("Repeat")).toHaveCount(0);
+  await expect(page.getByText("Also show in")).toHaveCount(0);
+
+  // The disclosure keeps the draft: same form, not a second editor.
+  await page.getByRole("textbox", { name: "Event title" }).fill("Studio time");
+  await page.getByRole("button", { name: "More options" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Studio time");
+  await expect(page.getByPlaceholder("Add location")).toBeVisible();
+  await expect(page.getByLabel("Repeat")).toBeVisible();
+  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
+
+  await page.getByPlaceholder("Add location").fill("Studio B");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Event created.");
+});
+
+test("keeps the full editor whole when editing an event", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: /Client call/ }).first().click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+
+  // Editing is the heavy layer: nothing is hidden behind a disclosure.
+  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
+  await expect(page.getByPlaceholder("Add location")).toBeVisible();
+  await expect(page.getByLabel("Repeat")).toBeVisible();
+});

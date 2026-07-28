@@ -119,6 +119,7 @@ export function QuickCreate({
           </div>
           <EventEditorForm
             calendars={calendars}
+            compact
             initialValues={initialValues}
             when={{
               date,
