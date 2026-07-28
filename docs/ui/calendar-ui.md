@@ -234,6 +234,21 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
+**B8 — Okno tvorby se dá odtáhnout: HOTOVO** (2026-07-28)
+
+- Bublina se táhne za svou hlavičku (`data-drag-handle`) a **clampuje se na
+  plochu kalendáře** — `clampOffset` posouvá offset, ne kurzor, takže se okno
+  nedá zaparkovat tak, aby jeho vlastní tlačítka byla mimo. Čistá funkce s testem
+  (`window-drag.ts`), gesto zvlášť (`use-window-drag.ts`) — stejné dělení jako u
+  time gridu.
+- Zůstává ukotvené a hýbe se transformem, takže se nic nemusí přepočítávat a
+  žádná collision logika ho uprostřed tažení nepřehodí na druhou stranu.
+- Pod 600 px se gesto **vůbec nenabízí**: tam je z bubliny sheet, který má jedno
+  místo, kde být.
+- Po přesunu zmizí šipka (ukazovala na anchor, který okno opustilo) a **vypne se
+  otevírací animace** — animace s `fill-mode: both` drží svůj poslední keyframe
+  a přebíjí inline transform, takže by okno zůstalo stát na místě.
+
 **B7 — More options je stránka: HOTOVO** (2026-07-28)
 
 - Nová route `/app/p/$pageId/event/new` je full editor jako **stránka**, ne

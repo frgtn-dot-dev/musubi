@@ -1657,6 +1657,37 @@
   box-shadow: 0 1px var(--border-subtle);
 }
 
+/* The header doubles as the window's grip. Text selection has to go, or the
+   browser starts a selection drag instead of the gesture. */
+.popoverHeader[data-drag-handle] {
+  align-items: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.popoverHeader[data-drag-handle]:active {
+  cursor: grabbing;
+}
+
+.dragHandleMark {
+  flex: none;
+  margin-right: -6px;
+  color: var(--text-faint);
+}
+
+/* Once moved, the window is where the user put it. The open animation has to go
+   with it: its filled final keyframe sets a transform, and a filled animation
+   outranks the inline one the drag applies. The arrow goes too — it pointed at
+   an anchor this window has left. */
+.popover[data-moved] {
+  animation: none;
+}
+
+.popover[data-moved] .popoverArrow {
+  display: none;
+}
+
 .popoverHeader h2 {
   margin: 0;
   font-family: var(--font-serif);

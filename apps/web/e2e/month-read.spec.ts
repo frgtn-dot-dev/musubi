@@ -2597,3 +2597,50 @@ test("leaving the full editor page keeps the calendar where it was", async ({
   await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 });
 
+
+test("moves the create window by its header, never out of the calendar", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.locator('[data-day-key="2026-07-15"]').click();
+
+  const bubble = page.getByRole("dialog", { name: "Create event" });
+  await bubble.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const before = (await bubble.boundingBox())!;
+  const header = bubble.locator("[data-drag-handle]");
+
+  // Dragging the header moves the window.
+  const grip = (await header.boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    grip.x + grip.width / 2 - 220,
+    grip.y + grip.height / 2 - 60,
+    { steps: 10 },
+  );
+  await page.mouse.up();
+
+  const after = (await bubble.boundingBox())!;
+  expect(Math.round(after.x)).toBe(Math.round(before.x - 220));
+  expect(Math.round(after.y)).toBe(Math.round(before.y - 60));
+  // Still the same draft: moving the window is not editing it.
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue(
+    "2026-07-15",
+  );
+
+  // Dragged hard at the calendar's left edge it stops there, whole.
+  const area = (await page.getByRole("main").boundingBox())!;
+  await page.mouse.move(after.x + 60, after.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(area.x - 900, after.y + 20, { steps: 10 });
+  await page.mouse.up();
+
+  const clamped = (await bubble.boundingBox())!;
+  expect(clamped.x).toBeGreaterThanOrEqual(area.x - 1);
+  expect(clamped.x + clamped.width).toBeLessThanOrEqual(
+    area.x + area.width + 1,
+  );
+});

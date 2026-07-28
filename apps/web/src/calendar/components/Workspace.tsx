@@ -1047,6 +1047,8 @@ export function Workspace({
       {createIntent ? (
         <QuickCreate
           anchor={createIntent.anchor}
+          // Movable, but only within the calendar it belongs to.
+          bounds={() => mainRef.current?.getBoundingClientRect()}
           calendars={editableCalendars}
           date={createIntent.date}
           email={user.email}
