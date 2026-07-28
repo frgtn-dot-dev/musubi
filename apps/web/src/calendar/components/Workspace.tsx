@@ -31,6 +31,7 @@ import {
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { getTimeGridDays, getTimeGridLabel } from "../time-grid-math";
+import type { EventFormValues } from "../event-form";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
 import { seriesEditWrites, type EditScope } from "../recurrence-edit";
@@ -113,6 +114,11 @@ type WorkspaceProps = {
     calendarId?: string;
     eventId: string;
   }) => Promise<Attendee[]>;
+  /**
+   * Open the full editor for a draft. Absent keeps quick create expanding in
+   * place, which is what the component tests and any router-less embedding use.
+   */
+  onOpenFullEditor?: (values: EventFormValues) => void;
   onSignOut: () => void;
   onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
@@ -190,6 +196,7 @@ export function Workspace({
   onPatchSettings = unavailableSettings,
   onSavePage = unavailablePageSave,
   onRemoveEvent,
+  onOpenFullEditor,
   onSetAttendance = unavailableAttendance,
   onSignOut,
   onUpdateEvent,
@@ -1049,6 +1056,14 @@ export function Workspace({
           key={createIntent.id}
           onCreate={onCreateEvent}
           onCreated={() => notify("Event created.")}
+          onMoreOptions={
+            onOpenFullEditor
+              ? (values) => {
+                  setCreateIntent(undefined);
+                  onOpenFullEditor(values);
+                }
+              : undefined
+          }
           onOpenChange={(open) => {
             if (!open) {
               setCreateIntent(undefined);

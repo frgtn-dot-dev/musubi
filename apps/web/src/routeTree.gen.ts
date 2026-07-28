@@ -15,6 +15,7 @@ import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppPPageIdViewRouteImport } from './routes/app/p.$pageId.$view'
+import { Route as AppPPageIdEventNewRouteImport } from './routes/app/p.$pageId.event.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const AppPPageIdViewRoute = AppPPageIdViewRouteImport.update({
   path: '/p/$pageId/$view',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPPageIdEventNewRoute = AppPPageIdEventNewRouteImport.update({
+  id: '/p/$pageId/event/new',
+  path: '/p/$pageId/event/new',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
+  '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
+  '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
+  '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +90,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/login'
     | '/app/p/$pageId/$view'
+    | '/app/p/$pageId/event/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +99,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/login'
     | '/app/p/$pageId/$view'
+    | '/app/p/$pageId/event/new'
   id:
     | '__root__'
     | '/'
@@ -97,6 +108,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/login'
     | '/app/p/$pageId/$view'
+    | '/app/p/$pageId/event/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -151,15 +163,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPPageIdViewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/p/$pageId/event/new': {
+      id: '/app/p/$pageId/event/new'
+      path: '/p/$pageId/event/new'
+      fullPath: '/app/p/$pageId/event/new'
+      preLoaderRoute: typeof AppPPageIdEventNewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppPPageIdViewRoute: typeof AppPPageIdViewRoute
+  AppPPageIdEventNewRoute: typeof AppPPageIdEventNewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppPPageIdViewRoute: AppPPageIdViewRoute,
+  AppPPageIdEventNewRoute: AppPPageIdEventNewRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

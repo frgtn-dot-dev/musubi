@@ -35,6 +35,12 @@ type EventEditorFormProps = {
    * same submit; only how much of it is on screen differs (R3, R5).
    */
   compact?: boolean;
+  /**
+   * Where "More options" leads when the extra fields belong somewhere else — a
+   * full page, in practice. It receives what is already filled in, so the draft
+   * travels with the user. Absent reveals the rest in place.
+   */
+  onExpand?: (values: EventFormValues) => void;
   initialValues: EventFormValues;
   /**
    * A new "when" from outside the form — the draft block being dragged on the
@@ -54,6 +60,7 @@ export function EventEditorForm({
   compact = false,
   initialValues,
   onCancel,
+  onExpand,
   onError,
   onSubmit,
   submitLabel,
@@ -395,7 +402,9 @@ export function EventEditorForm({
           <button
             className={styles.textButton}
             type="button"
-            onClick={() => setExpanded(true)}
+            onClick={() =>
+              onExpand ? onExpand(values) : setExpanded(true)
+            }
           >
             More options
           </button>

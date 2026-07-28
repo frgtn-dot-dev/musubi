@@ -352,6 +352,52 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
+  it("reveals the rest of the create form in place when there is no editor page", async () => {
+    const user = userEvent.setup();
+
+    render(<Workspace {...commonProps} />);
+
+    await user.click(screen.getByRole("button", { name: /^Event$/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Event title" }),
+      "Studio time",
+    );
+    // Quick create carries only the essentials.
+    expect(screen.queryByPlaceholderText("Add location")).toBeNull();
+
+    // Without an editor page wired in, the disclosure expands here — and the
+    // draft is the same form state, so what was typed stays.
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    expect(screen.getByPlaceholderText("Add location")).not.toBeNull();
+    expect(
+      (screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement)
+        .value,
+    ).toBe("Studio time");
+  });
+
+  it("hands the draft to the editor page when one is wired in", async () => {
+    const user = userEvent.setup();
+    const onOpenFullEditor = vi.fn();
+
+    render(
+      <Workspace {...commonProps} onOpenFullEditor={onOpenFullEditor} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Event$/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Event title" }),
+      "Studio time",
+    );
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    expect(onOpenFullEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Studio time" }),
+    );
+    // The bubble is gone: the page owns the draft now.
+    expect(screen.queryByRole("textbox", { name: "Event title" })).toBeNull();
+  });
+
   it("does not expose write controls for viewer-only calendars", async () => {
     const user = userEvent.setup();
     const viewerCalendars = fixtureCalendars.map((calendar) => ({

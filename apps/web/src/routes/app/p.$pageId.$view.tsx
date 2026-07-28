@@ -188,6 +188,29 @@ function WorkspaceRoute() {
           to: "/app/p/$pageId/$view",
         })
       }
+      onOpenFullEditor={(values) =>
+        void navigate({
+          params: { pageId },
+          // The draft goes in the URL so the page survives a reload.
+          search: {
+            allDay: values.isAllDay || undefined,
+            attendees: values.hasAttendees || undefined,
+            calendarId: values.calendarId,
+            date: values.date,
+            description: values.description || undefined,
+            endDate: values.endDate || undefined,
+            endTime: values.endTime || undefined,
+            location: values.location || undefined,
+            recurrence: values.recurrence || undefined,
+            returnDate: date,
+            startTime: values.startTime || undefined,
+            title: values.title || undefined,
+            url: values.url || undefined,
+            view: activeView,
+          },
+          to: "/app/p/$pageId/event/new",
+        })
+      }
       onViewChange={(nextView) =>
         void navigate({
           params: { pageId, view: nextView },

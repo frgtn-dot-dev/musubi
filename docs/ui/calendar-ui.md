@@ -234,6 +234,24 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
+**B7 — More options je stránka: HOTOVO** (2026-07-28)
+
+- Nová route `/app/p/$pageId/event/new` je full editor jako **stránka**, ne
+  rozbalený popover. Kalendářový chrome tam není — ta vrstva je o detailech
+  eventu, ne o kalendáři.
+- **Draft cestuje v URL**, ne v paměti: stránka jde reloadnout i nalinkovat a
+  rozdělaný event se neztratí (`title`, `date`, `startTime`, `endTime`,
+  `endDate`, `allDay`, `location`, `description`, `url`, `recurrence`,
+  `attendees`, `calendarId`).
+- `returnDate` je **oddělený** od data draftu: odchod ze stránky nesmí uživatele
+  potichu přesunout na jiný týden (R2). Uloží se → vrátí se tam, odkud přišel.
+- `EventEditorForm.onExpand` rozhoduje, kam „More options" vede. Když ho nikdo
+  nepředá (unit testy, embedding bez routeru), formulář se rozbalí na místě —
+  jedna komponenta, dvě umístění, ne dva formuláře.
+- **Editace existujícího eventu zůstává v popoveru.** Stránka je zatím jen pro
+  tvorbu: edit by potřeboval načtení eventu podle id (endpoint pro jeden event
+  nemáme) a rozhodnutí o rozsahu série ještě před otevřením.
+
 **B6 — Quick create je konečně quick: HOTOVO** (2026-07-28)
 
 Bublina pro tvorbu byla celý editor v popoveru (~700 px, deset bloků) — což je

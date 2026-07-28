@@ -24,6 +24,8 @@ type QuickCreateProps = {
   onCreate: (event: Event) => Promise<Event>;
   onCreated: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
+  /** Hand the draft to the full editor. Absent expands in place instead. */
+  onMoreOptions?: (values: EventFormValues) => void;
   endDate?: string;
   endTime?: string;
   isAllDay?: boolean;
@@ -39,6 +41,7 @@ export function QuickCreate({
   email,
   onCreate,
   onCreated,
+  onMoreOptions,
   onOpenChange,
   endDate,
   endTime,
@@ -120,6 +123,7 @@ export function QuickCreate({
           <EventEditorForm
             calendars={calendars}
             compact
+            onExpand={onMoreOptions}
             initialValues={initialValues}
             when={{
               date,

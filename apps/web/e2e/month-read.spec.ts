@@ -2500,7 +2500,7 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 
 
 
-test("asks for a name and a time first, the rest behind one disclosure", async ({
+test("asks for a name and a time first, the rest on request", async ({
   page,
 }) => {
   await mockAuthenticatedReads(page);
@@ -2520,17 +2520,8 @@ test("asks for a name and a time first, the rest behind one disclosure", async (
   await expect(page.getByLabel("Repeat")).toHaveCount(0);
   await expect(page.getByText("Also show in")).toHaveCount(0);
 
-  // The disclosure keeps the draft: same form, not a second editor.
+  // The short way out is still one click.
   await page.getByRole("textbox", { name: "Event title" }).fill("Studio time");
-  await page.getByRole("button", { name: "More options" }).click();
-  await expect(
-    page.getByRole("textbox", { name: "Event title" }),
-  ).toHaveValue("Studio time");
-  await expect(page.getByPlaceholder("Add location")).toBeVisible();
-  await expect(page.getByLabel("Repeat")).toBeVisible();
-  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
-
-  await page.getByPlaceholder("Add location").fill("Studio B");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Event created.");
 });
@@ -2547,3 +2538,62 @@ test("keeps the full editor whole when editing an event", async ({ page }) => {
   await expect(page.getByPlaceholder("Add location")).toBeVisible();
   await expect(page.getByLabel("Repeat")).toBeVisible();
 });
+
+test("hands the draft to a full editor page and back", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-30`);
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Quarterly review");
+  await page.getByRole("button", { name: "More options" }).click();
+
+  // A real page, with the draft in the URL so a reload cannot lose it.
+  await expect(page).toHaveURL(/\/event\/new\?/);
+  await expect(page).toHaveURL(/title=Quarterly\+review/);
+  await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Quarterly review");
+  // The full set of fields is here, with no disclosure left.
+  await expect(page.getByPlaceholder("Add location")).toBeVisible();
+  await expect(page.getByLabel("Repeat")).toBeVisible();
+  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
+
+  await page.reload();
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Quarterly review");
+
+  const writes: Array<{ title: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "POST") {
+      writes.push(route.request().postDataJSON() as { title: string });
+    }
+    return route.fallback();
+  });
+  await page.getByPlaceholder("Add location").fill("Studio B");
+  await page.getByRole("button", { name: "Create event" }).click();
+
+  // Saving lands back on the view and date it started from.
+  await expect(page).toHaveURL(/\/week\?date=2026-07-30/);
+  expect(writes[0]!.title).toBe("Quarterly review");
+  await expect(
+    page.getByRole("button", { name: /Quarterly review/ }).first(),
+  ).toBeVisible();
+});
+
+test("leaving the full editor page keeps the calendar where it was", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.locator('[data-day-key="2026-07-15"]').click();
+  await page.getByRole("button", { name: "More options" }).click();
+  await expect(page).toHaveURL(/\/event\/new\?/);
+
+  await page.getByRole("button", { name: "Back to calendar" }).click();
+  await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
+});
+
