@@ -1619,11 +1619,6 @@
   animation: popover-in var(--motion-standard) ease both;
 }
 
-.detailPopover {
-  max-height: var(--radix-popover-content-available-height);
-  overflow-y: auto;
-}
-
 .quickCreateAnchor {
   position: fixed;
   z-index: 99;
@@ -1657,7 +1652,6 @@
   padding: 17px 18px 11px;
 }
 
-.detailPopover > .popoverHeader,
 .createPopover > .popoverHeader {
   position: sticky;
   z-index: 2;
@@ -1712,186 +1706,6 @@
   border-color: transparent;
 }
 
-.detailCalendar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 7px 0 0;
-  color: var(--text-muted);
-  font-size: 0.71rem;
-}
-
-.detailList {
-  display: grid;
-  margin: 0;
-  padding: 5px 18px 12px;
-}
-
-.detailList > div {
-  display: grid;
-  grid-template-columns: 22px 60px minmax(0, 1fr);
-  gap: 6px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-}
-
-.detailList > div:last-child {
-  border-bottom: 0;
-}
-
-.detailList dt,
-.detailList dd {
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.45;
-}
-
-.detailList dt {
-  color: var(--text-muted);
-}
-
-.detailList dd {
-  color: var(--text-secondary);
-}
-
-.detailList a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.attendeeSection,
-.linkSection {
-  margin: 0;
-  padding: 11px 18px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.attendeeSection > div {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.attendeeSection strong {
-  font-size: 0.72rem;
-  font-weight: 500;
-}
-
-.attendeeSection p {
-  margin: 7px 0 9px;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  line-height: 1.45;
-}
-
-.attendeeSection .secondaryButton {
-  min-height: 32px;
-  padding: 0 11px;
-}
-
-.linkSection {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 5px;
-}
-
-.linkSection select,
-.deleteScope {
-  min-width: 0;
-  height: 34px;
-  padding: 0 8px;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-size: 0.68rem;
-}
-
-.linkSection .textButton {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 5px;
-}
-
-.prototypeNote {
-  margin: 0;
-  padding: 10px 18px 14px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-faint);
-  font-size: 0.65rem;
-}
-
-.detailActions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.deleteTextButton,
-.dangerButton {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--accent-primary);
-  font-size: 0.75rem;
-}
-
-.deleteTextButton:hover {
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-}
-
-.deleteConfirm {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 8px 10px;
-  padding: 13px 16px 14px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--accent-primary);
-}
-
-.deleteConfirm strong {
-  color: var(--text-primary);
-  font-size: 0.77rem;
-  font-weight: 500;
-}
-
-.deleteConfirm p {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: 0.69rem;
-  line-height: 1.45;
-}
-
-.deleteConfirm .formError,
-.deleteConfirmActions,
-.deleteScope {
-  grid-column: 1 / -1;
-}
-
-.deleteConfirmActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.dangerButton {
-  background: var(--accent-primary);
-  color: var(--accent-on-primary);
-}
-
 .createPopover {
   width: min(340px, calc(100vw - 28px));
   max-height: var(--radix-popover-content-available-height);
@@ -1905,31 +1719,6 @@
 
 .manageDialog {
   composes: manageDialog from "./styles/primitives.module.css";
-}
-
-.scopeDialog {
-  composes: manageDialog;
-  width: min(360px, calc(100vw - 28px));
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  font-size: 0.78rem;
-}
-
-.scopeDialog p {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.scopeOptions {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.scopeOptions button {
-  justify-content: flex-start;
 }
 
 .manageDialogHeader {
@@ -2498,12 +2287,6 @@
     animation: sheet-in var(--motion-standard) ease both;
     /* Clear of the home indicator on iOS, and of nothing elsewhere. */
     padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .detailPopover {
-    /* The available-height variable is measured against the anchor, which no
-       longer decides where this sits. */
-    max-height: 86vh;
   }
 
   .popoverArrow {

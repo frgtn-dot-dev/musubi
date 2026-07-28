@@ -1,12 +1,24 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import type { EditScope } from "../recurrence-edit";
-import styles from "./workspace.module.css";
+import type { ReactNode } from "react";
+import { Button } from "~/ui/Button";
+import { Dialog } from "~/ui/Dialog";
+import styles from "./styles/recurrence-scope.module.css";
 
-const OPTIONS: Array<{ label: string; scope: EditScope }> = [
-  { label: "This event", scope: "occurrence" },
-  { label: "This and following events", scope: "following" },
-  { label: "All events", scope: "series" },
-];
+const OPTION_LABELS: Record<
+  "change" | "delete",
+  Array<{ label: string; scope: EditScope }>
+> = {
+  change: [
+    { label: "This event", scope: "occurrence" },
+    { label: "This and following events", scope: "following" },
+    { label: "All events", scope: "series" },
+  ],
+  delete: [
+    { label: "This event", scope: "occurrence" },
+    { label: "This and following events", scope: "following" },
+    { label: "Entire series", scope: "series" },
+  ],
+};
 
 /**
  * Which occurrences a change to a recurring event applies to.
@@ -17,11 +29,19 @@ const OPTIONS: Array<{ label: string; scope: EditScope }> = [
  * dialog still shows the old one — nothing is written until an answer comes.
  */
 export function RecurrenceScopeDialog({
+  action = "change",
+  busyScope,
+  consequence,
+  error,
   onResolve,
   returnFocus,
   timeLabel,
   title,
 }: {
+  action?: "change" | "delete";
+  busyScope?: EditScope;
+  consequence?: string;
+  error?: ReactNode;
   /** The chosen scope, or undefined when dismissed. */
   onResolve: (scope: EditScope | undefined) => void;
   /**
@@ -29,45 +49,59 @@ export function RecurrenceScopeDialog({
    * — a drag or Alt+arrow opened this — so it is carried in.
    */
   returnFocus?: HTMLElement | null;
-  timeLabel: string;
+  timeLabel?: string;
   title: string;
 }) {
+  const deleting = action === "delete";
+
   return (
-    <Dialog.Root open onOpenChange={(open) => open || onResolve(undefined)}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.dialogOverlay} />
-        <Dialog.Content
-          aria-describedby="recurrence-scope-description"
-          className={styles.scopeDialog}
-          onCloseAutoFocus={(event) => {
-            if (!returnFocus?.isConnected) return;
-            event.preventDefault();
-            returnFocus.focus();
-          }}
+    <Dialog
+      closeLabel={`Close ${deleting ? "delete" : "change"} recurring event dialog`}
+      description={
+        deleting
+          ? `Choose which events to remove from “${title}”.`
+          : `“${title}” moves to ${timeLabel}. Which events should change?`
+      }
+      footer={
+        <Button
+          disabled={Boolean(busyScope)}
+          variant="text"
+          onClick={() => onResolve(undefined)}
         >
-          <Dialog.Title>Change recurring event</Dialog.Title>
-          <Dialog.Description id="recurrence-scope-description">
-            “{title}” moves to {timeLabel}. Which events should change?
-          </Dialog.Description>
-          <div className={styles.scopeOptions}>
-            {OPTIONS.map((option) => (
-              <button
-                className={styles.secondaryButton}
-                key={option.scope}
-                type="button"
-                onClick={() => onResolve(option.scope)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <Dialog.Close asChild>
-            <button className={styles.textButton} type="button">
-              Cancel
-            </button>
-          </Dialog.Close>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          Cancel
+        </Button>
+      }
+      onOpenChange={(open) => {
+        if (!open && !busyScope) onResolve(undefined);
+      }}
+      open
+      returnFocus={returnFocus}
+      size="compact"
+      title={deleting ? "Delete recurring event" : "Change recurring event"}
+    >
+      {consequence ? (
+        <p className={styles.consequence}>{consequence}</p>
+      ) : null}
+      {error ? (
+        <div className={styles.error} role="alert">
+          {error}
+        </div>
+      ) : null}
+      <div className={styles.scopeOptions}>
+        {OPTION_LABELS[action].map((option) => (
+          <Button
+            className={styles.scopeOption}
+            data-destructive={deleting ? "" : undefined}
+            disabled={Boolean(busyScope)}
+            key={option.scope}
+            loading={busyScope === option.scope}
+            variant="secondary"
+            onClick={() => onResolve(option.scope)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    </Dialog>
   );
 }

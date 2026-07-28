@@ -851,14 +851,43 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   ).toHaveCount(2);
 
   await page.goto("/app/p/my-calendar/week?date=2026-07-26");
-  await page.getByRole("button", { name: /Weekly review/ }).click();
-  await page.getByRole("button", { name: "Delete" }).click();
+  const recurringEvent = page
+    .getByRole("button", { name: /Weekly review/ })
+    .first();
+  await recurringEvent.click();
+  const deleteButton = page.getByRole("button", { name: "Delete" });
+  await deleteButton.click();
+  const deleteDialog = page.getByRole("dialog", {
+    name: "Delete recurring event",
+  });
+  await expect(deleteDialog).toBeVisible();
   await expect(
-    page.getByRole("combobox", {
-      name: "Recurring event delete scope",
+    deleteDialog.getByRole("button", { name: "This event", exact: true }),
+  ).toBeVisible();
+  await expect(
+    deleteDialog.getByRole("button", {
+      name: "This and following events",
     }),
-  ).toHaveValue("occurrence");
+  ).toBeVisible();
+  await expect(
+    deleteDialog.getByRole("button", { name: "Entire series" }),
+  ).toBeVisible();
+  const deleteAccessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(deleteAccessibility.violations).toEqual([]);
+
+  // Opening the modal dismisses the preview. Escape returns to the event that
+  // launched that preview, so the keyboard path has a stable place to resume.
+  await page.keyboard.press("Escape");
+  await expect(deleteDialog).toHaveCount(0);
+  await expect(recurringEvent).toBeFocused();
+  await recurringEvent.click();
   await page.getByRole("button", { name: "Delete" }).click();
+  await page
+    .getByRole("dialog", { name: "Delete recurring event" })
+    .getByRole("button", { name: "This event", exact: true })
+    .click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Occurrence removed.",
   );
@@ -2526,7 +2555,10 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-  await page.getByRole("button", { name: /Client call/ }).first().click();
+  const eventButton = page
+    .getByRole("button", { name: /Client call/ })
+    .first();
+  await eventButton.click();
   const sheet = page.getByRole("dialog").first();
   await sheet.evaluate((element) =>
     Promise.all(element.getAnimations().map((animation) => animation.finished)),
@@ -2539,6 +2571,31 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
   await expect(
     page.getByRole("heading", { name: "Client call" }),
   ).toBeVisible();
+  await expect(sheet.getByText("1 hr", { exact: true })).toBeVisible();
+  await expect(
+    sheet.getByRole("list", { name: "Calendars" }).getByText("Studio"),
+  ).toBeVisible();
+
+  const titleBox = (await sheet
+    .getByRole("heading", { name: "Client call" })
+    .boundingBox())!;
+  const dateBox = (await sheet.getByText("Date", { exact: true }).boundingBox())!;
+  const timeBox = (await sheet.getByText("Time", { exact: true }).boundingBox())!;
+  const calendarBox = (await sheet
+    .getByRole("list", { name: "Calendars" })
+    .boundingBox())!;
+  expect([titleBox.y, dateBox.y, timeBox.y, calendarBox.y]).toEqual(
+    [titleBox.y, dateBox.y, timeBox.y, calendarBox.y].sort((a, b) => a - b),
+  );
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(eventButton).toBeFocused();
 });
 
 
