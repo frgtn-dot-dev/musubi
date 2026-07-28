@@ -1,0 +1,48 @@
+.shortcutGroups {
+  display: grid;
+  padding: 4px 18px 18px;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* Not the sidebar's uppercase micro-label: at 10 px muted it misses 4.5:1. */
+.shortcutGroupTitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.shortcutList {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 0;
+  gap: 5px;
+  font-size: 0.74rem;
+}
+
+.shortcutList > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shortcutList dt {
+  color: var(--text-secondary);
+}
+
+.shortcutList dd {
+  margin: 0;
+}
+
+.shortcutList kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}

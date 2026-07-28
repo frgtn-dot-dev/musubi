@@ -1,0 +1,35 @@
+/* The full editor as a page: what "More options" opens. Deliberately plain —
+   this layer is about getting the details right, not about the calendar. */
+.editorPage {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 40px 20px 64px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+.editorPage header {
+  display: flex;
+  width: min(560px, 100%);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.editorPage h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  font-weight: 400;
+}
+
+.editorPageForm {
+  width: min(560px, 100%);
+  padding: 20px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  background: var(--surface-overlay);
+}
