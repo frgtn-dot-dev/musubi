@@ -1074,6 +1074,7 @@ export function Workspace({
           }}
           open
           startTime={createIntent.startTime}
+          timeFormat={settings.timeFormat}
           userId={user.id}
           weekStartsOn={settings.weekStartsOn}
         />

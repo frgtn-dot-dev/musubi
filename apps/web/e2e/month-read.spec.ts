@@ -709,6 +709,79 @@ test("chooses an event date from the calendar picker", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("chooses an event time and duration from the time pickers", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ end: string; start: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "POST") {
+      writes.push(
+        route.request().postDataJSON() as {
+          end: string;
+          start: string;
+        },
+      );
+    }
+    return route.fallback();
+  });
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Portfolio review");
+
+  const start = page.getByRole("combobox", { name: "Start time" });
+  const end = page.getByRole("combobox", { name: "End time" });
+  await start.click();
+  const startOptions = page.getByRole("listbox", {
+    name: "Start time options",
+  });
+  await expectNoAccessibilityViolations(page);
+  await startOptions
+    .getByRole("option", { name: "13:15", exact: true })
+    .click();
+  await expect(start).toHaveValue("13:15");
+  await expect(end).toHaveValue("14:15");
+
+  await end.click();
+  await page
+    .getByRole("listbox", { name: "End time options" })
+    .getByRole("option", { name: "13:45, +30m", exact: true })
+    .click();
+  await expect(end).toHaveValue("13:45");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event created.");
+  expect(new Date(writes[0]!.start).getHours()).toBe(13);
+  expect(new Date(writes[0]!.start).getMinutes()).toBe(15);
+  expect(
+    new Date(writes[0]!.end).getTime() -
+      new Date(writes[0]!.start).getTime(),
+  ).toBe(30 * 60 * 1_000);
+});
+
+test("offers one-tap time ranges on a narrow viewport", async ({ page }) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  const presets = page.getByRole("radiogroup", {
+    name: "Time range presets",
+  });
+  await expect(presets).toBeVisible();
+  await presets.getByRole("radio", { name: "Evening" }).click();
+
+  await expect(
+    page.getByRole("combobox", { name: "Start time" }),
+  ).toHaveValue("18:00");
+  await expect(
+    page.getByRole("combobox", { name: "End time" }),
+  ).toHaveValue("19:00");
+});
+
 test("keeps provider failures actionable without assuming a write succeeded", async ({
   page,
 }) => {
@@ -2559,7 +2632,9 @@ test("asks for a name and a time first, the rest on request", async ({
   await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
   await expect(page.getByRole("button", { name: /^Date:/ })).toBeVisible();
   await expect(page.getByLabel("Start time")).toBeVisible();
-  await expect(bubble.getByRole("combobox")).toBeVisible();
+  await expect(
+    bubble.getByRole("combobox", { name: "Calendar" }),
+  ).toBeVisible();
   // Everything else is out of the way until asked for.
   await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
   await expect(page.getByPlaceholder("Add notes")).toHaveCount(0);

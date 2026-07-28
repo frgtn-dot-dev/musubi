@@ -310,6 +310,7 @@ export function EventDetailsPopover({
                 }
                 onSubmit={handleUpdate}
                 submitLabel="Save"
+                timeFormat={timeFormat}
                 weekStartsOn={weekStartsOn}
               />
             </>

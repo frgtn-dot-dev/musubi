@@ -12,14 +12,48 @@ import {
 } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, useId, useState } from "react";
 import { DatePicker } from "~/ui/DatePicker";
+import { Segmented } from "~/ui/Segmented";
+import {
+  minutesToTime,
+  TimePicker,
+  timeToMinutes,
+} from "~/ui/TimePicker";
 import { type EventFormValues, validateEventForm } from "../event-form";
 import { federatedConnectionMap } from "../federation-routing";
+import { createTimeGeometry } from "../time-geometry";
 import styles from "./workspace.module.css";
 
 type FormError = {
   message: string;
   requestId?: string;
 };
+
+const TIME_SNAP_MINUTES = createTimeGeometry().snapMinutes;
+const LAST_MINUTE = 24 * 60 - 1;
+const LATEST_START_TIME = minutesToTime(
+  LAST_MINUTE - TIME_SNAP_MINUTES,
+);
+const LATEST_END_TIME = minutesToTime(LAST_MINUTE);
+const TIME_PRESETS = [
+  {
+    endTime: "10:00",
+    label: "Morning",
+    startTime: "09:00",
+    value: "09:00–10:00",
+  },
+  {
+    endTime: "14:00",
+    label: "Afternoon",
+    startTime: "13:00",
+    value: "13:00–14:00",
+  },
+  {
+    endTime: "19:00",
+    label: "Evening",
+    startTime: "18:00",
+    value: "18:00–19:00",
+  },
+] as const;
 
 /** The "when" fields a gesture outside the form can move under it. */
 export type EventWhen = Pick<
@@ -53,6 +87,7 @@ type EventEditorFormProps = {
   onError: (error: unknown, values: EventFormValues) => FormError;
   onSubmit: (values: EventFormValues) => Promise<void>;
   submitLabel: string;
+  timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
 };
 
@@ -66,6 +101,7 @@ export function EventEditorForm({
   onError,
   onSubmit,
   submitLabel,
+  timeFormat,
   weekStartsOn,
   when,
 }: EventEditorFormProps) {
@@ -96,6 +132,29 @@ export function EventEditorForm({
   function patch(next: Partial<EventFormValues>) {
     setValues((current) => ({ ...current, ...next }));
     setError(undefined);
+  }
+
+  function changeStartTime(startTime: string) {
+    const previousStart = timeToMinutes(values.startTime);
+    const previousEnd = timeToMinutes(values.endTime);
+    const nextStart = timeToMinutes(startTime);
+    if (nextStart === null) return;
+
+    const previousDuration =
+      previousStart !== null &&
+      previousEnd !== null &&
+      previousEnd > previousStart
+        ? previousEnd - previousStart
+        : 60;
+    const nextEnd = Math.min(
+      LAST_MINUTE,
+      nextStart + Math.max(TIME_SNAP_MINUTES, previousDuration),
+    );
+
+    patch({
+      endTime: minutesToTime(nextEnd),
+      startTime,
+    });
   }
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
@@ -189,30 +248,54 @@ export function EventEditorForm({
       ) : null}
 
       {!values.isAllDay ? (
-        <div className={styles.formRow}>
-          <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
-          <label>
-            <span className={styles.srOnly}>Start time</span>
-            <input
+        <>
+          <div className={styles.formRow}>
+            <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
+            <TimePicker
               disabled={saving}
-              required
-              type="time"
+              label="Start time"
+              max={LATEST_START_TIME}
+              timeFormat={timeFormat}
               value={values.startTime}
-              onChange={(event) => patch({ startTime: event.target.value })}
+              onChange={changeStartTime}
             />
-          </label>
-          <span className={styles.timeSeparator}>to</span>
-          <label>
-            <span className={styles.srOnly}>End time</span>
-            <input
+            <span className={styles.timeSeparator}>to</span>
+            <TimePicker
               disabled={saving}
-              required
-              type="time"
+              label="End time"
+              max={LATEST_END_TIME}
+              min={minutesToTime(
+                Math.min(
+                  LAST_MINUTE,
+                  (timeToMinutes(values.startTime) ?? 0) +
+                    TIME_SNAP_MINUTES,
+                ),
+              )}
+              relativeTo={values.startTime}
+              timeFormat={timeFormat}
               value={values.endTime}
-              onChange={(event) => patch({ endTime: event.target.value })}
+              onChange={(endTime) => patch({ endTime })}
             />
-          </label>
-        </div>
+          </div>
+          <div className={styles.timePresets}>
+            <Segmented
+              disabled={saving}
+              label="Time range presets"
+              options={TIME_PRESETS}
+              value={`${values.startTime}–${values.endTime}`}
+              onChange={(presetValue) => {
+                const preset = TIME_PRESETS.find(
+                  (option) => option.value === presetValue,
+                );
+                if (!preset) return;
+                patch({
+                  endTime: preset.endTime,
+                  startTime: preset.startTime,
+                });
+              }}
+            />
+          </div>
+        </>
       ) : null}
 
       {expanded ? (

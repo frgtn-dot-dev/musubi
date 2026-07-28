@@ -794,6 +794,135 @@
   stroke-width: 1px;
 }
 
+.timePicker {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+
+.timePickerInput {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 var(--space-6) 0 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-12);
+}
+
+.timePickerInput:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.timePickerInput[aria-invalid="true"] {
+  color: var(--accent-primary);
+}
+
+.timePickerInput:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.timePickerChevron {
+  position: absolute;
+  right: 0;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.timePickerPopover {
+  z-index: 140;
+  width: 252px;
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-card);
+  outline: 0;
+  background: var(--surface-canvas);
+  box-shadow: var(--shadow-overlay);
+  animation: date-picker-in var(--motion-fast) ease both;
+}
+
+:global([data-radix-popper-content-wrapper]):has(
+    .timePickerPopover
+  ) {
+  z-index: 140 !important;
+}
+
+.timePickerList {
+  max-height: 284px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2);
+  scrollbar-width: thin;
+}
+
+.timePickerSheetTitle {
+  display: none;
+}
+
+.timePickerOption {
+  display: grid;
+  width: 100%;
+  min-height: 38px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-chip);
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-13);
+  text-align: left;
+}
+
+.timePickerOption small {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.timePickerOption:hover,
+.timePickerOption[data-active] {
+  background: var(--surface-raised);
+}
+
+.timePickerOption[aria-selected="true"] {
+  background: var(--control-fill);
+  color: var(--control-on-fill);
+}
+
+.timePickerOption[aria-selected="true"] small {
+  color: inherit;
+}
+
+.timePickerHint {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  line-height: 1.4;
+}
+
+.timePickerHint[role="alert"] {
+  color: var(--accent-primary);
+}
+
+.timePickerArrow {
+  fill: var(--surface-canvas);
+  stroke: var(--border-medium);
+  stroke-width: 1px;
+}
+
 @keyframes date-picker-in {
   from {
     opacity: 0;
@@ -896,10 +1025,23 @@
     transform: none !important;
   }
 
-  .datePickerPopover {
+  :global([data-radix-popper-content-wrapper]):has(
+      .timePickerPopover
+    ) {
+    position: fixed !important;
+    z-index: 140 !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    min-width: 100% !important;
+    transform: none !important;
+  }
+
+  .datePickerPopover,
+  .timePickerPopover {
     width: 100%;
     max-height: calc(100dvh - var(--space-5));
-    overflow-y: auto;
     padding-bottom: env(safe-area-inset-bottom);
     border-right: 0;
     border-bottom: 0;
@@ -908,7 +1050,31 @@
     animation-name: dialog-sheet-in;
   }
 
-  .datePickerArrow {
+  .datePickerPopover {
+    overflow-y: auto;
+  }
+
+  .timePickerList {
+    max-height: min(55dvh, 420px);
+  }
+
+  .timePickerSheetTitle {
+    display: block;
+    margin: 0;
+    padding: var(--space-6) var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: var(--text-19);
+    font-weight: 400;
+  }
+
+  .timePickerOption {
+    min-height: 44px;
+  }
+
+  .datePickerArrow,
+  .timePickerArrow {
     display: none;
   }
 }
@@ -927,7 +1093,9 @@
 
   .dialogOverlay,
   .dialog,
-  .toast {
+  .toast,
+  .datePickerPopover,
+  .timePickerPopover {
     animation-duration: 0.01ms;
   }
 }

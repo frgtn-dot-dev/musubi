@@ -37,6 +37,7 @@ type QuickCreateProps = {
   isAllDay?: boolean;
   open: boolean;
   startTime?: string;
+  timeFormat: Settings["timeFormat"];
   userId: string;
   weekStartsOn: Settings["weekStartsOn"];
 };
@@ -56,6 +57,7 @@ export function QuickCreate({
   isAllDay,
   open,
   startTime,
+  timeFormat,
   userId,
   weekStartsOn,
 }: QuickCreateProps) {
@@ -193,6 +195,7 @@ export function QuickCreate({
             }
             onSubmit={handleSubmit}
             submitLabel="Create"
+            timeFormat={timeFormat}
             weekStartsOn={weekStartsOn}
           />
           <Popover.Arrow className={styles.popoverArrow} />

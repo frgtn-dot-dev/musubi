@@ -1915,8 +1915,19 @@
   composes: timeSeparator from "./styles/primitives.module.css";
 }
 
+.timePresets {
+  display: none;
+}
+
 .formHint {
   composes: formHint from "./styles/primitives.module.css";
+}
+
+@media (max-width: 599px) {
+  .timePresets {
+    display: block;
+    margin: 0 14px 7px;
+  }
 }
 
 .allDayRow {
