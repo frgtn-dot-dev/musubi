@@ -694,6 +694,19 @@ test("chooses an event date from the calendar picker", async ({ page }) => {
     .fill("Planning day");
   await page.getByRole("button", { name: /^Date:/ }).click();
   const picker = page.getByRole("dialog", { name: "Choose date" });
+  await expect(picker).toBeVisible();
+  await picker.evaluate(async (element) => {
+    // Radix mounts the portal before the CSS animation is registered. Wait two
+    // frames so Axe measures the settled UI rather than a translucent frame.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    );
+  });
   await expectNoAccessibilityViolations(page);
   await picker
     .getByRole("gridcell", { name: "Thursday, July 30, 2026" })
@@ -2198,7 +2211,7 @@ test("joins a calendar from an invite link on this server", async ({ page }) => 
   expect(joinedCalendarId).toBe("shared-cal");
 });
 
-test("updates the display name and gates account deletion", async ({
+test("manages account identity and gates account deletion", async ({
   page,
 }) => {
   await mockAuthenticatedReads(page);
@@ -2219,29 +2232,85 @@ test("updates the display name and gates account deletion", async ({
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await page.getByRole("button", { name: "Manage account" }).click();
-  await expect(
-    page.getByRole("heading", { exact: true, name: "Account" }),
-  ).toBeVisible();
+  const accountDialog = page.getByRole("dialog", { name: "Account" });
+  await expect(accountDialog).toBeVisible();
+  await expect(accountDialog).toContainText("web-qa@example.invalid");
+  await accountDialog.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
 
-  await page
+  const sectionHeadings = ["Profile", "Security", "Danger zone"];
+  const sectionTops = await Promise.all(
+    sectionHeadings.map(async (name) =>
+      (
+        await accountDialog
+          .getByRole("heading", { name })
+          .boundingBox()
+      )!.y,
+    ),
+  );
+  expect(sectionTops).toEqual([...sectionTops].sort((a, b) => a - b));
+
+  await accountDialog
+    .getByLabel("Change profile photo")
+    .setInputFiles({
+      buffer: Buffer.from("not-an-image"),
+      mimeType: "text/plain",
+      name: "notes.txt",
+    });
+  await expect(accountDialog.getByRole("alert")).toContainText(
+    "Choose a PNG, JPEG, or WebP image.",
+  );
+  await expectNoAccessibilityViolations(page);
+
+  const displayNameAction = accountDialog.getByRole("button", {
+    name: /Display name/,
+  });
+  await displayNameAction.focus();
+  await page.keyboard.press("Enter");
+  const nameDialog = page.getByRole("dialog", { name: "Display name" });
+  await expect(nameDialog).toBeVisible();
+  await expect(nameDialog.getByRole("textbox")).toBeFocused();
+
+  await nameDialog
     .getByRole("textbox", { name: "Display name" })
     .fill("Web QA Updated");
-  await page.getByRole("button", { name: "Save name" }).click();
+  await nameDialog.getByRole("button", { name: "Save" }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Name updated.",
   );
+  await expect(nameDialog).toBeHidden();
 
-  await page.getByRole("button", { name: "Reset password" }).click();
+  await accountDialog
+    .getByRole("button", { name: /Reset password/ })
+    .click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Check your email for a link to reset your password.",
   );
 
-  // Deletion needs the exact display name typed to confirm.
-  const deleteButton = page.getByRole("button", { name: "Delete account" });
+  await accountDialog
+    .getByRole("button", { name: /Delete account/ })
+    .click();
+  const deleteDialog = page.getByRole("dialog", { name: "Delete account?" });
+  await expect(deleteDialog).toBeVisible();
+  await deleteDialog.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  await expectNoAccessibilityViolations(page);
+
+  // Deletion needs the exact display name typed to confirm, including spacing.
+  const deleteButton = deleteDialog.getByRole("button", {
+    name: "Delete account",
+  });
+  const confirmation = deleteDialog.getByRole("textbox", {
+    name: "Type Web QA to confirm",
+  });
   await expect(deleteButton).toBeDisabled();
-  await page.getByPlaceholder("Web QA").fill("wrong");
+  await confirmation.fill("wrong");
   await expect(deleteButton).toBeDisabled();
-  await page.getByPlaceholder("Web QA").fill("Web QA");
+  await confirmation.fill(" Web QA ");
+  await expect(deleteButton).toBeDisabled();
+  await confirmation.fill("Web QA");
   await expect(deleteButton).toBeEnabled();
   await deleteButton.click();
 
@@ -2249,6 +2318,47 @@ test("updates the display name and gates account deletion", async ({
     "Check your email",
   );
   expect(deleteRequested).toBe(true);
+});
+
+test("keeps account management usable as nested mobile sheets", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("button", { name: "Manage account" }).click();
+  const accountSheet = page.getByRole("dialog", { name: "Account" });
+  await accountSheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+
+  const accountBox = (await accountSheet.boundingBox())!;
+  expect(accountBox.x).toBe(0);
+  expect(Math.round(accountBox.width)).toBe(390);
+  expect(accountBox.height).toBeLessThanOrEqual(700 + 1);
+
+  const deleteAction = accountSheet.getByRole("button", {
+    name: /Delete account/,
+  });
+  await deleteAction.scrollIntoViewIfNeeded();
+  await deleteAction.click();
+
+  const deleteSheet = page.getByRole("dialog", { name: "Delete account?" });
+  await deleteSheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const deleteBox = (await deleteSheet.boundingBox())!;
+  expect(deleteBox.x).toBe(0);
+  expect(Math.round(deleteBox.width)).toBe(390);
+  await expect(deleteSheet.getByRole("textbox")).toBeFocused();
+  await expectNoAccessibilityViolations(page);
+
+  await page.keyboard.press("Escape");
+  await expect(deleteSheet).toBeHidden();
+  await expect(accountSheet).toBeVisible();
+  await expect(deleteAction).toBeFocused();
 });
 
 test("drags across month days to create an all-day range", async ({ page }) => {

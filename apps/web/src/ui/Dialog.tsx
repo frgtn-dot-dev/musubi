@@ -2,6 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { IconButton } from "./Button";
 import { classNames } from "./class-names";
@@ -16,9 +17,10 @@ export type DialogProps = {
   closeLabel: string;
   description: ReactNode;
   footer?: ReactNode;
+  initialFocus?: RefObject<HTMLElement | null>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  returnFocus?: HTMLElement | null;
+  returnFocus?: HTMLElement | RefObject<HTMLElement | null> | null;
   size?: DialogSize;
   title: ReactNode;
   trigger?: ReactElement;
@@ -38,6 +40,7 @@ export function Dialog({
   closeLabel,
   description,
   footer,
+  initialFocus,
   onOpenChange,
   open,
   returnFocus,
@@ -58,10 +61,19 @@ export function Dialog({
             styles[`dialog_${size}`],
             className,
           )}
-          onCloseAutoFocus={(event) => {
-            if (!returnFocus?.isConnected) return;
+          onOpenAutoFocus={(event) => {
+            if (!initialFocus?.current) return;
             event.preventDefault();
-            returnFocus.focus();
+            initialFocus.current.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            const returnTarget =
+              returnFocus && "current" in returnFocus
+                ? returnFocus.current
+                : returnFocus;
+            if (!returnTarget?.isConnected) return;
+            event.preventDefault();
+            returnTarget.focus();
           }}
         >
           <header className={styles.dialogHeader}>

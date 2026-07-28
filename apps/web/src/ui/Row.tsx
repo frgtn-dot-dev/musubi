@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type ReactNode,
@@ -73,38 +74,44 @@ export type RowActionProps = Omit<
     trailing?: ReactNode;
   };
 
-export function RowAction({
-  className,
-  detail,
-  icon,
-  label,
-  showChevron = true,
-  trailing,
-  type = "button",
-  value,
-  ...buttonProps
-}: RowActionProps) {
-  return (
-    <button
-      {...buttonProps}
-      className={classNames(styles.row, styles.rowAction, className)}
-      type={type}
-    >
-      <RowContent
-        detail={detail}
-        icon={icon}
-        label={label}
-        trailing={
-          trailing ??
-          (showChevron ? (
-            <span className={styles.rowChevron} aria-hidden="true" />
-          ) : null)
-        }
-        value={value}
-      />
-    </button>
-  );
-}
+export const RowAction = forwardRef<HTMLButtonElement, RowActionProps>(
+  function RowAction(
+    {
+      className,
+      detail,
+      icon,
+      label,
+      showChevron = true,
+      trailing,
+      type = "button",
+      value,
+      ...buttonProps
+    },
+    ref,
+  ) {
+    return (
+      <button
+        {...buttonProps}
+        className={classNames(styles.row, styles.rowAction, className)}
+        ref={ref}
+        type={type}
+      >
+        <RowContent
+          detail={detail}
+          icon={icon}
+          label={label}
+          trailing={
+            trailing ??
+            (showChevron ? (
+              <span className={styles.rowChevron} aria-hidden="true" />
+            ) : null)
+          }
+          value={value}
+        />
+      </button>
+    );
+  },
+);
 
 export type RowToggleProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,

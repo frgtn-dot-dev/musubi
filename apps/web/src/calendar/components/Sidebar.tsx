@@ -19,6 +19,7 @@ import type {
 } from "@musubi/types";
 import { useState, useSyncExternalStore } from "react";
 import { BrandMark } from "~/components/BrandMark";
+import { Avatar } from "~/ui/Avatar";
 import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
 
@@ -40,7 +41,7 @@ type SidebarProps = {
   onToggleCalendar: (calendarId: string) => void;
   pages: PageDocument[];
   syncLabel: string;
-  user: Pick<User, "email" | "name">;
+  user: Pick<User, "email" | "image" | "name">;
   visibleCalendarIds: string[];
   weekStartsOn: UserSettings["weekStartsOn"];
 };
@@ -224,9 +225,7 @@ export function Sidebar({
               aria-label="Manage account"
               onClick={onManageAccount}
             >
-              <span className={styles.profileAvatar} aria-hidden="true">
-                {user.name.trim().charAt(0).toLocaleUpperCase() || "M"}
-              </span>
+              <Avatar image={user.image} name={user.name} size={32} />
               <span className={styles.profileCopy}>
                 <strong>{user.name}</strong>
                 <span>{user.email}</span>

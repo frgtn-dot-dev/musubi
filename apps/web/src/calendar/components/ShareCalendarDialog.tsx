@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { can, type Calendar } from "@musubi/types";
 import { Copy, Link2, Trash2, X } from "lucide-react";
 import { useCalendarSharing } from "~/calendar/calendar-sharing";
+import { Avatar } from "~/ui/Avatar";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./workspace.module.css";
 
@@ -111,13 +112,11 @@ export function ShareCalendarDialog({
                       className={styles.calendarManageRow}
                       key={member.id}
                     >
-                      <span
-                        className={styles.profileAvatar}
-                        aria-hidden="true"
-                      >
-                        {member.name.trim().charAt(0).toLocaleUpperCase() ||
-                          "M"}
-                      </span>
+                      <Avatar
+                        image={member.image}
+                        name={member.name}
+                        size={32}
+                      />
                       <span className={styles.calendarManageName}>
                         {member.name}
                         {member.id === userId ? " (you)" : ""}

@@ -125,7 +125,7 @@ type WorkspaceProps = {
   pageId: string;
   pages: PageDocument[];
   settings: Settings;
-  user: Pick<User, "email" | "id" | "name">;
+  user: Pick<User, "email" | "id" | "image" | "name">;
 };
 
 type CreateIntent = {

@@ -1,10 +1,29 @@
-import * as Dialog from "@radix-ui/react-dialog";
-import { Camera, X } from "lucide-react";
-import { useState } from "react";
-import { authClient } from "~/auth/auth-client";
+import {
+  Camera,
+  KeyRound,
+  Mail,
+  Pencil,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import {
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { deleteAccount, uploadAvatar } from "~/api/resources";
+import { authClient } from "~/auth/auth-client";
+import { Avatar } from "~/ui/Avatar";
+import { Button } from "~/ui/Button";
+import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Field } from "~/ui/Field";
+import { Row, RowAction } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
-import styles from "./workspace.module.css";
+import styles from "./styles/account.module.css";
 
 type AccountDialogProps = {
   onNotice: (message: string) => void;
@@ -12,7 +31,14 @@ type AccountDialogProps = {
   open: boolean;
 };
 
+type AccountUser = {
+  email: string;
+  image?: null | string;
+  name: string;
+};
+
 const AVATAR_MAX_BYTES = 256 * 1024;
+const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 // Strip the `data:<mime>;base64,` prefix — the API wants raw base64.
 function toBase64(file: File): Promise<string> {
@@ -32,26 +58,32 @@ export function AccountDialog({
 }: AccountDialogProps) {
   const session = authClient.useSession();
   const user = session.data?.user;
-  const [name, setName] = useState(user?.name ?? "");
-  const [confirmName, setConfirmName] = useState("");
+  const avatarInputId = useId();
+  const nameActionRef = useRef<HTMLButtonElement>(null);
+  const deleteActionRef = useRef<HTMLButtonElement>(null);
+  const [nameEditorOpen, setNameEditorOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const { busy, error, run, setError } = useAsyncAction();
 
-  async function saveName() {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === user?.name) return;
-    await run(async () => {
-      const result = await authClient.updateUser({ name: trimmed });
-      if (result.error) throw new Error(result.error.message);
-      await session.refetch();
-      onNotice("Name updated.");
-    }, "Could not update your name.");
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      setError("");
+      setNameEditorOpen(false);
+      setDeleteDialogOpen(false);
+    }
+    onOpenChange(nextOpen);
   }
 
   async function changeAvatar(file: File) {
+    if (!AVATAR_TYPES.has(file.type)) {
+      setError("Choose a PNG, JPEG, or WebP image.");
+      return;
+    }
     if (file.size > AVATAR_MAX_BYTES) {
       setError("Choose an image up to 256 KB.");
       return;
     }
+
     await run(async () => {
       const { url } = await uploadAvatar(await toBase64(file));
       const result = await authClient.updateUser({ image: url });
@@ -73,141 +105,328 @@ export function AccountDialog({
     }, "Could not start a password reset.");
   }
 
-  async function removeAccount() {
-    await run(async () => {
-      await deleteAccount();
-      onNotice(
-        "Check your email — open the link we sent to permanently delete your account.",
-      );
-      onOpenChange(false);
-    }, "Your account could not be deleted.");
-  }
-
-  const nameDirty = name.trim().length > 0 && name.trim() !== user?.name;
-  const confirmMatches = Boolean(user) && confirmName.trim() === user?.name;
-
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.dialogOverlay} />
-        <Dialog.Content
-          aria-describedby="account-description"
-          className={styles.manageDialog}
-        >
-          <header className={styles.manageDialogHeader}>
-            <div>
-              <Dialog.Title>Account</Dialog.Title>
-              <Dialog.Description id="account-description">
-                Your name and photo appear to people you share calendars with.
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                aria-label="Close account"
-                className={styles.iconButton}
-                type="button"
-              >
-                <X aria-hidden="true" size={17} />
-              </button>
-            </Dialog.Close>
-          </header>
-
-          <section className={styles.transferSection}>
-            <div className={styles.accountIdentity}>
-              <span className={styles.accountAvatar} aria-hidden="true">
-                {user?.image ? (
-                  <img alt="" src={user.image} />
-                ) : (
-                  (user?.name?.trim().charAt(0).toLocaleUpperCase() ?? "M")
-                )}
-              </span>
-              <label className={styles.secondaryButton}>
-                <Camera aria-hidden="true" size={15} />
-                <span>Change photo</span>
-                <input
-                  accept="image/png,image/jpeg,image/webp"
-                  className={styles.srOnly}
-                  disabled={busy}
-                  type="file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (file) void changeAvatar(file);
-                  }}
-                />
-              </label>
-            </div>
-
-            <label className={styles.settingRow}>
-              <span>Display name</span>
-              <input
-                aria-label="Display name"
-                disabled={busy}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+    <>
+      <Dialog
+        closeLabel="Close account"
+        description="Your profile is visible to people you share calendars with."
+        onOpenChange={handleOpenChange}
+        open={open}
+        title="Account"
+      >
+        <div aria-busy={busy || undefined} className={styles.content}>
+          <div className={styles.identity}>
+            <input
+              accept="image/png,image/jpeg,image/webp"
+              aria-label="Change profile photo"
+              className={styles.visuallyHidden}
+              disabled={busy}
+              id={avatarInputId}
+              type="file"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void changeAvatar(file);
+              }}
+            />
+            <label
+              className={styles.avatarControl}
+              htmlFor={avatarInputId}
+            >
+              <Avatar
+                image={user?.image}
+                name={user?.name ?? "Musubi"}
+                size={64}
               />
+              <span className={styles.cameraBadge} aria-hidden="true">
+                <Camera size={13} strokeWidth={2} />
+              </span>
             </label>
-            <div className={styles.transferControls}>
-              <span className={styles.accountEmail}>{user?.email}</span>
-              <button
-                className={styles.secondaryButton}
-                disabled={busy}
-                type="button"
-                onClick={() => void resetPassword()}
+            <div className={styles.identityCopy}>
+              <strong>{user?.name ?? "Your profile"}</strong>
+              <span>{user?.email ?? "Loading account…"}</span>
+              <label
+                className={styles.changePhotoControl}
+                htmlFor={avatarInputId}
               >
-                Reset password
-              </button>
-              <button
-                className={styles.primaryButton}
-                disabled={busy || !nameDirty}
-                type="button"
-                onClick={() => void saveName()}
-              >
-                Save name
-              </button>
-            </div>
-          </section>
-
-          <section className={styles.transferSection}>
-            <div className={styles.transferHeading}>
-              <div>
-                <h3>Delete account</h3>
-                <p>
-                  Permanently removes your account and data. Type your name to
-                  confirm — we’ll email you a final confirmation link.
-                </p>
-              </div>
-            </div>
-            <div className={styles.transferControls}>
-              <label>
-                <span className={styles.srOnly}>
-                  Type your name to confirm deletion
-                </span>
-                <input
-                  disabled={busy}
-                  placeholder={user?.name ?? "Your name"}
-                  value={confirmName}
-                  onChange={(event) => setConfirmName(event.target.value)}
-                />
+                Change photo
               </label>
-              <button
-                className={styles.dangerButton}
-                disabled={busy || !confirmMatches}
-                type="button"
-                onClick={() => void removeAccount()}
-              >
-                Delete account
-              </button>
             </div>
-          </section>
+          </div>
+
+          <AccountSection title="Profile">
+            <RowAction
+              disabled={!user || busy}
+              icon={<Pencil size={17} strokeWidth={1.7} />}
+              label="Display name"
+              ref={nameActionRef}
+              value={user?.name}
+              onClick={() => {
+                setError("");
+                setNameEditorOpen(true);
+              }}
+            />
+            <Row
+              icon={<Mail size={17} strokeWidth={1.7} />}
+              label="Email"
+              value={user?.email ?? "—"}
+            />
+          </AccountSection>
+
+          <AccountSection title="Security">
+            <RowAction
+              detail="We’ll email you a secure reset link"
+              disabled={!user?.email || busy}
+              icon={<KeyRound size={17} strokeWidth={1.7} />}
+              label="Reset password"
+              showChevron={false}
+              onClick={() => void resetPassword()}
+            />
+          </AccountSection>
+
+          <AccountSection title="Danger zone">
+            <RowAction
+              data-tone="destructive"
+              detail="Requires an email confirmation before anything is removed"
+              disabled={!user || busy}
+              icon={<Trash2 size={17} strokeWidth={1.7} />}
+              label="Delete account"
+              ref={deleteActionRef}
+              onClick={() => {
+                setError("");
+                setDeleteDialogOpen(true);
+              }}
+            />
+          </AccountSection>
 
           {error ? (
-            <div className={styles.formError} role="alert">
+            <div className={styles.error} role="alert">
               <p>{error}</p>
             </div>
           ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
+      </Dialog>
+
+      {user && nameEditorOpen ? (
+        <EditNameDialog
+          key={user.name}
+          onNotice={onNotice}
+          onOpenChange={setNameEditorOpen}
+          onRefetch={() => session.refetch()}
+          open
+          returnFocus={nameActionRef}
+          user={user}
+        />
+      ) : null}
+
+      {user && deleteDialogOpen ? (
+        <DeleteAccountDialog
+          onDeleted={() => {
+            setDeleteDialogOpen(false);
+            onNotice(
+              "Check your email — open the link we sent to permanently delete your account.",
+            );
+            onOpenChange(false);
+          }}
+          onOpenChange={setDeleteDialogOpen}
+          open
+          returnFocus={deleteActionRef}
+          userName={user.name}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function AccountSection({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className={styles.section}>
+      <SectionLabel className={styles.sectionHeading} level={3}>
+        {title}
+      </SectionLabel>
+      <div className={styles.sectionRows}>{children}</div>
+    </section>
+  );
+}
+
+function EditNameDialog({
+  onNotice,
+  onOpenChange,
+  onRefetch,
+  open,
+  returnFocus,
+  user,
+}: {
+  onNotice: (message: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onRefetch: () => Promise<unknown>;
+  open: boolean;
+  returnFocus: RefObject<HTMLElement | null>;
+  user: AccountUser;
+}) {
+  const [name, setName] = useState(user.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { busy, error, run } = useAsyncAction();
+  const trimmedName = name.trim();
+  const canSave = trimmedName.length > 0 && trimmedName !== user.name;
+
+  async function saveName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSave) return;
+    const saved = await run(async () => {
+      const result = await authClient.updateUser({ name: trimmedName });
+      if (result.error) throw new Error(result.error.message);
+      await onRefetch();
+      return true;
+    }, "Could not update your name.");
+
+    if (saved) {
+      onNotice("Name updated.");
+      onOpenChange(false);
+    }
+  }
+
+  return (
+    <Dialog
+      closeLabel="Close display name"
+      description="This is how other people will recognize you in shared calendars."
+      footer={
+        <>
+          <DialogClose>
+            <Button disabled={busy} variant="secondary">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={!canSave}
+            form="display-name-form"
+            loading={busy}
+            type="submit"
+          >
+            Save
+          </Button>
+        </>
+      }
+      initialFocus={inputRef}
+      onOpenChange={onOpenChange}
+      open={open}
+      returnFocus={returnFocus}
+      size="compact"
+      title="Display name"
+    >
+      <form id="display-name-form" onSubmit={(event) => void saveName(event)}>
+        <Field
+          description="Use the name people already know you by."
+          label="Display name"
+        >
+          <input
+            autoComplete="name"
+            disabled={busy}
+            maxLength={80}
+            ref={inputRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        {error ? (
+          <div className={styles.dialogError} role="alert">
+            <p>{error}</p>
+          </div>
+        ) : null}
+      </form>
+    </Dialog>
+  );
+}
+
+function DeleteAccountDialog({
+  onDeleted,
+  onOpenChange,
+  open,
+  returnFocus,
+  userName,
+}: {
+  onDeleted: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  returnFocus: RefObject<HTMLElement | null>;
+  userName: string;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { busy, error, run } = useAsyncAction();
+  const matches = confirmation === userName;
+
+  async function removeAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!matches) return;
+    const deleted = await run(async () => {
+      await deleteAccount();
+      return true;
+    }, "Your account could not be deleted.");
+    if (deleted) onDeleted();
+  }
+
+  return (
+    <Dialog
+      closeLabel="Close account deletion"
+      description="Permanently removes your account and data after you open the final confirmation link we email you."
+      footer={
+        <>
+          <DialogClose>
+            <Button disabled={busy} variant="secondary">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={!matches}
+            form="delete-account-form"
+            loading={busy}
+            type="submit"
+            variant="destructive"
+          >
+            Delete account
+          </Button>
+        </>
+      }
+      initialFocus={inputRef}
+      onOpenChange={onOpenChange}
+      open={open}
+      returnFocus={returnFocus}
+      size="compact"
+      title="Delete account?"
+    >
+      <form
+        id="delete-account-form"
+        onSubmit={(event) => void removeAccount(event)}
+      >
+        <div className={styles.deleteWarning}>
+          <UserRound aria-hidden="true" size={19} strokeWidth={1.6} />
+          <p>
+            Type <strong>{userName}</strong> exactly to continue.
+          </p>
+        </div>
+        <Field label={`Type ${userName} to confirm`}>
+          <input
+            autoComplete="off"
+            disabled={busy}
+            placeholder={userName}
+            ref={inputRef}
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+          />
+        </Field>
+        {error ? (
+          <div className={styles.dialogError} role="alert">
+            <p>{error}</p>
+          </div>
+        ) : null}
+      </form>
+    </Dialog>
   );
 }

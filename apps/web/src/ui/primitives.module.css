@@ -47,7 +47,7 @@
 .button_secondary {
   border-color: var(--border-medium);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .button_destructive {
@@ -123,6 +123,27 @@
   }
 }
 
+.avatar {
+  display: grid;
+  overflow: hidden;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  flex: none;
+  place-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+  font-family: var(--font-serif);
+  font-size: calc(var(--avatar-size) * 0.36);
+  line-height: 1;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -137,7 +158,7 @@
 }
 
 .fieldLabel {
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: var(--text-10);
   font-weight: 500;
   letter-spacing: 0.15em;
@@ -474,6 +495,15 @@
   opacity: 0.5;
 }
 
+.rowAction[data-tone="destructive"] .rowLabel,
+.rowAction[data-tone="destructive"] .rowIcon {
+  color: color-mix(
+    in srgb,
+    var(--accent-primary) 88%,
+    var(--text-primary)
+  );
+}
+
 .rowIcon {
   display: grid;
   width: 22px;
@@ -723,9 +753,16 @@
 }
 
 .datePickerPopover h2,
-.datePickerPopover abbr,
-.datePickerPopover [data-outside] {
+.datePickerPopover abbr {
   color: var(--text-secondary);
+}
+
+.datePickerPopover.datePickerPopover [data-outside] {
+  color: color-mix(
+    in srgb,
+    var(--text-primary) 72%,
+    var(--surface-canvas)
+  );
 }
 
 :global([data-radix-popper-content-wrapper]):has(
