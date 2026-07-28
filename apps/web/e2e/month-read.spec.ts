@@ -2401,6 +2401,9 @@ test("leaves a draft on the grid that can be moved before saving", async ({
   await page.getByRole("textbox", { name: "Event title" }).fill("Deep work");
   const draft = page.locator("[data-draft]");
   await expect(draft).toBeVisible();
+  // It reads as the event it is about to become, not as a selection.
+  await expect(draft).toContainText("New event");
+  await expect(draft).toContainText("02:00–03:30");
   const draftBox = (await draft.boundingBox())!;
   await page.mouse.move(
     draftBox.x + draftBox.width / 2,
@@ -2493,4 +2496,5 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
     page.getByRole("textbox", { name: "Event title" }),
   ).toHaveValue("Retreat");
 });
+
 

@@ -248,6 +248,9 @@ dokud se neuloží.
   další buňky), uchopením se posune celý rozsah. Tint pod ní zmizel — dvě značky
   pro jednu věc jsou šum; tint teď označuje jen rozsah, který se právě vytahuje
   (tam pilule ještě není).
+- Draft je pojmenovaný („New event") a nese svůj čas — čte se jako event, ne jako
+  výběr. Název se objeví, až když má blok výšku (stejné container query jako
+  reálný blok).
 - Formulář převezme nový čas přes `when` (`EventEditorForm`), který přepíše
   **jen** „kdy" — rozepsaný název přežije přetažení. Intent si drží `id`, takže
   se popover neremountuje.

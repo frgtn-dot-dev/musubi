@@ -827,10 +827,17 @@ export function TimeGridView({
                       startDraftDrag(pointerEvent, "move")
                     }
                   >
-                    <span>
+                    <span className={styles.timeGridSelectionTime}>
                       {minuteLabel(selection.startMinutes, timeFormat)}–
                       {minuteLabel(selection.endMinutes, timeFormat)}
                     </span>
+                    {/* Named once it is laid down, so it reads as the event it
+                        is about to become rather than as a selection. */}
+                    {draftSlot && !liveSelection ? (
+                      <span className={styles.timeGridSelectionTitle}>
+                        New event
+                      </span>
+                    ) : null}
                     {draftSlot && onMoveDraft ? (
                       <>
                         <span

@@ -1072,12 +1072,13 @@
 
 /* The interval a drag has chosen, before quick create opens. */
 .timeGridSelection {
+  container: timeGridSelection / size;
   position: absolute;
   z-index: 30;
   left: 2px;
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   width: calc(100% - 4px);
   padding: 2px 4px;
   border: 1px solid var(--accent-primary);
@@ -1086,10 +1087,29 @@
   pointer-events: none;
 }
 
-.timeGridSelection span {
+/* Time then name, left aligned — the same reading order as a real block. In day
+   view the column is the full width, so a right-aligned time ends up an inch
+   away from what it describes. */
+.timeGridSelectionTime {
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.62rem;
+}
+
+.timeGridSelectionTitle {
+  display: none;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Same rule as a real block: the name appears when the box has room for it. */
+@container timeGridSelection (min-height: 30px) {
+  .timeGridSelectionTitle {
+    display: block;
+  }
 }
 
 /* A laid-down draft takes the pointer back: it can be moved and resized while
