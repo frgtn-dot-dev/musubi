@@ -28,6 +28,7 @@ type EventPopoverProps = EventActionHandlers & {
   pending?: boolean;
   showLabel?: boolean;
   timeFormat: Settings["timeFormat"];
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 export function EventPopover({
@@ -41,6 +42,7 @@ export function EventPopover({
   pending = false,
   showLabel = true,
   timeFormat,
+  weekStartsOn,
   ...eventActions
 }: EventPopoverProps) {
   const eventColor = calendar?.color ?? event.color;
@@ -51,6 +53,7 @@ export function EventPopover({
       calendars={calendars}
       event={event}
       timeFormat={timeFormat}
+      weekStartsOn={weekStartsOn}
       {...eventActions}
     >
       <button

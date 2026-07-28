@@ -151,6 +151,9 @@ function NewEventRoute() {
           }
           onSubmit={handleSubmit}
           submitLabel="Create event"
+          weekStartsOn={
+            workspace.settings.data?.weekStartsOn ?? "monday"
+          }
         />
       </div>
     </main>

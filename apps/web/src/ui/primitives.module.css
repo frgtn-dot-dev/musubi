@@ -682,6 +682,125 @@
   color: var(--accent-primary);
 }
 
+.datePickerTrigger {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  text-align: left;
+}
+
+.datePickerTrigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datePickerTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.datePickerPopover {
+  z-index: 140;
+  width: 304px;
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-card);
+  outline: 0;
+  background: var(--surface-canvas);
+  box-shadow: var(--shadow-overlay);
+  animation: date-picker-in var(--motion-fast) ease both;
+}
+
+.datePickerPopover h2,
+.datePickerPopover abbr,
+.datePickerPopover [data-outside] {
+  color: var(--text-secondary);
+}
+
+:global([data-radix-popper-content-wrapper]):has(
+    .datePickerPopover
+  ) {
+  z-index: 140 !important;
+}
+
+.datePickerEntry {
+  display: flex;
+  align-items: end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.datePickerEntry label {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.datePickerEntry input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  letter-spacing: normal;
+}
+
+.datePickerEntry input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.datePickerEntry input[aria-invalid="true"] {
+  border-color: var(--accent-primary);
+}
+
+.datePickerHint {
+  min-height: 27px;
+  margin: 0;
+  padding: var(--space-1) var(--space-4) var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  line-height: 1.4;
+}
+
+.datePickerHint[role="alert"] {
+  color: var(--accent-primary);
+}
+
+.datePickerArrow {
+  fill: var(--surface-canvas);
+  stroke: var(--border-medium);
+  stroke-width: 1px;
+}
+
+@keyframes date-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+}
+
 @keyframes dialog-overlay-in {
   from {
     opacity: 0;
@@ -762,6 +881,35 @@
 
   .toastRegion {
     bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+
+  :global([data-radix-popper-content-wrapper]):has(
+      .datePickerPopover
+    ) {
+    position: fixed !important;
+    z-index: 140 !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    min-width: 100% !important;
+    transform: none !important;
+  }
+
+  .datePickerPopover {
+    width: 100%;
+    max-height: calc(100dvh - var(--space-5));
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+    animation-name: dialog-sheet-in;
+  }
+
+  .datePickerArrow {
+    display: none;
   }
 }
 

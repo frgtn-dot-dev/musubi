@@ -80,6 +80,7 @@ type EventDetailsPopoverProps = EventActionHandlers & {
   children: ReactElement;
   event: Event;
   timeFormat: Settings["timeFormat"];
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 export function EventDetailsPopover({
@@ -97,6 +98,7 @@ export function EventDetailsPopover({
   onUpdateEvent,
   timeFormat,
   user,
+  weekStartsOn,
 }: EventDetailsPopoverProps) {
   const master = getEventMaster(event);
   const [open, setOpen] = useState(false);
@@ -308,6 +310,7 @@ export function EventDetailsPopover({
                 }
                 onSubmit={handleUpdate}
                 submitLabel="Save"
+                weekStartsOn={weekStartsOn}
               />
             </>
           ) : (

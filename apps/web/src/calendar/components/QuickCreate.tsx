@@ -1,5 +1,5 @@
 import * as Popover from "@radix-ui/react-popover";
-import type { Calendar, Event } from "@musubi/types";
+import type { Calendar, Event, Settings } from "@musubi/types";
 import { GripHorizontal, X } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -38,6 +38,7 @@ type QuickCreateProps = {
   open: boolean;
   startTime?: string;
   userId: string;
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 export function QuickCreate({
@@ -56,6 +57,7 @@ export function QuickCreate({
   open,
   startTime,
   userId,
+  weekStartsOn,
 }: QuickCreateProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   // The window can be moved out of the way of whatever it covers, but only
@@ -191,6 +193,7 @@ export function QuickCreate({
             }
             onSubmit={handleSubmit}
             submitLabel="Create"
+            weekStartsOn={weekStartsOn}
           />
           <Popover.Arrow className={styles.popoverArrow} />
         </Popover.Content>

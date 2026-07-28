@@ -673,6 +673,42 @@ test("creates, edits and deletes an event through confirmed API writes", async (
   ).toBeVisible();
 });
 
+test("chooses an event date from the calendar picker", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ start: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "POST") {
+      writes.push(
+        route.request().postDataJSON() as {
+          start: string;
+        },
+      );
+    }
+    return route.fallback();
+  });
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Planning day");
+  await page.getByRole("button", { name: /^Date:/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose date" });
+  await expectNoAccessibilityViolations(page);
+  await picker
+    .getByRole("gridcell", { name: "Thursday, July 30, 2026" })
+    .click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event created.");
+  expect(writes[0]?.start.startsWith("2026-07-30")).toBe(true);
+  await expect(
+    page
+      .locator('[data-day-key="2026-07-30"]')
+      .getByRole("button", { name: /Planning day/ }),
+  ).toBeVisible();
+});
+
 test("keeps provider failures actionable without assuming a write succeeded", async ({
   page,
 }) => {
@@ -2045,8 +2081,12 @@ test("drags across month days to create an all-day range", async ({ page }) => {
   await page.mouse.up();
 
   // Quick create opens pre-filled as an all-day event spanning the range.
-  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-07-28");
-  await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
+  await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+    "Tuesday, July 28, 2026",
+  );
+  await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
+    "Thursday, July 30, 2026",
+  );
   // The tint hands over to the draft pill, which spans the same three days.
   await expect(page.locator("[data-range-selected]")).toHaveCount(0);
   await expect(page.locator("[data-draft]")).toHaveCount(3);
@@ -2079,8 +2119,12 @@ test("dragging backwards across month days still creates a forward range", async
   );
   await page.mouse.up();
 
-  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-07-28");
-  await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
+  await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+    "Tuesday, July 28, 2026",
+  );
+  await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
+    "Thursday, July 30, 2026",
+  );
 });
 
 test("asks which occurrences a dragged series should change", async ({
@@ -2466,8 +2510,8 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 
   // One pill per covered day, flat where it runs into the next cell.
   await expect(page.locator("[data-draft]")).toHaveCount(3);
-  await expect(page.getByLabel("Date", { exact: true })).toHaveValue(
-    "2026-07-28",
+  await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+    "Tuesday, July 28, 2026",
   );
   await page.getByRole("textbox", { name: "Event title" }).fill("Retreat");
 
@@ -2488,10 +2532,12 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
   );
   await page.mouse.up();
 
-  await expect(page.getByLabel("Date", { exact: true })).toHaveValue(
-    "2026-07-29",
+  await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+    "Wednesday, July 29, 2026",
   );
-  await expect(page.getByLabel("Ends")).toHaveValue("2026-07-31");
+  await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
+    "Friday, July 31, 2026",
+  );
   await expect(
     page.getByRole("textbox", { name: "Event title" }),
   ).toHaveValue("Retreat");
@@ -2511,7 +2557,7 @@ test("asks for a name and a time first, the rest on request", async ({
   await expect(bubble).toBeVisible();
   // What a new event cannot do without: name, when, which calendar.
   await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
-  await expect(page.getByLabel("Date", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Date:/ })).toBeVisible();
   await expect(page.getByLabel("Start time")).toBeVisible();
   await expect(bubble.getByRole("combobox")).toBeVisible();
   // Everything else is out of the way until asked for.
@@ -2627,8 +2673,8 @@ test("moves the create window by its header, never out of the calendar", async (
   expect(Math.round(after.x)).toBe(Math.round(before.x - 220));
   expect(Math.round(after.y)).toBe(Math.round(before.y - 60));
   // Still the same draft: moving the window is not editing it.
-  await expect(page.getByLabel("Date", { exact: true })).toHaveValue(
-    "2026-07-15",
+  await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+    "Wednesday, July 15, 2026",
   );
 
   // Dragged hard at the calendar's left edge it stops there, whole.
@@ -2711,5 +2757,3 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await page.mouse.up();
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
-
-

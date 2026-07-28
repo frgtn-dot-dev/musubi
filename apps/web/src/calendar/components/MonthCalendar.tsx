@@ -407,6 +407,7 @@ export function MonthCalendar({
                         }
                         showLabel={!segment.continuesBefore || dayIndex === 0}
                         timeFormat={timeFormat}
+                        weekStartsOn={weekStartsOn}
                         {...eventActions}
                       />
                     ))}

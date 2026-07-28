@@ -133,6 +133,7 @@ type TimelineEventProps = EventActionHandlers & {
   onBeginDrag: (input: BeginDragInput) => void;
   onKeyboardAdjust: (event: Event, times: DragTimes) => void;
   timeFormat: Settings["timeFormat"];
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 function hourLabel(hour: number, timeFormat: Settings["timeFormat"]) {
@@ -196,6 +197,7 @@ const TimelineEvent = memo(function TimelineEvent({
   pending = false,
   onKeyboardAdjust,
   timeFormat,
+  weekStartsOn,
   ...eventActions
 }: TimelineEventProps) {
   const { col, cols, event } = daySegment;
@@ -263,6 +265,7 @@ const TimelineEvent = memo(function TimelineEvent({
       calendars={calendars}
       event={event}
       timeFormat={timeFormat}
+      weekStartsOn={weekStartsOn}
       {...eventActions}
     >
       <button
@@ -698,6 +701,7 @@ export function TimeGridView({
                   event={span.event}
                   key={span.event.id}
                   timeFormat={timeFormat}
+                  weekStartsOn={weekStartsOn}
                   {...eventActions}
                 >
                   <button
@@ -938,6 +942,7 @@ export function TimeGridView({
                     onBeginDrag={beginDrag}
                     onKeyboardAdjust={adjustByKeyboard}
                     timeFormat={timeFormat}
+                    weekStartsOn={weekStartsOn}
                     {...eventActions}
                   />
                 ))}

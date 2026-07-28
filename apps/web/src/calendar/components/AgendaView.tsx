@@ -22,6 +22,7 @@ type AgendaViewProps = EventActionHandlers & {
   calendars: Calendar[];
   events: Event[];
   timeFormat: Settings["timeFormat"];
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 const dayFormatter = new Intl.DateTimeFormat("en", {
@@ -35,6 +36,7 @@ export function AgendaView({
   calendars,
   events,
   timeFormat,
+  weekStartsOn,
   ...eventActions
 }: AgendaViewProps) {
   const groups = useMemo(
@@ -154,6 +156,7 @@ export function AgendaView({
                         event={event}
                         key={event.id}
                         timeFormat={timeFormat}
+                        weekStartsOn={weekStartsOn}
                         {...eventActions}
                       >
                         <button

@@ -124,8 +124,8 @@
 
 /* Selected outranks today, and keeps the text readable on the fill. */
 .miniDay[data-selected] {
-  background: var(--accent-primary);
-  color: var(--accent-on-primary);
+  background: var(--control-fill);
+  color: var(--control-on-fill);
   font-weight: 600;
 }
 

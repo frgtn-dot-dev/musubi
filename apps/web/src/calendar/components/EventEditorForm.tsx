@@ -1,4 +1,4 @@
-import { can, type Calendar } from "@musubi/types";
+import { can, type Calendar, type Settings } from "@musubi/types";
 import {
   CalendarDays,
   Check,
@@ -11,6 +11,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, useId, useState } from "react";
+import { DatePicker } from "~/ui/DatePicker";
 import { type EventFormValues, validateEventForm } from "../event-form";
 import { federatedConnectionMap } from "../federation-routing";
 import styles from "./workspace.module.css";
@@ -52,6 +53,7 @@ type EventEditorFormProps = {
   onError: (error: unknown, values: EventFormValues) => FormError;
   onSubmit: (values: EventFormValues) => Promise<void>;
   submitLabel: string;
+  weekStartsOn: Settings["weekStartsOn"];
 };
 
 export function EventEditorForm({
@@ -64,6 +66,7 @@ export function EventEditorForm({
   onError,
   onSubmit,
   submitLabel,
+  weekStartsOn,
   when,
 }: EventEditorFormProps) {
   const id = useId();
@@ -141,17 +144,16 @@ export function EventEditorForm({
         onChange={(event) => patch({ title: event.target.value })}
       />
 
-      <label className={styles.formRow}>
+      <div className={styles.formRow}>
         <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
-        <span className={styles.srOnly}>Date</span>
-        <input
+        <DatePicker
           disabled={saving}
-          required
-          type="date"
+          label="Date"
           value={values.date}
-          onChange={(event) => patch({ date: event.target.value })}
+          weekStartsOn={weekStartsOn}
+          onChange={(date) => patch({ date })}
         />
-      </label>
+      </div>
 
       <label className={styles.allDayRow}>
         <span
@@ -172,18 +174,18 @@ export function EventEditorForm({
       </label>
 
       {values.isAllDay ? (
-        <label className={styles.formRow}>
+        <div className={styles.formRow}>
           <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
           <span className={styles.formHint}>Ends</span>
-          <input
+          <DatePicker
             disabled={saving}
+            label="Ends"
             min={values.date}
-            required
-            type="date"
             value={values.endDate}
-            onChange={(event) => patch({ endDate: event.target.value })}
+            weekStartsOn={weekStartsOn}
+            onChange={(endDate) => patch({ endDate })}
           />
-        </label>
+        </div>
       ) : null}
 
       {!values.isAllDay ? (

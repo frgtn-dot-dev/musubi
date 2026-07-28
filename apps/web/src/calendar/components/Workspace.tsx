@@ -875,6 +875,7 @@ export function Workspace({
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               user={user}
+              weekStartsOn={settings.weekStartsOn}
             />
           ) : activeView === "day" || activeView === "week" ? (
             <TimeGridView
@@ -1074,6 +1075,7 @@ export function Workspace({
           open
           startTime={createIntent.startTime}
           userId={user.id}
+          weekStartsOn={settings.weekStartsOn}
         />
       ) : null}
       <CalendarTransferDialog

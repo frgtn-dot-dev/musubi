@@ -21,10 +21,16 @@ const startOfMonth = (date: Date) =>
  */
 export function MiniCalendar({
   anchor,
+  label = "Jump to date",
+  max,
+  min,
   onDateChange,
   weekStartsOn,
 }: {
   anchor: Date;
+  label?: string;
+  max?: string;
+  min?: string;
   onDateChange: (date: string) => void;
   weekStartsOn: Settings["weekStartsOn"];
 }) {
@@ -35,7 +41,7 @@ export function MiniCalendar({
   const [seededFrom, setSeededFrom] = useState(() => monthKey(anchor));
   // Undefined focus means "follow the anchor" — the common case, and what a
   // paged month falls back to.
-  const [focused, setFocused] = useState<number>();
+  const [focused, setFocused] = useState<string>();
 
   function showMonth(next: Date) {
     setMonth(next);
@@ -54,29 +60,46 @@ export function MiniCalendar({
   const weekdayLabels = getWeekdayLabels(weekStartsOn);
   const anchorKey = toDateKey(anchor);
   const todayKey = toDateKey(new Date());
-  const anchorIndex = days.findIndex((day) => toDateKey(day) === anchorKey);
-  const cellRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const tabbable = focused ?? Math.max(0, anchorIndex);
+  const cellRefs = useRef(new Map<string, HTMLButtonElement>());
+  const unavailable = (dateKey: string) =>
+    Boolean((min && dateKey < min) || (max && dateKey > max));
+  const focusedIsVisible =
+    focused !== undefined &&
+    days.some(
+      (day) =>
+        toDateKey(day) === focused && !unavailable(toDateKey(day)),
+    );
+  const anchorIsVisible = days.some(
+    (day) =>
+      toDateKey(day) === anchorKey && !unavailable(toDateKey(day)),
+  );
+  const tabbableKey = focusedIsVisible
+    ? focused
+    : anchorIsVisible
+      ? anchorKey
+      : days.map(toDateKey).find((dateKey) => !unavailable(dateKey));
 
-  function moveFocus(index: number) {
-    const day = days[index];
-    if (!day) {
-      // Off the edge of the grid: page the month rather than trapping focus.
-      showMonth(
-        new Date(month.getFullYear(), month.getMonth() + (index < 0 ? -1 : 1), 1),
-      );
-      return;
-    }
-    setFocused(index);
-    requestAnimationFrame(() => cellRefs.current[index]?.focus());
+  function focusDate(day: Date) {
+    const dateKey = toDateKey(day);
+    if (unavailable(dateKey)) return;
+    setMonth(startOfMonth(day));
+    setFocused(dateKey);
+    requestAnimationFrame(() => cellRefs.current.get(dateKey)?.focus());
   }
 
   return (
-    <section className={styles.miniCalendar} aria-label="Jump to date">
+    <section className={styles.miniCalendar} aria-label={label}>
       <header className={styles.miniHeader}>
         <button
           aria-label="Previous month in date picker"
           className={styles.iconButton}
+          disabled={
+            min
+              ? toDateKey(
+                  new Date(month.getFullYear(), month.getMonth(), 0),
+                ) < min
+              : false
+          }
           type="button"
           onClick={() =>
             showMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
@@ -92,6 +115,13 @@ export function MiniCalendar({
         <button
           aria-label="Next month in date picker"
           className={styles.iconButton}
+          disabled={
+            max
+              ? toDateKey(
+                  new Date(month.getFullYear(), month.getMonth() + 1, 1),
+                ) > max
+              : false
+          }
           type="button"
           onClick={() =>
             showMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
@@ -118,37 +148,68 @@ export function MiniCalendar({
             {days.slice(week * 7, week * 7 + 7).map((day, offset) => {
               const index = week * 7 + offset;
               const dateKey = toDateKey(day);
+              const disabled = unavailable(dateKey);
 
               return (
                 <button
-                  aria-current={dateKey === anchorKey ? "date" : undefined}
+                  aria-current={dateKey === todayKey ? "date" : undefined}
                   aria-label={getLongDateLabel(day)}
+                  aria-selected={dateKey === anchorKey}
                   className={styles.miniDay}
                   data-outside={
                     day.getMonth() === month.getMonth() ? undefined : ""
                   }
                   data-selected={dateKey === anchorKey ? "" : undefined}
                   data-today={dateKey === todayKey ? "" : undefined}
+                  disabled={disabled}
                   key={dateKey}
                   ref={(node) => {
-                    cellRefs.current[index] = node;
+                    if (node) {
+                      cellRefs.current.set(dateKey, node);
+                    } else {
+                      cellRefs.current.delete(dateKey);
+                    }
                   }}
                   role="gridcell"
-                  tabIndex={index === tabbable ? 0 : -1}
+                  tabIndex={dateKey === tabbableKey ? 0 : -1}
                   type="button"
                   onClick={() => onDateChange(dateKey)}
-                  onFocus={() => setFocused(index)}
+                  onFocus={() => setFocused(dateKey)}
                   onKeyDown={(event) => {
-                    const moves: Partial<Record<string, number>> = {
-                      ArrowDown: 7,
-                      ArrowLeft: -1,
-                      ArrowRight: 1,
-                      ArrowUp: -7,
-                    };
-                    const move = moves[event.key];
-                    if (move === undefined) return;
+                    const target = new Date(day);
+                    if (event.key === "ArrowDown") {
+                      target.setDate(target.getDate() + 7);
+                    } else if (event.key === "ArrowLeft") {
+                      target.setDate(target.getDate() - 1);
+                    } else if (event.key === "ArrowRight") {
+                      target.setDate(target.getDate() + 1);
+                    } else if (event.key === "ArrowUp") {
+                      target.setDate(target.getDate() - 7);
+                    } else if (event.key === "Home") {
+                      target.setDate(target.getDate() - (index % 7));
+                    } else if (event.key === "End") {
+                      target.setDate(target.getDate() + (6 - (index % 7)));
+                    } else if (
+                      event.key === "PageUp" ||
+                      event.key === "PageDown"
+                    ) {
+                      const direction = event.key === "PageUp" ? -1 : 1;
+                      const targetMonth = day.getMonth() + direction;
+                      const lastDay = new Date(
+                        day.getFullYear(),
+                        targetMonth + 1,
+                        0,
+                      ).getDate();
+                      target.setFullYear(
+                        day.getFullYear(),
+                        targetMonth,
+                        Math.min(day.getDate(), lastDay),
+                      );
+                    } else {
+                      return;
+                    }
                     event.preventDefault();
-                    moveFocus(index + move);
+                    focusDate(target);
                   }}
                 >
                   {day.getDate()}
