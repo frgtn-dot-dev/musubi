@@ -234,6 +234,34 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
+**B5 — Draft jako položený, uchopitelný blok: HOTOVO** (2026-07-28)
+
+Předtím byl výsledek drag-to-create jen zvýrazněný pruh: co jsi vytáhl, to jsi
+měl. Teď je z něj **draft** — blok/pilule, která na kalendáři leží a dá se hýbat,
+dokud se neuloží.
+
+- Time grid: draft se dá **táhnout i resizovat** (`useTimeGridDrag`, druhá
+  instance téhož automatu — commituje do otevřeného formuláře, ne na server).
+  Hook je teď generický v tom, *co* se táhne (`useTimeGridDrag<T>`), aby draft
+  nemusel předstírat, že je `Event`.
+- Month: draft je **jedna pilule přes celý rozsah** (plochá tam, kde pokračuje do
+  další buňky), uchopením se posune celý rozsah. Tint pod ní zmizel — dvě značky
+  pro jednu věc jsou šum; tint teď označuje jen rozsah, který se právě vytahuje
+  (tam pilule ještě není).
+- Formulář převezme nový čas přes `when` (`EventEditorForm`), který přepíše
+  **jen** „kdy" — rozepsaný název přežije přetažení. Intent si drží `id`, takže
+  se popover neremountuje.
+- Popover se otevírá **vedle** slotu (`side="right"`, anchor na pravé hraně
+  sloupce / poslední buňky rozsahu), ne přes něj. Jinak by „draft se dá chytit"
+  byla lež — bublina ho zakrývala.
+- Tři chyby, které to odhalilo a které platily i pro reálné eventy:
+  1. Gesto končí **clickem**, který otevíral detail právě přetaženého bloku a
+     zavíral popover draftu (`swallowNextClick`, jen po skutečném dragu).
+  2. Hit-test cílového dne bral jen nejvyšší element, což byl při dragu popover
+     → „žádný cíl" (`dayKeyAtPoint` prochází celý stack).
+  3. Uchopitelná plocha nesmí být zároveň označitelný text: tažení selekce
+     Chromium gesto zruší (`user-select: none`).
+
 **B4 — Month drag-to-create: HOTOVO** (2026-07-27)
 
 - `useDayRangeCreate`: pointerdown na prázdné místo buňky → sleduje

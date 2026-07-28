@@ -21,17 +21,22 @@ import {
 // effect keyed on the ghost — re-registering them on every pointermove would
 // churn and can drop events mid-gesture.
 
-export type DragState = {
+/**
+ * What is being dragged is generic: a real event on the grid, or the draft a
+ * drag-to-create just laid down, which has no event yet. Everything else about
+ * the gesture — threshold, snapping, auto-scroll, Escape — is the same.
+ */
+export type DragState<T = Event> = {
   /** Column the pointer is over — the drop target in week view. */
   dayIndex: number;
-  event: Event;
+  event: T;
   mode: DragMode;
   times: DragTimes;
 };
 
-type Press = {
+type Press<T> = {
   dayIndex: number;
-  event: Event;
+  event: T;
   mode: DragMode;
   originEndMinutes: number;
   originStartMinutes: number;
@@ -41,10 +46,10 @@ type Press = {
   startY: number;
 };
 
-export type BeginDragInput = {
+export type BeginDragInput<T = Event> = {
   dayIndex: number;
   endMinutes: number;
-  event: Event;
+  event: T;
   mode: DragMode;
   pointerId: number;
   startMinutes: number;
@@ -52,14 +57,14 @@ export type BeginDragInput = {
   y: number;
 };
 
-export type TimeGridDragOptions = {
+export type TimeGridDragOptions<T = Event> = {
   /** Column geometry, so a move can change day. */
   columns: () => { count: number; left: number; width: number };
   geometry: TimeGeometry;
   /** Commit the drop. A rejection means the event snaps back. */
   onCommit: (input: {
     dayOffset: number;
-    event: Event;
+    event: T;
     mode: DragMode;
     times: DragTimes;
   }) => Promise<unknown>;
@@ -69,17 +74,56 @@ export type TimeGridDragOptions = {
 
 const AUTO_SCROLL_MS = 16;
 
-export function useTimeGridDrag({
+/**
+ * The day cell under the pointer, looking through anything floating above it.
+ *
+ * `elementFromPoint` returns only the topmost element, which during a drag is
+ * often the popover describing what is being dragged — so the cell right under
+ * the cursor would read as "no target at all". The whole stack is searched
+ * instead, and the first cell in it wins.
+ */
+function dayKeyAtPoint(x: number, y: number): string | undefined {
+  for (const element of document.elementsFromPoint(x, y)) {
+    const cell = element.closest<HTMLElement>("[data-day-key]");
+    if (cell) return cell.dataset.dayKey;
+  }
+  return undefined;
+}
+
+/**
+ * Swallow the click the browser fires after a drag.
+ *
+ * A pointer gesture ends in a click on whatever is under the cursor, and that
+ * click is not a click the user made: it opens the details popover of the block
+ * that was just dropped, or dismisses the one describing the draft that was just
+ * dragged. Captured once, at the document, so no layer below ever sees it.
+ */
+function swallowNextClick() {
+  function handleClick(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.removeEventListener("click", handleClick, true);
+  }
+
+  document.addEventListener("click", handleClick, true);
+  // If no click follows (a cancelled or touch gesture), drop the listener.
+  window.setTimeout(
+    () => document.removeEventListener("click", handleClick, true),
+    350,
+  );
+}
+
+export function useTimeGridDrag<T = Event>({
   columns,
   geometry,
   onCommit,
   onError,
   scrollRoot,
-}: TimeGridDragOptions) {
-  const [drag, setDrag] = useState<DragState>();
+}: TimeGridDragOptions<T>) {
+  const [drag, setDrag] = useState<DragState<T>>();
 
-  const pressRef = useRef<Press | undefined>(undefined);
-  const dragRef = useRef<DragState | undefined>(undefined);
+  const pressRef = useRef<Press<T> | undefined>(undefined);
+  const dragRef = useRef<DragState<T> | undefined>(undefined);
   const pointerRef = useRef({ x: 0, y: 0 });
   const autoScrollRef = useRef<number | undefined>(undefined);
   const detachRef = useRef<(() => void) | undefined>(undefined);
@@ -153,7 +197,7 @@ export function useTimeGridDrag({
   }, []);
 
   const begin = useCallback(
-    (input: BeginDragInput) => {
+    (input: BeginDragInput<T>) => {
       const root = optionsRef.current.scrollRoot();
       pressRef.current = {
         dayIndex: input.dayIndex,
@@ -240,6 +284,7 @@ export function useTimeGridDrag({
         const reportError = optionsRef.current.onError;
 
         finish();
+        swallowNextClick();
         if (unchanged) return;
 
         void commit({
@@ -293,17 +338,26 @@ export function useTimeGridDrag({
  * pointer is over. The same movement threshold applies, so clicking a chip still
  * opens its preview.
  */
-export function useMonthDrag({
+export function useMonthDrag<T = Event>({
   onCommit,
   onError,
 }: {
-  onCommit: (input: { dayKey: string; event: Event }) => Promise<unknown>;
+  onCommit: (input: {
+    dayKey: string;
+    /** Where the drag started, so a caller can work out the day delta. */
+    originDayKey: string;
+    event: T;
+  }) => Promise<unknown>;
   onError: (message: string) => void;
 }) {
-  const [state, setState] = useState<{ dayKey: string; event: Event }>();
+  const [state, setState] = useState<{
+    dayKey: string;
+    event: T;
+    originDayKey: string;
+  }>();
   const pressRef = useRef<
     | {
-        event: Event;
+        event: T;
         originDayKey: string;
         pointerId: number;
         startX: number;
@@ -311,9 +365,9 @@ export function useMonthDrag({
       }
     | undefined
   >(undefined);
-  const stateRef = useRef<{ dayKey: string; event: Event } | undefined>(
-    undefined,
-  );
+  const stateRef = useRef<
+    { dayKey: string; event: T; originDayKey: string } | undefined
+  >(undefined);
   const detachRef = useRef<(() => void) | undefined>(undefined);
   const optionsRef = useRef({ onCommit, onError });
   useEffect(() => {
@@ -330,7 +384,7 @@ export function useMonthDrag({
 
   const begin = useCallback(
     (input: {
-      event: Event;
+      event: T;
       originDayKey: string;
       pointerId: number;
       x: number;
@@ -359,13 +413,16 @@ export function useMonthDrag({
 
         nativeEvent.preventDefault();
         // The cell under the pointer is the drop target.
-        const cell = document
-          .elementFromPoint(nativeEvent.clientX, nativeEvent.clientY)
-          ?.closest<HTMLElement>("[data-day-key]");
-        const dayKey = cell?.dataset.dayKey ?? stateRef.current?.dayKey;
+        const dayKey =
+          dayKeyAtPoint(nativeEvent.clientX, nativeEvent.clientY) ??
+          stateRef.current?.dayKey;
         if (!dayKey) return;
 
-        const next = { dayKey, event: press.event };
+        const next = {
+          dayKey,
+          event: press.event,
+          originDayKey: press.originDayKey,
+        };
         stateRef.current = next;
         setState(next);
       }
@@ -379,6 +436,9 @@ export function useMonthDrag({
         const reportError = optionsRef.current.onError;
         const unchanged = !active || active.dayKey === press.originDayKey;
         finish();
+        // Only after a real drag: a plain click has to reach the chip, which is
+        // what opens its details.
+        if (active) swallowNextClick();
         if (unchanged || !active) return;
 
         void commit(active).catch((error: unknown) => {
@@ -488,9 +548,7 @@ export function useDayRangeCreate({
         }
 
         nativeEvent.preventDefault();
-        const hovered = document
-          .elementFromPoint(nativeEvent.clientX, nativeEvent.clientY)
-          ?.closest<HTMLElement>("[data-day-key]")?.dataset.dayKey;
+        const hovered = dayKeyAtPoint(nativeEvent.clientX, nativeEvent.clientY);
         const toKey = hovered ?? rangeRef.current?.toKey ?? press.fromKey;
         const next = { fromKey: press.fromKey, toKey };
         rangeRef.current = next;

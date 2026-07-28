@@ -14,6 +14,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -89,6 +90,15 @@ type TimeGridViewProps = EventActionHandlers & {
     endTime?: string;
     startTime?: string;
   };
+  /**
+   * Move or resize the draft a drag-to-create laid down, while its popover is
+   * open. Absent leaves the draft as a still highlight.
+   */
+  onMoveDraft?: (input: {
+    date: string;
+    endTime: string;
+    startTime: string;
+  }) => void;
   /** Page presentation: a five-column working week when false. */
   showWeekend?: boolean;
   onCreateAtTime?: (
@@ -337,6 +347,7 @@ export function TimeGridView({
   onCreateAtTime,
   onMoveEvent,
   busyEventId,
+  onMoveDraft,
   pendingCreate,
   showWeekend = true,
   timeFormat,
@@ -383,18 +394,20 @@ export function TimeGridView({
   // resetting it.
   const geometryRef = useRef(geometry);
 
+  const readColumns = useCallback(() => {
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    // The time gutter is part of the canvas but is not a day column.
+    const gutter = bounds ? Math.min(64, bounds.width) : 0;
+    const width = bounds ? (bounds.width - gutter) / days.length : 0;
+    return {
+      count: days.length,
+      left: (bounds?.left ?? 0) + gutter,
+      width,
+    };
+  }, [days.length]);
+
   const { begin: beginDrag, drag } = useTimeGridDrag({
-    columns: () => {
-      const bounds = canvasRef.current?.getBoundingClientRect();
-      // The time gutter is part of the canvas but is not a day column.
-      const gutter = bounds ? Math.min(64, bounds.width) : 0;
-      const width = bounds ? (bounds.width - gutter) / days.length : 0;
-      return {
-        count: days.length,
-        left: (bounds?.left ?? 0) + gutter,
-        width,
-      };
-    },
+    columns: readColumns,
     geometry,
     onCommit: async ({ dayOffset, event, times }) => {
       if (!onMoveEvent) return;
@@ -454,20 +467,18 @@ export function TimeGridView({
         clockValue(dragged.startMinutes),
         {
           returnFocus: column,
-          x: bounds.left + bounds.width / 2,
+          // The column's edge, so the popover lands beside the draft rather
+          // than over it.
+          x: bounds.right,
           y: bounds.top + minutesToY(dragged.startMinutes, geometry),
         },
         clockValue(dragged.endMinutes),
       );
     },
   });
-  const dayMode = view === "day";
-
-  // While dragging, the live gesture wins. Once released, the open popover's slot
-  // keeps the same interval highlighted — including for a plain click, which also
-  // deserves to show what "when" it picked.
-  const selection = useMemo(() => {
-    if (liveSelection) return liveSelection;
+  // Where the open quick-create popover's slot sits on the grid. This is the
+  // draft: a laid-down block, not just a highlight.
+  const draftSlot = useMemo(() => {
     if (!pendingCreate?.startTime) return undefined;
 
     const dayIndex = days.findIndex(
@@ -484,7 +495,72 @@ export function TimeGridView({
       endMinutes: Math.max(startMinutes + geometry.snapMinutes, endMinutes),
       startMinutes,
     };
-  }, [days, geometry.snapMinutes, liveSelection, pendingCreate]);
+  }, [days, geometry.snapMinutes, pendingCreate]);
+
+  // A second pointer machine, for the draft: same threshold, snapping,
+  // auto-scroll and Escape as a real event, but it commits into the open form
+  // instead of to the server.
+  const { begin: beginDraftDrag, drag: draftDrag } = useTimeGridDrag<undefined>({
+    columns: readColumns,
+    geometry,
+    onCommit: async ({ dayOffset, mode, times }) => {
+      if (!draftSlot || !onMoveDraft) return;
+      const day = days[
+        Math.max(
+          0,
+          Math.min(
+            days.length - 1,
+            draftSlot.dayIndex + (mode === "move" ? dayOffset : 0),
+          ),
+        )
+      ];
+      if (!day) return;
+      onMoveDraft({
+        date: dayKey(day),
+        endTime: clockValue(times.endMinutes),
+        startTime: clockValue(times.startMinutes),
+      });
+    },
+    onError: eventActions.onNotice,
+    scrollRoot: () => rootRef.current?.parentElement,
+  });
+  const dayMode = view === "day";
+
+  // Three sources, in the order they win: the create gesture in progress, the
+  // draft being dragged, and the draft at rest. A plain click also produces a
+  // draft, so it too shows what "when" it picked.
+  const selection = useMemo(() => {
+    if (liveSelection) return liveSelection;
+    if (draftDrag && draftSlot) {
+      return {
+        dayIndex:
+          draftDrag.mode === "move" ? draftDrag.dayIndex : draftSlot.dayIndex,
+        endMinutes: draftDrag.times.endMinutes,
+        startMinutes: draftDrag.times.startMinutes,
+      };
+    }
+    return draftSlot;
+  }, [draftDrag, draftSlot, liveSelection]);
+
+  /** Grab the draft to move it, or one of its edges to resize it. */
+  function startDraftDrag(
+    pointerEvent: ReactPointerEvent<HTMLElement>,
+    mode: DragMode,
+  ) {
+    if (!draftSlot || !onMoveDraft || pointerEvent.button !== 0) return;
+    pointerEvent.stopPropagation();
+    beginDraftDrag({
+      dayIndex: draftSlot.dayIndex,
+      endMinutes: draftSlot.endMinutes,
+      event: undefined,
+      mode,
+      pointerId: pointerEvent.pointerId,
+      startMinutes: draftSlot.startMinutes,
+      x: pointerEvent.clientX,
+      y: pointerEvent.clientY,
+    });
+  }
+
   const layoutStyle = {
     "--day-count": days.length,
     "--all-day-height": `${allDayLaneCount * 24 + 8}px`,
@@ -722,18 +798,24 @@ export function TimeGridView({
                     )}`,
                     {
                       returnFocus: event.currentTarget,
-                      x: event.clientX,
+                      // Beside the column, level with the slot that was clicked
+                      // — same rule as a dragged slot.
+                      x: event.currentTarget.getBoundingClientRect().right,
                       y: event.clientY,
                     },
                   );
                 }}
               >
-                {/* Selection layer: the chosen interval is visible before the
-                    quick-create popover even opens. */}
+                {/* The draft: visible from the first pixel of the create
+                    gesture, and once laid down it can be moved and resized like
+                    a real block. It stays aria-hidden — the popover's own date
+                    and time fields are the keyboard path to the same change. */}
                 {selection?.dayIndex === dayIndex ? (
                   <div
                     aria-hidden="true"
                     className={styles.timeGridSelection}
+                    data-draft={draftSlot && onMoveDraft ? "" : undefined}
+                    data-dragging={draftDrag ? "" : undefined}
                     style={{
                       height: `${durationToHeight(
                         selection.endMinutes - selection.startMinutes,
@@ -741,11 +823,30 @@ export function TimeGridView({
                       )}px`,
                       top: `${minutesToY(selection.startMinutes, geometry)}px`,
                     }}
+                    onPointerDown={(pointerEvent) =>
+                      startDraftDrag(pointerEvent, "move")
+                    }
                   >
                     <span>
                       {minuteLabel(selection.startMinutes, timeFormat)}–
                       {minuteLabel(selection.endMinutes, timeFormat)}
                     </span>
+                    {draftSlot && onMoveDraft ? (
+                      <>
+                        <span
+                          className={styles.resizeHandleTop}
+                          onPointerDown={(pointerEvent) =>
+                            startDraftDrag(pointerEvent, "resize-start")
+                          }
+                        />
+                        <span
+                          className={styles.resizeHandleBottom}
+                          onPointerDown={(pointerEvent) =>
+                            startDraftDrag(pointerEvent, "resize-end")
+                          }
+                        />
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
                 {segmentsByDay[dayIndex]?.map((segment) => (

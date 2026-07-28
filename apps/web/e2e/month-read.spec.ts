@@ -2047,11 +2047,12 @@ test("drags across month days to create an all-day range", async ({ page }) => {
   // Quick create opens pre-filled as an all-day event spanning the range.
   await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-07-28");
   await expect(page.getByLabel("Ends")).toHaveValue("2026-07-30");
-  // The days stay highlighted while the popover is up.
-  await expect(page.locator("[data-range-selected]")).toHaveCount(3);
+  // The tint hands over to the draft pill, which spans the same three days.
+  await expect(page.locator("[data-range-selected]")).toHaveCount(0);
+  await expect(page.locator("[data-draft]")).toHaveCount(3);
 
   await page.keyboard.press("Escape");
-  await expect(page.locator("[data-range-selected]")).toHaveCount(0);
+  await expect(page.locator("[data-draft]")).toHaveCount(0);
 });
 
 test("dragging backwards across month days still creates a forward range", async ({
@@ -2368,3 +2369,128 @@ test("keeps the page name and theme out of the calendar chrome", async ({
   await page.getByRole("button", { name: "Finish editing page" }).click();
   await expect(page.getByLabel("Page name")).toHaveCount(0);
 });
+
+test("leaves a draft on the grid that can be moved before saving", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-30`);
+  const column = page.locator("[data-time-grid-column]").first();
+  await expect(column).toBeVisible();
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '[class*="calendarArea"]',
+    );
+    if (scroller) scroller.scrollTop = 0;
+  });
+
+  // Drag out a 90-minute slot.
+  const bounds = (await column.boundingBox())!;
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 128);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 224, {
+    steps: 6,
+  });
+  await page.mouse.up();
+
+  const start = page.getByLabel("Start time");
+  await expect(start).toHaveValue("02:00");
+  await expect(page.getByLabel("End time")).toHaveValue("03:30");
+
+  // Type a title, then drag the draft itself: the time follows, the title stays.
+  await page.getByRole("textbox", { name: "Event title" }).fill("Deep work");
+  const draft = page.locator("[data-draft]");
+  await expect(draft).toBeVisible();
+  const draftBox = (await draft.boundingBox())!;
+  await page.mouse.move(
+    draftBox.x + draftBox.width / 2,
+    draftBox.y + draftBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    draftBox.x + draftBox.width / 2,
+    draftBox.y + draftBox.height / 2 + 64,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+
+  await expect(start).toHaveValue("03:00");
+  await expect(page.getByLabel("End time")).toHaveValue("04:30");
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Deep work");
+
+  // Saving writes the dragged time.
+  const writes: Array<{ end: string; start: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as {
+        end: string;
+        start: string;
+      };
+      writes.push({ end: body.end, start: body.start });
+    }
+    return route.fallback();
+  });
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Event created.");
+  expect(new Date(writes[0]!.start).getHours()).toBe(3);
+  expect(
+    new Date(writes[0]!.end).getTime() - new Date(writes[0]!.start).getTime(),
+  ).toBe(90 * 60_000);
+});
+
+test("leaves a draggable pill on the month grid", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const from = page.locator('[data-day-key="2026-07-28"]');
+  const to = page.locator('[data-day-key="2026-07-30"]');
+  await expect(from).toBeVisible();
+  const fromBox = (await from.boundingBox())!;
+  const toBox = (await to.boundingBox())!;
+
+  await page.mouse.move(
+    fromBox.x + fromBox.width / 2,
+    fromBox.y + fromBox.height - 6,
+  );
+  await page.mouse.down();
+  await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height - 6, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  // One pill per covered day, flat where it runs into the next cell.
+  await expect(page.locator("[data-draft]")).toHaveCount(3);
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue(
+    "2026-07-28",
+  );
+  await page.getByRole("textbox", { name: "Event title" }).fill("Retreat");
+
+  // Grab the pill and move the whole range a day later.
+  const pill = page.locator("[data-draft]").first();
+  const pillBox = (await pill.boundingBox())!;
+  const target = page.locator('[data-day-key="2026-07-29"]');
+  const targetBox = (await target.boundingBox())!;
+  await page.mouse.move(
+    pillBox.x + pillBox.width / 2,
+    pillBox.y + pillBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBox.x + targetBox.width / 2,
+    pillBox.y + pillBox.height / 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue(
+    "2026-07-29",
+  );
+  await expect(page.getByLabel("Ends")).toHaveValue("2026-07-31");
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Retreat");
+});
+

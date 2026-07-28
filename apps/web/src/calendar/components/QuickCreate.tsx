@@ -82,11 +82,24 @@ export function QuickCreate({
         <Popover.Content
           className={`${styles.popover} ${styles.createPopover}`}
           align="start"
-          side="bottom"
-          sideOffset={10}
+          /* Beside the slot, not on top of it: the draft underneath stays
+             grabbable, so its time can still be dragged while this is open.
+             Radix flips to the other side when there is no room. */
+          side="right"
+          sideOffset={12}
           collisionPadding={14}
           aria-label="Create event"
           onClick={(clickEvent) => clickEvent.stopPropagation()}
+          onInteractOutside={(interaction) => {
+            // Grabbing the draft this popover describes is not "outside" it —
+            // that gesture changes the time in the form, so it must not dismiss.
+            if (
+              interaction.target instanceof Element &&
+              interaction.target.closest("[data-draft]")
+            ) {
+              interaction.preventDefault();
+            }
+          }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             anchor.returnFocus?.focus();
@@ -107,6 +120,13 @@ export function QuickCreate({
           <EventEditorForm
             calendars={calendars}
             initialValues={initialValues}
+            when={{
+              date,
+              endDate: endDate ?? date,
+              endTime: initialValues.endTime,
+              isAllDay: initialValues.isAllDay,
+              startTime: initialValues.startTime,
+            }}
             onCancel={() => onOpenChange(false)}
             onError={(error, values) =>
               getEventMutationError(

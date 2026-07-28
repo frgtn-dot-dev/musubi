@@ -526,8 +526,10 @@ export function Workspace({
     setCreateIntent({
       anchor: {
         returnFocus: target,
-        x: point?.x ?? bounds.left + Math.min(bounds.width / 2, 180),
-        y: point?.y ?? bounds.top + Math.min(bounds.height, 48),
+        // Beside the slot, level with its top: the popover opens next to what it
+        // describes instead of on top of it, so the draft stays grabbable.
+        x: point?.x ?? bounds.right,
+        y: point?.y ?? bounds.top,
       },
       date: nextDate,
       endDate,
@@ -535,6 +537,19 @@ export function Workspace({
       id: Date.now(),
       startTime,
     });
+  }
+
+  /**
+   * Move the open draft to a new slot. The intent keeps its id, so the popover
+   * is not remounted and a title already typed into it survives the drag.
+   */
+  function moveCreateDraft(when: {
+    date: string;
+    endDate?: string;
+    endTime?: string;
+    startTime?: string;
+  }) {
+    setCreateIntent((current) => current && { ...current, ...when });
   }
 
   function handleWorkspaceKeyDown(event: globalThis.KeyboardEvent) {
@@ -873,6 +888,7 @@ export function Workspace({
               // The grid already shows the new position; this confirms it. A
               // rejection propagates so the drag reports it and the block snaps
               // back to the server's truth.
+              onMoveDraft={moveCreateDraft}
               onMoveEvent={commitEventTimes}
               showWeekend={showWeekend}
               getEventMaster={getEventMaster}
@@ -934,6 +950,7 @@ export function Workspace({
                   : undefined
               }
               onMonthChange={changePeriod}
+              onMoveDraft={moveCreateDraft}
               pendingCreate={
                 createIntent
                   ? { date: createIntent.date, endDate: createIntent.endDate }

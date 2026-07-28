@@ -28,10 +28,22 @@ type FormError = {
   requestId?: string;
 };
 
+/** The "when" fields a gesture outside the form can move under it. */
+export type EventWhen = Pick<
+  EventFormValues,
+  "date" | "endDate" | "endTime" | "isAllDay" | "startTime"
+>;
+
 type EventEditorFormProps = {
   calendarLocked?: boolean;
   calendars: Calendar[];
   initialValues: EventFormValues;
+  /**
+   * A new "when" from outside the form — the draft block being dragged on the
+   * grid while this is open. Only these fields are replaced, so a title that is
+   * already typed survives the move.
+   */
+  when?: EventWhen;
   onCancel: () => void;
   onError: (
     error: unknown,
@@ -49,9 +61,18 @@ export function EventEditorForm({
   onError,
   onSubmit,
   submitLabel,
+  when,
 }: EventEditorFormProps) {
   const id = useId();
   const [values, setValues] = useState(initialValues);
+  // Adjusted during render rather than from an effect: the form must never
+  // paint a time the grid has already moved on from.
+  const whenSignature = when ? Object.values(when).join("|") : "";
+  const [syncedWhen, setSyncedWhen] = useState(whenSignature);
+  if (when && syncedWhen !== whenSignature) {
+    setSyncedWhen(whenSignature);
+    setValues((current) => ({ ...current, ...when }));
+  }
   const [error, setError] = useState<FormError>();
   const [saving, setSaving] = useState(false);
   const selectedCalendar = calendars.find(

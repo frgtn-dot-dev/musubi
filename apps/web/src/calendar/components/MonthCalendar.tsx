@@ -5,7 +5,7 @@ import {
 } from "@musubi/calendar/layout";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
-import { toDateKey } from "../date-key";
+import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { canEditEvent } from "../event-permissions";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
@@ -24,8 +24,13 @@ type MonthCalendarProps = EventActionHandlers & {
     /** Set when days were dragged across: an all-day range. */
     endDate?: string,
   ) => void;
-  /** The slot a quick-create popover is open for, so its days stay highlighted. */
+  /** The slot a quick-create popover is open for: the draft, shown as a pill. */
   pendingCreate?: { date: string; endDate?: string };
+  /**
+   * Move the draft to another day range while its popover is open. Absent leaves
+   * the draft as a still pill.
+   */
+  onMoveDraft?: (input: { date: string; endDate: string }) => void;
   onMonthChange: (offset: number) => void;
   /**
    * Move an event to another day, keeping its time. Absent leaves the month
@@ -51,6 +56,7 @@ export function MonthCalendar({
   events,
   onCreateAtDate,
   onMonthChange,
+  onMoveDraft,
   onMoveEventToDate,
   pendingCreate,
   showAdjacentDays = true,
@@ -67,24 +73,52 @@ export function MonthCalendar({
       // Dragging backwards is as valid as forwards.
       const [start, end] =
         fromKey <= toKey ? [fromKey, toKey] : [toKey, fromKey];
-      onCreateAtDate?.(start, cell, end);
+      // Anchor on the last day of the range, so the popover opens past the end
+      // of the pill rather than across it.
+      const endCell = document.querySelector<HTMLElement>(
+        `[data-day-key="${end}"]`,
+      );
+      onCreateAtDate?.(start, endCell ?? cell, end);
     },
   });
 
-  // Highlight the dragged days, and keep them highlighted while the popover the
-  // drag opened is still up.
+  // The draft the open popover describes, as a day range. Dragging it moves the
+  // whole range, so the pill is grabbable the way a real chip is.
+  const { begin: beginDraftDrag, drag: draftDrag } = useMonthDrag<undefined>({
+    onCommit: async ({ dayKey: targetKey, originDayKey }) => {
+      if (!pendingCreate || !onMoveDraft) return;
+      const shift = dayDelta(originDayKey, targetKey);
+      onMoveDraft({
+        date: shiftDayKey(pendingCreate.date, shift),
+        endDate: shiftDayKey(
+          pendingCreate.endDate ?? pendingCreate.date,
+          shift,
+        ),
+      });
+    },
+    onError: eventActions.onNotice,
+  });
+
+  const draftRange = useMemo(() => {
+    if (!pendingCreate) return undefined;
+    // While the pill is being dragged it follows the pointer, before anything
+    // is written back to the intent.
+    const shift = draftDrag ? dayDelta(draftDrag.originDayKey, draftDrag.dayKey) : 0;
+    const from = shiftDayKey(pendingCreate.date, shift);
+    const to = shiftDayKey(pendingCreate.endDate ?? pendingCreate.date, shift);
+    return from <= to ? { from, to } : { from: to, to: from };
+  }, [draftDrag, pendingCreate]);
+
+  // The tint marks the range being dragged out right now, while there is no pill
+  // yet. Once the draft exists the pill says it better, and two markings for one
+  // thing is noise.
   const selectedRange = useMemo(() => {
-    const source = range
-      ? [range.fromKey, range.toKey]
-      : pendingCreate?.endDate && pendingCreate.endDate !== pendingCreate.date
-        ? [pendingCreate.date, pendingCreate.endDate]
-        : undefined;
-    if (!source) return undefined;
-    const [first, second] = source as [string, string];
+    if (!range) return undefined;
+    const [first, second] = [range.fromKey, range.toKey];
     return first <= second
       ? { from: first, to: second }
       : { from: second, to: first };
-  }, [pendingCreate, range]);
+  }, [range]);
 
   const { begin: beginMonthDrag, drag } = useMonthDrag({
     onCommit: async ({ dayKey: targetKey, event }) => {
@@ -284,6 +318,46 @@ export function MonthCalendar({
                     ) : null}
                   </div>
                   <div className={styles.dayEvents}>
+                    {/* The draft, as one pill across the range it covers: a
+                        month cell has no time axis, so this reads like the
+                        all-day event it will become. Grabbing it moves the whole
+                        range. It stays aria-hidden — the popover's own date
+                        fields are the keyboard path to the same change. */}
+                    {draftRange &&
+                    dateKey >= draftRange.from &&
+                    dateKey <= draftRange.to ? (
+                      <div
+                        aria-hidden="true"
+                        className={styles.dayDraft}
+                        data-continues-after={
+                          dateKey < draftRange.to && dayIndex < 6
+                            ? ""
+                            : undefined
+                        }
+                        data-continues-before={
+                          dateKey > draftRange.from && dayIndex > 0
+                            ? ""
+                            : undefined
+                        }
+                        data-draft={onMoveDraft ? "" : undefined}
+                        data-dragging={draftDrag ? "" : undefined}
+                        onPointerDown={(pointerEvent) => {
+                          if (!onMoveDraft || pointerEvent.button !== 0) return;
+                          pointerEvent.stopPropagation();
+                          beginDraftDrag({
+                            event: undefined,
+                            originDayKey: dateKey,
+                            pointerId: pointerEvent.pointerId,
+                            x: pointerEvent.clientX,
+                            y: pointerEvent.clientY,
+                          });
+                        }}
+                      >
+                        {dateKey === draftRange.from || dayIndex === 0
+                          ? "New event"
+                          : ""}
+                      </div>
+                    ) : null}
                     {visibleSegments.map((segment) => (
                       <EventPopover
                         calendar={calendarsById.get(
