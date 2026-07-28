@@ -4,6 +4,8 @@
 - Datum: 2026-07-27
 - Zdroj principů: `store/UI-UX/` (playbook, spec, studie Google Calendar)
 - Platí pro: `apps/web` primárně, `apps/client` kde to má smysl
+- Navazuje: [`ui-restructure-handoff.md`](./ui-restructure-handoff.md) — sjednocení
+  dialogů, primitiva v `src/ui/` a vlastní date/time/color pickery (nezačato)
 
 Studie Google Calendar je **referenční úroveň disciplíny, ne vizuální předloha**.
 Kopírujeme způsob skládání vrstev a míru závaznosti akcí. Nekopírujeme paletu,
