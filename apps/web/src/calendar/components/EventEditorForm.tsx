@@ -332,18 +332,25 @@ export function EventEditorForm({
           >
             <Select
               disabled={saving}
+              label="Repeat"
+              options={[
+                { label: "Does not repeat", value: "" },
+                { label: "Every day", value: "FREQ=DAILY" },
+                { label: "Every week", value: "FREQ=WEEKLY" },
+                { label: "Every month", value: "FREQ=MONTHLY" },
+                { label: "Every year", value: "FREQ=YEARLY" },
+                ...(customRecurrence
+                  ? [
+                      {
+                        label: "Custom recurrence",
+                        value: values.recurrence,
+                      },
+                    ]
+                  : []),
+              ]}
               value={values.recurrence}
-              onChange={(event) => patch({ recurrence: event.target.value })}
-            >
-              <option value="">Does not repeat</option>
-              <option value="FREQ=DAILY">Every day</option>
-              <option value="FREQ=WEEKLY">Every week</option>
-              <option value="FREQ=MONTHLY">Every month</option>
-              <option value="FREQ=YEARLY">Every year</option>
-              {customRecurrence ? (
-                <option value={values.recurrence}>Custom recurrence</option>
-              ) : null}
-            </Select>
+              onChange={(recurrence) => patch({ recurrence })}
+            />
           </Field>
         ) : null}
       </section>
@@ -450,9 +457,19 @@ export function EventEditorForm({
         >
           <Select
             disabled={calendarLocked || saving}
+            label="Calendar"
+            options={calendars.map((calendar) => ({
+              icon: (
+                <span
+                  className={styles.calendarDot}
+                  style={{ backgroundColor: calendar.color }}
+                />
+              ),
+              label: calendar.name,
+              value: calendar.id,
+            }))}
             value={values.calendarId}
-            onChange={(event) => {
-              const calendarId = event.target.value;
+            onChange={(calendarId) => {
               const replacingOnlyHome =
                 values.calendarIds.length === 1 &&
                 values.calendarIds[0] === values.calendarId;
@@ -465,13 +482,7 @@ export function EventEditorForm({
                     : [...values.calendarIds, calendarId],
               });
             }}
-          >
-            {calendars.map((calendar) => (
-              <option key={calendar.id} value={calendar.id}>
-                {calendar.name}
-              </option>
-            ))}
-          </Select>
+          />
         </Field>
 
         {expanded && calendars.length > 1 ? (

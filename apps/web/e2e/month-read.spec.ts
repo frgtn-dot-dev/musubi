@@ -48,6 +48,15 @@ const calendars = [
   },
 ];
 
+async function chooseSelectOption(
+  page: Page,
+  label: string,
+  option: string,
+) {
+  await page.getByRole("combobox", { name: label }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 function event(
   id: string,
   title: string,
@@ -820,9 +829,7 @@ test("keeps provider failures actionable without assuming a write succeeded", as
   await page
     .getByRole("textbox", { name: "Event title" })
     .fill("Provider check");
-  await page
-    .getByRole("combobox", { name: "Calendar" })
-    .selectOption("studio");
+  await chooseSelectOption(page, "Calendar", "Studio");
   await page.getByRole("button", { name: "Create" }).click();
 
   await expect(page.getByRole("alert")).toContainText(
@@ -931,9 +938,7 @@ test("exports and imports iCalendar files from calendar management", async ({
     page.getByRole("heading", { name: "Your calendars" }),
   ).toBeVisible();
 
-  await page
-    .getByRole("combobox", { name: "Calendar to export" })
-    .selectOption("studio");
+  await chooseSelectOption(page, "Calendar to export", "Studio");
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export .ics" }).click();
   const download = await downloadPromise;
@@ -1418,9 +1423,7 @@ test("changes time grid density from the page editor", async ({ page }) => {
   expect(comfortable).toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "Edit page" }).click();
-  await page
-    .getByRole("combobox", { name: "Row height" })
-    .selectOption("compact");
+  await chooseSelectOption(page, "Row height", "Compact");
 
   const compact = await canvasHeight();
   expect(compact).toBeLessThan(comfortable);
@@ -1764,12 +1767,10 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
 
   // Promote Sam to editor.
-  await page
-    .getByRole("combobox", { name: "Sam Rivers role" })
-    .selectOption("editor");
+  await chooseSelectOption(page, "Sam Rivers role", "Editor");
   await expect(
     page.getByRole("combobox", { name: "Sam Rivers role" }),
-  ).toHaveValue("editor");
+  ).toContainText("Editor");
 
   // Create then revoke an invite link.
   await page.getByRole("button", { name: "Create invite link" }).click();
@@ -1818,9 +1819,7 @@ test("transfers calendar ownership", async ({ page }) => {
   await page.getByRole("button", { name: "Share Studio" }).click();
   await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
 
-  await page
-    .getByRole("combobox", { name: "Sam Rivers role" })
-    .selectOption("owner");
+  await chooseSelectOption(page, "Sam Rivers role", "Owner");
 
   // The new owner loses the role control (shown as an Owner badge instead).
   await expect(
@@ -2754,6 +2753,41 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
   await expectNoAccessibilityViolations(page);
+});
+
+test("opens custom selections as accessible mobile sheets", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Create event" });
+  const trigger = editor.getByRole("combobox", { name: "Calendar" });
+  await trigger.click();
+
+  const selection = page.locator('[data-ui="select-popover"]');
+  await selection.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const box = (await selection.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
+  await expect(
+    page.getByRole("option", { name: "Personal", exact: true }),
+  ).toBeFocused();
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[data-ui="select-popover"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  await page.keyboard.press("Escape");
+  await expect(selection).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(trigger).toBeFocused();
 });
 
 test("opens the calendar color picker as the top mobile sheet", async ({

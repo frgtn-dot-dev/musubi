@@ -220,10 +220,6 @@
   width: 100%;
 }
 
-.calendarActions select {
-  width: 100%;
-}
-
 .calendarActions > div {
   display: flex;
   gap: var(--space-2);

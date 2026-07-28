@@ -3,6 +3,7 @@ import { can, type Calendar } from "@musubi/types";
 import { Copy, Link2, Trash2, X } from "lucide-react";
 import { useCalendarSharing } from "~/calendar/calendar-sharing";
 import { Avatar } from "~/ui/Avatar";
+import { Select } from "~/ui/Select";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./workspace.module.css";
 
@@ -122,28 +123,23 @@ export function ShareCalendarDialog({
                         {member.id === userId ? " (you)" : ""}
                       </span>
                       {canManage && !memberIsOwner ? (
-                        <label>
-                          <span className={styles.srOnly}>
-                            {member.name} role
-                          </span>
-                          <select
-                            disabled={busy}
-                            value={member.role}
-                            onChange={(event) =>
-                              changeRole(
-                                member.id,
-                                member.name,
-                                event.target.value,
-                              )
-                            }
-                          >
-                            <option value="viewer">Viewer</option>
-                            <option value="editor">Editor</option>
-                            {canTransfer ? (
-                              <option value="owner">Owner</option>
-                            ) : null}
-                          </select>
-                        </label>
+                        <Select
+                          className={styles.memberRoleSelect}
+                          disabled={busy}
+                          label={`${member.name} role`}
+                          options={[
+                            { label: "Viewer", value: "viewer" },
+                            { label: "Editor", value: "editor" },
+                            ...(canTransfer
+                              ? [{ label: "Owner", value: "owner" }]
+                              : []),
+                          ]}
+                          size="compact"
+                          value={member.role}
+                          onChange={(role) =>
+                            changeRole(member.id, member.name, role)
+                          }
+                        />
                       ) : (
                         <span className={styles.calendarBadge}>
                           {memberIsOwner ? "Owner" : member.role}

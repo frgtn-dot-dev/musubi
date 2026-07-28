@@ -425,23 +425,22 @@
   font-size: var(--text-11);
 }
 
-.selectRoot {
-  position: relative;
-  display: block;
-  min-width: 0;
-}
-
 .select {
+  display: flex;
   width: 100%;
   min-height: var(--control-height);
-  padding: 0 calc(var(--space-4) + 14px) 0 var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-control);
   outline: 0;
-  appearance: none;
   background: var(--surface-raised);
   color: var(--text-primary);
+  font-family: var(--font-sans);
   font-size: var(--text-14);
+  text-align: left;
 }
 
 .select:focus-visible {
@@ -454,17 +453,150 @@
   opacity: 0.55;
 }
 
-.selectChevron {
-  position: absolute;
-  top: 50%;
-  right: var(--space-4);
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
+.select_compact {
+  width: auto;
+  min-height: 32px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-11);
+}
+
+.selectValue {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selectValue > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectValueIcon,
+.selectOptionIcon {
+  display: grid;
+  flex: none;
+  place-content: center;
   color: var(--text-muted);
-  pointer-events: none;
-  transform: translateY(-65%) rotate(45deg);
+}
+
+.selectChevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--motion-fast) ease;
+}
+
+.select[aria-expanded="true"] .selectChevron {
+  transform: rotate(180deg);
+}
+
+.selectPopover {
+  z-index: 150;
+  width: max(
+    var(--radix-popover-trigger-width),
+    min(280px, calc(100vw - var(--space-6)))
+  );
+  max-height: min(360px, var(--radix-popover-content-available-height));
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-card);
+  outline: 0;
+  background: var(--surface-canvas);
+  box-shadow: var(--shadow-overlay);
+  animation: date-picker-in var(--motion-fast) ease both;
+}
+
+:global([data-radix-popper-content-wrapper]):has(.selectPopover) {
+  z-index: 150 !important;
+}
+
+.selectSheetTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.selectList {
+  max-height: inherit;
+  overflow-y: auto;
+  padding: var(--space-1);
+  overscroll-behavior: contain;
+}
+
+.selectOption {
+  display: grid;
+  width: 100%;
+  min-height: 42px;
+  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+}
+
+.selectOption[data-active],
+.selectOption:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.selectOption:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.selectOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.selectOptionCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.selectOptionCopy > span {
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--text-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectOptionCopy small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  line-height: 1.35;
+}
+
+.selectOptionCheck {
+  visibility: hidden;
+  color: var(--accent-primary);
+}
+
+.selectOption[aria-selected="true"] .selectOptionCheck {
+  visibility: visible;
+}
+
+.selectArrow {
+  fill: var(--surface-canvas);
+  stroke: var(--border-medium);
+  stroke-width: 1px;
 }
 
 .row {
@@ -1337,9 +1469,21 @@
     transform: none !important;
   }
 
+  :global([data-radix-popper-content-wrapper]):has(.selectPopover) {
+    position: fixed !important;
+    z-index: 150 !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    min-width: 100% !important;
+    transform: none !important;
+  }
+
   .datePickerPopover,
   .timePickerPopover,
-  .colorPickerPopover {
+  .colorPickerPopover,
+  .selectPopover {
     width: 100%;
     max-height: calc(100dvh - var(--space-5));
     padding-bottom: env(safe-area-inset-bottom);
@@ -1348,6 +1492,43 @@
     border-left: 0;
     border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
     animation-name: dialog-sheet-in;
+  }
+
+  .selectSheetTitle {
+    position: relative;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    padding: var(--space-6) var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+    margin: 0;
+    clip: auto;
+    color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: var(--text-19);
+    font-weight: 400;
+    white-space: normal;
+  }
+
+  .selectSheetTitle::before {
+    position: absolute;
+    top: var(--space-2);
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+    content: "";
+    transform: translateX(-50%);
+  }
+
+  .selectList {
+    padding: var(--space-2);
+    padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+
+  .selectOption {
+    min-height: 50px;
   }
 
   .datePickerPopover {
@@ -1400,7 +1581,8 @@
 
   .datePickerArrow,
   .timePickerArrow,
-  .colorPickerArrow {
+  .colorPickerArrow,
+  .selectArrow {
     display: none;
   }
 }
@@ -1422,7 +1604,8 @@
   .toast,
   .datePickerPopover,
   .timePickerPopover,
-  .colorPickerPopover {
+  .colorPickerPopover,
+  .selectPopover {
     animation-duration: 0.01ms;
   }
 }

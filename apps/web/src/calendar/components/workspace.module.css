@@ -375,14 +375,12 @@
   white-space: nowrap;
 }
 
-.densityField select {
-  height: 32px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
+.densityField > button {
   color: var(--text-secondary);
-  font-size: 0.72rem;
+}
+
+.memberRoleSelect {
+  min-width: 104px;
 }
 
 .pageNameInput {

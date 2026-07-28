@@ -60,6 +60,13 @@
   outline-offset: 1px;
 }
 
+.calendarDot {
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgb(0 0 0 / 10%);
+  border-radius: var(--radius-pill);
+}
+
 .groups {
   display: grid;
   gap: var(--space-5);

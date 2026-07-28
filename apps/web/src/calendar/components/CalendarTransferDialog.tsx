@@ -24,6 +24,7 @@ import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { Select } from "~/ui/Select";
 import { connectionOfCalendar } from "../federation-routing";
 import { ProviderIcon } from "./ProviderIcon";
 import styles from "./styles/calendars.module.css";
@@ -346,18 +347,25 @@ export function CalendarTransferDialog({
                 </div>
               </div>
               <Field className={styles.cardField} label="Calendar to export">
-                <select
+                <Select
                   disabled={Boolean(busy)}
+                  label="Calendar to export"
+                  options={[
+                    { label: "Choose a calendar", value: "" },
+                    ...calendars.map((calendar) => ({
+                      icon: (
+                        <span
+                          className={styles.calendarDot}
+                          style={{ backgroundColor: calendar.color }}
+                        />
+                      ),
+                      label: calendar.name,
+                      value: calendar.id,
+                    })),
+                  ]}
                   value={selectedExportId}
-                  onChange={(event) => setExportCalendarId(event.target.value)}
-                >
-                  <option value="">Choose a calendar</option>
-                  {calendars.map((calendar) => (
-                    <option key={calendar.id} value={calendar.id}>
-                      {calendar.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setExportCalendarId}
+                />
               </Field>
               <Button
                 className={styles.cardAction}

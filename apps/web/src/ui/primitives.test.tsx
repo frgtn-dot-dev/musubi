@@ -201,7 +201,7 @@ describe("choice primitives", () => {
     expect(onCheckedChange).toHaveBeenCalledWith(true);
   });
 
-  it("keeps checkbox and select browser semantics", async () => {
+  it("keeps checkbox semantics and exposes a custom select listbox", async () => {
     const user = userEvent.setup();
     const onCheckboxChange = vi.fn();
     const onSelectChange = vi.fn();
@@ -209,21 +209,32 @@ describe("choice primitives", () => {
     render(
       <>
         <Checkbox label="Studio" onChange={onCheckboxChange} />
-        <label htmlFor="calendar">Calendar</label>
-        <Select id="calendar" defaultValue="personal" onChange={onSelectChange}>
-          <option value="personal">Personal</option>
-          <option value="studio">Studio</option>
-        </Select>
+        <Select
+          id="calendar"
+          label="Calendar"
+          onChange={onSelectChange}
+          options={[
+            { label: "Personal", value: "personal" },
+            { label: "Studio", value: "studio" },
+          ]}
+          value="personal"
+        />
       </>,
     );
 
     await user.click(screen.getByRole("checkbox", { name: "Studio" }));
     expect(onCheckboxChange).toHaveBeenCalledOnce();
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Calendar" }),
-      "studio",
-    );
-    expect(onSelectChange).toHaveBeenCalledOnce();
+    const trigger = screen.getByRole("combobox", { name: "Calendar" });
+    await user.click(trigger);
+    const personal = screen.getByRole("option", { name: "Personal" });
+    expect(personal.getAttribute("aria-selected")).toBe("true");
+    await user.keyboard("s");
+    const studio = screen.getByRole("option", { name: "Studio" });
+    await waitFor(() => expect(document.activeElement).toBe(studio));
+    await user.keyboard("{Enter}");
+    expect(onSelectChange).toHaveBeenCalledWith("studio");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });
 

@@ -513,19 +513,21 @@ export function EventDetailsPopover({
                       <label>
                         <span>Add to calendar</span>
                         <Select
-                          aria-label="Target calendar"
                           disabled={Boolean(busyAction)}
+                          label="Target calendar"
+                          options={targetCalendars.map((item) => ({
+                            icon: (
+                              <span
+                                className={styles.calendarDot}
+                                style={{ backgroundColor: item.color }}
+                              />
+                            ),
+                            label: item.name,
+                            value: item.id,
+                          }))}
                           value={selectedTargetId}
-                          onChange={(changeEvent) =>
-                            setTargetCalendarId(changeEvent.target.value)
-                          }
-                        >
-                          {targetCalendars.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </Select>
+                          onChange={setTargetCalendarId}
+                        />
                       </label>
                       <div>
                         <Button

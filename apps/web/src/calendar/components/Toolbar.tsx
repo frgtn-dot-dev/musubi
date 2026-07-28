@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import type { RefObject } from "react";
+import { Select } from "~/ui/Select";
 import { calendarViews, type CalendarViewId } from "../view-registry";
 import type { Density } from "../time-geometry";
 import styles from "./workspace.module.css";
@@ -151,16 +152,19 @@ export function Toolbar({
           {editing && draftDensity && onDraftDensityChange ? (
             <label className={styles.densityField}>
               <span className={styles.srOnly}>Row height</span>
-              <select
+              <Select
+                label="Row height"
+                options={[
+                  { label: "Compact", value: "compact" },
+                  { label: "Comfortable", value: "comfortable" },
+                  { label: "Spacious", value: "spacious" },
+                ]}
+                size="compact"
                 value={draftDensity}
-                onChange={(event) =>
-                  onDraftDensityChange(event.target.value as Density)
+                onChange={(value) =>
+                  onDraftDensityChange(value as Density)
                 }
-              >
-                <option value="compact">Compact</option>
-                <option value="comfortable">Comfortable</option>
-                <option value="spacious">Spacious</option>
-              </select>
+              />
             </label>
           ) : null}
           {editing &&
