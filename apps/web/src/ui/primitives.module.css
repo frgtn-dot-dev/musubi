@@ -245,6 +245,290 @@
   margin-top: var(--space-2);
 }
 
+.segmented {
+  display: inline-flex;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-pill);
+  background: var(--surface-panel);
+}
+
+.segmentedOption {
+  min-height: 34px;
+  flex: 1;
+  padding-inline: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  white-space: nowrap;
+}
+
+.segmentedOption:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.segmentedOption[aria-checked="true"] {
+  background: var(--control-fill);
+  color: var(--control-on-fill);
+}
+
+.segmentedOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.switch {
+  display: inline-grid;
+  min-width: 44px;
+  min-height: 44px;
+  place-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+}
+
+.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.switchTrack {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  transition:
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.switchTrack[data-checked] {
+  border-color: var(--control-fill);
+  background: var(--control-fill);
+}
+
+.switchThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+  transition:
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.switchTrack[data-checked] .switchThumb {
+  background: var(--control-on-fill);
+  transform: translateX(16px);
+}
+
+.checkboxRoot {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-14);
+}
+
+.checkboxRoot_disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.checkboxRoot_iconOnly {
+  min-width: 44px;
+  justify-content: center;
+}
+
+.checkboxInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.checkboxBox {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: transparent;
+}
+
+.checkboxInput:checked + .checkboxBox {
+  border-color: var(--control-fill);
+  background: var(--control-fill);
+}
+
+.checkboxInput:checked + .checkboxBox::after {
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--control-on-fill);
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.checkboxInput:focus-visible + .checkboxBox {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.checkboxCopy {
+  display: grid;
+  gap: 2px;
+}
+
+.checkboxCopy small {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.selectRoot {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.select {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 0 calc(var(--space-4) + 14px) 0 var(--space-3);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  outline: 0;
+  appearance: none;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-14);
+}
+
+.select:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.selectChevron {
+  position: absolute;
+  top: 50%;
+  right: var(--space-4);
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--text-muted);
+  pointer-events: none;
+  transform: translateY(-65%) rotate(45deg);
+}
+
+.row {
+  display: flex;
+  width: 100%;
+  min-height: var(--row-min-height);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+}
+
+.rowAction {
+  cursor: pointer;
+}
+
+.rowAction:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+}
+
+.rowAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rowIcon {
+  display: grid;
+  width: 22px;
+  flex: none;
+  place-content: center;
+  color: var(--text-muted);
+}
+
+.rowCopy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.rowLabel {
+  color: var(--text-secondary);
+  font-size: var(--text-15);
+}
+
+.rowDetail {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  line-height: 1.35;
+}
+
+.rowValue {
+  overflow: hidden;
+  max-width: 42%;
+  color: var(--text-muted);
+  font-size: var(--text-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowTrailing {
+  display: grid;
+  flex: none;
+  place-content: center;
+}
+
+.rowChevron {
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  color: var(--text-faint);
+  transform: rotate(45deg);
+}
+
+.rowOptions {
+  flex: none;
+}
+
 .visuallyHidden {
   position: absolute;
   width: 1px;
@@ -260,6 +544,11 @@
 @media (max-width: 599px) {
   .field_inline {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rowOptions {
+    max-width: 58%;
+    overflow-x: auto;
   }
 }
 

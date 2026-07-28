@@ -2,9 +2,14 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Button, IconButton } from "./Button";
+import { Checkbox } from "./Checkbox";
 import { Empty } from "./Empty";
 import { Field } from "./Field";
+import { RowAction, RowOptions, RowToggle } from "./Row";
+import { Segmented } from "./Segmented";
+import { Select } from "./Select";
 import { SectionLabel } from "./SectionLabel";
+import { Switch } from "./Switch";
 
 describe("Button primitives", () => {
   it("uses a safe default type and invokes its action", async () => {
@@ -91,5 +96,167 @@ describe("static primitives", () => {
     expect(
       screen.getByRole("button", { name: "Connect account" }),
     ).not.toBeNull();
+  });
+});
+
+describe("choice primitives", () => {
+  it("moves a segmented selection with arrows and Home/End", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <Segmented
+        label="Theme"
+        options={[
+          { label: "System", value: "system" },
+          { label: "Light", value: "light" },
+          { label: "Dark", value: "dark" },
+        ]}
+        value="system"
+        onChange={onChange}
+      />,
+    );
+
+    const system = screen.getByRole("radio", { name: "System" });
+    system.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(onChange).toHaveBeenLastCalledWith("light");
+
+    rerender(
+      <Segmented
+        label="Theme"
+        options={[
+          { label: "System", value: "system" },
+          { label: "Light", value: "light" },
+          { label: "Dark", value: "dark" },
+        ]}
+        value="light"
+        onChange={onChange}
+      />,
+    );
+    await user.keyboard("{End}");
+    expect(onChange).toHaveBeenLastCalledWith("dark");
+    await user.keyboard("{Home}");
+    expect(onChange).toHaveBeenLastCalledWith("system");
+  });
+
+  it("keeps an enabled segmented option in the tab order", () => {
+    render(
+      <Segmented
+        label="View"
+        options={[
+          { disabled: true, label: "Month", value: "month" },
+          { label: "Week", value: "week" },
+        ]}
+        value="month"
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radio", { name: "Month" }).getAttribute("tabindex"),
+    ).toBe("-1");
+    expect(
+      screen.getByRole("radio", { name: "Week" }).getAttribute("tabindex"),
+    ).toBe("0");
+  });
+
+  it("uses native button keyboard behaviour for a switch", async () => {
+    const onCheckedChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <Switch
+        checked={false}
+        label="Event notifications"
+        onCheckedChange={onCheckedChange}
+      />,
+    );
+
+    const toggle = screen.getByRole("switch", {
+      name: "Event notifications",
+    });
+    toggle.focus();
+    await user.keyboard(" ");
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps checkbox and select browser semantics", async () => {
+    const user = userEvent.setup();
+    const onCheckboxChange = vi.fn();
+    const onSelectChange = vi.fn();
+
+    render(
+      <>
+        <Checkbox label="Studio" onChange={onCheckboxChange} />
+        <label htmlFor="calendar">Calendar</label>
+        <Select id="calendar" defaultValue="personal" onChange={onSelectChange}>
+          <option value="personal">Personal</option>
+          <option value="studio">Studio</option>
+        </Select>
+      </>,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "Studio" }));
+    expect(onCheckboxChange).toHaveBeenCalledOnce();
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Calendar" }),
+      "studio",
+    );
+    expect(onSelectChange).toHaveBeenCalledOnce();
+  });
+});
+
+describe("row variants", () => {
+  it("makes the whole action row operable", async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <RowAction
+        detail="web-qa@example.invalid"
+        label="Account"
+        value="Owner"
+        onClick={onClick}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Account/ }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("exposes a row toggle as one switch without nested controls", async () => {
+    const onCheckedChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <RowToggle
+        checked
+        label="Show kanji labels"
+        onCheckedChange={onCheckedChange}
+      />,
+    );
+
+    const toggle = screen.getByRole("switch", {
+      name: "Show kanji labels",
+    });
+    expect(toggle.querySelectorAll("button")).toHaveLength(0);
+    await user.click(toggle);
+    expect(onCheckedChange).toHaveBeenCalledWith(false);
+  });
+
+  it("labels the segmented choice inside an options row", () => {
+    render(
+      <RowOptions
+        label="Theme"
+        options={[
+          { label: "System", value: "system" },
+          { label: "Light", value: "light" },
+        ]}
+        value="system"
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("radiogroup", { name: "Theme" })).not.toBeNull();
   });
 });
