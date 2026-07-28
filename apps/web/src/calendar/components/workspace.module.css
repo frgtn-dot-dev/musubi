@@ -1817,14 +1817,6 @@
   composes: dialogLoading from "./styles/primitives.module.css";
 }
 
-.settingsLoadFailure {
-  composes: settingsLoadFailure from "./styles/primitives.module.css";
-}
-
-.settingsList {
-  display: grid;
-}
-
 .settingRow {
   composes: settingRow from "./styles/primitives.module.css";
 }

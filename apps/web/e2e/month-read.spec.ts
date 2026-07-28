@@ -966,12 +966,39 @@ test("saves revisioned settings and applies display preferences", async ({
     page.getByRole("heading", { name: "Settings" }),
   ).toBeVisible();
 
-  await page
-    .getByRole("combobox", { name: "Time format" })
-    .selectOption("12h");
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
-    "Settings saved.",
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const sectionHeadings = [
+    "Appearance",
+    "Notifications",
+    "Help & About",
+    "Account",
+  ];
+  const sectionTops = await Promise.all(
+    sectionHeadings.map(async (name) =>
+      (
+        await settingsDialog
+          .getByRole("heading", { name })
+          .boundingBox()
+      )!.y,
+    ),
   );
+  expect(sectionTops).toEqual([...sectionTops].sort((a, b) => a - b));
+
+  await expect(
+    settingsDialog.getByRole("radiogroup", { name: "Theme" }),
+  ).toBeVisible();
+  const currentTimeFormat = settingsDialog.getByRole("radio", {
+    name: "24 hour",
+  });
+  await currentTimeFormat.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    settingsDialog.getByRole("radio", { name: "12 hour" }),
+  ).toHaveAttribute("aria-checked", "true");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Settings saved." }),
+  ).toBeVisible();
+  await expectNoAccessibilityViolations(page);
   await page.getByRole("button", { name: "Close settings" }).click();
 
   await expect(
@@ -1006,9 +1033,47 @@ test("recovers when settings fail to load", async ({ page }) => {
   await expect(page.getByText("Loading settings…")).toHaveCount(0);
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(
-    page.getByRole("combobox", { name: "Theme" }),
+    page.getByRole("radiogroup", { name: "Theme" }),
   ).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("keeps settings usable as a mobile sheet", async ({ page }) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  const sheet = page.getByRole("dialog", { name: "Settings" });
+  await sheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+
+  const box = (await sheet.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  expect(box.height).toBeLessThanOrEqual(700 + 1);
+  await expect(
+    sheet.getByRole("heading", { name: "Appearance" }),
+  ).toBeVisible();
+  await sheet.getByRole("radio", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Settings saved." }),
+  ).toBeVisible();
+
+  const manageAccount = sheet.getByRole("button", {
+    name: /Manage account/,
+  });
+  await manageAccount.scrollIntoViewIfNeeded();
+  await expect(manageAccount).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+
+  await manageAccount.click();
+  await expect(
+    page.getByRole("dialog", { name: "Account" }),
+  ).toBeVisible();
 });
 
 test("resolves the default page and switches between pages", async ({

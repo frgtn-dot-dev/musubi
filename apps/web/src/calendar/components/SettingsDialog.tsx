@@ -1,18 +1,66 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import type {
   Settings,
   SettingsDocument,
   SettingsPatch,
 } from "@musubi/types";
-import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ExternalLink,
+  LifeBuoy,
+  UserRound,
+} from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import musubiPackage from "../../../../../package.json";
 import { ApiError } from "~/api/http";
 import { applyTheme } from "~/design/theme";
-import styles from "./workspace.module.css";
+import { Button } from "~/ui/Button";
+import { Dialog } from "~/ui/Dialog";
+import {
+  Row,
+  RowAction,
+  RowOptions,
+  RowToggle,
+} from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
+import styles from "./styles/settings.module.css";
+
+const FEEDBACK_URL = "https://feedback.musubi.pro/";
+const KOFI_URL = "https://ko-fi.com/frgtn";
+const PRIVACY_URL = "https://musubi.pro/privacy/";
+const TERMS_URL = "https://musubi.pro/terms/";
+
+const THEME_OPTIONS = [
+  { label: "System", value: "system" },
+  { label: "Dark", value: "dark" },
+  { label: "Light", value: "light" },
+] as const;
+
+const VIEW_OPTIONS = [
+  { label: "Day", value: "day" },
+  { label: "Week", value: "week" },
+  { label: "Month", value: "month" },
+  { label: "Agenda", value: "schedule" },
+] as const;
+
+const WEEK_START_OPTIONS = [
+  { label: "Sunday", value: "sunday" },
+  { label: "Monday", value: "monday" },
+] as const;
+
+const TIME_FORMAT_OPTIONS = [
+  { label: "24 hour", value: "24h" },
+  { label: "12 hour", value: "12h" },
+] as const;
+
+const DATE_FORMAT_OPTIONS = [
+  { label: "D/M/Y", value: "dmy" },
+  { label: "M/D/Y", value: "mdy" },
+  { label: "Y-M-D", value: "ymd" },
+] as const;
 
 type SettingsDialogProps = {
   onAdopt: (document: SettingsDocument) => void;
   onLoad: (signal?: AbortSignal) => Promise<SettingsDocument>;
+  onManageAccount: () => void;
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   onPatch: (request: {
@@ -26,9 +74,28 @@ function sameValue(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function openExternal(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function openProblemReport() {
+  const body = [
+    `Musubi web ${musubiPackage.version}`,
+    `Server: ${window.location.origin}`,
+    `Browser: ${navigator.userAgent}`,
+    "",
+    "What happened?",
+    "",
+  ].join("\n");
+  window.location.href = `mailto:hello@frgtn.dev?subject=${encodeURIComponent(
+    "Musubi problem report",
+  )}&body=${encodeURIComponent(body)}`;
+}
+
 export function SettingsDialog({
   onAdopt,
   onLoad,
+  onManageAccount,
   onNotice,
   onOpenChange,
   onPatch,
@@ -73,9 +140,19 @@ export function SettingsDialog({
     onOpenChange(nextOpen);
   }
 
+  function retryLoad() {
+    setError("");
+    setSettings(undefined);
+    setLoadAttempt((attempt) => attempt + 1);
+  }
+
   async function save(patch: SettingsPatch) {
     if (!settings || saving) return;
     const base = settings;
+    setSettings({
+      ...base,
+      value: { ...base.value, ...patch },
+    });
     if (patch.theme) applyTheme(patch.theme);
     setSaving(true);
     setError("");
@@ -117,6 +194,8 @@ export function SettingsDialog({
           );
           return;
         } catch (refreshError) {
+          setSettings(base);
+          if (patch.theme) applyTheme(base.value.theme);
           setError(
             refreshError instanceof Error
               ? refreshError.message
@@ -126,6 +205,7 @@ export function SettingsDialog({
         }
       }
 
+      setSettings(base);
       if (patch.theme) applyTheme(base.value.theme);
       setError(
         saveError instanceof Error
@@ -138,205 +218,188 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.dialogOverlay} />
-        <Dialog.Content
-          aria-describedby="settings-description"
-          className={styles.manageDialog}
+    <Dialog
+      closeLabel="Close settings"
+      description="Preferences sync across your Musubi devices."
+      onOpenChange={handleOpenChange}
+      open={open}
+      size="wide"
+      title="Settings"
+    >
+      {!settings && !error ? (
+        <div
+          aria-live="polite"
+          className={styles.loading}
+          role="status"
         >
-          <header className={styles.manageDialogHeader}>
-            <div>
-              <Dialog.Title>Settings</Dialog.Title>
-              <Dialog.Description id="settings-description">
-                Preferences sync across your Musubi devices.
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                aria-label="Close settings"
-                className={styles.iconButton}
-                type="button"
-              >
-                <X aria-hidden="true" size={17} />
-              </button>
-            </Dialog.Close>
-          </header>
+          <span aria-hidden="true" />
+          <p>Loading settings…</p>
+        </div>
+      ) : settings ? (
+        <div
+          aria-busy={saving || undefined}
+          className={styles.settingsContent}
+        >
+          <span
+            className={styles.visuallyHidden}
+            role="status"
+          >
+            {saving ? "Saving settings…" : ""}
+          </span>
 
-          {!settings && !error ? (
-            <p className={styles.dialogLoading}>Loading settings…</p>
-          ) : settings ? (
-            <div className={styles.settingsList}>
-              <SettingSelect
-                disabled={saving}
-                label="Theme"
-                value={settings.value.theme}
-                options={[
-                  ["system", "System"],
-                  ["light", "Light"],
-                  ["dark", "Dark"],
-                ]}
-                onChange={(theme) =>
-                  void save({ theme: theme as Settings["theme"] })
-                }
-              />
-              <SettingSelect
-                disabled={saving}
-                label="Time format"
-                value={settings.value.timeFormat}
-                options={[
-                  ["24h", "24 hour"],
-                  ["12h", "12 hour"],
-                ]}
-                onChange={(timeFormat) =>
-                  void save({
-                    timeFormat: timeFormat as Settings["timeFormat"],
-                  })
-                }
-              />
-              <SettingSelect
-                disabled={saving}
-                label="Date format"
-                value={settings.value.dateFormat}
-                options={[
-                  ["dmy", "Day / month / year"],
-                  ["mdy", "Month / day / year"],
-                  ["ymd", "Year / month / day"],
-                ]}
-                onChange={(dateFormat) =>
-                  void save({
-                    dateFormat: dateFormat as Settings["dateFormat"],
-                  })
-                }
-              />
-              <SettingSelect
-                disabled={saving}
-                label="Week starts"
-                value={settings.value.weekStartsOn}
-                options={[
-                  ["monday", "Monday"],
-                  ["sunday", "Sunday"],
-                ]}
-                onChange={(weekStartsOn) =>
-                  void save({
-                    weekStartsOn:
-                      weekStartsOn as Settings["weekStartsOn"],
-                  })
-                }
-              />
-              <SettingSelect
-                disabled={saving}
-                label="Default view"
-                value={settings.value.defaultCalendarView}
-                options={[
-                  ["day", "Day"],
-                  ["week", "Week"],
-                  ["month", "Month"],
-                  ["schedule", "Agenda"],
-                ]}
-                onChange={(defaultCalendarView) =>
-                  void save({
-                    defaultCalendarView:
-                      defaultCalendarView as Settings["defaultCalendarView"],
-                  })
-                }
-              />
-              <SettingToggle
-                checked={settings.value.notificationsOnByDefault}
-                disabled={saving}
-                label="Event notifications by default"
-                onChange={(notificationsOnByDefault) =>
-                  void save({ notificationsOnByDefault })
-                }
-              />
-              <SettingToggle
-                checked={settings.value.showKanji}
-                disabled={saving}
-                label="Show kanji labels"
-                onChange={(showKanji) => void save({ showKanji })}
-              />
-              <SettingToggle
-                checked={settings.value.tabBarLabels ?? true}
-                disabled={saving}
-                label="Show mobile tab labels"
-                onChange={(tabBarLabels) => void save({ tabBarLabels })}
-              />
-            </div>
-          ) : (
-            <div className={styles.settingsLoadFailure}>
-              <p>Settings could not be loaded.</p>
-              <button
-                className={styles.secondaryButton}
-                type="button"
-                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-              >
-                Retry
-              </button>
-            </div>
-          )}
+          <SettingsSection title="Appearance">
+            <RowOptions
+              disabled={saving}
+              label="Theme"
+              onChange={(theme) => void save({ theme })}
+              options={THEME_OPTIONS}
+              value={settings.value.theme}
+            />
+            <RowToggle
+              checked={settings.value.showKanji}
+              detail="Display Japanese day labels in the mini calendar"
+              disabled={saving}
+              label="Show kanji"
+              onCheckedChange={(showKanji) => void save({ showKanji })}
+            />
+            <RowToggle
+              checked={settings.value.tabBarLabels ?? true}
+              detail="Show labels in the mobile navigation"
+              disabled={saving}
+              label="Tab labels"
+              onCheckedChange={(tabBarLabels) =>
+                void save({ tabBarLabels })
+              }
+            />
+            <RowOptions
+              disabled={saving}
+              label="Default view"
+              onChange={(defaultCalendarView) =>
+                void save({ defaultCalendarView })
+              }
+              options={VIEW_OPTIONS}
+              value={settings.value.defaultCalendarView}
+            />
+            <RowOptions
+              disabled={saving}
+              label="Week starts on"
+              onChange={(weekStartsOn) =>
+                void save({ weekStartsOn })
+              }
+              options={WEEK_START_OPTIONS}
+              value={settings.value.weekStartsOn}
+            />
+            <RowOptions
+              disabled={saving}
+              label="Time format"
+              onChange={(timeFormat) => void save({ timeFormat })}
+              options={TIME_FORMAT_OPTIONS}
+              value={settings.value.timeFormat}
+            />
+            <RowOptions
+              disabled={saving}
+              label="Date format"
+              onChange={(dateFormat) => void save({ dateFormat })}
+              options={DATE_FORMAT_OPTIONS}
+              value={settings.value.dateFormat}
+            />
+          </SettingsSection>
+
+          <SettingsSection title="Notifications">
+            <RowToggle
+              checked={settings.value.notificationsOnByDefault}
+              detail="New events start with notifications enabled"
+              disabled={saving}
+              label="On by default"
+              onCheckedChange={(notificationsOnByDefault) =>
+                void save({ notificationsOnByDefault })
+              }
+            />
+          </SettingsSection>
+
+          <SettingsSection title="Help & About">
+            <RowAction
+              detail="Suggest ideas, vote, and see what is planned"
+              label="Feedback & Roadmap"
+              showChevron={false}
+              trailing={<ExternalLink aria-hidden="true" size={15} />}
+              onClick={() => openExternal(FEEDBACK_URL)}
+            />
+            <RowAction
+              detail="Includes browser and server details"
+              label="Report a Problem"
+              showChevron={false}
+              trailing={<LifeBuoy aria-hidden="true" size={16} />}
+              onClick={openProblemReport}
+            />
+            <RowAction
+              detail="Buy us a coffee on Ko-fi"
+              label="Support Us"
+              showChevron={false}
+              trailing={<ExternalLink aria-hidden="true" size={15} />}
+              onClick={() => openExternal(KOFI_URL)}
+            />
+            <RowAction
+              label="Privacy Policy"
+              showChevron={false}
+              trailing={<ExternalLink aria-hidden="true" size={15} />}
+              onClick={() => openExternal(PRIVACY_URL)}
+            />
+            <RowAction
+              label="Terms of Service"
+              showChevron={false}
+              trailing={<ExternalLink aria-hidden="true" size={15} />}
+              onClick={() => openExternal(TERMS_URL)}
+            />
+            <Row
+              label="Version"
+              value={musubiPackage.version}
+            />
+          </SettingsSection>
+
+          <SettingsSection title="Account">
+            <RowAction
+              detail="Profile, avatar, and account deletion"
+              icon={<UserRound size={18} strokeWidth={1.6} />}
+              label="Manage account"
+              onClick={onManageAccount}
+            />
+          </SettingsSection>
 
           {error ? (
-            <div className={styles.formError} role="alert">
+            <div className={styles.error} role="alert">
               <p>{error}</p>
             </div>
           ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
+      ) : (
+        <div className={styles.loadFailure} role="alert">
+          <div>
+            <strong>Settings could not be loaded.</strong>
+            <p>{error}</p>
+          </div>
+          <Button variant="secondary" onClick={retryLoad}>
+            Retry
+          </Button>
+        </div>
+      )}
+    </Dialog>
   );
 }
 
-function SettingSelect({
-  disabled,
-  label,
-  onChange,
-  options,
-  value,
+function SettingsSection({
+  children,
+  title,
 }: {
-  disabled: boolean;
-  label: string;
-  onChange: (value: string) => void;
-  options: Array<[string, string]>;
-  value: string;
+  children: ReactNode;
+  title: string;
 }) {
   return (
-    <label className={styles.settingRow}>
-      <span>{label}</span>
-      <select
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function SettingToggle({
-  checked,
-  disabled,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  label: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className={styles.settingRow}>
-      <span>{label}</span>
-      <input
-        checked={checked}
-        disabled={disabled}
-        type="checkbox"
-        onChange={(event) => onChange(event.target.checked)}
-      />
-    </label>
+    <section className={styles.section}>
+      <SectionLabel className={styles.sectionHeading} level={3}>
+        {title}
+      </SectionLabel>
+      <div className={styles.sectionRows}>{children}</div>
+    </section>
   );
 }

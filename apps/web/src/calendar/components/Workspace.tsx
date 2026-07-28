@@ -1127,6 +1127,10 @@ export function Workspace({
       <SettingsDialog
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}
+        onManageAccount={() => {
+          setSettingsOpen(false);
+          setAccountOpen(true);
+        }}
         onNotice={notify}
         onOpenChange={setSettingsOpen}
         onPatch={onPatchSettings}

@@ -151,6 +151,7 @@ export type RowOptionsProps<Value extends string> = Omit<
   "onChange"
 > &
   Omit<RowContentProps, "trailing" | "value"> & {
+    disabled?: boolean;
     onChange: (value: Value) => void;
     options: ReadonlyArray<SegmentedOption<Value>>;
     value: Value;
@@ -159,6 +160,7 @@ export type RowOptionsProps<Value extends string> = Omit<
 export function RowOptions<Value extends string>({
   className,
   detail,
+  disabled = false,
   icon,
   label,
   onChange,
@@ -173,6 +175,7 @@ export function RowOptions<Value extends string>({
       <RowContent detail={detail} icon={icon} label={label} />
       <Segmented
         className={styles.rowOptions}
+        disabled={disabled}
         label={accessibleLabel}
         options={options}
         value={value}

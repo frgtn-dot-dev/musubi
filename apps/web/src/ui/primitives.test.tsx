@@ -280,6 +280,27 @@ describe("row variants", () => {
 
     expect(screen.getByRole("radiogroup", { name: "Theme" })).not.toBeNull();
   });
+
+  it("disables every option while an options row is saving", () => {
+    render(
+      <RowOptions
+        disabled
+        label="Theme"
+        options={[
+          { label: "System", value: "system" },
+          { label: "Light", value: "light" },
+        ]}
+        value="system"
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen
+        .getAllByRole("radio")
+        .every((option) => (option as HTMLButtonElement).disabled),
+    ).toBe(true);
+  });
 });
 
 describe("overlay primitives", () => {
