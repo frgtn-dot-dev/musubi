@@ -2281,3 +2281,57 @@ test("says an event is unsettled while its write is in flight", async ({
   release();
   await expect(block).not.toHaveAttribute("data-pending", "");
 });
+
+test("turns anchored surfaces into sheets on a narrow viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // Create sits within thumb reach rather than in the toolbar.
+  const create = page.getByRole("button", { name: "Event", exact: true });
+  const fab = (await create.boundingBox())!;
+  expect(fab.y).toBeGreaterThan(500);
+  expect(Math.round(fab.width)).toBe(Math.round(fab.height));
+
+  await create.click();
+  // The popover is a bottom sheet: full width, sitting on the bottom edge.
+  const sheet = page.getByRole("dialog", { name: "Create event" });
+  await sheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const box = (await sheet.boundingBox())!;
+  expect(Math.round(box.width)).toBe(390);
+  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
+  expect(box.x).toBe(0);
+
+  // It is still the same layer: Escape dismisses it and focus is handled.
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expectNoAccessibilityViolations(page);
+});
+
+test("opens an event's details as a sheet on a narrow viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: /Client call/ }).first().click();
+  const sheet = page.getByRole("dialog").first();
+  await sheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const box = (await sheet.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  // Tall content scrolls inside the sheet instead of running off the screen.
+  expect(box.height).toBeLessThanOrEqual(720 * 0.86 + 1);
+  await expect(
+    page.getByRole("heading", { name: "Client call" }),
+  ).toBeVisible();
+});
+
+

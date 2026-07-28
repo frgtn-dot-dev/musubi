@@ -159,6 +159,9 @@ míchat — to je zdroj náhodných popoverů a ztraceného focusu.
 Pořadí je dané prioritou z §1 a tím, co odemyká „pocit". **Fáze A je předpoklad
 pro B** (snap potřebuje px/min jako data, ne magickou konstantu).
 
+**Stav: A–F hotové** (2026-07-28). Zbytky jsou vypsané u jednotlivých fází —
+žádný z nich neblokuje další práci. Dál platí §7 checklist na každý nový ticket.
+
 ### Fáze A — Geometrie a tokeny — **HOTOVO** (2026-07-27)
 
 - Tokeny z §3 doplněné (`--space-*`, `--hour-height`, `--date-header-height`,
@@ -336,11 +339,25 @@ otázek projít napříč.
   toastem; zaseknutý červený blok by tvrdil, že data jsou v nějakém rozbitém
   stavu, což nejsou — server o změně neví.
 
-### Fáze F — Responzivita
+### Fáze F — Responzivita — **HOTOVO** (2026-07-28)
 
-- Breakpointy: <600 (sheet místo popoveru, FAB, overlay drawer),
-  600–1023, 1024–1439, ≥1440.
-- Priorita zmenšování z R12.
+- **Popover → sheet pod 600 px v CSS, ne druhou komponentou.** Radix drží focus,
+  dismiss i Escape; přepisuje se jen jedna věc — inline `transform` na
+  `[data-radix-popper-content-wrapper]` (přes `:global`), plus `position: fixed`
+  na spodní hranu. Druhá implementace „mobilního sheetu“ by byla druhá věc, co se
+  musí držet v kroku. Platí pro quick create i detail eventu.
+- **FAB je tentýž `.eventButton`,** jen přesunutý do dosahu palce
+  (`position: fixed`, kruh, `env(safe-area-inset-bottom)`). Žádné druhé tlačítko
+  → žádný druhý handler a druhý label. Toast se nad něj posune.
+- **Pořadí zmenšování podle R12**: `Today` se pod 820 px už neschovává (jen mu
+  ubere padding) — rozsah a navigace jsou v pořadí nad vším ostatním. Labely
+  ustupují u view switcheru, který je v pořadí poslední.
+- Chip v Month má teď explicitní mřížku `čas | title | marks` — implicitní tok
+  by značky z fáze E zalomil na druhý řádek. Ikona v collapsed searchi dostala
+  `flex: none`, jinak ji input vytlačil na nulovou šířku (pole vypadalo prázdné).
+- Sheet záměrně **nemá scrim**: popover se zavírá klikem mimo, takže pozadí musí
+  zůstat dosažitelné. Dialogy (settings, scope, shortcuts) scrim mají — ty jsou
+  modální.
 
 ### Vědomě odloženo
 
