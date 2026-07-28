@@ -121,6 +121,11 @@ type TimelineEventProps = EventActionHandlers & {
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
   /** Live times while this event is being dragged, else undefined. */
   dragTimes?: DragTimes;
+  /**
+   * This event is being moved somewhere else: what stays here is the shape it
+   * would leave behind, so the origin is still legible while it travels.
+   */
+  ghost?: boolean;
   /** A write for this event is in flight. */
   pending?: boolean;
   draggable: boolean;
@@ -186,6 +191,7 @@ const TimelineEvent = memo(function TimelineEvent({
   dragTimes,
   draggable,
   geometry,
+  ghost = false,
   onBeginDrag,
   pending = false,
   onKeyboardAdjust,
@@ -193,10 +199,7 @@ const TimelineEvent = memo(function TimelineEvent({
   ...eventActions
 }: TimelineEventProps) {
   const { col, cols, event } = daySegment;
-  const editable = canEditEvent(
-    eventActions.getEventMaster(event),
-    calendars,
-  );
+  const editable = canEditEvent(eventActions.getEventMaster(event), calendars);
   // While dragging, the block follows the ghost times rather than the data.
   const startMin = dragTimes?.startMinutes ?? daySegment.startMin;
   const endMin = dragTimes?.endMinutes ?? daySegment.endMin;
@@ -270,6 +273,7 @@ const TimelineEvent = memo(function TimelineEvent({
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
         aria-busy={pending || undefined}
         data-dragging={dragTimes ? "" : undefined}
+        data-ghost={ghost ? "" : undefined}
         data-draggable={draggable ? "" : undefined}
         data-pending={pending ? "" : undefined}
         data-readonly={editable ? undefined : ""}
@@ -500,31 +504,38 @@ export function TimeGridView({
   // A second pointer machine, for the draft: same threshold, snapping,
   // auto-scroll and Escape as a real event, but it commits into the open form
   // instead of to the server.
-  const { begin: beginDraftDrag, drag: draftDrag } = useTimeGridDrag<undefined>({
-    columns: readColumns,
-    geometry,
-    onCommit: async ({ dayOffset, mode, times }) => {
-      if (!draftSlot || !onMoveDraft) return;
-      const day = days[
-        Math.max(
-          0,
-          Math.min(
-            days.length - 1,
-            draftSlot.dayIndex + (mode === "move" ? dayOffset : 0),
-          ),
-        )
-      ];
-      if (!day) return;
-      onMoveDraft({
-        date: dayKey(day),
-        endTime: clockValue(times.endMinutes),
-        startTime: clockValue(times.startMinutes),
-      });
+  const { begin: beginDraftDrag, drag: draftDrag } = useTimeGridDrag<undefined>(
+    {
+      columns: readColumns,
+      geometry,
+      onCommit: async ({ dayOffset, mode, times }) => {
+        if (!draftSlot || !onMoveDraft) return;
+        const day =
+          days[
+            Math.max(
+              0,
+              Math.min(
+                days.length - 1,
+                draftSlot.dayIndex + (mode === "move" ? dayOffset : 0),
+              ),
+            )
+          ];
+        if (!day) return;
+        onMoveDraft({
+          date: dayKey(day),
+          endTime: clockValue(times.endMinutes),
+          startTime: clockValue(times.startMinutes),
+        });
+      },
+      onError: eventActions.onNotice,
+      scrollRoot: () => rootRef.current?.parentElement,
     },
-    onError: eventActions.onNotice,
-    scrollRoot: () => rootRef.current?.parentElement,
-  });
+  );
   const dayMode = view === "day";
+  const dragPreviewColor = drag
+    ? (calendarsById.get(drag.event.calendars[0] ?? "")?.color ??
+      drag.event.color)
+    : "transparent";
 
   // Three sources, in the order they win: the create gesture in progress, the
   // draft being dragged, and the draft at rest. A plain click also produces a
@@ -856,6 +867,38 @@ export function TimeGridView({
                     ) : null}
                   </div>
                 ) : null}
+                {/* The event where it is being dragged to — the answer to
+                    "where will this land", including across days. */}
+                {drag && drag.mode === "move" && drag.dayIndex === dayIndex ? (
+                  <div
+                    aria-hidden="true"
+                    className={styles.dragPreview}
+                    data-drag-preview=""
+                    style={
+                      {
+                        "--event-color": dragPreviewColor,
+                        "--event-foreground":
+                          getReadableEventTextColor(dragPreviewColor),
+                        height: `${Math.max(
+                          durationToHeight(
+                            drag.times.endMinutes - drag.times.startMinutes,
+                            geometry,
+                          ),
+                          geometry.minEventHeight,
+                        )}px`,
+                        top: `${minutesToY(drag.times.startMinutes, geometry)}px`,
+                      } as CSSProperties
+                    }
+                  >
+                    <span className={styles.dragPreviewTime}>
+                      {minuteLabel(drag.times.startMinutes, timeFormat)}–
+                      {minuteLabel(drag.times.endMinutes, timeFormat)}
+                    </span>
+                    <span className={styles.dragPreviewTitle}>
+                      {drag.event.title}
+                    </span>
+                  </div>
+                ) : null}
                 {segmentsByDay[dayIndex]?.map((segment) => (
                   <TimelineEvent
                     pending={
@@ -871,12 +914,17 @@ export function TimeGridView({
                     dayMode={dayMode}
                     daySegment={segment}
                     dragTimes={
-                      // The ghost stays in the event's own column and shows the
-                      // new time; the target day is highlighted separately, so a
-                      // cross-day drag still reads clearly.
-                      drag?.event.id === segment.event.id
+                      // A resize grows the block in place. A move leaves this one
+                      // where it was, as a ghost, and travels as its own preview
+                      // in whichever column the pointer is over.
+                      drag?.event.id === segment.event.id &&
+                      drag.mode !== "move"
                         ? drag.times
                         : undefined
+                    }
+                    ghost={
+                      drag?.event.id === segment.event.id &&
+                      drag.mode === "move"
                     }
                     draggable={
                       Boolean(onMoveEvent) &&

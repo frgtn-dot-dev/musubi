@@ -2644,3 +2644,70 @@ test("moves the create window by its header, never out of the calendar", async (
     area.x + area.width + 1,
   );
 });
+
+
+test("shows a dragged event where it is going and a ghost where it was", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-06`);
+
+  const block = page.getByRole("button", { name: /Weekly review/ }).first();
+  await expect(block).toBeVisible();
+  const from = (await block.boundingBox())!;
+  const monday = page.locator("[data-time-grid-column]").first();
+  const thursday = page.locator("[data-time-grid-column]").nth(3);
+  const target = (await thursday.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    target.x + target.width / 2,
+    from.y + from.height / 2 + 70,
+    { steps: 10 },
+  );
+
+  // The event is where the pointer is — in another day's column, at the time it
+  // would take — and its outline stays behind on the day it came from.
+  const preview = page.locator("[data-drag-preview]");
+  await expect(preview).toHaveCount(1);
+  await expect(thursday.locator("[data-drag-preview]")).toHaveCount(1);
+  await expect(preview).toContainText("Weekly review");
+  await expect(preview).toContainText("12:00–13:00");
+  await expect(monday.locator("[data-ghost]")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+  await expect(page.locator("[data-ghost]")).toHaveCount(0);
+});
+
+test("shows a dragged chip in the month cell it would land in", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const chip = page.getByRole("button", { name: /Client call/ }).first();
+  await expect(chip).toBeVisible();
+  const from = (await chip.boundingBox())!;
+  const origin = page.locator('[data-day-key="2026-07-08"]');
+  const target = page.locator('[data-day-key="2026-07-10"]');
+  const to = (await target.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 10,
+  });
+
+  await expect(target.locator("[data-drag-preview]")).toHaveCount(1);
+  await expect(target.locator("[data-drag-preview]")).toContainText(
+    "Client call",
+  );
+  await expect(origin.locator("[data-ghost]")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+});

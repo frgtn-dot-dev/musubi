@@ -3,9 +3,16 @@ import {
   getMonthGrid,
   segmentEventsByDay as bucketEventsByDay,
 } from "@musubi/calendar/layout";
-import { type KeyboardEvent, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
+import { getReadableEventTextColor } from "../event-color";
 import { canEditEvent } from "../event-permissions";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
@@ -103,7 +110,9 @@ export function MonthCalendar({
     if (!pendingCreate) return undefined;
     // While the pill is being dragged it follows the pointer, before anything
     // is written back to the intent.
-    const shift = draftDrag ? dayDelta(draftDrag.originDayKey, draftDrag.dayKey) : 0;
+    const shift = draftDrag
+      ? dayDelta(draftDrag.originDayKey, draftDrag.dayKey)
+      : 0;
     const from = shiftDayKey(pendingCreate.date, shift);
     const to = shiftDayKey(pendingCreate.endDate ?? pendingCreate.date, shift);
     return from <= to ? { from, to } : { from: to, to: from };
@@ -155,6 +164,10 @@ export function MonthCalendar({
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars],
   );
+  const dragPreviewColor = drag
+    ? (calendarsById.get(drag.event.calendars[0] ?? "")?.color ??
+      drag.event.color)
+    : "transparent";
   const todayKey = toDateKey(new Date());
   const initialFocusIndex = Math.max(
     0,
@@ -366,7 +379,7 @@ export function MonthCalendar({
                         calendars={calendars}
                         continuesAfter={segment.continuesAfter}
                         continuesBefore={segment.continuesBefore}
-                        dragging={drag?.event.id === segment.event.id}
+                        ghost={drag?.event.id === segment.event.id}
                         event={segment.event}
                         pending={
                           busyEventId !== undefined &&
@@ -397,6 +410,26 @@ export function MonthCalendar({
                         {...eventActions}
                       />
                     ))}
+                    {/* The dragged event, in the cell it would land in: a month
+                        cell has no time axis, so "where" is the whole answer and
+                        the chip has to be visible to give it. Last in the cell,
+                        so multi-day bars already drawn keep their row. */}
+                    {drag && drag.dayKey === dateKey ? (
+                      <div
+                        aria-hidden="true"
+                        className={styles.dragPreviewChip}
+                        data-drag-preview=""
+                        style={
+                          {
+                            "--event-color": dragPreviewColor,
+                            "--event-foreground":
+                              getReadableEventTextColor(dragPreviewColor),
+                          } as CSSProperties
+                        }
+                      >
+                        {drag.event.title}
+                      </div>
+                    ) : null}
                     {overflow > 0 ? (
                       <button
                         className={styles.moreEvents}

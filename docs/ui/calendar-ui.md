@@ -234,6 +234,23 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
+**B9 — Ghost na místě, event tam, kam se táhne: HOTOVO** (2026-07-28)
+
+Předtím zůstával tažený blok ve svém sloupci a jen měnil čas; cílový den se
+zvýrazňoval zvlášť. To bylo dokumentované jako záměr, ale je to špatně: u tažení
+napříč dny odpověď „kam to spadne" nesla jen výplň sloupce, a v Month nebyl
+tažený chip vidět vůbec.
+
+- **Move**: na původním místě zůstane **ghost** (obtah + slabá výplň), a event se
+  vykreslí jako **preview v tom sloupci/buňce, nad kterou je kurzor**, s časem,
+  který by dostal. Takže tažení do strany je vidět.
+- **Resize** zůstává v místě — tam ghost nemá co říct, blok sám roste.
+- Month preview je chip **za** existujícími segmenty v buňce: vložený dopředu
+  posunul víceденní pruhy o řádek a rozbil jejich návaznost.
+- Karty eventů dostaly **1px prsten z barvy plátna + jemný drop shadow**, aby dvě
+  stejně barevné karty na sobě čtly jako dvě. U pruhů, které pokračují do další
+  buňky, se prsten vypíná — jinak by jeden event vypadal jako několik.
+
 **B8 — Okno tvorby se dá odtáhnout: HOTOVO** (2026-07-28)
 
 - Bublina se táhne za svou hlavičku (`data-drag-handle`) a **clampuje se na

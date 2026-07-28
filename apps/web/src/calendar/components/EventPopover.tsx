@@ -16,8 +16,11 @@ type EventPopoverProps = EventActionHandlers & {
   calendars: Calendar[];
   continuesAfter?: boolean;
   continuesBefore?: boolean;
-  /** Set while this chip is being dragged to another day. */
-  dragging?: boolean;
+  /**
+   * This chip is being dragged elsewhere: what stays here is the shape it would
+   * leave behind, so the day it came from stays readable.
+   */
+  ghost?: boolean;
   event: Event;
   /** Absent when the event may not be moved by dragging. */
   onBeginDrag?: (pointerEvent: React.PointerEvent<HTMLElement>) => void;
@@ -32,8 +35,8 @@ export function EventPopover({
   calendars,
   continuesAfter = false,
   continuesBefore = false,
-  dragging = false,
   event,
+  ghost = false,
   onBeginDrag,
   pending = false,
   showLabel = true,
@@ -67,7 +70,7 @@ export function EventPopover({
           event,
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
         aria-busy={pending || undefined}
-        data-dragging={dragging ? "" : undefined}
+        data-ghost={ghost ? "" : undefined}
         data-draggable={onBeginDrag ? "" : undefined}
         data-pending={pending ? "" : undefined}
         data-event-id={event.id}
