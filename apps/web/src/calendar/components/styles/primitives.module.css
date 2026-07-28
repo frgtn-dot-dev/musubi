@@ -87,7 +87,7 @@
 
 .textButton {
   border-color: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 @keyframes dialog-overlay-in {

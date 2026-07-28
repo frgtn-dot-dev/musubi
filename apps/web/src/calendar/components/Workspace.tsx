@@ -115,10 +115,11 @@ type WorkspaceProps = {
     eventId: string;
   }) => Promise<Attendee[]>;
   /**
-   * Open the full editor for a draft. Absent keeps quick create expanding in
-   * place, which is what the component tests and any router-less embedding use.
+   * Open the full editor for a draft. An event identifies an update; without
+   * one it is a new event. Absent keeps the compact form expanding in place,
+   * which is what router-less embeddings use.
    */
-  onOpenFullEditor?: (values: EventFormValues) => void;
+  onOpenFullEditor?: (values: EventFormValues, event?: Event) => void;
   onSignOut: () => void;
   onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
@@ -866,6 +867,7 @@ export function Workspace({
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}
               onNotice={notify}
+              onOpenFullEditor={onOpenFullEditor}
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
@@ -911,6 +913,7 @@ export function Workspace({
                   : undefined
               }
               onNotice={notify}
+              onOpenFullEditor={onOpenFullEditor}
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
@@ -962,6 +965,7 @@ export function Workspace({
                   : undefined
               }
               onNotice={notify}
+              onOpenFullEditor={onOpenFullEditor}
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}

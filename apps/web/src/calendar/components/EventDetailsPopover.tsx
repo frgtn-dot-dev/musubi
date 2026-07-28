@@ -58,6 +58,10 @@ export type EventActionHandlers = {
   onForkEvent: (input: TargetMutation) => Promise<Event>;
   onLinkEvent: (input: TargetMutation) => Promise<Event>;
   onNotice: Notify;
+  onOpenFullEditor?: (
+    values: EventFormValues,
+    event: Event,
+  ) => void;
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
   /**
    * Puts a deleted event back. Absent means a delete cannot be offered as
@@ -94,6 +98,7 @@ export function EventDetailsPopover({
   onForkEvent,
   onLinkEvent,
   onNotice,
+  onOpenFullEditor,
   onRemoveEvent,
   onRestoreEvent,
   onSetAttendance,
@@ -345,8 +350,17 @@ export function EventDetailsPopover({
                 <EventEditorForm
                   calendarLocked
                   calendars={calendars}
+                  compact
                   initialValues={eventFormValues(master)}
                   onCancel={() => setEditing(false)}
+                  onExpand={
+                    onOpenFullEditor
+                      ? (values) => {
+                          handleOpenChange(false);
+                          onOpenFullEditor(values, master);
+                        }
+                      : undefined
+                  }
                   onError={(error) =>
                     getEventMutationError(error, "update", homeCalendar)
                   }

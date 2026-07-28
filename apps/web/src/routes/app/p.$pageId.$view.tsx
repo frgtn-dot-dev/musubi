@@ -188,29 +188,43 @@ function WorkspaceRoute() {
           to: "/app/p/$pageId/$view",
         })
       }
-      onOpenFullEditor={(values) =>
-        void navigate({
-          params: { pageId },
-          // The draft goes in the URL so the page survives a reload.
-          search: {
-            allDay: values.isAllDay || undefined,
-            attendees: values.hasAttendees || undefined,
-            calendarId: values.calendarId,
-            date: values.date,
-            description: values.description || undefined,
-            endDate: values.endDate || undefined,
-            endTime: values.endTime || undefined,
-            location: values.location || undefined,
-            recurrence: values.recurrence || undefined,
-            returnDate: date,
-            startTime: values.startTime || undefined,
-            title: values.title || undefined,
-            url: values.url || undefined,
-            view: activeView,
-          },
-          to: "/app/p/$pageId/event/new",
-        })
-      }
+      onOpenFullEditor={(values, event) => {
+        // The draft goes in the URL so the page survives a reload.
+        const search = {
+          allDay: values.isAllDay || undefined,
+          attendees: values.hasAttendees || undefined,
+          calendarId: values.calendarId,
+          calendarIds:
+            values.calendarIds.length > 1
+              ? values.calendarIds
+              : undefined,
+          date: values.date,
+          description: values.description || undefined,
+          endDate: values.endDate || undefined,
+          endTime: values.endTime || undefined,
+          location: values.location || undefined,
+          recurrence: values.recurrence || undefined,
+          returnDate: date,
+          startTime: values.startTime || undefined,
+          title: values.title || undefined,
+          url: values.url || undefined,
+          view: activeView,
+        };
+
+        if (event) {
+          void navigate({
+            params: { eventId: event.id, pageId },
+            search,
+            to: "/app/p/$pageId/event/$eventId",
+          });
+        } else {
+          void navigate({
+            params: { pageId },
+            search,
+            to: "/app/p/$pageId/event/new",
+          });
+        }
+      }}
       onViewChange={(nextView) =>
         void navigate({
           params: { pageId, view: nextView },

@@ -3076,29 +3076,68 @@ test("asks for a name and a time first, the rest on request", async ({
   await expect(page.getByRole("status")).toContainText("Event created.");
 });
 
-test("keeps the full editor whole when editing an event", async ({ page }) => {
+test("keeps event edits focused and moves details to a full page", async ({
+  page,
+}) => {
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
   await page.getByRole("button", { name: /Client call/ }).first().click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
 
-  // Editing is the heavy layer: nothing is hidden behind a disclosure.
-  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
+  // The popover is for the high-frequency edits, matching quick create.
+  await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
+  await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
+  await expect(page.getByLabel("Repeat")).toHaveCount(0);
+  await expect(
+    page.getByRole("combobox", { name: "Calendar" }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Client call revised");
+  await expectNoAccessibilityViolations(page);
+
+  await page.getByRole("button", { name: "More options" }).click();
+  await expect(page).toHaveURL(/\/event\/client-call\?/);
+  await expect(page).toHaveURL(/title=Client\+call\+revised/);
+  await expect(page.getByRole("heading", { name: "Edit event" })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Client call revised");
+
+  // The page is the deliberate, complete layer and survives a reload.
   await expect(page.getByPlaceholder("Add location")).toBeVisible();
   await expect(page.getByLabel("Repeat")).toBeVisible();
-  const orderedControls = [
-    page.getByLabel("Repeat"),
-    page.getByRole("checkbox", { name: /Allow attendance/ }),
-    page.getByPlaceholder("Add location"),
-    page.getByPlaceholder("Add link"),
-    page.getByPlaceholder("Add notes"),
-    page.getByRole("combobox", { name: "Calendar" }),
-  ];
-  const controlTops = await Promise.all(
-    orderedControls.map(async (control) => (await control.boundingBox())!.y),
+  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(
+    0,
   );
-  expect(controlTops).toEqual([...controlTops].sort((a, b) => a - b));
+  await page.reload();
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toHaveValue("Client call revised");
+
+  await page.getByPlaceholder("Add location").fill("Studio C");
+  await page.getByRole("button", { name: "Save event" }).click();
+  await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
+  await expect(
+    page.getByRole("button", { name: /Client call revised/ }).first(),
+  ).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+});
+
+test("makes the scope of a recurring event edit explicit", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: /Weekly review/ }).first().click();
+  await page.getByRole("button", { name: "Edit series" }).click();
+  await page.getByRole("button", { name: "More options" }).click();
+
+  await expect(page).toHaveURL(/\/event\/weekly-review\?/);
+  await expect(page.getByRole("heading", { name: "Edit series" })).toBeVisible();
+  await expect(
+    page.getByText("Changes here apply to the recurring series."),
+  ).toBeVisible();
   await expectNoAccessibilityViolations(page);
 });
 

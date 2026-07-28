@@ -26,6 +26,14 @@
   font-weight: 400;
 }
 
+.editorPage header p {
+  max-width: 52ch;
+  margin: -4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.5;
+}
+
 .editorPageForm {
   width: min(560px, 100%);
   padding: 20px;
