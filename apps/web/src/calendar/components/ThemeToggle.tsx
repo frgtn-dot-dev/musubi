@@ -1,40 +1,18 @@
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
+import {
+  getAppliedTheme,
+  subscribeToTheme,
+  toggleTheme,
+} from "~/design/theme";
 import styles from "./workspace.module.css";
-
-type Theme = "dark" | "light";
-
-function getDocumentTheme(): Theme {
-  if (typeof document === "undefined") {
-    return "light";
-  }
-
-  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-}
-
-function subscribeToTheme(callback: () => void) {
-  window.addEventListener("musubi-theme-change", callback);
-  window.addEventListener("storage", callback);
-
-  return () => {
-    window.removeEventListener("musubi-theme-change", callback);
-    window.removeEventListener("storage", callback);
-  };
-}
 
 export function ThemeToggle() {
   const theme = useSyncExternalStore(
     subscribeToTheme,
-    getDocumentTheme,
+    getAppliedTheme,
     () => "light",
   );
-
-  function toggleTheme() {
-    const next = getDocumentTheme() === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("musubi-theme", next);
-    window.dispatchEvent(new Event("musubi-theme-change"));
-  }
 
   const nextTheme = theme === "dark" ? "light" : "dark";
 

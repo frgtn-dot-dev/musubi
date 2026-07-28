@@ -7,10 +7,15 @@ import {
   Scripts,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
 import { AppErrorBoundary } from "~/components/AppErrorBoundary";
 import { NotFound } from "~/components/NotFound";
 import globalCss from "~/design/global.css?url";
+import {
+  getAppliedTheme,
+  subscribeToTheme,
+  THEME_BOOTSTRAP_SCRIPT,
+} from "~/design/theme";
 import tokensCss from "~/design/tokens.css?url";
 
 export const Route = createRootRouteWithContext<{
@@ -56,6 +61,11 @@ function RootComponent() {
   );
 }
 
+function ThemeSynchronizer() {
+  useSyncExternalStore(subscribeToTheme, getAppliedTheme, () => "light");
+  return null;
+}
+
 function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -64,12 +74,12 @@ function RootDocument({ children }: { children: ReactNode }) {
         <script
           // Theme is applied before the body is painted to avoid a light flash.
           dangerouslySetInnerHTML={{
-            __html:
-              "try{const t=localStorage.getItem('musubi-theme');const d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch{document.documentElement.dataset.theme='light'}",
+            __html: THEME_BOOTSTRAP_SCRIPT,
           }}
         />
       </head>
       <body>
+        <ThemeSynchronizer />
         <a className="skip-link" href="#main-content">
           Skip to calendar
         </a>

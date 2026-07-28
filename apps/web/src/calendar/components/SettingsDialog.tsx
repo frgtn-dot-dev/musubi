@@ -7,6 +7,7 @@ import type {
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ApiError } from "~/api/http";
+import { applyTheme } from "~/design/theme";
 import styles from "./workspace.module.css";
 
 type SettingsDialogProps = {
@@ -20,16 +21,6 @@ type SettingsDialogProps = {
   }) => Promise<SettingsDocument>;
   open: boolean;
 };
-
-function applyTheme(theme: Settings["theme"]) {
-  localStorage.setItem("musubi-theme", theme);
-  const dark =
-    theme === "dark" ||
-    (theme === "system" &&
-      matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
-  window.dispatchEvent(new Event("musubi-theme-change"));
-}
 
 function sameValue(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
