@@ -1,12 +1,16 @@
 import {
   can,
   DEFAULT_CALENDAR_COLOR,
+  providerDisplayName,
   type Calendar,
   type Settings,
 } from "@musubi/types";
 import {
   CalendarDays,
+  Check,
+  ChevronDown,
   Clock3,
+  House,
   Link2,
   MapPin,
   Repeat2,
@@ -25,8 +29,16 @@ import {
   TimePicker,
   timeToMinutes,
 } from "~/ui/TimePicker";
-import { type EventFormValues, validateEventForm } from "../event-form";
-import { federatedConnectionMap } from "../federation-routing";
+import { groupCalendars } from "../calendar-groups";
+import {
+  type EventFormValues,
+  selectHomeCalendar,
+  validateEventForm,
+} from "../event-form";
+import {
+  connectionOfCalendar,
+  federatedConnectionMap,
+} from "../federation-routing";
 import { createTimeGeometry } from "../time-geometry";
 import styles from "./styles/event-editor.module.css";
 
@@ -115,6 +127,8 @@ export function EventEditorForm({
   const id = useId();
   const [values, setValues] = useState(initialValues);
   const [expanded, setExpanded] = useState(!compact);
+  const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
+  const [placementMessage, setPlacementMessage] = useState("");
   // Adjusted during render rather than from an effect: the form must never
   // paint a time the grid has already moved on from.
   const whenSignature = when ? Object.values(when).join("|") : "";
@@ -128,6 +142,11 @@ export function EventEditorForm({
   const selectedCalendar = calendars.find(
     (calendar) => calendar.id === values.calendarId,
   );
+  const selectedCalendarIds = new Set(values.calendarIds);
+  const calendarGroups = groupCalendars(calendars);
+  const homeServer = calendarServer(selectedCalendar);
+  const calendarCount = values.calendarIds.length;
+  const showCalendarList = expanded || calendarPickerOpen;
   const customRecurrence = ![
     "",
     "FREQ=DAILY",
@@ -162,6 +181,50 @@ export function EventEditorForm({
       endTime: minutesToTime(nextEnd),
       startTime,
     });
+  }
+
+  function changeHomeCalendar(calendar: Calendar) {
+    const switchedServer = calendarServer(calendar) !== homeServer;
+    const change = selectHomeCalendar(
+      values,
+      calendar.id,
+      (calendarId) =>
+        calendarServer(
+          calendars.find((item) => item.id === calendarId),
+        ),
+    );
+
+    patch({
+      calendarId: change.calendarId,
+      calendarIds: change.calendarIds,
+    });
+    setPlacementMessage(
+      switchedServer && change.removedCalendarCount > 0
+        ? `${calendar.name} is now home. ${change.removedCalendarCount} ${
+            change.removedCalendarCount === 1
+              ? "calendar was"
+              : "calendars were"
+          } removed because an event cannot span Musubi servers.`
+        : `${calendar.name} is now the home calendar.`,
+    );
+  }
+
+  function changeCalendarMembership(
+    calendar: Calendar,
+    checked: boolean,
+  ) {
+    patch({
+      calendarIds: checked
+        ? Array.from(new Set([...values.calendarIds, calendar.id]))
+        : values.calendarIds.filter(
+            (calendarId) => calendarId !== calendar.id,
+          ),
+    });
+    setPlacementMessage(
+      checked
+        ? `Event will also appear in ${calendar.name}.`
+        : `Event will no longer appear in ${calendar.name}.`,
+    );
   }
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
@@ -436,94 +499,198 @@ export function EventEditorForm({
           className={styles.sectionLabel}
           id={`${id}-calendar-heading`}
         >
-          Calendar
+          Event calendars
         </SectionLabel>
-        <Field
-          className={styles.inlineField}
-          label={
-            <span className={styles.fieldLabel}>
-              <span
-                aria-hidden="true"
-                className={styles.calendarDot}
-                style={{
-                  backgroundColor:
-                    selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
-                }}
-              />
-              Calendar
+
+        {!expanded ? (
+          <button
+            aria-controls={`${id}-calendar-list`}
+            aria-expanded={calendarPickerOpen}
+            aria-label={`Choose calendars. ${
+              selectedCalendar?.name ?? "No calendar"
+            } is home. Event appears in ${calendarCount} ${
+              calendarCount === 1 ? "calendar" : "calendars"
+            }.`}
+            className={styles.calendarSummary}
+            disabled={saving}
+            type="button"
+            onClick={() => setCalendarPickerOpen((current) => !current)}
+          >
+            <span
+              aria-hidden="true"
+              className={styles.calendarDot}
+              style={{
+                backgroundColor:
+                  selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
+              }}
+            />
+            <span className={styles.calendarSummaryCopy}>
+              <strong>{selectedCalendar?.name ?? "Choose a calendar"}</strong>
+              <span>
+                Home
+                {calendarCount > 1
+                  ? ` · Appears in ${calendarCount} calendars`
+                  : " · Only calendar"}
+              </span>
             </span>
-          }
-          layout="inline"
-        >
-          <Select
-            disabled={calendarLocked || saving}
-            label="Calendar"
-            options={calendars.map((calendar) => ({
-              icon: (
-                <span
-                  className={styles.calendarDot}
-                  style={{ backgroundColor: calendar.color }}
-                />
-              ),
-              label: calendar.name,
-              value: calendar.id,
-            }))}
-            value={values.calendarId}
-            onChange={(calendarId) => {
-              const replacingOnlyHome =
-                values.calendarIds.length === 1 &&
-                values.calendarIds[0] === values.calendarId;
-              patch({
-                calendarId,
-                calendarIds: replacingOnlyHome
-                  ? [calendarId]
-                  : values.calendarIds.includes(calendarId)
-                    ? values.calendarIds
-                    : [...values.calendarIds, calendarId],
-              });
-            }}
-          />
-        </Field>
+            <span className={styles.calendarSummaryAction}>
+              Change
+              <ChevronDown
+                aria-hidden="true"
+                data-open={calendarPickerOpen ? "" : undefined}
+                size={15}
+                strokeWidth={1.6}
+              />
+            </span>
+          </button>
+        ) : (
+          <p className={styles.calendarHint} id={`${id}-calendar-hint`}>
+            Choose where the event appears. Its home calendar owns updates,
+            invitations, and the event color.
+          </p>
+        )}
 
-        {expanded && calendars.length > 1 ? (
-          <fieldset className={styles.calendarChoices}>
-            <legend>Also show in</legend>
-            {calendars.map((calendar) => {
-              const checked = values.calendarIds.includes(calendar.id);
-              const isHome = values.calendarId === calendar.id;
-              const mutable =
-                !calendarLocked || can(calendar.role, "editEvents");
+        {showCalendarList ? (
+          <fieldset
+            aria-describedby={
+              expanded ? `${id}-calendar-hint` : undefined
+            }
+            className={styles.calendarPlacement}
+            data-ui="calendar-placement"
+            id={`${id}-calendar-list`}
+          >
+            <legend className={styles.srOnly}>
+              Calendars for this event
+            </legend>
+            <div
+              aria-hidden="true"
+              className={styles.calendarPlacementHeader}
+            >
+              <span>Appears in</span>
+              <span>Home</span>
+            </div>
 
-              return (
-                <Checkbox
-                  checked={checked}
-                  className={styles.calendarChoice}
-                  description={isHome ? "Home calendar" : undefined}
-                  disabled={saving || isHome || !mutable}
-                  key={calendar.id}
-                  label={
-                    <span className={styles.calendarChoiceLabel}>
-                      <span
-                        aria-hidden="true"
-                        className={styles.calendarDot}
-                        style={{ backgroundColor: calendar.color }}
-                      />
-                      {calendar.name}
-                    </span>
-                  }
-                  onChange={(event) =>
-                    patch({
-                      calendarIds: event.target.checked
-                        ? [...values.calendarIds, calendar.id]
-                        : values.calendarIds.filter(
-                            (calendarId) => calendarId !== calendar.id,
-                          ),
-                    })
-                  }
-                />
-              );
-            })}
+            {calendarGroups.map((group) => (
+              <div className={styles.calendarGroup} key={group.key}>
+                {calendarGroups.length > 1 ? (
+                  <div className={styles.calendarGroupHeading}>
+                    <strong>{group.title}</strong>
+                    <span>{group.detail}</span>
+                  </div>
+                ) : null}
+                <ul>
+                  {group.calendars.map((calendar) => {
+                    const checked = selectedCalendarIds.has(calendar.id);
+                    const isHome = values.calendarId === calendar.id;
+                    const compatible =
+                      calendarServer(calendar) === homeServer;
+                    const membershipLocked =
+                      saving ||
+                      isHome ||
+                      !compatible ||
+                      !can(calendar.role, "editEvents");
+                    const homeLocked =
+                      saving ||
+                      calendarLocked ||
+                      !can(calendar.role, "editEvents");
+                    const detail = !compatible
+                      ? "Choose as home to switch Musubi server"
+                      : calendarSourceDetail(calendar);
+
+                    return (
+                      <li
+                        className={styles.calendarPlacementRow}
+                        key={calendar.id}
+                      >
+                        <label
+                          className={styles.calendarMembership}
+                          data-disabled={membershipLocked ? "" : undefined}
+                          data-home={isHome ? "" : undefined}
+                        >
+                          <input
+                            aria-label={`Show event in ${calendar.name}`}
+                            checked={checked}
+                            disabled={membershipLocked}
+                            type="checkbox"
+                            onChange={(event) =>
+                              changeCalendarMembership(
+                                calendar,
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          <span
+                            aria-hidden="true"
+                            className={styles.calendarMembershipBox}
+                          >
+                            {checked ? (
+                              <Check size={12} strokeWidth={2.2} />
+                            ) : null}
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className={styles.calendarDot}
+                            style={{ backgroundColor: calendar.color }}
+                          />
+                          <span className={styles.calendarPlacementCopy}>
+                            <strong>{calendar.name}</strong>
+                            <span>{detail}</span>
+                          </span>
+                        </label>
+
+                        {calendarLocked ? (
+                          isHome ? (
+                            <span className={styles.homeBadge}>
+                              <House
+                                aria-hidden="true"
+                                size={13}
+                                strokeWidth={1.7}
+                              />
+                              Home
+                            </span>
+                          ) : (
+                            <span aria-hidden="true" />
+                          )
+                        ) : (
+                          <label
+                            className={styles.homeChoice}
+                            data-checked={isHome ? "" : undefined}
+                            data-disabled={homeLocked ? "" : undefined}
+                          >
+                            <input
+                              aria-label={`${calendar.name} as home calendar`}
+                              checked={isHome}
+                              disabled={homeLocked}
+                              name={`${id}-home-calendar`}
+                              type="radio"
+                              value={calendar.id}
+                              onChange={() => changeHomeCalendar(calendar)}
+                            />
+                            <span aria-hidden="true">
+                              <House size={14} strokeWidth={1.7} />
+                            </span>
+                            <span className={styles.srOnly}>
+                              {isHome ? "Home" : "Make home"}
+                            </span>
+                          </label>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </fieldset>
+        ) : null}
+
+        {placementMessage ? (
+          <span
+            aria-live="polite"
+            className={styles.srOnly}
+            role="status"
+          >
+            {placementMessage}
+          </span>
         ) : null}
       </section>
 
@@ -562,4 +729,14 @@ export function EventEditorForm({
       </div>
     </form>
   );
+}
+
+function calendarServer(calendar: Calendar | undefined) {
+  return connectionOfCalendar(calendar) ?? "home";
+}
+
+function calendarSourceDetail(calendar: Calendar) {
+  if (calendar.provider) return providerDisplayName(calendar);
+  if (calendar.isDefault) return "Personal calendar";
+  return calendar.role === "owner" ? "Your calendar" : "Shared calendar";
 }

@@ -4,6 +4,7 @@ import {
   createEventFromForm,
   defaultEventFormValues,
   eventFormValues,
+  selectHomeCalendar,
   updateEventFromForm,
   validateEventForm,
 } from "./event-form";
@@ -82,6 +83,67 @@ describe("event form", () => {
         title: "Invalid",
       }),
     ).toBe("End time must be after start time.");
+  });
+
+  it("replaces the default-only calendar when a new home is chosen", () => {
+    expect(
+      selectHomeCalendar(
+        { calendarId: "personal", calendarIds: ["personal"] },
+        "studio",
+        () => "home",
+      ),
+    ).toEqual({
+      calendarId: "studio",
+      calendarIds: ["studio"],
+      removedCalendarCount: 1,
+    });
+  });
+
+  it("keeps deliberate links on the new home's server", () => {
+    const servers = new Map([
+      ["personal", "home"],
+      ["studio", "home"],
+      ["family", "home"],
+    ]);
+
+    expect(
+      selectHomeCalendar(
+        {
+          calendarId: "personal",
+          calendarIds: ["personal", "family"],
+        },
+        "studio",
+        (calendarId) => servers.get(calendarId) ?? "home",
+      ),
+    ).toEqual({
+      calendarId: "studio",
+      calendarIds: ["studio", "personal", "family"],
+      removedCalendarCount: 0,
+    });
+  });
+
+  it("drops memberships that cannot follow a home to another server", () => {
+    const servers = new Map([
+      ["personal", "home"],
+      ["family", "home"],
+      ["remote-main", "remote"],
+      ["remote-team", "remote"],
+    ]);
+
+    expect(
+      selectHomeCalendar(
+        {
+          calendarId: "personal",
+          calendarIds: ["personal", "family", "remote-team"],
+        },
+        "remote-main",
+        (calendarId) => servers.get(calendarId) ?? "home",
+      ),
+    ).toEqual({
+      calendarId: "remote-main",
+      calendarIds: ["remote-main", "remote-team"],
+      removedCalendarCount: 2,
+    });
   });
 
   it("preserves identity and links during quick edit", () => {

@@ -642,7 +642,7 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
   await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
-test("creates, edits and deletes an event through confirmed API writes", async ({
+test("creates across chosen calendars, then edits and deletes through confirmed API writes", async ({
   page,
 }) => {
   await mockAuthenticatedReads(page);
@@ -652,7 +652,28 @@ test("creates, edits and deletes an event through confirmed API writes", async (
   await page
     .getByRole("textbox", { name: "Event title" })
     .fill("Release check");
+  await page.getByRole("button", { name: /^Choose calendars/ }).click();
+  await expect(
+    page.getByRole("checkbox", { name: "Show event in Personal" }),
+  ).toBeChecked();
+  await page
+    .getByRole("radio", { name: "Studio as home calendar" })
+    .click();
+  await page
+    .getByRole("checkbox", { name: "Show event in Family" })
+    .check();
+  const createRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/events",
+  );
   await page.getByRole("button", { name: "Create" }).click();
+  const createdEvent = (await createRequest).postDataJSON() as {
+    calendars: string[];
+    originCalendarID: string;
+  };
+  expect(createdEvent.originCalendarID).toBe("studio");
+  expect(createdEvent.calendars).toEqual(["studio", "family"]);
 
   await expect(page.getByRole("status")).toContainText("Event created.");
   await expect(
@@ -829,7 +850,10 @@ test("keeps provider failures actionable without assuming a write succeeded", as
   await page
     .getByRole("textbox", { name: "Event title" })
     .fill("Provider check");
-  await chooseSelectOption(page, "Calendar", "Studio");
+  await page.getByRole("button", { name: /^Choose calendars/ }).click();
+  await page
+    .getByRole("radio", { name: "Studio as home calendar" })
+    .click();
   await page.getByRole("button", { name: "Create" }).click();
 
   await expect(page.getByRole("alert")).toContainText(
@@ -2783,7 +2807,7 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
   await expectNoAccessibilityViolations(page);
 });
 
-test("opens custom selections as accessible mobile sheets", async ({
+test("chooses event calendars from an accessible mobile list", async ({
   page,
 }) => {
   await page.setViewportSize({ height: 720, width: 390 });
@@ -2792,30 +2816,34 @@ test("opens custom selections as accessible mobile sheets", async ({
 
   await page.getByRole("button", { name: "Event", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Create event" });
-  const trigger = editor.getByRole("combobox", { name: "Calendar" });
+  const trigger = editor.getByRole("button", {
+    name: /^Choose calendars/,
+  });
   await trigger.click();
 
-  const selection = page.locator('[data-ui="select-popover"]');
-  await selection.evaluate((element) =>
-    Promise.all(element.getAnimations().map((animation) => animation.finished)),
-  );
-  const box = (await selection.boundingBox())!;
-  expect(box.x).toBe(0);
-  expect(Math.round(box.width)).toBe(390);
-  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
+  const selection = editor.locator('[data-ui="calendar-placement"]');
+  await expect(selection).toBeVisible();
   await expect(
-    page.getByRole("option", { name: "Personal", exact: true }),
-  ).toBeFocused();
+    selection.getByRole("checkbox", { name: "Show event in Personal" }),
+  ).toBeChecked();
+  await selection
+    .getByRole("radio", { name: "Studio as home calendar" })
+    .click();
+  await expect(
+    selection.getByRole("checkbox", { name: "Show event in Studio" }),
+  ).toBeChecked();
 
   const accessibility = await new AxeBuilder({ page })
-    .include('[data-ui="select-popover"]')
+    .include('[data-ui="calendar-placement"]')
     .analyze();
   expect(accessibility.violations).toEqual([]);
 
-  await page.keyboard.press("Escape");
+  await trigger.click();
   await expect(selection).toHaveCount(0);
   await expect(editor).toBeVisible();
-  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAccessibleName(
+    /Studio is home\. Event appears in 1 calendar/,
+  );
 });
 
 test("opens the calendar color picker as the top mobile sheet", async ({
@@ -3098,14 +3126,19 @@ test("asks for a name and a time first, the rest on request", async ({
   await expect(page.getByRole("button", { name: /^Date:/ })).toBeVisible();
   await expect(page.getByLabel("Start time")).toBeVisible();
   await expect(
-    bubble.getByRole("combobox", { name: "Calendar" }),
+    bubble.getByRole("button", { name: /^Choose calendars/ }),
   ).toBeVisible();
+  await bubble.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
   await expectNoAccessibilityViolations(page);
   // Everything else is out of the way until asked for.
   await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
   await expect(page.getByPlaceholder("Add notes")).toHaveCount(0);
   await expect(page.getByLabel("Repeat")).toHaveCount(0);
-  await expect(page.getByText("Also show in")).toHaveCount(0);
+  await expect(
+    bubble.locator('[data-ui="calendar-placement"]'),
+  ).toHaveCount(0);
 
   // The documented keyboard path submits without leaving the title field.
   await page.getByRole("textbox", { name: "Event title" }).fill("Studio time");
@@ -3127,7 +3160,7 @@ test("keeps event edits focused and moves details to a full page", async ({
   await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
   await expect(page.getByLabel("Repeat")).toHaveCount(0);
   await expect(
-    page.getByRole("combobox", { name: "Calendar" }),
+    page.getByRole("button", { name: /^Choose calendars/ }),
   ).toBeVisible();
   await page
     .getByRole("textbox", { name: "Event title" })

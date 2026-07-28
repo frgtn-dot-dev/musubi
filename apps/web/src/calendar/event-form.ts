@@ -21,6 +21,13 @@ export type EventFormValues = {
   url: string;
 };
 
+export type HomeCalendarChange = Pick<
+  EventFormValues,
+  "calendarId" | "calendarIds"
+> & {
+  removedCalendarCount: number;
+};
+
 type NewEventIdentity = {
   email: string;
   userId: string;
@@ -146,6 +153,39 @@ export function validateEventForm(
   }
 
   return null;
+}
+
+/**
+ * A home switch is also a server-routing decision. If the draft only contains
+ * its old home, the new home replaces it. Once the user has deliberately added
+ * more calendars, keep every selected calendar from the new home's server and
+ * discard memberships that the receiving server could not persist.
+ */
+export function selectHomeCalendar(
+  values: Pick<EventFormValues, "calendarId" | "calendarIds">,
+  calendarId: string,
+  serverForCalendar: (calendarId: string) => string,
+): HomeCalendarChange {
+  const nextServer = serverForCalendar(calendarId);
+  const replacingOnlyHome =
+    values.calendarIds.length === 1 &&
+    values.calendarIds[0] === values.calendarId;
+  const calendarsOnNextServer = replacingOnlyHome
+    ? []
+    : values.calendarIds.filter(
+        (selectedId) => serverForCalendar(selectedId) === nextServer,
+      );
+  const calendarIds = Array.from(
+    new Set([calendarId, ...calendarsOnNextServer]),
+  );
+
+  return {
+    calendarId,
+    calendarIds,
+    removedCalendarCount: values.calendarIds.filter(
+      (selectedId) => !calendarIds.includes(selectedId),
+    ).length,
+  };
 }
 
 function eventBoundaries(values: EventFormValues) {

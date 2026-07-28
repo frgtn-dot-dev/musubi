@@ -77,8 +77,7 @@
   padding-block: 7px;
 }
 
-.fieldLabel,
-.calendarChoiceLabel {
+.fieldLabel {
   display: inline-flex;
   min-width: 0;
   align-items: center;
@@ -93,17 +92,91 @@
   border-radius: var(--radius-pill);
 }
 
-.calendarChoices {
+.calendarSummary {
   display: grid;
-  gap: 0;
+  width: 100%;
+  min-height: 56px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendarSummary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+}
+
+.calendarSummary:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.calendarSummaryCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.calendarSummaryCopy strong,
+.calendarPlacementCopy strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-14);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarSummaryCopy > span,
+.calendarPlacementCopy > span {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  line-height: 1.35;
+}
+
+.calendarSummaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.calendarSummaryAction svg {
+  transition: transform var(--motion-fast) ease;
+}
+
+.calendarSummaryAction svg[data-open] {
+  transform: rotate(180deg);
+}
+
+.calendarHint {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.calendarPlacement {
+  display: grid;
   margin: 0;
   padding: 0;
   border: 0;
   border-top: 1px solid var(--border-subtle);
 }
 
-.calendarChoices legend {
-  padding: var(--space-3) var(--space-4) var(--space-1);
+.calendarPlacementHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) 5px;
   color: var(--text-secondary);
   font-size: var(--text-10);
   font-weight: 500;
@@ -111,12 +184,162 @@
   text-transform: uppercase;
 }
 
-.calendarChoice {
+.calendarPlacementHeader > span:last-child {
+  text-align: center;
+}
+
+.calendarGroupHeading {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-raised) 42%, transparent);
+}
+
+.calendarGroupHeading strong {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  font-weight: 500;
+}
+
+.calendarGroupHeading span {
+  color: var(--text-muted);
+  font-size: var(--text-10);
+}
+
+.calendarGroup ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendarPlacementRow {
+  display: grid;
   width: 100%;
-  min-height: var(--control-height);
+  min-height: 56px;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  align-items: stretch;
   box-sizing: border-box;
-  padding: 0 var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.calendarMembership {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 18px 9px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+
+.calendarMembership:hover:not([data-disabled]) {
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+}
+
+.calendarMembership[data-disabled] {
+  cursor: default;
+}
+
+.calendarMembership[data-disabled]:not([data-home]) {
+  opacity: 0.58;
+}
+
+.calendarMembership input,
+.homeChoice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.calendarMembershipBox {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--control-on-fill);
+}
+
+.calendarMembership input:checked + .calendarMembershipBox {
+  border-color: var(--control-fill);
+  background: var(--control-fill);
+}
+
+.calendarMembership input:focus-visible + .calendarMembershipBox,
+.homeChoice input:focus-visible + span {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.calendarPlacementCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.homeChoice,
+.homeBadge {
+  display: inline-grid;
+  align-self: center;
+  justify-self: center;
+  place-content: center;
+  color: var(--text-secondary);
+}
+
+.homeChoice {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.homeChoice > span:first-of-type {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-content: center;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-pill);
+  background: transparent;
+}
+
+.homeChoice:hover:not([data-disabled]) > span:first-of-type {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.homeChoice[data-checked] > span:first-of-type {
+  border-color: var(--control-fill);
+  background: var(--control-fill);
+  color: var(--control-on-fill);
+}
+
+.homeChoice[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.homeBadge {
+  gap: 2px;
+  font-size: var(--text-10);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .formError {
