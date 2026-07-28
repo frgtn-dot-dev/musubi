@@ -353,7 +353,10 @@ Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 - `Notify = (message, undo?) => void` (`src/calendar/notice.ts`). Undo se
   nepřidával jako abstraktní command model — reverzní akce je closure u místa,
   které mutaci provedlo, protože jen ono ví, co byl původní stav.
-- Toast s Undo žije 9 s (bez Undo 3,5 s): nabídka platí jen tehdy, když tam je
+- Toast sedí **dole na střed** kalendářové plochy — tam ho lidi hledají, a je to
+  z cesty toolbaru, ze kterého změna obvykle přišla. Na úzkém viewportu se zvedne
+  nad create button, který vlastní pravý dolní rok. Toast s Undo žije 9 s
+  (bez Undo 3,5 s): nabídka platí jen tehdy, když tam je
   ještě v okamžiku, kdy si chybu všimneš. Klik Undo nabídku hned sundá, aby se
   reverzace nedala přehrát dvakrát.
 - Undo má: přesun a resize (time grid i month, včetně Alt+šipek), mazání eventu,

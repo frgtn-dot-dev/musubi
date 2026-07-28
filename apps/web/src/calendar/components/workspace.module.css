@@ -1293,7 +1293,7 @@
   text-align: left;
   /* A soft drop, so two blocks of the same colour touching still read as two
      cards rather than one taller one. */
-  box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 26%);
   transition:
     filter var(--motion-fast) ease,
     transform var(--motion-fast) ease;
@@ -1528,7 +1528,7 @@
   background: var(--event-color);
   color: var(--event-foreground);
   text-align: left;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 26%);
   transition:
     filter var(--motion-fast) ease,
     transform var(--motion-fast) ease;
@@ -2518,11 +2518,16 @@ input.calendarManageName {
   gap: 8px;
 }
 
+/* Bottom centre: where people look for a toast, and out of the way of the
+   toolbar the change usually came from. */
 .liveRegion {
   position: absolute;
   z-index: 120;
-  top: 16px;
-  right: 74px;
+  bottom: 20px;
+  left: 50%;
+  display: flex;
+  justify-content: center;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -2568,7 +2573,8 @@ input.calendarManageName {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-5px);
+    /* Rises from the edge it sits on. */
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -2806,9 +2812,8 @@ input.calendarManageName {
   }
 
   .liveRegion {
-    top: 9px;
-    right: 60px;
-    left: 60px;
+    width: calc(100vw - 24px);
+    bottom: 14px;
   }
 }
 
@@ -2975,10 +2980,9 @@ input.calendarManageName {
   }
 
   .liveRegion {
-    top: auto;
-    right: 12px;
+    /* Above the create button, which owns the bottom-right corner. */
+    width: calc(100vw - 24px);
     bottom: calc(82px + env(safe-area-inset-bottom));
-    left: 12px;
   }
 }
 
