@@ -1,4 +1,9 @@
-import { CalendarSchema, EventSchema } from "@musubi/types";
+import {
+  CalendarSchema,
+  DEFAULT_CALENDAR_COLOR,
+  EventSchema,
+  MUSUBI_CALENDAR_COLORS,
+} from "@musubi/types";
 import { z } from "zod";
 
 export const fixtureCalendars = z.array(CalendarSchema).parse([
@@ -6,7 +11,7 @@ export const fixtureCalendars = z.array(CalendarSchema).parse([
     id: "personal",
     creatorID: "alex",
     name: "Personal",
-    color: "#b3492f",
+    color: MUSUBI_CALENDAR_COLORS[1].hex,
     members: [],
     role: "owner",
     isDefault: true,
@@ -15,7 +20,7 @@ export const fixtureCalendars = z.array(CalendarSchema).parse([
     id: "studio",
     creatorID: "alex",
     name: "Studio",
-    color: "#7a8ba3",
+    color: MUSUBI_CALENDAR_COLORS[4].hex,
     members: [],
     role: "editor",
   },
@@ -23,7 +28,7 @@ export const fixtureCalendars = z.array(CalendarSchema).parse([
     id: "client-work",
     creatorID: "alex",
     name: "Client work",
-    color: "#d4a574",
+    color: MUSUBI_CALENDAR_COLORS[3].hex,
     members: [],
     role: "owner",
   },
@@ -31,7 +36,7 @@ export const fixtureCalendars = z.array(CalendarSchema).parse([
     id: "family-calendar",
     creatorID: "alex",
     name: "Family",
-    color: "#6f7d67",
+    color: MUSUBI_CALENDAR_COLORS[2].hex,
     members: [],
     role: "editor",
   },
@@ -57,7 +62,7 @@ function event(
     creatorID: "alex",
     organizer: "alex@example.com",
     title,
-    color: calendar?.color ?? "#7a8ba3",
+    color: calendar?.color ?? DEFAULT_CALENDAR_COLOR,
     start,
     end,
     calendars: [calendarId],

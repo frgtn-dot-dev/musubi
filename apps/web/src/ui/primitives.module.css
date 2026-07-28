@@ -923,6 +923,255 @@
   stroke-width: 1px;
 }
 
+.colorPickerTrigger {
+  --picker-color: var(--surface-raised);
+  display: inline-grid;
+  width: 42px;
+  min-width: 42px;
+  height: 40px;
+  place-content: center;
+  padding: 0;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface-raised);
+}
+
+.colorPickerTrigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.colorPickerTrigger:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.colorPickerTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.colorPickerSwatch {
+  width: 25px;
+  height: 25px;
+  border: 1px solid rgb(0 0 0 / 16%);
+  border-radius: var(--radius-pill);
+  background: var(--picker-color);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
+}
+
+.colorPickerPopover {
+  z-index: 140;
+  width: 316px;
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-card);
+  outline: 0;
+  background: var(--surface-canvas);
+  box-shadow: var(--shadow-overlay);
+  animation: date-picker-in var(--motion-fast) ease both;
+}
+
+:global([data-radix-popper-content-wrapper]):has(
+    .colorPickerPopover
+  ) {
+  z-index: 140 !important;
+}
+
+.colorPickerHeader {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.colorPickerHeader h2,
+.colorPickerHeader p {
+  margin: 0;
+}
+
+.colorPickerHeader h2 {
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: var(--text-19);
+  font-weight: 400;
+}
+
+.colorPickerHeader p {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  line-height: 1.4;
+}
+
+.colorPickerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.colorPickerOption {
+  display: grid;
+  min-width: 0;
+  min-height: 66px;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  padding: 5px 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-11);
+}
+
+.colorPickerOption:hover,
+.colorPickerOption:focus-visible {
+  border-color: var(--border-medium);
+  background: var(--surface-raised);
+}
+
+.colorPickerOption:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.colorPickerOption[aria-selected="true"] {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.colorPickerOptionSwatch,
+.colorPickerCustomSwatch {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-content: center;
+  border-radius: var(--radius-pill);
+}
+
+.colorPickerOptionSwatch {
+  border: 1px solid rgb(0 0 0 / 16%);
+  background: var(--option-color);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
+  color: var(--option-foreground);
+}
+
+.colorPickerCustomSwatch {
+  border: 1px dashed var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.colorPickerOption[aria-selected="true"] .colorPickerCustomSwatch {
+  border-style: solid;
+  border-color: var(--control-fill);
+  box-shadow: inset 0 0 0 2px var(--surface-canvas);
+}
+
+.colorPickerCustom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.colorPickerPreview {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgb(0 0 0 / 16%);
+  border-radius: var(--radius-control);
+  background: var(--preview-color);
+}
+
+.colorPickerCustom label {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.colorPickerCustom input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  letter-spacing: normal;
+  text-transform: uppercase;
+}
+
+.colorPickerCustom input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.colorPickerCustom input[aria-invalid="true"] {
+  border-color: var(--accent-primary);
+}
+
+.colorPickerDone {
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-11);
+}
+
+.colorPickerDone:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.colorPickerDone:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.colorPickerDone:disabled {
+  opacity: 0.45;
+}
+
+.colorPickerCustom p {
+  grid-column: 2 / -1;
+  margin: -2px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+}
+
+.colorPickerCustom p[role="alert"] {
+  color: var(--accent-primary);
+}
+
+.colorPickerHint {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.colorPickerArrow {
+  fill: var(--surface-canvas);
+  stroke: var(--border-medium);
+  stroke-width: 1px;
+}
+
 @keyframes date-picker-in {
   from {
     opacity: 0;
@@ -1038,8 +1287,22 @@
     transform: none !important;
   }
 
+  :global([data-radix-popper-content-wrapper]):has(
+      .colorPickerPopover
+    ) {
+    position: fixed !important;
+    z-index: 140 !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    min-width: 100% !important;
+    transform: none !important;
+  }
+
   .datePickerPopover,
-  .timePickerPopover {
+  .timePickerPopover,
+  .colorPickerPopover {
     width: 100%;
     max-height: calc(100dvh - var(--space-5));
     padding-bottom: env(safe-area-inset-bottom);
@@ -1073,8 +1336,34 @@
     min-height: 44px;
   }
 
+  .colorPickerHeader {
+    position: relative;
+    padding-top: var(--space-6);
+  }
+
+  .colorPickerHeader::before {
+    position: absolute;
+    top: var(--space-2);
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+    content: "";
+    transform: translateX(-50%);
+  }
+
+  .colorPickerGrid {
+    padding-block: var(--space-5);
+  }
+
+  .colorPickerOption {
+    min-height: 72px;
+  }
+
   .datePickerArrow,
-  .timePickerArrow {
+  .timePickerArrow,
+  .colorPickerArrow {
     display: none;
   }
 }
@@ -1095,7 +1384,8 @@
   .dialog,
   .toast,
   .datePickerPopover,
-  .timePickerPopover {
+  .timePickerPopover,
+  .colorPickerPopover {
     animation-duration: 0.01ms;
   }
 }

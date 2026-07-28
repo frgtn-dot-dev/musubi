@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   can,
+  DEFAULT_CALENDAR_COLOR,
   providerDisplayName,
   type Calendar,
 } from "@musubi/types";
@@ -21,6 +22,7 @@ import {
 } from "react";
 import type { ImportedCalendar } from "~/api/contracts";
 import { ApiError, ApiResponseError } from "~/api/http";
+import { ColorPicker } from "~/ui/ColorPicker";
 import { connectionOfCalendar } from "../federation-routing";
 import styles from "./workspace.module.css";
 
@@ -44,7 +46,6 @@ type CalendarTransferDialogProps = {
 };
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
-const DEFAULT_COLOR = "#7a9e7e";
 
 function transferError(error: unknown, fallback: string) {
   return {
@@ -78,11 +79,15 @@ export function CalendarTransferDialog({
     calendars[0]?.id ?? "",
   );
   const [importName, setImportName] = useState("");
-  const [importColor, setImportColor] = useState(DEFAULT_COLOR);
+  const [importColor, setImportColor] = useState<string>(
+    DEFAULT_CALENDAR_COLOR,
+  );
   const [importFileName, setImportFileName] = useState("");
   const [ics, setIcs] = useState("");
   const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState(DEFAULT_COLOR);
+  const [newColor, setNewColor] = useState<string>(
+    DEFAULT_CALENDAR_COLOR,
+  );
   const [edit, setEdit] = useState<EditDraft>();
   const [busy, setBusy] = useState<
     "export" | "import" | "create" | "save" | "delete"
@@ -131,7 +136,7 @@ export function CalendarTransferDialog({
       });
       onNotice(`${calendar.name} created.`);
       setNewName("");
-      setNewColor(DEFAULT_COLOR);
+      setNewColor(DEFAULT_CALENDAR_COLOR);
     } catch (createError) {
       setError(transferError(createError, "Could not create the calendar."));
     } finally {
@@ -305,19 +310,13 @@ export function CalendarTransferDialog({
                           setEdit({ ...edit, name: event.target.value })
                         }
                       />
-                      <label className={styles.colorPicker}>
-                        <span className={styles.srOnly}>
-                          {calendar.name} color
-                        </span>
-                        <input
-                          disabled={busy === "save"}
-                          type="color"
-                          value={edit.color}
-                          onChange={(event) =>
-                            setEdit({ ...edit, color: event.target.value })
-                          }
-                        />
-                      </label>
+                      <ColorPicker
+                        disabled={busy === "save"}
+                        label={`${calendar.name} color`}
+                        provider={calendar.provider}
+                        value={edit.color}
+                        onChange={(color) => setEdit({ ...edit, color })}
+                      />
                       <button
                         aria-label="Save calendar"
                         className={styles.iconButton}
@@ -410,15 +409,12 @@ export function CalendarTransferDialog({
                   onChange={(event) => setNewName(event.target.value)}
                 />
               </label>
-              <label className={styles.colorPicker}>
-                <span className={styles.srOnly}>New calendar color</span>
-                <input
-                  disabled={busy === "create"}
-                  type="color"
-                  value={newColor}
-                  onChange={(event) => setNewColor(event.target.value)}
-                />
-              </label>
+              <ColorPicker
+                disabled={busy === "create"}
+                label="New calendar color"
+                value={newColor}
+                onChange={setNewColor}
+              />
               <button
                 className={styles.primaryButton}
                 disabled={busy === "create"}
@@ -496,15 +492,12 @@ export function CalendarTransferDialog({
                   onChange={(event) => setImportName(event.target.value)}
                 />
               </label>
-              <label className={styles.colorPicker}>
-                <span className={styles.srOnly}>Imported calendar color</span>
-                <input
-                  disabled={Boolean(busy)}
-                  type="color"
-                  value={importColor}
-                  onChange={(event) => setImportColor(event.target.value)}
-                />
-              </label>
+              <ColorPicker
+                disabled={Boolean(busy)}
+                label="Imported calendar color"
+                value={importColor}
+                onChange={setImportColor}
+              />
               <button
                 className={styles.primaryButton}
                 disabled={Boolean(busy)}

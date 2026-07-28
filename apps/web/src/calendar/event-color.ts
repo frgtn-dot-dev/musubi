@@ -1,6 +1,7 @@
+import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
+
 const DARK_EVENT_TEXT = "#000";
 const LIGHT_EVENT_TEXT = "#fff";
-const FALLBACK_EVENT_COLOR = "#7a8ba3";
 
 type Rgb = readonly [number, number, number];
 
@@ -42,7 +43,8 @@ function relativeLuminance([red, green, blue]: Rgb) {
 
 export function getReadableEventTextColor(backgroundColor: string) {
   const background =
-    parseHexColor(backgroundColor) ?? parseHexColor(FALLBACK_EVENT_COLOR)!;
+    parseHexColor(backgroundColor) ??
+    parseHexColor(DEFAULT_CALENDAR_COLOR)!;
   const luminance = relativeLuminance(background);
   const contrastWithBlack = (luminance + 0.05) / 0.05;
   const contrastWithWhite = 1.05 / (luminance + 0.05);

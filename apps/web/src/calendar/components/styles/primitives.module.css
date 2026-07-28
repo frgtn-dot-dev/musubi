@@ -378,14 +378,6 @@ input.calendarManageName {
   opacity: 0;
 }
 
-.colorPicker {
-  width: 42px;
-}
-
-.colorPicker input {
-  padding: 5px;
-}
-
 .dialogLoading {
   margin: 0;
   padding: 28px 20px;

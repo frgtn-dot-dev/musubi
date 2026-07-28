@@ -938,7 +938,7 @@
 }
 
 .timeGridAllDayEvent {
-  --event-color: var(--event-indigo);
+  --event-color: var(--accent-primary);
   --event-foreground: #000;
   position: absolute;
   display: block;
@@ -1217,7 +1217,7 @@
 }
 
 .timelineEvent {
-  --event-color: var(--event-indigo);
+  --event-color: var(--accent-primary);
   --event-foreground: #000;
   /* The block is its own container: its height is set from geometry, so what
      fits inside is answered by the box rather than by a duration threshold in
@@ -1452,7 +1452,7 @@
 }
 
 .eventChip {
-  --event-color: var(--event-indigo);
+  --event-color: var(--accent-primary);
   --event-foreground: #000;
   position: relative;
   z-index: 1;
@@ -2060,10 +2060,6 @@
 
 .filePicker {
   composes: filePicker from "./styles/primitives.module.css";
-}
-
-.colorPicker {
-  composes: colorPicker from "./styles/primitives.module.css";
 }
 
 .transferSection .formError,

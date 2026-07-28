@@ -1,4 +1,9 @@
-import { can, type Calendar, type Settings } from "@musubi/types";
+import {
+  can,
+  DEFAULT_CALENDAR_COLOR,
+  type Calendar,
+  type Settings,
+} from "@musubi/types";
 import {
   CalendarDays,
   Check,
@@ -390,7 +395,8 @@ export function EventEditorForm({
         <span
           className={styles.calendarDot}
           style={{
-            backgroundColor: selectedCalendar?.color ?? "#7a8ba3",
+            backgroundColor:
+              selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
           }}
         />
         <span className={styles.srOnly}>Calendar</span>

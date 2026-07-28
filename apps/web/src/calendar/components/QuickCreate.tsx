@@ -1,5 +1,10 @@
 import * as Popover from "@radix-ui/react-popover";
-import type { Calendar, Event, Settings } from "@musubi/types";
+import {
+  DEFAULT_CALENDAR_COLOR,
+  type Calendar,
+  type Event,
+  type Settings,
+} from "@musubi/types";
 import { GripHorizontal, X } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -84,7 +89,7 @@ export function QuickCreate({
     const event = createEventFromForm(
       values,
       { email, userId },
-      calendar?.color ?? "#7a8ba3",
+      calendar?.color ?? DEFAULT_CALENDAR_COLOR,
     );
     const created = await onCreate(event);
     onCreated(created);

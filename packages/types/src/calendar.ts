@@ -2,6 +2,18 @@ import { z } from "zod";
 import { UserSchema } from "./user";
 import { EventSchema } from "./event";
 
+// One shared product palette for every client. Keep the names stable: they
+// describe the pigments in the UI and are more accessible than color alone.
+export const MUSUBI_CALENDAR_COLORS = [
+  { name: "dune", hex: "#B3A48A" },
+  { name: "shu", hex: "#C8553D" },
+  { name: "moss", hex: "#A8B5A0" },
+  { name: "ochre", hex: "#D4A574" },
+  { name: "indigo", hex: "#7A8BA3" },
+] as const;
+
+export const DEFAULT_CALENDAR_COLOR = MUSUBI_CALENDAR_COLORS[0].hex;
+
 export const CalendarSchema = z.object({
   id: z.string(),
   creatorID: z.string(),

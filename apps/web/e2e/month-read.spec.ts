@@ -1453,7 +1453,32 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 
   // Create
   await page.getByPlaceholder("New calendar").fill("Travel");
+  await page
+    .getByRole("button", { name: "New calendar color: #B3A48A" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Choose color" }),
+  ).toBeVisible();
+  const colorPickerAccessibility = await new AxeBuilder({ page })
+    .include('[data-ui="color-picker-popover"]')
+    .analyze();
+  expect(colorPickerAccessibility.violations).toEqual([]);
+  await page.getByRole("option", { name: "Moss, #A8B5A0" }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "New calendar color: #A8B5A0",
+    }),
+  ).toBeVisible();
+  const createRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/calendars",
+  );
   await page.getByRole("button", { name: "Add" }).click();
+  expect((await createRequest).postDataJSON()).toMatchObject({
+    color: "#A8B5A0",
+    name: "Travel",
+  });
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Travel created.",
   );
@@ -1461,6 +1486,10 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
     .getByRole("listitem")
     .filter({ hasText: "Travel" });
   await expect(travelRow).toBeVisible();
+  await expect(travelRow.locator("span").first()).toHaveCSS(
+    "background-color",
+    "rgb(168, 181, 160)",
+  );
 
   // Rename
   await page.getByRole("button", { name: "Rename Travel" }).click();
@@ -2438,6 +2467,56 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
   await expectNoAccessibilityViolations(page);
+});
+
+test("opens the calendar color picker as the top mobile sheet", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("button", { name: "Calendars" }).click();
+  const trigger = page.getByRole("button", {
+    name: "New calendar color: #B3A48A",
+  });
+  await trigger.click();
+
+  const sheet = page.getByRole("dialog", { name: "Choose color" });
+  await sheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const box = (await sheet.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[data-ui="color-picker-popover"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  await page.getByRole("option", { name: "Custom color" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Hex color" }),
+  ).toBeFocused();
+  const expandedBox = (await sheet.boundingBox())!;
+  expect(Math.round(expandedBox.y + expandedBox.height)).toBeLessThanOrEqual(
+    721,
+  );
+  const customAccessibility = await new AxeBuilder({ page })
+    .include('[data-ui="color-picker-popover"]')
+    .analyze();
+  expect(customAccessibility.violations).toEqual([]);
+
+  // Escape dismisses only the top layer and restores the initiating control.
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "Calendars" }),
+  ).toBeVisible();
+  await expect(trigger).toBeFocused();
 });
 
 test("opens an event's details as a sheet on a narrow viewport", async ({

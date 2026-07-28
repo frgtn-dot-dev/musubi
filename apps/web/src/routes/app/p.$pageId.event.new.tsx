@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { authClient } from "~/auth/auth-client";
@@ -122,7 +123,7 @@ function NewEventRoute() {
       createEventFromForm(
         values,
         { email: session.data?.user.email ?? "", userId },
-        calendar?.color ?? "#7a8ba3",
+        calendar?.color ?? DEFAULT_CALENDAR_COLOR,
       ),
     );
     back();
