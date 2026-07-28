@@ -861,13 +861,38 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   await page.getByRole("button", { name: "Attend" }).click();
   await expect(page.getByRole("button", { name: "Leave" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Link" }).click();
+  await page.getByRole("button", { name: "Link to a calendar" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Link to a calendar" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Link to Personal" }),
+  ).toBeFocused();
+  await expect(
+    page.getByText(
+      "It stays one event, so future changes appear in every linked calendar.",
+    ),
+  ).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+  // Escape goes back one decision, not out of the event.
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Link to a calendar" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Link to a calendar" }).click();
+  await page.getByRole("button", { name: "Link to Personal" }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Event linked to calendar.",
   );
 
   await page.getByRole("button", { name: /Design review/ }).click();
-  await page.getByRole("button", { name: "Fork" }).click();
+  await page
+    .getByRole("button", { name: "Make an independent copy" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Make an independent copy" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Make copy in Studio" }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Independent event copy created.",
   );
@@ -886,6 +911,9 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
     name: "Delete recurring event",
   });
   await expect(deleteDialog).toBeVisible();
+  await deleteDialog.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
   await expect(
     deleteDialog.getByRole("button", { name: "This event", exact: true }),
   ).toBeVisible();
@@ -2884,6 +2912,15 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
     .include('[role="dialog"]')
     .analyze();
   expect(accessibility.violations).toEqual([]);
+
+  await page.getByRole("button", { name: "Link to a calendar" }).click();
+  await expect(
+    page.getByRole("button", { name: "Link to Personal" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Link to a calendar" }),
+  ).toBeFocused();
 
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);

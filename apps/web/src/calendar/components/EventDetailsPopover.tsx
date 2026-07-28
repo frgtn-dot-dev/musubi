@@ -4,6 +4,7 @@ import type { Calendar, Event, Settings } from "@musubi/types";
 import { providerDisplayName } from "@musubi/types";
 import {
   AlertTriangle,
+  ArrowLeft,
   CalendarDays,
   Clock3,
   CopyPlus,
@@ -21,13 +22,13 @@ import type {
   ReactElement,
   ReactNode,
 } from "react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Attendee, RemoveEventResponse } from "~/api/contracts";
 import { getEventAttendees } from "~/api/resources";
 import { Button, IconButton } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
+import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { Select } from "~/ui/Select";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
 import {
   eventFormValues,
@@ -79,6 +80,7 @@ export type EventActionHandlers = {
 
 type DeleteScope = "occurrence" | "following" | "series";
 type DeletePrompt = "confirm" | "scope";
+type TargetAction = "fork" | "link";
 
 type EventDetailsPopoverProps = EventActionHandlers & {
   calendar: Calendar | undefined;
@@ -111,6 +113,7 @@ export function EventDetailsPopover({
   const titleId = useId();
   const notesTitleId = useId();
   const guestsTitleId = useId();
+  const targetActionTitleId = useId();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
@@ -119,6 +122,11 @@ export function EventDetailsPopover({
   const [triggerElement, setTriggerElement] =
     useState<HTMLElement | null>(null);
   const [busyAction, setBusyAction] = useState<string>();
+  const [targetAction, setTargetAction] = useState<TargetAction>();
+  const [pendingTargetId, setPendingTargetId] = useState<string>();
+  const linkActionRef = useRef<HTMLButtonElement>(null);
+  const forkActionRef = useRef<HTMLButtonElement>(null);
+  const targetListRef = useRef<HTMLDivElement>(null);
   const [actionError, setActionError] = useState<{
     message: string;
     requestId?: string;
@@ -142,9 +150,6 @@ export function EventDetailsPopover({
   const targetCalendars = getEditableCalendars(calendars).filter(
     (item) => !master.calendars.includes(item.id),
   );
-  const [targetCalendarId, setTargetCalendarId] = useState("");
-  const selectedTargetId =
-    targetCalendarId || targetCalendars[0]?.id || "";
   const [attendees, setAttendees] = useState<Attendee[]>();
   const isAttending =
     attendees?.some((attendee) => attendee.id === user.id) ?? false;
@@ -178,12 +183,23 @@ export function EventDetailsPopover({
     };
   }, [homeConnectionId, master.hasAttendees, master.id, open]);
 
+  useEffect(() => {
+    if (!targetAction) return;
+    requestAnimationFrame(() => {
+      targetListRef.current
+        ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+        ?.focus();
+    });
+  }, [targetAction]);
+
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
 
     if (!nextOpen) {
       setEditing(false);
       setActionError(undefined);
+      setTargetAction(undefined);
+      setPendingTargetId(undefined);
     }
   }
 
@@ -255,37 +271,59 @@ export function EventDetailsPopover({
     }
   }
 
-  async function handleTargetAction(action: "link" | "fork") {
-    if (!selectedTargetId) return;
+  async function handleTargetAction(
+    action: TargetAction,
+    calendarId: string,
+  ) {
     setBusyAction(action);
+    setPendingTargetId(calendarId);
     setActionError(undefined);
 
     try {
       if (action === "link") {
         await onLinkEvent({
-          calendarId: selectedTargetId,
+          calendarId,
           eventId: master.id,
         });
         onNotice("Event linked to calendar.");
       } else {
         await onForkEvent({
-          calendarId: selectedTargetId,
+          calendarId,
           eventId: master.id,
         });
         onNotice("Independent event copy created.");
       }
+      setTargetAction(undefined);
       handleOpenChange(false);
     } catch (error) {
       setActionError(
         getEventMutationError(
           error,
           "update",
-          calendars.find((item) => item.id === selectedTargetId),
+          calendars.find((item) => item.id === calendarId),
         ),
       );
     } finally {
       setBusyAction(undefined);
+      setPendingTargetId(undefined);
     }
+  }
+
+  function showTargetCalendars(action: TargetAction) {
+    setActionError(undefined);
+    setTargetAction(action);
+  }
+
+  function hideTargetCalendars() {
+    const previousAction = targetAction;
+    setActionError(undefined);
+    setTargetAction(undefined);
+    requestAnimationFrame(() => {
+      (previousAction === "link"
+        ? linkActionRef.current
+        : forkActionRef.current
+      )?.focus();
+    });
   }
 
   async function handleAttendance() {
@@ -329,6 +367,11 @@ export function EventDetailsPopover({
             className={`${workspaceStyles.popover} ${styles.detailPopover}`}
             collisionPadding={14}
             onClick={(clickEvent) => clickEvent.stopPropagation()}
+            onEscapeKeyDown={(escapeEvent) => {
+              if (!targetAction) return;
+              escapeEvent.preventDefault();
+              hideTargetCalendars();
+            }}
             side="bottom"
             sideOffset={8}
             style={surfaceStyle}
@@ -523,52 +566,116 @@ export function EventDetailsPopover({
                   ) : null}
 
                   {targetCalendars.length > 0 ? (
-                    <section className={styles.calendarActions}>
-                      <label>
-                        <span>Add to calendar</span>
-                        <Select
-                          disabled={Boolean(busyAction)}
-                          label="Target calendar"
-                          options={targetCalendars.map((item) => ({
-                            icon: (
-                              <span
-                                className={styles.calendarDot}
-                                style={{ backgroundColor: item.color }}
-                              />
-                            ),
-                            label: item.name,
-                            value: item.id,
-                          }))}
-                          value={selectedTargetId}
-                          onChange={setTargetCalendarId}
-                        />
-                      </label>
-                      <div>
-                        <Button
-                          disabled={Boolean(busyAction)}
-                          icon={<Link2 size={15} />}
-                          loading={busyAction === "link"}
-                          size="compact"
-                          variant="secondary"
-                          onClick={() => void handleTargetAction("link")}
-                        >
-                          Link
-                        </Button>
-                        <Button
-                          disabled={Boolean(busyAction)}
-                          icon={<CopyPlus size={15} />}
-                          loading={busyAction === "fork"}
-                          size="compact"
-                          variant="text"
-                          onClick={() => void handleTargetAction("fork")}
-                        >
-                          Fork
-                        </Button>
-                      </div>
+                    <section
+                      aria-labelledby={
+                        targetAction ? targetActionTitleId : undefined
+                      }
+                      className={styles.calendarActions}
+                    >
+                      {targetAction ? (
+                        <>
+                          <div className={styles.targetActionHeader}>
+                            <IconButton
+                              disabled={Boolean(busyAction)}
+                              label="Back to add options"
+                              size="compact"
+                              onClick={hideTargetCalendars}
+                            >
+                              <ArrowLeft size={16} strokeWidth={1.6} />
+                            </IconButton>
+                            <div>
+                              <h3 id={targetActionTitleId}>
+                                {targetAction === "link"
+                                  ? "Link to a calendar"
+                                  : "Make an independent copy"}
+                              </h3>
+                              <p>
+                                {targetAction === "link"
+                                  ? "It stays one event, so future changes appear in every linked calendar."
+                                  : "The copy can be changed later without affecting this event."}
+                              </p>
+                            </div>
+                          </div>
+                          <div
+                            className={styles.targetCalendarList}
+                            ref={targetListRef}
+                          >
+                            {targetCalendars.map((item) => {
+                              const pending =
+                                pendingTargetId === item.id &&
+                                busyAction === targetAction;
+
+                              return (
+                                <RowAction
+                                  aria-label={
+                                    targetAction === "link"
+                                      ? `Link to ${item.name}`
+                                      : `Make copy in ${item.name}`
+                                  }
+                                  aria-busy={pending || undefined}
+                                  className={styles.targetCalendar}
+                                  detail={targetCalendarDetail(item)}
+                                  disabled={Boolean(busyAction)}
+                                  icon={
+                                    <span
+                                      className={styles.calendarDot}
+                                      style={{ backgroundColor: item.color }}
+                                    />
+                                  }
+                                  key={item.id}
+                                  label={item.name}
+                                  showChevron={false}
+                                  value={
+                                    pending
+                                      ? targetAction === "link"
+                                        ? "Linking…"
+                                        : "Copying…"
+                                      : undefined
+                                  }
+                                  onClick={() =>
+                                    void handleTargetAction(
+                                      targetAction,
+                                      item.id,
+                                    )
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
+                          {actionError ? (
+                            <ActionError
+                              message={actionError.message}
+                              requestId={actionError.requestId}
+                            />
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <SectionLabel level={3}>Add to calendar</SectionLabel>
+                          <div className={styles.targetIntentList}>
+                            <RowAction
+                              detail="Keep one event shared across calendars."
+                              disabled={Boolean(busyAction)}
+                              icon={<Link2 size={17} strokeWidth={1.6} />}
+                              label="Link to a calendar"
+                              ref={linkActionRef}
+                              onClick={() => showTargetCalendars("link")}
+                            />
+                            <RowAction
+                              detail="Create a copy you can change separately."
+                              disabled={Boolean(busyAction)}
+                              icon={<CopyPlus size={17} strokeWidth={1.6} />}
+                              label="Make an independent copy"
+                              ref={forkActionRef}
+                              onClick={() => showTargetCalendars("fork")}
+                            />
+                          </div>
+                        </>
+                      )}
                     </section>
                   ) : null}
 
-                  {actionError ? (
+                  {actionError && !targetAction ? (
                     <ActionError
                       message={actionError.message}
                       requestId={actionError.requestId}
@@ -576,7 +683,7 @@ export function EventDetailsPopover({
                   ) : null}
                 </div>
 
-                {editable || removable ? (
+                {!targetAction && (editable || removable) ? (
                   <footer
                     aria-label="Event actions"
                     className={styles.detailActions}
@@ -604,11 +711,11 @@ export function EventDetailsPopover({
                       </Button>
                     ) : null}
                   </footer>
-                ) : (
+                ) : !targetAction ? (
                   <p className={styles.viewOnly}>
                     You have view-only access to this event.
                   </p>
-                )}
+                ) : null}
               </>
             )}
             <Popover.Arrow className={workspaceStyles.popoverArrow} />
@@ -741,4 +848,10 @@ function getUrlLabel(url: string): string {
   } catch {
     return url;
   }
+}
+
+function targetCalendarDetail(calendar: Calendar) {
+  if (calendar.provider) return providerDisplayName(calendar);
+  if (calendar.isDefault) return "Personal calendar";
+  return calendar.role === "owner" ? "Your calendar" : "Shared calendar";
 }
