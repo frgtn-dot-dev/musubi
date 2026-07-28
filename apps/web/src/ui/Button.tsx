@@ -1,0 +1,129 @@
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
+import { classNames } from "./class-names";
+import styles from "./primitives.module.css";
+
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "destructive"
+  | "text";
+
+export type ButtonSize = "control" | "compact";
+
+export type ButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "children"
+> & {
+  children: ReactNode;
+  icon?: ReactNode;
+  loading?: boolean;
+  size?: ButtonSize;
+  variant?: ButtonVariant;
+};
+
+/**
+ * The shared text button. It owns visual variants, busy semantics and the
+ * minimum pointer target; callers still own the action-specific label.
+ */
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button(
+    {
+      children,
+      className,
+      disabled = false,
+      icon,
+      loading = false,
+      size = "control",
+      type = "button",
+      variant = "primary",
+      ...buttonProps
+    },
+    ref,
+  ) {
+    const blocked = disabled || loading;
+
+    return (
+      <button
+        {...buttonProps}
+        aria-busy={loading || undefined}
+        className={classNames(
+          styles.button,
+          styles[`button_${variant}`],
+          styles[`button_${size}`],
+          className,
+        )}
+        data-loading={loading ? "" : undefined}
+        disabled={blocked}
+        ref={ref}
+        type={type}
+      >
+        <span className={styles.buttonIcon} aria-hidden="true">
+          {loading ? <span className={styles.spinner} /> : icon}
+        </span>
+        <span className={styles.buttonLabel}>{children}</span>
+      </button>
+    );
+  },
+);
+
+export type IconButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "aria-label" | "children"
+> & {
+  children: ReactNode;
+  label: string;
+  loading?: boolean;
+  size?: ButtonSize;
+  variant?: Exclude<ButtonVariant, "text"> | "ghost";
+};
+
+/**
+ * Icon-only actions require a stable accessible name. The label is mandatory
+ * in the type so a bare, silent icon cannot reach the UI.
+ */
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
+  function IconButton(
+    {
+      children,
+      className,
+      disabled = false,
+      label,
+      loading = false,
+      size = "control",
+      title,
+      type = "button",
+      variant = "ghost",
+      ...buttonProps
+    },
+    ref,
+  ) {
+    const blocked = disabled || loading;
+
+    return (
+      <button
+        {...buttonProps}
+        aria-busy={loading || undefined}
+        aria-label={label}
+        className={classNames(
+          styles.iconButton,
+          styles[`button_${variant}`],
+          styles[`button_${size}`],
+          className,
+        )}
+        data-loading={loading ? "" : undefined}
+        disabled={blocked}
+        ref={ref}
+        title={title}
+        type={type}
+      >
+        <span aria-hidden="true">
+          {loading ? <span className={styles.spinner} /> : children}
+        </span>
+      </button>
+    );
+  },
+);
