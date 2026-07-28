@@ -1593,7 +1593,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
     .getByRole("listitem")
     .filter({ hasText: "Travel" });
   await expect(travelRow).toBeVisible();
-  await expect(travelRow.locator("span").first()).toHaveCSS(
+  await expect(travelRow.locator("[data-calendar-swatch]")).toHaveCSS(
     "background-color",
     "rgb(168, 181, 160)",
   );
@@ -1603,7 +1603,10 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
   await page
     .getByRole("textbox", { name: "Rename Travel" })
     .fill("Trips");
-  await page.getByRole("button", { name: "Save calendar" }).click();
+  await page
+    .getByRole("dialog", { name: "Edit calendar" })
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Calendar updated.",
   );
@@ -1611,15 +1614,90 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
     page.getByRole("listitem").filter({ hasText: "Trips" }),
   ).toBeVisible();
 
-  // Delete (accepts the confirm dialog)
-  page.on("dialog", (dialog) => void dialog.accept());
-  await page.getByRole("button", { name: "Delete Trips" }).click();
+  // Delete uses the same accessible dialog and focus policy as the rest of UI.
+  const deleteButton = page.getByRole("button", { name: "Delete Trips" });
+  await deleteButton.click();
+  const deleteDialog = page.getByRole("dialog", {
+    name: "Delete “Trips”?",
+  });
+  await expect(deleteDialog).toBeVisible();
+  await expect(
+    deleteDialog.getByRole("button", { name: "Cancel" }),
+  ).toBeFocused();
+  await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(deleteButton).toBeFocused();
+
+  await deleteButton.click();
+  await deleteDialog
+    .getByRole("button", { name: "Delete calendar" })
+    .click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Trips deleted.",
   );
   await expect(
     page.getByRole("listitem").filter({ hasText: "Trips" }),
   ).toHaveCount(0);
+});
+
+test("groups calendars by server and connected account", async ({ page }) => {
+  const groupedCalendars = [
+    calendars[0]!,
+    {
+      ...calendars[1]!,
+      accountId: "google-work",
+      accountLabel: "work@example.com",
+      provider: "google",
+    },
+    {
+      ...calendars[2]!,
+      accountId: "google-work",
+      accountLabel: "work@example.com",
+      provider: "google",
+    },
+  ];
+  await mockAuthenticatedReads(page, events, groupedCalendars);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: "Calendars" }).click();
+  const dialog = page.getByRole("dialog", { name: "Calendars" });
+  const musubiGroup = dialog.getByRole("region", { name: "Musubi" });
+  const googleGroup = dialog.getByRole("region", {
+    name: "work@example.com",
+  });
+
+  await expect(
+    musubiGroup.getByRole("listitem").filter({ hasText: "Personal" }),
+  ).toBeVisible();
+  await expect(
+    googleGroup.getByRole("listitem").filter({ hasText: "Studio" }),
+  ).toBeVisible();
+  await expect(
+    googleGroup.getByRole("listitem").filter({ hasText: "Family" }),
+  ).toBeVisible();
+  await expect(
+    googleGroup.getByText("Google Calendar", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    googleGroup.getByText("Managed in Google Calendar", {
+      exact: true,
+    }),
+  ).toHaveCount(2);
+  await expect(
+    googleGroup.getByRole("button", { name: "Rename Studio" }),
+  ).toHaveCount(0);
+  await expect(
+    googleGroup.getByRole("button", { name: "Share Studio" }),
+  ).toHaveCount(0);
+
+  const [musubiBox, googleBox] = await Promise.all([
+    musubiGroup.boundingBox(),
+    googleGroup.boundingBox(),
+  ]);
+  expect(musubiBox?.y).toBeLessThan(googleBox?.y ?? 0);
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test("manages members and invite links for a calendar", async ({ page }) => {

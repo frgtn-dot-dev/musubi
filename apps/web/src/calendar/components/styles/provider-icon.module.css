@@ -1,0 +1,32 @@
+.icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.icon[data-provider="google"] {
+  color: #3978cf;
+}
+
+.icon[data-provider="microsoft"] {
+  color: #2878bd;
+}
+
+.icon[data-provider="apple"] {
+  color: var(--text-primary);
+}
+
+.icon[data-provider="caldav"] {
+  color: color-mix(in srgb, var(--accent-primary) 68%, var(--text-primary));
+}
+
+.musubiMark {
+  width: 23px;
+  height: 16px;
+}

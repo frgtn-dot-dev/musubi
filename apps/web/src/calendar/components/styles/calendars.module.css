@@ -1,0 +1,384 @@
+.body {
+  display: grid;
+  padding-bottom: var(--space-4);
+}
+
+.calendarSection,
+.transferSection {
+  display: grid;
+}
+
+.calendarSection {
+  padding-bottom: var(--space-5);
+}
+
+.transferSection {
+  padding-bottom: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.sectionHeading p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  line-height: 1.45;
+}
+
+.createBar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  margin: 0 var(--space-5) var(--space-5);
+  padding: var(--space-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+}
+
+.createBar > input {
+  min-width: 0;
+  min-height: var(--control-height);
+  padding-inline: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-14);
+}
+
+.createBar > input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.groups {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.group {
+  display: grid;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-2);
+}
+
+.groupHeader h3,
+.groupHeader p {
+  margin: 0;
+}
+
+.groupHeader h3 {
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  font-weight: 600;
+}
+
+.groupHeader p {
+  margin-top: 1px;
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  line-height: 1.35;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.list > li:last-child > div {
+  border-bottom: 0;
+}
+
+.calendarSwatch {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+}
+
+.calendarName {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.calendarName > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.rowActions button[aria-label^="Delete"] {
+  color: color-mix(in srgb, var(--accent-primary) 76%, var(--text-primary));
+}
+
+.transferGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: 0 var(--space-5);
+}
+
+.transferCard {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+}
+
+.cardHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: 42px;
+}
+
+.cardHeading > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+
+.cardHeading h3,
+.cardHeading p {
+  margin: 0;
+}
+
+.cardHeading h3 {
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  font-weight: 600;
+}
+
+.cardHeading p {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  line-height: 1.4;
+}
+
+.cardField {
+  padding: 0;
+  border: 0;
+}
+
+.cardAction {
+  align-self: flex-end;
+  margin-top: auto;
+}
+
+.fileControl {
+  position: relative;
+  display: flex;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 7px 6px var(--space-3);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.fileControl:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.fileControl input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.fileCopy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.fileCopy strong,
+.fileCopy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileCopy strong {
+  color: var(--text-primary);
+  font-size: var(--text-11);
+  font-weight: 500;
+}
+
+.fileCopy span {
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+}
+
+.fileButton {
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: calc(var(--radius-control) - 2px);
+  color: var(--text-primary);
+  font-size: var(--text-11);
+  font-weight: 500;
+}
+
+.importControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.editColorRow {
+  min-height: 60px;
+}
+
+.deleteWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 7%,
+    var(--surface-raised)
+  );
+  color: var(--text-primary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.deleteWarning svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent-primary);
+}
+
+.deleteWarning p,
+.error p,
+.compactError p {
+  margin: 0;
+}
+
+.deleteWarning strong {
+  font-weight: 600;
+}
+
+.error,
+.compactError {
+  border: 1px solid
+    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
+  border-radius: var(--radius-md);
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 7%,
+    var(--surface-raised)
+  );
+  color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.error {
+  margin: 0 var(--space-5);
+  padding: var(--space-3);
+}
+
+.compactError {
+  margin: var(--space-4);
+  padding: var(--space-3);
+}
+
+.error span,
+.compactError span {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-10);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .sectionHeading,
+  .groupHeader {
+    padding-inline: var(--space-4);
+  }
+
+  .createBar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-inline: var(--space-4);
+  }
+
+  .createBar > button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .rowActions {
+    gap: 0;
+  }
+
+  .transferGrid {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: var(--space-4);
+  }
+
+  .error {
+    margin-inline: var(--space-4);
+  }
+}

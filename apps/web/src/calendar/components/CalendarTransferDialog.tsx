@@ -1,30 +1,32 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   can,
   DEFAULT_CALENDAR_COLOR,
   providerDisplayName,
   type Calendar,
 } from "@musubi/types";
-import {
-  Check,
-  Download,
-  FileUp,
-  Pencil,
-  Plus,
-  Trash2,
-  Users,
-  X,
-} from "lucide-react";
+import { Download, FileUp, Pencil, Plus, Trash2, Users } from "lucide-react";
 import {
   type ChangeEvent,
   type FormEvent,
+  type RefObject,
+  useRef,
   useState,
 } from "react";
 import type { ImportedCalendar } from "~/api/contracts";
 import { ApiError, ApiResponseError } from "~/api/http";
+import {
+  groupCalendars,
+  type CalendarSourceGroup,
+} from "~/calendar/calendar-groups";
+import { Button, IconButton } from "~/ui/Button";
 import { ColorPicker } from "~/ui/ColorPicker";
+import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Field } from "~/ui/Field";
+import { Row } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { connectionOfCalendar } from "../federation-routing";
-import styles from "./workspace.module.css";
+import { ProviderIcon } from "./ProviderIcon";
+import styles from "./styles/calendars.module.css";
 
 type ImportInput = {
   color: string;
@@ -45,9 +47,14 @@ type CalendarTransferDialogProps = {
   open: boolean;
 };
 
+type TransferError = {
+  message: string;
+  requestId?: string;
+};
+
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
-function transferError(error: unknown, fallback: string) {
+function transferError(error: unknown, fallback: string): TransferError {
   return {
     message: error instanceof Error ? error.message : fallback,
     requestId:
@@ -61,7 +68,22 @@ function exportFilename(calendar: Calendar) {
   return `${calendar.name.replace(/[^\w.-]+/g, "_") || "calendar"}.ics`;
 }
 
-type EditDraft = { color: string; id: string; name: string };
+function calendarDetail(calendar: Calendar, external: boolean) {
+  if (calendar.syncStatus === "reconnect_required") {
+    return "Reconnect this account in Connections";
+  }
+  if (external) {
+    return `Managed in ${providerDisplayName(calendar)}`;
+  }
+
+  const access =
+    calendar.role === "owner"
+      ? "You own this calendar"
+      : calendar.role === "editor"
+        ? "You can edit this calendar"
+        : "View only";
+  return calendar.isDefault ? `Personal calendar · ${access}` : access;
+}
 
 export function CalendarTransferDialog({
   calendars,
@@ -85,17 +107,30 @@ export function CalendarTransferDialog({
   const [importFileName, setImportFileName] = useState("");
   const [ics, setIcs] = useState("");
   const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState<string>(
-    DEFAULT_CALENDAR_COLOR,
-  );
-  const [edit, setEdit] = useState<EditDraft>();
-  const [busy, setBusy] = useState<
-    "export" | "import" | "create" | "save" | "delete"
-  >();
-  const [error, setError] = useState<{
-    message: string;
-    requestId?: string;
-  }>();
+  const [newColor, setNewColor] = useState<string>(DEFAULT_CALENDAR_COLOR);
+  const [editCalendar, setEditCalendar] = useState<Calendar>();
+  const [deleteCalendar, setDeleteCalendar] = useState<Calendar>();
+  const [deleteError, setDeleteError] = useState<TransferError>();
+  const [busy, setBusy] = useState<"export" | "import" | "create" | "delete">();
+  const [error, setError] = useState<TransferError>();
+  const editReturnFocusRef = useRef<HTMLButtonElement>(null);
+  const deleteReturnFocusRef = useRef<HTMLButtonElement>(null);
+  const groups = groupCalendars(calendars);
+  const selectedExportId = calendars.some(
+    (calendar) => calendar.id === exportCalendarId,
+  )
+    ? exportCalendarId
+    : (calendars[0]?.id ?? "");
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      setEditCalendar(undefined);
+      setDeleteCalendar(undefined);
+      setError(undefined);
+      setDeleteError(undefined);
+    }
+    onOpenChange(nextOpen);
+  }
 
   async function handleFile(changeEvent: ChangeEvent<HTMLInputElement>) {
     const file = changeEvent.target.files?.[0];
@@ -144,42 +179,21 @@ export function CalendarTransferDialog({
     }
   }
 
-  async function handleSaveEdit() {
-    if (!edit) return;
-    const source = calendars.find((item) => item.id === edit.id);
-    if (!source || !edit.name.trim()) {
-      setError({ message: "Give the calendar a name." });
-      return;
-    }
-    setBusy("save");
-    setError(undefined);
-    try {
-      await onUpdate({ ...source, color: edit.color, name: edit.name.trim() });
-      onNotice("Calendar updated.");
-      setEdit(undefined);
-    } catch (saveError) {
-      setError(transferError(saveError, "Could not update the calendar."));
-    } finally {
-      setBusy(undefined);
-    }
-  }
-
-  async function handleDelete(calendar: Calendar) {
-    if (
-      !window.confirm(
-        `Delete “${calendar.name}” and all of its events? This can’t be undone.`,
-      )
-    ) {
-      return;
-    }
+  async function handleDelete() {
+    if (!deleteCalendar) return;
     setBusy("delete");
-    setError(undefined);
+    setDeleteError(undefined);
     try {
-      await onRemove(calendar);
-      onNotice(`${calendar.name} deleted.`);
-      if (exportCalendarId === calendar.id) setExportCalendarId("");
-    } catch (deleteError) {
-      setError(transferError(deleteError, "Could not delete the calendar."));
+      await onRemove(deleteCalendar);
+      onNotice(`${deleteCalendar.name} deleted.`);
+      if (exportCalendarId === deleteCalendar.id) {
+        setExportCalendarId("");
+      }
+      setDeleteCalendar(undefined);
+    } catch (removeError) {
+      setDeleteError(
+        transferError(removeError, "Could not delete the calendar."),
+      );
     } finally {
       setBusy(undefined);
     }
@@ -205,29 +219,22 @@ export function CalendarTransferDialog({
           calendar.imported === 1 ? "" : "s"
         } into ${calendar.name}.`,
       );
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch (importError) {
-      setError(
-        transferError(importError, "Could not import this calendar."),
-      );
+      setError(transferError(importError, "Could not import this calendar."));
     } finally {
       setBusy(undefined);
     }
   }
 
   async function handleExport() {
-    const calendar = calendars.find(
-      (item) => item.id === exportCalendarId,
-    );
+    const calendar = calendars.find((item) => item.id === selectedExportId);
     if (!calendar) return;
 
     setBusy("export");
     setError(undefined);
     try {
-      const text = await onExport(
-        calendar.id,
-        connectionOfCalendar(calendar),
-      );
+      const text = await onExport(calendar.id, connectionOfCalendar(calendar));
       const url = URL.createObjectURL(
         new Blob([text], { type: "text/calendar;charset=utf-8" }),
       );
@@ -240,209 +247,109 @@ export function CalendarTransferDialog({
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
       onNotice(`${calendar.name} exported.`);
     } catch (exportError) {
-      setError(
-        transferError(exportError, "Could not export this calendar."),
-      );
+      setError(transferError(exportError, "Could not export this calendar."));
     } finally {
       setBusy(undefined);
     }
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.dialogOverlay} />
-        <Dialog.Content
-          aria-describedby="calendar-transfer-description"
-          className={styles.manageDialog}
-        >
-          <header className={styles.manageDialogHeader}>
+    <>
+      <Dialog
+        bodyClassName={styles.body}
+        closeLabel="Close calendars"
+        description="Create and organize calendars from Musubi and your connected accounts."
+        onOpenChange={handleOpenChange}
+        open={open}
+        size="wide"
+        title="Calendars"
+      >
+        <section className={styles.calendarSection}>
+          <div className={styles.sectionHeading}>
             <div>
-              <Dialog.Title>Calendars</Dialog.Title>
-              <Dialog.Description id="calendar-transfer-description">
-                Create, rename and remove calendars, or move them as .ics files.
-              </Dialog.Description>
+              <SectionLabel level={2}>Your calendars</SectionLabel>
+              <p>Musubi calendars come first, followed by each account.</p>
             </div>
-            <Dialog.Close asChild>
-              <button
-                aria-label="Close calendars"
-                className={styles.iconButton}
-                type="button"
-              >
-                <X aria-hidden="true" size={17} />
-              </button>
-            </Dialog.Close>
-          </header>
+          </div>
 
-          <section className={styles.transferSection}>
-            <div className={styles.transferHeading}>
-              <div>
-                <h3>Your calendars</h3>
-                <p>Owners can rename, recolor or delete native calendars.</p>
-              </div>
-            </div>
-            <ul className={styles.calendarManageList}>
-              {calendars.map((calendar) => {
-                // A federated calendar is a native calendar on another Musubi
-                // server: management is allowed by role and routed there. Only
-                // provider mirrors (Google/Outlook/CalDAV) stay read-only here,
-                // because those writes must go through the provider first.
-                const federatedId = connectionOfCalendar(calendar);
-                const external =
-                  Boolean(calendar.provider) && !federatedId;
-                const editable =
-                  !external && can(calendar.role, "editCalendar");
-                const deletable =
-                  editable &&
-                  !calendar.isDefault &&
-                  can(calendar.role, "deleteCalendar");
-                const isEditing = edit?.id === calendar.id;
+          <form className={styles.createBar} onSubmit={handleCreate}>
+            <label
+              className={styles.visuallyHidden}
+              htmlFor="new-calendar-name"
+            >
+              New calendar name
+            </label>
+            <input
+              disabled={busy === "create"}
+              id="new-calendar-name"
+              placeholder="New calendar"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+            />
+            <ColorPicker
+              disabled={busy === "create"}
+              label="New calendar color"
+              value={newColor}
+              onChange={setNewColor}
+            />
+            <Button
+              icon={<Plus size={16} strokeWidth={1.8} />}
+              loading={busy === "create"}
+              type="submit"
+            >
+              Add
+            </Button>
+          </form>
 
-                if (isEditing) {
-                  return (
-                    <li className={styles.calendarManageRow} key={calendar.id}>
-                      <input
-                        aria-label={`Rename ${calendar.name}`}
-                        className={styles.calendarManageName}
-                        disabled={busy === "save"}
-                        value={edit.name}
-                        onChange={(event) =>
-                          setEdit({ ...edit, name: event.target.value })
-                        }
-                      />
-                      <ColorPicker
-                        disabled={busy === "save"}
-                        label={`${calendar.name} color`}
-                        provider={calendar.provider}
-                        value={edit.color}
-                        onChange={(color) => setEdit({ ...edit, color })}
-                      />
-                      <button
-                        aria-label="Save calendar"
-                        className={styles.iconButton}
-                        disabled={busy === "save"}
-                        type="button"
-                        onClick={() => void handleSaveEdit()}
-                      >
-                        <Check aria-hidden="true" size={16} />
-                      </button>
-                      <button
-                        aria-label="Cancel"
-                        className={styles.iconButton}
-                        disabled={busy === "save"}
-                        type="button"
-                        onClick={() => setEdit(undefined)}
-                      >
-                        <X aria-hidden="true" size={16} />
-                      </button>
-                    </li>
-                  );
-                }
-
-                return (
-                  <li className={styles.calendarManageRow} key={calendar.id}>
-                    <span
-                      className={styles.calendarDot}
-                      style={{ backgroundColor: calendar.color }}
-                    />
-                    <span className={styles.calendarManageName}>
-                      {calendar.name}
-                    </span>
-                    {calendar.isDefault ? (
-                      <span className={styles.calendarBadge}>Personal</span>
-                    ) : null}
-                    {calendar.provider ? (
-                      <span className={styles.calendarBadge}>
-                        {providerDisplayName(calendar)}
-                      </span>
-                    ) : null}
-                    {external ? null : (
-                      <button
-                        aria-label={`Share ${calendar.name}`}
-                        className={styles.iconButton}
-                        disabled={Boolean(busy)}
-                        type="button"
-                        onClick={() => onManageMembers(calendar)}
-                      >
-                        <Users aria-hidden="true" size={15} />
-                      </button>
-                    )}
-                    {editable ? (
-                      <button
-                        aria-label={`Rename ${calendar.name}`}
-                        className={styles.iconButton}
-                        disabled={Boolean(busy)}
-                        type="button"
-                        onClick={() =>
-                          setEdit({
-                            color: calendar.color,
-                            id: calendar.id,
-                            name: calendar.name,
-                          })
-                        }
-                      >
-                        <Pencil aria-hidden="true" size={15} />
-                      </button>
-                    ) : null}
-                    {deletable ? (
-                      <button
-                        aria-label={`Delete ${calendar.name}`}
-                        className={styles.iconButton}
-                        disabled={Boolean(busy)}
-                        type="button"
-                        onClick={() => void handleDelete(calendar)}
-                      >
-                        <Trash2 aria-hidden="true" size={15} />
-                      </button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-            <form className={styles.transferControls} onSubmit={handleCreate}>
-              <label>
-                <span className={styles.srOnly}>New calendar name</span>
-                <input
-                  disabled={busy === "create"}
-                  placeholder="New calendar"
-                  value={newName}
-                  onChange={(event) => setNewName(event.target.value)}
-                />
-              </label>
-              <ColorPicker
-                disabled={busy === "create"}
-                label="New calendar color"
-                value={newColor}
-                onChange={setNewColor}
+          <div className={styles.groups}>
+            {groups.map((group) => (
+              <CalendarGroup
+                busy={Boolean(busy)}
+                group={group}
+                key={group.key}
+                onDelete={(calendar, button) => {
+                  deleteReturnFocusRef.current = button;
+                  setDeleteError(undefined);
+                  setDeleteCalendar(calendar);
+                }}
+                onEdit={(calendar, button) => {
+                  editReturnFocusRef.current = button;
+                  setEditCalendar(calendar);
+                }}
+                onManageMembers={onManageMembers}
               />
-              <button
-                className={styles.primaryButton}
-                disabled={busy === "create"}
-                type="submit"
-              >
-                <Plus aria-hidden="true" size={16} />
-                <span>{busy === "create" ? "Creating…" : "Add"}</span>
-              </button>
-            </form>
-          </section>
+            ))}
+          </div>
+        </section>
 
-          <section className={styles.transferSection}>
-            <div className={styles.transferHeading}>
-              <Download aria-hidden="true" size={17} />
-              <div>
-                <h3>Export</h3>
-                <p>Downloads the calendar and its events as an .ics file.</p>
-              </div>
+        <section className={styles.transferSection}>
+          <div className={styles.sectionHeading}>
+            <div>
+              <SectionLabel level={2}>Move calendars</SectionLabel>
+              <p>Use standard .ics files to take events in or out of Musubi.</p>
             </div>
-            <div className={styles.transferControls}>
-              <label>
-                <span className={styles.srOnly}>Calendar to export</span>
+          </div>
+
+          <div className={styles.transferGrid}>
+            <form
+              className={styles.transferCard}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleExport();
+              }}
+            >
+              <div className={styles.cardHeading}>
+                <Download aria-hidden="true" size={18} strokeWidth={1.7} />
+                <div>
+                  <h3>Export</h3>
+                  <p>Download one calendar and all its events.</p>
+                </div>
+              </div>
+              <Field className={styles.cardField} label="Calendar to export">
                 <select
                   disabled={Boolean(busy)}
-                  value={exportCalendarId}
-                  onChange={(event) =>
-                    setExportCalendarId(event.target.value)
-                  }
+                  value={selectedExportId}
+                  onChange={(event) => setExportCalendarId(event.target.value)}
                 >
                   <option value="">Choose a calendar</option>
                   {calendars.map((calendar) => (
@@ -451,73 +358,370 @@ export function CalendarTransferDialog({
                     </option>
                   ))}
                 </select>
-              </label>
-              <button
-                className={styles.secondaryButton}
-                disabled={!exportCalendarId || Boolean(busy)}
-                type="button"
-                onClick={() => void handleExport()}
+              </Field>
+              <Button
+                className={styles.cardAction}
+                disabled={!selectedExportId}
+                loading={busy === "export"}
+                type="submit"
+                variant="secondary"
               >
-                {busy === "export" ? "Exporting…" : "Export .ics"}
-              </button>
-            </div>
-          </section>
+                Export .ics
+              </Button>
+            </form>
 
-          <form className={styles.transferSection} onSubmit={handleImport}>
-            <div className={styles.transferHeading}>
-              <FileUp aria-hidden="true" size={17} />
-              <div>
-                <h3>Import</h3>
-                <p>Creates a new native calendar from an .ics file.</p>
+            <form className={styles.transferCard} onSubmit={handleImport}>
+              <div className={styles.cardHeading}>
+                <FileUp aria-hidden="true" size={18} strokeWidth={1.7} />
+                <div>
+                  <h3>Import</h3>
+                  <p>Create a Musubi calendar from an .ics file.</p>
+                </div>
               </div>
-            </div>
-            <label className={styles.filePicker}>
-              <span>{importFileName || "Choose .ics file"}</span>
-              <input
-                accept=".ics,text/calendar"
-                disabled={Boolean(busy)}
-                required
-                type="file"
-                onChange={(event) => void handleFile(event)}
-              />
-            </label>
-            <div className={styles.transferControls}>
-              <label>
-                <span className={styles.srOnly}>Imported calendar name</span>
+              <label className={styles.fileControl}>
+                <span className={styles.fileCopy}>
+                  <strong>Calendar file</strong>
+                  <span>{importFileName || "No file selected"}</span>
+                </span>
+                <span className={styles.fileButton}>Choose file</span>
                 <input
+                  accept=".ics,text/calendar"
+                  aria-label="Choose .ics file"
                   disabled={Boolean(busy)}
-                  placeholder="Calendar name"
                   required
-                  value={importName}
-                  onChange={(event) => setImportName(event.target.value)}
+                  type="file"
+                  onChange={(event) => void handleFile(event)}
                 />
               </label>
-              <ColorPicker
-                disabled={Boolean(busy)}
-                label="Imported calendar color"
-                value={importColor}
-                onChange={setImportColor}
-              />
-              <button
-                className={styles.primaryButton}
-                disabled={Boolean(busy)}
-                type="submit"
-              >
-                {busy === "import" ? "Importing…" : "Import"}
-              </button>
-            </div>
-          </form>
+              <div className={styles.importControls}>
+                <Field
+                  className={styles.cardField}
+                  label="Imported calendar name"
+                  labelHidden
+                >
+                  <input
+                    disabled={Boolean(busy)}
+                    placeholder="Calendar name"
+                    required
+                    value={importName}
+                    onChange={(event) => setImportName(event.target.value)}
+                  />
+                </Field>
+                <ColorPicker
+                  disabled={Boolean(busy)}
+                  label="Imported calendar color"
+                  value={importColor}
+                  onChange={setImportColor}
+                />
+                <Button loading={busy === "import"} type="submit">
+                  Import
+                </Button>
+              </div>
+            </form>
+          </div>
+        </section>
 
-          {error ? (
-            <div className={styles.formError} role="alert">
-              <p>{error.message}</p>
-              {error.requestId ? (
-                <span>Request {error.requestId}</span>
-              ) : null}
-            </div>
-          ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        {error ? <ErrorMessage error={error} /> : null}
+      </Dialog>
+
+      {editCalendar ? (
+        <EditCalendarDialog
+          calendar={editCalendar}
+          onNotice={onNotice}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setEditCalendar(undefined);
+          }}
+          onUpdate={onUpdate}
+          returnFocus={editReturnFocusRef}
+        />
+      ) : null}
+
+      {deleteCalendar ? (
+        <DeleteCalendarDialog
+          busy={busy === "delete"}
+          calendar={deleteCalendar}
+          error={deleteError}
+          onDelete={() => void handleDelete()}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && busy !== "delete") {
+              setDeleteCalendar(undefined);
+              setDeleteError(undefined);
+            }
+          }}
+          returnFocus={deleteReturnFocusRef}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function CalendarGroup({
+  busy,
+  group,
+  onDelete,
+  onEdit,
+  onManageMembers,
+}: {
+  busy: boolean;
+  group: CalendarSourceGroup;
+  onDelete: (calendar: Calendar, button: HTMLButtonElement) => void;
+  onEdit: (calendar: Calendar, button: HTMLButtonElement) => void;
+  onManageMembers: (calendar: Calendar) => void;
+}) {
+  return (
+    <section
+      aria-labelledby={`calendar-group-${group.key}`}
+      className={styles.group}
+    >
+      <header className={styles.groupHeader}>
+        <ProviderIcon flavor={group.flavor} />
+        <div>
+          <h3 id={`calendar-group-${group.key}`}>{group.title}</h3>
+          <p>{group.detail}</p>
+        </div>
+      </header>
+      <ul aria-label={`${group.title} calendars`} className={styles.list}>
+        {group.calendars.map((calendar) => {
+          const federatedId = connectionOfCalendar(calendar);
+          const external = Boolean(calendar.provider) && !federatedId;
+          const editable = !external && can(calendar.role, "editCalendar");
+          const deletable =
+            editable &&
+            !calendar.isDefault &&
+            can(calendar.role, "deleteCalendar");
+
+          return (
+            <li key={calendar.id}>
+              <Row
+                detail={calendarDetail(calendar, external)}
+                icon={
+                  <span
+                    className={styles.calendarSwatch}
+                    data-calendar-swatch=""
+                    style={{ backgroundColor: calendar.color }}
+                  />
+                }
+                label={
+                  <span className={styles.calendarName}>
+                    <span>{calendar.name}</span>
+                    {calendar.isDefault ? (
+                      <span className={styles.badge}>Personal</span>
+                    ) : null}
+                  </span>
+                }
+                trailing={
+                  <span className={styles.rowActions}>
+                    {!external ? (
+                      <IconButton
+                        disabled={busy}
+                        label={`Share ${calendar.name}`}
+                        size="compact"
+                        title="Members and sharing"
+                        onClick={() => onManageMembers(calendar)}
+                      >
+                        <Users size={16} strokeWidth={1.7} />
+                      </IconButton>
+                    ) : null}
+                    {editable ? (
+                      <IconButton
+                        disabled={busy}
+                        label={`Rename ${calendar.name}`}
+                        size="compact"
+                        title="Edit calendar"
+                        onClick={(event) =>
+                          onEdit(calendar, event.currentTarget)
+                        }
+                      >
+                        <Pencil size={15} strokeWidth={1.7} />
+                      </IconButton>
+                    ) : null}
+                    {deletable ? (
+                      <IconButton
+                        disabled={busy}
+                        label={`Delete ${calendar.name}`}
+                        size="compact"
+                        title="Delete calendar"
+                        variant="ghost"
+                        onClick={(event) =>
+                          onDelete(calendar, event.currentTarget)
+                        }
+                      >
+                        <Trash2 size={15} strokeWidth={1.7} />
+                      </IconButton>
+                    ) : null}
+                  </span>
+                }
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function EditCalendarDialog({
+  calendar,
+  onNotice,
+  onOpenChange,
+  onUpdate,
+  returnFocus,
+}: {
+  calendar: Calendar;
+  onNotice: (message: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onUpdate: (calendar: Calendar) => Promise<Calendar>;
+  returnFocus: RefObject<HTMLElement | null>;
+}) {
+  const [name, setName] = useState(calendar.name);
+  const [color, setColor] = useState(calendar.color);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<TransferError>();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const canSave =
+    Boolean(name.trim()) &&
+    (name.trim() !== calendar.name || color !== calendar.color);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSave) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onUpdate({ ...calendar, color, name: name.trim() });
+      onNotice("Calendar updated.");
+      onOpenChange(false);
+    } catch (saveError) {
+      setError(transferError(saveError, "Could not update the calendar."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      closeLabel="Close calendar editor"
+      description="Change how this calendar is named and identified across Musubi."
+      footer={
+        <>
+          <DialogClose>
+            <Button disabled={busy} variant="secondary">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={!canSave}
+            form="edit-calendar-form"
+            loading={busy}
+            type="submit"
+          >
+            Save
+          </Button>
+        </>
+      }
+      initialFocus={inputRef}
+      onOpenChange={onOpenChange}
+      open
+      returnFocus={returnFocus}
+      size="compact"
+      title="Edit calendar"
+    >
+      <form
+        id="edit-calendar-form"
+        onSubmit={(event) => void handleSubmit(event)}
+      >
+        <Field label="Calendar name">
+          <input
+            aria-label={`Rename ${calendar.name}`}
+            disabled={busy}
+            maxLength={80}
+            ref={inputRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        <Row
+          className={styles.editColorRow}
+          label="Color"
+          trailing={
+            <ColorPicker
+              disabled={busy}
+              label={`${calendar.name} color`}
+              provider={calendar.provider}
+              value={color}
+              onChange={setColor}
+            />
+          }
+        />
+        {error ? <ErrorMessage error={error} compact /> : null}
+      </form>
+    </Dialog>
+  );
+}
+
+function DeleteCalendarDialog({
+  busy,
+  calendar,
+  error,
+  onDelete,
+  onOpenChange,
+  returnFocus,
+}: {
+  busy: boolean;
+  calendar: Calendar;
+  error?: TransferError;
+  onDelete: () => void;
+  onOpenChange: (open: boolean) => void;
+  returnFocus: RefObject<HTMLElement | null>;
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <Dialog
+      closeLabel="Close calendar deletion"
+      description="The calendar and every event in it will be permanently removed."
+      footer={
+        <>
+          <DialogClose>
+            <Button disabled={busy} ref={cancelRef} variant="secondary">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button loading={busy} variant="destructive" onClick={onDelete}>
+            Delete calendar
+          </Button>
+        </>
+      }
+      initialFocus={cancelRef}
+      onOpenChange={onOpenChange}
+      open
+      returnFocus={returnFocus}
+      size="compact"
+      title={`Delete “${calendar.name}”?`}
+    >
+      <div className={styles.deleteWarning}>
+        <Trash2 aria-hidden="true" size={19} strokeWidth={1.7} />
+        <p>
+          This can’t be undone. Shared members will also lose access to{" "}
+          <strong>{calendar.name}</strong>.
+        </p>
+      </div>
+      {error ? <ErrorMessage error={error} compact /> : null}
+    </Dialog>
+  );
+}
+
+function ErrorMessage({
+  compact = false,
+  error,
+}: {
+  compact?: boolean;
+  error: TransferError;
+}) {
+  return (
+    <div className={compact ? styles.compactError : styles.error} role="alert">
+      <p>{error.message}</p>
+      {error.requestId ? <span>Request {error.requestId}</span> : null}
+    </div>
   );
 }
