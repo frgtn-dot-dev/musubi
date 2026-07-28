@@ -21,6 +21,7 @@ import {
   useConnections,
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
+import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./workspace.module.css";
 
 type ConnectionsDialogProps = {
@@ -74,8 +75,7 @@ export function ConnectionsDialog({
 }: ConnectionsDialogProps) {
   const connections = useConnections(userId);
   const federated = useFederatedWorkspace(userId);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { busy, error, run, setError } = useAsyncAction();
   const [caldav, setCaldav] = useState<{
     apple: boolean;
     password: string;
@@ -91,17 +91,6 @@ export function ConnectionsDialog({
   const providers = connections.capabilities.data?.syncProviders ?? [];
   const accounts = connectedAccounts(calendars);
   const federatedServers = federated.data?.servers ?? [];
-
-  async function run(action: () => Promise<unknown>, failure: string) {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : failure);
-      setBusy(false);
-    }
-  }
 
   async function connectSocial(
     provider: "google" | "microsoft",
@@ -146,7 +135,6 @@ export function ConnectionsDialog({
         ? await getFederatedInvitePreview(parsed.server, parsed.token)
         : await getInvitePreview(parsed.token);
       setInvite({ parsed, preview });
-      setBusy(false);
     }, "That invite could not be opened. It may have expired.");
   }
 
@@ -157,7 +145,6 @@ export function ConnectionsDialog({
       onNotice(`Joined ${invite.preview.name}.`);
       setInvite(undefined);
       setInviteValue("");
-      setBusy(false);
     }, "Could not join that calendar.");
   }
 
@@ -177,7 +164,6 @@ export function ConnectionsDialog({
       });
       onNotice("Calendar connected.");
       setCaldav(undefined);
-      setBusy(false);
     }, "Could not connect. Check the server and credentials.");
   }
 
@@ -252,7 +238,6 @@ export function ConnectionsDialog({
                             provider: account.provider,
                           });
                           onNotice(`${account.label} disconnected.`);
-                          setBusy(false);
                         }, "Could not disconnect the account.")
                       }
                     >
@@ -388,7 +373,6 @@ export function ConnectionsDialog({
                             server.server,
                           );
                           onNotice(`${server.label} disconnected.`);
-                          setBusy(false);
                         }, "Could not disconnect the server.")
                       }
                     >

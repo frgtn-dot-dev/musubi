@@ -1,8 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { can, type Calendar } from "@musubi/types";
 import { Copy, Link2, Trash2, X } from "lucide-react";
-import { useState } from "react";
 import { useCalendarSharing } from "~/calendar/calendar-sharing";
+import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./workspace.module.css";
 
 type ShareCalendarDialogProps = {
@@ -25,24 +25,11 @@ export function ShareCalendarDialog({
   userId,
 }: ShareCalendarDialogProps) {
   const sharing = useCalendarSharing(userId, calendar);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { busy, error, run, setError } = useAsyncAction();
 
   const open = Boolean(calendar);
   const canManage = can(calendar?.role, "manageMembers");
   const isOwner = calendar?.role === "owner";
-
-  async function run(action: () => Promise<unknown>, failure: string) {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : failure);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function copyLink(inviteId: string) {
     try {

@@ -3,6 +3,7 @@ import { Camera, X } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "~/auth/auth-client";
 import { deleteAccount, uploadAvatar } from "~/api/resources";
+import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./workspace.module.css";
 
 type AccountDialogProps = {
@@ -33,20 +34,7 @@ export function AccountDialog({
   const user = session.data?.user;
   const [name, setName] = useState(user?.name ?? "");
   const [confirmName, setConfirmName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function run(action: () => Promise<unknown>, failure: string) {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : failure);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { busy, error, run, setError } = useAsyncAction();
 
   async function saveName() {
     const trimmed = name.trim();
