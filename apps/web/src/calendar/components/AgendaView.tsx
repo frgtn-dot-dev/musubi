@@ -100,7 +100,9 @@ export function AgendaView({
       },
       {
         root: rootRef.current?.parentElement ?? null,
-        rootMargin: "0px",
+        // Match the mobile Agenda: prepare the next batch before the user
+        // reaches the edge, so the list reads as one continuous timeline.
+        rootMargin: "0px 0px 400px",
       },
     );
     observer.observe(sentinel);

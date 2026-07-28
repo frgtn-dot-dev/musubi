@@ -38,6 +38,7 @@ type ToolbarProps = {
   onViewChange: (view: CalendarViewId) => void;
   pageTitle: string;
   periodLabel: string;
+  periodNavigation?: boolean;
   periodName: string;
   searchQuery: string;
   /** So the "/" shortcut can put the caret in the field. */
@@ -68,6 +69,7 @@ export function Toolbar({
   onViewChange,
   pageTitle,
   periodLabel,
+  periodNavigation = true,
   periodName,
   searchQuery,
   searchRef,
@@ -102,22 +104,24 @@ export function Toolbar({
           <button className={styles.secondaryButton} type="button" onClick={onToday}>
             Today
           </button>
-          <div className={styles.navPair}>
-            <button
-              type="button"
-              aria-label={`Previous ${periodName}`}
-              onClick={() => onPeriodChange(-1)}
-            >
-              <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.6} />
-            </button>
-            <button
-              type="button"
-              aria-label={`Next ${periodName}`}
-              onClick={() => onPeriodChange(1)}
-            >
-              <ChevronRight aria-hidden="true" size={18} strokeWidth={1.6} />
-            </button>
-          </div>
+          {periodNavigation ? (
+            <div className={styles.navPair}>
+              <button
+                type="button"
+                aria-label={`Previous ${periodName}`}
+                onClick={() => onPeriodChange(-1)}
+              >
+                <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.6} />
+              </button>
+              <button
+                type="button"
+                aria-label={`Next ${periodName}`}
+                onClick={() => onPeriodChange(1)}
+              >
+                <ChevronRight aria-hidden="true" size={18} strokeWidth={1.6} />
+              </button>
+            </div>
+          ) : null}
           <p className={styles.monthTitle}>{periodLabel}</p>
         </div>
 

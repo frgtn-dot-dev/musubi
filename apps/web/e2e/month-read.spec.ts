@@ -524,7 +524,9 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
   await expectNoAccessibilityViolations(page);
 });
 
-test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
+test("reads, filters and continuously loads the authenticated Agenda", async ({
+  page,
+}) => {
   await mockAuthenticatedReads(page);
 
   await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
@@ -534,9 +536,9 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Agenda", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  // The initial DOM is a bounded slice of a year-long range, not the whole
-  // range. How many batches fit depends on the viewport, so this asserts the
-  // bound rather than one exact batch.
+  // The DOM stays bounded even though Agenda is one continuous two-year
+  // timeline. How many batches fit depends on the viewport, so this asserts
+  // the bound rather than one exact batch.
   const initialDays = await page.locator("[data-agenda-date]").count();
   expect(initialDays).toBeGreaterThanOrEqual(14);
   expect(initialDays).toBeLessThanOrEqual(28);
@@ -563,6 +565,13 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
   await expect
     .poll(() => page.locator("[data-agenda-date]").count())
     .toBeGreaterThan(initialDays);
+  await expect(
+    page.getByRole("button", { name: "Previous agenda start" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Next agenda start" }),
+  ).toHaveCount(0);
+  await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 
   await page
     .locator("label")
@@ -571,10 +580,6 @@ test("reads, filters and pages the authenticated Agenda", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(0);
 
   await expectNoAccessibilityViolations(page);
-
-  await page.getByRole("button", { name: "Next agenda start" }).click();
-  await expect(page).toHaveURL(/[?&]date=2026-08-23/);
-  await expect(page.getByText("From Aug 23, 2026")).toBeVisible();
 });
 
 test("renders and navigates the authenticated Week time grid", async ({

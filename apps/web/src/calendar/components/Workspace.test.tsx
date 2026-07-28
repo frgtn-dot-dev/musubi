@@ -146,14 +146,11 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: /Design review/ })).toBeNull();
   });
 
-  it("renders only future event days and pages the Agenda anchor", async () => {
-    const user = userEvent.setup();
-    const onDateChange = vi.fn();
+  it("renders future event days as one continuous Agenda", () => {
     const { container } = render(
       <Workspace
         {...commonProps}
         activeView="agenda"
-        onDateChange={onDateChange}
       />,
     );
 
@@ -163,12 +160,12 @@ describe("Workspace", () => {
       container.querySelector('[data-agenda-date="2026-07-26"]'),
     ).toBeNull();
     expect(screen.getByRole("button", { name: /Board games/ })).not.toBeNull();
-
-    await user.click(
-      screen.getByRole("button", { name: "Next agenda start" }),
-    );
-
-    expect(onDateChange).toHaveBeenCalledWith("2026-08-23");
+    expect(
+      screen.queryByRole("button", { name: "Previous agenda start" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Next agenda start" }),
+    ).toBeNull();
   });
 
   it("exposes Agenda as an enabled view", async () => {

@@ -500,10 +500,6 @@ export function Workspace({
         return addDays(anchor, offset * 7);
       }
 
-      if (activeView === "agenda") {
-        return addDays(anchor, offset * 28);
-      }
-
       return addMonthPages(anchor, offset);
     })();
 
@@ -826,6 +822,7 @@ export function Workspace({
           onViewChange={onViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
+          periodNavigation={activeView !== "agenda"}
           periodName={activeView === "agenda" ? "agenda start" : activeView}
           searchQuery={searchQuery}
           searchRef={searchRef}
