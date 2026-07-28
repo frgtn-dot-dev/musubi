@@ -1,8 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Button, IconButton } from "./Button";
 import { Checkbox } from "./Checkbox";
+import { Dialog } from "./Dialog";
 import { Empty } from "./Empty";
 import { Field } from "./Field";
 import { RowAction, RowOptions, RowToggle } from "./Row";
@@ -10,6 +12,25 @@ import { Segmented } from "./Segmented";
 import { Select } from "./Select";
 import { SectionLabel } from "./SectionLabel";
 import { Switch } from "./Switch";
+import { Toast } from "./Toast";
+
+function DialogHarness() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog
+      closeLabel="Close event editor"
+      description="Choose the calendar and time for this event."
+      open={open}
+      title="Edit event"
+      trigger={<button type="button">Open editor</button>}
+      onOpenChange={setOpen}
+    >
+      <label htmlFor="dialog-title">Title</label>
+      <input id="dialog-title" />
+    </Dialog>
+  );
+}
 
 describe("Button primitives", () => {
   it("uses a safe default type and invokes its action", async () => {
@@ -258,5 +279,57 @@ describe("row variants", () => {
     );
 
     expect(screen.getByRole("radiogroup", { name: "Theme" })).not.toBeNull();
+  });
+});
+
+describe("overlay primitives", () => {
+  it("names a dialog, closes it with Escape and returns focus", async () => {
+    const user = userEvent.setup();
+    render(<DialogHarness />);
+
+    const trigger = screen.getByRole("button", { name: "Open editor" });
+    await user.click(trigger);
+
+    expect(
+      screen.getByRole("dialog", {
+        name: "Edit event",
+        description: "Choose the calendar and time for this event.",
+      }),
+    ).not.toBeNull();
+    expect(document.activeElement).not.toBe(trigger);
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("announces a toast without moving focus and keeps its action operable", async () => {
+    const onAction = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">Keep focus</button>
+        <Toast
+          actionLabel="Undo"
+          message="Event moved."
+          onAction={onAction}
+        />
+      </>,
+    );
+
+    const focusTarget = screen.getByRole("button", { name: "Keep focus" });
+    focusTarget.focus();
+    expect(screen.getByRole("status").textContent).toContain("Event moved.");
+    expect(document.activeElement).toBe(focusTarget);
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onAction).toHaveBeenCalledOnce();
+  });
+
+  it("uses an assertive alert only for error toasts", () => {
+    render(<Toast message="Could not save event." tone="error" />);
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Could not save event.",
+    );
   });
 });
