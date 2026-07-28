@@ -247,9 +247,10 @@ tažený chip vidět vůbec.
 - **Resize** zůstává v místě — tam ghost nemá co říct, blok sám roste.
 - Month preview je chip **za** existujícími segmenty v buňce: vložený dopředu
   posunul víceденní pruhy o řádek a rozbil jejich návaznost.
-- Karty eventů dostaly **1px prsten z barvy plátna + jemný drop shadow**, aby dvě
-  stejně barevné karty na sobě čtly jako dvě. U pruhů, které pokračují do další
-  buňky, se prsten vypíná — jinak by jeden event vypadal jako několik.
+- Karty eventů dostaly **jemný drop shadow**, aby dvě stejně barevné karty na
+  sobě čtly jako dvě. Prsten z barvy plátna jsme zkusili a zahodili — u pruhů,
+  které pokračují do další buňky, rozsekal jeden event na několik, a shadow sám
+  to oddělení unese.
 
 **B8 — Okno tvorby se dá odtáhnout: HOTOVO** (2026-07-28)
 

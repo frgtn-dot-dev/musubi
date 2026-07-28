@@ -1291,11 +1291,9 @@
   background: var(--event-color);
   color: var(--event-foreground);
   text-align: left;
-  /* A hairline of the canvas plus a soft drop: two blocks of the same colour
-     touching must still read as two cards, not one taller one. */
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--surface-canvas) 82%, transparent),
-    0 1px 3px rgb(0 0 0 / 16%);
+  /* A soft drop, so two blocks of the same colour touching still read as two
+     cards rather than one taller one. */
+  box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
   transition:
     filter var(--motion-fast) ease,
     transform var(--motion-fast) ease;
@@ -1530,9 +1528,7 @@
   background: var(--event-color);
   color: var(--event-foreground);
   text-align: left;
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--surface-canvas) 82%, transparent),
-    0 1px 3px rgb(0 0 0 / 16%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
   transition:
     filter var(--motion-fast) ease,
     transform var(--motion-fast) ease;
@@ -1566,13 +1562,6 @@
 .eventChip .eventMarks {
   grid-column: -2;
   margin-left: 0;
-}
-
-/* A bar that runs into the next cell must not be ringed at the seam, or the one
-   event reads as several. The drop shadow stays, so stacked bars still separate. */
-.eventChipContinuesBefore,
-.eventChipContinuesAfter {
-  box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
 }
 
 .eventChipContinuesBefore {
