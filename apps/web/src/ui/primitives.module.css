@@ -81,6 +81,14 @@
   box-shadow: 0 5px 16px rgb(0 0 0 / 10%);
 }
 
+.button_secondary[aria-expanded="true"],
+.button_secondary[aria-pressed="true"],
+.iconButton[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
 .button:disabled,
 .iconButton:disabled {
   cursor: not-allowed;
@@ -622,6 +630,15 @@
   background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
 
+.rowAction[data-selected] {
+  background: var(--control-fill);
+  color: var(--control-on-fill);
+}
+
+.rowAction[data-selected] :is(.rowLabel, .rowDetail, .rowIcon) {
+  color: inherit;
+}
+
 .rowAction:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -689,6 +706,26 @@
 
 .rowOptions {
   flex: none;
+}
+
+.row_compact {
+  min-height: 44px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 0;
+  border-radius: var(--radius-chip);
+}
+
+.row_compact .rowIcon {
+  width: 20px;
+}
+
+.row_compact .rowLabel {
+  font-size: var(--text-13);
+}
+
+.row_compact .rowDetail {
+  font-size: var(--text-10);
 }
 
 .dialogOverlay {

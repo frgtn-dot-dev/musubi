@@ -9,6 +9,9 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import type { RefObject } from "react";
+import { Button, IconButton } from "~/ui/Button";
+import { Checkbox } from "~/ui/Checkbox";
+import { Segmented } from "~/ui/Segmented";
 import { Select } from "~/ui/Select";
 import { calendarViews, type CalendarViewId } from "../view-registry";
 import type { Density } from "../time-geometry";
@@ -27,9 +30,9 @@ type ToolbarProps = {
   onDraftShowAdjacentDaysChange?: (show: boolean) => void;
   onDraftShowWeekendChange?: (show: boolean) => void;
   filtersOpen: boolean;
+  navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
   onDraftNameChange: (name: string) => void;
-  onNotice: (message: string) => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
   onSearch: (query: string) => void;
@@ -55,12 +58,12 @@ export function Toolbar({
   draftShowWeekend,
   editing,
   filtersOpen,
+  navigationTriggerRef,
   onCreateEvent,
   onDraftDensityChange,
   onDraftNameChange,
   onDraftShowAdjacentDaysChange,
   onDraftShowWeekendChange,
-  onNotice,
   onOpenSidebar,
   onPeriodChange,
   onSearch,
@@ -89,112 +92,104 @@ export function Toolbar({
             value={draftName}
             onChange={(event) => onDraftNameChange(event.target.value)}
           />
+          <div className={styles.pageEditOptions}>
+            {draftDensity && onDraftDensityChange ? (
+              <label className={styles.densityField}>
+                <span className={styles.srOnly}>Row height</span>
+                <Select
+                  label="Row height"
+                  options={[
+                    { label: "Compact", value: "compact" },
+                    { label: "Comfortable", value: "comfortable" },
+                    { label: "Spacious", value: "spacious" },
+                  ]}
+                  size="compact"
+                  value={draftDensity}
+                  onChange={(value) =>
+                    onDraftDensityChange(value as Density)
+                  }
+                />
+              </label>
+            ) : null}
+            {draftShowWeekend !== undefined &&
+            onDraftShowWeekendChange ? (
+              <Checkbox
+                checked={draftShowWeekend}
+                className={styles.presentationToggle}
+                label="Weekend"
+                onChange={(event) =>
+                  onDraftShowWeekendChange(event.target.checked)
+                }
+              />
+            ) : null}
+            {draftShowAdjacentDays !== undefined &&
+            onDraftShowAdjacentDaysChange ? (
+              <Checkbox
+                checked={draftShowAdjacentDays}
+                className={styles.presentationToggle}
+                label="Nearby months"
+                onChange={(event) =>
+                  onDraftShowAdjacentDaysChange(event.target.checked)
+                }
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
 
       <div className={styles.toolbarControls}>
         <div className={styles.dateControls}>
-          <button
-            className={`${styles.iconButton} ${styles.sidebarMenuButton}`}
-            type="button"
-            aria-label="Open navigation"
+          <IconButton
+            className={styles.sidebarMenuButton}
+            label="Open navigation"
+            ref={navigationTriggerRef}
+            size="compact"
             onClick={onOpenSidebar}
           >
             <Menu aria-hidden="true" size={18} strokeWidth={1.6} />
-          </button>
-          <button className={styles.secondaryButton} type="button" onClick={onToday}>
+          </IconButton>
+          <Button
+            className={styles.todayButton}
+            size="compact"
+            variant="secondary"
+            onClick={onToday}
+          >
             Today
-          </button>
+          </Button>
           {periodNavigation ? (
             <div className={styles.navPair}>
-              <button
-                type="button"
-                aria-label={`Previous ${periodName}`}
+              <IconButton
+                label={`Previous ${periodName}`}
+                size="compact"
                 onClick={() => onPeriodChange(-1)}
               >
                 <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.6} />
-              </button>
-              <button
-                type="button"
-                aria-label={`Next ${periodName}`}
+              </IconButton>
+              <IconButton
+                label={`Next ${periodName}`}
+                size="compact"
                 onClick={() => onPeriodChange(1)}
               >
                 <ChevronRight aria-hidden="true" size={18} strokeWidth={1.6} />
-              </button>
+              </IconButton>
             </div>
           ) : null}
           <p className={styles.monthTitle}>{periodLabel}</p>
         </div>
 
-        <div className={styles.viewSwitcher} aria-label="Calendar view">
-          {calendarViews.map((view) => (
-            <button
-              className={`${styles.viewButton} ${
-                view.id === activeView ? styles.viewButtonActive : ""
-              } ${view.enabled ? "" : styles.viewButtonPlanned}`}
-              type="button"
-              aria-pressed={view.id === activeView}
-              key={view.id}
-              onClick={() => {
-                if (view.enabled) {
-                  onViewChange(view.id);
-                } else {
-                  onNotice(`${view.label} view follows the Month vertical slice.`);
-                }
-              }}
-            >
-              {view.label}
-            </button>
-          ))}
-        </div>
+        <Segmented<CalendarViewId>
+          className={styles.viewSwitcher}
+          label="Calendar view"
+          options={calendarViews.map((view) => ({
+            disabled: !view.enabled,
+            label: view.label,
+            value: view.id,
+          }))}
+          value={activeView}
+          onChange={onViewChange}
+        />
 
         <div className={styles.toolbarActions}>
-          {editing && draftDensity && onDraftDensityChange ? (
-            <label className={styles.densityField}>
-              <span className={styles.srOnly}>Row height</span>
-              <Select
-                label="Row height"
-                options={[
-                  { label: "Compact", value: "compact" },
-                  { label: "Comfortable", value: "comfortable" },
-                  { label: "Spacious", value: "spacious" },
-                ]}
-                size="compact"
-                value={draftDensity}
-                onChange={(value) =>
-                  onDraftDensityChange(value as Density)
-                }
-              />
-            </label>
-          ) : null}
-          {editing &&
-          draftShowWeekend !== undefined &&
-          onDraftShowWeekendChange ? (
-            <label className={styles.presentationToggle}>
-              <input
-                checked={draftShowWeekend}
-                type="checkbox"
-                onChange={(event) =>
-                  onDraftShowWeekendChange(event.target.checked)
-                }
-              />
-              <span>Weekend</span>
-            </label>
-          ) : null}
-          {editing &&
-          draftShowAdjacentDays !== undefined &&
-          onDraftShowAdjacentDaysChange ? (
-            <label className={styles.presentationToggle}>
-              <input
-                checked={draftShowAdjacentDays}
-                type="checkbox"
-                onChange={(event) =>
-                  onDraftShowAdjacentDaysChange(event.target.checked)
-                }
-              />
-              <span>Nearby months</span>
-            </label>
-          ) : null}
           <label className={styles.searchField}>
             <Search aria-hidden="true" size={17} strokeWidth={1.6} />
             <span className={styles.srOnly}>Search events</span>
@@ -206,13 +201,10 @@ export function Toolbar({
               onChange={(event) => onSearch(event.target.value)}
             />
           </label>
-          <button
-            className={`${styles.iconButton} ${
-              editing ? styles.buttonSelected : ""
-            }`}
-            type="button"
+          <IconButton
             aria-pressed={editing}
-            aria-label={editing ? "Finish editing page" : "Edit page"}
+            label={editing ? "Finish editing page" : "Edit page"}
+            size="compact"
             onClick={onToggleEdit}
           >
             {editing ? (
@@ -220,28 +212,33 @@ export function Toolbar({
             ) : (
               <PencilLine aria-hidden="true" size={17} strokeWidth={1.6} />
             )}
-          </button>
-          <button
-            className={`${styles.secondaryButton} ${
-              filtersOpen ? styles.buttonSelected : ""
-            }`}
-            type="button"
+          </IconButton>
+          <Button
             aria-expanded={filtersOpen}
+            className={styles.filterButton}
+            icon={
+              <SlidersHorizontal
+                aria-hidden="true"
+                size={17}
+                strokeWidth={1.6}
+              />
+            }
+            size="compact"
+            variant="secondary"
             onClick={onToggleFilters}
           >
-            <SlidersHorizontal aria-hidden="true" size={17} strokeWidth={1.6} />
-            <span>Filters</span>
-          </button>
+            Filters
+          </Button>
           {canCreateEvents ? (
-            <button
+            <Button
               aria-label="Event"
               className={styles.eventButton}
-              type="button"
+              icon={<Plus aria-hidden="true" size={18} strokeWidth={1.7} />}
+              size="compact"
               onClick={(event) => onCreateEvent(event.currentTarget)}
             >
-              <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
-              <span>Event</span>
-            </button>
+              Event
+            </Button>
           ) : null}
         </div>
       </div>

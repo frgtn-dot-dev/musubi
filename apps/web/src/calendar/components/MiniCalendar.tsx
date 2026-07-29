@@ -2,6 +2,8 @@ import type { Settings } from "@musubi/types";
 import { getMonthGrid } from "@musubi/calendar/layout";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { IconButton } from "~/ui/Button";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import styles from "./workspace.module.css";
@@ -90,9 +92,7 @@ export function MiniCalendar({
   return (
     <section className={styles.miniCalendar} aria-label={label}>
       <header className={styles.miniHeader}>
-        <button
-          aria-label="Previous month in date picker"
-          className={styles.iconButton}
+        <IconButton
           disabled={
             min
               ? toDateKey(
@@ -100,21 +100,20 @@ export function MiniCalendar({
                 ) < min
               : false
           }
-          type="button"
+          label="Previous month in date picker"
+          size="compact"
           onClick={() =>
             showMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
           }
         >
           <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.7} />
-        </button>
-        <h2 className={styles.sectionLabel}>
+        </IconButton>
+        <SectionLabel className={styles.miniTitle}>
           {/* Short month: the toolbar already spells the period out in full,
               and this one has seven columns to fit. */}
           {month.toLocaleDateString("en", { month: "short", year: "numeric" })}
-        </h2>
-        <button
-          aria-label="Next month in date picker"
-          className={styles.iconButton}
+        </SectionLabel>
+        <IconButton
           disabled={
             max
               ? toDateKey(
@@ -122,13 +121,14 @@ export function MiniCalendar({
                 ) > max
               : false
           }
-          type="button"
+          label="Next month in date picker"
+          size="compact"
           onClick={() =>
             showMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
           }
         >
           <ChevronRight aria-hidden="true" size={15} strokeWidth={1.7} />
-        </button>
+        </IconButton>
       </header>
 
       <div className={styles.miniGrid} role="grid">

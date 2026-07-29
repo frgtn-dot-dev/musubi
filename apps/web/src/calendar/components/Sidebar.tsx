@@ -1,6 +1,5 @@
 import {
   CalendarDays,
-  Check,
   CircleCheck,
   House,
   Layers3,
@@ -17,9 +16,19 @@ import type {
   Settings as UserSettings,
   User,
 } from "@musubi/types";
-import { useState, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { BrandMark } from "~/components/BrandMark";
 import { Avatar } from "~/ui/Avatar";
+import { IconButton } from "~/ui/Button";
+import { RowAction } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
+import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
 
@@ -34,12 +43,14 @@ type SidebarProps = {
   onManageAccount: () => void;
   onManageCalendars: () => void;
   onManageConnections: () => void;
+  onModalStateChange?: (modal: boolean) => void;
   onOpenSettings: () => void;
   onNotice: (message: string) => void;
   onPageChange: (pageId: string) => void;
   onSignOut: () => void;
   onToggleCalendar: (calendarId: string) => void;
   pages: PageDocument[];
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   syncLabel: string;
   user: Pick<User, "email" | "image" | "name">;
   visibleCalendarIds: string[];
@@ -67,6 +78,7 @@ export function Sidebar({
   onManageAccount,
   onManageCalendars,
   onManageConnections,
+  onModalStateChange,
   onOpenSettings,
   onNotice,
   onDateChange,
@@ -74,6 +86,7 @@ export function Sidebar({
   onSignOut,
   onToggleCalendar,
   pages,
+  returnFocusRef,
   syncLabel,
   user,
   visibleCalendarIds,
@@ -86,6 +99,44 @@ export function Sidebar({
     () => false,
   );
   const sidebarHidden = isMobile && !isOpen;
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const modal = isMobile && isOpen;
+    onModalStateChange?.(modal);
+    if (!modal) {
+      return;
+    }
+
+    const focusFrame = requestAnimationFrame(() =>
+      closeButtonRef.current?.focus(),
+    );
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onModalStateChange?.(false);
+      onClose();
+      requestAnimationFrame(() => returnFocusRef?.current?.focus());
+    };
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [
+    isMobile,
+    isOpen,
+    onClose,
+    onModalStateChange,
+    returnFocusRef,
+  ]);
+
+  function closeAndRestoreFocus() {
+    onModalStateChange?.(false);
+    onClose();
+    requestAnimationFrame(() => returnFocusRef?.current?.focus());
+  }
 
   return (
     <>
@@ -94,7 +145,7 @@ export function Sidebar({
           className={`${styles.sidebarBackdrop} ${styles.sidebarBackdropVisible}`}
           type="button"
           aria-label="Close navigation"
-          onClick={onClose}
+          onClick={closeAndRestoreFocus}
         />
       ) : null}
       <aside
@@ -108,14 +159,15 @@ export function Sidebar({
             <BrandMark className={styles.brandMark} />
             <span>MUSUBI</span>
           </div>
-          <button
-            className={`${styles.iconButton} ${styles.mobileClose}`}
-            type="button"
-            aria-label="Close navigation"
-            onClick={onClose}
+          <IconButton
+            className={styles.mobileClose}
+            label="Close navigation"
+            ref={closeButtonRef}
+            size="compact"
+            onClick={closeAndRestoreFocus}
           >
             <X aria-hidden="true" size={17} strokeWidth={1.7} />
-          </button>
+          </IconButton>
         </div>
 
         <div className={styles.sidebarScroll}>
@@ -125,9 +177,9 @@ export function Sidebar({
             weekStartsOn={weekStartsOn}
           />
           <nav className={styles.sidebarSection} aria-labelledby="pages-label">
-            <h2 className={styles.sectionLabel} id="pages-label">
+            <SectionLabel className={styles.sidebarSectionLabel} id="pages-label">
               Pages
-            </h2>
+            </SectionLabel>
             <div className={styles.pageList}>
               {pages.map((page) => (
                 <PageButton
@@ -141,16 +193,16 @@ export function Sidebar({
                   }}
                 />
               ))}
-              <button
-                className={styles.newPageButton}
-                type="button"
+              <RowAction
+                className={styles.sidebarRow}
+                icon={<Plus size={18} strokeWidth={1.5} />}
+                label="New page"
+                showChevron={false}
+                size="compact"
                 onClick={() =>
                   onNotice("Page templates will connect with the Pages API next.")
                 }
-              >
-                <Plus aria-hidden="true" size={18} strokeWidth={1.5} />
-                <span>New page</span>
-              </button>
+              />
             </div>
           </nav>
 
@@ -158,93 +210,85 @@ export function Sidebar({
             className={`${styles.sidebarSection} ${styles.calendarSection}`}
             aria-labelledby="calendars-label"
           >
-            <h2 className={styles.sectionLabel} id="calendars-label">
+            <SectionLabel
+              className={styles.sidebarSectionLabel}
+              id="calendars-label"
+            >
               Calendars
-            </h2>
+            </SectionLabel>
             <div className={styles.calendarList}>
               {calendars.map((calendar) => {
                 const checked = visibleCalendarIds.includes(calendar.id);
 
                 return (
-                  <label className={styles.calendarToggle} key={calendar.id}>
-                    <span
-                      className={styles.calendarDot}
-                      style={{ backgroundColor: calendar.color }}
-                    />
-                    <input
-                      checked={checked}
-                      type="checkbox"
-                      onChange={() => onToggleCalendar(calendar.id)}
-                    />
-                    <span
-                      className={`${styles.checkbox} ${
-                        checked ? styles.checkboxChecked : ""
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {checked ? <Check size={12} strokeWidth={2} /> : null}
-                    </span>
-                    <span>{calendar.name}</span>
-                  </label>
+                  <CalendarVisibilityRow
+                    calendar={calendar}
+                    key={calendar.id}
+                    visible={checked}
+                    onVisibleChange={() => onToggleCalendar(calendar.id)}
+                  />
                 );
               })}
             </div>
           </section>
+
+          <nav className={styles.sidebarUtilities} aria-label="Manage Musubi">
+            <RowAction
+              className={styles.sidebarRow}
+              icon={<Layers3 size={18} strokeWidth={1.6} />}
+              label="Calendars"
+              showChevron={false}
+              size="compact"
+              onClick={onManageCalendars}
+            />
+            <RowAction
+              className={styles.sidebarRow}
+              icon={<Link2 size={18} strokeWidth={1.6} />}
+              label="Connections"
+              showChevron={false}
+              size="compact"
+              onClick={onManageConnections}
+            />
+            <RowAction
+              className={styles.sidebarRow}
+              icon={<Settings size={18} strokeWidth={1.6} />}
+              label="Settings"
+              showChevron={false}
+              size="compact"
+              onClick={onOpenSettings}
+            />
+          </nav>
         </div>
 
-        <nav className={styles.sidebarFooter} aria-label="Manage Musubi">
-          <button
-            type="button"
-            onClick={onManageCalendars}
-          >
-            <Layers3 aria-hidden="true" size={18} strokeWidth={1.6} />
-            <span>Calendars</span>
-          </button>
-          <button
-            type="button"
-            onClick={onManageConnections}
-          >
-            <Link2 aria-hidden="true" size={18} strokeWidth={1.6} />
-            <span>Connections</span>
-          </button>
-          <button
-            type="button"
-            onClick={onOpenSettings}
-          >
-            <Settings aria-hidden="true" size={18} strokeWidth={1.6} />
-            <span>Settings</span>
-          </button>
+        <footer className={styles.sidebarFooter}>
           <p className={styles.syncStatus}>
             <CircleCheck aria-hidden="true" size={15} strokeWidth={1.6} />
             {syncLabel}
           </p>
           <div className={styles.profile}>
-            <button
+            <RowAction
               className={styles.profileMain}
-              type="button"
               aria-label="Manage account"
+              detail={user.email}
+              icon={<Avatar image={user.image} name={user.name} size={32} />}
+              label={user.name}
+              showChevron={false}
               onClick={onManageAccount}
-            >
-              <Avatar image={user.image} name={user.name} size={32} />
-              <span className={styles.profileCopy}>
-                <strong>{user.name}</strong>
-                <span>{user.email}</span>
-              </span>
-            </button>
-            <button
+            />
+            <IconButton
               className={styles.profileSignOut}
               disabled={signingOut}
-              type="button"
-              aria-label={`Sign out ${user.name}`}
+              label={`Sign out ${user.name}`}
+              size="compact"
               onClick={() => {
                 setSigningOut(true);
                 onSignOut();
               }}
             >
               <LogOut aria-hidden="true" size={16} strokeWidth={1.6} />
-            </button>
+            </IconButton>
           </div>
-        </nav>
+        </footer>
       </aside>
     </>
   );
@@ -262,14 +306,15 @@ function PageButton({
   onSelect: () => void;
 }) {
   return (
-    <button
-      className={`${styles.pageButton} ${active ? styles.pageButtonActive : ""}`}
-      type="button"
+    <RowAction
+      className={styles.sidebarRow}
       aria-current={active ? "page" : undefined}
+      data-selected={active ? "" : undefined}
+      icon={<Icon size={18} strokeWidth={1.6} />}
+      label={name}
+      showChevron={false}
+      size="compact"
       onClick={onSelect}
-    >
-      <Icon aria-hidden="true" size={18} strokeWidth={1.6} />
-      <span>{name}</span>
-    </button>
+    />
   );
 }

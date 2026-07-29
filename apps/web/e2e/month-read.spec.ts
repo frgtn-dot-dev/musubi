@@ -493,10 +493,7 @@ test("reads, filters and signs out of the authenticated Month", async ({
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await page
-    .locator("label")
-    .filter({ has: page.getByRole("checkbox", { name: "Studio" }) })
-    .click();
+  await page.getByRole("switch", { name: "Studio" }).click();
   await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Event", exact: true }).click();
@@ -543,8 +540,8 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
   await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
   await expect(page.getByText("From Jul 26, 2026")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Agenda", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("radio", { name: "Agenda", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
   // The DOM stays bounded even though Agenda is one continuous two-year
   // timeline. How many batches fit depends on the viewport, so this asserts
   // the bound rather than one exact batch.
@@ -582,10 +579,7 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
   ).toHaveCount(0);
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 
-  await page
-    .locator("label")
-    .filter({ has: page.getByRole("checkbox", { name: "Family" }) })
-    .click();
+  await page.getByRole("switch", { name: "Family" }).click();
   await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(0);
 
   await expectNoAccessibilityViolations(page);
@@ -603,8 +597,8 @@ test("renders and navigates the authenticated Week time grid", async ({
 
   await expect(page.getByText("Jul 20 – 26, 2026")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Week", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("radio", { name: "Week", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("[data-time-grid-day]")).toHaveCount(7);
   await expect(
     page.getByRole("button", { name: /All-day event, Family holiday/ }),
@@ -631,8 +625,8 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 
   await expect(page.getByText("Thursday, July 23, 2026")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Day", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("radio", { name: "Day", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("[data-time-grid-day]")).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Project check-in/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Partner call/ })).toHaveCount(1);
@@ -1013,15 +1007,12 @@ test("exports and imports iCalendar files from calendar management", async ({
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Imported 1 event into Roadmap.",
   );
-  const importedCalendar = page.getByRole("checkbox", {
+  const importedCalendar = page.getByRole("switch", {
     name: "Roadmap",
   });
-  const importedCalendarRow = page
-    .locator("label")
-    .filter({ has: importedCalendar });
-  await importedCalendarRow.scrollIntoViewIfNeeded();
-  await expect(importedCalendar).toBeChecked();
-  await expect(importedCalendarRow).toContainText("Roadmap");
+  await importedCalendar.scrollIntoViewIfNeeded();
+  await expect(importedCalendar).toHaveAttribute("aria-checked", "true");
+  await expect(importedCalendar).toContainText("Roadmap");
   expect(runtimeErrors).toEqual([]);
 });
 
@@ -1509,13 +1500,18 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await expect(
-    page.getByRole("checkbox", { name: "Studio" }),
-  ).toBeChecked();
+    page.getByRole("switch", { name: "Studio" }),
+  ).toHaveAttribute("aria-checked", "true");
 
   await page.getByRole("button", { name: "Edit page" }).click();
-  // The real checkbox is visually collapsed; toggle it through its label text.
-  await page.getByText("Studio", { exact: true }).click();
-  await expect(page.getByText("Unsaved page changes")).toBeVisible();
+  await page.getByRole("switch", { name: "Studio" }).click();
+  const saveBar = page.getByRole("region", {
+    name: "Unsaved page changes",
+  });
+  await expect(saveBar).toBeVisible();
+  await saveBar.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
@@ -1528,8 +1524,8 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
   });
   // Read mode now reflects the saved visibility.
   await expect(
-    page.getByRole("checkbox", { name: "Studio" }),
-  ).not.toBeChecked();
+    page.getByRole("switch", { name: "Studio" }),
+  ).toHaveAttribute("aria-checked", "false");
 });
 
 test("surfaces a page save conflict without overwriting", async ({ page }) => {
@@ -1552,8 +1548,7 @@ test("surfaces a page save conflict without overwriting", async ({ page }) => {
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await page.getByRole("button", { name: "Edit page" }).click();
-  // The real checkbox is visually collapsed; toggle it through its label text.
-  await page.getByText("Studio", { exact: true }).click();
+  await page.getByRole("switch", { name: "Studio" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(
@@ -2177,8 +2172,8 @@ test("shows federated calendars and reports an unreachable server", async ({
 
   // The remote calendar and its event render like any other.
   await expect(
-    page.getByRole("checkbox", { name: "Book club" }),
-  ).toBeChecked();
+    page.getByRole("switch", { name: "Book club" }),
+  ).toHaveAttribute("aria-checked", "true");
   await expect(
     page.getByRole("button", { name: /Book club meetup/ }),
   ).toBeVisible();
@@ -2381,8 +2376,8 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await expect(
-    page.getByRole("checkbox", { name: "Book club" }),
-  ).toBeChecked();
+    page.getByRole("switch", { name: "Book club" }),
+  ).toHaveAttribute("aria-checked", "true");
 
   // The remote calendar is renamed on its own server; our server relays the
   // change as federated_sync and the snapshot refetches.
@@ -2402,8 +2397,8 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
   });
 
   await expect(
-    page.getByRole("checkbox", { name: "Book club (Thursdays)" }),
-  ).toBeChecked();
+    page.getByRole("switch", { name: "Book club (Thursdays)" }),
+  ).toHaveAttribute("aria-checked", "true");
 });
 
 test("joins a calendar from a pasted cross-server invite link", async ({
@@ -3135,6 +3130,84 @@ test("keeps the page name and theme out of the calendar chrome", async ({
   await expect(page.getByLabel("Page name")).toHaveValue("My calendar");
   await page.getByRole("button", { name: "Finish editing page" }).click();
   await expect(page.getByLabel("Page name")).toHaveCount(0);
+});
+
+test("keeps calendar chrome consistent and keyboard operable", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const navigation = page.getByRole("complementary", {
+    name: "Workspace navigation",
+  });
+  const filters = page.getByRole("button", { name: "Filters" });
+  await filters.click();
+
+  const shelf = page.getByRole("region", { name: "Visible calendars" });
+  await expect(shelf).toBeVisible();
+  const sidebarStudio = navigation.getByRole("switch", { name: "Studio" });
+  const shelfStudio = shelf.getByRole("switch", { name: "Studio" });
+  await expect(sidebarStudio).toHaveAttribute("aria-checked", "true");
+  await expect(shelfStudio).toHaveAttribute("aria-checked", "true");
+
+  await shelfStudio.click();
+  await expect(sidebarStudio).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(
+    0,
+  );
+
+  const month = page.getByRole("radio", { name: "Month" });
+  await month.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(
+    `/app/p/${DEFAULT_PAGE_ID}/agenda?date=2026-07-26`,
+  );
+  await expect(
+    page.getByRole("radio", { name: "Agenda" }),
+  ).toHaveAttribute("aria-checked", "true");
+  await expectNoAccessibilityViolations(page);
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("moves focus through the mobile navigation drawer", async ({ page }) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const main = page.locator("main#main-content");
+  const trigger = page.getByRole("button", { name: "Open navigation" });
+  await trigger.click();
+
+  const navigation = page.getByRole("complementary", {
+    name: "Workspace navigation",
+  });
+  const close = navigation.getByRole("button", { name: "Close navigation" });
+  await expect(close).toBeFocused();
+  await expect(main).toHaveAttribute("inert", "");
+  await navigation.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const studio = navigation.getByRole("switch", { name: "Studio" });
+  const studioBox = (await studio.boundingBox())!;
+  expect(studioBox.height).toBeGreaterThanOrEqual(44);
+  await expectNoAccessibilityViolations(page);
+
+  // Resizing to desktop must never leave the calendar inert behind a drawer
+  // that no longer behaves as a modal layer.
+  await page.setViewportSize({ height: 720, width: 1280 });
+  await expect(main).not.toHaveAttribute("inert", "");
+  await page.setViewportSize({ height: 720, width: 390 });
+  await expect(close).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(main).not.toHaveAttribute("inert", "");
+  await expect(trigger).toBeFocused();
 });
 
 test("leaves a draft on the grid that can be moved before saving", async ({

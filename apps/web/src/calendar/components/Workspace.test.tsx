@@ -68,12 +68,12 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} />);
 
-    const studioToggle = screen.getByRole("checkbox", { name: "Studio" });
-    expect((studioToggle as HTMLInputElement).checked).toBe(true);
+    const studioToggle = screen.getByRole("switch", { name: "Studio" });
+    expect(studioToggle.getAttribute("aria-checked")).toBe("true");
 
     await user.click(studioToggle);
 
-    expect((studioToggle as HTMLInputElement).checked).toBe(false);
+    expect(studioToggle.getAttribute("aria-checked")).toBe("false");
     expect(screen.queryByRole("button", { name: /Quarterly planning/ })).toBeNull();
   });
 
@@ -97,7 +97,7 @@ describe("Workspace", () => {
     expect(screen.queryByText("Unsaved page changes")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Edit page" }));
-    await user.click(screen.getByRole("checkbox", { name: "Studio" }));
+    await user.click(screen.getByRole("switch", { name: "Studio" }));
 
     expect(screen.getByText("Unsaved page changes")).not.toBeNull();
 
@@ -123,16 +123,17 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
     await user.click(screen.getByRole("button", { name: "Edit page" }));
-    await user.click(screen.getByRole("checkbox", { name: "Studio" }));
+    await user.click(screen.getByRole("switch", { name: "Studio" }));
     await user.click(screen.getByRole("button", { name: "Discard" }));
 
     expect(onSavePage).not.toHaveBeenCalled();
     expect(screen.queryByText("Unsaved page changes")).toBeNull();
     // Back in read mode the calendar is visible again (draft dropped).
     expect(
-      (screen.getByRole("checkbox", { name: "Studio" }) as HTMLInputElement)
-        .checked,
-    ).toBe(true);
+      screen
+        .getByRole("switch", { name: "Studio" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
   });
 
   it("filters visible server events through the toolbar search", async () => {
@@ -174,7 +175,7 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onViewChange={onViewChange} />);
 
-    await user.click(screen.getByRole("button", { name: "Agenda" }));
+    await user.click(screen.getByRole("radio", { name: "Agenda" }));
 
     expect(onViewChange).toHaveBeenCalledWith("agenda");
   });

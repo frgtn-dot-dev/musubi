@@ -147,11 +147,7 @@
 
 .calendarSection {
   margin-top: auto;
-  padding-bottom: 24px;
-}
-
-.sectionLabel {
-  composes: sectionLabel from "./styles/primitives.module.css";
+  padding-bottom: 8px;
 }
 
 .pageList,
@@ -160,71 +156,13 @@
   gap: 3px;
 }
 
-.pageButton,
-.newPageButton {
-  display: grid;
-  width: 100%;
-  min-height: 40px;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.86rem;
-  text-align: left;
-  transition:
-    color var(--motion-fast) ease,
-    background var(--motion-fast) ease;
+.sidebarSectionLabel {
+  margin: 0 8px 10px;
 }
 
-.pageButton:hover,
-.newPageButton:hover {
-  background: color-mix(in srgb, var(--surface-raised) 70%, transparent);
-  color: var(--text-primary);
-}
-
-.pageButtonActive {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-}
-
-.pageDirtyDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-}
-
-.newPageButton {
-  grid-template-columns: 22px minmax(0, 1fr);
-  color: var(--text-muted);
-}
-
-.calendarToggle {
-  display: grid;
-  min-height: 37px;
-  grid-template-columns: 8px 0 18px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 0 9px;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.84rem;
-}
-
-.calendarToggle:hover {
-  background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
-}
-
-.calendarToggle input {
-  width: 0;
-  height: 0;
-  margin: 0;
-  opacity: 0;
+.sidebarRow,
+.calendarVisibilityRow {
+  flex: none;
 }
 
 .calendarDot {
@@ -235,45 +173,23 @@
   border-radius: 50%;
 }
 
-.checkbox {
-  composes: checkbox from "./styles/primitives.module.css";
-}
-
-.checkboxChecked {
-  composes: checkboxChecked from "./styles/primitives.module.css";
-}
-
 .sidebarFooter {
   display: grid;
-  gap: 2px;
-  padding: 12px 14px 18px;
+  padding: 10px 14px 18px;
   border-top: 1px solid var(--border-subtle);
 }
 
-.sidebarFooter button {
-  display: flex;
-  min-height: 39px;
-  align-items: center;
-  gap: 11px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.84rem;
-  text-align: left;
-}
-
-.sidebarFooter button:hover {
-  background: var(--surface-raised);
-  color: var(--text-primary);
+.sidebarUtilities {
+  display: grid;
+  gap: 2px;
+  padding: 0 14px 14px;
 }
 
 .syncStatus {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 14px 10px 0;
+  margin: 0 10px;
   color: var(--text-faint);
   font-size: 0.69rem;
 }
@@ -281,66 +197,22 @@
 .profile {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 38px;
   align-items: center;
   gap: 9px;
-  margin-top: 12px;
-  padding: 11px 8px 0;
+  margin-top: 9px;
+  padding: 9px 0 0;
   border-top: 1px solid var(--border-subtle);
 }
 
 .profileMain {
-  display: grid;
   min-width: 0;
-  grid-template-columns: 32px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  padding: 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
+  padding-inline: 8px;
+  border-radius: var(--radius-control);
 }
 
-.profileMain:hover .profileCopy strong {
-  color: var(--accent-primary);
-}
-
-.profileCopy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.profileCopy strong,
-.profileCopy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profileCopy strong {
-  color: var(--text-primary);
-  font-size: 0.73rem;
-  font-weight: 500;
-}
-
-.profileCopy span {
-  color: var(--text-faint);
-  font-size: 0.62rem;
-}
-
-.sidebarFooter .profileSignOut {
-  width: 34px;
-  min-height: 34px;
-  justify-content: center;
-  padding: 0;
+.profileSignOut {
   color: var(--text-muted);
-}
-
-.profileSignOut:disabled {
-  cursor: wait;
-  opacity: 0.5;
 }
 
 .sidebarBackdrop {
@@ -359,15 +231,28 @@
   background: color-mix(in srgb, var(--surface-canvas) 96%, transparent);
 }
 
-/* Only rendered while editing a page: the row that carries the rename field. */
+/* Page-specific presentation controls stay in their own edit strip, keeping
+   the date and event actions stable while a draft is being configured. */
 .toolbarTop {
   display: flex;
+  min-width: 0;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
   padding: 10px 24px 0 28px;
+}
+
+.pageEditOptions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 
 .presentationToggle {
   display: inline-flex;
+  min-height: 38px;
   align-items: center;
   gap: var(--space-1);
   color: var(--text-secondary);
@@ -437,44 +322,8 @@
   composes: iconButton from "./styles/primitives.module.css";
 }
 
-.secondaryButton {
-  composes: secondaryButton from "./styles/primitives.module.css";
-}
-
-.primaryButton {
-  composes: primaryButton from "./styles/primitives.module.css";
-}
-
-.textButton {
-  composes: textButton from "./styles/primitives.module.css";
-}
-
 .eventButton {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 13px;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 400;
-  transition:
-    background var(--motion-fast) ease,
-    border-color var(--motion-fast) ease,
-    color var(--motion-fast) ease,
-    transform var(--motion-fast) ease;
-  border-color: var(--control-fill);
-  background: var(--control-fill);
-  color: var(--control-on-fill);
-}
-
-.eventButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 5px 16px rgb(0 0 0 / 10%);
+  flex: none;
 }
 
 .sidebarMenuButton {
@@ -508,39 +357,11 @@
 }
 
 .viewSwitcher {
-  display: flex;
-  overflow: hidden;
   justify-self: center;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
 }
 
-.viewButton {
+.viewSwitcher > button {
   min-width: 66px;
-  min-height: 38px;
-  padding: 0 15px;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-}
-
-.viewButton + .viewButton {
-  border-left: 1px solid var(--border-subtle);
-}
-
-.viewButton:hover {
-  color: var(--text-primary);
-}
-
-.viewButtonActive {
-  background: var(--surface-raised);
-  box-shadow: 0 2px 9px rgb(0 0 0 / 7%);
-  color: var(--text-primary);
-}
-
-.viewButtonPlanned:not(.viewButtonActive) {
-  color: var(--text-secondary);
 }
 
 .searchField {
@@ -582,47 +403,35 @@
   color: var(--text-faint);
 }
 
-.buttonSelected {
-  border-color: var(--border-strong);
-  background: var(--surface-raised);
-  color: var(--text-primary);
-}
-
 .filterBar {
-  display: flex;
+  display: grid;
   min-height: 51px;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  overflow-x: auto;
+  gap: var(--space-3);
   padding: 7px 28px;
   border-bottom: 1px solid var(--border-subtle);
-  scrollbar-width: none;
 }
 
-.filterBar > span {
-  margin-right: 4px;
-  color: var(--text-muted);
-  font-size: 0.7rem;
+.filterBarLabel {
+  margin: 0;
   white-space: nowrap;
 }
 
-.filterBar button {
-  display: inline-flex;
-  min-height: 30px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 7px;
-  padding: 0 11px;
-  border: 1px solid var(--border-medium);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.71rem;
+.filterCalendarList {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.filterBar .filterChipActive {
-  background: var(--surface-raised);
-  color: var(--text-primary);
+.filterCalendarList > .calendarVisibilityRow {
+  width: auto;
+  min-width: 168px;
+  flex: none;
+  border: 1px solid var(--border-medium);
+  background: color-mix(in srgb, var(--surface-panel) 72%, transparent);
 }
 
 .calendarArea {
@@ -1824,6 +1633,18 @@
   animation: save-bar-in var(--motion-standard) ease both;
 }
 
+.saveBar[data-tone="warning"] {
+  border-color: color-mix(
+    in srgb,
+    var(--accent-primary) 45%,
+    var(--border-medium)
+  );
+}
+
+.saveBar[data-tone="warning"] .saveBarIcon {
+  color: var(--accent-primary);
+}
+
 @keyframes save-bar-in {
   from {
     opacity: 0;
@@ -1906,7 +1727,7 @@
     opacity: 1;
   }
 
-  .viewButton {
+  .viewSwitcher > button {
     min-width: 58px;
     padding: 0 11px;
   }
@@ -1928,7 +1749,7 @@
     justify-self: stretch;
   }
 
-  .viewButton {
+  .viewSwitcher > button {
     flex: 1;
   }
 
@@ -1936,7 +1757,7 @@
     min-width: 0;
   }
 
-  .toolbarActions .secondaryButton span {
+  .filterButton > span:last-child {
     display: none;
   }
 
@@ -1993,7 +1814,14 @@
   }
 
   .toolbarTop {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) auto;
     padding: 8px 14px 0;
+  }
+
+  .pageEditOptions {
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .toolbarControls {
@@ -2009,17 +1837,17 @@
 
   /* Today stays: R12 keeps range and navigation above everything that follows,
      and there is room for it next to the arrows. Only its padding gives way. */
-  .dateControls > .secondaryButton {
+  .todayButton {
     padding: 0 11px;
     font-size: 0.74rem;
   }
 
   .toolbarActions .searchField,
-  .toolbarActions > .secondaryButton {
+  .filterButton {
     display: none;
   }
 
-  .eventButton span {
+  .eventButton > span:last-child {
     display: none;
   }
 
@@ -2097,7 +1925,7 @@
   }
 
   .saveBarCopy span,
-  .saveBarActions .secondaryButton {
+  .saveBarSecondaryAction {
     display: none;
   }
 
@@ -2108,6 +1936,20 @@
 }
 
 @media (max-width: 520px) {
+  .toolbarTop {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .pageNameInput {
+    width: 100%;
+    max-width: none;
+  }
+
+  .pageEditOptions {
+    justify-content: flex-start;
+  }
+
   .toolbarControls {
     gap: 8px;
   }
@@ -2253,7 +2095,7 @@
   }
 
   /* Last in the R12 keep-order, so it is what gives up its labels first. */
-  .viewButton {
+  .viewSwitcher > button {
     min-width: 0;
     padding: 0 6px;
     font-size: 0.7rem;

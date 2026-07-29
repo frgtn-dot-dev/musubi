@@ -17,6 +17,8 @@ type RowContentProps = {
   value?: ReactNode;
 };
 
+export type RowSize = "compact" | "default";
+
 function RowContent({
   detail,
   icon,
@@ -41,19 +43,30 @@ function RowContent({
   );
 }
 
-export type RowProps = HTMLAttributes<HTMLDivElement> & RowContentProps;
+export type RowProps = HTMLAttributes<HTMLDivElement> &
+  RowContentProps & {
+    size?: RowSize;
+  };
 
 export function Row({
   className,
   detail,
   icon,
   label,
+  size = "default",
   trailing,
   value,
   ...rowProps
 }: RowProps) {
   return (
-    <div {...rowProps} className={classNames(styles.row, className)}>
+    <div
+      {...rowProps}
+      className={classNames(
+        styles.row,
+        size === "compact" && styles.row_compact,
+        className,
+      )}
+    >
       <RowContent
         detail={detail}
         icon={icon}
@@ -71,6 +84,7 @@ export type RowActionProps = Omit<
 > &
   Omit<RowContentProps, "trailing"> & {
     showChevron?: boolean;
+    size?: RowSize;
     trailing?: ReactNode;
   };
 
@@ -82,6 +96,7 @@ export const RowAction = forwardRef<HTMLButtonElement, RowActionProps>(
       icon,
       label,
       showChevron = true,
+      size = "default",
       trailing,
       type = "button",
       value,
@@ -92,7 +107,12 @@ export const RowAction = forwardRef<HTMLButtonElement, RowActionProps>(
     return (
       <button
         {...buttonProps}
-        className={classNames(styles.row, styles.rowAction, className)}
+        className={classNames(
+          styles.row,
+          styles.rowAction,
+          size === "compact" && styles.row_compact,
+          className,
+        )}
         ref={ref}
         type={type}
       >
@@ -120,6 +140,7 @@ export type RowToggleProps = Omit<
   Omit<RowContentProps, "trailing" | "value"> & {
     checked: boolean;
     onCheckedChange: (checked: boolean) => void;
+    size?: RowSize;
   };
 
 export function RowToggle({
@@ -130,6 +151,7 @@ export function RowToggle({
   icon,
   label,
   onCheckedChange,
+  size = "default",
   type = "button",
   ...buttonProps
 }: RowToggleProps) {
@@ -137,7 +159,12 @@ export function RowToggle({
     <button
       {...buttonProps}
       aria-checked={checked}
-      className={classNames(styles.row, styles.rowAction, className)}
+      className={classNames(
+        styles.row,
+        styles.rowAction,
+        size === "compact" && styles.row_compact,
+        className,
+      )}
       disabled={disabled}
       role="switch"
       type={type}
@@ -161,6 +188,7 @@ export type RowOptionsProps<Value extends string> = Omit<
     disabled?: boolean;
     onChange: (value: Value) => void;
     options: ReadonlyArray<SegmentedOption<Value>>;
+    size?: RowSize;
     value: Value;
   };
 
@@ -172,13 +200,21 @@ export function RowOptions<Value extends string>({
   label,
   onChange,
   options,
+  size = "default",
   value,
   ...rowProps
 }: RowOptionsProps<Value>) {
   const accessibleLabel = typeof label === "string" ? label : "Options";
 
   return (
-    <div {...rowProps} className={classNames(styles.row, className)}>
+    <div
+      {...rowProps}
+      className={classNames(
+        styles.row,
+        size === "compact" && styles.row_compact,
+        className,
+      )}
+    >
       <RowContent detail={detail} icon={icon} label={label} />
       <Segmented
         className={styles.rowOptions}

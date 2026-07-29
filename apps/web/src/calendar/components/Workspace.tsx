@@ -23,6 +23,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { getAgendaLabel } from "../agenda-math";
 import {
   getEventRangeLabel,
@@ -47,6 +48,7 @@ import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
+import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
@@ -234,6 +236,8 @@ export function Workspace({
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarModal, setSidebarModal] = useState(false);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const [notice, setNotice] = useState<{
     message: string;
     undo?: () => Promise<unknown> | void;
@@ -353,6 +357,7 @@ export function Workspace({
   // The event a time write is in flight for. One gesture at a time, so one id.
   const [busyEventId, setBusyEventId] = useState<string>();
   const searchRef = useRef<HTMLInputElement>(null);
+  const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
@@ -745,7 +750,7 @@ export function Workspace({
         calendars={calendars}
         pages={pages}
         isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={closeSidebar}
         onDateChange={(nextDate) => {
           onDateChange(nextDate);
           setSidebarOpen(false);
@@ -762,6 +767,7 @@ export function Workspace({
           setSidebarOpen(false);
           setConnectionsOpen(true);
         }}
+        onModalStateChange={setSidebarModal}
         onOpenSettings={() => {
           setSidebarOpen(false);
           setSettingsOpen(true);
@@ -770,6 +776,7 @@ export function Workspace({
         onPageChange={guardedPageChange}
         onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
+        returnFocusRef={sidebarTriggerRef}
         syncLabel={
           isRefreshing ? "Refreshing server data…" : "Connected to server"
         }
@@ -778,7 +785,12 @@ export function Workspace({
         visibleCalendarIds={visibleCalendarIds}
       />
 
-      <main className={styles.main} id="main-content" ref={mainRef}>
+      <main
+        className={styles.main}
+        id="main-content"
+        inert={sidebarModal ? true : undefined}
+        ref={mainRef}
+      >
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
@@ -786,6 +798,7 @@ export function Workspace({
           draftName={draftName}
           editing={editing}
           filtersOpen={filtersOpen}
+          navigationTriggerRef={sidebarTriggerRef}
           onDraftDensityChange={(density) =>
             setDraftView((current) =>
               "density" in current ? { ...current, density } : current,
@@ -815,7 +828,6 @@ export function Workspace({
           onToggleEdit={editing ? stopEditing : startEditing}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
           onPeriodChange={changePeriod}
-          onNotice={notify}
           onOpenSidebar={() => setSidebarOpen(true)}
           onSearch={setSearchQuery}
           onToday={() => onDateChange(toDateKey(new Date()))}
@@ -830,31 +842,27 @@ export function Workspace({
         />
 
         {filtersOpen ? (
-          <div
+          <section
             className={styles.filterBar}
-            aria-label="Active calendar filters"
+            aria-labelledby="calendar-filter-label"
           >
-            <span>Visible calendars</span>
-            {calendars.map((calendar) => {
-              const active = visibleCalendarIds.includes(calendar.id);
-
-              return (
-                <button
-                  className={active ? styles.filterChipActive : ""}
-                  type="button"
-                  aria-pressed={active}
+            <SectionLabel
+              className={styles.filterBarLabel}
+              id="calendar-filter-label"
+            >
+              Visible calendars
+            </SectionLabel>
+            <div className={styles.filterCalendarList}>
+              {calendars.map((calendar) => (
+                <CalendarVisibilityRow
+                  calendar={calendar}
                   key={calendar.id}
-                  onClick={() => handleToggleCalendar(calendar.id)}
-                >
-                  <span
-                    className={styles.calendarDot}
-                    style={{ backgroundColor: calendar.color }}
-                  />
-                  {calendar.name}
-                </button>
-              );
-            })}
-          </div>
+                  visible={visibleCalendarIds.includes(calendar.id)}
+                  onVisibleChange={() => handleToggleCalendar(calendar.id)}
+                />
+              ))}
+            </div>
+          </section>
         ) : null}
 
         <div className={styles.calendarArea}>
@@ -977,41 +985,15 @@ export function Workspace({
           )}
         </div>
 
-        {pageConflict ? (
-          <div className={styles.saveBar} role="alert">
-            <div className={styles.saveBarCopy}>
-              <strong>This page changed on another device</strong>
-              <span>
-                Your edits weren’t saved. Keep them as a new page, or discard
-                them and use the latest version.
-              </span>
-            </div>
-            <div className={styles.saveBarActions}>
-              <button
-                className={styles.secondaryButton}
-                disabled={savingPage}
-                type="button"
-                onClick={discardEditing}
-              >
-                Discard my changes
-              </button>
-              <button
-                className={styles.primaryButton}
-                disabled={savingPage}
-                type="button"
-                onClick={() => void savePageAsNew()}
-              >
-                Save as a copy
-              </button>
-            </div>
-          </div>
-        ) : editing ? (
+        {editing ? (
           <SaveBar
+            conflict={pageConflict}
             dirty={pageDirty}
             onDiscard={discardEditing}
             onDismiss={discardEditing}
             onSave={() => void savePageChanges()}
             onSaveAsNew={() => void savePageAsNew()}
+            saving={savingPage}
           />
         ) : null}
 
