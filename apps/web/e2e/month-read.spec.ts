@@ -574,6 +574,59 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
   await expectNoAccessibilityViolations(page);
 });
 
+test("keeps a compact Month fixed and folds excess events into More", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 800, height: 720 });
+  const crowdedEvents = Array.from({ length: 5 }, (_, index) =>
+    event(
+      `crowded-${index}`,
+      `Crowded event ${index + 1}`,
+      "personal",
+      "#b3492f",
+      `2026-07-23T${String(9 + index).padStart(2, "0")}:00:00.000Z`,
+      `2026-07-23T${String(10 + index).padStart(2, "0")}:00:00.000Z`,
+    ),
+  );
+  await mockAuthenticatedReads(page, {
+    ...events,
+    events: crowdedEvents,
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const area = page.locator("[data-calendar-area]");
+  const month = page.getByRole("grid", { name: "July 2026 calendar" });
+  const crowdedDay = page.locator('[data-day-key="2026-07-23"]');
+  await expect(month).toHaveAttribute("data-event-capacity", "2");
+  await expect(crowdedDay.locator("[data-event-id]")).toHaveCount(1);
+  await crowdedDay.getByRole("button", { name: "+4 more" }).click();
+  const overflowDialog = page.getByRole("dialog", {
+    name: "Thursday, July 23, 2026 events",
+  });
+  await expect(overflowDialog).toBeVisible();
+  await expect(overflowDialog.locator("[data-event-id]")).toHaveCount(5);
+  await overflowDialog.evaluate(async (element) => {
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    );
+  });
+  await expectNoAccessibilityViolations(page);
+  await overflowDialog
+    .getByRole("button", { name: /Crowded event 1/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Crowded event 1" }),
+  ).toBeVisible();
+  expect(
+    await area.evaluate(
+      (element) => element.scrollHeight - element.clientHeight,
+    ),
+  ).toBeLessThanOrEqual(1);
+});
+
 test("reads, filters and continuously loads the authenticated Agenda", async ({
   page,
 }) => {
@@ -1656,6 +1709,72 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Your calendars" }),
   ).toBeVisible();
+  const calendarDialog = page.getByRole("dialog", { name: "Calendars" });
+  const newName = calendarDialog.getByPlaceholder("New calendar");
+  const newColor = calendarDialog.getByRole("button", {
+    name: /New calendar color:/,
+  });
+  const add = calendarDialog.getByRole("button", { name: "Add" });
+  const [nameBox, colorBox, addBox] = await Promise.all([
+    newName.boundingBox(),
+    newColor.boundingBox(),
+    add.boundingBox(),
+  ]);
+  expect(nameBox).not.toBeNull();
+  expect(colorBox).not.toBeNull();
+  expect(addBox).not.toBeNull();
+  expect(Math.abs(nameBox!.y - colorBox!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(colorBox!.y - addBox!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(nameBox!.height - colorBox!.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(colorBox!.height - addBox!.height)).toBeLessThanOrEqual(1);
+
+  const sourceIcon = calendarDialog.locator('[data-provider="musubi"]').first();
+  const calendarSwatch = calendarDialog.locator("[data-calendar-swatch]").first();
+  const [sourceBox, swatchBox] = await Promise.all([
+    sourceIcon.boundingBox(),
+    calendarSwatch.boundingBox(),
+  ]);
+  expect(sourceBox).not.toBeNull();
+  expect(swatchBox).not.toBeNull();
+  expect(
+    Math.abs(
+      sourceBox!.x +
+        sourceBox!.width / 2 -
+        (swatchBox!.x + swatchBox!.width / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
+
+  const exportSelect = calendarDialog.getByRole("combobox", {
+    name: "Calendar to export",
+  });
+  const fileControl = calendarDialog.locator("[data-calendar-file-control]");
+  const exportButton = calendarDialog.getByRole("button", {
+    name: "Export .ics",
+  });
+  const importButton = calendarDialog.getByRole("button", {
+    name: "Import",
+    exact: true,
+  });
+  const [exportSelectBox, fileControlBox, exportButtonBox, importButtonBox] =
+    await Promise.all([
+      exportSelect.boundingBox(),
+      fileControl.boundingBox(),
+      exportButton.boundingBox(),
+      importButton.boundingBox(),
+    ]);
+  expect(exportSelectBox).not.toBeNull();
+  expect(fileControlBox).not.toBeNull();
+  expect(exportButtonBox).not.toBeNull();
+  expect(importButtonBox).not.toBeNull();
+  expect(
+    Math.abs(exportSelectBox!.y - fileControlBox!.y),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(exportButtonBox!.y - importButtonBox!.y),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(exportButtonBox!.height - importButtonBox!.height),
+  ).toBeLessThanOrEqual(1);
 
   // Create
   await page.getByPlaceholder("New calendar").fill("Travel");
@@ -2218,8 +2337,15 @@ test("shows federated calendars and reports an unreachable server", async ({
   await expect(
     page.getByRole("switch", { name: "Book club" }),
   ).toHaveAttribute("aria-checked", "true");
+  await page
+    .locator('[data-day-key="2026-07-23"]')
+    .getByRole("button", { name: /\+\d+ more/ })
+    .click();
+  const dayEvents = page.getByRole("dialog", {
+    name: "Thursday, July 23, 2026 events",
+  });
   await expect(
-    page.getByRole("button", { name: /Book club meetup/ }),
+    dayEvents.getByRole("button", { name: /Book club meetup/ }),
   ).toBeVisible();
   // A dead server must not take the home calendar down with it.
   await expect(
@@ -2316,7 +2442,16 @@ test("routes federated event writes through the gateway", async ({ page }) => {
   );
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-  await page.getByRole("button", { name: /Book club meetup/ }).click();
+  await page
+    .locator('[data-day-key="2026-07-23"]')
+    .getByRole("button", { name: /\+\d+ more/ })
+    .click();
+  await page
+    .getByRole("dialog", {
+      name: "Thursday, July 23, 2026 events",
+    })
+    .getByRole("button", { name: /Book club meetup/ })
+    .click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Event title" })
@@ -2997,11 +3132,72 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
   expect(Math.round(box.width)).toBe(390);
   expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
   expect(box.x).toBe(0);
+  expect(
+    await sheet.evaluate(
+      (element) => element.scrollWidth - element.clientWidth,
+    ),
+  ).toBe(0);
 
   // It is still the same layer: Escape dismisses it and focus is handled.
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
   await expectNoAccessibilityViolations(page);
+});
+
+test("keeps desktop event details full-sized beside their trigger", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const leftTrigger = page
+    .getByRole("button", { name: /Studio retreat/ })
+    .first();
+  const leftTriggerBox = (await leftTrigger.boundingBox())!;
+  await leftTrigger.click();
+  const leftDetails = page.getByRole("dialog", { name: "Studio retreat" });
+  await leftDetails.evaluate((element) =>
+    Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    ),
+  );
+  const leftDetailsBox = (await leftDetails.boundingBox())!;
+  expect(leftDetailsBox.x).toBeGreaterThanOrEqual(
+    leftTriggerBox.x + leftTriggerBox.width + 7,
+  );
+  expect(
+    await leftDetails.evaluate((element) => ({
+      horizontal: element.scrollWidth - element.clientWidth,
+      vertical: element.scrollHeight - element.clientHeight,
+    })),
+  ).toEqual({ horizontal: 0, vertical: 0 });
+  await page.keyboard.press("Escape");
+
+  const rightTrigger = page.getByRole("button", {
+    name: /Theatre night/,
+  });
+  const rightTriggerBox = (await rightTrigger.boundingBox())!;
+  await rightTrigger.click();
+  const rightDetails = page.getByRole("dialog", { name: "Theatre night" });
+  await rightDetails.evaluate((element) =>
+    Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    ),
+  );
+  const rightDetailsBox = (await rightDetails.boundingBox())!;
+  expect(rightDetailsBox.x + rightDetailsBox.width).toBeLessThanOrEqual(
+    rightTriggerBox.x - 7,
+  );
+  expect(
+    await rightDetails.evaluate(
+      (element) => element.scrollWidth - element.clientWidth,
+    ),
+  ).toBe(0);
 });
 
 test("chooses event calendars from an accessible mobile list", async ({
@@ -3409,6 +3605,12 @@ test("asks for a name and a time first, the rest on request", async ({
   await bubble.evaluate((element) =>
     Promise.all(element.getAnimations().map((animation) => animation.finished)),
   );
+  expect(
+    await bubble.evaluate((element) => ({
+      horizontal: element.scrollWidth - element.clientWidth,
+      vertical: element.scrollHeight - element.clientHeight,
+    })),
+  ).toEqual({ horizontal: 0, vertical: 0 });
   await expectNoAccessibilityViolations(page);
   // Everything else is out of the way until asked for.
   await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
@@ -3686,9 +3888,14 @@ test("shows a dragged event where it is going and a ghost where it was", async (
 test("shows a dragged chip in the month cell it would land in", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 800, height: 720 });
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
+  const calendarArea = page.locator("[data-calendar-area]");
+  const initialScrollTop = await calendarArea.evaluate(
+    (element) => element.scrollTop,
+  );
   const chip = page.getByRole("button", { name: /Client call/ }).first();
   await expect(chip).toBeVisible();
   const from = (await chip.boundingBox())!;
@@ -3707,6 +3914,9 @@ test("shows a dragged chip in the month cell it would land in", async ({
     "Client call",
   );
   await expect(origin.locator("[data-ghost]")).toHaveCount(1);
+  expect(
+    await calendarArea.evaluate((element) => element.scrollTop),
+  ).toBe(initialScrollTop);
 
   await page.keyboard.press("Escape");
   await page.mouse.up();

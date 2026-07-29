@@ -1,6 +1,7 @@
 .detailPopover {
   width: min(390px, calc(100vw - 28px));
-  max-height: var(--radix-popover-content-available-height);
+  max-height: min(620px, calc(100dvh - 28px));
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }

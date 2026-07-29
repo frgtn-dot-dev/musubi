@@ -200,7 +200,6 @@ export function QuickCreate({
             timeFormat={timeFormat}
             weekStartsOn={weekStartsOn}
           />
-          <Popover.Arrow className={styles.popoverArrow} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

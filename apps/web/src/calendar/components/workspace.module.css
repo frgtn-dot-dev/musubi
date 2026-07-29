@@ -234,6 +234,7 @@
 .pageEditOptions {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
@@ -402,9 +403,8 @@
 .filterCalendarList {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
 .filterCalendarList > .calendarVisibilityRow {
@@ -426,11 +426,17 @@
     var(--surface-canvas);
 }
 
+.calendarAreaMonth {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .monthView {
   display: grid;
+  height: 100%;
   min-width: 680px;
-  min-height: 100%;
-  grid-template-rows: 36px minmax(620px, 1fr);
+  min-height: 0;
+  grid-template-rows: 36px minmax(0, 1fr);
 }
 
 .agendaView {
@@ -1124,12 +1130,21 @@
 }
 
 .monthGrid {
+  --month-day-fixed-space: 38px;
+  --month-event-height: 21px;
+  --month-event-gap: 3px;
   display: grid;
-  grid-template-rows: repeat(6, minmax(103px, 1fr));
+  min-height: 0;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+}
+
+.monthWeek {
+  min-height: 0;
 }
 
 .dayCell {
   position: relative;
+  overflow: hidden;
   min-width: 0;
   padding: 7px 7px 5px;
   border-right: 1px solid var(--border-subtle);
@@ -1349,6 +1364,72 @@
   color: var(--text-primary);
 }
 
+.monthOverflowPopover {
+  width: min(360px, calc(100vw - var(--space-6)));
+  max-height: min(460px, calc(100dvh - var(--space-7)));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.monthOverflowHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.monthOverflowHeader h2,
+.monthOverflowHeader p {
+  margin: 0;
+}
+
+.monthOverflowHeader h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-19);
+  font-weight: 400;
+}
+
+.monthOverflowHeader p {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.monthOverflowList {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.monthOverflowList .eventChip {
+  width: 100%;
+  min-height: 42px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  margin-left: 0;
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-chip);
+}
+
+.monthOverflowList .eventTime {
+  display: block;
+}
+
+.monthOverflowList .eventTitle {
+  grid-column: 2;
+  font-size: var(--text-13);
+  text-align: left;
+}
+
+.monthOverflowList .eventChipContinuesBefore,
+.monthOverflowList .eventChipContinuesAfter,
+.monthOverflowList .eventChipContinuesBoth {
+  width: 100%;
+  margin-left: 0;
+  border-radius: var(--radius-chip);
+}
+
 .popover {
   z-index: 100;
   width: min(340px, calc(100vw - 28px));
@@ -1367,12 +1448,6 @@
   width: 1px;
   height: 1px;
   pointer-events: none;
-}
-
-.popoverArrow {
-  fill: var(--surface-overlay);
-  stroke: var(--border-medium);
-  stroke-width: 1px;
 }
 
 @keyframes popover-in {
@@ -1423,14 +1498,9 @@
 
 /* Once moved, the window is where the user put it. The open animation has to go
    with it: its filled final keyframe sets a transform, and a filled animation
-   outranks the inline one the drag applies. The arrow goes too — it pointed at
-   an anchor this window has left. */
+   outranks the inline one the drag applies. */
 .popover[data-moved] {
   animation: none;
-}
-
-.popover[data-moved] .popoverArrow {
-  display: none;
 }
 
 .popoverHeader h2 {
@@ -1443,7 +1513,8 @@
 
 .createPopover {
   width: min(340px, calc(100vw - 28px));
-  max-height: var(--radix-popover-content-available-height);
+  max-height: min(620px, calc(100dvh - 28px));
+  overflow-x: hidden;
   overflow-y: auto;
   padding-bottom: 8px;
 }
@@ -1656,11 +1727,6 @@
     padding: 8px 14px 0;
   }
 
-  .pageEditOptions {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
   .toolbarControls {
     min-height: 64px;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1726,11 +1792,7 @@
 
   .monthView {
     min-width: 560px;
-    grid-template-rows: 32px minmax(576px, 1fr);
-  }
-
-  .monthGrid {
-    grid-template-rows: repeat(6, minmax(96px, 1fr));
+    grid-template-rows: 32px minmax(0, 1fr);
   }
 
   .dayCell {
@@ -1848,6 +1910,11 @@
     padding: 5px 3px 4px;
   }
 
+  .monthGrid {
+    --month-day-fixed-space: 35px;
+    --month-event-height: 20px;
+  }
+
   .dayEvents {
     --event-bleed: 4px;
   }
@@ -1864,10 +1931,6 @@
 
   .eventTitle {
     font-size: 0.58rem;
-  }
-
-  .dayEvents .eventChip:nth-child(n + 3) {
-    display: none;
   }
 
   .saveBarIcon {
@@ -1905,16 +1968,13 @@
   .popover {
     width: 100%;
     max-height: 86vh;
+    overflow-x: hidden;
     overflow-y: auto;
     border-width: 1px 0 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     animation: sheet-in var(--motion-standard) ease both;
     /* Clear of the home indicator on iOS, and of nothing elsewhere. */
     padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .popoverArrow {
-    display: none;
   }
 
   /* Create moves out of the toolbar and stays reachable with a thumb. It is the

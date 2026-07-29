@@ -288,6 +288,7 @@ export function CalendarTransferDialog({
               onChange={(event) => setNewName(event.target.value)}
             />
             <ColorPicker
+              className={styles.formColorPicker}
               disabled={busy === "create"}
               label="New calendar color"
               value={newColor}
@@ -386,21 +387,26 @@ export function CalendarTransferDialog({
                   <p>Create a Musubi calendar from an .ics file.</p>
                 </div>
               </div>
-              <label className={styles.fileControl}>
-                <span className={styles.fileCopy}>
-                  <strong>Calendar file</strong>
-                  <span>{importFileName || "No file selected"}</span>
-                </span>
-                <span className={styles.fileButton}>Choose file</span>
-                <input
-                  accept=".ics,text/calendar"
-                  aria-label="Choose .ics file"
-                  disabled={Boolean(busy)}
-                  required
-                  type="file"
-                  onChange={(event) => void handleFile(event)}
-                />
-              </label>
+              <div className={styles.cardFieldGroup}>
+                <span className={styles.cardControlLabel}>Calendar file</span>
+                <label
+                  className={styles.fileControl}
+                  data-calendar-file-control=""
+                >
+                  <span className={styles.fileCopy}>
+                    {importFileName || "No file selected"}
+                  </span>
+                  <span className={styles.fileButton}>Choose file</span>
+                  <input
+                    accept=".ics,text/calendar"
+                    aria-label="Choose .ics file"
+                    disabled={Boolean(busy)}
+                    required
+                    type="file"
+                    onChange={(event) => void handleFile(event)}
+                  />
+                </label>
+              </div>
               <div className={styles.importControls}>
                 <Field
                   className={styles.cardField}
@@ -416,6 +422,7 @@ export function CalendarTransferDialog({
                   />
                 </Field>
                 <ColorPicker
+                  className={styles.formColorPicker}
                   disabled={Boolean(busy)}
                   label="Imported calendar color"
                   value={importColor}
@@ -501,6 +508,7 @@ function CalendarGroup({
           return (
             <li key={calendar.id}>
               <Row
+                className={styles.calendarRow}
                 detail={calendarDetail(calendar, external)}
                 icon={
                   <span

@@ -1046,6 +1046,7 @@
 
 .dialogBody {
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1655,9 +1656,18 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .row[data-row-options] {
+    flex-wrap: wrap;
+  }
+
+  .row[data-row-options] .rowCopy {
+    flex-basis: 100%;
+  }
+
   .rowOptions {
-    max-width: 58%;
-    overflow-x: auto;
+    width: 100%;
+    max-width: none;
+    overflow: visible;
   }
 
   .dialog,

@@ -372,8 +372,11 @@ export function EventDetailsPopover({
               escapeEvent.preventDefault();
               hideTargetCalendars();
             }}
-            side="bottom"
-            sideOffset={8}
+            /* Keep the detail surface beside its event. Collision handling may
+               flip right to left, but it no longer compresses the card into
+               the small strip above or below a late-month event. */
+            side="right"
+            sideOffset={12}
             style={surfaceStyle}
           >
             {editing ? (
@@ -718,7 +721,6 @@ export function EventDetailsPopover({
                 ) : null}
               </>
             )}
-            <Popover.Arrow className={workspaceStyles.popoverArrow} />
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>

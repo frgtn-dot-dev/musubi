@@ -866,7 +866,12 @@ export function Workspace({
           </section>
         ) : null}
 
-        <div className={styles.calendarArea}>
+        <div
+          className={`${styles.calendarArea} ${
+            activeView === "month" ? styles.calendarAreaMonth : ""
+          }`}
+          data-calendar-area=""
+        >
           {activeView === "agenda" ? (
             <AgendaView
               anchor={anchor}

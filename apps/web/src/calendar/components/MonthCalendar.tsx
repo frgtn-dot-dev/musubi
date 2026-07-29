@@ -1,3 +1,4 @@
+import * as Popover from "@radix-ui/react-popover";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
   getMonthGrid,
@@ -6,6 +7,7 @@ import {
 import {
   type CSSProperties,
   type KeyboardEvent,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -18,6 +20,31 @@ import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
+
+const DEFAULT_EVENT_CAPACITY = 3;
+
+function eventCapacityForGrid(grid: HTMLElement) {
+  // SSR, jsdom and a temporarily hidden workspace do not have a measurable
+  // layout. Keep the established density until a real grid size is available.
+  if (grid.clientHeight <= 0) return DEFAULT_EVENT_CAPACITY;
+
+  const styles = window.getComputedStyle(grid);
+  const fixedSpace =
+    Number.parseFloat(
+      styles.getPropertyValue("--month-day-fixed-space"),
+    ) || 38;
+  const eventHeight =
+    Number.parseFloat(styles.getPropertyValue("--month-event-height")) || 21;
+  const eventGap =
+    Number.parseFloat(styles.getPropertyValue("--month-event-gap")) || 3;
+  const rowHeight = grid.clientHeight / 6;
+  const availableHeight = Math.max(0, rowHeight - fixedSpace);
+
+  return Math.max(
+    1,
+    Math.floor((availableHeight + eventGap) / (eventHeight + eventGap)),
+  );
+}
 
 type MonthCalendarProps = EventActionHandlers & {
   anchor: Date;
@@ -174,7 +201,29 @@ export function MonthCalendar({
     days.findIndex((day) => toDateKey(day) === toDateKey(anchor)),
   );
   const [focusedIndex, setFocusedIndex] = useState(initialFocusIndex);
+  const [eventCapacity, setEventCapacity] = useState(
+    DEFAULT_EVENT_CAPACITY,
+  );
   const cellRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || typeof ResizeObserver === "undefined") return;
+
+    function syncEventCapacity() {
+      if (!grid) return;
+      const nextCapacity = eventCapacityForGrid(grid);
+      setEventCapacity((current) =>
+        current === nextCapacity ? current : nextCapacity,
+      );
+    }
+
+    syncEventCapacity();
+    const observer = new ResizeObserver(syncEventCapacity);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  }, []);
 
   function focusCell(index: number) {
     const bounded = Math.min(days.length - 1, Math.max(0, index));
@@ -233,6 +282,7 @@ export function MonthCalendar({
   return (
     <div
       className={styles.monthView}
+      data-event-capacity={eventCapacity}
       role="grid"
       aria-label={`${anchor.toLocaleDateString("en", {
         month: "long",
@@ -246,7 +296,7 @@ export function MonthCalendar({
           </div>
         ))}
       </div>
-      <div className={styles.monthGrid} role="rowgroup">
+      <div className={styles.monthGrid} ref={gridRef} role="rowgroup">
         {weeks.map((week, weekIndex) => (
           <div
             className={styles.monthWeek}
@@ -262,7 +312,16 @@ export function MonthCalendar({
               // A hidden adjacent day keeps its cell (so the month keeps its
               // height) but shows nothing and takes no clicks.
               const muted = !inMonth && !showAdjacentDays;
-              const visibleSegments = muted ? [] : daySegments.slice(0, 3);
+              // If not every event fits, one measured slot belongs to the
+              // "+N more" control. This mirrors the calendar pattern where the
+              // month grid stays fixed and density yields to explicit overflow.
+              const visibleCount =
+                daySegments.length > eventCapacity
+                  ? Math.max(0, eventCapacity - 1)
+                  : eventCapacity;
+              const visibleSegments = muted
+                ? []
+                : daySegments.slice(0, visibleCount);
               const overflow = muted
                 ? 0
                 : daySegments.length - visibleSegments.length;
@@ -432,16 +491,61 @@ export function MonthCalendar({
                       </div>
                     ) : null}
                     {overflow > 0 ? (
-                      <button
-                        className={styles.moreEvents}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          focusCell(index);
-                        }}
-                      >
-                        +{overflow} more
-                      </button>
+                      <Popover.Root>
+                        <Popover.Trigger asChild>
+                          <button
+                            className={styles.moreEvents}
+                            type="button"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            +{overflow} more
+                          </button>
+                        </Popover.Trigger>
+                        <Popover.Portal>
+                          <Popover.Content
+                            align="center"
+                            aria-label={`${getLongDateLabel(day)} events`}
+                            className={`${styles.popover} ${styles.monthOverflowPopover}`}
+                            collisionPadding={12}
+                            role="dialog"
+                            side="bottom"
+                            sideOffset={8}
+                          >
+                            <div className={styles.monthOverflowHeader}>
+                              <h2>{getLongDateLabel(day)}</h2>
+                              <p>
+                                {daySegments.length}{" "}
+                                {daySegments.length === 1
+                                  ? "event"
+                                  : "events"}
+                              </p>
+                            </div>
+                            <div className={styles.monthOverflowList}>
+                              {daySegments.map((segment) => (
+                                <EventPopover
+                                  calendar={calendarsById.get(
+                                    segment.event.calendars[0] ?? "",
+                                  )}
+                                  calendars={calendars}
+                                  event={segment.event}
+                                  key={segment.event.id}
+                                  pending={
+                                    busyEventId !== undefined &&
+                                    (segment.event.id === busyEventId ||
+                                      segment.event.id.startsWith(
+                                        `${busyEventId}_`,
+                                      ))
+                                  }
+                                  showLabel
+                                  timeFormat={timeFormat}
+                                  weekStartsOn={weekStartsOn}
+                                  {...eventActions}
+                                />
+                              ))}
+                            </div>
+                          </Popover.Content>
+                        </Popover.Portal>
+                      </Popover.Root>
                     ) : null}
                   </div>
                 </div>

@@ -214,6 +214,7 @@ export function RowOptions<Value extends string>({
         size === "compact" && styles.row_compact,
         className,
       )}
+      data-row-options=""
     >
       <RowContent detail={detail} icon={icon} label={label} />
       <Segmented
