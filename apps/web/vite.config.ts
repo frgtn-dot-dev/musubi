@@ -22,6 +22,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   server: {
+    allowedHosts: ["3000.f-tuma.dev"],
     port: 3000,
     proxy: {
       "/api": {
