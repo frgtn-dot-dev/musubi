@@ -104,6 +104,7 @@ function EditEventRoute() {
         calendarLocked
         calendars={calendars}
         initialValues={initialValues}
+        layout="page"
         onCancel={back}
         onError={(error) =>
           getEventMutationError(error, "update", homeCalendar)

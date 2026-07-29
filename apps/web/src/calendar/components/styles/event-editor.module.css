@@ -400,6 +400,150 @@
   align-self: center;
 }
 
+@media (min-width: 900px) {
+  .form[data-layout="page"] {
+    height: 100%;
+    min-height: 0;
+    grid-template-areas:
+      "title title"
+      "when details"
+      "calendars calendars"
+      "error error"
+      "actions actions";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  }
+
+  .form[data-layout="page"] .titleField {
+    grid-area: title;
+    padding-block: var(--space-2);
+  }
+
+  .form[data-layout="page"] .whenSection {
+    grid-area: when;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .form[data-layout="page"] .detailsSection {
+    grid-area: details;
+  }
+
+  .form[data-layout="page"] .calendarSection {
+    display: grid;
+    min-height: 0;
+    grid-area: calendars;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .form[data-layout="page"] .formError {
+    grid-area: error;
+  }
+
+  .form[data-layout="page"] .actions {
+    grid-area: actions;
+  }
+
+  .form[data-layout="page"] .sectionLabel {
+    padding-block: var(--space-2) 6px;
+  }
+
+  .form[data-layout="page"] .pickerRow,
+  .form[data-layout="page"] .timeRow,
+  .form[data-layout="page"] .toggleRow {
+    min-height: 44px;
+  }
+
+  .form[data-layout="page"] .inlineField {
+    padding-block: 5px;
+  }
+
+  .form[data-layout="page"] .calendarHint {
+    padding-bottom: var(--space-2);
+  }
+
+  .form[data-layout="page"] .calendarPlacement {
+    min-height: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .form[data-layout="page"] .calendarPlacementHeader {
+    grid-column: 1 / -1;
+  }
+
+  .form[data-layout="page"] .calendarGroup {
+    min-width: 0;
+  }
+
+  .form[data-layout="page"] .calendarGroup + .calendarGroup {
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .form[data-layout="page"] .calendarGroup:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .form[data-layout="page"] .calendarGroup:only-child ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form[data-layout="page"]
+    .calendarGroup:only-child
+    .calendarPlacementRow:nth-child(odd) {
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .form[data-layout="page"] .calendarPlacementRow {
+    min-height: 50px;
+  }
+
+  .form[data-layout="page"] .actions {
+    border-top: 1px solid var(--border-subtle);
+    padding-block: var(--space-2);
+  }
+}
+
+@media (min-width: 1000px) {
+  .form[data-layout="page"] {
+    grid-template-areas:
+      "title title title"
+      "when details calendars"
+      "error error error"
+      "actions actions actions";
+    grid-template-columns:
+      minmax(0, 0.95fr)
+      minmax(0, 1.05fr)
+      minmax(320px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .form[data-layout="page"] .detailsSection {
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .form[data-layout="page"] .calendarPlacement {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form[data-layout="page"] .calendarGroup:only-child {
+    grid-column: auto;
+  }
+
+  .form[data-layout="page"] .calendarGroup:only-child ul {
+    display: block;
+  }
+
+  .form[data-layout="page"]
+    .calendarGroup:only-child
+    .calendarPlacementRow:nth-child(odd) {
+    border-right: 0;
+  }
+}
+
 @media (max-width: 599px) {
   .timePresets {
     display: block;

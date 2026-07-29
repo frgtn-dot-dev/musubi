@@ -21,7 +21,11 @@ export function EventEditorPage({
   title,
 }: EventEditorPageProps) {
   return (
-    <main className={styles.page} id="main-content">
+    <main
+      className={styles.page}
+      data-event-editor-page=""
+      id="main-content"
+    >
       <nav aria-label="Event editor" className={styles.navigation}>
         <div className={styles.navigationInner}>
           <Button
@@ -44,6 +48,7 @@ export function EventEditorPage({
           <section
             aria-label="Event details"
             className={styles.formSurface}
+            data-event-editor-surface=""
           >
             {children}
           </section>

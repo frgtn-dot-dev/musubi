@@ -93,6 +93,7 @@ function NewEventRoute() {
       <EventEditorForm
         calendars={calendars}
         initialValues={initialValues}
+        layout="page"
         onCancel={back}
         onError={(error, values) =>
           getEventMutationError(

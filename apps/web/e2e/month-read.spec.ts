@@ -3738,6 +3738,80 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("uses the desktop event editor as a fixed multi-column workspace", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 800, width: 1280 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { exact: true, name: "Event" }).click();
+  await page.getByRole("button", { name: "More options" }).click();
+
+  const editor = page.locator("[data-event-editor-page]");
+  const surface = page.locator("[data-event-editor-surface]");
+  const form = surface.locator('form[data-layout="page"]');
+  const when = form.locator('[data-editor-section="when"]');
+  const details = form.locator('[data-editor-section="details"]');
+  const calendarSection = form.locator(
+    '[data-editor-section="calendars"]',
+  );
+  const [whenBox, detailsBox, calendarBox] = await Promise.all([
+    when.boundingBox(),
+    details.boundingBox(),
+    calendarSection.boundingBox(),
+  ]);
+
+  expect(whenBox).not.toBeNull();
+  expect(detailsBox).not.toBeNull();
+  expect(calendarBox).not.toBeNull();
+  expect(Math.abs(whenBox!.y - detailsBox!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(detailsBox!.y - calendarBox!.y)).toBeLessThanOrEqual(1);
+  expect(
+    await page.evaluate(() => ({
+      horizontal:
+        document.documentElement.scrollWidth - window.innerWidth,
+      vertical:
+        document.documentElement.scrollHeight - window.innerHeight,
+    })),
+  ).toEqual({ horizontal: 0, vertical: 0 });
+  expect(
+    await editor.evaluate((element) => ({
+      horizontal: element.scrollWidth - element.clientWidth,
+      vertical: element.scrollHeight - element.clientHeight,
+    })),
+  ).toEqual({ horizontal: 0, vertical: 0 });
+  expect(
+    await form
+      .locator('[data-ui="calendar-placement"]')
+      .evaluate((element) => element.scrollHeight - element.clientHeight),
+  ).toBeLessThanOrEqual(1);
+
+  await page.getByPlaceholder("Add location").fill("Studio B");
+  await page.getByPlaceholder("Add notes").fill("Bring the roadmap.");
+  await expect(
+    page.getByRole("button", { exact: true, name: "Create" }),
+  ).toBeInViewport();
+
+  await page.setViewportSize({ height: 768, width: 1024 });
+  expect(
+    await page.evaluate(() => ({
+      horizontal:
+        document.documentElement.scrollWidth - window.innerWidth,
+      vertical:
+        document.documentElement.scrollHeight - window.innerHeight,
+    })),
+  ).toEqual({ horizontal: 0, vertical: 0 });
+  expect(
+    await form
+      .locator('[data-ui="calendar-placement"]')
+      .evaluate((element) => element.scrollHeight - element.clientHeight),
+  ).toBeLessThanOrEqual(1);
+  await expect(
+    page.getByRole("button", { exact: true, name: "Create" }),
+  ).toBeInViewport();
+  await expectNoAccessibilityViolations(page);
+});
+
 test("keeps the full event editor usable on a narrow viewport", async ({
   page,
 }) => {

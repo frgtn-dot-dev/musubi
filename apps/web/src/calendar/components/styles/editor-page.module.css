@@ -70,6 +70,44 @@
   box-shadow: 0 14px 40px rgb(0 0 0 / 6%);
 }
 
+@media (min-width: 900px) {
+  .navigationInner,
+  .content {
+    width: min(1180px, calc(100% - var(--space-10)));
+  }
+
+  .content {
+    padding: clamp(var(--space-5), 3vh, var(--space-7)) 0;
+  }
+
+  .heading {
+    padding-bottom: var(--space-4);
+  }
+}
+
+@media (min-width: 1000px) and (min-height: 700px) {
+  .page {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .content {
+    display: grid;
+    height: calc(100dvh - 59px);
+    grid-template-rows: auto minmax(0, 1fr);
+    box-sizing: border-box;
+  }
+
+  .formSurface {
+    min-height: 0;
+  }
+
+  .formSurface > * {
+    height: 100%;
+  }
+}
+
 @media (max-width: 599px) {
   .navigationInner,
   .content {

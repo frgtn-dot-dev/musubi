@@ -96,6 +96,8 @@ type EventEditorFormProps = {
    */
   onExpand?: (values: EventFormValues) => void;
   initialValues: EventFormValues;
+  /** Full-page editors use the viewport as a workspace instead of a long card. */
+  layout?: "page" | "popover";
   /**
    * A new "when" from outside the form — the draft block being dragged on the
    * grid while this is open. Only these fields are replaced, so a title that is
@@ -115,6 +117,7 @@ export function EventEditorForm({
   calendars,
   compact = false,
   initialValues,
+  layout = "popover",
   onCancel,
   onExpand,
   onError,
@@ -263,6 +266,7 @@ export function EventEditorForm({
       aria-busy={saving || undefined}
       className={styles.form}
       data-compact={!expanded ? "" : undefined}
+      data-layout={layout}
       onKeyDown={handleKeyDown}
       onSubmit={handleSubmit}
     >
@@ -282,7 +286,8 @@ export function EventEditorForm({
 
       <section
         aria-labelledby={`${id}-when-heading`}
-        className={styles.section}
+        className={`${styles.section} ${styles.whenSection}`}
+        data-editor-section="when"
       >
         <SectionLabel
           className={styles.sectionLabel}
@@ -421,7 +426,8 @@ export function EventEditorForm({
       {expanded ? (
         <section
           aria-labelledby={`${id}-details-heading`}
-          className={styles.section}
+          className={`${styles.section} ${styles.detailsSection}`}
+          data-editor-section="details"
         >
           <SectionLabel
             className={styles.sectionLabel}
@@ -493,7 +499,8 @@ export function EventEditorForm({
 
       <section
         aria-labelledby={`${id}-calendar-heading`}
-        className={styles.section}
+        className={`${styles.section} ${styles.calendarSection}`}
+        data-editor-section="calendars"
       >
         <SectionLabel
           className={styles.sectionLabel}
