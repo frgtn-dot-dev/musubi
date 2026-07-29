@@ -3338,13 +3338,14 @@ test("keeps event edits focused and moves details to a full page", async ({
   await expect(page.getByRole("button", { name: "More options" })).toHaveCount(
     0,
   );
+  await expectNoAccessibilityViolations(page);
   await page.reload();
   await expect(
     page.getByRole("textbox", { name: "Event title" }),
   ).toHaveValue("Client call revised");
 
   await page.getByPlaceholder("Add location").fill("Studio C");
-  await page.getByRole("button", { name: "Save event" }).click();
+  await page.getByRole("button", { exact: true, name: "Save" }).click();
   await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
   await expect(
     page.getByRole("button", { name: /Client call revised/ }).first(),
@@ -3389,6 +3390,7 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
   await expect(page.getByPlaceholder("Add location")).toBeVisible();
   await expect(page.getByLabel("Repeat")).toBeVisible();
   await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
+  await expectNoAccessibilityViolations(page);
 
   await page.reload();
   await expect(
@@ -3403,7 +3405,7 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
     return route.fallback();
   });
   await page.getByPlaceholder("Add location").fill("Studio B");
-  await page.getByRole("button", { name: "Create event" }).click();
+  await page.getByRole("button", { exact: true, name: "Create" }).click();
 
   // Saving lands back on the view and date it started from.
   await expect(page).toHaveURL(/\/week\?date=2026-07-30/);
@@ -3411,6 +3413,55 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Quarterly review/ }).first(),
   ).toBeVisible();
+});
+
+test("keeps the full event editor usable on a narrow viewport", async ({
+  page,
+}) => {
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { exact: true, name: "Event" }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Mobile planning");
+  await page.getByRole("button", { name: "More options" }).click();
+
+  await expect(page).toHaveURL(/\/event\/new\?/);
+  await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Event title" }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole("navigation", { name: "Event editor" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "When" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Details" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Event calendars" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await expectNoAccessibilityViolations(page);
+
+  const create = page.getByRole("button", {
+    exact: true,
+    name: "Create",
+  });
+  await create.scrollIntoViewIfNeeded();
+  await expect(create).toBeVisible();
+  await page.getByRole("button", { name: "Back to calendar" }).click();
+  await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
+  expect(runtimeErrors).toEqual([]);
 });
 
 test("leaving the full editor page keeps the calendar where it was", async ({

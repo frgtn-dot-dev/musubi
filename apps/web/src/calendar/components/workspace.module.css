@@ -2281,11 +2281,3 @@
     opacity: 1;
   }
 }
-
-.editorPage {
-  composes: editorPage from "./styles/editor-page.module.css";
-}
-
-.editorPageForm {
-  composes: editorPageForm from "./styles/editor-page.module.css";
-}

@@ -1,43 +1,102 @@
-/* The full editor as a page: what "More options" opens. Deliberately plain —
-   this layer is about getting the details right, not about the calendar. */
-.editorPage {
-  display: flex;
-  min-height: 100vh;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 40px 20px 64px;
+.page {
+  min-height: 100dvh;
   background: var(--surface-canvas);
   color: var(--text-primary);
 }
 
-.editorPage header {
+.navigation {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(
+    in srgb,
+    var(--surface-canvas) 92%,
+    transparent
+  );
+  backdrop-filter: blur(12px);
+}
+
+.navigationInner,
+.content {
+  width: min(680px, calc(100% - var(--space-8)));
+  margin-inline: auto;
+}
+
+.navigationInner {
   display: flex;
-  width: min(560px, 100%);
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  min-height: 58px;
+  align-items: center;
 }
 
-.editorPage h1 {
+.backButton {
+  margin-left: calc(var(--space-3) * -1);
+}
+
+.content {
+  padding: var(--space-8) 0 64px;
+}
+
+.heading {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-1) var(--space-5);
+}
+
+.heading h1,
+.heading p {
   margin: 0;
-  font-family: var(--font-serif);
-  font-size: 1.6rem;
-  font-weight: 400;
 }
 
-.editorPage header p {
-  max-width: 52ch;
-  margin: -4px 0 0;
+.heading h1 {
+  font-family: var(--font-serif);
+  font-size: var(--text-26);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.heading p {
+  max-width: 56ch;
   color: var(--text-secondary);
-  font-size: var(--text-12);
+  font-size: var(--text-13);
   line-height: 1.5;
 }
 
-.editorPageForm {
-  width: min(560px, 100%);
-  padding: 20px;
+.formSurface {
+  overflow: hidden;
   border: 1px solid var(--border-medium);
-  border-radius: var(--radius-lg);
-  background: var(--surface-overlay);
+  border-radius: var(--radius-sheet);
+  background: var(--surface-panel);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 6%);
+}
+
+@media (max-width: 599px) {
+  .navigationInner,
+  .content {
+    width: calc(100% - var(--space-6));
+  }
+
+  .navigationInner {
+    min-height: 54px;
+  }
+
+  .content {
+    padding-top: var(--space-6);
+    padding-bottom: calc(
+      var(--space-8) + env(safe-area-inset-bottom)
+    );
+  }
+
+  .heading {
+    padding-bottom: var(--space-4);
+  }
+
+  .heading h1 {
+    font-size: var(--text-22);
+  }
+
+  .formSurface {
+    border-radius: var(--radius-lg);
+    box-shadow: none;
+  }
 }

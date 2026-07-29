@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
-import { ArrowLeft } from "lucide-react";
 import { authClient } from "~/auth/auth-client";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
+import { EventEditorPage } from "~/calendar/components/EventEditorPage";
 import { toDateKey } from "~/calendar/date-key";
 import {
   applyEventEditorSearch,
@@ -20,7 +20,6 @@ import {
 } from "~/calendar/event-permissions";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
-import styles from "~/calendar/components/workspace.module.css";
 
 export const Route = createFileRoute("/app/p/$pageId/event/new")({
   validateSearch: eventEditorSearchSchema,
@@ -90,36 +89,25 @@ function NewEventRoute() {
   }
 
   return (
-    <main className={styles.editorPage} id="main-content">
-      <header>
-        <button className={styles.textButton} type="button" onClick={back}>
-          <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.6} />
-          Back to calendar
-        </button>
-        <h1>New event</h1>
-      </header>
-      <div className={styles.editorPageForm}>
-        <EventEditorForm
-          calendars={calendars}
-          initialValues={initialValues}
-          onCancel={back}
-          onError={(error, values) =>
-            getEventMutationError(
-              error,
-              "create",
-              calendars.find((calendar) => calendar.id === values.calendarId),
-            )
-          }
-          onSubmit={handleSubmit}
-          submitLabel="Create event"
-          timeFormat={
-            workspace.settings.data?.timeFormat ?? "24h"
-          }
-          weekStartsOn={
-            workspace.settings.data?.weekStartsOn ?? "monday"
-          }
-        />
-      </div>
-    </main>
+    <EventEditorPage onBack={back} title="New event">
+      <EventEditorForm
+        calendars={calendars}
+        initialValues={initialValues}
+        onCancel={back}
+        onError={(error, values) =>
+          getEventMutationError(
+            error,
+            "create",
+            calendars.find((calendar) => calendar.id === values.calendarId),
+          )
+        }
+        onSubmit={handleSubmit}
+        submitLabel="Create"
+        timeFormat={workspace.settings.data?.timeFormat ?? "24h"}
+        weekStartsOn={
+          workspace.settings.data?.weekStartsOn ?? "monday"
+        }
+      />
+    </EventEditorPage>
   );
 }

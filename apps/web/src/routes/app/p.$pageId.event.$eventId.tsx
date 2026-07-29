@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { authClient } from "~/auth/auth-client";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
+import { EventEditorPage } from "~/calendar/components/EventEditorPage";
 import { toDateKey } from "~/calendar/date-key";
 import {
   applyEventEditorSearch,
@@ -20,7 +20,6 @@ import {
 } from "~/calendar/event-permissions";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
-import styles from "~/calendar/components/workspace.module.css";
 
 export const Route = createFileRoute("/app/p/$pageId/event/$eventId")({
   validateSearch: eventEditorSearchSchema,
@@ -65,20 +64,15 @@ function EditEventRoute() {
 
   if (!event || !canEditEvent(event, calendars)) {
     return (
-      <main className={styles.editorPage} id="main-content">
-        <header>
-          <button className={styles.textButton} type="button" onClick={back}>
-            <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.6} />
-            Back to calendar
-          </button>
-          <h1>{event ? "This event is read-only" : "Event not found"}</h1>
-          <p>
-            {event
-              ? "Your access changed, so Musubi cannot save edits to this event."
-              : "The event may have been deleted or moved out of this calendar."}
-          </p>
-        </header>
-      </main>
+      <EventEditorPage
+        description={
+          event
+            ? "Your access changed, so Musubi cannot save edits to this event."
+            : "The event may have been deleted or moved out of this calendar."
+        }
+        onBack={back}
+        title={event ? "This event is read-only" : "Event not found"}
+      />
     );
   }
 
@@ -97,34 +91,28 @@ function EditEventRoute() {
   }
 
   return (
-    <main className={styles.editorPage} id="main-content">
-      <header>
-        <button className={styles.textButton} type="button" onClick={back}>
-          <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.6} />
-          Back to calendar
-        </button>
-        <h1>{editableEvent.recurrence ? "Edit series" : "Edit event"}</h1>
-        <p>
-          {editableEvent.recurrence
-            ? "Changes here apply to the recurring series."
-            : "Review every event detail in one place."}
-        </p>
-      </header>
-      <div className={styles.editorPageForm}>
-        <EventEditorForm
-          calendarLocked
-          calendars={calendars}
-          initialValues={initialValues}
-          onCancel={back}
-          onError={(error) =>
-            getEventMutationError(error, "update", homeCalendar)
-          }
-          onSubmit={handleSubmit}
-          submitLabel="Save event"
-          timeFormat={workspace.settings.data?.timeFormat ?? "24h"}
-          weekStartsOn={workspace.settings.data?.weekStartsOn ?? "monday"}
-        />
-      </div>
-    </main>
+    <EventEditorPage
+      description={
+        editableEvent.recurrence
+          ? "Changes here apply to the recurring series."
+          : "Review every event detail in one place."
+      }
+      onBack={back}
+      title={editableEvent.recurrence ? "Edit series" : "Edit event"}
+    >
+      <EventEditorForm
+        calendarLocked
+        calendars={calendars}
+        initialValues={initialValues}
+        onCancel={back}
+        onError={(error) =>
+          getEventMutationError(error, "update", homeCalendar)
+        }
+        onSubmit={handleSubmit}
+        submitLabel="Save"
+        timeFormat={workspace.settings.data?.timeFormat ?? "24h"}
+        weekStartsOn={workspace.settings.data?.weekStartsOn ?? "monday"}
+      />
+    </EventEditorPage>
   );
 }
