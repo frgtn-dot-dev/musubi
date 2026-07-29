@@ -1817,12 +1817,23 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
   await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
+  const sharingDialog = page.getByRole("dialog", { name: "Share Studio" });
+  await sharingDialog.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 
-  // Promote Sam to editor.
-  await chooseSelectOption(page, "Sam Rivers role", "Editor");
+  // Promote Sam to editor through the visible, keyboard-friendly role group.
+  const roleGroup = page.getByRole("radiogroup", {
+    name: "Sam Rivers role",
+  });
+  await roleGroup.getByRole("radio", { name: "Editor" }).click();
   await expect(
-    page.getByRole("combobox", { name: "Sam Rivers role" }),
-  ).toContainText("Editor");
+    roleGroup.getByRole("radio", { name: "Editor" }),
+  ).toHaveAttribute("aria-checked", "true");
 
   // Create then revoke an invite link.
   await page.getByRole("button", { name: "Create invite link" }).click();
@@ -1837,6 +1848,52 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   // Remove Sam entirely.
   await page.getByRole("button", { name: "Remove Sam Rivers" }).click();
   await expect(page.getByText("Sam Rivers", { exact: true })).toHaveCount(0);
+});
+
+test("keeps calendar sharing usable as a mobile sheet", async ({ page }) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/calendars/*/members", (route) =>
+    respond(route, [
+      { id: "user-web-qa", image: null, name: "Web QA", role: "owner" },
+      { id: "member-2", image: null, name: "Sam Rivers", role: "viewer" },
+    ]),
+  );
+  await page.route("**/api/v1/calendars/*/invites", (route) =>
+    respond(route, []),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("button", { name: "Calendars" }).click();
+  await page.getByRole("button", { name: "Share Studio" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Share Studio" });
+  await sheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const box = (await sheet.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
+  await expect(
+    sheet.getByRole("radiogroup", { name: "Sam Rivers role" }),
+  ).toBeVisible();
+
+  const transfer = sheet.getByRole("button", { name: "Make owner" });
+  await transfer.click();
+  const confirmation = page.getByRole("dialog", {
+    name: "Make Sam Rivers the owner?",
+  });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(transfer).toBeFocused();
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test("transfers calendar ownership", async ({ page }) => {
@@ -1864,18 +1921,37 @@ test("transfers calendar ownership", async ({ page }) => {
   await page.route("**/api/v1/calendars/*/invites", (route) =>
     respond(route, []),
   );
-  page.on("dialog", (dialog) => void dialog.accept());
-
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await page.getByRole("button", { name: "Calendars" }).click();
   await page.getByRole("button", { name: "Share Studio" }).click();
   await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
 
-  await chooseSelectOption(page, "Sam Rivers role", "Owner");
-
-  // The new owner loses the role control (shown as an Owner badge instead).
+  await page.getByRole("button", { name: "Make owner" }).click();
+  const transferDialog = page.getByRole("dialog", {
+    name: "Make Sam Rivers the owner?",
+  });
+  await expect(transferDialog).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "Sam Rivers role" }),
+    transferDialog.getByText(
+      "You will become an editor and lose access to sharing controls for Studio.",
+    ),
+  ).toBeVisible();
+  await transferDialog.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  await transferDialog
+    .getByRole("button", { name: "Transfer ownership" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Sam Rivers is now the owner of Studio.",
+  );
+  await expect(
+    page.getByRole("dialog", { name: "Share Studio" }),
   ).toHaveCount(0);
   expect(transferredRole).toBe("owner");
 });

@@ -1,0 +1,291 @@
+.body {
+  display: grid;
+  padding-bottom: var(--space-4);
+}
+
+.section {
+  display: grid;
+}
+
+.section + .section {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+.sectionHeading > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.sectionHeading p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  line-height: 1.4;
+}
+
+.count,
+.roleBadge {
+  flex: none;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-pill);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+  text-transform: capitalize;
+}
+
+.count {
+  padding: 4px 8px;
+}
+
+.memberList,
+.inviteList {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.memberRow {
+  display: grid;
+  min-height: var(--row-min-height);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.memberIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.memberCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.memberCopy strong,
+.memberCopy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memberCopy strong {
+  color: var(--text-primary);
+  font-size: var(--text-14);
+  font-weight: 500;
+}
+
+.memberCopy span {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.memberActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.roleControl {
+  flex: none;
+}
+
+.transferButton {
+  min-width: max-content;
+  padding-inline: var(--space-2);
+  font-size: var(--text-11);
+}
+
+.removeButton,
+.revokeButton,
+.leaveButton {
+  color: color-mix(
+    in srgb,
+    var(--accent-primary) 76%,
+    var(--text-primary)
+  );
+}
+
+.roleBadge {
+  justify-self: start;
+  padding: 5px 9px;
+}
+
+.inviteRow {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.inviteIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.inviteRow input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  text-overflow: ellipsis;
+}
+
+.inviteRow input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.loading,
+.sectionError {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.sectionError {
+  color: color-mix(
+    in srgb,
+    var(--accent-primary) 72%,
+    var(--text-primary)
+  );
+}
+
+.empty {
+  min-height: 150px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.empty p {
+  color: var(--text-secondary);
+}
+
+.error,
+.dialogError {
+  border: 1px solid
+    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
+  border-radius: var(--radius-md);
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 7%,
+    var(--surface-raised)
+  );
+  color: color-mix(
+    in srgb,
+    var(--accent-primary) 72%,
+    var(--text-primary)
+  );
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.error {
+  margin: var(--space-4);
+  padding: var(--space-3);
+}
+
+.dialogError {
+  margin: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-3);
+}
+
+.error p,
+.dialogError p,
+.transferWarning p {
+  margin: 0;
+}
+
+.leaveButton {
+  margin-right: auto;
+}
+
+.transferWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-4) var(--space-4) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 7%,
+    var(--surface-raised)
+  );
+  color: var(--text-primary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.transferWarning svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent-primary);
+}
+
+.transferWarning strong {
+  font-weight: 600;
+}
+
+@media (max-width: 599px) {
+  .body {
+    padding-bottom: calc(
+      var(--space-3) + env(safe-area-inset-bottom)
+    );
+  }
+
+  .sectionHeading {
+    padding-top: var(--space-4);
+  }
+
+  .memberRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding-block: var(--space-3);
+  }
+
+  .memberActions {
+    padding-left: 46px;
+  }
+
+  .roleBadge {
+    margin-left: 46px;
+  }
+
+  .roleControl {
+    flex: 1;
+  }
+
+  .transferButton {
+    min-width: 86px;
+  }
+
+  .inviteRow {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+}
