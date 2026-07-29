@@ -3793,6 +3793,47 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
   ).toBeInViewport();
 
   await page.setViewportSize({ height: 768, width: 1024 });
+  const create = page.getByRole("button", {
+    exact: true,
+    name: "Create",
+  });
+  const [compactSurfaceBox, compactActionsBox, compactWhenBox] =
+    await Promise.all([
+      surface.boundingBox(),
+      create.locator("..").boundingBox(),
+      when.boundingBox(),
+    ]);
+  expect(compactSurfaceBox).not.toBeNull();
+  expect(compactActionsBox).not.toBeNull();
+  expect(compactWhenBox).not.toBeNull();
+  expect(compactSurfaceBox!.x).toBeGreaterThanOrEqual(28);
+  expect(
+    Math.abs(
+      compactSurfaceBox!.x -
+        (1024 - compactSurfaceBox!.x - compactSurfaceBox!.width),
+    ),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(compactActionsBox!.x - (compactSurfaceBox!.x + 12)),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      compactActionsBox!.x +
+        compactActionsBox!.width -
+        (compactSurfaceBox!.x + compactSurfaceBox!.width - 12),
+    ),
+  ).toBeLessThanOrEqual(2);
+
+  const [dateBox, startTimeBox, repeatBox] = await Promise.all([
+    form.getByRole("button", { name: /^Date:/ }).boundingBox(),
+    form.getByLabel("Start time").boundingBox(),
+    form.getByLabel("Repeat").boundingBox(),
+  ]);
+  expect(dateBox).not.toBeNull();
+  expect(startTimeBox).not.toBeNull();
+  expect(repeatBox).not.toBeNull();
+  expect(Math.abs(dateBox!.x - startTimeBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(startTimeBox!.x - repeatBox!.x)).toBeLessThanOrEqual(1);
   expect(
     await page.evaluate(() => ({
       horizontal:
@@ -3807,7 +3848,7 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
       .evaluate((element) => element.scrollHeight - element.clientHeight),
   ).toBeLessThanOrEqual(1);
   await expect(
-    page.getByRole("button", { exact: true, name: "Create" }),
+    create,
   ).toBeInViewport();
   await expectNoAccessibilityViolations(page);
 });

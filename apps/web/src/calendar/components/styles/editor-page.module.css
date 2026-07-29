@@ -73,7 +73,10 @@
 @media (min-width: 900px) {
   .navigationInner,
   .content {
-    width: min(1180px, calc(100% - var(--space-10)));
+    width: min(
+      1120px,
+      calc(100% - clamp(48px, 6vw, 96px))
+    );
   }
 
   .content {

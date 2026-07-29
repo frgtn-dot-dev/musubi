@@ -313,6 +313,12 @@ export function EventEditorForm({
           <>
             <div className={styles.timeRow}>
               <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
+              <span
+                aria-hidden="true"
+                className={`${styles.pickerLabel} ${styles.timeLabel}`}
+              >
+                Time
+              </span>
               <TimePicker
                 disabled={saving}
                 label="Start time"
