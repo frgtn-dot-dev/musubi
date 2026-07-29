@@ -1,10 +1,15 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   providerDisplayName,
+  providerFlavor,
   type Calendar,
 } from "@musubi/types";
-import { Link2, Plus, RefreshCw, Unlink, Users, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import {
+  Link2,
+  Plus,
+  RefreshCw,
+  Unlink,
+} from "lucide-react";
+import { type FormEvent, useRef, useState } from "react";
 import type { InvitePreview } from "~/api/contracts";
 import {
   getFederatedInvitePreview,
@@ -21,8 +26,15 @@ import {
   useConnections,
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
+import { Button, IconButton } from "~/ui/Button";
+import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Empty } from "~/ui/Empty";
+import { Field } from "~/ui/Field";
+import { Row } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
-import styles from "./workspace.module.css";
+import { ProviderIcon } from "./ProviderIcon";
+import styles from "./styles/connections.module.css";
 
 type ConnectionsDialogProps = {
   calendars: Calendar[];
@@ -34,9 +46,19 @@ type ConnectionsDialogProps = {
 
 type ConnectedAccount = {
   accountId: string;
+  flavor: string | null;
   label: string;
   provider: string;
+  providerName: string;
   reconnect: boolean;
+  serverUrl?: string | null;
+};
+
+type CaldavDraft = {
+  apple: boolean;
+  password: string;
+  serverUrl: string;
+  username: string;
 };
 
 const APPLE_CALDAV_URL = "https://caldav.icloud.com";
@@ -44,8 +66,8 @@ const APPLE_CALDAV_URL = "https://caldav.icloud.com";
 function connectedAccounts(calendars: Calendar[]): ConnectedAccount[] {
   const map = new Map<string, ConnectedAccount>();
   for (const calendar of calendars) {
-    // Federated servers are listed from their own status source below, so they
-    // show up even when the server is unreachable and returns no calendars.
+    // Federated servers have their own status source below, which remains
+    // available even when a remote server cannot return its calendars.
     if (calendar.provider === "musubi") continue;
     if (!calendar.provider || !calendar.accountId) continue;
     const key = `${calendar.provider}:${calendar.accountId}`;
@@ -53,17 +75,23 @@ function connectedAccounts(calendars: Calendar[]): ConnectedAccount[] {
     const existing = map.get(key);
     if (existing) {
       existing.reconnect = existing.reconnect || reconnect;
-    } else {
-      map.set(key, {
-        accountId: calendar.accountId,
-        label:
-          calendar.accountLabel ?? providerDisplayName(calendar),
-        provider: calendar.provider,
-        reconnect,
-      });
+      continue;
     }
+    map.set(key, {
+      accountId: calendar.accountId,
+      flavor: providerFlavor(calendar),
+      label: calendar.accountLabel ?? providerDisplayName(calendar),
+      provider: calendar.provider,
+      providerName: providerDisplayName(calendar),
+      reconnect,
+      serverUrl: calendar.serverUrl,
+    });
   }
   return [...map.values()];
+}
+
+function accountStatus(reconnect: boolean) {
+  return reconnect ? "Needs attention" : "Connected";
 }
 
 export function ConnectionsDialog({
@@ -76,12 +104,9 @@ export function ConnectionsDialog({
   const connections = useConnections(userId);
   const federated = useFederatedWorkspace(userId);
   const { busy, error, run, setError } = useAsyncAction();
-  const [caldav, setCaldav] = useState<{
-    apple: boolean;
-    password: string;
-    serverUrl: string;
-    username: string;
-  }>();
+  const caldavReturnFocusRef = useRef<HTMLButtonElement>(null);
+  const inviteInputRef = useRef<HTMLInputElement>(null);
+  const [caldav, setCaldav] = useState<CaldavDraft>();
   const [inviteValue, setInviteValue] = useState("");
   const [invite, setInvite] = useState<{
     parsed: ParsedInvite;
@@ -92,12 +117,23 @@ export function ConnectionsDialog({
   const accounts = connectedAccounts(calendars);
   const federatedServers = federated.data?.servers ?? [];
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      setCaldav(undefined);
+      setInvite(undefined);
+      setInviteValue("");
+      setError("");
+      caldavReturnFocusRef.current = null;
+    }
+    onOpenChange(nextOpen);
+  }
+
   async function connectSocial(
     provider: "google" | "microsoft",
     scopes: string[],
   ) {
-    // Better Auth redirects the whole page to the provider and back to
-    // callbackURL, so a success never returns here — only an early error does.
+    // Better Auth redirects the page to the provider. Only an early error
+    // returns to this dialog.
     await run(async () => {
       const result = await authClient.linkSocial({
         callbackURL: window.location.href,
@@ -108,25 +144,65 @@ export function ConnectionsDialog({
     }, "Could not start the connection.");
   }
 
-  function reconnect(account: ConnectedAccount) {
-    if (account.provider === "google") {
-      void connectSocial("google", GOOGLE_CALENDAR_SCOPES);
-    } else if (account.provider === "microsoft") {
-      void connectSocial("microsoft", MICROSOFT_CALENDAR_SCOPES);
-    } else {
-      setCaldav({
-        apple: false,
-        password: "",
-        serverUrl: "",
-        username: "",
-      });
-    }
+  function openCaldav(draft: CaldavDraft, trigger: HTMLButtonElement) {
+    caldavReturnFocusRef.current = trigger;
+    setError("");
+    setCaldav(draft);
   }
 
-  async function previewInvite(submitEvent: FormEvent<HTMLFormElement>) {
-    submitEvent.preventDefault();
+  function closeCaldav() {
+    setCaldav(undefined);
+    setError("");
+    caldavReturnFocusRef.current?.focus();
+  }
+
+  function focusInviteInput() {
+    requestAnimationFrame(() => inviteInputRef.current?.focus());
+  }
+
+  function reconnect(
+    account: ConnectedAccount,
+    trigger: HTMLButtonElement,
+  ) {
+    if (account.provider === "google") {
+      void connectSocial("google", GOOGLE_CALENDAR_SCOPES);
+      return;
+    }
+    if (account.provider === "microsoft") {
+      void connectSocial("microsoft", MICROSOFT_CALENDAR_SCOPES);
+      return;
+    }
+    openCaldav(
+      {
+        apple: account.flavor === "apple",
+        password: "",
+        serverUrl:
+          account.flavor === "apple"
+            ? APPLE_CALDAV_URL
+            : (account.serverUrl ?? ""),
+        username: "",
+      },
+      trigger,
+    );
+  }
+
+  async function disconnectAccount(account: ConnectedAccount) {
+    const disconnected = await run(async () => {
+      await connections.disconnectAccount({
+        accountId: account.accountId,
+        provider: account.provider,
+      });
+      return true;
+    }, "Could not disconnect the account.");
+
+    if (disconnected) onNotice(`${account.label} disconnected.`);
+  }
+
+  async function previewInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     const parsed = parseInviteLink(inviteValue, window.location.origin);
     if (!parsed) {
+      setInvite(undefined);
       setError("Paste a Musubi invite link.");
       return;
     }
@@ -140,12 +216,17 @@ export function ConnectionsDialog({
 
   async function acceptInvite() {
     if (!invite) return;
-    await run(async () => {
+    const joined = await run(async () => {
       await connections.acceptInvite(invite.parsed);
+      return true;
+    }, "Could not join that calendar.");
+
+    if (joined) {
       onNotice(`Joined ${invite.preview.name}.`);
       setInvite(undefined);
       setInviteValue("");
-    }, "Could not join that calendar.");
+      focusInviteInput();
+    }
   }
 
   async function submitCaldav(event: FormEvent<HTMLFormElement>) {
@@ -156,260 +237,278 @@ export function ConnectionsDialog({
       setError("Fill in the server, username and password.");
       return;
     }
-    await run(async () => {
+    const connected = await run(async () => {
       await connections.connectCaldav({
         password: caldav.password,
         serverUrl,
         username: caldav.username.trim(),
       });
+      return true;
+    }, "Could not connect. Check the server and credentials.");
+
+    if (connected) {
       onNotice("Calendar connected.");
       setCaldav(undefined);
-    }, "Could not connect. Check the server and credentials.");
+      caldavReturnFocusRef.current?.focus();
+    }
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.dialogOverlay} />
-        <Dialog.Content
-          aria-describedby="connections-description"
-          className={styles.manageDialog}
+    <Dialog
+      bodyClassName={styles.body}
+      closeLabel="Close connections"
+      description="Keep outside calendars in sync or join one shared through Musubi."
+      footer={
+        <DialogClose>
+          <Button disabled={busy} variant="secondary">
+            Done
+          </Button>
+        </DialogClose>
+      }
+      onOpenChange={handleOpenChange}
+      open={open}
+      size="wide"
+      title="Connections"
+    >
+      <div aria-busy={busy || undefined}>
+        <section
+          aria-labelledby="connections-accounts-title"
+          className={styles.section}
         >
-          <header className={styles.manageDialogHeader}>
-            <div>
-              <Dialog.Title>Connections</Dialog.Title>
-              <Dialog.Description id="connections-description">
-                Sync calendars from Google, Outlook and Apple or CalDAV servers.
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                aria-label="Close connections"
-                className={styles.iconButton}
-                type="button"
+          <SectionHeading
+            description="Calendars from these accounts stay in sync both ways."
+            id="connections-accounts-title"
+            title="Connected accounts"
+          />
+          {accounts.length > 0 ? (
+            <ul aria-label="Connected accounts" className={styles.list}>
+              {accounts.map((account) => (
+                <li key={`${account.provider}:${account.accountId}`}>
+                  <Row
+                    className={styles.connectionRow}
+                    detail={account.providerName}
+                    icon={<ProviderIcon flavor={account.flavor} />}
+                    label={
+                      <span className={styles.rowLabel}>
+                        <span>{account.label}</span>
+                        <StatusBadge
+                          label={accountStatus(account.reconnect)}
+                          tone={account.reconnect ? "warning" : "positive"}
+                        />
+                      </span>
+                    }
+                    trailing={
+                      <span className={styles.rowActions}>
+                        {account.reconnect ? (
+                          <Button
+                            disabled={busy}
+                            icon={
+                              <RefreshCw size={14} strokeWidth={1.8} />
+                            }
+                            size="compact"
+                            variant="secondary"
+                            onClick={(event) =>
+                              reconnect(account, event.currentTarget)
+                            }
+                          >
+                            Reconnect
+                          </Button>
+                        ) : null}
+                        <IconButton
+                          className={styles.disconnectButton}
+                          disabled={busy}
+                          label={`Disconnect ${account.label}`}
+                          size="compact"
+                          title="Disconnect account"
+                          onClick={() => void disconnectAccount(account)}
+                        >
+                          <Unlink size={15} strokeWidth={1.7} />
+                        </IconButton>
+                      </span>
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty
+              className={styles.empty}
+              description="Connect an account below to see its calendars in Musubi."
+              icon={<Link2 size={18} strokeWidth={1.7} />}
+              title="No connected accounts"
+            />
+          )}
+        </section>
+
+        <section
+          aria-labelledby="connections-invite-title"
+          className={styles.section}
+        >
+          <SectionHeading
+            description="Use an invite from this or another Musubi server."
+            id="connections-invite-title"
+            title="Join a shared calendar"
+          />
+          {invite ? (
+            <InvitePreview
+              busy={busy}
+              invite={invite}
+              onCancel={() => {
+                setInvite(undefined);
+                setError("");
+                focusInviteInput();
+              }}
+              onJoin={() => void acceptInvite()}
+            />
+          ) : (
+            <form
+              className={styles.inviteForm}
+              onSubmit={(event) => void previewInvite(event)}
+            >
+              <Field
+                className={styles.inviteField}
+                description="Paste the full link or just its invite token."
+                label="Invite link"
               >
-                <X aria-hidden="true" size={17} />
-              </button>
-            </Dialog.Close>
-          </header>
-
-          <section className={styles.transferSection}>
-            <div className={styles.transferHeading}>
-              <div>
-                <h3>Connected accounts</h3>
-                <p>Calendars from these accounts stay in sync both ways.</p>
-              </div>
-            </div>
-            {accounts.length === 0 ? (
-              <p className={styles.dialogLoading}>No connected accounts yet.</p>
-            ) : (
-              <ul className={styles.calendarManageList}>
-                {accounts.map((account) => (
-                  <li
-                    className={styles.calendarManageRow}
-                    key={`${account.provider}:${account.accountId}`}
-                  >
-                    <span className={styles.calendarManageName}>
-                      {account.label}
-                    </span>
-                    <span className={styles.calendarBadge}>
-                      {providerDisplayName({ provider: account.provider })}
-                    </span>
-                    {account.reconnect ? (
-                      <button
-                        className={styles.iconButton}
-                        disabled={busy}
-                        type="button"
-                        aria-label={`Reconnect ${account.label}`}
-                        onClick={() => reconnect(account)}
-                      >
-                        <RefreshCw aria-hidden="true" size={15} />
-                      </button>
-                    ) : null}
-                    <button
-                      aria-label={`Disconnect ${account.label}`}
-                      className={styles.iconButton}
-                      disabled={busy}
-                      type="button"
-                      onClick={() =>
-                        void run(async () => {
-                          await connections.disconnectAccount({
-                            accountId: account.accountId,
-                            provider: account.provider,
-                          });
-                          onNotice(`${account.label} disconnected.`);
-                        }, "Could not disconnect the account.")
-                      }
-                    >
-                      <Unlink aria-hidden="true" size={15} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className={styles.transferSection}>
-            <div className={styles.transferHeading}>
-              <Users aria-hidden="true" size={17} />
-              <div>
-                <h3>Join a shared calendar</h3>
-                <p>
-                  Paste an invite link. If it belongs to another Musubi server,
-                  your server connects to it for you.
-                </p>
-              </div>
-            </div>
-            {invite ? (
-              <div className={styles.caldavForm}>
-                <div className={styles.calendarManageRow}>
-                  <span
-                    className={styles.calendarDot}
-                    style={{ backgroundColor: invite.preview.color }}
-                  />
-                  <span className={styles.calendarManageName}>
-                    {invite.preview.name}
-                  </span>
-                  <span className={styles.calendarBadge}>
-                    {invite.parsed.server
-                      ? new URL(invite.parsed.server).host
-                      : "This server"}
-                  </span>
-                </div>
-                <p className={styles.caldavHint}>
-                  {invite.preview.members.length} member
-                  {invite.preview.members.length === 1 ? "" : "s"} ·{" "}
-                  {invite.preview.events.length} event
-                  {invite.preview.events.length === 1 ? "" : "s"} in the next 30
-                  days. You join as a viewer.
-                </p>
-                <div className={styles.transferControls}>
-                  <button
-                    className={styles.secondaryButton}
-                    disabled={busy}
-                    type="button"
-                    onClick={() => setInvite(undefined)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className={styles.primaryButton}
-                    disabled={busy}
-                    type="button"
-                    onClick={() => void acceptInvite()}
-                  >
-                    {busy ? "Joining…" : "Join calendar"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form className={styles.transferControls} onSubmit={previewInvite}>
-                <label>
-                  <span className={styles.srOnly}>Invite link</span>
-                  <input
-                    disabled={busy}
-                    placeholder="https://server/invite/…"
-                    value={inviteValue}
-                    onChange={(event) => setInviteValue(event.target.value)}
-                  />
-                </label>
-                <button
-                  className={styles.secondaryButton}
-                  disabled={busy || !inviteValue.trim()}
-                  type="submit"
-                >
-                  {busy ? "Opening…" : "Open invite"}
-                </button>
-              </form>
-            )}
-          </section>
-
-          {federatedServers.length > 0 ? (
-            <section className={styles.transferSection}>
-              <div className={styles.transferHeading}>
-                <div>
-                  <h3>Musubi servers</h3>
-                  <p>
-                    Calendars shared with you from another Musubi server. Your
-                    server talks to them for you.
-                  </p>
-                </div>
-              </div>
-              <ul className={styles.calendarManageList}>
-                {federatedServers.map((server) => (
-                  <li
-                    className={styles.calendarManageRow}
-                    key={server.connectionId}
-                  >
-                    <span className={styles.calendarManageName}>
-                      {server.label}
-                    </span>
-                    <span className={styles.calendarBadge}>
-                      {server.state === "active"
-                        ? "Connected"
-                        : server.state === "unauthorized"
-                          ? "Needs a new invite"
-                          : "Unreachable"}
-                    </span>
-                    {server.state === "unreachable" ? (
-                      <button
-                        aria-label={`Retry ${server.label}`}
-                        className={styles.iconButton}
-                        disabled={busy}
-                        type="button"
-                        onClick={() => void federated.refetch()}
-                      >
-                        <RefreshCw aria-hidden="true" size={15} />
-                      </button>
-                    ) : null}
-                    <button
-                      aria-label={`Disconnect ${server.label}`}
-                      className={styles.iconButton}
-                      disabled={busy}
-                      type="button"
-                      onClick={() =>
-                        void run(async () => {
-                          await connections.disconnectFederatedServer(
-                            server.server,
-                          );
-                          onNotice(`${server.label} disconnected.`);
-                        }, "Could not disconnect the server.")
-                      }
-                    >
-                      <Unlink aria-hidden="true" size={15} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section className={styles.transferSection}>
-            <div className={styles.transferHeading}>
-              <Link2 aria-hidden="true" size={17} />
-              <div>
-                <h3>Add a connection</h3>
-                <p>Google and Outlook open a secure sign-in; you’ll return here after authorizing.</p>
-              </div>
-            </div>
-            <div className={styles.connectionButtons}>
-              {providers.includes("google") ? (
-                <button
-                  className={styles.secondaryButton}
+                <input
                   disabled={busy}
-                  type="button"
+                  placeholder="https://server/invite/…"
+                  ref={inviteInputRef}
+                  value={inviteValue}
+                  onChange={(event) => setInviteValue(event.target.value)}
+                />
+              </Field>
+              <Button
+                className={styles.inviteSubmit}
+                disabled={!inviteValue.trim()}
+                loading={busy}
+                type="submit"
+              >
+                Open invite
+              </Button>
+            </form>
+          )}
+        </section>
+
+        {federatedServers.length > 0 ? (
+          <section
+            aria-labelledby="connections-servers-title"
+            className={styles.section}
+          >
+            <SectionHeading
+              description="Remote calendars stay connected through your home server."
+              id="connections-servers-title"
+              title="Musubi servers"
+            />
+            <ul aria-label="Connected Musubi servers" className={styles.list}>
+              {federatedServers.map((server) => {
+                const status =
+                  server.state === "active"
+                    ? "Connected"
+                    : server.state === "unauthorized"
+                      ? "Needs a new invite"
+                      : "Unreachable";
+                return (
+                  <li key={server.connectionId}>
+                    <Row
+                      className={styles.connectionRow}
+                      detail="Shared calendars on another Musubi server"
+                      icon={<ProviderIcon flavor={null} />}
+                      label={
+                        <span className={styles.rowLabel}>
+                          <span>{server.label}</span>
+                          <StatusBadge
+                            label={status}
+                            tone={
+                              server.state === "active"
+                                ? "positive"
+                                : "warning"
+                            }
+                          />
+                        </span>
+                      }
+                      trailing={
+                        <span className={styles.rowActions}>
+                          {server.state === "unreachable" ? (
+                            <Button
+                              disabled={busy}
+                              icon={
+                                <RefreshCw size={14} strokeWidth={1.8} />
+                              }
+                              size="compact"
+                              variant="secondary"
+                              onClick={() => void federated.refetch()}
+                            >
+                              Retry
+                              <span className={styles.visuallyHidden}>
+                                {" "}
+                                {server.label}
+                              </span>
+                            </Button>
+                          ) : null}
+                          <IconButton
+                            className={styles.disconnectButton}
+                            disabled={busy}
+                            label={`Disconnect ${server.label}`}
+                            size="compact"
+                            title="Disconnect server"
+                            onClick={() =>
+                              void run(async () => {
+                                await connections.disconnectFederatedServer(
+                                  server.server,
+                                );
+                                onNotice(`${server.label} disconnected.`);
+                              }, "Could not disconnect the server.")
+                            }
+                          >
+                            <Unlink size={15} strokeWidth={1.7} />
+                          </IconButton>
+                        </span>
+                      }
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        <section
+          aria-labelledby="connections-add-title"
+          className={styles.section}
+        >
+          <SectionHeading
+            description="Choose where your other calendars live."
+            id="connections-add-title"
+            title="Add a connection"
+          />
+          {connections.capabilities.isPending ? (
+            <p aria-live="polite" className={styles.loading}>
+              Loading connection options…
+            </p>
+          ) : connections.capabilities.isError ? (
+            <p className={styles.sectionError} role="alert">
+              Connection options could not be loaded.
+            </p>
+          ) : providers.length > 0 ? (
+            <div className={styles.providerButtons}>
+              {providers.includes("google") ? (
+                <Button
+                  disabled={busy}
+                  icon={<ProviderIcon flavor="google" />}
+                  variant="secondary"
                   onClick={() =>
                     void connectSocial("google", GOOGLE_CALENDAR_SCOPES)
                   }
                 >
                   Connect Google Calendar
-                </button>
+                </Button>
               ) : null}
               {providers.includes("microsoft") ? (
-                <button
-                  className={styles.secondaryButton}
+                <Button
                   disabled={busy}
-                  type="button"
+                  icon={<ProviderIcon flavor="microsoft" />}
+                  variant="secondary"
                   onClick={() =>
                     void connectSocial(
                       "microsoft",
@@ -418,118 +517,239 @@ export function ConnectionsDialog({
                   }
                 >
                   Connect Outlook
-                </button>
+                </Button>
               ) : null}
               {providers.includes("caldav") ? (
                 <>
-                  <button
-                    className={styles.secondaryButton}
+                  <Button
                     disabled={busy}
-                    type="button"
-                    onClick={() =>
-                      setCaldav({
-                        apple: true,
-                        password: "",
-                        serverUrl: APPLE_CALDAV_URL,
-                        username: "",
-                      })
+                    icon={<ProviderIcon flavor="apple" />}
+                    variant="secondary"
+                    onClick={(event) =>
+                      openCaldav(
+                        {
+                          apple: true,
+                          password: "",
+                          serverUrl: APPLE_CALDAV_URL,
+                          username: "",
+                        },
+                        event.currentTarget,
+                      )
                     }
                   >
                     Connect Apple / iCloud
-                  </button>
-                  <button
-                    className={styles.secondaryButton}
+                  </Button>
+                  <Button
                     disabled={busy}
-                    type="button"
-                    onClick={() =>
-                      setCaldav({
-                        apple: false,
-                        password: "",
-                        serverUrl: "",
-                        username: "",
-                      })
+                    icon={<ProviderIcon flavor="caldav" />}
+                    variant="secondary"
+                    onClick={(event) =>
+                      openCaldav(
+                        {
+                          apple: false,
+                          password: "",
+                          serverUrl: "",
+                          username: "",
+                        },
+                        event.currentTarget,
+                      )
                     }
                   >
                     Connect other (CalDAV)
-                  </button>
+                  </Button>
                 </>
               ) : null}
             </div>
+          ) : (
+            <p className={styles.loading}>
+              This server does not offer external calendar connections.
+            </p>
+          )}
 
-            {caldav ? (
-              <form className={styles.caldavForm} onSubmit={submitCaldav}>
-                {caldav.apple ? (
-                  <p className={styles.caldavHint}>
-                    Use an app-specific password from appleid.apple.com — not
-                    your Apple ID password.
-                  </p>
-                ) : (
-                  <label>
-                    <span className={styles.srOnly}>CalDAV server URL</span>
-                    <input
-                      disabled={busy}
-                      placeholder="https://caldav.example.com"
-                      value={caldav.serverUrl}
-                      onChange={(event) =>
-                        setCaldav({ ...caldav, serverUrl: event.target.value })
-                      }
-                    />
-                  </label>
-                )}
-                <label>
-                  <span className={styles.srOnly}>Username</span>
-                  <input
-                    autoComplete="username"
-                    disabled={busy}
-                    placeholder={caldav.apple ? "Apple ID email" : "Username"}
-                    value={caldav.username}
-                    onChange={(event) =>
-                      setCaldav({ ...caldav, username: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  <span className={styles.srOnly}>Password</span>
-                  <input
-                    autoComplete="current-password"
-                    disabled={busy}
-                    placeholder="Password"
-                    type="password"
-                    value={caldav.password}
-                    onChange={(event) =>
-                      setCaldav({ ...caldav, password: event.target.value })
-                    }
-                  />
-                </label>
-                <div className={styles.transferControls}>
-                  <button
-                    className={styles.secondaryButton}
-                    disabled={busy}
-                    type="button"
-                    onClick={() => setCaldav(undefined)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className={styles.primaryButton}
-                    disabled={busy}
-                    type="submit"
-                  >
-                    <Plus aria-hidden="true" size={16} />
-                    <span>{busy ? "Connecting…" : "Connect"}</span>
-                  </button>
-                </div>
-              </form>
-            ) : null}
-          </section>
-
-          {error ? (
-            <div className={styles.formError} role="alert">
-              <p>{error}</p>
-            </div>
+          {caldav ? (
+            <CaldavForm
+              busy={busy}
+              draft={caldav}
+              onCancel={closeCaldav}
+              onChange={setCaldav}
+              onSubmit={(event) => void submitCaldav(event)}
+            />
           ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </section>
+
+        {error ? (
+          <div className={styles.error} role="alert">
+            <p>{error}</p>
+          </div>
+        ) : null}
+      </div>
+    </Dialog>
+  );
+}
+
+function SectionHeading({
+  description,
+  id,
+  title,
+}: {
+  description: string;
+  id: string;
+  title: string;
+}) {
+  return (
+    <div className={styles.sectionHeading}>
+      <SectionLabel id={id}>{title}</SectionLabel>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+function StatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "positive" | "warning";
+}) {
+  return (
+    <span className={styles.status} data-tone={tone}>
+      <span aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+function InvitePreview({
+  busy,
+  invite,
+  onCancel,
+  onJoin,
+}: {
+  busy: boolean;
+  invite: { parsed: ParsedInvite; preview: InvitePreview };
+  onCancel: () => void;
+  onJoin: () => void;
+}) {
+  const memberCount = invite.preview.members.length;
+  const eventCount = invite.preview.events.length;
+  const source = invite.parsed.server
+    ? new URL(invite.parsed.server).host
+    : "This server";
+
+  return (
+    <div
+      aria-label="Invite preview"
+      className={styles.invitePreview}
+      role="region"
+    >
+      <Row
+        className={styles.previewRow}
+        detail={`${memberCount} member${memberCount === 1 ? "" : "s"} · ${eventCount} event${eventCount === 1 ? "" : "s"} in the next 30 days`}
+        icon={
+          <span
+            className={styles.calendarSwatch}
+            style={{ backgroundColor: invite.preview.color }}
+          />
+        }
+        label={invite.preview.name}
+        value={source}
+      />
+      <p>You will join as a viewer.</p>
+      <div className={styles.formActions}>
+        <Button
+          autoFocus
+          disabled={busy}
+          variant="secondary"
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button loading={busy} onClick={onJoin}>
+          Join calendar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CaldavForm({
+  busy,
+  draft,
+  onCancel,
+  onChange,
+  onSubmit,
+}: {
+  busy: boolean;
+  draft: CaldavDraft;
+  onCancel: () => void;
+  onChange: (draft: CaldavDraft) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className={styles.caldavForm} onSubmit={onSubmit}>
+      <header className={styles.formHeading}>
+        <ProviderIcon flavor={draft.apple ? "apple" : "caldav"} />
+        <div>
+          <h3>
+            {draft.apple ? "Connect Apple / iCloud" : "Connect a CalDAV server"}
+          </h3>
+          <p>
+            {draft.apple
+              ? "Use an app-specific password, not your Apple ID password."
+              : "Your credentials are sent securely to the CalDAV server."}
+          </p>
+        </div>
+      </header>
+      {!draft.apple ? (
+        <Field label="Server address">
+          <input
+            autoFocus
+            disabled={busy}
+            placeholder="https://caldav.example.com"
+            type="url"
+            value={draft.serverUrl}
+            onChange={(event) =>
+              onChange({ ...draft, serverUrl: event.target.value })
+            }
+          />
+        </Field>
+      ) : null}
+      <Field label={draft.apple ? "Apple ID email" : "Username"}>
+        <input
+          autoComplete="username"
+          autoFocus={draft.apple}
+          disabled={busy}
+          placeholder={draft.apple ? "name@icloud.com" : "Username"}
+          value={draft.username}
+          onChange={(event) =>
+            onChange({ ...draft, username: event.target.value })
+          }
+        />
+      </Field>
+      <Field label={draft.apple ? "App-specific password" : "Password"}>
+        <input
+          autoComplete="current-password"
+          disabled={busy}
+          placeholder="Password"
+          type="password"
+          value={draft.password}
+          onChange={(event) =>
+            onChange({ ...draft, password: event.target.value })
+          }
+        />
+      </Field>
+      <div className={styles.formActions}>
+        <Button disabled={busy} variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          icon={<Plus size={16} strokeWidth={1.7} />}
+          loading={busy}
+          type="submit"
+        >
+          Connect
+        </Button>
+      </div>
+    </form>
   );
 }

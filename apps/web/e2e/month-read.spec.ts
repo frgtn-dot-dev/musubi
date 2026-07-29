@@ -1957,6 +1957,12 @@ test("transfers calendar ownership", async ({ page }) => {
 });
 
 test("connects and disconnects calendar providers", async ({ page }) => {
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+
   const withExternal = [
     ...calendars,
     {
@@ -2000,6 +2006,16 @@ test("connects and disconnects calendar providers", async ({ page }) => {
   await expect(
     page.getByRole("heading", { exact: true, name: "Connections" }),
   ).toBeVisible();
+  const connectionsDialog = page.getByRole("dialog", {
+    name: "Connections",
+  });
+  await connectionsDialog.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 
   // Capability-gated add buttons.
   await expect(
@@ -2021,7 +2037,9 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 
   // CalDAV/Apple connect form.
   await page.getByRole("button", { name: "Connect Apple / iCloud" }).click();
-  await page.getByPlaceholder("Apple ID email").fill("me@icloud.com");
+  await page
+    .getByRole("textbox", { name: "Apple ID email" })
+    .fill("me@icloud.com");
   await page.getByPlaceholder("Password").fill("app-specific-pw");
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
@@ -2032,6 +2050,69 @@ test("connects and disconnects calendar providers", async ({ page }) => {
     serverUrl: "https://caldav.icloud.com",
     username: "me@icloud.com",
   });
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("keeps connections usable as a mobile sheet", async ({ page }) => {
+  await page.setViewportSize({ height: 720, width: 390 });
+  await mockAuthenticatedReads(page, events, [
+    ...calendars,
+    {
+      accountId: "acc-1",
+      accountLabel: "work@gmail.com",
+      color: "#4285f4",
+      creatorID: "user-web-qa",
+      id: "g-cal-1",
+      members: [],
+      name: "Work (Google)",
+      provider: "google",
+      role: "owner",
+      syncStatus: "reconnect_required",
+    },
+  ]);
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, {
+      email: true,
+      minClientVersion: "0.1.2",
+      socials: ["google"],
+      syncProviders: ["google", "microsoft", "caldav"],
+    }),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("button", { name: "Connections" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Connections" });
+  await sheet.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  const box = (await sheet.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(Math.round(box.width)).toBe(390);
+  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
+
+  const account = sheet
+    .getByRole("listitem")
+    .filter({ hasText: "work@gmail.com" });
+  await expect(account).toContainText("Needs attention");
+  await expect(
+    account.getByRole("button", { name: "Reconnect" }),
+  ).toBeVisible();
+
+  const apple = sheet.getByRole("button", {
+    name: "Connect Apple / iCloud",
+  });
+  await apple.click();
+  const email = sheet.getByRole("textbox", { name: "Apple ID email" });
+  await expect(email).toBeFocused();
+  await sheet.getByRole("button", { name: "Cancel" }).click();
+  await expect(apple).toBeFocused();
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test("shows federated calendars and reports an unreachable server", async ({
