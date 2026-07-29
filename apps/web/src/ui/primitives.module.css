@@ -1065,8 +1065,11 @@
 .toastRegion {
   position: fixed;
   z-index: 130;
-  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
-  left: 50%;
+  bottom: var(
+    --toast-bottom,
+    calc(var(--space-5) + env(safe-area-inset-bottom))
+  );
+  left: var(--toast-left, 50%);
   display: flex;
   width: min(390px, calc(100vw - var(--space-6)));
   justify-content: center;
@@ -1694,7 +1697,10 @@
   }
 
   .toastRegion {
-    bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+    bottom: var(
+      --toast-bottom,
+      calc(var(--space-3) + env(safe-area-inset-bottom))
+    );
   }
 
   :global([data-radix-popper-content-wrapper]):has(

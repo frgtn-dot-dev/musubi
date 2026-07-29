@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clampOffset, type Offset } from "./window-drag";
 
-const NARROW_QUERY = "(max-width: 600px)";
+const NARROW_QUERY = "(max-width: 599px)";
 
 /**
  * Drag a floating layer around by a handle, without letting it leave its bounds.

@@ -1,6 +1,6 @@
 # Handoff — web UI restructure (primitives, pickers, screens)
 
-- Stav: **nezačato**, plán schválený 2026-07-28
+- Stav: **dokončeno**, fáze 0–4 uzavřené 2026-07-29
 - Pro: `apps/web`
 - Čti první: tento soubor, pak `docs/ui/calendar-ui.md` (§2 pravidla R1–R12, §7
   checklist, §8 anti-patterny). Zdroj principů je `store/UI-UX/`, předloha stylu je
@@ -200,17 +200,16 @@ focus se vrací na trigger, šipky se hýbou uvnitř.
     `login.tsx` + `login.module.css`) — vtáhnout druhý a třetí stylesheet do
     primitiv, aby `.route-state*` a duplicitní brand/form/button pravidla zmizela.
 
-### Fáze 4 — úklid
+### Fáze 4 — úklid — **HOTOVO**
 
-- Smazat mrtvé classy a znovu změřit `workspace.module.css`; žádný dialog nemá mít
-  vlastní layout CSS. Srovnat breakpointy a zrušit JS duplikát
-  `(max-width: 820px)` v `Sidebar.tsx:48`.
-- Axe průchod přes každý dialog (e2e helper pouští **plnou defaultní sadu pravidel
+- Mrtvé classy a compatibility stylesheet jsou odstraněné; dialogové skořápky
+  vlastní `src/ui/Dialog`. Breakpointy používají ladder 599 / 1023 / 1439 a
+  sidebar čte CSS flag místo vlastní media query.
+- Axe průchod pokrývá každý dialog (e2e helper pouští **plnou defaultní sadu pravidel
   bez filtrování** — přesně to chytilo poslední kontrast 3,22:1) plus jeden
   klávesnicový průchod na obrazovku; handoff DoD vyžaduje klávesnicový scénář, ne
   jen axe.
-- Aktualizovat `docs/ui/calendar-ui.md`: tabulka tokenů v §3 je zastaralá (všech
-  sedm „chybějících" tokenů existuje) a přidat sekci o primitivech s odkazem na
+- `docs/ui/calendar-ui.md` popisuje aktuální tokeny, breakpointy a primitiva v
   `src/ui/`, aby příští ticket nevymyslel šestnácté tlačítko.
 
 ## Co NErozbíjet

@@ -21,7 +21,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import { BrandMark } from "~/components/BrandMark";
 import { Avatar } from "~/ui/Avatar";
@@ -57,18 +56,6 @@ type SidebarProps = {
   weekStartsOn: UserSettings["weekStartsOn"];
 };
 
-const mobileQuery = "(max-width: 820px)";
-
-function subscribeToMobileViewport(callback: () => void) {
-  const mediaQuery = window.matchMedia(mobileQuery);
-  mediaQuery.addEventListener("change", callback);
-  return () => mediaQuery.removeEventListener("change", callback);
-}
-
-function getMobileViewport() {
-  return window.matchMedia(mobileQuery).matches;
-}
-
 export function Sidebar({
   activePageId,
   anchor,
@@ -93,16 +80,29 @@ export function Sidebar({
   weekStartsOn,
 }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false);
-  const isMobile = useSyncExternalStore(
-    subscribeToMobileViewport,
-    getMobileViewport,
-    () => false,
-  );
-  const sidebarHidden = isMobile && !isOpen;
+  const [overlay, setOverlay] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusOnCloseRef = useRef(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const modal = overlay && isOpen;
 
   useEffect(() => {
-    const modal = isMobile && isOpen;
+    function syncOverlayState() {
+      const value = sidebarRef.current
+        ? window
+            .getComputedStyle(sidebarRef.current)
+            .getPropertyValue("--sidebar-overlay")
+            .trim()
+        : "0";
+      setOverlay(value === "1");
+    }
+
+    syncOverlayState();
+    window.addEventListener("resize", syncOverlayState);
+    return () => window.removeEventListener("resize", syncOverlayState);
+  }, []);
+
+  useEffect(() => {
     onModalStateChange?.(modal);
     if (!modal) {
       return;
@@ -114,9 +114,9 @@ export function Sidebar({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
+      restoreFocusOnCloseRef.current = true;
       onModalStateChange?.(false);
       onClose();
-      requestAnimationFrame(() => returnFocusRef?.current?.focus());
     };
     window.addEventListener("keydown", closeOnEscape);
 
@@ -124,18 +124,21 @@ export function Sidebar({
       cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [
-    isMobile,
-    isOpen,
-    onClose,
-    onModalStateChange,
-    returnFocusRef,
-  ]);
+  }, [modal, onClose, onModalStateChange, returnFocusRef]);
+
+  useEffect(() => {
+    if (isOpen || !restoreFocusOnCloseRef.current) return;
+    restoreFocusOnCloseRef.current = false;
+    const focusFrame = requestAnimationFrame(() =>
+      returnFocusRef?.current?.focus(),
+    );
+    return () => cancelAnimationFrame(focusFrame);
+  }, [isOpen, returnFocusRef]);
 
   function closeAndRestoreFocus() {
+    restoreFocusOnCloseRef.current = true;
     onModalStateChange?.(false);
     onClose();
-    requestAnimationFrame(() => returnFocusRef?.current?.focus());
   }
 
   return (
@@ -151,8 +154,9 @@ export function Sidebar({
       <aside
         className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""}`}
         aria-label="Workspace navigation"
-        aria-hidden={sidebarHidden}
-        inert={sidebarHidden}
+        aria-hidden={overlay && !isOpen}
+        inert={overlay && !isOpen}
+        ref={sidebarRef}
       >
         <div className={styles.sidebarHeader}>
           <div className={styles.brand}>

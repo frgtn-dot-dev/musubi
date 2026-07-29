@@ -1,7 +1,16 @@
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
+
+function subscribeToPortalTarget() {
+  return () => undefined;
+}
+
+function getPortalTarget() {
+  return document.body;
+}
 
 export type ToastTone = "neutral" | "error";
 
@@ -24,10 +33,15 @@ export function Toast({
   onAction,
   tone = "neutral",
 }: ToastProps) {
+  const portalTarget = useSyncExternalStore(
+    subscribeToPortalTarget,
+    getPortalTarget,
+    () => null,
+  );
   const hasAction = Boolean(actionLabel && onAction);
   const isError = tone === "error";
 
-  return (
+  const content = (
     <div
       aria-atomic="true"
       aria-live={isError ? "assertive" : "polite"}
@@ -49,4 +63,6 @@ export function Toast({
       </div>
     </div>
   );
+
+  return portalTarget ? createPortal(content, portalTarget) : content;
 }

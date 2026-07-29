@@ -1,11 +1,12 @@
 # Kalendářové UI/UX — pravidla a plán polishe
 
 - Stav: living document
-- Datum: 2026-07-27
+- Datum: 2026-07-29
 - Zdroj principů: `store/UI-UX/` (playbook, spec, studie Google Calendar)
 - Platí pro: `apps/web` primárně, `apps/client` kde to má smysl
-- Navazuje: [`ui-restructure-handoff.md`](./ui-restructure-handoff.md) — sjednocení
-  dialogů, primitiva v `src/ui/` a vlastní date/time/color pickery (nezačato)
+- Navazuje: [`ui-restructure-handoff.md`](./ui-restructure-handoff.md) —
+  sjednocení dialogů, primitiva v `src/ui/` a vlastní date/time/color pickery
+  (dokončeno 2026-07-29)
 
 Studie Google Calendar je **referenční úroveň disciplíny, ne vizuální předloha**.
 Kopírujeme způsob skládání vrstev a míru závaznosti akcí. Nekopírujeme paletu,
@@ -81,22 +82,53 @@ event content → Create → přepnutí pohledu.
 
 ## 3. Tokeny a geometrie
 
-Náhodné hodnoty v komponentách jsou zakázané. Spacing jen z škály
-`4 / 8 / 12 / 16 / 24 / 32`.
+Zdroj pravdy je [`apps/web/src/design/tokens.css`](../../apps/web/src/design/tokens.css).
+Nové komponenty nesmí zakládat paralelní paletu ani vlastní škálu controlů.
 
-Dnes v `design/tokens.css` je 47 tokenů (surfaces, borders, text, accent,
-pigmenty, radius, `--sidebar-width`, `--toolbar-height`, motion fast/standard).
-Chybí a musí přijít:
+Aktuální systém obsahuje:
 
-| Token | Doporučení | Poznámka |
-|---|---|---|
-| `--space-1..8` | 4/8/12/16/24/32 | žádné ad-hoc mezery |
-| `--hour-height` | 48–72 px | **řízeno density**, dnes hardcoded `HOUR_HEIGHT = 64` v `TimeGridView.tsx` |
-| `--date-header-height` | 40–52 px | sticky v day/week |
-| `--event-radius` | 4–8 px | menší v husté mřížce |
-| `--focus-ring` | 2 px solid accent | nesmí kolidovat s event borderem |
-| `--popover-width` | 320–420 px | collision-aware, max-height + vnitřní scroll |
-| `--motion-slow` | ~260 ms | máme jen fast/standard |
+| Rodina | Tokeny / kontrakt |
+|---|---|
+| plochy a text | `--surface-*`, `--border-*`, `--text-*`, světlé i tmavé téma |
+| typografie | `--font-*` a škála `--text-10..--text-26` |
+| spacing | `--space-1..--space-8` (`4 / 8 / 12 / 16 / 20 / 24 / 28 / 32`) |
+| radiusy | `--radius-sm/-md/-lg/-pill/-sheet/-card/-control/-chip`, `--event-radius` |
+| ovládání | `--control-height`, `--row-min-height`, `--focus-ring` |
+| kalendář | `--sidebar-width`, `--toolbar-height`, `--date-header-height`, `--hour-height`, `--popover-width` |
+| motion | `--motion-fast/-standard/-slow`; globální reduced-motion pojistka |
+
+`--hour-height` nastavuje renderer z téhož `TimeGeometry`, který používá
+hit-testing, event layout i drag. Není dovoleno zavést druhou pixelovou
+konstantu pro tutéž časovou osu.
+
+### 3.1 Sdílená UI vrstva
+
+Znovupoužitelné ovládací prvky žijí v
+[`apps/web/src/ui/`](../../apps/web/src/ui/). Feature komponenta může vlastnit
+obsah a jeho doménové uspořádání, ne novou skořápku dialogu nebo šestnáctý
+vzhled tlačítka.
+
+| Potřeba | Použít |
+|---|---|
+| akce a ikonová akce | `Button` / `IconButton`; navigace zůstává odkazem s `buttonClassName` |
+| modal / confirm | `Dialog` / `DialogClose` — jedna hlavička, focus trap, návrat focusu, mobilní sheet |
+| popsané pole | `Field` — label, description a error vazby generuje komponenta |
+| řádek nastavení či seznamu | `RowAction` / `RowToggle` / `RowOptions` |
+| malá volba | `Segmented`; boolean `Switch` / `Checkbox`; delší seznam `Select` |
+| datum, čas a barva | `DatePicker` / `TimePicker` / `ColorPicker`, ne nativní browser picker |
+| prázdno, sekce, feedback | `Empty` / `SectionLabel` / `Toast` |
+| route a auth plocha | `RouteState` / `AuthShell` |
+
+Varianty patří do API primitiva (`variant`, `size`, `layout`), ne do
+descendant selektoru obrazovky. Moduly v `calendar/components/styles/` smějí
+popisovat jen doménový obsah uvnitř sdílené skořápky.
+
+Responzivní ladder je jediný:
+
+- `≤599`: overlay drawer, FAB, popover → sheet;
+- `600–1023`: overlay/compact drawer;
+- `1024–1439`: permanentní sidebar, kompaktní desktop chrome;
+- `≥1440`: plný desktop shell.
 
 Vizuální hierarchie: mřížka nízký kontrast → **eventy dominantní**; dnešek
 zvýrazněný bez zabarvení celého sloupce; now indicator jediný svého typu;

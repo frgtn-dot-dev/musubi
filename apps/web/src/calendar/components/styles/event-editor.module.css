@@ -415,8 +415,7 @@
 
   .pickerRow,
   .timeRow,
-  .toggleRow,
-  .calendarChoice {
+  .toggleRow {
     min-height: 52px;
   }
 }

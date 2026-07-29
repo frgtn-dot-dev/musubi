@@ -7,6 +7,7 @@ import {
 } from "@musubi/types";
 import { GripHorizontal, X } from "lucide-react";
 import { useRef } from "react";
+import { IconButton } from "~/ui/Button";
 import {
   createEventFromForm,
   defaultEventFormValues,
@@ -167,13 +168,9 @@ export function QuickCreate({
             ) : null}
             <h2>New event</h2>
             <Popover.Close asChild>
-              <button
-                className={styles.iconButton}
-                type="button"
-                aria-label="Close new event"
-              >
+              <IconButton label="Close new event" size="compact">
                 <X aria-hidden="true" size={17} strokeWidth={1.6} />
-              </button>
+              </IconButton>
             </Popover.Close>
           </div>
           <EventEditorForm

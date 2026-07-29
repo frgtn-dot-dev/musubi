@@ -1,6 +1,6 @@
 import { Dialog } from "~/ui/Dialog";
 import { SHORTCUT_GROUPS } from "../shortcuts";
-import styles from "./workspace.module.css";
+import styles from "./styles/shortcuts.module.css";
 
 /** The `?` overlay. Lists the same map `shortcutFor` dispatches. */
 export function ShortcutsDialog({

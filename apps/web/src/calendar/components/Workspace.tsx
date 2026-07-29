@@ -24,6 +24,7 @@ import {
   useState,
 } from "react";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { Toast } from "~/ui/Toast";
 import { getAgendaLabel } from "../agenda-math";
 import {
   getEventRangeLabel,
@@ -1011,22 +1012,16 @@ export function Workspace({
           />
         ) : null}
 
-        <div className={styles.liveRegion} role="status" aria-live="polite">
-          {notice ? (
-            <div className={styles.toast}>
-              <p>{notice.message}</p>
-              {notice.undo ? (
-                <button
-                  className={styles.toastAction}
-                  type="button"
-                  onClick={() => void runUndo(notice.undo!)}
-                >
-                  Undo
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        {notice ? (
+          <Toast
+            actionLabel={notice.undo ? "Undo" : undefined}
+            className={styles.workspaceToast}
+            message={notice.message}
+            onAction={
+              notice.undo ? () => void runUndo(notice.undo) : undefined
+            }
+          />
+        ) : null}
       </main>
       {createIntent ? (
         <QuickCreate

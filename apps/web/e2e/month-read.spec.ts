@@ -2797,6 +2797,7 @@ test("asks which occurrences a dragged series should change", async ({
   const dialog = page.getByRole("dialog", { name: "Change recurring event" });
   await expect(dialog).toBeVisible();
   expect(writes).toHaveLength(0);
+  await expectNoAccessibilityViolations(page);
 
   // Dismissing writes nothing at all.
   await page.keyboard.press("Escape");
@@ -3242,11 +3243,14 @@ test("moves focus through the mobile navigation drawer", async ({ page }) => {
   expect(studioBox.height).toBeGreaterThanOrEqual(44);
   await expectNoAccessibilityViolations(page);
 
-  // Resizing to desktop must never leave the calendar inert behind a drawer
-  // that no longer behaves as a modal layer.
-  await page.setViewportSize({ height: 720, width: 1280 });
+  // Medium keeps the overlay drawer; 1024 is the first permanent-sidebar
+  // width. CSS owns that boundary and JS reads its flag, so the two cannot
+  // silently drift apart.
+  await page.setViewportSize({ height: 720, width: 800 });
+  await expect(main).toHaveAttribute("inert", "");
+  await page.setViewportSize({ height: 720, width: 1024 });
   await expect(main).not.toHaveAttribute("inert", "");
-  await page.setViewportSize({ height: 720, width: 390 });
+  await page.setViewportSize({ height: 720, width: 800 });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Escape");

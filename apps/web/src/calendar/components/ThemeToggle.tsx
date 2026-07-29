@@ -5,7 +5,7 @@ import {
   subscribeToTheme,
   toggleTheme,
 } from "~/design/theme";
-import styles from "./workspace.module.css";
+import { IconButton } from "~/ui/Button";
 
 export function ThemeToggle() {
   const theme = useSyncExternalStore(
@@ -17,10 +17,8 @@ export function ThemeToggle() {
   const nextTheme = theme === "dark" ? "light" : "dark";
 
   return (
-    <button
-      className={styles.iconButton}
-      type="button"
-      aria-label={`Use ${nextTheme} theme`}
+    <IconButton
+      label={`Use ${nextTheme} theme`}
       title={`Use ${nextTheme} theme`}
       onClick={toggleTheme}
     >
@@ -29,6 +27,6 @@ export function ThemeToggle() {
       ) : (
         <Moon aria-hidden="true" size={17} strokeWidth={1.6} />
       )}
-    </button>
+    </IconButton>
   );
 }
