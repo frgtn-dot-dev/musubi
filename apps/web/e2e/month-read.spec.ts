@@ -475,6 +475,50 @@ test("redirects an anonymous Month request to sign in", async ({ page }) => {
   await expectNoAccessibilityViolations(page);
 });
 
+test("keeps sign in clear and keyboard-usable on a narrow screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 720 });
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+
+  const email = page.getByRole("textbox", { name: "Email" });
+  await expect(email).toBeFocused();
+  await email.fill("not-an-email");
+  await page.getByLabel("Passphrase").fill("long-enough");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Enter a valid email address.");
+
+  const createAccount = page.getByRole("button", { name: "Create one" });
+  await createAccount.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Begin simply." })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
+  await expectNoAccessibilityViolations(page);
+});
+
+test("renders an accessible route state for an unknown page", async ({
+  page,
+}) => {
+  await page.goto("/this-page-does-not-exist");
+
+  await expect(
+    page.getByRole("heading", {
+      name: "This page is not part of your workspace.",
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Musubi" })).toBeVisible();
+  await expect(page.getByRole("main")).toHaveAttribute("id", "main-content");
+  await expectNoAccessibilityViolations(page);
+});
+
 test("reads, filters and signs out of the authenticated Month", async ({
   page,
 }) => {

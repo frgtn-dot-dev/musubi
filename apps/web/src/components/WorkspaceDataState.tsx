@@ -1,4 +1,5 @@
-import { BrandMark } from "./BrandMark";
+import { Button } from "~/ui/Button";
+import { RouteState } from "~/ui/RouteState";
 
 type WorkspaceDataStateProps = {
   detail: string;
@@ -16,27 +17,17 @@ export function WorkspaceDataState({
   title,
 }: WorkspaceDataStateProps) {
   return (
-    <main
-      className="route-state"
-      id="main-content"
-      aria-busy={kind === "loading"}
-    >
-      <BrandMark aria-hidden="true" />
-      <p className="route-state__code">
-        {kind === "loading" ? "Loading workspace" : "Calendar unavailable"}
-      </p>
-      <h1>{title}</h1>
-      <p>{detail}</p>
-      {requestId ? (
-        <p className="route-state__request">Request ID: {requestId}</p>
-      ) : null}
-      {onRetry ? (
-        <div className="route-state__actions">
-          <button type="button" onClick={onRetry}>
-            Try again
-          </button>
-        </div>
-      ) : null}
-    </main>
+    <RouteState
+      actions={
+        onRetry ? <Button onClick={onRetry}>Try again</Button> : undefined
+      }
+      busy={kind === "loading"}
+      description={detail}
+      eyebrow={
+        kind === "loading" ? "Loading workspace" : "Calendar unavailable"
+      }
+      requestId={requestId}
+      title={title}
+    />
   );
 }

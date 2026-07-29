@@ -5,6 +5,7 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
+import { RouteState } from "~/ui/RouteState";
 import { AUTH_EXPIRED_EVENT, authClient } from "./auth-client";
 
 export function SessionGate() {
@@ -44,20 +45,22 @@ export function SessionGate() {
 
   if (session.isPending) {
     return (
-      <main className="route-state" id="main-content" aria-busy="true">
-        <p className="route-state__code">Musubi</p>
-        <h1>Opening your calendar…</h1>
-        <p>Checking the session on this server.</p>
-      </main>
+      <RouteState
+        busy
+        description="Checking the session on this server."
+        eyebrow="Musubi"
+        title="Opening your calendar…"
+      />
     );
   }
 
   if (!session.data) {
     return (
-      <main className="route-state" id="main-content" aria-busy="true">
-        <p className="route-state__code">Session required</p>
-        <h1>Taking you to sign in…</h1>
-      </main>
+      <RouteState
+        busy
+        eyebrow="Session required"
+        title="Taking you to sign in…"
+      />
     );
   }
 

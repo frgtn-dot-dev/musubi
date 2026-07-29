@@ -14,6 +14,29 @@ export type ButtonVariant =
 
 export type ButtonSize = "control" | "compact";
 
+type ButtonClassNameOptions = {
+  className?: string;
+  size?: ButtonSize;
+  variant?: ButtonVariant;
+};
+
+/**
+ * Gives semantic links the same visual treatment as actions without turning
+ * navigation into a button.
+ */
+export function buttonClassName({
+  className,
+  size = "control",
+  variant = "primary",
+}: ButtonClassNameOptions = {}) {
+  return classNames(
+    styles.button,
+    styles[`button_${variant}`],
+    styles[`button_${size}`],
+    className,
+  );
+}
+
 export type ButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
   "children"
@@ -50,12 +73,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         {...buttonProps}
         aria-busy={loading || undefined}
-        className={classNames(
-          styles.button,
-          styles[`button_${variant}`],
-          styles[`button_${size}`],
-          className,
-        )}
+        className={buttonClassName({ className, size, variant })}
         data-loading={loading ? "" : undefined}
         disabled={blocked}
         ref={ref}

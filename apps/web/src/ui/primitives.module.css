@@ -19,6 +19,8 @@
   justify-content: center;
   gap: var(--space-2);
   padding-inline: var(--space-4);
+  cursor: pointer;
+  text-decoration: none;
 }
 
 .iconButton {
@@ -165,6 +167,11 @@
   column-gap: var(--space-4);
 }
 
+.field_plain {
+  padding: 0;
+  border-bottom: 0;
+}
+
 .fieldLabel {
   color: var(--text-primary);
   font-size: var(--text-10);
@@ -218,6 +225,229 @@
 
 .fieldError {
   color: var(--accent-primary);
+}
+
+.routeState,
+.authPage {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 20% 10%,
+      color-mix(in srgb, var(--accent-primary) 9%, transparent),
+      transparent 35%
+    ),
+    radial-gradient(
+      circle at 80% 90%,
+      color-mix(in srgb, var(--text-muted) 8%, transparent),
+      transparent 38%
+    ),
+    var(--surface-canvas);
+}
+
+.pageAmbient {
+  position: absolute;
+  right: -0.02em;
+  bottom: -0.42em;
+  color: var(--text-primary);
+  font-family: var(--font-kanji);
+  font-size: min(54vw, 42rem);
+  line-height: 1;
+  opacity: 0.025;
+  pointer-events: none;
+}
+
+.pageEyebrow {
+  margin: 0;
+  color: var(--accent-primary);
+  font-size: var(--text-11);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.routeState {
+  place-items: center;
+  padding: var(--space-8);
+  text-align: center;
+}
+
+.routeStateContent {
+  z-index: 1;
+  display: grid;
+  width: min(100%, 620px);
+  justify-items: center;
+  gap: var(--space-3);
+}
+
+.routeStateMark {
+  width: 72px;
+  height: auto;
+  margin-bottom: var(--space-2);
+}
+
+.routeState h1 {
+  max-width: 18ch;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 400;
+  line-height: 1.08;
+}
+
+.routeStateDescription {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-15);
+  line-height: 1.6;
+}
+
+.routeStateRequest {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-10);
+}
+
+.routeStateActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.authPage {
+  place-items: center;
+  padding: 96px var(--space-6) 48px;
+}
+
+.authTopBar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-7);
+}
+
+.authBrand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--text-10);
+  letter-spacing: 0.38em;
+}
+
+.authBrand svg {
+  width: 43px;
+  height: 29px;
+}
+
+.authCard {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 430px);
+  padding: clamp(var(--space-7), 5vw, 46px);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sheet);
+  background: color-mix(in srgb, var(--surface-panel) 76%, transparent);
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(22px);
+}
+
+.authCard h1 {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.9rem, 6vw, 2.7rem);
+  font-weight: 400;
+  line-height: 1.14;
+}
+
+.authIntroduction {
+  margin: var(--space-3) 0 var(--space-7);
+  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: var(--text-15);
+  line-height: 1.65;
+}
+
+.authForm {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.authMessage {
+  min-height: 19px;
+  color: var(--accent-primary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.authSubmit {
+  width: 100%;
+}
+
+.authFooter {
+  margin-top: var(--space-5);
+}
+
+.authSwitch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-12);
+  text-align: center;
+}
+
+.authSwitch button {
+  min-height: 36px;
+  padding-inline: var(--space-1);
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 599px) {
+  .routeState {
+    padding: var(--space-6);
+  }
+
+  .routeStateContent {
+    gap: var(--space-2);
+  }
+
+  .routeStateMark {
+    width: 60px;
+  }
+
+  .routeState h1 {
+    font-size: clamp(1.9rem, 10vw, 2.7rem);
+  }
+
+  .authPage {
+    place-items: start center;
+    padding: 88px var(--space-3) var(--space-6);
+  }
+
+  .authTopBar {
+    padding: var(--space-4);
+  }
+
+  .authCard {
+    padding: var(--space-7) var(--space-5);
+    border-radius: var(--radius-lg);
+  }
 }
 
 .sectionLabel {

@@ -58,7 +58,6 @@ button {
   transform: translateY(0);
 }
 
-.route-state,
 .foundation {
   display: grid;
   min-height: 100vh;
@@ -67,11 +66,6 @@ button {
   text-align: center;
 }
 
-.route-state {
-  gap: 14px;
-}
-
-.route-state h1,
 .foundation h1 {
   max-width: 720px;
   margin: 0;
@@ -81,7 +75,6 @@ button {
   line-height: 1.08;
 }
 
-.route-state p,
 .foundation p {
   max-width: 580px;
   margin: 0 auto;
@@ -89,39 +82,11 @@ button {
   line-height: 1.6;
 }
 
-.route-state__code,
 .foundation > p:first-of-type {
   color: var(--accent-primary);
   font-size: 0.72rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-}
-
-.route-state > svg {
-  width: 72px;
-  height: auto;
-  margin: 0 auto 8px;
-}
-
-.route-state__request {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-}
-
-.route-state__actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-.route-state button,
-.route-state a {
-  padding: 10px 14px;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  text-decoration: none;
 }
 
 .foundation {

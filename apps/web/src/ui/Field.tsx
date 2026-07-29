@@ -22,6 +22,7 @@ export type FieldProps = Omit<HTMLAttributes<HTMLDivElement>, "children"> & {
   label: ReactNode;
   labelHidden?: boolean;
   layout?: "stack" | "inline";
+  variant?: "plain" | "section";
 };
 
 /**
@@ -37,6 +38,7 @@ export function Field({
   label,
   labelHidden = false,
   layout = "stack",
+  variant = "section",
   ...containerProps
 }: FieldProps) {
   const generatedId = useId();
@@ -64,6 +66,7 @@ export function Field({
       className={classNames(
         styles.field,
         layout === "inline" && styles.field_inline,
+        styles[`field_${variant}`],
         className,
       )}
       data-invalid={error ? "" : undefined}

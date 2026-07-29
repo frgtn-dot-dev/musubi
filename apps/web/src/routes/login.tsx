@@ -2,9 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { authClient } from "~/auth/auth-client";
-import { BrandMark } from "~/components/BrandMark";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
-import styles from "./login.module.css";
+import {
+  AuthForm,
+  AuthMessage,
+  AuthShell,
+  AuthSubmit,
+  AuthSwitch,
+} from "~/ui/AuthShell";
+import { Field } from "~/ui/Field";
+import { RouteState } from "~/ui/RouteState";
 
 const loginSearchSchema = z.object({
   redirect: z.string().optional().catch(undefined),
@@ -100,115 +107,95 @@ function LoginRoute() {
 
   if (session.data) {
     return (
-      <main className="route-state" id="main-content" aria-busy="true">
-        <p className="route-state__code">Signed in</p>
-        <h1>Opening your calendar…</h1>
-      </main>
+      <RouteState
+        busy
+        eyebrow="Signed in"
+        title="Opening your calendar…"
+      />
     );
   }
 
   return (
-    <main className={styles.page} id="main-content">
-      <div className={styles.ambient} aria-hidden="true">
-        結
-      </div>
-      <div className={styles.topBar}>
-        <div className={styles.brand}>
-          <BrandMark className={styles.brandMark} />
-          <span>MUSUBI</span>
-        </div>
-        <ThemeToggle />
-      </div>
-
-      <section className={styles.card} aria-labelledby="login-title">
-        <p className={styles.eyebrow}>
-          {signingUp ? "A new shared space" : "Welcome back"}
-        </p>
-        <h1 id="login-title">
-          {signingUp ? "Begin simply." : "Pick up where you left off."}
-        </h1>
-        <p className={styles.intro}>
-          {signingUp
-            ? "Your name, email and a private passphrase. That is all."
-            : "Sign in to read the calendars held by this Musubi server."}
-        </p>
-
-        <form className={styles.form} onSubmit={handleSubmit} noValidate>
-          {signingUp ? (
-            <label>
-              <span>Name</span>
-              <input
-                autoComplete="name"
-                autoFocus
-                name="name"
-                placeholder="Your name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-          ) : null}
-          <label>
-            <span>Email</span>
+    <AuthShell
+      eyebrow={signingUp ? "A new shared space" : "Welcome back"}
+      footer={
+        <AuthSwitch
+          action={signingUp ? "Sign in" : "Create one"}
+          onAction={switchMode}
+        >
+          {signingUp ? "Already have an account?" : "New to this server?"}
+        </AuthSwitch>
+      }
+      introduction={
+        signingUp
+          ? "Your name, email and a private passphrase. That is all."
+          : "Sign in to read the calendars held by this Musubi server."
+      }
+      title={signingUp ? "Begin simply." : "Pick up where you left off."}
+      utility={<ThemeToggle />}
+    >
+      <AuthForm onSubmit={handleSubmit} noValidate>
+        {signingUp ? (
+          <Field label="Name" variant="plain">
             <input
-              autoCapitalize="none"
-              autoComplete="email"
-              autoFocus={!signingUp}
-              inputMode="email"
-              name="email"
-              placeholder="you@example.com"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="name"
+              autoFocus
+              name="name"
+              placeholder="Your name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
             />
-          </label>
-          <label>
-            <span>Passphrase</span>
+          </Field>
+        ) : null}
+        <Field label="Email" variant="plain">
+          <input
+            autoCapitalize="none"
+            autoComplete="email"
+            autoFocus={!signingUp}
+            inputMode="email"
+            name="email"
+            placeholder="you@example.com"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
+        <Field label="Passphrase" variant="plain">
+          <input
+            autoComplete={signingUp ? "new-password" : "current-password"}
+            minLength={8}
+            name="password"
+            placeholder="At least 8 characters"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </Field>
+        {signingUp ? (
+          <Field label="Confirm passphrase" variant="plain">
             <input
-              autoComplete={signingUp ? "new-password" : "current-password"}
+              autoComplete="new-password"
               minLength={8}
-              name="password"
-              placeholder="At least 8 characters"
+              name="confirm-password"
+              placeholder="Repeat your passphrase"
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
             />
-          </label>
-          {signingUp ? (
-            <label>
-              <span>Confirm passphrase</span>
-              <input
-                autoComplete="new-password"
-                minLength={8}
-                name="confirm-password"
-                placeholder="Repeat your passphrase"
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-              />
-            </label>
-          ) : null}
+          </Field>
+        ) : null}
 
-          <div className={styles.message} role="alert" aria-live="polite">
-            {message}
-          </div>
-          <button className={styles.submit} disabled={submitting} type="submit">
-            {submitting
-              ? signingUp
-                ? "Creating account…"
-                : "Signing in…"
-              : signingUp
-                ? "Create account"
-                : "Continue"}
-          </button>
-        </form>
-
-        <p className={styles.switchCopy}>
-          {signingUp ? "Already have an account?" : "New to this server?"}{" "}
-          <button type="button" onClick={switchMode}>
-            {signingUp ? "Sign in" : "Create one"}
-          </button>
-        </p>
-      </section>
-    </main>
+        <AuthMessage>{message}</AuthMessage>
+        <AuthSubmit loading={submitting} type="submit">
+          {submitting
+            ? signingUp
+              ? "Creating account…"
+              : "Signing in…"
+            : signingUp
+              ? "Create account"
+              : "Continue"}
+        </AuthSubmit>
+      </AuthForm>
+    </AuthShell>
   );
 }
