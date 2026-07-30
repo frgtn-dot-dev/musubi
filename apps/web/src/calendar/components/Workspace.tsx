@@ -39,6 +39,7 @@ import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
 import { seriesEditWrites, type EditScope } from "../recurrence-edit";
 import { shortcutFor } from "../shortcuts";
+import { useSwipePeriod } from "../use-swipe-period";
 import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
@@ -217,6 +218,7 @@ export function Workspace({
   user,
 }: WorkspaceProps) {
   const anchor = useMemo(() => parseDateKey(date), [date]);
+  const swipePeriod = useSwipePeriod((offset) => changePeriod(offset));
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Sidebar calendar toggles are a temporary local filter: a set of ids flipped
   // from what the Page config resolves to. Never saved — the Page's own
@@ -735,6 +737,11 @@ export function Workspace({
             activeView === "month" ? styles.calendarAreaMonth : ""
           }`}
           data-calendar-area=""
+          // Flick sideways to move a period, like the native client's pager.
+          // Agenda is one continuous list, so it has no period to page.
+          onPointerDown={
+            activeView === "agenda" ? undefined : swipePeriod.onPointerDown
+          }
         >
           {activeView === "agenda" ? (
             <AgendaView

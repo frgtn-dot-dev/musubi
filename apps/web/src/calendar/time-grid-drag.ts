@@ -112,6 +112,16 @@ export function autoScrollStep(
 /** A pointer has to travel before a press becomes a drag, or clicks get eaten. */
 export const DRAG_THRESHOLD_PX = 4;
 
+/**
+ * The moment a touch stops being a flick and becomes a hold.
+ *
+ * Both gestures live on the same cells: below this a sideways move pages the
+ * calendar, above it the finger is dragging out a range. One constant, so the
+ * window where both could fire cannot exist. The native client draws the same
+ * line at 280 ms, so the muscle memory carries over.
+ */
+export const TOUCH_HOLD_MS = 280;
+
 export function exceedsDragThreshold(
   from: { x: number; y: number },
   to: { x: number; y: number },

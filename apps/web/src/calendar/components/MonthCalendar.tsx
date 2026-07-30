@@ -364,6 +364,8 @@ export function MonthCalendar({
                       cell: pointerEvent.currentTarget,
                       dayKey: dateKey,
                       pointerId: pointerEvent.pointerId,
+                      pointerType: pointerEvent.pointerType,
+                      time: pointerEvent.timeStamp,
                       x: pointerEvent.clientX,
                       y: pointerEvent.clientY,
                     });

@@ -4,6 +4,7 @@ import { yToMinutes, type TimeGeometry } from "./time-geometry";
 import {
   autoScrollStep,
   exceedsDragThreshold,
+  TOUCH_HOLD_MS,
   nextDragTimes,
   type DragMode,
   type DragTimes,
@@ -499,6 +500,8 @@ export function useDayRangeCreate({
         pointerId: number;
         startX: number;
         startY: number;
+        time: number;
+        touch: boolean;
       }
     | undefined
   >(undefined);
@@ -523,6 +526,8 @@ export function useDayRangeCreate({
       cell: HTMLElement;
       dayKey: string;
       pointerId: number;
+      pointerType?: string;
+      time?: number;
       x: number;
       y: number;
     }) => {
@@ -532,11 +537,20 @@ export function useDayRangeCreate({
         pointerId: input.pointerId,
         startX: input.x,
         startY: input.y,
+        time: input.time ?? 0,
+        touch: input.pointerType === "touch",
       };
 
       function handleMove(nativeEvent: PointerEvent) {
         const press = pressRef.current;
         if (!press || nativeEvent.pointerId !== press.pointerId) return;
+        if (
+          press.touch &&
+          !rangeRef.current &&
+          nativeEvent.timeStamp - press.time < TOUCH_HOLD_MS
+        ) {
+          return;
+        }
         if (
           !rangeRef.current &&
           !exceedsDragThreshold(

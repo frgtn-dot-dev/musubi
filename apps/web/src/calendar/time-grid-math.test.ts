@@ -3,6 +3,7 @@ import {
   getTimeGridDays,
   getTimeGridLabel,
   getTimeGridQueryRange,
+  openScrollMinutes,
   overlapPlacement,
 } from "./time-grid-math";
 import { parseDateKey } from "./calendar-math";
@@ -126,5 +127,23 @@ describe("overlap placement", () => {
     expect(overlapPlacement(4, 9)).toEqual(overlapPlacement(3, 9));
     expect(overlapPlacement(8, 9)).toEqual(overlapPlacement(3, 9));
     expect(overlapPlacement(3, 9).left).toBe("75%");
+  });
+});
+
+describe("opening scroll position", () => {
+  it("opens just before now when today is on screen", () => {
+    expect(openScrollMinutes(new Date("2026-07-30T15:20:00"), true)).toBe(
+      14 * 60,
+    );
+  });
+
+  it("never scrolls above the start of the day", () => {
+    expect(openScrollMinutes(new Date("2026-07-30T00:30:00"), true)).toBe(0);
+  });
+
+  it("falls back to the working day for a range without today", () => {
+    expect(openScrollMinutes(new Date("2026-07-30T15:20:00"), false)).toBe(
+      7 * 60,
+    );
   });
 });

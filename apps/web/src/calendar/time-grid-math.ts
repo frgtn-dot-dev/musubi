@@ -25,6 +25,24 @@ const LANE_SPREAD = 1.7;
 /** Breathing room so neighbouring blocks never share an edge. */
 const LANE_GAP_PX = 3;
 
+// ── Opening scroll position ─────────────────────────────────────────────────
+/** Where a day without "now" on it opens: the start of a working day. */
+const DEFAULT_OPEN_HOUR = 7;
+/** How much of the recent past stays on screen when today is visible. */
+const OPEN_PRE_ROLL_MINUTES = 60;
+
+/**
+ * Which minute of the day the time grid should open on.
+ *
+ * Landing on a fixed hour means that at 15:00 you open eight hours above your own
+ * day and have to scroll to find it. When today is on screen the grid opens just
+ * before now instead, which is what the native client does.
+ */
+export function openScrollMinutes(now: Date, includesToday: boolean): number {
+  if (!includesToday) return DEFAULT_OPEN_HOUR * 60;
+  return Math.max(0, now.getHours() * 60 - OPEN_PRE_ROLL_MINUTES);
+}
+
 export type OverlapPlacement = { left: string; width: string };
 
 /**

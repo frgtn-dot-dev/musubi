@@ -42,6 +42,7 @@ import {
 } from "../use-time-grid-drag";
 import {
   getTimeGridDays,
+  openScrollMinutes,
   overlapPlacement,
   type TimeGridViewId,
 } from "../time-grid-math";
@@ -51,7 +52,6 @@ import {
 } from "./EventDetailsPopover";
 import styles from "./workspace.module.css";
 
-const INITIAL_SCROLL_HOUR = 7;
 const ALL_DAY_LANES = 3;
 const longWeekdayFormatter = new Intl.DateTimeFormat("en", {
   weekday: "long",
@@ -602,9 +602,9 @@ export function TimeGridView({
 
     scrollRoot.scrollTop =
       previousHourHeight === geometry.hourHeight
-        ? minutesToY(INITIAL_SCROLL_HOUR * 60, geometry) - 12
+        ? minutesToY(openScrollMinutes(new Date(), hasToday), geometry) - 12
         : scrollRoot.scrollTop * (geometry.hourHeight / previousHourHeight);
-  }, [anchor, geometry, view, weekStartsOn]);
+  }, [anchor, geometry, hasToday, view, weekStartsOn]);
 
   useEffect(() => {
     if (!hasToday) {

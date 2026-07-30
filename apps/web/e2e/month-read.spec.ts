@@ -1642,6 +1642,78 @@ test("keeps the event preview open while its text is being selected", async ({
   ).toBe("none");
 });
 
+test("flicks sideways to change period, but a held drag still creates", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 844, width: 390 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.locator("[data-calendar-area]")).toBeVisible();
+
+  // Playwright's touchscreen only taps, so the gesture is dispatched directly.
+  // pointerType is what separates a finger from the mouse here.
+  const touchDrag = (dx: number, dy = 0, holdMs = 0) =>
+    page.evaluate(
+      async ([shiftX, shiftY, hold]) => {
+        const area = document.querySelector("[data-calendar-area]")!;
+        const box = area.getBoundingClientRect();
+        const from = {
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+        };
+        const common = {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 7,
+          pointerType: "touch",
+        };
+        const target = document.elementFromPoint(from.x, from.y) ?? area;
+        target.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            ...common,
+            clientX: from.x,
+            clientY: from.y,
+          }),
+        );
+        if (hold) await new Promise((done) => setTimeout(done, hold as number));
+        for (const step of [0.5, 1]) {
+          window.dispatchEvent(
+            new PointerEvent("pointermove", {
+              ...common,
+              clientX: from.x + (shiftX as number) * step,
+              clientY: from.y + (shiftY as number) * step,
+            }),
+          );
+        }
+        window.dispatchEvent(
+          new PointerEvent("pointerup", {
+            ...common,
+            clientX: from.x + (shiftX as number),
+            clientY: from.y + (shiftY as number),
+          }),
+        );
+      },
+      [dx, dy, holdMs] as const,
+    );
+
+  // Flick left for the next period, right for the previous one.
+  await touchDrag(-120);
+  await expect(page).toHaveURL(/date=2026-08-01/);
+  await expect(page.locator("[data-live], [data-draft]")).toHaveCount(0);
+  await touchDrag(120);
+  await expect(page).toHaveURL(/date=2026-07-01/);
+
+  // Scrolling must win when the gesture is mostly vertical.
+  await touchDrag(20, 140);
+  await expect(page).toHaveURL(/date=2026-07-01/);
+
+  // Past the hold the same finger is dragging out a range, so it creates instead
+  // of paging — one shared constant decides which, so neither can double-fire.
+  await touchDrag(-120, 0, 350);
+  await expect(page.locator("[data-draft]")).toHaveCount(3);
+  await expect(page).toHaveURL(/date=2026-07-01/);
+});
+
 test("moves an event to another day in the month grid", async ({ page }) => {
   await mockAuthenticatedReads(page);
   const writes: Array<{ end: string; start: string }> = [];

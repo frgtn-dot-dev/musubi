@@ -1835,6 +1835,12 @@
     min-width: 100%;
   }
 
+  /* The create button floats over the bottom-right corner, which is a real cell
+     in the last month row. Clear its footprint instead of covering an event. */
+  .calendarArea {
+    padding-bottom: 76px;
+  }
+
   .agendaDay {
     display: block;
     min-height: 42px;
@@ -1857,17 +1863,24 @@
     padding-inline: 12px;
   }
 
+  /* A week has to look like a week. Wider viewports keep a minimum column and
+     scroll sideways; on a phone that showed three and a half days and hid the
+     rest behind a horizontal scroll nobody goes looking for. */
   .timeGridView {
     --timeline-gutter: 52px;
-    min-width: 700px;
+    min-width: 100%;
   }
 
   .timeGridViewDay {
     min-width: 100%;
   }
 
+  /* A weekday label and its date don't fit beside each other in a ~48px column;
+     side by side they both get clipped, stacked they both read. */
   .timeGridDayHeader time {
-    gap: 3px;
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.15;
   }
 
   .timelineEvent {
