@@ -183,7 +183,10 @@
   right: 4px;
   color: var(--text-muted);
   opacity: 0;
-  transform: translateY(-50%);
+  /* `translate`, not `transform`: the shared hover lift owns `transform`, and a
+     shorthand there would throw the centring away and drop the button. These two
+     properties compose. */
+  translate: 0 -50%;
   transition: opacity 120ms ease;
 }
 

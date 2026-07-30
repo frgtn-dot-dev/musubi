@@ -4125,6 +4125,3 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await page.mouse.up();
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
-
-
-
