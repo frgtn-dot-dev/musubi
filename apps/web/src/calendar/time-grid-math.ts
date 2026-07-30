@@ -7,6 +7,51 @@ import {
 
 export type TimeGridViewId = "day" | "week";
 
+// ── Overlap placement tuning ────────────────────────────────────────────────
+/**
+ * How many overlap levels get a lane of their own. Deeper ones stack on the last
+ * lane; z-order still puts the later event on top, so nothing is unreachable —
+ * ponytail: a cluster deeper than this loses its fan, which is the point at which
+ * a "+N more" affordance would earn its keep.
+ */
+const MAX_OVERLAP_LANES = 4;
+/**
+ * How far a block spreads past its own lane, as a multiple of the lane width.
+ * 1 would be strict side-by-side columns; more than that lets a block cover part
+ * of its right-hand neighbour, which is what makes two events read as one wide
+ * card with a second card laid over its corner rather than two thin slivers.
+ */
+const LANE_SPREAD = 1.7;
+/** Breathing room so neighbouring blocks never share an edge. */
+const LANE_GAP_PX = 3;
+
+export type OverlapPlacement = { left: string; width: string };
+
+/**
+ * Where an overlapping event sits across the width of its day column.
+ *
+ * Lanes are equal shares of the column, but each block spreads over part of the
+ * next lane and paints above it (`zIndex` from the same `col`). So the earlier
+ * event keeps a wide, readable strip instead of the 8px sliver a fixed-pixel
+ * cascade leaves — the reference behaviour from Google Calendar, and the thing
+ * `apps/client` will want too (it cascades by a fixed 10px today).
+ */
+export function overlapPlacement(
+  col: number,
+  cols: number,
+): OverlapPlacement {
+  const lanes = Math.max(1, Math.min(cols, MAX_OVERLAP_LANES));
+  const lane = Math.min(col, lanes - 1);
+  const share = 100 / lanes;
+  const left = lane * share;
+  const width = Math.min(100 - left, share * LANE_SPREAD);
+
+  return {
+    left: `${left}%`,
+    width: `calc(${width}% - ${LANE_GAP_PX}px)`,
+  };
+}
+
 export function getTimeGridDays(
   anchor: Date,
   view: TimeGridViewId,

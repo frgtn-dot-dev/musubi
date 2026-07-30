@@ -715,6 +715,70 @@ test("renders and navigates the authenticated Week time grid", async ({
   await expectNoAccessibilityViolations(page);
 });
 
+test("lays overlapping events over each other, not into slivers", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 900, width: 1400 });
+  // Two events that overlap, plus one that starts after the first has ended.
+  await mockAuthenticatedReads(page, {
+    ...events,
+    events: [
+      event(
+        "pp",
+        "pp",
+        "personal",
+        "#b3492f",
+        "2026-07-27T12:30:00.000Z",
+        "2026-07-27T15:50:00.000Z",
+      ),
+      event(
+        "ppp",
+        "ppp",
+        "personal",
+        "#b3492f",
+        "2026-07-27T14:45:00.000Z",
+        "2026-07-27T17:05:00.000Z",
+      ),
+      event(
+        "test",
+        "TEST",
+        "personal",
+        "#b3492f",
+        "2026-07-27T16:00:00.000Z",
+        "2026-07-27T17:35:00.000Z",
+      ),
+    ],
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-27`);
+
+  const column = page.locator("[data-time-grid-column]").first();
+  const columnBox = (await column.boundingBox())!;
+  const box = async (id: string) =>
+    (await page.locator(`[data-time-event="${id}"]`).boundingBox())!;
+  const [pp, ppp, test] = await Promise.all([
+    box("pp"),
+    box("ppp"),
+    box("test"),
+  ]);
+
+  // The later event lies over the earlier one from about halfway across the
+  // column, so what stays visible of the first is a readable strip and not the
+  // hairline a fixed-pixel cascade leaves.
+  expect(ppp.x - pp.x).toBeGreaterThan(columnBox.width * 0.4);
+  expect(ppp.x + ppp.width).toBeGreaterThan(
+    columnBox.x + columnBox.width - 8,
+  );
+  // It is also marked as covering, which is what earns it the separating ring:
+  // two events from one calendar are the same colour.
+  await expect(page.locator('[data-time-event="ppp"]')).toHaveAttribute(
+    "data-overlapping",
+    "",
+  );
+  // An event that starts after the first one ends is not in its cluster, so it
+  // goes back to the column's left edge.
+  expect(Math.abs(test.x - pp.x)).toBeLessThan(2);
+});
+
 test("uses the shared time grid as a one-column Day", async ({ page }) => {
   await mockAuthenticatedReads(page);
 

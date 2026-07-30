@@ -3,6 +3,7 @@ import {
   getTimeGridDays,
   getTimeGridLabel,
   getTimeGridQueryRange,
+  overlapPlacement,
 } from "./time-grid-math";
 import { parseDateKey } from "./calendar-math";
 import { toDateKey } from "./date-key";
@@ -85,5 +86,45 @@ describe("time grid math", () => {
         "week",
       ),
     ).toBe("Jul 26 – Aug 1, 2026");
+  });
+});
+
+describe("overlap placement", () => {
+  it("gives a single event the whole column", () => {
+    expect(overlapPlacement(0, 1)).toEqual({
+      left: "0%",
+      width: "calc(100% - 3px)",
+    });
+  });
+
+  it("spreads a block past its lane so the one under it stays readable", () => {
+    const first = overlapPlacement(0, 2);
+    const second = overlapPlacement(1, 2);
+
+    expect(first.left).toBe("0%");
+    expect(second.left).toBe("50%");
+    // The first block reaches into the second lane; the second one takes the
+    // rest. Neither is left as a sliver, which a fixed-pixel cascade would do.
+    expect(first.width).toBe("calc(85% - 3px)");
+    expect(second.width).toBe("calc(50% - 3px)");
+  });
+
+  it("never spreads past the column's right edge", () => {
+    for (const cols of [1, 2, 3, 4, 5, 9]) {
+      for (let col = 0; col < cols; col += 1) {
+        const { left, width } = overlapPlacement(col, cols);
+        const leftPercent = Number.parseFloat(left);
+        const widthPercent = Number.parseFloat(width.replace("calc(", ""));
+        expect(leftPercent + widthPercent).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+
+  it("stacks deep clusters on the last lane instead of off the column", () => {
+    // Past the lane cap the geometry repeats; z-order (the caller's col) still
+    // decides what is on top.
+    expect(overlapPlacement(4, 9)).toEqual(overlapPlacement(3, 9));
+    expect(overlapPlacement(8, 9)).toEqual(overlapPlacement(3, 9));
+    expect(overlapPlacement(3, 9).left).toBe("75%");
   });
 });

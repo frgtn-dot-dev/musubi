@@ -40,7 +40,11 @@ import {
   useTimeGridDrag,
   type BeginDragInput,
 } from "../use-time-grid-drag";
-import { getTimeGridDays, type TimeGridViewId } from "../time-grid-math";
+import {
+  getTimeGridDays,
+  overlapPlacement,
+  type TimeGridViewId,
+} from "../time-grid-math";
 import {
   EventDetailsPopover,
   type EventActionHandlers,
@@ -119,7 +123,6 @@ type TimelineEventProps = EventActionHandlers & {
   calendar: Calendar | undefined;
   calendars: Calendar[];
   dayIndex: number;
-  dayMode: boolean;
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
   /** Live times while this event is being dragged, else undefined. */
   dragTimes?: DragTimes;
@@ -189,7 +192,6 @@ const TimelineEvent = memo(function TimelineEvent({
   calendar,
   calendars,
   dayIndex,
-  dayMode,
   daySegment,
   dragTimes,
   draggable,
@@ -256,10 +258,9 @@ const TimelineEvent = memo(function TimelineEvent({
       y: pointerEvent.clientY,
     });
   }
-  const left = dayMode ? `${(col / cols) * 100}%` : `${Math.min(col, 3) * 8}px`;
-  const width = dayMode
-    ? `calc(${100 / cols}% - 3px)`
-    : `calc(100% - ${Math.min(col, 3) * 8 + 4}px)`;
+  // One placement rule for Day and Week: a column is a column, and the reason a
+  // block is narrow is that something overlaps it, not which view you are in.
+  const { left, width } = overlapPlacement(col, cols);
 
   return (
     <EventDetailsPopover
@@ -281,6 +282,7 @@ const TimelineEvent = memo(function TimelineEvent({
         data-ghost={ghost ? "" : undefined}
         data-draggable={draggable ? "" : undefined}
         data-pending={pending ? "" : undefined}
+        data-overlapping={col > 0 ? "" : undefined}
         data-readonly={editable ? undefined : ""}
         data-time-event={event.id}
         onKeyDown={handleKeyDown}
@@ -921,7 +923,6 @@ export function TimeGridView({
                     )}
                     calendars={calendars}
                     dayIndex={dayIndex}
-                    dayMode={dayMode}
                     daySegment={segment}
                     dragTimes={
                       // A resize grows the block in place. A move leaves this one

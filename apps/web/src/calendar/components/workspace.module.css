@@ -1044,6 +1044,15 @@
     transform var(--motion-fast) ease;
 }
 
+/* A block laid over another needs an edge against it: two events from the same
+   calendar are the same colour, so without a gap they merge into one shape and
+   only the text gives them away. The ring is the canvas, so it reads as space. */
+.timelineEvent[data-overlapping] {
+  box-shadow:
+    0 0 0 2px var(--surface-canvas),
+    0 2px 8px rgb(0 0 0 / 28%);
+}
+
 .timelineEvent:hover,
 .timelineEvent:focus-visible {
   color: var(--event-foreground);
