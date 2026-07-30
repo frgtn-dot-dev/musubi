@@ -187,13 +187,47 @@
      shorthand there would throw the centring away and drop the button. These two
      properties compose. */
   translate: 0 -50%;
+  /* Concentric with the row it is inset into (row radius minus the 3px inset);
+     an inner corner rounder than its container's reads as a misfit. */
+  border-radius: calc(var(--radius-chip) - 3px);
   transition: opacity 120ms ease;
 }
 
-/* The selected row is a filled surface, so the dots have to read against the
-   fill — inheriting the muted panel colour makes them disappear (R11a). */
-.pageRow:has([data-selected]) .pageRowEdit {
-  color: var(--control-on-fill);
+/* No lift here: this button lives inside a row and has to stay centred in it.
+   The wash and the colour carry the hover instead. */
+.pageRowEdit:hover:not(:disabled) {
+  transform: none;
+}
+
+/* The dots sit over the row, so pointing at them takes the pointer off the row
+   button underneath and its own hover would blink out mid-gesture. The wrapper
+   owns the row's hover for both. */
+.pageRow {
+  --page-row-hover: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+}
+
+.pageRow:hover .pageRowMain {
+  background: var(--page-row-hover);
+}
+
+/* A selected row is a filled surface, so every control on it needs the fill's
+   palette, not the panel's — otherwise the dots vanish at rest and the shared
+   ghost hover paints a foreign grey patch (R11a). Remapping the tokens for the
+   subtree fixes both states at once, and any control added here later inherits
+   the right ones instead of needing another override. */
+.pageRow:has([data-selected]) {
+  /* Derived like the rest, not switched off: the hover still wants a defined
+     edge, it just has to be the fill's own hairline instead of the panel's. */
+  --border-strong: color-mix(in srgb, var(--control-on-fill) 34%, transparent);
+  --page-row-hover: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
+  --surface-raised: color-mix(in srgb, var(--control-on-fill) 20%, transparent);
+  --text-muted: color-mix(in srgb, var(--control-on-fill) 72%, transparent);
+  --text-primary: var(--control-on-fill);
+  --text-secondary: var(--control-on-fill);
 }
 
 .pageRow:hover .pageRowEdit,

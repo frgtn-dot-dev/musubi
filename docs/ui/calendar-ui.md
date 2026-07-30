@@ -93,6 +93,14 @@ zavření dialogu, což čte jako glitch. Modalitu proto držíme sami
 další pointer stisk ho **odpojí**; do té doby je `outline-color: transparent`.
 Klávesová cesta tím nepřijde o nic, což je ta nediskutovatelná část.
 
+**R11c — Vyplněná plocha je vlastní kontext, ne výjimka.** Když control sedí na
+`--control-fill` (vybraný řádek, filled chip), nepřepisuj mu jednu vlastnost po
+druhé — **přemapuj tokeny pro ten podstrom** (`--text-secondary`, `--text-muted`,
+`--surface-raised`, `--border-strong` odvozené z `--control-on-fill`). Sdílená
+hover pravidla si pak vezmou správnou paletu sama, funguje to v obou tématech a
+další control přidaný do toho řádku už žádný override nepotřebuje. Viz
+`.pageRow:has([data-selected])`.
+
 **R4a — Anchor se nesmí hýbat, když je jeho vrstva otevřená.** Karta eventu se na
 hover zvedá o 1 px; dokud u ní visí popover, zvedla by ho s sebou (a při hover-out
 zase spustila). Radix značí spouštěč `data-state="open"` — geometrie se v tom
@@ -559,6 +567,12 @@ na řádku Page v sidebaru (quiet, objeví se na `:hover`/`:focus-within`, na
   se nevejde a stačí „Edit", protože hlavička už sérii bádžuje a scope dialog se
   na rozsah stejně zeptá. Delete drží stejný tvar jako sousedi, destruktivnost
   nese barva.
+- Řádek Page je **dvě tlačítka v jednom vizuálním řádku**, takže hover vlastní
+  wrapper (`.pageRow:hover .pageRowMain`) — tečky leží nad řádkem, takže mířit na
+  ně jinak vezme pointer z řádku a jeho hover by uprostřed gesta zhasl. Tečky
+  samy se na hover nezvedají (musí zůstat na středu řádku) a mají rádius
+  koncentrický s řádkem (`radius - inset`); vnitřní kulatější než vnější je
+  vždycky vidět.
 - `IconButton` centruje flexem, ne gridem: grid řádek je vysoký jako line box,
   takže se ikona zarovnala na účaří a sedla o 1,5 px nad střed tlačítka.
 - Sloupce editoru eventu se v page layoutu roztahují na výšku řádku, takže
