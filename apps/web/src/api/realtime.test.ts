@@ -7,6 +7,7 @@ function page(id: string, revision: number, name = id): PageDocument {
     config: {
       calendarVisibility: { hiddenCalendarIds: [], mode: "all" },
       filters: [],
+      icon: "house" as const,
       schemaVersion: 1,
       view: { configVersion: 1, id: "month", showAdjacentDays: true },
     },

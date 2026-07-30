@@ -1,46 +1,27 @@
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
   Menu,
-  PencilLine,
   Plus,
   Search,
   SlidersHorizontal,
-  Trash2,
 } from "lucide-react";
 import type { RefObject } from "react";
 import { Button, IconButton } from "~/ui/Button";
-import { Checkbox } from "~/ui/Checkbox";
 import { Segmented } from "~/ui/Segmented";
-import { Select } from "~/ui/Select";
 import { calendarViews, type CalendarViewId } from "../view-registry";
-import type { Density } from "../time-geometry";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
   activeView: CalendarViewId;
   canCreateEvents: boolean;
-  draftName: string;
-  /** Present only while editing a page whose view supports the option. */
-  draftDensity?: Density;
-  draftShowAdjacentDays?: boolean;
-  draftShowWeekend?: boolean;
-  editing: boolean;
-  onDraftDensityChange?: (density: Density) => void;
-  onDraftShowAdjacentDaysChange?: (show: boolean) => void;
-  onDraftShowWeekendChange?: (show: boolean) => void;
   filtersOpen: boolean;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
-  /** Absent when this page cannot be deleted (it is the only one left). */
-  onDeletePage?: () => void;
-  onDraftNameChange: (name: string) => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
   onSearch: (query: string) => void;
   onToday: () => void;
-  onToggleEdit: () => void;
   onToggleFilters: () => void;
   onViewChange: (view: CalendarViewId) => void;
   pageTitle: string;
@@ -55,24 +36,13 @@ type ToolbarProps = {
 export function Toolbar({
   activeView,
   canCreateEvents,
-  draftDensity,
-  draftName,
-  draftShowAdjacentDays,
-  draftShowWeekend,
-  editing,
   filtersOpen,
   navigationTriggerRef,
   onCreateEvent,
-  onDeletePage,
-  onDraftDensityChange,
-  onDraftNameChange,
-  onDraftShowAdjacentDaysChange,
-  onDraftShowWeekendChange,
   onOpenSidebar,
   onPeriodChange,
   onSearch,
   onToday,
-  onToggleEdit,
   onToggleFilters,
   onViewChange,
   pageTitle,
@@ -84,72 +54,9 @@ export function Toolbar({
 }: ToolbarProps) {
   return (
     <header className={styles.toolbar}>
-      {/* The page name lives in the sidebar and the theme in Settings, so read
-          mode has no strip here at all. Edit mode still needs a field to rename
-          the page, and it is the only thing that row carries. */}
+      {/* The page name lives in the sidebar, its settings in the page dialog and
+          the theme in Settings, so the toolbar carries no page strip at all. */}
       <h1 className={styles.srOnly}>{pageTitle}</h1>
-      {editing ? (
-        <div className={styles.toolbarTop}>
-          <input
-            aria-label="Page name"
-            className={styles.pageNameInput}
-            value={draftName}
-            onChange={(event) => onDraftNameChange(event.target.value)}
-          />
-          <div className={styles.pageEditOptions}>
-            {draftDensity && onDraftDensityChange ? (
-              <label className={styles.densityField}>
-                <span className={styles.srOnly}>Row height</span>
-                <Select
-                  label="Row height"
-                  options={[
-                    { label: "Compact", value: "compact" },
-                    { label: "Comfortable", value: "comfortable" },
-                    { label: "Spacious", value: "spacious" },
-                  ]}
-                  size="compact"
-                  value={draftDensity}
-                  onChange={(value) =>
-                    onDraftDensityChange(value as Density)
-                  }
-                />
-              </label>
-            ) : null}
-            {draftShowWeekend !== undefined &&
-            onDraftShowWeekendChange ? (
-              <Checkbox
-                checked={draftShowWeekend}
-                className={styles.presentationToggle}
-                label="Weekend"
-                onChange={(event) =>
-                  onDraftShowWeekendChange(event.target.checked)
-                }
-              />
-            ) : null}
-            {draftShowAdjacentDays !== undefined &&
-            onDraftShowAdjacentDaysChange ? (
-              <Checkbox
-                checked={draftShowAdjacentDays}
-                className={styles.presentationToggle}
-                label="Nearby months"
-                onChange={(event) =>
-                  onDraftShowAdjacentDaysChange(event.target.checked)
-                }
-              />
-            ) : null}
-            {onDeletePage ? (
-              <IconButton
-                label={`Delete page ${pageTitle}`}
-                size="compact"
-                title="Delete this page"
-                onClick={onDeletePage}
-              >
-                <Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />
-              </IconButton>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       <div className={styles.toolbarControls}>
         <div className={styles.dateControls}>
@@ -215,18 +122,6 @@ export function Toolbar({
               onChange={(event) => onSearch(event.target.value)}
             />
           </label>
-          <IconButton
-            aria-pressed={editing}
-            label={editing ? "Finish editing page" : "Edit page"}
-            size="compact"
-            onClick={onToggleEdit}
-          >
-            {editing ? (
-              <Check aria-hidden="true" size={17} strokeWidth={1.7} />
-            ) : (
-              <PencilLine aria-hidden="true" size={17} strokeWidth={1.6} />
-            )}
-          </IconButton>
           <Button
             aria-expanded={filtersOpen}
             className={styles.filterButton}

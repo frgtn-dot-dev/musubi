@@ -1,11 +1,10 @@
 import {
-  CalendarDays,
   CircleCheck,
-  House,
   Layers3,
   Link2,
   LogOut,
   type LucideIcon,
+  Pencil,
   Plus,
   Settings,
   X,
@@ -27,6 +26,7 @@ import { Avatar } from "~/ui/Avatar";
 import { IconButton } from "~/ui/Button";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { pageIconComponent } from "../page-icons";
 import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
@@ -40,6 +40,7 @@ type SidebarProps = {
   onClose: () => void;
   onCreatePage: () => void;
   onDateChange: (date: string) => void;
+  onEditPage: (page: PageDocument) => void;
   onManageAccount: () => void;
   onManageCalendars: () => void;
   onManageConnections: () => void;
@@ -63,6 +64,7 @@ export function Sidebar({
   isOpen,
   onClose,
   onCreatePage,
+  onEditPage,
   onManageAccount,
   onManageCalendars,
   onManageConnections,
@@ -186,11 +188,12 @@ export function Sidebar({
             </SectionLabel>
             <div className={styles.pageList}>
               {pages.map((page) => (
-                <PageButton
+                <PageRow
                   key={page.id}
                   active={page.id === activePageId}
-                  icon={page.isDefault ? House : CalendarDays}
+                  icon={pageIconComponent(page.config.icon)}
                   name={page.name}
+                  onEdit={() => onEditPage(page)}
                   onSelect={() => {
                     onPageChange(page.id);
                     onClose();
@@ -299,27 +302,46 @@ export function Sidebar({
   );
 }
 
-function PageButton({
+/**
+ * A page row is two controls, not one: selecting the page, and opening its
+ * settings. The settings button is quiet until the row is hovered or holds
+ * focus — but it is a real, tabbable button, so the keyboard never depends on a
+ * pointer state, and on touch (no hover) it stays visible.
+ */
+function PageRow({
   active,
   icon: Icon,
   name,
+  onEdit,
   onSelect,
 }: {
   active: boolean;
   icon: LucideIcon;
   name: string;
+  onEdit: () => void;
   onSelect: () => void;
 }) {
   return (
-    <RowAction
-      className={styles.sidebarRow}
-      aria-current={active ? "page" : undefined}
-      data-selected={active ? "" : undefined}
-      icon={<Icon size={18} strokeWidth={1.6} />}
-      label={name}
-      showChevron={false}
-      size="compact"
-      onClick={onSelect}
-    />
+    <div className={styles.pageRow}>
+      <RowAction
+        className={`${styles.sidebarRow} ${styles.pageRowMain}`}
+        aria-current={active ? "page" : undefined}
+        data-selected={active ? "" : undefined}
+        icon={<Icon size={18} strokeWidth={1.6} />}
+        label={name}
+        showChevron={false}
+        size="compact"
+        onClick={onSelect}
+      />
+      <IconButton
+        className={styles.pageRowEdit}
+        label={`Edit ${name}`}
+        size="compact"
+        title="Page settings"
+        onClick={onEdit}
+      >
+        <Pencil aria-hidden="true" size={14} strokeWidth={1.7} />
+      </IconButton>
+    </div>
   );
 }

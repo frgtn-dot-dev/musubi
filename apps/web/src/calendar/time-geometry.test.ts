@@ -88,6 +88,7 @@ describe("densityFromPageConfig", () => {
   const base = {
     calendarVisibility: { hiddenCalendarIds: [], mode: "all" as const },
     filters: [],
+    icon: "house" as const,
     schemaVersion: 1 as const,
   };
 

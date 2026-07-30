@@ -42,8 +42,6 @@ import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
   newPageConfig,
-  toggleCalendarVisibility,
-  visibilityEquals,
   type SavePageResult,
 } from "../page-editor";
 import type { CalendarViewId } from "../view-registry";
@@ -53,9 +51,9 @@ import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
+import { PageSettingsDialog } from "./PageSettingsDialog";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
-import { SaveBar } from "./SaveBar";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
@@ -219,28 +217,14 @@ export function Workspace({
 }: WorkspaceProps) {
   const anchor = useMemo(() => parseDateKey(date), [date]);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Read-mode calendar toggles are a temporary local filter: a set of ids
-  // flipped from what the Page config resolves to. Cleared when the Page or its
-  // saved visibility changes.
+  // Sidebar calendar toggles are a temporary local filter: a set of ids flipped
+  // from what the Page config resolves to. Never saved — the Page's own
+  // visibility is edited explicitly in its settings dialog.
   const [tempToggles, setTempToggles] = useState<Set<string>>(() => new Set());
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState("");
-  const [draftVisibility, setDraftVisibility] = useState<
-    PageConfigV1["calendarVisibility"]
-  >({ hiddenCalendarIds: [], mode: "all" });
-  // The view config carries presentation options (density, weekend,
-  // showAdjacentDays); drafting it lets edit mode preview them live.
-  const [draftView, setDraftView] = useState<PageConfigV1["view"]>({
-    configVersion: 1,
-    id: "month",
-    showAdjacentDays: true,
-  });
-  // Revision captured when editing started. A realtime update from another
-  // session bumps the cached Page under us; saving against this frozen base then
-  // returns 409 instead of silently overwriting the remote change.
-  const [draftBaseRevision, setDraftBaseRevision] = useState(1);
-  const [savingPage, setSavingPage] = useState(false);
-  const [pageConflict, setPageConflict] = useState(false);
+  // The page whose settings dialog is open. Any page in the sidebar, not just
+  // the active one.
+  const [settingsPage, setSettingsPage] = useState<PageDocument>();
+  const [creatingPage, setCreatingPage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -398,12 +382,8 @@ export function Workspace({
     [pages, pageId],
   );
 
-  // Editing shows the live draft; reading shows the saved Page visibility with
-  // the session's temporary toggles layered on top.
+  // The saved Page visibility with the session's temporary toggles on top.
   const visibleCalendarIds = useMemo(() => {
-    if (editing) {
-      return calendarIdsForVisibility(draftVisibility, calendars);
-    }
     const visible = new Set(
       calendarIdsForVisibility(activePage.config.calendarVisibility, calendars),
     );
@@ -417,25 +397,16 @@ export function Workspace({
     return calendars
       .map((calendar) => calendar.id)
       .filter((calendarId) => visible.has(calendarId));
-  }, [activePage, calendars, draftVisibility, editing, tempToggles]);
+  }, [activePage, calendars, tempToggles]);
 
   // Density lives in the Page config, so "this page shows time grids compactly"
   // is saved with the page rather than being a device preference.
   const geometry = useMemo(
-    () =>
-      createTimeGeometry(
-        densityFromPageConfig(
-          editing
-            ? { ...activePage.config, view: draftView }
-            : activePage.config,
-        ),
-      ),
-    [activePage.config, draftView, editing],
+    () => createTimeGeometry(densityFromPageConfig(activePage.config)),
+    [activePage.config],
   );
 
-  // Presentation flags from the same config the geometry came from, so edit mode
-  // previews them together.
-  const presentationView = editing ? draftView : activePage.config.view;
+  const presentationView = activePage.config.view;
   const showWeekend =
     "weekend" in presentationView ? presentationView.weekend : true;
   const showAdjacentDays =
@@ -444,27 +415,9 @@ export function Workspace({
       : true;
 
   const pageTitle = activePage.name;
-  const pageDirty =
-    editing &&
-    (draftName.trim() !== activePage.name ||
-      !visibilityEquals(
-        draftVisibility,
-        activePage.config.calendarVisibility,
-      ) ||
-      JSON.stringify(draftView) !== JSON.stringify(activePage.config.view));
 
   // The route remounts this component per page (key={pageId}), so switching
-  // pages resets editing, conflict and the temporary read filter for free.
-
-  useEffect(() => {
-    if (!pageDirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [pageDirty]);
+  // pages resets the temporary read filter for free.
 
   const visibleEvents = useMemo(() => {
     const normalizedQuery = deferredSearchQuery.trim().toLocaleLowerCase();
@@ -614,11 +567,9 @@ export function Workspace({
         event.preventDefault();
         changePeriod(-1);
         return;
+      // Saving belongs to the page settings dialog, which owns the draft and
+      // traps focus while it is open.
       case "save":
-        if (editing && pageDirty) {
-          event.preventDefault();
-          void savePageChanges();
-        }
         return;
       case "search":
         event.preventDefault();
@@ -650,12 +601,6 @@ export function Workspace({
   }, []);
 
   function handleToggleCalendar(calendarId: string) {
-    if (editing) {
-      setDraftVisibility((current) =>
-        toggleCalendarVisibility(current, calendarId, calendars),
-      );
-      return;
-    }
     setTempToggles((current) => {
       const next = new Set(current);
       if (next.has(calendarId)) {
@@ -667,85 +612,19 @@ export function Workspace({
     });
   }
 
-  function startEditing() {
-    setDraftName(activePage.name);
-    setDraftVisibility(activePage.config.calendarVisibility);
-    setDraftView(activePage.config.view);
-    setDraftBaseRevision(activePage.revision);
-    setPageConflict(false);
-    setEditing(true);
-  }
-
-  // Explicit discard (Save bar / conflict banner) — the user already chose to
-  // drop the draft, so no extra confirm.
-  function discardEditing() {
-    setEditing(false);
-    setPageConflict(false);
-  }
-
-  // One gate for every exit that would drop an unsaved draft: leaving edit mode,
-  // switching page, creating a new one.
-  function keepingDraftBlocks() {
-    return pageDirty && !window.confirm("Discard your unsaved page changes?");
-  }
-
-  // Leaving edit mode via the toolbar toggle confirms first when dirty.
-  function stopEditing() {
-    if (keepingDraftBlocks()) return;
-    discardEditing();
-  }
-
-  function guardedPageChange(nextPageId: string) {
-    if (keepingDraftBlocks()) return;
-    setEditing(false);
-    setPageConflict(false);
-    onPageChange(nextPageId);
-  }
-
-  const draftConfig = (): PageConfigV1 => ({
-    ...activePage.config,
-    calendarVisibility: draftVisibility,
-    view: draftView,
-  });
-
-  async function savePageChanges() {
-    if (!pageDirty || savingPage) return;
-    setSavingPage(true);
-    setPageConflict(false);
-    try {
-      const result = await onSavePage({
-        baseRevision: draftBaseRevision,
-        config: draftConfig(),
-        id: activePage.id,
-        name: draftName.trim(),
-      });
-      if (result.status === "conflict") {
-        setPageConflict(true);
-        notify("This page changed on another device.");
-        return;
-      }
-      setEditing(false);
-      notify("Page saved.");
-    } catch {
-      notify("This page could not be saved.");
-    } finally {
-      setSavingPage(false);
-    }
-  }
-
   /**
-   * New Page from the current state, named up front.
+   * New Page from the current state, named up front. Everything else about it —
+   * icon, presentation, which calendars — is edited in its settings dialog.
    *
-   * ponytail: `window.prompt` for the name — same register as the discard
-   * confirm above, and it keeps the whole flow to three lines. Swap it for a
-   * styled dialog when the name needs company (icon, template, colour).
+   * ponytail: `window.prompt` for the name keeps the whole flow to three lines.
+   * Swap it for a styled step when creating needs to offer more than a name.
    */
   async function createNewPage() {
-    if (savingPage || keepingDraftBlocks()) return;
+    if (creatingPage) return;
     const name = window.prompt("Name for the new page", "New page")?.trim();
     if (!name) return;
 
-    setSavingPage(true);
+    setCreatingPage(true);
     try {
       const created = await onCreatePage({
         config: newPageConfig(
@@ -755,56 +634,11 @@ export function Workspace({
         ),
         name,
       });
-      setEditing(false);
-      setPageConflict(false);
       onPageChange(created.id);
     } catch {
       notify("The new page could not be created.");
     } finally {
-      setSavingPage(false);
-    }
-  }
-
-  async function deleteActivePage() {
-    if (savingPage) return;
-    // The server soft-deletes and there is no restore endpoint, so an Undo toast
-    // would be a promise we can't keep — this is one of the few deletes that
-    // earns a confirm (docs/ui/calendar-ui.md §2).
-    if (
-      !window.confirm(`Delete "${activePage.name}"? This cannot be undone.`)
-    ) {
-      return;
-    }
-
-    setSavingPage(true);
-    try {
-      await onDeletePage(activePage.id);
-      // No success toast: the page leaving the sidebar and the redirect to the
-      // default page are the feedback, and this component unmounts with the
-      // route change anyway — a toast set here would never be seen.
-    } catch {
-      notify("This page could not be deleted.");
-    } finally {
-      setSavingPage(false);
-    }
-  }
-
-  async function savePageAsNew() {
-    if (savingPage) return;
-    setSavingPage(true);
-    try {
-      const created = await onCreatePage({
-        config: draftConfig(),
-        name: `${draftName.trim() || activePage.name} copy`,
-      });
-      setEditing(false);
-      setPageConflict(false);
-      notify("Saved as a new page.");
-      onPageChange(created.id);
-    } catch {
-      notify("The new page could not be created.");
-    } finally {
-      setSavingPage(false);
+      setCreatingPage(false);
     }
   }
 
@@ -834,12 +668,16 @@ export function Workspace({
           setSidebarOpen(false);
           setConnectionsOpen(true);
         }}
+        onEditPage={(page) => {
+          setSidebarOpen(false);
+          setSettingsPage(page);
+        }}
         onModalStateChange={setSidebarModal}
         onOpenSettings={() => {
           setSidebarOpen(false);
           setSettingsOpen(true);
         }}
-        onPageChange={guardedPageChange}
+        onPageChange={onPageChange}
         onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
         returnFocusRef={sidebarTriggerRef}
@@ -860,42 +698,8 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
-          draftDensity={"density" in draftView ? draftView.density : undefined}
-          draftName={draftName}
-          editing={editing}
           filtersOpen={filtersOpen}
           navigationTriggerRef={sidebarTriggerRef}
-          onDraftDensityChange={(density) =>
-            setDraftView((current) =>
-              "density" in current ? { ...current, density } : current,
-            )
-          }
-          onDraftNameChange={setDraftName}
-          draftShowWeekend={
-            "weekend" in draftView ? draftView.weekend : undefined
-          }
-          onDraftShowWeekendChange={(weekend) =>
-            setDraftView((current) =>
-              "weekend" in current ? { ...current, weekend } : current,
-            )
-          }
-          draftShowAdjacentDays={
-            "showAdjacentDays" in draftView
-              ? draftView.showAdjacentDays
-              : undefined
-          }
-          onDraftShowAdjacentDaysChange={(showAdjacentDays) =>
-            setDraftView((current) =>
-              "showAdjacentDays" in current
-                ? { ...current, showAdjacentDays }
-                : current,
-            )
-          }
-          // Deleting is offered while editing the page it belongs to, and only
-          // while another page can take over — the last one would just be
-          // backfilled again on the next read.
-          onDeletePage={pages.length > 1 ? () => void deleteActivePage() : undefined}
-          onToggleEdit={editing ? stopEditing : startEditing}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
           onPeriodChange={changePeriod}
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -1060,18 +864,6 @@ export function Workspace({
           )}
         </div>
 
-        {editing ? (
-          <SaveBar
-            conflict={pageConflict}
-            dirty={pageDirty}
-            onDiscard={discardEditing}
-            onDismiss={discardEditing}
-            onSave={() => void savePageChanges()}
-            onSaveAsNew={() => void savePageAsNew()}
-            saving={savingPage}
-          />
-        ) : null}
-
         <ShortcutsDialog
           onOpenChange={setShortcutsOpen}
           open={shortcutsOpen}
@@ -1164,6 +956,30 @@ export function Workspace({
             if (!open) setAccountOpen(false);
           }}
           open
+        />
+      ) : null}
+      {settingsPage ? (
+        <PageSettingsDialog
+          calendars={calendars}
+          // The last page can't go: the server would backfill a fresh default
+          // on the next read anyway.
+          canDelete={pages.length > 1}
+          key={settingsPage.id}
+          onCreatePage={onCreatePage}
+          onDeletePage={onDeletePage}
+          onNotice={notify}
+          onOpenChange={(open) => {
+            if (!open) setSettingsPage(undefined);
+          }}
+          onOpenPage={onPageChange}
+          onSavePage={async (input) => {
+            const result = await onSavePage(input);
+            // The page now says what it shows, so a stale temporary toggle would
+            // silently invert the choice just saved.
+            if (result.status === "saved") setTempToggles(new Set());
+            return result;
+          }}
+          page={settingsPage}
         />
       ) : null}
       {shareCalendar ? (

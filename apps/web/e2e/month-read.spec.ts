@@ -1279,9 +1279,9 @@ test("resolves the default page and switches between pages", async ({
 
   // Both pages are listed; selecting one navigates without losing the date.
   await expect(
-    page.getByRole("button", { name: "My calendar" }),
+    page.getByRole("button", { exact: true, name: "My calendar" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Work" }).click();
+  await page.getByRole("button", { exact: true, name: "Work" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 });
@@ -1329,15 +1329,24 @@ test("creates a page from the sidebar and deletes it again", async ({
   // The new page opens straight away, keeping the date.
   await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
-  await expect(page.getByRole("button", { name: "Work" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { exact: true, name: "Work" }),
+  ).toBeVisible();
 
-  // Deleting the page being edited falls back to the default page.
-  await page.getByRole("button", { name: "Edit page" }).click();
+  // Deleting the open page falls back to the default page.
+  await page
+    .getByRole("button", { name: "Edit Work" })
+    .click();
   page.once("dialog", (dialog) => void dialog.accept());
-  await page.getByRole("button", { name: "Delete page Work" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete page" })
+    .click();
 
   await expect(page).toHaveURL(new RegExp(`/app/p/${DEFAULT_PAGE_ID}/month`));
-  await expect(page.getByRole("button", { name: "Work" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { exact: true, name: "Work" }),
+  ).toBeHidden();
   expect(writes.map((write) => write.method)).toEqual(["POST", "DELETE"]);
   // Started from what was on screen, as an explicit include list.
   expect(writes[0]!.body).toMatchObject({
@@ -1628,17 +1637,23 @@ test("changes time grid density from the page editor", async ({ page }) => {
   const comfortable = await canvasHeight();
   expect(comfortable).toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "Edit page" }).click();
+  await page
+    .getByRole("button", { name: "Edit My calendar" })
+    .click();
   await chooseSelectOption(page, "Row height", "Compact");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
 
-  const compact = await canvasHeight();
-  expect(compact).toBeLessThan(comfortable);
-
-  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Page saved.",
   );
   expect(savedDensity).toBe("compact");
+  // Saved, so the grid geometry follows — the dialog previews nothing live.
+  await expect(async () => {
+    expect(await canvasHeight()).toBeLessThan(comfortable);
+  }).toPass();
 });
 
 test("edits and saves a page's calendar visibility", async ({ page }) => {
@@ -1666,17 +1681,14 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
     page.getByRole("switch", { name: "Studio" }),
   ).toHaveAttribute("aria-checked", "true");
 
-  await page.getByRole("button", { name: "Edit page" }).click();
-  await page.getByRole("switch", { name: "Studio" }).click();
-  const saveBar = page.getByRole("region", {
-    name: "Unsaved page changes",
-  });
-  await expect(saveBar).toBeVisible();
-  await saveBar.evaluate((element) =>
-    Promise.all(element.getAnimations().map((animation) => animation.finished)),
-  );
-
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Edit My calendar" })
+    .click();
+  const settings = page.getByRole("dialog");
+  // A brand-new surface with a custom icon radiogroup — check it before saving.
+  await expectNoAccessibilityViolations(page);
+  await settings.getByRole("switch", { name: "Studio" }).click();
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Page saved.",
@@ -1710,9 +1722,12 @@ test("surfaces a page save conflict without overwriting", async ({ page }) => {
   );
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-  await page.getByRole("button", { name: "Edit page" }).click();
-  await page.getByRole("switch", { name: "Studio" }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Edit My calendar" })
+    .click();
+  const conflicted = page.getByRole("dialog");
+  await conflicted.getByRole("switch", { name: "Studio" }).click();
+  await conflicted.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(
     page.getByText("This page changed on another device", { exact: true }),
@@ -1746,7 +1761,7 @@ test("applies a realtime page created in another session", async ({ page }) => {
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await expect(
-    page.getByRole("button", { name: "My calendar" }),
+    page.getByRole("button", { exact: true, name: "My calendar" }),
   ).toBeVisible();
 
   const sharedPage = {
@@ -1763,7 +1778,7 @@ test("applies a realtime page created in another session", async ({ page }) => {
 
   // The page created elsewhere shows up without a manual refresh.
   await expect(
-    page.getByRole("button", { name: "Shared plan" }),
+    page.getByRole("button", { exact: true, name: "Shared plan" }),
   ).toBeVisible();
 });
 
@@ -3429,13 +3444,16 @@ test("keeps the page name and theme out of the calendar chrome", async ({
   ).toHaveCount(0);
   // The page name is the sidebar's job; the heading stays for structure only.
   await expect(
-    page.getByRole("button", { name: "My calendar" }),
+    page.getByRole("button", { exact: true, name: "My calendar" }),
   ).toBeVisible();
 
-  // Renaming still has a field, in the row edit mode brings with it.
-  await page.getByRole("button", { name: "Edit page" }).click();
+  // Renaming lives in the page's own settings dialog, never in the chrome.
+  await expect(page.getByLabel("Page name")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Edit My calendar" })
+    .click();
   await expect(page.getByLabel("Page name")).toHaveValue("My calendar");
-  await page.getByRole("button", { name: "Finish editing page" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByLabel("Page name")).toHaveCount(0);
 });
 

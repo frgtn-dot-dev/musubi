@@ -30,6 +30,29 @@ export const CalendarVisibilitySchema = z.discriminatedUnion("mode", [
     .strict(),
 ]);
 
+// Page icons are a closed set, not free text: the client maps the value to a
+// component, so an arbitrary string in stored config would be a lookup miss (or
+// worse) rather than a picture. Adding a name here is a contract change, which
+// is the point — both clients have to know how to draw it.
+export const PAGE_ICONS = [
+  "house",
+  "calendar-days",
+  "star",
+  "sparkles",
+  "circle",
+  "diamond",
+  "heart",
+  "plane",
+  "coffee",
+  "flag",
+  "music",
+  "briefcase",
+] as const;
+
+export const PageIconSchema = z.enum(PAGE_ICONS).default("calendar-days");
+
+export type PageIcon = (typeof PAGE_ICONS)[number];
+
 const DayViewSchema = z
   .object({
     id: z.literal("day"),
@@ -99,6 +122,8 @@ export const PageFilterSchema = z.discriminatedUnion("type", [
 export const PageConfigV1Schema = z
   .object({
     schemaVersion: z.literal(1),
+    // Defaulted, so every Page stored before icons existed reads back as one.
+    icon: PageIconSchema,
     view: BuiltInViewConfigSchema,
     calendarVisibility: CalendarVisibilitySchema,
     filters: z.array(PageFilterSchema).max(20).default([]),
@@ -162,6 +187,8 @@ export function defaultPageConfig(view: PageViewId): PageConfigV1 {
   );
   return {
     schemaVersion: 1,
+    // This factory only builds the home Page; other pages pick their own.
+    icon: "house",
     view: viewConfig,
     calendarVisibility: { mode: "all", hiddenCalendarIds: [] },
     filters: [],

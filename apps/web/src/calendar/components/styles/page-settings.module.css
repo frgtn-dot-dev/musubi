@@ -1,0 +1,142 @@
+.form {
+  display: grid;
+  padding-bottom: var(--space-4);
+}
+
+.section {
+  display: grid;
+}
+
+.sectionHeading {
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+.sectionRows {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sectionRows > :last-child {
+  border-bottom: 0;
+}
+
+.icons {
+  display: grid;
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-2);
+  border: 0;
+  gap: var(--space-2);
+}
+
+.iconsLegend {
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-12);
+}
+
+.iconGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: var(--space-2);
+}
+
+.iconChoice {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.iconChoice:hover {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+/* The radio itself carries focus and checked state; the tile just reflects it. */
+.iconInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.iconChoice:has(.iconInput:checked) {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--accent-primary);
+}
+
+.iconChoice:has(.iconInput:focus-visible) {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.iconGlyph {
+  display: grid;
+  place-items: center;
+}
+
+.conflict {
+  display: flex;
+  align-items: flex-start;
+  margin: var(--space-4) var(--space-4) 0;
+  padding: var(--space-3);
+  border: 1px solid
+    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
+  border-radius: var(--radius-md);
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 7%,
+    var(--surface-raised)
+  );
+  color: var(--accent-primary);
+  gap: var(--space-2);
+}
+
+.conflict strong {
+  display: block;
+  font-size: var(--text-13);
+  font-weight: 500;
+}
+
+.conflict p {
+  margin: 0;
+  max-width: 52ch;
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.danger {
+  display: flex;
+  justify-content: flex-start;
+  padding: var(--space-5) var(--space-4) 0;
+}
+
+.error {
+  margin: var(--space-4) var(--space-4) 0;
+  color: var(--accent-primary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .form {
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  }
+
+  .sectionHeading {
+    padding-top: var(--space-4);
+  }
+}

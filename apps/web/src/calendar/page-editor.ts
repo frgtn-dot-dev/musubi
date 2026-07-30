@@ -89,6 +89,9 @@ export function newPageConfig(
   return {
     ...base,
     calendarVisibility: { calendarIds: visibleCalendarIds, mode: "include" },
+    // The house belongs to the default page; a new one is a plain calendar until
+    // its settings say otherwise.
+    icon: "calendar-days",
     view: view === currentView.id ? currentView : base.view,
   };
 }

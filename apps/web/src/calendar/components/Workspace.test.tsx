@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "~/api/http";
@@ -30,6 +30,7 @@ const commonProps = {
       config: {
         calendarVisibility: { hiddenCalendarIds: [], mode: "all" as const },
         filters: [],
+        icon: "house" as const,
         schemaVersion: 1 as const,
         view: {
           configVersion: 1 as const,
@@ -77,12 +78,12 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: /Quarterly planning/ })).toBeNull();
   });
 
-  it("persists calendar visibility through the page editor", async () => {
+  it("saves name, icon and visibility from the page settings dialog", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn<
       (input: {
         baseRevision: number;
-        config: { calendarVisibility: unknown };
+        config: { calendarVisibility: unknown; icon: string };
         id: string;
         name: string;
       }) => Promise<{ page: (typeof commonProps.pages)[0]; status: "saved" }>
@@ -93,23 +94,28 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    // No save bar until the page is explicitly edited.
-    expect(screen.queryByText("Unsaved page changes")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Edit My calendar" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
 
-    await user.click(screen.getByRole("button", { name: "Edit page" }));
-    await user.click(screen.getByRole("switch", { name: "Studio" }));
+    // Nothing to save until something actually changes.
+    expect(dialog.getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(true);
 
-    expect(screen.getByText("Unsaved page changes")).not.toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.clear(dialog.getByLabelText("Page name"));
+    await user.type(dialog.getByLabelText("Page name"), "Studio only");
+    await user.click(dialog.getByRole("radio", { name: "Star" }));
+    await user.click(dialog.getByRole("switch", { name: "Studio" }));
+    await user.click(dialog.getByRole("button", { name: "Save" }));
 
     expect(onSavePage).toHaveBeenCalledTimes(1);
     const request = onSavePage.mock.calls[0]![0];
     expect(request).toMatchObject({
       baseRevision: 1,
       id: "my-calendar",
-      name: "My calendar",
+      name: "Studio only",
     });
+    expect(request.config.icon).toBe("star");
     expect(request.config.calendarVisibility).toEqual({
       hiddenCalendarIds: ["studio"],
       mode: "all",
@@ -154,6 +160,7 @@ describe("Workspace", () => {
           mode: "include",
         },
         filters: [],
+        icon: "calendar-days",
         schemaVersion: 1,
         view: { configVersion: 1, id: "month", showAdjacentDays: true },
       },
@@ -162,7 +169,7 @@ describe("Workspace", () => {
     expect(onPageChange).toHaveBeenCalledWith("work");
   });
 
-  it("deletes the page being edited, but never the last one", async () => {
+  it("deletes a page from its settings, but never the last one", async () => {
     const user = userEvent.setup();
     const onDeletePage = vi.fn(async () => undefined);
     const secondPage = {
@@ -177,8 +184,14 @@ describe("Workspace", () => {
     const single = render(
       <Workspace {...commonProps} onDeletePage={onDeletePage} />,
     );
-    await user.click(screen.getByRole("button", { name: "Edit page" }));
-    expect(screen.queryByRole("button", { name: /Delete page/ })).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Edit My calendar" }),
+    );
+    expect(
+      within(screen.getByRole("dialog")).queryByRole("button", {
+        name: "Delete page",
+      }),
+    ).toBeNull();
     single.unmount();
 
     render(
@@ -188,27 +201,47 @@ describe("Workspace", () => {
         pages={[...commonProps.pages, secondPage]}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Edit page" }));
+    await user.click(screen.getByRole("button", { name: "Edit Work" }));
     await user.click(
-      screen.getByRole("button", { name: "Delete page My calendar" }),
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete page",
+      }),
     );
 
-    expect(onDeletePage).toHaveBeenCalledWith("my-calendar");
+    expect(onDeletePage).toHaveBeenCalledWith("work");
   });
 
-  it("discards page edits without saving", async () => {
+  it("keeps an unsaved page draft when the discard confirm is declined", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn();
+    const confirmSpy = vi
+      .spyOn(window, "confirm")
+      .mockReturnValue(false);
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    await user.click(screen.getByRole("button", { name: "Edit page" }));
-    await user.click(screen.getByRole("switch", { name: "Studio" }));
-    await user.click(screen.getByRole("button", { name: "Discard" }));
+    await user.click(
+      screen.getByRole("button", { name: "Edit My calendar" }),
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("switch", { name: "Studio" }),
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+    );
 
+    // Declining the confirm leaves the dialog and its draft alone.
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).not.toBeNull();
     expect(onSavePage).not.toHaveBeenCalled();
-    expect(screen.queryByText("Unsaved page changes")).toBeNull();
-    // Back in read mode the calendar is visible again (draft dropped).
+
+    confirmSpy.mockReturnValue(true);
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+    );
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    // The page itself never changed, so the sidebar still shows the calendar.
     expect(
       screen
         .getByRole("switch", { name: "Studio" })

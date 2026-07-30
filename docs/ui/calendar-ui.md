@@ -492,11 +492,41 @@ otázek projít napříč.
   zůstat dosažitelné. Dialogy (settings, scope, shortcuts) scrim mají — ty jsou
   modální.
 
+### Fáze G — Page settings jako dialog — **HOTOVO** (2026-07-30)
+
+Editace Page se přesunula z inline edit mode do vlastního dialogu. Pencil sedí
+na řádku Page v sidebaru (quiet, objeví se na `:hover`/`:focus-within`, na
+`hover: none` je vidět vždy — hover nesmí být jediná cesta k funkci).
+
+**Co zmizelo:** `SaveBar.tsx`, edit strip v toolbaru (`toolbarTop`,
+`pageNameInput`, `pageEditOptions`), pencil v toolbaru a všechen draft state ve
+`Workspace.tsx` (~150 řádků). Dialog je jediné místo, kde Page vzniká i mění se.
+
+**Odchylky od dosavadních pravidel, s důvodem:**
+
+- **Přišli jsme o live náhled** viditelnosti a density při editaci. Byla to cena
+  za jedno místo editace místo dvou (§1: srozumitelnost nad efektem). Density se
+  tedy projeví až po Uložit, ne při přetahování selectu.
+- **Checkboxy kalendářů v sidebaru jsou teď *jen* dočasný filtr**, nikdy nic
+  neukládají — jako v Google Calendaru. Uložená viditelnost Page se edituje
+  výhradně v jejím dialogu. Po úspěšném uložení se dočasné přepnutí zahodí,
+  jinak by invertovalo právě uloženou volbu.
+- **Ikona Page je nové pole v `PageConfigV1`** (`icon`, `z.enum` s `.default`,
+  ne volný string): klient jméno mapuje na komponentu, takže cizí hodnota by
+  nebyla obrázek, ale chyba. Nová ikona = změna kontraktu, což je záměr.
+- **Delete Page má confirm, ne Undo** — soft delete na serveru nemá restore
+  endpoint, takže Undo by byl slib, který nesplníme (§2 výjimka pro nevratné).
+  Skryté, dokud je Page poslední: server by ji hned backfillnul.
+- `Ctrl/Cmd+S`, guard na neuložené změny a `beforeunload` se přestěhovaly do
+  dialogu, který jako jediný drží draft a trapuje focus.
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,
 tasks / focus time / OOO / appointment schedules. Žádné z toho nemá cenu, dokud
-neběží B a C.
+neběží B a C. Reorder Pages a „set as default" mají hotový endpoint
+(`PUT /pages/reorder` umí obojí v jednom zápisu), ale žádné UI — pořadí je
+pořadí vzniku, dokud na ručním řazení nezačne sejít.
 
 ## 7. Checklist na každý UI ticket
 
