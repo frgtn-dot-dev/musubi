@@ -83,7 +83,7 @@ describe("Workspace", () => {
     const onSavePage = vi.fn<
       (input: {
         baseRevision: number;
-        config: { calendarVisibility: unknown; icon: string };
+        config: { calendarVisibility: unknown; icon?: string };
         id: string;
         name: string;
       }) => Promise<{ page: (typeof commonProps.pages)[0]; status: "saved" }>
@@ -136,7 +136,6 @@ describe("Workspace", () => {
       name: "Work",
     }));
     const onPageChange = vi.fn();
-    vi.spyOn(window, "prompt").mockReturnValue("Work");
 
     render(
       <Workspace
@@ -151,6 +150,16 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("switch", { name: "Studio" }));
     await user.click(screen.getByRole("button", { name: "New page" }));
 
+    const dialog = within(screen.getByRole("dialog"));
+    // Nothing to create without a name.
+    expect(
+      dialog.getByRole("button", { name: "Create page" }).hasAttribute("disabled"),
+    ).toBe(true);
+
+    await user.type(dialog.getByLabelText("Page name"), "Work");
+    await user.click(dialog.getByRole("radio", { name: "Briefcase" }));
+    await user.click(dialog.getByRole("button", { name: "Create page" }));
+
     expect(onCreatePage).toHaveBeenCalledTimes(1);
     expect(onCreatePage.mock.calls[0]![0]).toEqual({
       config: {
@@ -160,13 +169,14 @@ describe("Workspace", () => {
           mode: "include",
         },
         filters: [],
-        icon: "calendar-days",
+        icon: "briefcase",
         schemaVersion: 1,
         view: { configVersion: 1, id: "month", showAdjacentDays: true },
       },
       name: "Work",
     });
     expect(onPageChange).toHaveBeenCalledWith("work");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("deletes a page from its settings, but never the last one", async () => {

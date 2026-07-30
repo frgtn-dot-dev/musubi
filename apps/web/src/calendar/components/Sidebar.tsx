@@ -4,7 +4,7 @@ import {
   Link2,
   LogOut,
   type LucideIcon,
-  Pencil,
+  MoreHorizontal,
   Plus,
   Settings,
   X,
@@ -26,7 +26,7 @@ import { Avatar } from "~/ui/Avatar";
 import { IconButton } from "~/ui/Button";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { pageIconComponent } from "../page-icons";
+import { pageIconComponent, resolvePageIcon } from "../page-icons";
 import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
@@ -191,7 +191,9 @@ export function Sidebar({
                 <PageRow
                   key={page.id}
                   active={page.id === activePageId}
-                  icon={pageIconComponent(page.config.icon)}
+                  icon={pageIconComponent(
+                    resolvePageIcon(page.config.icon, page.isDefault),
+                  )}
                   name={page.name}
                   onEdit={() => onEditPage(page)}
                   onSelect={() => {
@@ -340,7 +342,7 @@ function PageRow({
         title="Page settings"
         onClick={onEdit}
       >
-        <Pencil aria-hidden="true" size={14} strokeWidth={1.7} />
+        <MoreHorizontal aria-hidden="true" size={16} strokeWidth={1.8} />
       </IconButton>
     </div>
   );

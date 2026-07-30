@@ -211,14 +211,12 @@
   margin: 0;
 }
 
-.targetIntentList,
 .targetCalendarList {
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 
-.targetIntentList > button:last-child,
 .targetCalendarList > button:last-child {
   border-bottom: 0;
 }
@@ -290,11 +288,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5)
+  /* Up to four actions fit here; wrapping keeps them all reachable instead of
+     pushing the popover into a horizontal scroll. */
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4)
     calc(var(--space-3) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-canvas);
+}
+
+/* Delete keeps its own end of the row, whatever wrapped above it. */
+.detailActions > .deleteAction {
+  margin-left: auto;
 }
 
 .deleteAction {

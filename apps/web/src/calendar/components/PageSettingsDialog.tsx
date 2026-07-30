@@ -21,7 +21,11 @@ import {
   visibilityEquals,
   type SavePageResult,
 } from "../page-editor";
-import { pageIconChoices, pageIconComponent } from "../page-icons";
+import {
+  pageIconChoices,
+  pageIconComponent,
+  resolvePageIcon,
+} from "../page-icons";
 import type { Density } from "../time-geometry";
 import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import styles from "./styles/page-settings.module.css";
@@ -72,7 +76,9 @@ export function PageSettingsDialog({
   page,
 }: PageSettingsDialogProps) {
   const [name, setName] = useState(page.name);
-  const [icon, setIcon] = useState<PageIcon>(page.config.icon);
+  const [icon, setIcon] = useState<PageIcon>(
+    resolvePageIcon(page.config.icon, page.isDefault),
+  );
   const [view, setView] = useState<PageConfigV1["view"]>(page.config.view);
   const [visibility, setVisibility] = useState(page.config.calendarVisibility);
   const [busy, setBusy] = useState(false);
@@ -82,7 +88,7 @@ export function PageSettingsDialog({
   const trimmedName = name.trim();
   const dirty =
     trimmedName !== page.name ||
-    icon !== page.config.icon ||
+    icon !== resolvePageIcon(page.config.icon, page.isDefault) ||
     JSON.stringify(view) !== JSON.stringify(page.config.view) ||
     !visibilityEquals(visibility, page.config.calendarVisibility);
   const canSave = Boolean(trimmedName) && dirty && !busy;
@@ -262,35 +268,12 @@ export function PageSettingsDialog({
           />
         </Field>
 
-        <fieldset className={styles.icons} disabled={busy}>
-          <legend className={styles.iconsLegend}>Icon</legend>
-          <div className={styles.iconGrid}>
-            {pageIconChoices.map((choice) => {
-              const Icon = pageIconComponent(choice.icon);
-
-              return (
-                <label
-                  className={styles.iconChoice}
-                  key={choice.icon}
-                  title={choice.label}
-                >
-                  <input
-                    checked={icon === choice.icon}
-                    className={styles.iconInput}
-                    name="page-icon"
-                    type="radio"
-                    value={choice.icon}
-                    onChange={() => setIcon(choice.icon)}
-                  />
-                  <span aria-hidden="true" className={styles.iconGlyph}>
-                    <Icon size={19} strokeWidth={1.6} />
-                  </span>
-                  <span className={styles.visuallyHidden}>{choice.label}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
+        <IconField
+          disabled={busy}
+          name="page-settings-icon"
+          value={icon}
+          onChange={setIcon}
+        />
 
         <section className={styles.section}>
           <SectionLabel className={styles.sectionHeading} level={3}>
@@ -401,6 +384,147 @@ export function PageSettingsDialog({
           </div>
         ) : null}
 
+        {error ? (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        ) : null}
+      </form>
+    </Dialog>
+  );
+}
+
+/**
+ * Native radios in a grid: arrow-key movement, the checked state and a real
+ * accessible name all come from the platform, so there is no roving tabindex or
+ * `aria-selected` bookkeeping to get wrong.
+ */
+function IconField({
+  disabled,
+  name,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  /** Radio group name — unique per dialog, so two open forms never merge. */
+  name: string;
+  onChange: (icon: PageIcon) => void;
+  value: PageIcon;
+}) {
+  return (
+    <fieldset className={styles.icons} disabled={disabled}>
+      <legend className={styles.iconsLegend}>Icon</legend>
+      <div className={styles.iconGrid}>
+        {pageIconChoices.map((choice) => {
+          const Icon = pageIconComponent(choice.icon);
+
+          return (
+            <label
+              className={styles.iconChoice}
+              key={choice.icon}
+              title={choice.label}
+            >
+              <input
+                checked={value === choice.icon}
+                className={styles.iconInput}
+                name={name}
+                type="radio"
+                value={choice.icon}
+                onChange={() => onChange(choice.icon)}
+              />
+              <span aria-hidden="true" className={styles.iconGlyph}>
+                <Icon size={19} strokeWidth={1.6} />
+              </span>
+              <span className={styles.visuallyHidden}>{choice.label}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * Creating a page asks only what the page cannot be born without: a name and an
+ * icon. Everything else it inherits from the view it was created in, and the
+ * settings dialog is one click away for the rest.
+ */
+export function NewPageDialog({
+  onCreate,
+  onOpenChange,
+}: {
+  onCreate: (input: { icon: PageIcon; name: string }) => Promise<void>;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState<PageIcon>("calendar-days");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+  const trimmedName = name.trim();
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!trimmedName || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onCreate({ icon, name: trimmedName });
+      onOpenChange(false);
+    } catch {
+      setError("The new page could not be created.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      closeLabel="Close new page"
+      description="It starts from the calendars you can see right now."
+      footer={
+        <>
+          <DialogClose>
+            <Button disabled={busy} variant="secondary">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={!trimmedName || busy}
+            form="new-page-form"
+            loading={busy}
+            type="submit"
+          >
+            Create page
+          </Button>
+        </>
+      }
+      initialFocus={nameRef}
+      onOpenChange={onOpenChange}
+      open
+      size="compact"
+      title="New page"
+    >
+      <form
+        className={styles.form}
+        id="new-page-form"
+        onSubmit={(event) => void submit(event)}
+      >
+        <Field label="Page name">
+          <input
+            disabled={busy}
+            maxLength={80}
+            placeholder="Work, Family, Training…"
+            ref={nameRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        <IconField
+          disabled={busy}
+          name="new-page-icon"
+          value={icon}
+          onChange={setIcon}
+        />
         {error ? (
           <p className={styles.error} role="alert">
             {error}

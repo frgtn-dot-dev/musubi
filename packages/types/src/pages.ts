@@ -49,7 +49,10 @@ export const PAGE_ICONS = [
   "briefcase",
 ] as const;
 
-export const PageIconSchema = z.enum(PAGE_ICONS).default("calendar-days");
+// Optional, not defaulted: "no icon chosen yet" is a real state for every Page
+// stored before icons existed, and the client draws those the way it always did
+// (a house for the default Page, a calendar for the rest).
+export const PageIconSchema = z.enum(PAGE_ICONS).optional();
 
 export type PageIcon = (typeof PAGE_ICONS)[number];
 
@@ -122,7 +125,6 @@ export const PageFilterSchema = z.discriminatedUnion("type", [
 export const PageConfigV1Schema = z
   .object({
     schemaVersion: z.literal(1),
-    // Defaulted, so every Page stored before icons existed reads back as one.
     icon: PageIconSchema,
     view: BuiltInViewConfigSchema,
     calendarVisibility: CalendarVisibilitySchema,

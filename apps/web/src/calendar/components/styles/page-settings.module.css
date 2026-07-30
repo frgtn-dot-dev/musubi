@@ -27,10 +27,14 @@
   gap: var(--space-2);
 }
 
+/* Matches the Field label above it — one label voice per form. */
 .iconsLegend {
   padding: 0;
-  color: var(--text-muted);
-  font-size: var(--text-12);
+  color: var(--text-primary);
+  font-size: var(--text-10);
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
 }
 
 .iconGrid {
@@ -40,6 +44,7 @@
 }
 
 .iconChoice {
+  position: relative;
   display: grid;
   place-items: center;
   min-height: 42px;
@@ -54,13 +59,15 @@
   color: var(--text-primary);
 }
 
-/* The radio itself carries focus and checked state; the tile just reflects it. */
+/* The radio carries focus, checked state and the whole tile's hit area; the
+   glyph under it is decoration. Sized to the tile rather than hidden at 1px so a
+   click anywhere on it lands on the control itself. */
 .iconInput {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  margin: 0;
+  inset: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
 }
 
 .iconChoice:has(.iconInput:checked) {

@@ -76,6 +76,15 @@ mít klávesnicovou alternativu.
 **R11 — Stav je vidět.** Každý interaktivní prvek: default, hover, focus-visible,
 pressed, selected, dragging, resizing, pending, disabled, error.
 
+**R11a — Stavy se kombinují, nepřepisují.** `:hover` na vybraném prvku **posune
+jeho vlastní barvu**, nikdy ji nenahradí neutrální hover plochou. Pozor na
+specificitu: `.x:hover:not(:disabled)` (0,3,0) přebíjí `.x[data-selected]`
+(0,2,0), takže vybraný prvek pod kurzorem zbělá, pokud pár `[selected]:hover`
+neexistuje. Nudge dělej `color-mix(in srgb, var(--control-fill) 88%,
+var(--control-on-fill))` — míchá k vlastní barvě textu, takže jedno pravidlo
+platí v light i dark. Barevný objekt (event) se na hover nepřebarvuje vůbec, jen
+`filter: saturate()`.
+
 **R12 — Mobil/narrow se adaptuje, nezmenšuje.** Pod 600 px popover → sheet,
 permanentní zóny → vrstvy. Zachovej v tomto pořadí: rozsah → Today/navigace →
 event content → Create → přepnutí pohledu.
@@ -519,6 +528,21 @@ na řádku Page v sidebaru (quiet, objeví se na `:hover`/`:focus-within`, na
   Skryté, dokud je Page poslední: server by ji hned backfillnul.
 - `Ctrl/Cmd+S`, guard na neuložené změny a `beforeunload` se přestěhovaly do
   dialogu, který jako jediný drží draft a trapuje focus.
+- **Tvorba Page má vlastní dialog** (`NewPageDialog`), ne `window.prompt` —
+  ptá se na jméno a ikonu, zbytek Page zdědí ze stavu, ve kterém vznikla.
+  Mřížka ikon je společná komponenta obou dialogů; radio pokrývá celou dlaždici
+  (`inset: 0; opacity: 0`), ne 1 px schované, aby klik trefil samotný control.
+- Ikona je v configu **optional**, ne defaultovaná: „ještě nevybráno" je reálný
+  stav Pages uložených před ikonami a klient je kreslí jako dřív (domeček pro
+  default Page, kalendář pro ostatní) — `resolvePageIcon()`.
+- V `EventDetailsPopover` zmizela sekce „Add to calendar" se dvěma velkými
+  řádky; Link a Fork jsou kompaktní tlačítka ve footeru, druhý krok (do kterého
+  kalendáře) zůstal beze změny. Footer se smí zalomit — čtyři akce se do šířky
+  popoveru nevejdou a horizontální scroll v popoveru je chyba.
+- Sloupce editoru eventu se v page layoutu roztahují na výšku řádku, takže
+  poslední pole (notes) bere zbytek místa a seznam kalendářů drží
+  `align-content: start` u hlavičky. Nevyplněné místo mezi hlavičkou a obsahem
+  je vada, ne vzduch.
 
 ### Vědomě odloženo
 
@@ -557,6 +581,7 @@ klávesnice a screen reader, jak se řeší loading/pending/error/undo, jaké te
 - Popover uprostřed obrazovky bez vztahu k anchoru.
 - Po zavření editoru skok na dnešek nebo nahoru.
 - Barva je jediný rozdíl mezi stavem nebo typem.
+- `:hover` přepíše vybraný/checked stav místo aby ho posunul (viz R11a).
 - Změna filtru resetuje datum nebo scroll.
 - Grid, event layout a hit-testing počítají každý po svém.
 - Drag zapisuje na server při každém pointer move.

@@ -47,6 +47,17 @@ const PAGE_ICON_LABELS: Record<PageIcon, string> = {
   star: "Star",
 };
 
+/**
+ * Which icon a Page shows. Pages saved before icons existed have none, and they
+ * keep the look they had: the default Page is home, everything else a calendar.
+ */
+export function resolvePageIcon(
+  icon: PageIcon | undefined,
+  isDefault: boolean,
+): PageIcon {
+  return icon ?? (isDefault ? "house" : "calendar-days");
+}
+
 export function pageIconComponent(icon: PageIcon): LucideIcon {
   return PAGE_ICON_COMPONENTS[icon];
 }

@@ -130,6 +130,16 @@
   font-weight: 600;
 }
 
+/* Still answers the pointer once selected, without dropping back to the plain
+   hover surface. */
+.miniDay[data-selected]:hover {
+  background: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
+}
+
 .sidebarSection {
   padding: 16px 14px;
 }

@@ -489,7 +489,7 @@ export function EventEditorForm({
               onChange={(event) => patch({ url: event.target.value })}
             />
           </Field>
-          <Field label="Description">
+          <Field className={styles.descriptionField} label="Description">
             <textarea
               disabled={saving}
               placeholder="Add notes"

@@ -534,6 +534,15 @@
   color: var(--control-on-fill);
 }
 
+.segmentedOption[aria-checked="true"]:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
+  color: var(--control-on-fill);
+}
+
 .segmentedOption:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -867,6 +876,18 @@
 
 .rowAction[data-selected] :is(.rowLabel, .rowDetail, .rowIcon) {
   color: inherit;
+}
+
+/* Hover on a selected control nudges its own fill instead of replacing it: the
+   plain :hover rule above outranks [data-selected] on specificity, so without
+   this a selected row goes pale under the pointer. Mixing toward the fill's own
+   text colour keeps one rule right in both themes. */
+.rowAction[data-selected]:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
 }
 
 .rowAction:disabled {
@@ -1342,6 +1363,15 @@
 
 .timePickerOption[aria-selected="true"] small {
   color: inherit;
+}
+
+.timePickerOption[aria-selected="true"]:hover,
+.timePickerOption[aria-selected="true"][data-active] {
+  background: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
 }
 
 .timePickerHint {

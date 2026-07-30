@@ -976,7 +976,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   await page.getByRole("button", { name: "Attend" }).click();
   await expect(page.getByRole("button", { name: "Leave" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Link to a calendar" }).click();
+  await page.getByRole("button", { exact: true, name: "Link" }).click();
   await expect(
     page.getByRole("heading", { name: "Link to a calendar" }),
   ).toBeVisible();
@@ -992,18 +992,16 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   // Escape goes back one decision, not out of the event.
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "Link to a calendar" }),
+    page.getByRole("button", { exact: true, name: "Link" }),
   ).toBeFocused();
-  await page.getByRole("button", { name: "Link to a calendar" }).click();
+  await page.getByRole("button", { exact: true, name: "Link" }).click();
   await page.getByRole("button", { name: "Link to Personal" }).click();
   await expect(page.locator('[aria-live="polite"]')).toContainText(
     "Event linked to calendar.",
   );
 
   await page.getByRole("button", { name: /Design review/ }).click();
-  await page
-    .getByRole("button", { name: "Make an independent copy" })
-    .click();
+  await page.getByRole("button", { exact: true, name: "Fork" }).click();
   await expect(
     page.getByRole("heading", { name: "Make an independent copy" }),
   ).toBeVisible();
@@ -1323,8 +1321,11 @@ test("creates a page from the sidebar and deletes it again", async ({
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-  page.once("dialog", (dialog) => void dialog.accept("Work"));
   await page.getByRole("button", { name: "New page" }).click();
+  const newPage = page.getByRole("dialog");
+  await newPage.getByLabel("Page name").fill("Work");
+  await newPage.getByRole("radio", { name: "Briefcase" }).click();
+  await newPage.getByRole("button", { name: "Create page" }).click();
 
   // The new page opens straight away, keeping the date.
   await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
@@ -1355,6 +1356,7 @@ test("creates a page from the sidebar and deletes it again", async ({
         calendarIds: ["personal", "studio", "family"],
         mode: "include",
       },
+      icon: "briefcase",
       view: { configVersion: 1, id: "month", showAdjacentDays: true },
     },
     name: "Work",
@@ -3415,13 +3417,13 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
     .analyze();
   expect(accessibility.violations).toEqual([]);
 
-  await page.getByRole("button", { name: "Link to a calendar" }).click();
+  await page.getByRole("button", { exact: true, name: "Link" }).click();
   await expect(
     page.getByRole("button", { name: "Link to Personal" }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "Link to a calendar" }),
+    page.getByRole("button", { exact: true, name: "Link" }),
   ).toBeFocused();
 
   await page.keyboard.press("Escape");
@@ -4121,3 +4123,4 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await page.mouse.up();
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
+

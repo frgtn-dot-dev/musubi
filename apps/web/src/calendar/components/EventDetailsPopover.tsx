@@ -150,6 +150,7 @@ export function EventDetailsPopover({
   const targetCalendars = getEditableCalendars(calendars).filter(
     (item) => !master.calendars.includes(item.id),
   );
+  const canAddToCalendar = targetCalendars.length > 0;
   const [attendees, setAttendees] = useState<Attendee[]>();
   const isAttending =
     attendees?.some((attendee) => attendee.id === user.id) ?? false;
@@ -568,15 +569,12 @@ export function EventDetailsPopover({
                     </section>
                   ) : null}
 
-                  {targetCalendars.length > 0 ? (
+                  {targetAction && targetCalendars.length > 0 ? (
                     <section
-                      aria-labelledby={
-                        targetAction ? targetActionTitleId : undefined
-                      }
+                      aria-labelledby={targetActionTitleId}
                       className={styles.calendarActions}
                     >
-                      {targetAction ? (
-                        <>
+                      <>
                           <div className={styles.targetActionHeader}>
                             <IconButton
                               disabled={Boolean(busyAction)}
@@ -651,30 +649,7 @@ export function EventDetailsPopover({
                               requestId={actionError.requestId}
                             />
                           ) : null}
-                        </>
-                      ) : (
-                        <>
-                          <SectionLabel level={3}>Add to calendar</SectionLabel>
-                          <div className={styles.targetIntentList}>
-                            <RowAction
-                              detail="Keep one event shared across calendars."
-                              disabled={Boolean(busyAction)}
-                              icon={<Link2 size={17} strokeWidth={1.6} />}
-                              label="Link to a calendar"
-                              ref={linkActionRef}
-                              onClick={() => showTargetCalendars("link")}
-                            />
-                            <RowAction
-                              detail="Create a copy you can change separately."
-                              disabled={Boolean(busyAction)}
-                              icon={<CopyPlus size={17} strokeWidth={1.6} />}
-                              label="Make an independent copy"
-                              ref={forkActionRef}
-                              onClick={() => showTargetCalendars("fork")}
-                            />
-                          </div>
-                        </>
-                      )}
+                      </>
                     </section>
                   ) : null}
 
@@ -686,7 +661,7 @@ export function EventDetailsPopover({
                   ) : null}
                 </div>
 
-                {!targetAction && (editable || removable) ? (
+                {!targetAction && (editable || removable || canAddToCalendar) ? (
                   <footer
                     aria-label="Event actions"
                     className={styles.detailActions}
@@ -700,6 +675,34 @@ export function EventDetailsPopover({
                       >
                         {master.recurrence ? "Edit series" : "Edit"}
                       </Button>
+                    ) : null}
+                    {/* Adding this event to another calendar is a second step —
+                        which calendar — so these open the picker rather than
+                        writing. Compact buttons, because the preview's job is to
+                        show the event, not to explain both options up front. */}
+                    {canAddToCalendar ? (
+                      <>
+                        <Button
+                          icon={<Link2 size={15} strokeWidth={1.6} />}
+                          ref={linkActionRef}
+                          size="compact"
+                          title="Keep one event shared across calendars"
+                          variant="secondary"
+                          onClick={() => showTargetCalendars("link")}
+                        >
+                          Link
+                        </Button>
+                        <Button
+                          icon={<CopyPlus size={15} strokeWidth={1.6} />}
+                          ref={forkActionRef}
+                          size="compact"
+                          title="Create a copy you can change separately"
+                          variant="secondary"
+                          onClick={() => showTargetCalendars("fork")}
+                        >
+                          Fork
+                        </Button>
+                      </>
                     ) : null}
                     {removable ? (
                       <Button

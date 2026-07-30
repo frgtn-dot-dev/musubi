@@ -324,6 +324,20 @@
   color: var(--control-on-fill);
 }
 
+.homeChoice[data-checked]:hover:not([data-disabled]) > span:first-of-type {
+  border-color: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
+  background: color-mix(
+    in srgb,
+    var(--control-fill) 88%,
+    var(--control-on-fill)
+  );
+  color: var(--control-on-fill);
+}
+
 .homeChoice[data-disabled] {
   cursor: not-allowed;
   opacity: 0.5;
@@ -429,8 +443,31 @@
     grid-area: when;
   }
 
+  /* The page layout stretches every column to the row height, so the last field
+     takes the slack instead of leaving dead space under it. Notes are the one
+     field that benefits from more room, which is why they go last. */
   .form[data-layout="page"] .detailsSection {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
     grid-area: details;
+  }
+
+  .form[data-layout="page"] .descriptionField {
+    min-height: 0;
+    flex: 1;
+    grid-template-rows: auto minmax(96px, 1fr);
+  }
+
+  .form[data-layout="page"] .descriptionField > div {
+    min-height: 0;
+  }
+
+  .form[data-layout="page"] .descriptionField textarea {
+    /* Fills the column, so dragging a resize handle has nothing left to give. */
+    height: 100%;
+    min-height: 0;
+    resize: none;
   }
 
   .form[data-layout="page"] .calendarSection {
@@ -498,6 +535,9 @@
   .form[data-layout="page"] .calendarPlacement {
     min-height: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Rows keep their own height and stay under the header; without this they
+       share the stretched column and the list floats in the middle of it. */
+    align-content: start;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;

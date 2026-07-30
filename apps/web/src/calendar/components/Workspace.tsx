@@ -4,6 +4,7 @@ import type {
   Event,
   PageConfigV1,
   PageDocument,
+  PageIcon,
   Settings,
   SettingsDocument,
   SettingsPatch,
@@ -51,7 +52,7 @@ import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
-import { PageSettingsDialog } from "./PageSettingsDialog";
+import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
@@ -224,7 +225,7 @@ export function Workspace({
   // The page whose settings dialog is open. Any page in the sidebar, not just
   // the active one.
   const [settingsPage, setSettingsPage] = useState<PageDocument>();
-  const [creatingPage, setCreatingPage] = useState(false);
+  const [newPageOpen, setNewPageOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -613,33 +614,23 @@ export function Workspace({
   }
 
   /**
-   * New Page from the current state, named up front. Everything else about it —
-   * icon, presentation, which calendars — is edited in its settings dialog.
-   *
-   * ponytail: `window.prompt` for the name keeps the whole flow to three lines.
-   * Swap it for a styled step when creating needs to offer more than a name.
+   * A new Page takes its name and icon from the dialog and everything else from
+   * the state it was created in; its settings dialog owns the rest afterwards.
+   * Errors surface in the dialog, which stays open, so the typed name survives.
    */
-  async function createNewPage() {
-    if (creatingPage) return;
-    const name = window.prompt("Name for the new page", "New page")?.trim();
-    if (!name) return;
-
-    setCreatingPage(true);
-    try {
-      const created = await onCreatePage({
-        config: newPageConfig(
+  async function createNewPage(input: { icon: PageIcon; name: string }) {
+    const created = await onCreatePage({
+      config: {
+        ...newPageConfig(
           activeView,
           activePage.config.view,
           visibleCalendarIds,
         ),
-        name,
-      });
-      onPageChange(created.id);
-    } catch {
-      notify("The new page could not be created.");
-    } finally {
-      setCreatingPage(false);
-    }
+        icon: input.icon,
+      },
+      name: input.name,
+    });
+    onPageChange(created.id);
   }
 
   return (
@@ -651,7 +642,7 @@ export function Workspace({
         pages={pages}
         isOpen={sidebarOpen}
         onClose={closeSidebar}
-        onCreatePage={() => void createNewPage()}
+        onCreatePage={() => setNewPageOpen(true)}
         onDateChange={(nextDate) => {
           onDateChange(nextDate);
           setSidebarOpen(false);
@@ -956,6 +947,14 @@ export function Workspace({
             if (!open) setAccountOpen(false);
           }}
           open
+        />
+      ) : null}
+      {newPageOpen ? (
+        <NewPageDialog
+          onCreate={createNewPage}
+          onOpenChange={(open) => {
+            if (!open) setNewPageOpen(false);
+          }}
         />
       ) : null}
       {settingsPage ? (
