@@ -169,6 +169,7 @@ function WorkspaceRoute() {
       onGetSettingsDocument={settingsMutations.getSettingsDocument}
       onLinkEvent={eventMutations.linkEvent}
       onCreatePage={pageMutations.createPage}
+      onDeletePage={pageMutations.deletePage}
       onSavePage={pageMutations.savePage}
       pageId={pageId}
       onRemoveEvent={eventMutations.removeEvent}

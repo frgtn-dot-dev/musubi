@@ -7,6 +7,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import type { RefObject } from "react";
 import { Button, IconButton } from "~/ui/Button";
@@ -32,6 +33,8 @@ type ToolbarProps = {
   filtersOpen: boolean;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
+  /** Absent when this page cannot be deleted (it is the only one left). */
+  onDeletePage?: () => void;
   onDraftNameChange: (name: string) => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
@@ -60,6 +63,7 @@ export function Toolbar({
   filtersOpen,
   navigationTriggerRef,
   onCreateEvent,
+  onDeletePage,
   onDraftDensityChange,
   onDraftNameChange,
   onDraftShowAdjacentDaysChange,
@@ -132,6 +136,16 @@ export function Toolbar({
                   onDraftShowAdjacentDaysChange(event.target.checked)
                 }
               />
+            ) : null}
+            {onDeletePage ? (
+              <IconButton
+                label={`Delete page ${pageTitle}`}
+                size="compact"
+                title="Delete this page"
+                onClick={onDeletePage}
+              >
+                <Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />
+              </IconButton>
             ) : null}
           </div>
         </div>

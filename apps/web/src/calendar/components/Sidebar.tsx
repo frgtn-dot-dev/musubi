@@ -38,13 +38,13 @@ type SidebarProps = {
   calendars: Calendar[];
   isOpen: boolean;
   onClose: () => void;
+  onCreatePage: () => void;
   onDateChange: (date: string) => void;
   onManageAccount: () => void;
   onManageCalendars: () => void;
   onManageConnections: () => void;
   onModalStateChange?: (modal: boolean) => void;
   onOpenSettings: () => void;
-  onNotice: (message: string) => void;
   onPageChange: (pageId: string) => void;
   onSignOut: () => void;
   onToggleCalendar: (calendarId: string) => void;
@@ -62,12 +62,12 @@ export function Sidebar({
   calendars,
   isOpen,
   onClose,
+  onCreatePage,
   onManageAccount,
   onManageCalendars,
   onManageConnections,
   onModalStateChange,
   onOpenSettings,
-  onNotice,
   onDateChange,
   onPageChange,
   onSignOut,
@@ -203,9 +203,10 @@ export function Sidebar({
                 label="New page"
                 showChevron={false}
                 size="compact"
-                onClick={() =>
-                  onNotice("Page templates will connect with the Pages API next.")
-                }
+                onClick={() => {
+                  onCreatePage();
+                  onClose();
+                }}
               />
             </div>
           </nav>

@@ -1,13 +1,15 @@
-import type {
-  Calendar,
-  CreatePageRequest,
-  PageConfigV1,
-  PageDocument,
-  SavePageRequest,
+import {
+  defaultPageConfig,
+  type Calendar,
+  type CreatePageRequest,
+  type PageConfigV1,
+  type PageDocument,
+  type PageViewId,
+  type SavePageRequest,
 } from "@musubi/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "~/api/http";
-import { createPage, savePage } from "~/api/resources";
+import { createPage, deletePage, savePage } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
 type CalendarVisibility = PageConfigV1["calendarVisibility"];
@@ -69,6 +71,28 @@ export function visibilityEquals(
   return [...leftIds].sort().every((id, index) => id === sortedRight[index]);
 }
 
+/**
+ * The config a brand-new Page starts from: whatever the user is looking at.
+ *
+ * Visibility is written as an explicit `include` list, not `all` — a curated
+ * page must not silently pick up every calendar added later (12-open-decisions).
+ * The view keeps its presentation options when the current view matches the one
+ * being branched off, so "new page from this compact week" stays compact.
+ */
+export function newPageConfig(
+  view: PageViewId,
+  currentView: PageConfigV1["view"],
+  visibleCalendarIds: string[],
+): PageConfigV1 {
+  const base = defaultPageConfig(view);
+
+  return {
+    ...base,
+    calendarVisibility: { calendarIds: visibleCalendarIds, mode: "include" },
+    view: view === currentView.id ? currentView : base.view,
+  };
+}
+
 export type SavePageResult =
   | { status: "saved"; page: PageDocument }
   | { status: "conflict" };
@@ -91,6 +115,18 @@ export function usePageMutations(userId: string) {
       const page = await createPage(request);
       replaceInCache(page);
       return page;
+    },
+    deletePage: async (id: string) => {
+      await deletePage(id);
+      // Drop it locally first: the sidebar loses the row and the route's
+      // unknown-page fallback redirects immediately, without waiting on a
+      // refetch. The refetch then brings whichever page the server promoted to
+      // default. Both match what the `page_removed` SSE frame does, so the echo
+      // is a no-op.
+      queryClient.setQueryData<PageDocument[]>(pagesKey, (current) =>
+        (current ?? []).filter((page) => page.id !== id),
+      );
+      void queryClient.invalidateQueries({ queryKey: pagesKey });
     },
     savePage: async (input: {
       baseRevision: number;

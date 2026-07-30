@@ -41,6 +41,7 @@ import { shortcutFor } from "../shortcuts";
 import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
+  newPageConfig,
   toggleCalendarVisibility,
   visibilityEquals,
   type SavePageResult,
@@ -82,6 +83,7 @@ type WorkspaceProps = {
   }) => Promise<Event>;
   onPageChange: (pageId: string) => void;
   onCreatePage?: (request: CreatePageRequest) => Promise<PageDocument>;
+  onDeletePage?: (id: string) => Promise<unknown>;
   onSavePage?: (input: {
     baseRevision: number;
     config: PageConfigV1;
@@ -175,6 +177,10 @@ const unavailablePageCreate = async (): Promise<PageDocument> => {
   throw new Error("Page creation is unavailable.");
 };
 
+const unavailablePageDelete = async (): Promise<void> => {
+  throw new Error("Page deletion is unavailable.");
+};
+
 const ignoreSettings = () => undefined;
 
 export function Workspace({
@@ -196,6 +202,7 @@ export function Workspace({
   onRemoveCalendar = unavailableCalendarWrite,
   onGetSettingsDocument = unavailableSettings,
   onCreatePage = unavailablePageCreate,
+  onDeletePage = unavailablePageDelete,
   onPageChange,
   onPatchSettings = unavailableSettings,
   onSavePage = unavailablePageSave,
@@ -676,18 +683,20 @@ export function Workspace({
     setPageConflict(false);
   }
 
+  // One gate for every exit that would drop an unsaved draft: leaving edit mode,
+  // switching page, creating a new one.
+  function keepingDraftBlocks() {
+    return pageDirty && !window.confirm("Discard your unsaved page changes?");
+  }
+
   // Leaving edit mode via the toolbar toggle confirms first when dirty.
   function stopEditing() {
-    if (pageDirty && !window.confirm("Discard your unsaved page changes?")) {
-      return;
-    }
+    if (keepingDraftBlocks()) return;
     discardEditing();
   }
 
   function guardedPageChange(nextPageId: string) {
-    if (pageDirty && !window.confirm("Discard your unsaved page changes?")) {
-      return;
-    }
+    if (keepingDraftBlocks()) return;
     setEditing(false);
     setPageConflict(false);
     onPageChange(nextPageId);
@@ -724,6 +733,62 @@ export function Workspace({
     }
   }
 
+  /**
+   * New Page from the current state, named up front.
+   *
+   * ponytail: `window.prompt` for the name — same register as the discard
+   * confirm above, and it keeps the whole flow to three lines. Swap it for a
+   * styled dialog when the name needs company (icon, template, colour).
+   */
+  async function createNewPage() {
+    if (savingPage || keepingDraftBlocks()) return;
+    const name = window.prompt("Name for the new page", "New page")?.trim();
+    if (!name) return;
+
+    setSavingPage(true);
+    try {
+      const created = await onCreatePage({
+        config: newPageConfig(
+          activeView,
+          activePage.config.view,
+          visibleCalendarIds,
+        ),
+        name,
+      });
+      setEditing(false);
+      setPageConflict(false);
+      onPageChange(created.id);
+    } catch {
+      notify("The new page could not be created.");
+    } finally {
+      setSavingPage(false);
+    }
+  }
+
+  async function deleteActivePage() {
+    if (savingPage) return;
+    // The server soft-deletes and there is no restore endpoint, so an Undo toast
+    // would be a promise we can't keep — this is one of the few deletes that
+    // earns a confirm (docs/ui/calendar-ui.md §2).
+    if (
+      !window.confirm(`Delete "${activePage.name}"? This cannot be undone.`)
+    ) {
+      return;
+    }
+
+    setSavingPage(true);
+    try {
+      await onDeletePage(activePage.id);
+      // No success toast: the page leaving the sidebar and the redirect to the
+      // default page are the feedback, and this component unmounts with the
+      // route change anyway — a toast set here would never be seen.
+    } catch {
+      notify("This page could not be deleted.");
+    } finally {
+      setSavingPage(false);
+    }
+  }
+
   async function savePageAsNew() {
     if (savingPage) return;
     setSavingPage(true);
@@ -752,6 +817,7 @@ export function Workspace({
         pages={pages}
         isOpen={sidebarOpen}
         onClose={closeSidebar}
+        onCreatePage={() => void createNewPage()}
         onDateChange={(nextDate) => {
           onDateChange(nextDate);
           setSidebarOpen(false);
@@ -773,7 +839,6 @@ export function Workspace({
           setSidebarOpen(false);
           setSettingsOpen(true);
         }}
-        onNotice={notify}
         onPageChange={guardedPageChange}
         onSignOut={onSignOut}
         onToggleCalendar={handleToggleCalendar}
@@ -826,6 +891,10 @@ export function Workspace({
                 : current,
             )
           }
+          // Deleting is offered while editing the page it belongs to, and only
+          // while another page can take over — the last one would just be
+          // backfilled again on the next read.
+          onDeletePage={pages.length > 1 ? () => void deleteActivePage() : undefined}
           onToggleEdit={editing ? stopEditing : startEditing}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
           onPeriodChange={changePeriod}

@@ -116,6 +116,86 @@ describe("Workspace", () => {
     });
   });
 
+  it("creates a page from the calendars currently visible", async () => {
+    const user = userEvent.setup();
+    const onCreatePage = vi.fn<
+      (request: {
+        config: unknown;
+        name: string;
+      }) => Promise<(typeof commonProps.pages)[0]>
+    >(async () => ({
+      ...commonProps.pages[0]!,
+      id: "work",
+      isDefault: false,
+      name: "Work",
+    }));
+    const onPageChange = vi.fn();
+    vi.spyOn(window, "prompt").mockReturnValue("Work");
+
+    render(
+      <Workspace
+        {...commonProps}
+        onCreatePage={onCreatePage}
+        onPageChange={onPageChange}
+      />,
+    );
+
+    // Hide one calendar first: the new page has to start from what is on screen,
+    // not from the saved config of the page it was branched off.
+    await user.click(screen.getByRole("switch", { name: "Studio" }));
+    await user.click(screen.getByRole("button", { name: "New page" }));
+
+    expect(onCreatePage).toHaveBeenCalledTimes(1);
+    expect(onCreatePage.mock.calls[0]![0]).toEqual({
+      config: {
+        // `include`, not `all` — a curated page must not gain calendars added later.
+        calendarVisibility: {
+          calendarIds: ["personal", "client-work", "family-calendar"],
+          mode: "include",
+        },
+        filters: [],
+        schemaVersion: 1,
+        view: { configVersion: 1, id: "month", showAdjacentDays: true },
+      },
+      name: "Work",
+    });
+    expect(onPageChange).toHaveBeenCalledWith("work");
+  });
+
+  it("deletes the page being edited, but never the last one", async () => {
+    const user = userEvent.setup();
+    const onDeletePage = vi.fn(async () => undefined);
+    const secondPage = {
+      ...commonProps.pages[0]!,
+      id: "work",
+      isDefault: false,
+      name: "Work",
+      position: 1,
+    };
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const single = render(
+      <Workspace {...commonProps} onDeletePage={onDeletePage} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Edit page" }));
+    expect(screen.queryByRole("button", { name: /Delete page/ })).toBeNull();
+    single.unmount();
+
+    render(
+      <Workspace
+        {...commonProps}
+        onDeletePage={onDeletePage}
+        pages={[...commonProps.pages, secondPage]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Edit page" }));
+    await user.click(
+      screen.getByRole("button", { name: "Delete page My calendar" }),
+    );
+
+    expect(onDeletePage).toHaveBeenCalledWith("my-calendar");
+  });
+
   it("discards page edits without saving", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn();

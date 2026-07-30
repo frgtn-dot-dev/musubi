@@ -84,6 +84,13 @@ export function savePage(id: string, request: SavePageRequest) {
   });
 }
 
+export function deletePage(id: string) {
+  return apiRequest(`/api/v1/pages/${id}`, {
+    method: "DELETE",
+    responseSchema: z.object({ id: z.string() }),
+  });
+}
+
 export function getSettings(signal?: AbortSignal) {
   return apiRequest("/api/v1/users/settings", {
     responseSchema: SettingsResponseSchema,

@@ -1286,6 +1286,72 @@ test("resolves the default page and switches between pages", async ({
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 });
 
+test("creates a page from the sidebar and deletes it again", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const workPageId = "22222222-2222-4222-8222-222222222222";
+  const writes: Array<{ body?: unknown; method: string }> = [];
+  let pageState: unknown[] = [defaultPage];
+
+  await page.route("**/api/v1/pages", async (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as {
+        config: unknown;
+        name: string;
+      };
+      writes.push({ body, method: "POST" });
+      const created = {
+        ...defaultPage,
+        config: body.config,
+        id: workPageId,
+        isDefault: false,
+        name: body.name,
+        position: 1,
+      };
+      pageState = [defaultPage, created];
+      return respond(route, created, 201);
+    }
+    return respond(route, pageState);
+  });
+  await page.route(`**/api/v1/pages/${workPageId}`, async (route) => {
+    if (route.request().method() !== "DELETE") return route.fallback();
+    writes.push({ method: "DELETE" });
+    pageState = [defaultPage];
+    return respond(route, { id: workPageId });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  page.once("dialog", (dialog) => void dialog.accept("Work"));
+  await page.getByRole("button", { name: "New page" }).click();
+
+  // The new page opens straight away, keeping the date.
+  await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
+  await expect(page).toHaveURL(/[?&]date=2026-07-26/);
+  await expect(page.getByRole("button", { name: "Work" })).toBeVisible();
+
+  // Deleting the page being edited falls back to the default page.
+  await page.getByRole("button", { name: "Edit page" }).click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Delete page Work" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/app/p/${DEFAULT_PAGE_ID}/month`));
+  await expect(page.getByRole("button", { name: "Work" })).toBeHidden();
+  expect(writes.map((write) => write.method)).toEqual(["POST", "DELETE"]);
+  // Started from what was on screen, as an explicit include list.
+  expect(writes[0]!.body).toMatchObject({
+    config: {
+      calendarVisibility: {
+        calendarIds: ["personal", "studio", "family"],
+        mode: "include",
+      },
+      view: { configVersion: 1, id: "month", showAdjacentDays: true },
+    },
+    name: "Work",
+  });
+});
+
 test("moves and resizes an event by dragging it", async ({ page }) => {
   await mockAuthenticatedReads(page);
   const writes: Array<{ end: string; start: string }> = [];
