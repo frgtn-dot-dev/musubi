@@ -1,9 +1,24 @@
+/* The shell is an application surface, not a document. Dragging across it makes
+   events, and Chromium cancels a pointer gesture the moment it turns into a text
+   selection — so a stray selection doesn't just look wrong, it breaks the drag.
+   An I-beam over a grid is also a lie about what the pointer will do.
+   Radix portals its layers to the body, so dialogs, popovers and event details
+   stay selectable and copyable; the grid itself is the copy-unfriendly part, and
+   an event's own preview is the place to read and copy its text. */
 .workspace {
   display: grid;
   min-height: 100vh;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface-canvas);
+  cursor: default;
+  user-select: none;
+}
+
+/* Fields are the exception, including the toolbar search. */
+.workspace :is(input, textarea) {
+  cursor: auto;
+  user-select: text;
 }
 
 .main {

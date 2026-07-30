@@ -36,6 +36,7 @@ import {
   type EventFormValues,
 } from "../event-form";
 import { connectionOfCalendar } from "../federation-routing";
+import { focusMovedToAnotherLayer } from "../layer-focus";
 import {
   canEditEvent,
   canRemoveEvent,
@@ -368,6 +369,21 @@ export function EventDetailsPopover({
             className={`${workspaceStyles.popover} ${styles.detailPopover}`}
             collisionPadding={14}
             onClick={(clickEvent) => clickEvent.stopPropagation()}
+            /* React portals bubble events to the React parent, not the DOM
+               one: without this a press on the title reaches the day cell this
+               popover is rendered from and starts its drag-to-create gesture, so
+               selecting text opened a draft instead. Click was already stopped
+               for the same reason. */
+            onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+            /* Selecting the title or notes moves focus off the text and out of
+               the layer, which Radix reads as an interaction outside — so the
+               preview closed the moment you tried to copy anything out of it.
+               A modal opening over it still takes it away. */
+            onFocusOutside={(focusEvent) => {
+              if (!focusMovedToAnotherLayer(focusEvent.target)) {
+                focusEvent.preventDefault();
+              }
+            }}
             onEscapeKeyDown={(escapeEvent) => {
               if (!targetAction) return;
               escapeEvent.preventDefault();

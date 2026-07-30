@@ -15,6 +15,7 @@ import {
 } from "../event-form";
 import { getEventMutationError } from "../event-permissions";
 import { useWindowDrag } from "../use-window-drag";
+import { focusMovedToAnotherLayer } from "../layer-focus";
 import { EventEditorForm } from "./EventEditorForm";
 import styles from "./workspace.module.css";
 
@@ -124,6 +125,18 @@ export function QuickCreate({
           collisionPadding={14}
           aria-label="Create event"
           onClick={(clickEvent) => clickEvent.stopPropagation()}
+          /* Same as the click above: a portal bubbles into its React parent, so
+             without this a press in the form starts the grid's create gesture. */
+          onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+          /* Focus wandering out is not a decision to discard a draft — pressing
+             outside or Escape is. It especially must not be, because a draft this
+             one replaces restores focus to its own origin as it unmounts, which
+             would otherwise dismiss the replacement the instant it arrives. */
+          onFocusOutside={(focusEvent) => {
+            if (!focusMovedToAnotherLayer(focusEvent.target)) {
+              focusEvent.preventDefault();
+            }
+          }}
           onInteractOutside={(interaction) => {
             // Grabbing the draft this popover describes is not "outside" it —
             // that gesture changes the time in the form, so it must not dismiss.

@@ -85,6 +85,13 @@ var(--control-on-fill))` — míchá k vlastní barvě textu, takže jedno pravi
 platí v light i dark. Barevný objekt (event) se na hover nepřebarvuje vůbec, jen
 `filter: saturate()`.
 
+**R11d — Shell není dokument.** Kalendářová plocha má `user-select: none` a
+`cursor: default`: tažení po ní vyrábí eventy a Chromium **ruší pointer gesto** ve
+chvíli, kdy se z něj stane označování textu — takže nechtěná selekce není kosmetika,
+ale rozbité gesto. Vstupní pole jsou výjimka (`user-select: text`), a protože Radix
+portáluje vrstvy do `body`, dialogy, popovery i detail eventu zůstávají čitelné a
+kopírovatelné. Kdo chce zkopírovat název eventu, otevře jeho preview.
+
 **R11b — Focus ring patří klávesnici.** `:focus-visible` sám nestačí: při
 *programatickém* focusu (dialog otevře první pole, focus se vrací na spouštěč)
 prohlížeč hádá a Chrome hádá „ukázat". Myšímu uživateli tak ring bliká po každém
@@ -100,6 +107,20 @@ druhé — **přemapuj tokeny pro ten podstrom** (`--text-secondary`, `--text-mu
 hover pravidla si pak vezmou správnou paletu sama, funguje to v obou tématech a
 další control přidaný do toho řádku už žádný override nepotřebuje. Viz
 `.pageRow:has([data-selected])`.
+
+**R4b — Vrstva nesmí prosáknout do plochy pod sebou.** React portály bublají
+eventy do **React** rodiče, ne DOM rodiče: popover vyrenderovaný z buňky Month
+posílá svůj `pointerdown` do handleru té buňky, takže stisk v preview startoval
+drag-to-create pod ním (a označit text v preview tím bylo nemožné). Content každé
+vrstvy proto zastavuje `pointerdown` i `click`. Platí pro každou novou vrstvu
+rendered z interaktivní plochy.
+
+**R4c — Focus mimo vrstvu není rozhodnutí ji zavřít.** Radix zavírá vrstvu, když
+z ní odejde focus, což míchá dvě různé věci: modál, který přebírá řízení (ta
+vrstva opravdu má jít), a focus, který jen opustil text — což dělá začátek
+označování i vrstva, kterou nahrazujeme (při odchodu vrací focus na svůj původ,
+takže zabila náhradu v okamžiku vzniku). Zavírá se jen ta první varianta,
+predikát je `focusMovedToAnotherLayer()`.
 
 **R4a — Anchor se nesmí hýbat, když je jeho vrstva otevřená.** Karta eventu se na
 hover zvedá o 1 px; dokud u ní visí popover, zvedla by ho s sebou (a při hover-out
@@ -308,6 +329,15 @@ jako time grid maluje blok, který vzniká. Cell tint je smazaný: dvě značky 
 jednu věc jsou šum a obarvená mřížka nesedí do stylu. Živý pill má
 `pointer-events: none` (gesto vlastní buňka pod ním) a po puštění se z něj beze
 změny vzhledu stane grabbable draft — žádný přeskok mezi „taženo" a „vytvořeno".
+
+**B3b — Druhý draft nahradí první, ne oba: HOTOVO** (2026-07-30)
+
+Když byl otevřený draft a začalo se tahat jiný, po puštění zmizely **oba**.
+Příčina nebyla v gestu: odcházející popover při unmountu vrací focus na svůj
+původ (`onCloseAutoFocus`), nově namountovaný to přes Radix vyhodnotí jako
+interakci mimo sebe a zavře se — viz R4c. Navíc první draft teď padá **hned při
+stisku** nového gesta (`onCancelDraft` v Month i time gridu), takže na obrazovce
+nikdy nejsou dva rozpracované eventy.
 
 **B9 — Ghost na místě, event tam, kam se táhne: HOTOVO** (2026-07-28)
 

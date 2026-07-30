@@ -790,6 +790,7 @@ export function Workspace({
                       )
                   : undefined
               }
+              onCancelDraft={() => setCreateIntent(undefined)}
               onNotice={notify}
               onOpenFullEditor={onOpenFullEditor}
               onRemoveEvent={onRemoveEvent}
@@ -835,6 +836,7 @@ export function Workspace({
                       })
                   : undefined
               }
+              onCancelDraft={() => setCreateIntent(undefined)}
               onMonthChange={changePeriod}
               onMoveDraft={moveCreateDraft}
               pendingCreate={

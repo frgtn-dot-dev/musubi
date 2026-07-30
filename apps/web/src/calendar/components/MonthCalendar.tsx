@@ -59,6 +59,8 @@ type MonthCalendarProps = EventActionHandlers & {
     endDate?: string,
   ) => void;
   /** The slot a quick-create popover is open for: the draft, shown as a pill. */
+  /** Drops the draft the open quick create describes, before a new one starts. */
+  onCancelDraft?: () => void;
   pendingCreate?: { date: string; endDate?: string };
   /**
    * Move the draft to another day range while its popover is open. Absent leaves
@@ -92,6 +94,7 @@ export function MonthCalendar({
   onMonthChange,
   onMoveDraft,
   onMoveEventToDate,
+  onCancelDraft,
   pendingCreate,
   showAdjacentDays = true,
   timeFormat,
@@ -353,6 +356,10 @@ export function MonthCalendar({
                     ) {
                       return;
                     }
+                    // A new gesture replaces the old draft from its first
+                    // press, not on release: leaving the previous popover open
+                    // over a range being dragged reads as two pending events.
+                    onCancelDraft?.();
                     beginRangeCreate({
                       cell: pointerEvent.currentTarget,
                       dayKey: dateKey,

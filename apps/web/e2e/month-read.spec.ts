@@ -1493,6 +1493,91 @@ test("keeps the chosen interval visible while quick create is open", async ({
   await expect(page.getByText("03:00–04:00")).toHaveCount(0);
 });
 
+test("a second month drag replaces the first draft, not both", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // One draft from a plain click.
+  const firstCell = page.locator('[data-day-key="2026-07-07"]');
+  const firstBox = (await firstCell.boundingBox())!;
+  await page.mouse.click(
+    firstBox.x + firstBox.width / 2,
+    firstBox.y + firstBox.height - 6,
+  );
+  await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+  await expect(page.locator("[data-draft]")).toHaveCount(1);
+
+  // Dragging out another one drops the first from the first press.
+  const from = page.locator('[data-day-key="2026-07-28"]');
+  const to = page.locator('[data-day-key="2026-07-30"]');
+  const fromBox = (await from.boundingBox())!;
+  const toBox = (await to.boundingBox())!;
+  await page.mouse.move(
+    fromBox.x + fromBox.width / 2,
+    fromBox.y + fromBox.height - 6,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    toBox.x + toBox.width / 2,
+    toBox.y + toBox.height - 6,
+    { steps: 8 },
+  );
+  await expect(page.locator("[data-live]")).toHaveCount(3);
+  await expect(page.locator("[data-draft]")).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "Create event" }),
+  ).toHaveCount(0);
+
+  // Releasing keeps the new one. The replaced popover restores focus to its own
+  // origin cell as it goes, which must not read as a dismissal of the new one.
+  await page.mouse.up();
+  await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+  await expect(page.locator("[data-draft]")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+    "Tuesday, July 28, 2026",
+  );
+});
+
+test("keeps the event preview open while its text is being selected", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: /Design review/ }).first().click();
+  const preview = page.locator('[class*="detailPopover"]');
+  await expect(preview).toBeVisible();
+  await preview.evaluate((el) =>
+    Promise.all(el.getAnimations().map((animation) => animation.finished)),
+  );
+
+  // Dragging across the title is how you copy it. Focus leaves the text as the
+  // drag starts, which Radix reports as an interaction outside the layer — the
+  // preview used to close on the way.
+  const title = preview.getByRole("heading", { name: "Design review" });
+  const box = (await title.boundingBox())!;
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  await expect(preview).toBeVisible();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toContain(
+    "Design review",
+  );
+  // The grid behind it stays unselectable, so a drag there is always a gesture
+  // and never a stray selection — which Chromium would cancel the drag for.
+  expect(
+    await page
+      .locator("[data-calendar-area]")
+      .evaluate((el) => getComputedStyle(el).userSelect),
+  ).toBe("none");
+});
+
 test("moves an event to another day in the month grid", async ({ page }) => {
   await mockAuthenticatedReads(page);
   const writes: Array<{ end: string; start: string }> = [];

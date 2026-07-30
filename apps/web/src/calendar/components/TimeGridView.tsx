@@ -85,6 +85,8 @@ type TimeGridViewProps = EventActionHandlers & {
    * visible for as long as the popover is, so the interval being described never
    * disappears out from under it.
    */
+  /** Drops the draft the open quick create describes, before a new one starts. */
+  onCancelDraft?: () => void;
   pendingCreate?: {
     date: string;
     endTime?: string;
@@ -351,6 +353,7 @@ export function TimeGridView({
   calendars,
   events,
   geometry,
+  onCancelDraft,
   onCreateAtTime,
   onMoveEvent,
   busyEventId,
@@ -777,6 +780,9 @@ export function TimeGridView({
                   ) {
                     return;
                   }
+                  // Same as the month grid: the previous draft goes on press,
+                  // so two pending events are never on screen at once.
+                  onCancelDraft?.();
                   beginCreateDrag({
                     clientY: pointerEvent.clientY,
                     column: pointerEvent.currentTarget,
