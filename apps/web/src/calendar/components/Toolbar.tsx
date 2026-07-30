@@ -9,6 +9,8 @@ import {
 import type { RefObject } from "react";
 import { Button, IconButton } from "~/ui/Button";
 import { Segmented } from "~/ui/Segmented";
+import { Select } from "~/ui/Select";
+import { useNarrowViewport } from "~/design/use-narrow-viewport";
 import { calendarViews, type CalendarViewId } from "../view-registry";
 import styles from "./workspace.module.css";
 
@@ -52,6 +54,9 @@ export function Toolbar({
   searchQuery,
   searchRef,
 }: ToolbarProps) {
+  // A flick moves the period on touch, so the arrows are desktop furniture.
+  const narrow = useNarrowViewport();
+
   return (
     <header className={styles.toolbar}>
       {/* The page name lives in the sidebar, its settings in the page dialog and
@@ -77,7 +82,7 @@ export function Toolbar({
           >
             Today
           </Button>
-          {periodNavigation ? (
+          {periodNavigation && !narrow ? (
             <div className={styles.navPair}>
               <IconButton
                 label={`Previous ${periodName}`}
@@ -98,17 +103,35 @@ export function Toolbar({
           <p className={styles.monthTitle}>{periodLabel}</p>
         </div>
 
-        <Segmented<CalendarViewId>
-          className={styles.viewSwitcher}
-          label="Calendar view"
-          options={calendarViews.map((view) => ({
-            disabled: !view.enabled,
-            label: view.label,
-            value: view.id,
-          }))}
-          value={activeView}
-          onChange={onViewChange}
-        />
+        {/* Four chips need a row of their own on a phone, and that row was the
+            difference between a calendar and a control panel. Same choice, one
+            control, on the line it already shares with the date. */}
+        {narrow ? (
+          <Select
+            className={styles.viewSelect}
+            label="Calendar view"
+            options={calendarViews.map((view) => ({
+              disabled: !view.enabled,
+              label: view.label,
+              value: view.id,
+            }))}
+            size="compact"
+            value={activeView}
+            onChange={(value) => onViewChange(value as CalendarViewId)}
+          />
+        ) : (
+          <Segmented<CalendarViewId>
+            className={styles.viewSwitcher}
+            label="Calendar view"
+            options={calendarViews.map((view) => ({
+              disabled: !view.enabled,
+              label: view.label,
+              value: view.id,
+            }))}
+            value={activeView}
+            onChange={onViewChange}
+          />
+        )}
 
         <div className={styles.toolbarActions}>
           <label className={styles.searchField}>

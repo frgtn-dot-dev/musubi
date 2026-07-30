@@ -60,15 +60,6 @@
   display: none;
 }
 
-.timePresets {
-  display: none;
-  padding: 0 var(--space-4) var(--space-2) 46px;
-}
-
-.timePresets > div {
-  width: 100%;
-}
-
 .toggleRow {
   width: 100%;
   min-height: var(--control-height);
@@ -614,10 +605,6 @@
 }
 
 @media (max-width: 599px) {
-  .timePresets {
-    display: block;
-  }
-
   .inlineField {
     grid-template-columns: 86px minmax(0, 1fr);
   }

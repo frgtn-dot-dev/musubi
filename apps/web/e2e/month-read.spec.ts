@@ -965,26 +965,6 @@ test("chooses an event time and duration from the time pickers", async ({
   ).toBe(30 * 60 * 1_000);
 });
 
-test("offers one-tap time ranges on a narrow viewport", async ({ page }) => {
-  await page.setViewportSize({ height: 720, width: 390 });
-  await mockAuthenticatedReads(page);
-  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
-
-  await page.getByRole("button", { name: "Event", exact: true }).click();
-  const presets = page.getByRole("radiogroup", {
-    name: "Time range presets",
-  });
-  await expect(presets).toBeVisible();
-  await presets.getByRole("radio", { name: "Evening" }).click();
-
-  await expect(
-    page.getByRole("combobox", { name: "Start time" }),
-  ).toHaveValue("18:00");
-  await expect(
-    page.getByRole("combobox", { name: "End time" }),
-  ).toHaveValue("19:00");
-});
-
 test("keeps provider failures actionable without assuming a write succeeded", async ({
   page,
 }) => {
@@ -1060,7 +1040,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   ).toBeFocused();
   await page.getByRole("button", { exact: true, name: "Link" }).click();
   await page.getByRole("button", { name: "Link to Personal" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Event linked to calendar.",
   );
 
@@ -1070,7 +1050,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
     page.getByRole("heading", { name: "Make an independent copy" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Make copy in Studio" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Independent event copy created.",
   );
   await expect(
@@ -1118,7 +1098,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
     .getByRole("dialog", { name: "Delete recurring event" })
     .getByRole("button", { name: "This event", exact: true })
     .click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Occurrence removed.",
   );
   await expect(
@@ -1163,7 +1143,7 @@ test("exports and imports iCalendar files from calendar management", async ({
     .fill("Roadmap");
   await page.getByRole("button", { name: "Import", exact: true }).click();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Imported 1 event into Roadmap.",
   );
   const importedCalendar = page.getByRole("switch", {
@@ -1457,7 +1437,7 @@ test("moves and resizes an event by dragging it", async ({ page }) => {
   });
   await page.mouse.up();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Event moved.",
   );
   expect(writes).toHaveLength(1);
@@ -1484,7 +1464,7 @@ test("moves and resizes an event by dragging it", async ({ page }) => {
   );
   await page.mouse.up();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Event resized.",
   );
   expect(writes).toHaveLength(2);
@@ -1745,7 +1725,7 @@ test("moves an event to another day in the month grid", async ({ page }) => {
   await expect(target).toHaveAttribute("data-drop-target", "");
   await page.mouse.up();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Event moved.",
   );
   expect(writes).toHaveLength(1);
@@ -1778,7 +1758,7 @@ test("moves an event with the keyboard", async ({ page }) => {
 
   // Alt+Down moves by one snap interval; the change is announced.
   await page.keyboard.press("Alt+ArrowDown");
-  await expect(page.locator('[aria-live="polite"]')).toContainText("now ");
+  await expect(page.locator('[class*="toastRegion"]')).toContainText("now ");
   expect(writes).toHaveLength(1);
   expect(
     new Date(writes[0]!.end).getTime() - new Date(writes[0]!.start).getTime(),
@@ -1869,7 +1849,7 @@ test("changes time grid density from the page editor", async ({ page }) => {
     .getByRole("button", { name: "Save", exact: true })
     .click();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Page saved.",
   );
   expect(savedDensity).toBe("compact");
@@ -1913,7 +1893,7 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
   await settings.getByRole("switch", { name: "Studio" }).click();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Page saved.",
   );
   expect(saved?.config?.calendarVisibility).toEqual({
@@ -2108,7 +2088,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
     color: "#A8B5A0",
     name: "Travel",
   });
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Travel created.",
   );
   const travelRow = page
@@ -2129,7 +2109,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
     .getByRole("dialog", { name: "Edit calendar" })
     .getByRole("button", { name: "Save", exact: true })
     .click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Calendar updated.",
   );
   await expect(
@@ -2153,7 +2133,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
   await deleteDialog
     .getByRole("button", { name: "Delete calendar" })
     .click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Trips deleted.",
   );
   await expect(
@@ -2492,7 +2472,7 @@ test("connects and disconnects calendar providers", async ({ page }) => {
   await page
     .getByRole("button", { name: "Disconnect work@gmail.com" })
     .click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "work@gmail.com disconnected.",
   );
   expect(disconnectBody).toEqual({ accountId: "acc-1", provider: "google" });
@@ -2504,7 +2484,7 @@ test("connects and disconnects calendar providers", async ({ page }) => {
     .fill("me@icloud.com");
   await page.getByPlaceholder("Password").fill("app-specific-pw");
   await page.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Calendar connected.",
   );
   expect(caldavBody).toEqual({
@@ -2674,7 +2654,7 @@ test("shows federated calendars and reports an unreachable server", async ({
 
   // Disconnecting a federated server uses its own endpoint, not provider disconnect.
   await page.getByRole("button", { name: "Disconnect dead.example" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "dead.example disconnected.",
   );
   expect(disconnectedServer).toEqual({ server: "https://dead.example" });
@@ -2762,7 +2742,7 @@ test("routes federated event writes through the gateway", async ({ page }) => {
     .fill("Book club — new venue");
   await page.getByRole("button", { name: "Save" }).click();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Event updated.",
   );
   expect(gatewayWrites).toEqual(["PUT"]);
@@ -2935,7 +2915,7 @@ test("joins a calendar from a pasted cross-server invite link", async ({
   expect(previewQuery).toContain(`token=${token}`);
 
   await page.getByRole("button", { name: "Join calendar" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Joined Book club.",
   );
   // The handshake runs server-side — no member token is sent by the browser.
@@ -2974,7 +2954,7 @@ test("joins a calendar from an invite link on this server", async ({ page }) => 
   await expect(page.getByText("This server")).toBeVisible();
 
   await page.getByRole("button", { name: "Join calendar" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Joined Shared plans.",
   );
   expect(joinedCalendarId).toBe("shared-cal");
@@ -3045,7 +3025,7 @@ test("manages account identity and gates account deletion", async ({
     .getByRole("textbox", { name: "Display name" })
     .fill("Web QA Updated");
   await nameDialog.getByRole("button", { name: "Save" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Name updated.",
   );
   await expect(nameDialog).toBeHidden();
@@ -3053,7 +3033,7 @@ test("manages account identity and gates account deletion", async ({
   await accountDialog
     .getByRole("button", { name: /Reset password/ })
     .click();
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Check your email for a link to reset your password.",
   );
 
@@ -3083,7 +3063,7 @@ test("manages account identity and gates account deletion", async ({
   await expect(deleteButton).toBeEnabled();
   await deleteButton.click();
 
-  await expect(page.locator('[aria-live="polite"]')).toContainText(
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Check your email",
   );
   expect(deleteRequested).toBe(true);

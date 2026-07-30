@@ -22,7 +22,6 @@ import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { Segmented } from "~/ui/Segmented";
 import { Select } from "~/ui/Select";
 import {
   minutesToTime,
@@ -53,26 +52,6 @@ const LATEST_START_TIME = minutesToTime(
   LAST_MINUTE - TIME_SNAP_MINUTES,
 );
 const LATEST_END_TIME = minutesToTime(LAST_MINUTE);
-const TIME_PRESETS = [
-  {
-    endTime: "10:00",
-    label: "Morning",
-    startTime: "09:00",
-    value: "09:00–10:00",
-  },
-  {
-    endTime: "14:00",
-    label: "Afternoon",
-    startTime: "13:00",
-    value: "13:00–14:00",
-  },
-  {
-    endTime: "19:00",
-    label: "Evening",
-    startTime: "18:00",
-    value: "18:00–19:00",
-  },
-] as const;
 
 /** The "when" fields a gesture outside the form can move under it. */
 export type EventWhen = Pick<
@@ -343,24 +322,6 @@ export function EventEditorForm({
                 timeFormat={timeFormat}
                 value={values.endTime}
                 onChange={(endTime) => patch({ endTime })}
-              />
-            </div>
-            <div className={styles.timePresets}>
-              <Segmented
-                disabled={saving}
-                label="Time range presets"
-                options={TIME_PRESETS}
-                value={`${values.startTime}–${values.endTime}`}
-                onChange={(presetValue) => {
-                  const preset = TIME_PRESETS.find(
-                    (option) => option.value === presetValue,
-                  );
-                  if (!preset) return;
-                  patch({
-                    endTime: preset.endTime,
-                    startTime: preset.startTime,
-                  });
-                }}
               />
             </div>
           </>

@@ -25,11 +25,14 @@ export function getAgendaRecurrenceEnd(start: Date): Date {
   return end;
 }
 
-export function getAgendaLabel(anchor: Date): string {
+export function getAgendaLabel(
+  anchor: Date,
+  { compact = false }: { compact?: boolean } = {},
+): string {
   return `From ${new Intl.DateTimeFormat("en", {
     day: "numeric",
     month: "short",
-    year: "numeric",
+    ...(compact ? {} : { year: "numeric" }),
   }).format(anchor)}`;
 }
 

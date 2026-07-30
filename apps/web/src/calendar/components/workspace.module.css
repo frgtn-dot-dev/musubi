@@ -1835,6 +1835,12 @@
     min-width: 100%;
   }
 
+  /* One row of chrome: the view picker sits beside the date rather than taking a
+     band of its own under it. */
+  .viewSelect {
+    justify-self: end;
+  }
+
   /* The create button floats over the bottom-right corner, which is a real cell
      in the last month row. Clear its footprint instead of covering an event. */
   .calendarArea {

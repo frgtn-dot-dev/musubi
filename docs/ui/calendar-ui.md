@@ -339,6 +339,23 @@ interakci mimo sebe a zavře se — viz R4c. Navíc první draft teď padá **hn
 stisku** nového gesta (`onCancelDraft` v Month i time gridu), takže na obrazovce
 nikdy nejsou dva rozpracované eventy.
 
+**B3c — Překryv: karty přes sebe, ne slivery: HOTOVO** (2026-07-30)
+
+Week kaskádovala pevných 8 px na úroveň (mobil dělá totéž s 10 px), takže
+z eventu pod ním zbyl proužek, ve kterém nebylo nic — ani název, ani čas. Day
+zase dělil na přesné rovné sloupce. Teď je **jedno pravidlo pro oba**
+(`overlapPlacement()` v `time-grid-math.ts`): lane = rovný podíl sloupce, ale blok
+se rozlévá `LANE_SPREAD = 1.7` lane doprava a kreslí se nad tu vedlejší. Dva
+překryvy tedy vyjdou na `0–85 %` a `50–100 %` — čte se to jako široká karta
+s druhou položenou přes její rok, což je referenční chování Google Calendaru.
+Klastry hlubší než `MAX_OVERLAP_LANES = 4` se skládají na poslední lane (z-order
+pořád drží pozdější nahoře); tam by se teprve vyplatilo „+N more".
+
+Blok, který leží nad jiným, má **prstenec v barvě plochy** (`data-overlapping`):
+dva eventy z jednoho kalendáře mají stejnou barvu a bez mezery splynou v jeden
+tvar, ve kterém je odlišuje jen text. `apps/client` má zatím pořád pevných 10 px —
+sdílená není matematika, jen ta čísla, takže při další úpravě mobilu je vzít odsud.
+
 **B9 — Ghost na místě, event tam, kam se táhne: HOTOVO** (2026-07-28)
 
 Předtím zůstával tažený blok ve svém sloupci a jen měnil čas; cílový den se
@@ -619,6 +636,53 @@ na řádku Page v sidebaru (quiet, objeví se na `:hover`/`:focus-within`, na
   poslední pole (notes) bere zbytek místa a seznam kalendářů drží
   `align-content: start` u hlavičky. Nevyplněné místo mezi hlavičkou a obsahem
   je vada, ne vzduch.
+
+### Fáze H — Mobilní průchod — **HOTOVO** (2026-07-30)
+
+Review webu na 390×844 proti nativnímu klientovi. Nativní model je: horizontální
+pager mezi obdobími, pull-to-refresh, tap → draft, hold+pan → create/move, pinch
+→ vertikální zoom, month→day drill zoom.
+
+**Opraveno:**
+
+- **Week na telefonu ukazoval 3,5 dne ze 7.** `.timeGridView` držela
+  `min-width: 700px`, takže mřížka scrollovala vodorovně — a horizontální scroll
+  v kalendáři nikdo nehledá. Pod 600 px se teď vejde celý týden (~48px sloupce);
+  nad tím zůstává minimální sloupec a scroll, kde je čitelnější. Hlavička dne je
+  ve dvou řádcích (`MON` / `20`) — vedle sebe se v 48px oba klipovaly.
+- **Flick doleva/doprava mění období** (`use-swipe-period.ts`), jen na dotyku:
+  myš má šipky a horizontální scroll trackpadu není gesto. V agendě se nepaguje,
+  je to jeden souvislý seznam.
+- **Drag-to-create na dotyku čeká na držení.** Flick i tažení rozsahu žijí na
+  stejných buňkách, takže o tom, co gesto je, rozhoduje **jedna** konstanta
+  `TOUCH_HOLD_MS = 280` (stejná hodnota jako `HOLD_CREATE_MS` v nativním
+  klientovi) — pod ní je to stránkování, nad ní tažení. Sdílená konstanta je to,
+  co brání okně, ve kterém by vystřelilo obojí; první verze měla flick 400 ms a
+  v pásmu 280–400 ms dělala obojí zároveň.
+- **FAB přestal zakrývat poslední řádek Month** (`padding-bottom` plochy).
+- **Grid se otevírá hodinu před „teď"**, ne na fixní 7:00. V 15:00 jsi předtím
+  přistál osm hodin nad svým dnem (`openScrollMinutes()`).
+
+**Druhé kolo (po zpětné vazbě):**
+
+- **Horní bar je jedna řádka, 64 px.** Šipky ‹ › na telefonu zmizely (flick je
+  nahradil), přepínač pohledů se z pásu čtyř chipů stal `Select` — na úzkém
+  displeji ho sdílené primitivum otevře jako spodní sheet, takže „schovat" nestálo
+  žádnou novou komponentu. Titulek se přestal ořezávat, protože na úzkém displeji
+  ztrácí rok (`Jul 27 – Aug 2`, `Mon, Jul 27`, `From Jul 27`) — rok je to první,
+  co label může ztratit a pořád odpovědět „na co se dívám"; ořezaný titulek
+  neodpoví na nic. Týden přes Silvestr si oba roky nechává, tam by to bylo
+  dvojznačné.
+- **Presety Morning/Afternoon/Evening jsou pryč.** Byly jen na úzkém displeji,
+  zabíraly řádek v už tak nabité quick create a časy se dají nastavit vedle.
+- O tom, co je „úzké", rozhoduje `useNarrowViewport()` — **stejný breakpoint jako
+  CSS**, protože dva by se rozešly. Renderovat obojí a jedno skrýt CSS by nechalo
+  dva controly na jednu práci v accessibility stromu.
+
+**Vědomě neuděláno** (a proč): pull-to-refresh — to gesto vlastní prohlížeč,
+vlastní implementace by s ním zápasila; pinch zoom timeline — density je vlastnost
+Page, takže by vznikly dva zdroje pravdy na tutéž věc; month→day drill zoom —
+kosmetika nativní navigace.
 
 ### Vědomě odloženo
 

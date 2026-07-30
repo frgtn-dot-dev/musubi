@@ -118,9 +118,15 @@ export function getTimeGridQueryRange(
   };
 }
 
+/**
+ * The toolbar's period label. `compact` is the phone: the year is what the label
+ * can lose first and still answer "which days am I looking at", and a truncated
+ * label answers nothing at all.
+ */
 export function getTimeGridLabel(
   days: Date[],
   view: TimeGridViewId,
+  { compact = false }: { compact?: boolean } = {},
 ): string {
   const first = days[0];
   const last = days[days.length - 1];
@@ -132,9 +138,9 @@ export function getTimeGridLabel(
   if (view === "day") {
     return new Intl.DateTimeFormat("en", {
       day: "numeric",
-      month: "long",
-      weekday: "long",
-      year: "numeric",
+      month: compact ? "short" : "long",
+      weekday: compact ? "short" : "long",
+      ...(compact ? {} : { year: "numeric" }),
     }).format(first);
   }
 
@@ -145,13 +151,17 @@ export function getTimeGridLabel(
     month: "short",
   }).format(last);
 
+  // A week that straddles New Year keeps both years even when compact: that is
+  // the one case where dropping them makes the range ambiguous.
   if (first.getFullYear() !== last.getFullYear()) {
     return `${firstMonth} ${first.getDate()}, ${first.getFullYear()} – ${lastMonth} ${last.getDate()}, ${last.getFullYear()}`;
   }
 
+  const year = compact ? "" : `, ${last.getFullYear()}`;
+
   if (first.getMonth() === last.getMonth()) {
-    return `${firstMonth} ${first.getDate()} – ${last.getDate()}, ${last.getFullYear()}`;
+    return `${firstMonth} ${first.getDate()} – ${last.getDate()}${year}`;
   }
 
-  return `${firstMonth} ${first.getDate()} – ${lastMonth} ${last.getDate()}, ${last.getFullYear()}`;
+  return `${firstMonth} ${first.getDate()} – ${lastMonth} ${last.getDate()}${year}`;
 }
