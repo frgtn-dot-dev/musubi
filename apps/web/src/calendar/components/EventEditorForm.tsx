@@ -718,7 +718,7 @@ export function EventEditorForm({
         {expanded ? (
           <Button
             disabled={saving}
-            variant="text"
+            variant="secondary"
             onClick={onCancel}
           >
             Cancel

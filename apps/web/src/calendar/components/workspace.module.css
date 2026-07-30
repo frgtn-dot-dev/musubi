@@ -179,10 +179,18 @@
 
 .pageRowEdit {
   position: absolute;
+  top: 50%;
   right: 4px;
   color: var(--text-muted);
   opacity: 0;
+  transform: translateY(-50%);
   transition: opacity 120ms ease;
+}
+
+/* The selected row is a filled surface, so the dots have to read against the
+   fill — inheriting the muted panel colour makes them disappear (R11a). */
+.pageRow:has([data-selected]) .pageRowEdit {
+  color: var(--control-on-fill);
 }
 
 .pageRow:hover .pageRowEdit,
@@ -1000,6 +1008,15 @@
   outline-offset: -3px;
 }
 
+/* An open detail popover is anchored to this card. Lifting the card on hover
+   would drag the popover a pixel with it — and dropping it on hover-out would
+   drop the popover too — so while the popover is open the card holds still. The
+   colour shift stays; only the geometry is frozen. */
+.timelineEvent[data-state="open"],
+.timelineEvent[data-state="open"]:hover {
+  transform: none;
+}
+
 .timelineEventTime,
 .timelineEventMeta {
   display: none;
@@ -1242,6 +1259,11 @@
 .eventChip:focus-visible {
   outline: 2px solid var(--event-foreground);
   outline-offset: -3px;
+}
+
+.eventChip[data-state="open"],
+.eventChip[data-state="open"]:hover {
+  transform: none;
 }
 
 .eventChipAllDay {

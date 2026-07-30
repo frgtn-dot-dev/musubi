@@ -23,12 +23,19 @@
   text-decoration: none;
 }
 
+/* Flex, not grid: a grid row is as tall as the line box, so an icon aligned to
+   the start of that row sits a pixel or two above the button's centre. Same
+   centring model as .button, which is the point of both being primitives. */
 .iconButton {
-  display: inline-grid;
+  display: inline-flex;
   width: var(--control-height);
   min-width: var(--control-height);
-  place-content: center;
+  align-items: center;
+  justify-content: center;
   padding: 0;
+  /* The glyph is the only child: without this it sits on the text baseline of an
+     inherited line box, which pushes it a pixel or two above centre. */
+  line-height: 0;
 }
 
 .button_compact {
@@ -68,6 +75,13 @@
 .button:hover:not(:disabled),
 .iconButton:hover:not(:disabled) {
   transform: translateY(-1px);
+}
+
+/* A button that owns an open popover or dialog is that layer's anchor: moving it
+   moves the layer. Radix marks the trigger, so the lift simply stops applying. */
+.button[data-state="open"]:hover:not(:disabled),
+.iconButton[data-state="open"]:hover:not(:disabled) {
+  transform: none;
 }
 
 .button_secondary:hover:not(:disabled),

@@ -37,6 +37,14 @@ button {
   outline-offset: 3px;
 }
 
+/* Focus rings belong to keyboard use. Until a key arms them (see focus-mode.ts)
+   every ring is transparent, so programmatic focus — a dialog opening, focus
+   returning to a trigger — can't flash an outline at someone using a mouse.
+   Outlines don't affect layout, so nothing moves when they light up. */
+:root:not([data-focus-mode="keyboard"]) :focus-visible {
+  outline-color: transparent;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
 }

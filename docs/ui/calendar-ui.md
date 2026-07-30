@@ -85,6 +85,19 @@ var(--control-on-fill))` — míchá k vlastní barvě textu, takže jedno pravi
 platí v light i dark. Barevný objekt (event) se na hover nepřebarvuje vůbec, jen
 `filter: saturate()`.
 
+**R11b — Focus ring patří klávesnici.** `:focus-visible` sám nestačí: při
+*programatickém* focusu (dialog otevře první pole, focus se vrací na spouštěč)
+prohlížeč hádá a Chrome hádá „ukázat". Myšímu uživateli tak ring bliká po každém
+zavření dialogu, což čte jako glitch. Modalitu proto držíme sami
+(`src/design/focus-mode.ts`): jakákoli klávesa, která není psaní, ring **nabije**,
+další pointer stisk ho **odpojí**; do té doby je `outline-color: transparent`.
+Klávesová cesta tím nepřijde o nic, což je ta nediskutovatelná část.
+
+**R4a — Anchor se nesmí hýbat, když je jeho vrstva otevřená.** Karta eventu se na
+hover zvedá o 1 px; dokud u ní visí popover, zvedla by ho s sebou (a při hover-out
+zase spustila). Radix značí spouštěč `data-state="open"` — geometrie se v tom
+stavu zmrazí, barevný posun zůstává.
+
 **R12 — Mobil/narrow se adaptuje, nezmenšuje.** Pod 600 px popover → sheet,
 permanentní zóny → vrstvy. Zachovej v tomto pořadí: rozsah → Today/navigace →
 event content → Create → přepnutí pohledu.
@@ -120,6 +133,7 @@ vzhled tlačítka.
 | Potřeba | Použít |
 |---|---|
 | akce a ikonová akce | `Button` / `IconButton`; navigace zůstává odkazem s `buttonClassName` |
+| zrušení akce | vždy `variant="secondary"` — stejná role musí mít stejnou váhu; `variant="text"` je pro terciární věci v toku („More options", „Back to calendar") |
 | modal / confirm | `Dialog` / `DialogClose` — jedna hlavička, focus trap, návrat focusu, mobilní sheet |
 | popsané pole | `Field` — label, description a error vazby generuje komponenta |
 | řádek nastavení či seznamu | `RowAction` / `RowToggle` / `RowOptions` |
@@ -539,6 +553,14 @@ na řádku Page v sidebaru (quiet, objeví se na `:hover`/`:focus-within`, na
   řádky; Link a Fork jsou kompaktní tlačítka ve footeru, druhý krok (do kterého
   kalendáře) zůstal beze změny. Footer se smí zalomit — čtyři akce se do šířky
   popoveru nevejdou a horizontální scroll v popoveru je chyba.
+- Footer preview eventu je **grid rovných buněk** (`grid-auto-flow: column`),
+  jedna až čtyři akce podle práv. Čtyři ikona+label tlačítka se do 390 px vejdou
+  jen s polovičním `padding-inline`, takže labely musí být krátké — „Edit series"
+  se nevejde a stačí „Edit", protože hlavička už sérii bádžuje a scope dialog se
+  na rozsah stejně zeptá. Delete drží stejný tvar jako sousedi, destruktivnost
+  nese barva.
+- `IconButton` centruje flexem, ne gridem: grid řádek je vysoký jako line box,
+  takže se ikona zarovnala na účaří a sedla o 1,5 px nad střed tlačítka.
 - Sloupce editoru eventu se v page layoutu roztahují na výšku řádku, takže
   poslední pole (notes) bere zbytek místa a seznam kalendářů drží
   `align-content: start` u hlavičky. Nevyplněné místo mezi hlavičkou a obsahem

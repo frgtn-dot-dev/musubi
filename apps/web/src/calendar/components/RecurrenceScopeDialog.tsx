@@ -65,7 +65,7 @@ export function RecurrenceScopeDialog({
       footer={
         <Button
           disabled={Boolean(busyScope)}
-          variant="text"
+          variant="secondary"
           onClick={() => onResolve(undefined)}
         >
           Cancel

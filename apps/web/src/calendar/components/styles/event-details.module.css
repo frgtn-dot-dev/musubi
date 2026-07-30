@@ -281,16 +281,17 @@
   font-size: var(--text-10);
 }
 
+/* One row of equal cells, however many actions the event has (one to four). Four
+   icon+label buttons fit the popover's 390px exactly once their inline padding
+   is halved, so keep labels short — "Edit series" would not fit. */
 .detailActions {
   position: sticky;
   z-index: 2;
   bottom: 0;
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  /* Up to four actions fit here; wrapping keeps them all reachable instead of
-     pushing the popover into a horizontal scroll. */
-  flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4)
     calc(var(--space-3) + env(safe-area-inset-bottom));
@@ -298,13 +299,12 @@
   background: var(--surface-canvas);
 }
 
-/* Delete keeps its own end of the row, whatever wrapped above it. */
-.detailActions > .deleteAction {
-  margin-left: auto;
+.detailActions > button {
+  min-width: 0;
+  padding-inline: var(--space-2);
 }
 
 .deleteAction {
-  margin-left: auto;
   color: var(--accent-primary);
 }
 

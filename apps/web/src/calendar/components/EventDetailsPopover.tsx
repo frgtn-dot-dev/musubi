@@ -673,7 +673,10 @@ export function EventDetailsPopover({
                         variant="secondary"
                         onClick={() => setEditing(true)}
                       >
-                        {master.recurrence ? "Edit series" : "Edit"}
+                        {/* Just "Edit": the header already badges this as a
+                            series, four labels have to fit one row, and the
+                            scope dialog asks which occurrences anyway. */}
+                        Edit
                       </Button>
                     ) : null}
                     {/* Adding this event to another calendar is a second step —
@@ -710,7 +713,9 @@ export function EventDetailsPopover({
                         icon={<Trash2 size={16} strokeWidth={1.6} />}
                         loading={busyAction === "delete"}
                         size="compact"
-                        variant="text"
+                        // Same shape as its three neighbours; the colour is what
+                        // marks it destructive, not a different silhouette.
+                        variant="secondary"
                         onClick={beginDelete}
                       >
                         Delete
@@ -762,7 +767,7 @@ export function EventDetailsPopover({
           <>
             <Button
               disabled={busyAction === "delete"}
-              variant="text"
+              variant="secondary"
               onClick={() => setDeletePrompt(undefined)}
             >
               Cancel

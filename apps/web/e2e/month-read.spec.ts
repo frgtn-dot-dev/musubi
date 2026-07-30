@@ -3767,7 +3767,9 @@ test("makes the scope of a recurring event edit explicit", async ({ page }) => {
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
   await page.getByRole("button", { name: /Weekly review/ }).first().click();
-  await page.getByRole("button", { name: "Edit series" }).click();
+  // The popover badges the series and its Edit is one word; "series" is spelled
+  // out again by the editor it opens.
+  await page.getByRole("button", { exact: true, name: "Edit" }).click();
   await page.getByRole("button", { name: "More options" }).click();
 
   await expect(page).toHaveURL(/\/event\/weekly-review\?/);
@@ -4123,4 +4125,6 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await page.mouse.up();
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
+
+
 

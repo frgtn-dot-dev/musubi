@@ -10,6 +10,7 @@ import {
 import { type ReactNode, useSyncExternalStore } from "react";
 import { AppErrorBoundary } from "~/components/AppErrorBoundary";
 import { NotFound } from "~/components/NotFound";
+import { useFocusMode } from "~/design/focus-mode";
 import globalCss from "~/design/global.css?url";
 import {
   getAppliedTheme,
@@ -66,6 +67,11 @@ function ThemeSynchronizer() {
   return null;
 }
 
+function FocusMode() {
+  useFocusMode();
+  return null;
+}
+
 function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -80,6 +86,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         <ThemeSynchronizer />
+        <FocusMode />
         <a className="skip-link" href="#main-content">
           Skip to calendar
         </a>
