@@ -299,6 +299,16 @@ Tím je fáze A uzavřená — mrtvý kontrakt `PageConfigV1.view` je celý živ
   **klik**, ne jen tažení. Dřív zmizela v okamžiku, kdy se popover otevřel, což
   bylo proti §8.2.
 
+**B3a — Month drag kreslí ghost, ne obarvené buňky: HOTOVO** (2026-07-30)
+
+Tažení přes buňky Month dřív obarvovalo dotčené buňky (`data-range-selected`) a
+pill „New event" se objevil až po puštění. Teď se **od prvního pixelu za
+thresholdem kreslí tentýž pill**, takže gesto odpovídá tím, co vyrobí — stejně
+jako time grid maluje blok, který vzniká. Cell tint je smazaný: dvě značky pro
+jednu věc jsou šum a obarvená mřížka nesedí do stylu. Živý pill má
+`pointer-events: none` (gesto vlastní buňka pod ním) a po puštění se z něj beze
+změny vzhledu stane grabbable draft — žádný přeskok mezi „taženo" a „vytvořeno".
+
 **B9 — Ghost na místě, event tam, kam se táhne: HOTOVO** (2026-07-28)
 
 Předtím zůstával tažený blok ve svém sloupci a jen měnil čas; cílový den se

@@ -2930,8 +2930,9 @@ test("drags across month days to create an all-day range", async ({ page }) => {
     toBox.y + toBox.height - 6,
     { steps: 8 },
   );
-  // Every day in the range is highlighted while dragging.
-  await expect(page.locator("[data-range-selected]")).toHaveCount(3);
+  // The pill being created is drawn across the range while dragging, the same
+  // way the time grid paints the block it is about to make.
+  await expect(page.locator("[data-live]")).toHaveCount(3);
   await page.mouse.up();
 
   // Quick create opens pre-filled as an all-day event spanning the range.
@@ -2941,8 +2942,8 @@ test("drags across month days to create an all-day range", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
     "Thursday, July 30, 2026",
   );
-  // The tint hands over to the draft pill, which spans the same three days.
-  await expect(page.locator("[data-range-selected]")).toHaveCount(0);
+  // The same pill stays put, now grabbable and owned by the open draft.
+  await expect(page.locator("[data-live]")).toHaveCount(0);
   await expect(page.locator("[data-draft]")).toHaveCount(3);
 
   await page.keyboard.press("Escape");

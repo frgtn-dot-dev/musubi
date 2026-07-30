@@ -831,10 +831,6 @@
 }
 
 /* Days being dragged across to create an all-day event. */
-.dayCell[data-range-selected] {
-  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-}
-
 .eventChip[data-draggable] {
   cursor: grab;
 }
@@ -1386,6 +1382,11 @@
 
 .dayDraft[data-dragging] {
   cursor: grabbing;
+}
+
+/* Still being dragged out: the cell underneath owns the gesture. */
+.dayDraft[data-live] {
+  pointer-events: none;
 }
 
 .dayDraft[data-continues-before] {

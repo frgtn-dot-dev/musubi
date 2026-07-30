@@ -133,7 +133,21 @@ export function MonthCalendar({
     onError: eventActions.onNotice,
   });
 
+  /**
+   * The pill's range, whether it is being dragged out right now or already
+   * belongs to an open draft.
+   *
+   * The live drag draws the same pill rather than tinting the cells it crosses:
+   * the time grid paints the block you are about to create while you drag it, and
+   * a month cell should answer the gesture with the thing it will produce too.
+   */
   const draftRange = useMemo(() => {
+    if (range) {
+      const [first, second] = [range.fromKey, range.toKey];
+      return first <= second
+        ? { from: first, live: true, to: second }
+        : { from: second, live: true, to: first };
+    }
     if (!pendingCreate) return undefined;
     // While the pill is being dragged it follows the pointer, before anything
     // is written back to the intent.
@@ -142,19 +156,10 @@ export function MonthCalendar({
       : 0;
     const from = shiftDayKey(pendingCreate.date, shift);
     const to = shiftDayKey(pendingCreate.endDate ?? pendingCreate.date, shift);
-    return from <= to ? { from, to } : { from: to, to: from };
-  }, [draftDrag, pendingCreate]);
-
-  // The tint marks the range being dragged out right now, while there is no pill
-  // yet. Once the draft exists the pill says it better, and two markings for one
-  // thing is noise.
-  const selectedRange = useMemo(() => {
-    if (!range) return undefined;
-    const [first, second] = [range.fromKey, range.toKey];
-    return first <= second
-      ? { from: first, to: second }
-      : { from: second, to: first };
-  }, [range]);
+    return from <= to
+      ? { from, live: false, to }
+      : { from: to, live: false, to: from };
+  }, [draftDrag, pendingCreate, range]);
 
   const { begin: beginMonthDrag, drag } = useMonthDrag({
     onCommit: async ({ dayKey: targetKey, event }) => {
@@ -338,13 +343,6 @@ export function MonthCalendar({
                   data-drop-target={
                     drag && drag.dayKey === dateKey ? "" : undefined
                   }
-                  data-range-selected={
-                    selectedRange &&
-                    dateKey >= selectedRange.from &&
-                    dateKey <= selectedRange.to
-                      ? ""
-                      : undefined
-                  }
                   onPointerDown={(pointerEvent) => {
                     if (
                       muted ||
@@ -411,19 +409,30 @@ export function MonthCalendar({
                             ? ""
                             : undefined
                         }
-                        data-draft={onMoveDraft ? "" : undefined}
+                        data-draft={
+                          !draftRange.live && onMoveDraft ? "" : undefined
+                        }
                         data-dragging={draftDrag ? "" : undefined}
-                        onPointerDown={(pointerEvent) => {
-                          if (!onMoveDraft || pointerEvent.button !== 0) return;
-                          pointerEvent.stopPropagation();
-                          beginDraftDrag({
-                            event: undefined,
-                            originDayKey: dateKey,
-                            pointerId: pointerEvent.pointerId,
-                            x: pointerEvent.clientX,
-                            y: pointerEvent.clientY,
-                          });
-                        }}
+                        // Nothing to grab while it is still being dragged out —
+                        // the cell under it owns that gesture.
+                        data-live={draftRange.live ? "" : undefined}
+                        onPointerDown={
+                          draftRange.live
+                            ? undefined
+                            : (pointerEvent) => {
+                                if (!onMoveDraft || pointerEvent.button !== 0) {
+                                  return;
+                                }
+                                pointerEvent.stopPropagation();
+                                beginDraftDrag({
+                                  event: undefined,
+                                  originDayKey: dateKey,
+                                  pointerId: pointerEvent.pointerId,
+                                  x: pointerEvent.clientX,
+                                  y: pointerEvent.clientY,
+                                });
+                              }
+                        }
                       >
                         {dateKey === draftRange.from || dayIndex === 0
                           ? "New event"
