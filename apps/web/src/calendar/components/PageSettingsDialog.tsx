@@ -27,7 +27,7 @@ import {
   resolvePageIcon,
 } from "../page-icons";
 import type { Density } from "../time-geometry";
-import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
+import { CalendarVisibilityPill } from "./CalendarVisibilityPill";
 import styles from "./styles/page-settings.module.css";
 
 const DENSITY_OPTIONS = [
@@ -354,9 +354,12 @@ export function PageSettingsDialog({
           <SectionLabel className={styles.sectionHeading} level={3}>
             Visible calendars
           </SectionLabel>
-          <div className={styles.sectionRows}>
+          {/* Same pills as the filter shelf: the choice is identical, so the
+              control should be too — a column of switches also made the dialog
+              as tall as the calendar list. */}
+          <div className={styles.pillGrid}>
             {calendars.map((calendar) => (
-              <CalendarVisibilityRow
+              <CalendarVisibilityPill
                 calendar={calendar}
                 key={calendar.id}
                 visible={visibleCalendarIds.includes(calendar.id)}

@@ -717,11 +717,13 @@ kosmetika nativní navigace.
 
 ### Fáze J — Filtry, překryv a ghost jako objekt — **HOTOVO** (2026-07-30)
 
-- **Filtrování kalendářů je zpátky na pilulkách** (`CalendarFilterPill`), jak to
-  bylo před `f2cfac4` a jak to má nativní klient: stav nese sama pilulka
-  (`aria-pressed`), ne přepínač vedle labelu. **A přepínání ze sidebaru zmizelo** —
-  byl to sloupec chromu pro filtr a druhá kopie téže volby. `CalendarVisibilityRow`
-  zůstává, ale už jen v Page settings, kde se edituje **uložená** viditelnost.
+- **Viditelnost kalendářů je všude na pilulkách** (`CalendarVisibilityPill`), jak
+  to bylo před `f2cfac4` a jak to má nativní klient: stav nese sama pilulka
+  (`aria-pressed`), ne přepínač vedle labelu. Platí pro filter shelf (dočasný
+  filtr) **i pro Page settings** (uložená viditelnost) — je to tatáž otázka, takže
+  jeden control, který se nemůže rozejít. `CalendarVisibilityRow` tím zmizel.
+  **A přepínání ze sidebaru taky** — byl to sloupec chromu pro filtr a druhá kopie
+  téže volby.
 - **Eventy drží odstup od pravé hrany sloupce** (`COLUMN_RIGHT_INSET_PX = 10`).
   Blok nalepený na mřížku se čte jako její součást, a ten pruh je zároveň místo,
   kde se dá stisknout nový event vedle plného. Odstup platí jen pro poslední lane

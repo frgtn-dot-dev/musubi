@@ -19,6 +19,14 @@
   border-bottom: 0;
 }
 
+.pillGrid {
+  display: flex;
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-1);
+}
+
 .icons {
   display: grid;
   margin: 0;

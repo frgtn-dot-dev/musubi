@@ -50,7 +50,7 @@ import {
 import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
-import { CalendarFilterPill } from "./CalendarFilterPill";
+import { CalendarVisibilityPill } from "./CalendarVisibilityPill";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
@@ -737,7 +737,7 @@ export function Workspace({
             </SectionLabel>
             <div className={styles.filterCalendarList}>
               {calendars.map((calendar) => (
-                <CalendarFilterPill
+                <CalendarVisibilityPill
                   calendar={calendar}
                   key={calendar.id}
                   visible={visibleCalendarIds.includes(calendar.id)}

@@ -112,7 +112,7 @@ describe("Workspace", () => {
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Studio only");
     await user.click(dialog.getByRole("radio", { name: "Star" }));
-    await user.click(dialog.getByRole("switch", { name: "Studio" }));
+    await user.click(dialog.getByRole("button", { name: "Studio" }));
     await user.click(dialog.getByRole("button", { name: "Save" }));
 
     expect(onSavePage).toHaveBeenCalledTimes(1);
@@ -245,7 +245,7 @@ describe("Workspace", () => {
       screen.getByRole("button", { name: "Edit My calendar" }),
     );
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("switch", { name: "Studio" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Studio" }),
     );
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),

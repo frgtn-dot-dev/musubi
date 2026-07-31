@@ -1996,7 +1996,7 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
   const settings = page.getByRole("dialog");
   // A brand-new surface with a custom icon radiogroup — check it before saving.
   await expectNoAccessibilityViolations(page);
-  await settings.getByRole("switch", { name: "Studio" }).click();
+  await settings.getByRole("button", { name: "Studio" }).click();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page.locator('[class*="toastRegion"]')).toContainText(
@@ -2037,7 +2037,7 @@ test("surfaces a page save conflict without overwriting", async ({ page }) => {
     .getByRole("button", { name: "Edit My calendar" })
     .click();
   const conflicted = page.getByRole("dialog");
-  await conflicted.getByRole("switch", { name: "Studio" }).click();
+  await conflicted.getByRole("button", { name: "Studio" }).click();
   await conflicted.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(
