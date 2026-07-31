@@ -2,6 +2,7 @@ import type { Calendar, Event, Settings } from "@musubi/types";
 import { ChevronRight, MapPin } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AGENDA_FREE_DAYS_MIN,
   AGENDA_GROUP_PAGE,
   freeDaysBetween,
   getAgendaGroups,
@@ -36,6 +37,10 @@ const dayFormatter = new Intl.DateTimeFormat("en", {
 });
 
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long" });
+const monthYearFormatter = new Intl.DateTimeFormat("en", {
+  month: "long",
+  year: "numeric",
+});
 
 export function AgendaView({
   anchor,
@@ -129,9 +134,17 @@ export function AgendaView({
         {visibleGroups.map((group, groupIndex) => {
           const previous = visibleGroups[groupIndex - 1]?.date;
           const isNewYear =
-            groupIndex === 0 || previous?.getFullYear() !== group.date.getFullYear();
-          const isNewMonth =
-            !isNewYear && previous?.getMonth() !== group.date.getMonth();
+            previous !== undefined &&
+            previous.getFullYear() !== group.date.getFullYear();
+          // One band per month, carrying the year only when it changes: a
+          // separate year band would stick to the top of the list forever to say
+          // what the toolbar already says.
+          const month =
+            groupIndex === 0 || previous?.getMonth() !== group.date.getMonth()
+              ? (isNewYear ? monthYearFormatter : monthFormatter).format(
+                  group.date,
+                )
+              : undefined;
           const isToday = group.key === todayKey;
           const relative = relativeDayName(group.date, now);
           // Days with nothing on them are not rendered, so the jump between two
@@ -140,21 +153,14 @@ export function AgendaView({
 
           return (
             <Fragment key={group.key}>
-              {isNewYear ? (
-                <li className={styles.agendaYear} aria-hidden="true">
-                  <span>{group.date.getFullYear()}</span>
-                </li>
-              ) : null}
-              {isNewMonth ? (
+              {month ? (
                 <li className={styles.agendaMonth} aria-hidden="true">
-                  <span>{monthFormatter.format(group.date)}</span>
+                  <span>{month}</span>
                 </li>
               ) : null}
-              {freeDays > 0 ? (
+              {freeDays >= AGENDA_FREE_DAYS_MIN ? (
                 <li className={styles.agendaGap}>
-                  <span>
-                    {freeDays === 1 ? "1 free day" : `${freeDays} free days`}
-                  </span>
+                  <span>{freeDays} free days</span>
                 </li>
               ) : null}
               <li

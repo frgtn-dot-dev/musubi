@@ -60,6 +60,16 @@ export function relativeDayName(
  * 27th to the 3rd looks like the 3rd comes next. Saying how much time is free is
  * half of what an agenda is for.
  */
+/**
+ * How long a gap has to be before the list says so.
+ *
+ * A weekly event leaves six empty days after every occurrence; marking those
+ * turns the separator into a band between every single row and says nothing. A
+ * whole week with nothing on it is the point where a reader stops being able to
+ * tell "next week" from "next month" by looking.
+ */
+export const AGENDA_FREE_DAYS_MIN = 7;
+
 export function freeDaysBetween(previous: Date, next: Date): number {
   const from = startOfDay(previous).getTime();
   const to = startOfDay(next).getTime();

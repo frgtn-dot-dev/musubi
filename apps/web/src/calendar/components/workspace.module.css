@@ -576,28 +576,40 @@
 }
 
 .agendaList {
+  /* Every band in the list hangs off these two: the date column's width and the
+     page inset. Media queries change the numbers, nothing else. */
+  --agenda-date-column: 200px;
+  --agenda-inline: 28px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.agendaYear {
-  position: sticky;
-  z-index: 3;
-  top: 0;
-  display: flex;
-  min-height: 31px;
-  align-items: center;
-  gap: 12px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-canvas);
+/* A month band, carrying its year when it changes. Deliberately not sticky: the
+   day date above the events is the one heading worth pinning, and a second
+   sticky layer costs a phone a band of screen for the whole scroll. */
+.agendaMonth {
+  padding: var(--space-4) var(--agenda-inline) var(--space-2);
   color: var(--text-secondary);
   font-family: var(--font-serif);
-  font-size: 0.83rem;
+  font-size: 1.05rem;
 }
 
-.agendaYear::after {
+/* Empty days are never drawn, so this is the only place the time between two
+   groups can be seen. Aligned with the events, not the dates: it belongs to the
+   jump between them, not to either day. */
+.agendaGap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--agenda-inline) var(--space-2)
+    calc(var(--agenda-inline) + var(--agenda-date-column));
+  color: var(--text-secondary);
+  font-size: 0.63rem;
+  letter-spacing: 0.06em;
+}
+
+.agendaGap::after {
   height: 1px;
   flex: 1;
   background: var(--border-subtle);
@@ -607,8 +619,8 @@
 .agendaDay {
   display: grid;
   min-height: 44px;
-  grid-template-columns: 200px minmax(0, 1fr);
-  padding-left: 28px;
+  grid-template-columns: var(--agenda-date-column) minmax(0, 1fr);
+  padding-left: var(--agenda-inline);
   border-bottom: 1px solid var(--border-subtle);
   content-visibility: auto;
   contain-intrinsic-size: auto 44px;
@@ -618,14 +630,26 @@
   background: color-mix(in srgb, var(--accent-primary) 3%, transparent);
 }
 
+/* The sticky date carries the row's own tint, or today's band would show a pale
+   patch where the date sits. */
+.agendaDayToday .agendaDate {
+  background: color-mix(in srgb, var(--accent-primary) 3%, var(--surface-canvas));
+}
+
 .agendaDate {
   position: sticky;
   /* Sticks inside its own day's grid area, so the date stays readable while that
-     day's events scroll past and gives way to the next one. */
+     day's events scroll past, and the next day pushes it out. Opaque because a
+     month band or a gap band scrolls through the same strip. */
+  z-index: 2;
   top: 0;
   align-self: start;
-  padding-top: 14px;
-  color: var(--text-muted);
+  /* Sits on the first event's text, not above it: the row is 43px with its text
+     centred, so the label's 10px cap lands at 16px. */
+  padding: 16px 0 var(--space-2);
+  background: var(--surface-canvas);
+  /* Not --text-muted: 9.76px at 50% opacity is 3.2:1 on the canvas, under AA. */
+  color: var(--text-secondary);
   font-size: 0.61rem;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -651,45 +675,6 @@
   color: var(--accent-primary);
 }
 
-/* A month is a band, not a row of its own kind — quieter than the year, louder
-   than a day. */
-.agendaMonth {
-  padding: var(--space-4) 28px var(--space-2);
-  color: var(--text-secondary);
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-}
-
-/* Days with nothing on them are never rendered, so this is the only place the
-   time between two groups can be seen at all. Deliberately quiet: it is the
-   absence of events, not an event. */
-.agendaGap {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 28px;
-  color: var(--text-faint);
-  font-size: 0.63rem;
-  letter-spacing: 0.06em;
-}
-
-.agendaGap::before,
-.agendaGap::after {
-  height: 1px;
-  flex: 1;
-  background: var(--border-subtle);
-  content: "";
-}
-
-.agendaGap::before {
-  max-width: 96px;
-}
-
-.agendaEvents {
-  display: grid;
-  min-width: 0;
-}
-
 .agendaEventCopy {
   display: grid;
   min-width: 0;
@@ -702,7 +687,7 @@
   align-items: center;
   gap: 4px;
   overflow: hidden;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.64rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1853,9 +1838,9 @@
     display: none;
   }
 
-  .agendaDay {
-    grid-template-columns: 178px minmax(0, 1fr);
-    padding-left: 22px;
+  .agendaList {
+    --agenda-date-column: 178px;
+    --agenda-inline: 22px;
   }
 
   .agendaEvent {
@@ -1948,9 +1933,9 @@
     padding-inline: 14px;
   }
 
-  .agendaDay {
-    grid-template-columns: 150px minmax(0, 1fr);
-    padding-left: 14px;
+  .agendaList {
+    --agenda-date-column: 150px;
+    --agenda-inline: 14px;
   }
 
   .agendaEvent {
@@ -1961,12 +1946,6 @@
 
   .agendaEventCalendar {
     display: none;
-  }
-
-  .agendaYear,
-  .agendaMonth,
-  .agendaGap {
-    padding-inline: 14px;
   }
 
   .timeGridView {
@@ -2070,16 +2049,31 @@
     padding-bottom: 76px;
   }
 
+  .agendaList {
+    --agenda-inline: 12px;
+  }
+
   .agendaDay {
     display: block;
     min-height: 42px;
     padding: 0;
   }
 
+  /* Stacked over its events rather than beside them, so it is a full-width
+     sticky heading — and it can be tight, because it has the whole width. */
   .agendaDate {
     display: block;
-    min-height: 25px;
-    padding: 8px 12px 5px;
+    min-height: 0;
+    padding: 6px var(--agenda-inline) 4px;
+  }
+
+  .agendaDate strong {
+    display: inline;
+    margin: 0 6px 0 0;
+  }
+
+  .agendaMonth {
+    padding-top: var(--space-3);
   }
 
   .agendaEvent {
@@ -2088,10 +2082,9 @@
     padding: 0 8px 0 12px;
   }
 
-  .agendaYear,
-  .agendaMonth,
+  /* Stacked, so the gap band has no date column to line up with. */
   .agendaGap {
-    padding-inline: 12px;
+    padding-left: var(--agenda-inline);
   }
 
   /* A week has to look like a week. Wider viewports keep a minimum column and

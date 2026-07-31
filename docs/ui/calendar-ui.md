@@ -816,6 +816,27 @@ seznam sám říká, kde v čase jsme.
   (`clip` místo `display: none`) — a pilulky se nezalamují, scrollují do strany
   (`overscroll-behavior-x: contain`, skrytý scrollbar) jako v nativním klientovi.
   Zalomený blok pilulek na 390px ukrojil třetinu obrazovky kalendáři.
+**Vizuální check ukázal tři věci, které z popisu nebyly vidět** (2026-07-31):
+
+- **Dvě sticky vrstvy nad sebou nemají v agendě co dělat.** Pásmo roku stálo
+  `top: 0` a datum dne taky — datum se schovávalo pod rok a jeho `padding-top`
+  se nelícoval s ničím. Rok navíc na telefonu držel u horní hrany natrvalo a
+  říkal „2026", což už říká toolbar. Rok proto **zmizel do pásma měsíce**
+  („January 2027", když se rok mění) a **sticky je jen datum dne** — neprůhledné,
+  protože přes tentýž pruh scrollují pásma měsíce a mezer.
+- **„N free days" mezi každými dvěma řádky není informace, ale šum.** Týdenní
+  event nechává šest prázdných dnů za každým výskytem, takže se pásmo objevovalo
+  mezi vším. Hranice je `AGENDA_FREE_DAYS_MIN = 7` — celý týden, kdy čtenář
+  přestává poznat „příští týden" od „příštího měsíce". Pásmo se navíc lícuje se
+  **sloupcem eventů**, ne s datem: patří skoku mezi dny, ne jednomu z nich.
+- **Filtry na telefonu nešly vůbec otevřít.** Pod 1024px toolbar schovává hledání
+  i tlačítko Filters — pás pilulek je tam proto **vždy vidět** (`useCompactViewport`),
+  ne za přepínačem, který na té šířce neexistuje.
+- Rytmus agendy drží dvě proměnné na `.agendaList` (`--agenda-date-column`,
+  `--agenda-inline`); media queries přepisují jen je, ne jednotlivá pásma.
+- `--text-muted` na 9,76px je 3,2:1 — axe to na datu dne odhalil až ve chvíli, kdy
+  dostalo vlastní pozadí (u průhledného sticky prvku hlásí „incomplete", ne chybu).
+  Datum, mezera i místo jedou na `--text-secondary`.
 - `PLAYWRIGHT_ORIGIN` v `playwright.config.ts` — dev server nabídnutý jen na `::1`
   se testuje beze druhé konfigurace.
 

@@ -40,7 +40,10 @@ import type { Notify } from "../notice";
 import { seriesEditWrites, type EditScope } from "../recurrence-edit";
 import { shortcutFor } from "../shortcuts";
 import { useSwipePeriod } from "../use-swipe-period";
-import { useNarrowViewport } from "~/design/use-narrow-viewport";
+import {
+  useCompactViewport,
+  useNarrowViewport,
+} from "~/design/use-narrow-viewport";
 import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
@@ -230,6 +233,9 @@ export function Workspace({
   const swipePeriod = useSwipePeriod((offset) => changePeriod(offset));
   // Phone chrome has less room for a date label than it has date to spell out.
   const narrow = useNarrowViewport();
+  // No Filters toggle fits in a compact toolbar, so the shelf is simply always
+  // there — as a sideways-scrolling strip, like the native client's filter bar.
+  const compact = useCompactViewport();
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Sidebar calendar toggles are a temporary local filter: a set of ids flipped
   // from what the Page config resolves to. Never saved — the Page's own
@@ -724,7 +730,7 @@ export function Workspace({
           searchRef={searchRef}
         />
 
-        {filtersOpen ? (
+        {filtersOpen || compact ? (
           <section
             className={styles.filterBar}
             aria-labelledby="calendar-filter-label"
