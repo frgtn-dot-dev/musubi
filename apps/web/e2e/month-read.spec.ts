@@ -213,6 +213,19 @@ function respond(route: Route, body: unknown, status = 200) {
   });
 }
 
+/**
+ * The calendar filter pills. Visibility lives on the shelf behind Filters — the
+ * sidebar no longer carries a second copy of the same choice.
+ */
+async function openFilterShelf(page: Page) {
+  const shelf = page.getByRole("region", { name: "Visible calendars" });
+  if (!(await shelf.isVisible())) {
+    await page.getByRole("button", { name: "Filters" }).click();
+  }
+  await expect(shelf).toBeVisible();
+  return shelf;
+}
+
 async function expectNoAccessibilityViolations(page: Page) {
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
@@ -537,7 +550,9 @@ test("reads, filters and signs out of the authenticated Month", async ({
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await page.getByRole("switch", { name: "Studio" }).click();
+  await (await openFilterShelf(page))
+    .getByRole("button", { name: "Studio" })
+    .click();
   await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Event", exact: true }).click();
@@ -676,7 +691,9 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
   ).toHaveCount(0);
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 
-  await page.getByRole("switch", { name: "Family" }).click();
+  await (await openFilterShelf(page))
+    .getByRole("button", { name: "Family" })
+    .click();
   await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(0);
 
   await expectNoAccessibilityViolations(page);
@@ -765,8 +782,10 @@ test("lays overlapping events over each other, not into slivers", async ({
   // column, so what stays visible of the first is a readable strip and not the
   // hairline a fixed-pixel cascade leaves.
   expect(ppp.x - pp.x).toBeGreaterThan(columnBox.width * 0.4);
+  // It reaches the column's edge, bar the inset every block keeps off the grid
+  // line (COLUMN_RIGHT_INSET_PX in time-grid-math).
   expect(ppp.x + ppp.width).toBeGreaterThan(
-    columnBox.x + columnBox.width - 8,
+    columnBox.x + columnBox.width - 14,
   );
   // It is also marked as covering, which is what earns it the separating ring:
   // two events from one calendar are the same colour.
@@ -1175,11 +1194,10 @@ test("exports and imports iCalendar files from calendar management", async ({
   await expect(page.locator('[class*="toastRegion"]')).toContainText(
     "Imported 1 event into Roadmap.",
   );
-  const importedCalendar = page.getByRole("switch", {
+  const importedCalendar = (await openFilterShelf(page)).getByRole("button", {
     name: "Roadmap",
   });
-  await importedCalendar.scrollIntoViewIfNeeded();
-  await expect(importedCalendar).toHaveAttribute("aria-checked", "true");
+  await expect(importedCalendar).toHaveAttribute("aria-pressed", "true");
   await expect(importedCalendar).toContainText("Roadmap");
   expect(runtimeErrors).toEqual([]);
 });
@@ -1910,8 +1928,8 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await expect(
-    page.getByRole("switch", { name: "Studio" }),
-  ).toHaveAttribute("aria-checked", "true");
+    (await openFilterShelf(page)).getByRole("button", { name: "Studio" }),
+  ).toHaveAttribute("aria-pressed", "true");
 
   await page
     .getByRole("button", { name: "Edit My calendar" })
@@ -1930,9 +1948,11 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
     mode: "all",
   });
   // Read mode now reflects the saved visibility.
+  // Saved visibility shows on the shelf: the pill is off without the page having
+  // to be reopened.
   await expect(
-    page.getByRole("switch", { name: "Studio" }),
-  ).toHaveAttribute("aria-checked", "false");
+    (await openFilterShelf(page)).getByRole("button", { name: "Studio" }),
+  ).toHaveAttribute("aria-pressed", "false");
 });
 
 test("surfaces a page save conflict without overwriting", async ({ page }) => {
@@ -2648,8 +2668,8 @@ test("shows federated calendars and reports an unreachable server", async ({
 
   // The remote calendar and its event render like any other.
   await expect(
-    page.getByRole("switch", { name: "Book club" }),
-  ).toHaveAttribute("aria-checked", "true");
+    (await openFilterShelf(page)).getByRole("button", { name: "Book club" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await page
     .locator('[data-day-key="2026-07-23"]')
     .getByRole("button", { name: /\+\d+ more/ })
@@ -2868,8 +2888,8 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await expect(
-    page.getByRole("switch", { name: "Book club" }),
-  ).toHaveAttribute("aria-checked", "true");
+    (await openFilterShelf(page)).getByRole("button", { name: "Book club" }),
+  ).toHaveAttribute("aria-pressed", "true");
 
   // The remote calendar is renamed on its own server; our server relays the
   // change as federated_sync and the snapshot refetches.
@@ -2889,8 +2909,10 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
   });
 
   await expect(
-    page.getByRole("switch", { name: "Book club (Thursdays)" }),
-  ).toHaveAttribute("aria-checked", "true");
+    (await openFilterShelf(page)).getByRole("button", {
+      name: "Book club (Thursdays)",
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("joins a calendar from a pasted cross-server invite link", async ({
@@ -3707,15 +3729,16 @@ test("keeps calendar chrome consistent and keyboard operable", async ({
   const filters = page.getByRole("button", { name: "Filters" });
   await filters.click();
 
+  // Visibility lives on the shelf only: the sidebar used to carry a second copy
+  // of the same switches, which was a column of chrome for a filter.
   const shelf = page.getByRole("region", { name: "Visible calendars" });
   await expect(shelf).toBeVisible();
-  const sidebarStudio = navigation.getByRole("switch", { name: "Studio" });
-  const shelfStudio = shelf.getByRole("switch", { name: "Studio" });
-  await expect(sidebarStudio).toHaveAttribute("aria-checked", "true");
-  await expect(shelfStudio).toHaveAttribute("aria-checked", "true");
+  await expect(navigation.getByRole("switch")).toHaveCount(0);
 
+  const shelfStudio = shelf.getByRole("button", { name: "Studio" });
+  await expect(shelfStudio).toHaveAttribute("aria-pressed", "true");
   await shelfStudio.click();
-  await expect(sidebarStudio).toHaveAttribute("aria-checked", "false");
+  await expect(shelfStudio).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(
     0,
   );
@@ -3751,9 +3774,13 @@ test("moves focus through the mobile navigation drawer", async ({ page }) => {
   await navigation.evaluate((element) =>
     Promise.all(element.getAnimations().map((animation) => animation.finished)),
   );
-  const studio = navigation.getByRole("switch", { name: "Studio" });
-  const studioBox = (await studio.boundingBox())!;
-  expect(studioBox.height).toBeGreaterThanOrEqual(44);
+  // Touch targets in the drawer: the page rows are what it carries now that the
+  // calendar switches moved to the filter shelf.
+  const pageRow = navigation.getByRole("button", {
+    exact: true,
+    name: "My calendar",
+  });
+  expect((await pageRow.boundingBox())!.height).toBeGreaterThanOrEqual(38);
   await expectNoAccessibilityViolations(page);
 
   // Medium keeps the overlay drawer; 1024 is the first permanent-sidebar

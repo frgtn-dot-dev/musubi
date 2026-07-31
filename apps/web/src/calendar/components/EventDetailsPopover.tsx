@@ -491,23 +491,27 @@ export function EventDetailsPopover({
                     {eventCalendars.length > 0 ? (
                       eventCalendars.map((item) => (
                         <li className={styles.calendarPill} key={item.id}>
-                          <span
-                            aria-hidden="true"
-                            className={styles.calendarDot}
-                            style={{ backgroundColor: item.color }}
-                          />
-                          {item.name}
-                          {/* Which one it belongs to, not just where it shows up:
-                              the home calendar owns the colour, the invitations
-                              and where an edit is written. */}
+                          {/* The home calendar's mark replaces its dot rather
+                              than sitting next to it: both say "this calendar",
+                              and the star says which one owns the event — the
+                              colour, the invitations and where an edit lands. */}
                           {item.id === homeCalendarId ? (
                             <Star
                               aria-label="Home calendar"
                               className={styles.homePillMark}
+                              fill={item.color}
                               size={12}
-                              strokeWidth={1.8}
+                              strokeWidth={1.6}
+                              style={{ color: item.color }}
                             />
-                          ) : null}
+                          ) : (
+                            <span
+                              aria-hidden="true"
+                              className={styles.calendarDot}
+                              style={{ backgroundColor: item.color }}
+                            />
+                          )}
+                          {item.name}
                         </li>
                       ))
                     ) : (

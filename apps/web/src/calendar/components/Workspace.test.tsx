@@ -69,12 +69,19 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} />);
 
-    const studioToggle = screen.getByRole("switch", { name: "Studio" });
-    expect(studioToggle.getAttribute("aria-checked")).toBe("true");
+    // Visibility is a filter, so it lives on the filter shelf — the sidebar no
+    // longer carries a second copy of the same switches.
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    // Scoped: event blocks in the grid answer to the calendar's name too.
+    const shelf = within(
+      screen.getByRole("region", { name: "Visible calendars" }),
+    );
+    const studio = shelf.getByRole("button", { name: "Studio" });
+    expect(studio.getAttribute("aria-pressed")).toBe("true");
 
-    await user.click(studioToggle);
+    await user.click(studio);
 
-    expect(studioToggle.getAttribute("aria-checked")).toBe("false");
+    expect(studio.getAttribute("aria-pressed")).toBe("false");
     expect(screen.queryByRole("button", { name: /Quarterly planning/ })).toBeNull();
   });
 
@@ -147,7 +154,11 @@ describe("Workspace", () => {
 
     // Hide one calendar first: the new page has to start from what is on screen,
     // not from the saved config of the page it was branched off.
-    await user.click(screen.getByRole("switch", { name: "Studio" }));
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.click(
+      within(screen.getByRole("region", { name: "Visible calendars" }))
+        .getByRole("button", { name: "Studio" }),
+    );
     await user.click(screen.getByRole("button", { name: "New page" }));
 
     const dialog = within(screen.getByRole("dialog"));
@@ -251,11 +262,12 @@ describe("Workspace", () => {
     );
 
     expect(screen.queryByRole("dialog")).toBeNull();
-    // The page itself never changed, so the sidebar still shows the calendar.
+    // The page itself never changed, so the filter shelf still shows it on.
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     expect(
-      screen
-        .getByRole("switch", { name: "Studio" })
-        .getAttribute("aria-checked"),
+      within(screen.getByRole("region", { name: "Visible calendars" }))
+        .getByRole("button", { name: "Studio" })
+        .getAttribute("aria-pressed"),
     ).toBe("true");
   });
 

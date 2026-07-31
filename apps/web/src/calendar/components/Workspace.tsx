@@ -50,8 +50,8 @@ import {
 import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
+import { CalendarFilterPill } from "./CalendarFilterPill";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
-import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
@@ -646,7 +646,6 @@ export function Workspace({
       <Sidebar
         activePageId={pageId}
         anchor={anchor}
-        calendars={calendars}
         pages={pages}
         isOpen={sidebarOpen}
         onClose={closeSidebar}
@@ -678,14 +677,12 @@ export function Workspace({
         }}
         onPageChange={onPageChange}
         onSignOut={onSignOut}
-        onToggleCalendar={handleToggleCalendar}
         returnFocusRef={sidebarTriggerRef}
         syncLabel={
           isRefreshing ? "Refreshing server data…" : "Connected to server"
         }
         user={user}
         weekStartsOn={settings.weekStartsOn}
-        visibleCalendarIds={visibleCalendarIds}
       />
 
       <main
@@ -727,7 +724,7 @@ export function Workspace({
             </SectionLabel>
             <div className={styles.filterCalendarList}>
               {calendars.map((calendar) => (
-                <CalendarVisibilityRow
+                <CalendarFilterPill
                   calendar={calendar}
                   key={calendar.id}
                   visible={visibleCalendarIds.includes(calendar.id)}

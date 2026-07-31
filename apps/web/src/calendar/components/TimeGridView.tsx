@@ -264,7 +264,13 @@ const TimelineEvent = memo(function TimelineEvent({
   }
   // One placement rule for Day and Week: a column is a column, and the reason a
   // block is narrow is that something overlaps it, not which view you are in.
-  const { left, width } = overlapPlacement(col, cols);
+  //
+  // While it is being dragged it takes the whole column, the way Google's does:
+  // the block you are holding is the one you need to read, and its lane is about
+  // to change anyway. Dropping it puts it back in whatever lane it lands in.
+  const { left, width } = dragTimes
+    ? overlapPlacement(0, 1)
+    : overlapPlacement(col, cols);
 
   return (
     <EventDetailsPopover

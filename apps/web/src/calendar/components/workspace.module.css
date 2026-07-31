@@ -159,11 +159,6 @@
   padding: 16px 14px;
 }
 
-.calendarSection {
-  margin-top: auto;
-  padding-bottom: 8px;
-}
-
 .pageList,
 .calendarList {
   display: grid;
@@ -278,7 +273,9 @@
 }
 
 .sidebarUtilities {
+  /* Bottom of the scroll area: the visibility list used to hold this anchor. */
   display: grid;
+  margin-top: auto;
   gap: 2px;
   padding: 0 14px 14px;
 }
@@ -464,13 +461,54 @@
   gap: var(--space-2);
 }
 
-.filterCalendarList > .calendarVisibilityRow {
-  width: auto;
-  min-width: 168px;
-  flex: none;
-  border: 1px solid var(--border-medium);
-  background: color-mix(in srgb, var(--surface-panel) 72%, transparent);
+/* On/off by how it looks, not by a control beside a label: the shelf is a strip
+   of choices, so the pill itself carries the state. */
+.filterPill {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  /* Not --text-muted: at this size that lands at 3.2:1, under AA. Off reads as
+     off through the flat background and the dimmed dot instead. */
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-11);
+  cursor: pointer;
 }
+
+.filterPill:hover:not([aria-pressed="true"]) {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+.filterPill[aria-pressed="true"] {
+  border-color: var(--border-medium);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.filterPill[aria-pressed="true"]:hover {
+  border-color: var(--border-strong);
+}
+
+.filterPillDot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--pill-color);
+}
+
+/* Off means the colour steps back too, so a glance across the shelf reads which
+   calendars are in play without checking each label. */
+.filterPill:not([aria-pressed="true"]) .filterPillDot {
+  opacity: 0.45;
+}
+
 
 .calendarArea {
   position: relative;
@@ -801,8 +839,10 @@
 /* What the event leaves behind while it is being moved: its outline, so the
    place it came from stays readable and the move is comparable. */
 .timelineEvent[data-ghost] {
+  /* Same reason as the month chip: over the hour lines, not under them. */
+  z-index: 20;
   border: 1px solid var(--event-color);
-  background: var(--draft-fill);
+  background: var(--ghost-fill);
   box-shadow: none;
   color: var(--text-secondary);
   pointer-events: none;
@@ -852,8 +892,13 @@
 
 /* What a dragged chip leaves behind on its own day. */
 .eventChip[data-ghost] {
+  /* Above the cells that come after it in the grid: their borders would otherwise
+     paint over the part of the chip that bleeds into them, and a translucent
+     ghost would show those lines running through it. The fill has to reveal the
+     canvas, not the mesh. */
+  z-index: 4;
   border: 1px solid var(--event-color);
-  background: var(--draft-fill);
+  background: var(--ghost-fill);
   box-shadow: none;
   color: var(--text-secondary);
   pointer-events: none;
@@ -954,6 +999,29 @@
 .timelineEvent[data-draggable]:hover .resizeHandleTop,
 .timelineEvent[data-draggable]:hover .resizeHandleBottom {
   background: color-mix(in srgb, var(--event-foreground) 28%, transparent);
+}
+
+/* A draft is made to be adjusted, so its grips are always drawn: a hover-only
+   hint tells nobody who doesn't already know they are there, and the whole point
+   of the block is that you push its ends around before saving. */
+.timeGridSelection[data-draft] .resizeHandleTop::after,
+.timeGridSelection[data-draft] .resizeHandleBottom::after {
+  position: absolute;
+  left: 50%;
+  width: 26px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--draft-accent, var(--accent-primary));
+  content: "";
+  translate: -50% 0;
+}
+
+.timeGridSelection[data-draft] .resizeHandleTop::after {
+  top: 1px;
+}
+
+.timeGridSelection[data-draft] .resizeHandleBottom::after {
+  bottom: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -91,10 +91,12 @@ describe("time grid math", () => {
 });
 
 describe("overlap placement", () => {
-  it("gives a single event the whole column", () => {
+  it("gives a single event the column, minus its edge inset", () => {
     expect(overlapPlacement(0, 1)).toEqual({
       left: "0%",
-      width: "calc(100% - 3px)",
+      // Never flush with the grid line: that strip is also where you press to
+      // create an event beside a full one.
+      width: "calc(100% - 10px)",
     });
   });
 
@@ -106,8 +108,10 @@ describe("overlap placement", () => {
     expect(second.left).toBe("50%");
     // The first block reaches into the second lane; the second one takes the
     // rest. Neither is left as a sliver, which a fixed-pixel cascade would do.
+    // Only the last lane's right edge is the column's, so only it gets the wider
+    // inset; the one before it is covered anyway.
     expect(first.width).toBe("calc(85% - 3px)");
-    expect(second.width).toBe("calc(50% - 3px)");
+    expect(second.width).toBe("calc(50% - 10px)");
   });
 
   it("never spreads past the column's right edge", () => {

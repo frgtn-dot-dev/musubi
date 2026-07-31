@@ -53,7 +53,9 @@
   width: fit-content;
   align-items: center;
   gap: var(--space-1);
-  color: var(--text-muted);
+  /* --text-muted is 3.2:1 at this size, under AA — the badge is the only place a
+     screen reader user has to be told the event repeats, so it has to be read. */
+  color: var(--text-secondary);
   font-size: var(--text-11);
 }
 
@@ -147,12 +149,11 @@
   font-size: var(--text-11);
 }
 
-/* Sits inside the pill, after the name, so the mark reads as part of the label
-   rather than a second dot competing with the colour swatch. */
+/* Stands where the colour dot would: it is the same signal plus one, so the pill
+   keeps its shape and the calendar keeps its colour. */
 .homePillMark {
   flex: none;
-  margin-left: 1px;
-  color: var(--text-muted);
+  margin-left: -1px;
 }
 
 .calendarDot {

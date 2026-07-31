@@ -24,6 +24,12 @@ const MAX_OVERLAP_LANES = 4;
 const LANE_SPREAD = 1.7;
 /** Breathing room so neighbouring blocks never share an edge. */
 const LANE_GAP_PX = 3;
+/**
+ * How far the rightmost block stays off the column's edge. Blocks that touch the
+ * grid line read as part of it; the gap also leaves a strip of bare column to
+ * press for a new event next to a full one.
+ */
+const COLUMN_RIGHT_INSET_PX = 10;
 
 // ── Opening scroll position ─────────────────────────────────────────────────
 /** Where a day without "now" on it opens: the start of a working day. */
@@ -63,10 +69,13 @@ export function overlapPlacement(
   const share = 100 / lanes;
   const left = lane * share;
   const width = Math.min(100 - left, share * LANE_SPREAD);
+  // Only the last lane's right edge is the column's edge; the others are covered
+  // by the block that spreads over them, so they just need the lane gap.
+  const trim = lane === lanes - 1 ? COLUMN_RIGHT_INSET_PX : LANE_GAP_PX;
 
   return {
     left: `${left}%`,
-    width: `calc(${width}% - ${LANE_GAP_PX}px)`,
+    width: `calc(${width}% - ${trim}px)`,
   };
 }
 

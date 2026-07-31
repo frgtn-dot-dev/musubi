@@ -10,7 +10,6 @@ import {
   X,
 } from "lucide-react";
 import type {
-  Calendar,
   PageDocument,
   Settings as UserSettings,
   User,
@@ -27,7 +26,6 @@ import { IconButton } from "~/ui/Button";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { pageIconComponent, resolvePageIcon } from "../page-icons";
-import { CalendarVisibilityRow } from "./CalendarVisibilityRow";
 import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
 
@@ -35,7 +33,6 @@ type SidebarProps = {
   activePageId: string;
   /** The date the main view is on, so the mini calendar can mark it. */
   anchor: Date;
-  calendars: Calendar[];
   isOpen: boolean;
   onClose: () => void;
   onCreatePage: () => void;
@@ -48,19 +45,16 @@ type SidebarProps = {
   onOpenSettings: () => void;
   onPageChange: (pageId: string) => void;
   onSignOut: () => void;
-  onToggleCalendar: (calendarId: string) => void;
   pages: PageDocument[];
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
   syncLabel: string;
   user: Pick<User, "email" | "image" | "name">;
-  visibleCalendarIds: string[];
   weekStartsOn: UserSettings["weekStartsOn"];
 };
 
 export function Sidebar({
   activePageId,
   anchor,
-  calendars,
   isOpen,
   onClose,
   onCreatePage,
@@ -73,12 +67,10 @@ export function Sidebar({
   onDateChange,
   onPageChange,
   onSignOut,
-  onToggleCalendar,
   pages,
   returnFocusRef,
   syncLabel,
   user,
-  visibleCalendarIds,
   weekStartsOn,
 }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false);
@@ -215,32 +207,6 @@ export function Sidebar({
               />
             </div>
           </nav>
-
-          <section
-            className={`${styles.sidebarSection} ${styles.calendarSection}`}
-            aria-labelledby="calendars-label"
-          >
-            <SectionLabel
-              className={styles.sidebarSectionLabel}
-              id="calendars-label"
-            >
-              Calendars
-            </SectionLabel>
-            <div className={styles.calendarList}>
-              {calendars.map((calendar) => {
-                const checked = visibleCalendarIds.includes(calendar.id);
-
-                return (
-                  <CalendarVisibilityRow
-                    calendar={calendar}
-                    key={calendar.id}
-                    visible={checked}
-                    onVisibleChange={() => onToggleCalendar(calendar.id)}
-                  />
-                );
-              })}
-            </div>
-          </section>
 
           <nav className={styles.sidebarUtilities} aria-label="Manage Musubi">
             <RowAction

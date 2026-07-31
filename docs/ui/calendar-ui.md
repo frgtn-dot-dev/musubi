@@ -707,6 +707,31 @@ kosmetika nativní navigace.
 - **Hlavička sloupce Event calendars nescrolluje** s kalendáři pod sebou
   (`position: sticky`).
 
+### Fáze J — Filtry, překryv a ghost jako objekt — **HOTOVO** (2026-07-30)
+
+- **Filtrování kalendářů je zpátky na pilulkách** (`CalendarFilterPill`), jak to
+  bylo před `f2cfac4` a jak to má nativní klient: stav nese sama pilulka
+  (`aria-pressed`), ne přepínač vedle labelu. **A přepínání ze sidebaru zmizelo** —
+  byl to sloupec chromu pro filtr a druhá kopie téže volby. `CalendarVisibilityRow`
+  zůstává, ale už jen v Page settings, kde se edituje **uložená** viditelnost.
+- **Eventy drží odstup od pravé hrany sloupce** (`COLUMN_RIGHT_INSET_PX = 10`).
+  Blok nalepený na mřížku se čte jako její součást, a ten pruh je zároveň místo,
+  kde se dá stisknout nový event vedle plného. Odstup platí jen pro poslední lane
+  — u ostatních je pravá hrana pod blokem, který je překrývá.
+- **Tažený blok se rozšíří na celý sloupec** a po položení se vrátí do své lane,
+  jako u Googlu: co držíš, to potřebuješ číst, a lane se stejně mění.
+- **Ghost je průhledný overlay** (`--ghost-fill`), draft zůstal opaque
+  (`--draft-fill`) — draft zastupuje blok, který bude, ghost je stopa po tom, kde
+  event byl, takže mřížka pod ním má být vidět. Ghost proto taky leží **nad**
+  čárami buněk, jinak by mu jimi prosvítaly.
+- **Draft má vždycky viditelné úchyty** na horní a dolní hraně. Hover-only nápověda
+  řekne jen tomu, kdo už ví, že tam jsou — a draft je celý o tom, že se jeho konce
+  posouvají.
+- **Hvězdička domovského kalendáře stojí místo barevného kolečka** a nese jeho
+  barvu (jako na mobilu): je to stejný signál plus jeden, ne dva vedle sebe.
+- Opraven kontrast `--text-muted` na 11px textu (3,2:1, pod AA) u pilulek i
+  u `recurrenceBadge` — axe to na nové pilulce zachytil hned.
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,
