@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { dropIndexAt, type RowBox } from "./list-reorder";
 import { DRAG_THRESHOLD_PX, TOUCH_HOLD_MS } from "./time-grid-drag";
 
-export type ReorderDrag = { from: number; to: number };
+export type ReorderDrag = {
+  /** Every row's box as measured when the drag started. */
+  boxes: RowBox[];
+  /** How far the held row has travelled, so it can track the pointer exactly. */
+  dy: number;
+  from: number;
+  to: number;
+};
 
 /**
  * Drag a row to a new place in a short vertical list.
@@ -19,6 +26,10 @@ export function useListReorder({
   onCommit: (move: ReorderDrag) => void;
 }) {
   const [drag, setDrag] = useState<ReorderDrag>();
+  // True for the frame that swaps the saved order in. The held row is already
+  // sitting where it lands, so animating that frame would slide it back out of
+  // place and then in again; a cancelled drag still glides home.
+  const [settling, setSettling] = useState(false);
   const pressRef = useRef<
     | {
         boxes: RowBox[];
@@ -79,8 +90,12 @@ export function useListReorder({
         }
 
         event.preventDefault();
-        const to = dropIndexAt(event.clientY, press.boxes);
-        const next = { from: press.from, to };
+        const next = {
+          boxes: press.boxes,
+          dy: event.clientY - press.startY,
+          from: press.from,
+          to: dropIndexAt(event.clientY, press.boxes),
+        };
         dragRef.current = next;
         setDrag(next);
       }
@@ -94,7 +109,9 @@ export function useListReorder({
         if (move && move.to !== move.from) {
           // The row moved, so the release is not a selection.
           consumedRef.current = true;
+          setSettling(true);
           onCommitRef.current(move);
+          requestAnimationFrame(() => setSettling(false));
         }
       }
 
@@ -128,5 +145,6 @@ export function useListReorder({
       return consumed;
     },
     drag,
+    settling,
   };
 }

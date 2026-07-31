@@ -14,6 +14,7 @@ import type {
   Settings as UserSettings,
   User,
 } from "@musubi/types";
+import type { CSSProperties } from "react";
 import {
   forwardRef,
   type PointerEvent as ReactPointerEvent,
@@ -27,7 +28,7 @@ import { Avatar } from "~/ui/Avatar";
 import { IconButton } from "~/ui/Button";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { moveItem } from "../list-reorder";
+import { moveItem, previewIndex } from "../list-reorder";
 import { pageIconComponent, resolvePageIcon } from "../page-icons";
 import { useListReorder } from "../use-list-reorder";
 import { MiniCalendar } from "./MiniCalendar";
@@ -87,14 +88,28 @@ export function Sidebar({
     begin: beginReorder,
     consumeClick: consumeReorderClick,
     drag: reorderDrag,
+    settling: reorderSettling,
   } = useListReorder({
     onCommit: ({ from, to }) =>
       onReorderPages(moveItem(pages, from, to).map((page) => page.id)),
   });
-  // While dragging, the list shows where the row would land.
-  const orderedPages = reorderDrag
-    ? moveItem(pages, reorderDrag.from, reorderDrag.to)
-    : pages;
+  /**
+   * How far each row is displaced from where the DOM puts it.
+   *
+   * The DOM order never changes during a drag — rows are translated to their
+   * preview slot instead, so they glide there and the held row can follow the
+   * pointer exactly rather than being re-rendered under it.
+   */
+  function rowShift(index: number): number {
+    if (!reorderDrag) return 0;
+    if (index === reorderDrag.from) return reorderDrag.dy;
+
+    const boxes = reorderDrag.boxes;
+    const target = previewIndex(index, reorderDrag.from, reorderDrag.to);
+    const from = boxes[index];
+    const to = boxes[target];
+    return from && to ? to.top - from.top : 0;
+  }
 
   /** Keyboard equivalent of the drag (R10), on the row that has focus. */
   function movePageBy(index: number, offset: number) {
@@ -209,25 +224,22 @@ export function Sidebar({
             <SectionLabel className={styles.sidebarSectionLabel} id="pages-label">
               Pages
             </SectionLabel>
-            <div className={styles.pageList}>
-              {orderedPages.map((page, index) => (
+            <div
+              className={styles.pageList}
+              data-settling={reorderSettling ? "" : undefined}
+            >
+              {pages.map((page, index) => (
                 <PageRow
                   key={page.id}
                   active={page.id === activePageId}
-                  dragging={
-                    reorderDrag !== undefined && index === reorderDrag.to
-                  }
+                  held={reorderDrag?.from === index}
+                  shift={rowShift(index)}
                   icon={pageIconComponent(
                     resolvePageIcon(page.config.icon, page.isDefault),
                   )}
                   name={page.name}
                   onEdit={() => onEditPage(page)}
-                  onMoveBy={(offset) =>
-                    movePageBy(
-                      pages.findIndex((item) => item.id === page.id),
-                      offset,
-                    )
-                  }
+                  onMoveBy={(offset) => movePageBy(index, offset)}
                   onPress={(event) =>
                     beginReorder({
                       boxes: pageRowRefs.current
@@ -236,7 +248,7 @@ export function Sidebar({
                           const box = node.getBoundingClientRect();
                           return { height: box.height, top: box.top };
                         }),
-                      index: pages.findIndex((item) => item.id === page.id),
+                      index,
                       pointerId: event.pointerId,
                       pointerType: event.pointerType,
                       time: event.timeStamp,
@@ -346,23 +358,36 @@ const PageRow = forwardRef<
   HTMLDivElement,
   {
     active: boolean;
-    dragging: boolean;
+    held: boolean;
     icon: LucideIcon;
     name: string;
     onEdit: () => void;
     onMoveBy: (offset: number) => void;
     onPress: (event: ReactPointerEvent<HTMLElement>) => void;
     onSelect: () => void;
+    /** Vertical displacement from the row's DOM slot, in pixels. */
+    shift: number;
   }
 >(function PageRow(
-  { active, dragging, icon: Icon, name, onEdit, onMoveBy, onPress, onSelect },
+  {
+    active,
+    held,
+    icon: Icon,
+    name,
+    onEdit,
+    onMoveBy,
+    onPress,
+    onSelect,
+    shift,
+  },
   ref,
 ) {
   return (
     <div
       className={styles.pageRow}
-      data-dragging={dragging ? "" : undefined}
+      data-held={held ? "" : undefined}
       ref={ref}
+      style={{ "--row-shift": `${shift}px` } as CSSProperties}
     >
       <RowAction
         className={`${styles.sidebarRow} ${styles.pageRowMain}`}

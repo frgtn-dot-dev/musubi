@@ -11,6 +11,23 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
 export type RowBox = { height: number; top: number };
 
 /**
+ * Where a row sits while a drag previews `from → to`.
+ *
+ * The list keeps its saved order in the DOM and rows are *moved* to their preview
+ * slot with a transform, so they glide instead of jumping and the held row can
+ * follow the pointer without fighting a re-render.
+ */
+export function previewIndex(
+  index: number,
+  from: number,
+  to: number,
+): number {
+  if (index === from) return to;
+  if (from < to) return index > from && index <= to ? index - 1 : index;
+  return index >= to && index < from ? index + 1 : index;
+}
+
+/**
  * Which slot a pointer at `y` is over, given where the rows were when the drag
  * started.
  *

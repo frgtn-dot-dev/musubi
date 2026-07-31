@@ -756,9 +756,17 @@ celé nové pořadí ids.
 - **Optimisticky s rollbackem (R8):** pořadí se překreslí hned, chyba vrátí
   původní seznam a řekne to toastem; seznam, který se na dobu round tripu vrátí
   zpátky, se čte jako selhané tažení.
+- **DOM pořadí se během tažení nemění.** Řádky se posouvají do svého preview
+  slotu transformem (`--row-shift` + `transition: translate`), takže se plynule
+  prohodí, a držený řádek sleduje kurzor 1:1 bez re-renderu pod rukou. Kdo drží,
+  ten má `transition: none` a leží nad ostatními.
+- **Frame, ve kterém přijde nové pořadí, se nesmí animovat.** Držený řádek už na
+  svém místě *je*; kdyby v tu chvíli měl transition, odjel by o řádek zpátky a
+  zase dopředu. Proto `data-settling` po dobu jednoho `requestAnimationFrame`.
+  Zrušené tažení (Escape, drop na stejný slot) se naopak animovat má — řádek
+  doklouže domů.
 - Rozměry řádků se **měří jednou na začátku** tažení. Průběžné měření by řádek
-  nechalo honit kurzor a blikat mezi dvěma sloty, protože preview pořadí jimi
-  samo hýbe.
+  nechalo honit kurzor, protože transformy s ním samy hýbou.
 - „Set as default" pořád UI nemá — endpoint ho umí ve stejném zápisu
   (`defaultPageId`), ale default přehazuje server při smazání a víc než to nikdo
   nežádal.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropIndexAt, moveItem } from "./list-reorder";
+import { dropIndexAt, moveItem, previewIndex } from "./list-reorder";
 
 const rows = (count: number, height = 40) =>
   Array.from({ length: count }, (_, index) => ({
@@ -43,5 +43,30 @@ describe("list reorder", () => {
     expect(dropIndexAt(-200, boxes)).toBe(0);
     expect(dropIndexAt(9_000, boxes)).toBe(2);
     expect(dropIndexAt(10, [])).toBe(0);
+  });
+
+  it("previews a downward move by pulling the rows in between up one", () => {
+    // 0 → 2: the held row lands on 2, and 1 and 2 shuffle up to fill the gap.
+    expect([0, 1, 2, 3].map((index) => previewIndex(index, 0, 2))).toEqual([
+      2, 0, 1, 3,
+    ]);
+  });
+
+  it("previews an upward move by pushing the rows in between down one", () => {
+    expect([0, 1, 2, 3].map((index) => previewIndex(index, 3, 1))).toEqual([
+      0, 2, 3, 1,
+    ]);
+  });
+
+  it("agrees with the array move it previews", () => {
+    const items = ["a", "b", "c", "d", "e"];
+    for (const from of items.keys()) {
+      for (const to of items.keys()) {
+        const moved = moveItem(items, from, to);
+        for (const [index, item] of items.entries()) {
+          expect(moved[previewIndex(index, from, to)]).toBe(item);
+        }
+      }
+    }
   });
 });
