@@ -62,12 +62,11 @@
   --text-26: 1.625rem;
 
   /* A block that is not (yet) real: the create draft, and the trace a dragged
-     event leaves behind. Translucent, because both of them sit *on* the grid
-     rather than replacing it — the hour lines and the cell under them have to
-     stay legible through the block. Derived from the text colour, so the overlay
-     comes out dark on the light theme and light on the dark one from a single
-     definition. */
-  --draft-fill: color-mix(in srgb, var(--text-primary) 12%, transparent);
+     event leaves behind. A veil of the canvas itself — light on the light theme,
+     dark on the dark one — so it mutes the grid under it without introducing a
+     colour of its own. Translucent, because both blocks sit *on* the grid rather
+     than replacing it. */
+  --draft-fill: color-mix(in srgb, var(--surface-canvas) 72%, transparent);
 
   --radius-sm: 5px;
   --radius-md: 9px;

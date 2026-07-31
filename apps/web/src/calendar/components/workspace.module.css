@@ -892,10 +892,6 @@
 
 /* What a dragged chip leaves behind on its own day. */
 .eventChip[data-ghost] {
-  /* Above the cells that come after it in the grid: their borders would otherwise
-     paint over the part of the chip that bleeds into them, and a translucent
-     ghost would show those lines running through it. The fill has to reveal the
-     canvas, not the mesh. */
   z-index: 4;
   border: 1px solid var(--event-color);
   background: var(--draft-fill);
@@ -1289,6 +1285,14 @@
 
 .dayCell:nth-child(7n) {
   border-right: 0;
+}
+
+/* A cell clips its contents, which cuts the 8px bleed a multi-day chip uses to
+   reach across the divider — so the 1px border stays uncovered and draws a line
+   through the bar. An opaque chip hides that; a translucent ghost shows it. Only
+   the cell holding a ghost drops the clip, and only while a drag is running. */
+.dayCell:has(.eventChip[data-ghost]) {
+  overflow: visible;
 }
 
 .dayCell:hover,

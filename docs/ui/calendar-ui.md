@@ -721,10 +721,16 @@ kosmetika nativní navigace.
 - **Tažený blok se rozšíří na celý sloupec** a po položení se vrátí do své lane,
   jako u Googlu: co držíš, to potřebuješ číst, a lane se stejně mění.
 - **Draft i ghost jsou průhledný overlay** — jeden token `--draft-fill`, protože
-  oba leží *na* mřížce, ne místo ní: hodinové čáry a buňka pod nimi musí zůstat
-  čitelné. (Nejdřív jsem draft nechal opaque a ghost průhledný; dva tokeny pro
-  totéž nemají smysl, takže jsou sloučené.) Ghost proto taky leží **nad** čárami
-  buněk, jinak by mu jimi prosvítaly.
+  oba leží *na* mřížce, ne místo ní. Je to **závoj z barvy plochy**
+  (`--surface-canvas` na 72 %), takže na světlém tématu světlý a na tmavém tmavý;
+  overlay odvozený z barvy textu by dělal opak a na tmavém svítil. (Cesta k tomu:
+  nejdřív opaque draft + průhledný ghost jako dva tokeny, pak sloučené, pak
+  přehozené z text- na surface-derived.)
+- **Ghost v Month krájela dělící linka buněk.** Nebyl to z-index: `.dayCell` má
+  `overflow: hidden`, takže 8px bleed, kterým chip sahá přes hranici, se ostříhne
+  na hranici buňky a ten 1px border zůstane odkrytý. U neprůhledného chipu to
+  není vidět, u průhledného ghostu ano. Klip proto pouští jen buňka, která ghost
+  drží (`.dayCell:has(.eventChip[data-ghost])`), a jen po dobu tažení.
 - **Draft má vždycky viditelné úchyty** na horní a dolní hraně. Hover-only nápověda
   řekne jen tomu, kdo už ví, že tam jsou — a draft je celý o tom, že se jeho konce
   posouvají.
