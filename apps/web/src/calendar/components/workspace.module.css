@@ -191,15 +191,18 @@
    preview slot instead, so they glide past each other rather than snapping. */
 .pageRow {
   translate: 0 var(--row-shift, 0);
-  transition: translate var(--motion-standard) ease;
+  transition:
+    translate var(--motion-standard) ease,
+    box-shadow var(--motion-standard) ease;
 }
 
 /* The held row tracks the pointer, so it must not lag behind it — and it rides
-   above the ones getting out of its way. */
+   above the ones getting out of its way. The lift fades rather than snapping off,
+   which is the other half of the drop reading as smooth. */
 .pageRow[data-held] {
   z-index: 1;
   box-shadow: var(--shadow-overlay);
-  transition: none;
+  transition: box-shadow var(--motion-standard) ease;
 }
 
 .pageRow[data-held] .pageRowMain {
@@ -209,7 +212,8 @@
 
 /* The frame the new order lands on: the held row is already in place, so let it
    stay there instead of animating away from it. */
-.pageList[data-settling] .pageRow {
+.pageList[data-settling] .pageRow,
+.pageList[data-settling] .pageRow[data-held] {
   transition: none;
 }
 

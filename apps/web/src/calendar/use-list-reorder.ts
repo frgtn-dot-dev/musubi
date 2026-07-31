@@ -26,9 +26,13 @@ export function useListReorder({
   onCommit: (move: ReorderDrag) => void;
 }) {
   const [drag, setDrag] = useState<ReorderDrag>();
-  // True for the frame that swaps the saved order in. The held row is already
-  // sitting where it lands, so animating that frame would slide it back out of
-  // place and then in again; a cancelled drag still glides home.
+  // True while the saved order swaps in. The held row is already sitting where it
+  // lands, so a transition on that change would slide it back out of place and
+  // then in again — the blink you get on drop. A cancelled drag still glides home.
+  //
+  // Cleared after *two* frames on purpose: a single `requestAnimationFrame` runs
+  // before the next paint, so re-enabling transitions there lands in the same
+  // paint as the reorder and the transition fires anyway.
   const [settling, setSettling] = useState(false);
   const pressRef = useRef<
     | {
@@ -111,7 +115,9 @@ export function useListReorder({
           consumedRef.current = true;
           setSettling(true);
           onCommitRef.current(move);
-          requestAnimationFrame(() => setSettling(false));
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => setSettling(false)),
+          );
         }
       }
 

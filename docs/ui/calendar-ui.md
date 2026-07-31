@@ -762,9 +762,11 @@ celé nové pořadí ids.
   ten má `transition: none` a leží nad ostatními.
 - **Frame, ve kterém přijde nové pořadí, se nesmí animovat.** Držený řádek už na
   svém místě *je*; kdyby v tu chvíli měl transition, odjel by o řádek zpátky a
-  zase dopředu. Proto `data-settling` po dobu jednoho `requestAnimationFrame`.
-  Zrušené tažení (Escape, drop na stejný slot) se naopak animovat má — řádek
-  doklouže domů.
+  zase dopředu — to je to probliknutí po puštění. Proto `data-settling`, a to
+  přes **dva** `requestAnimationFrame`: jeden běží ještě před nejbližším paintem,
+  takže by se vypnutí i zapnutí animace vešlo do stejného paintu a přechod by
+  stejně vystřelil. Zrušené tažení (Escape, drop na stejný slot) se naopak
+  animovat má — řádek doklouže domů.
 - Rozměry řádků se **měří jednou na začátku** tažení. Průběžné měření by řádek
   nechalo honit kurzor, protože transformy s ním samy hýbou.
 - „Set as default" pořád UI nemá — endpoint ho umí ve stejném zápisu
