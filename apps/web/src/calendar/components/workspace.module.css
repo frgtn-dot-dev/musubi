@@ -210,11 +210,12 @@
   cursor: grabbing;
 }
 
-/* The frame the new order lands on: the held row is already in place, so let it
-   stay there instead of animating away from it. */
+/* The frames the new order lands on: the held row is already in place, so its
+   *position* must not animate away from it. The lift is a different matter — the
+   shadow snapping off is the last of the blink, so it keeps its fade. */
 .pageList[data-settling] .pageRow,
 .pageList[data-settling] .pageRow[data-held] {
-  transition: none;
+  transition: box-shadow var(--motion-standard) ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -874,13 +875,13 @@
 
 /* What the event leaves behind while it is being moved: its outline, so the
    place it came from stays readable and the move is comparable. */
+/* Where a dragged event came from: the same block, just faded. It is a real event
+   with a real colour, so it stays itself and only goes quiet. The translucent
+   overlay with a border belongs to a *new* event being drawn — see
+   `.timeGridSelection` and `.dayDraft`. */
 .timelineEvent[data-ghost] {
-  /* Same reason as the month chip: over the hour lines, not under them. */
-  z-index: 20;
-  border: 1px solid var(--event-color);
-  background: var(--draft-fill);
   box-shadow: none;
-  color: var(--text-secondary);
+  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -928,11 +929,8 @@
 
 /* What a dragged chip leaves behind on its own day. */
 .eventChip[data-ghost] {
-  z-index: 4;
-  border: 1px solid var(--event-color);
-  background: var(--draft-fill);
   box-shadow: none;
-  color: var(--text-secondary);
+  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -957,7 +955,10 @@
 .timeGridSelection {
   container: timeGridSelection / size;
   position: absolute;
-  z-index: 30;
+  /* Above the events it is drawn among, below the sticky day header and all-day
+     row (z-index 8) — a draft scrolled up must pass under them like an event
+     does, not over the date it belongs to. */
+  z-index: 5;
   left: 2px;
   display: flex;
   flex-direction: column;
@@ -1323,11 +1324,11 @@
   border-right: 0;
 }
 
-/* A cell clips its contents, which cuts the 8px bleed a multi-day chip uses to
-   reach across the divider — so the 1px border stays uncovered and draws a line
-   through the bar. An opaque chip hides that; a translucent ghost shows it. Only
-   the cell holding a ghost drops the clip, and only while a drag is running. */
-.dayCell:has(.eventChip[data-ghost]) {
+/* A cell clips its contents, which cuts the 8px bleed a block uses to reach across
+   the divider — so the 1px border stays uncovered and draws a line through it. On
+   a solid chip that seam is invisible; through the draft's translucent fill it is
+   not, so the cell holding a draft drops the clip while it is on screen. */
+.dayCell:has(.dayDraft) {
   overflow: visible;
 }
 
@@ -1486,6 +1487,11 @@
 /* The month draft pill: an all-day bar in the accent colour, flat where it
    continues into the next cell so a range reads as one thing. */
 .dayDraft {
+  /* Positioned, so it paints above the cell borders that follow it in the grid —
+     the same reason the ghost chip is. Static content would go under them and the
+     translucent fill would show the mesh running through the block. */
+  position: relative;
+  z-index: 4;
   min-height: 21px;
   display: flex;
   align-items: center;

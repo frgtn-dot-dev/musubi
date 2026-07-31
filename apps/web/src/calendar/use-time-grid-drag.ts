@@ -151,6 +151,20 @@ export function useTimeGridDrag<T = Event>({
     setDrag(undefined);
   }, [stopAutoScroll]);
 
+  /**
+   * Stop following the pointer but leave the block where it was dropped.
+   *
+   * Clearing the whole drag on release would put the event back at its old time
+   * until the write lands — and the cache notifies in a later tick, so that gap
+   * is visible: the block bounces home and then jumps to where it was dropped.
+   */
+  const release = useCallback(() => {
+    pressRef.current = undefined;
+    stopAutoScroll();
+    detachRef.current?.();
+    detachRef.current = undefined;
+  }, [stopAutoScroll]);
+
   /** Recompute the ghost from the latest pointer position and scroll offset. */
   const recompute = useCallback(() => {
     const press = pressRef.current;
@@ -284,23 +298,29 @@ export function useTimeGridDrag<T = Event>({
         const commit = optionsRef.current.onCommit;
         const reportError = optionsRef.current.onError;
 
-        finish();
         swallowNextClick();
-        if (unchanged) return;
+        if (unchanged) {
+          finish();
+          return;
+        }
 
+        release();
         void commit({
           dayOffset,
           event: active.event,
           mode: active.mode,
           times: active.times,
-        }).catch((error: unknown) => {
-          // The ghost is gone, so the event is already back at its old time.
-          reportError(
-            error instanceof Error
-              ? error.message
-              : "That change could not be saved. The original time was restored.",
-          );
-        });
+        })
+          .catch((error: unknown) => {
+            reportError(
+              error instanceof Error
+                ? error.message
+                : "That change could not be saved. The original time was restored.",
+            );
+          })
+          // Only now does the block stop being drawn where it was dropped: by
+          // this point the event itself is there, or the error put it back.
+          .finally(finish);
       }
 
       function handleKey(nativeEvent: KeyboardEvent) {
@@ -322,7 +342,7 @@ export function useTimeGridDrag<T = Event>({
         window.removeEventListener("keydown", handleKey, true);
       };
     },
-    [finish, recompute, stopAutoScroll],
+    [finish, recompute, release, stopAutoScroll],
   );
 
   // Unmounting mid-gesture must not leave listeners or a timer behind.
@@ -383,6 +403,13 @@ export function useMonthDrag<T = Event>({
     setState(undefined);
   }, []);
 
+  /** Stop tracking the pointer, but keep drawing the chip where it was dropped. */
+  const release = useCallback(() => {
+    pressRef.current = undefined;
+    detachRef.current?.();
+    detachRef.current = undefined;
+  }, []);
+
   const begin = useCallback(
     (input: {
       event: T;
@@ -436,19 +463,26 @@ export function useMonthDrag<T = Event>({
         const commit = optionsRef.current.onCommit;
         const reportError = optionsRef.current.onError;
         const unchanged = !active || active.dayKey === press.originDayKey;
-        finish();
         // Only after a real drag: a plain click has to reach the chip, which is
         // what opens its details.
         if (active) swallowNextClick();
-        if (unchanged || !active) return;
+        if (unchanged || !active) {
+          finish();
+          return;
+        }
 
-        void commit(active).catch((error: unknown) => {
-          reportError(
-            error instanceof Error
-              ? error.message
-              : "That change could not be saved. The original date was restored.",
-          );
-        });
+        release();
+        void commit(active)
+          .catch((error: unknown) => {
+            reportError(
+              error instanceof Error
+                ? error.message
+                : "That change could not be saved. The original date was restored.",
+            );
+          })
+          // Held until the write lands, so the chip does not flick back to its
+          // old day while the cache catches up.
+          .finally(finish);
       }
 
       function handleKey(nativeEvent: KeyboardEvent) {
@@ -469,7 +503,7 @@ export function useMonthDrag<T = Event>({
         window.removeEventListener("keydown", handleKey, true);
       };
     },
-    [finish],
+    [finish, release],
   );
 
   useEffect(() => finish, [finish]);

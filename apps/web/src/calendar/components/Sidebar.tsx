@@ -29,6 +29,7 @@ import { IconButton } from "~/ui/Button";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { moveItem, previewIndex } from "../list-reorder";
+import { sortPagesBy } from "../page-editor";
 import { pageIconComponent, resolvePageIcon } from "../page-icons";
 import { useListReorder } from "../use-list-reorder";
 import { MiniCalendar } from "./MiniCalendar";
@@ -50,7 +51,7 @@ type SidebarProps = {
   onOpenSettings: () => void;
   onPageChange: (pageId: string) => void;
   /** The full page order after a move, which is what the endpoint takes. */
-  onReorderPages: (pageIds: string[]) => void;
+  onReorderPages: (pageIds: string[]) => Promise<unknown> | void;
   onSignOut: () => void;
   pages: PageDocument[];
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
@@ -84,15 +85,41 @@ export function Sidebar({
   const [signingOut, setSigningOut] = useState(false);
   const pageRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [reorderMessage, setReorderMessage] = useState("");
+  /**
+   * The order a drop asked for, held locally until the server's list shows it.
+   *
+   * Not cosmetic: React Query notifies subscribers in a later tick, so relying on
+   * it would clear the drag's transforms one frame *before* the new order arrived
+   * — and that frame shows the old order, which is the blink on drop. Owning the
+   * order locally makes both changes land in the same commit.
+   */
+  const [committedOrder, setCommittedOrder] = useState<string[]>();
   const {
     begin: beginReorder,
     consumeClick: consumeReorderClick,
     drag: reorderDrag,
     settling: reorderSettling,
   } = useListReorder({
-    onCommit: ({ from, to }) =>
-      onReorderPages(moveItem(pages, from, to).map((page) => page.id)),
+    onCommit: ({ from, to }) => {
+      const pageIds = moveItem(pages, from, to).map((page) => page.id);
+      setCommittedOrder(pageIds);
+      void Promise.resolve(onReorderPages(pageIds)).catch(() =>
+        // The write failed and the cache went back; stop overriding it.
+        setCommittedOrder(undefined),
+      );
+    },
   });
+  const orderedPages = committedOrder
+    ? sortPagesBy(committedOrder, pages)
+    : pages;
+  // Once the server's list agrees, the local order has nothing left to say.
+  if (
+    committedOrder &&
+    pages.length === committedOrder.length &&
+    pages.every((page, index) => page.id === committedOrder[index])
+  ) {
+    setCommittedOrder(undefined);
+  }
   /**
    * How far each row is displaced from where the DOM puts it.
    *
@@ -114,11 +141,17 @@ export function Sidebar({
   /** Keyboard equivalent of the drag (R10), on the row that has focus. */
   function movePageBy(index: number, offset: number) {
     const to = index + offset;
-    if (to < 0 || to >= pages.length) return;
-    const page = pages[index];
+    if (to < 0 || to >= orderedPages.length) return;
+    const page = orderedPages[index];
     if (!page) return;
-    onReorderPages(moveItem(pages, index, to).map((item) => item.id));
-    setReorderMessage(`${page.name} moved to ${to + 1} of ${pages.length}.`);
+    const pageIds = moveItem(orderedPages, index, to).map((item) => item.id);
+    setCommittedOrder(pageIds);
+    void Promise.resolve(onReorderPages(pageIds)).catch(() =>
+      setCommittedOrder(undefined),
+    );
+    setReorderMessage(
+      `${page.name} moved to ${to + 1} of ${orderedPages.length}.`,
+    );
   }
   const [overlay, setOverlay] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -228,7 +261,7 @@ export function Sidebar({
               className={styles.pageList}
               data-settling={reorderSettling ? "" : undefined}
             >
-              {pages.map((page, index) => (
+              {orderedPages.map((page, index) => (
                 <PageRow
                   key={page.id}
                   active={page.id === activePageId}

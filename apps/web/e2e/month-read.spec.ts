@@ -1785,7 +1785,8 @@ test("reorders pages by dragging a row, and by keyboard", async ({ page }) => {
   await page.mouse.move(first.x + first.width / 2, first.y + 4, { steps: 6 });
   await page.mouse.up();
 
-  expect(writes[0]).toEqual([workPageId, DEFAULT_PAGE_ID]);
+  // The write leaves on release; poll rather than reading the array straight away.
+  await expect.poll(() => writes).toEqual([[workPageId, DEFAULT_PAGE_ID]]);
   await expect(order).toHaveText(["Work", "My calendar"]);
   // The release ended a drag, so it must not also have opened that page.
   await expect(page).toHaveURL(new RegExp(`/app/p/${DEFAULT_PAGE_ID}/month`));
@@ -1793,7 +1794,9 @@ test("reorders pages by dragging a row, and by keyboard", async ({ page }) => {
   // Alt+arrows are the keyboard path to the same move (R10).
   await rows.nth(1).getByRole("button", { exact: true, name: "My calendar" }).focus();
   await page.keyboard.press("Alt+ArrowUp");
-  expect(writes[1]).toEqual([DEFAULT_PAGE_ID, workPageId]);
+  await expect
+    .poll(() => writes[1])
+    .toEqual([DEFAULT_PAGE_ID, workPageId]);
   await expect(order).toHaveText(["My calendar", "Work"]);
 });
 

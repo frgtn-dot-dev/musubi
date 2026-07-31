@@ -682,11 +682,13 @@ export function Workspace({
           setSettingsOpen(true);
         }}
         onPageChange={onPageChange}
-        onReorderPages={(pageIds) => {
-          void onReorderPages(pageIds).catch(() =>
-            notify("That order could not be saved."),
-          );
-        }}
+        onReorderPages={(pageIds) =>
+          // Rethrown so the sidebar knows to stop showing the order it asked for.
+          onReorderPages(pageIds).catch((error: unknown) => {
+            notify("That order could not be saved.");
+            throw error;
+          })
+        }
         onSignOut={onSignOut}
         returnFocusRef={sidebarTriggerRef}
         syncLabel={

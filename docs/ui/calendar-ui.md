@@ -63,6 +63,14 @@ je to placeholder.
 musí číst stejné hodnoty (`pxPerMinute`, `snapMinutes`, `minEventHeight`,
 `visibleDayStart/End`). Dvě různé matematiky = kurzor „ujíždí" oproti času.
 
+**R8a — Držet, dokud zápis nedosedne.** Pointer mašina nesmí uklidit svůj
+vizuální stav dřív, než se změna projeví v datech. React Query notifikuje
+odběratele **v pozdějším ticku**, takže „uklidit hned" znamená jeden frame se
+starým stavem — blok skočí zpátky na původní čas a pak na nový, řádek problikne
+starým pořadím. Proto `release()` (odpojí pointer, blok nechá na místě) a
+`finish()` až v `.finally()` commitu; u seznamu Pages totéž řeší lokálně držené
+`committedOrder`.
+
 **R8 — Optimisticky, s rollbackem.** Mutace se projeví okamžitě, chyba vrátí
 stav a **řekne to lidsky**: co selhalo, proč, co dělat, že byl stav obnoven.
 
@@ -720,12 +728,15 @@ kosmetika nativní navigace.
   — u ostatních je pravá hrana pod blokem, který je překrývá.
 - **Tažený blok se rozšíří na celý sloupec** a po položení se vrátí do své lane,
   jako u Googlu: co držíš, to potřebuješ číst, a lane se stejně mění.
-- **Draft i ghost jsou průhledný overlay** — jeden token `--draft-fill`, protože
-  oba leží *na* mřížce, ne místo ní. Je to **závoj z barvy plochy**
-  (`--surface-canvas` na 72 %), takže na světlém tématu světlý a na tmavém tmavý;
-  overlay odvozený z barvy textu by dělal opak a na tmavém svítil. (Cesta k tomu:
-  nejdřív opaque draft + průhledný ghost jako dva tokeny, pak sloučené, pak
-  přehozené z text- na surface-derived.)
+- **Slovník:** „ghost event" = **návrh nového** eventu z drag-to-create
+  (`.timeGridSelection`, `.dayDraft`) — průhledný závoj s plným okrajem. Stopa po
+  **přesouvaném** eventu je něco jiného: tentýž blok, jen **vybledlý**
+  (`opacity: .45`), protože je to skutečný event se svou barvou. Nemíchat.
+- **Závoj návrhu je z barvy plochy** (`--draft-fill` = `--surface-canvas` na
+  72 %), takže na světlém tématu světlý a na tmavém tmavý; overlay odvozený
+  z barvy textu by dělal opak a na tmavém svítil.
+- Návrh v time gridu leží v **z-index pásmu eventů** (5), ne nad sticky hlavičkou
+  (8) — při scrollování musí zajet pod all-day řádek a datum jako event.
 - **Ghost v Month krájela dělící linka buněk.** Nebyl to z-index: `.dayCell` má
   `overflow: hidden`, takže 8px bleed, kterým chip sahá přes hranici, se ostříhne
   na hranici buňky a ten 1px border zůstane odkrytý. U neprůhledného chipu to
