@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   AGENDA_GROUP_PAGE,
   AGENDA_RECURRENCE_HORIZON_YEARS,
+  freeDaysBetween,
   getAgendaGroups,
   getAgendaLabel,
   getAgendaRecurrenceEnd,
   getAgendaStart,
+  relativeDayName,
 } from "./agenda-math";
 import { parseDateKey } from "./calendar-math";
 
@@ -114,5 +116,53 @@ describe("agenda math", () => {
     expect(groups[0]?.items[0]?.id).toBe("distant");
     expect(getAgendaLabel(anchor)).toBe("From Jul 26, 2026");
     expect(AGENDA_GROUP_PAGE).toBe(14);
+  });
+
+  it("names only the two days a reader already knows", () => {
+    const now = new Date("2026-07-31T09:00:00");
+    expect(relativeDayName(new Date("2026-07-31T23:59:00"), now)).toBe(
+      "Today",
+    );
+    expect(relativeDayName(new Date("2026-08-01T00:01:00"), now)).toBe(
+      "Tomorrow",
+    );
+    expect(relativeDayName(new Date("2026-08-02T09:00:00"), now)).toBe(
+      undefined,
+    );
+    expect(relativeDayName(new Date("2026-07-30T09:00:00"), now)).toBe(
+      undefined,
+    );
+  });
+
+  it("counts the empty days between two groups, ignoring the time of day", () => {
+    expect(
+      freeDaysBetween(
+        new Date("2026-07-27T23:00:00"),
+        new Date("2026-08-03T01:00:00"),
+      ),
+    ).toBe(6);
+    // Neighbouring and same days have nothing free between them.
+    expect(
+      freeDaysBetween(
+        new Date("2026-07-27T01:00:00"),
+        new Date("2026-07-28T23:00:00"),
+      ),
+    ).toBe(0);
+    expect(
+      freeDaysBetween(
+        new Date("2026-07-27T01:00:00"),
+        new Date("2026-07-27T23:00:00"),
+      ),
+    ).toBe(0);
+  });
+
+  it("counts free days across a spring-forward boundary", () => {
+    // 23-hour day: a plain millisecond division would round this to 5.
+    expect(
+      freeDaysBetween(
+        new Date("2026-03-27T12:00:00"),
+        new Date("2026-04-03T12:00:00"),
+      ),
+    ).toBe(6);
   });
 });

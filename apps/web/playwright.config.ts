@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// A dev server bound to ::1 only (pnpm dev's default on some hosts) is reached by
+// PLAYWRIGHT_ORIGIN="http://[::1]:3000" instead of a second config.
+const origin = process.env.PLAYWRIGHT_ORIGIN ?? "http://127.0.0.1:3000";
+
 export default defineConfig({
   expect: {
     timeout: 5_000,
@@ -9,7 +13,7 @@ export default defineConfig({
   reporter: "list",
   testDir: "./e2e",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: origin,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
@@ -20,7 +24,7 @@ export default defineConfig({
     // A real page, not /healthz: that route answers before Vite has finished
     // optimizing client deps, so tests would start against a server that still
     // 504s the client entry ("Outdated Optimize Dep").
-    url: "http://127.0.0.1:3000/login",
+    url: `${origin}/login`,
   },
   projects: [
     {

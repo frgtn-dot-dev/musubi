@@ -86,6 +86,13 @@ type DeletePrompt = "confirm" | "scope";
 type TargetAction = "fork" | "link";
 
 type EventDetailsPopoverProps = EventActionHandlers & {
+  /**
+   * Where the preview opens. The default sits it beside a calendar block; a
+   * full-width row has no room to its right, so a list passes its own side and
+   * alignment rather than letting collision detection flip the card leftwards.
+   */
+  align?: "center" | "end" | "start";
+  side?: "bottom" | "left" | "right" | "top";
   calendar: Calendar | undefined;
   calendars: Calendar[];
   children: ReactElement;
@@ -95,6 +102,8 @@ type EventDetailsPopoverProps = EventActionHandlers & {
 };
 
 export function EventDetailsPopover({
+  align = "start",
+  side = "right",
   calendar,
   calendars,
   children,
@@ -369,10 +378,10 @@ export function EventDetailsPopover({
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
-            align="start"
             aria-labelledby={titleId}
             className={`${workspaceStyles.popover} ${styles.detailPopover}`}
             collisionPadding={14}
+            align={align}
             onClick={(clickEvent) => clickEvent.stopPropagation()}
             /* React portals bubble events to the React parent, not the DOM
                one: without this a press on the title reaches the day cell this
@@ -397,7 +406,7 @@ export function EventDetailsPopover({
             /* Keep the detail surface beside its event. Collision handling may
                flip right to left, but it no longer compresses the card into
                the small strip above or below a late-month event. */
-            side="right"
+            side={side}
             sideOffset={12}
             style={surfaceStyle}
           >

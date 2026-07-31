@@ -786,6 +786,39 @@ celé nové pořadí ids.
   (`defaultPageId`), ale default přehazuje server při smazání a víc než to nikdo
   nežádal.
 
+### Fáze L — Agenda a filtry na telefonu — **HOTOVO** (2026-07-31)
+
+Agenda byla „strohá": čas, název, kalendář. Teď nese to, co event skutečně má, a
+seznam sám říká, kde v čase jsme.
+
+- **Relativní jméno dne** („Today", „Tomorrow") stojí nad datem, ne místo něj —
+  jméno hledá oko, datum ho potvrzuje. Dál už žádné „In 3 days": čtvrtý den
+  dopředu si nikdo takové jméno nepřeloží rychleji než datum.
+- **Prázdné dny jsou vidět jako mezera.** Agenda kreslí jen dny, které něco mají,
+  takže skok z 27. na 3. se čte jako „3. je další v řadě". Tichý separátor
+  „6 free days" mezi skupinami je jediné místo, kde volný čas může být vůbec
+  vidět. Počítá se přes `startOfDay` obou konců, ne dělením milisekund — 23hodinový
+  den při přechodu času by jinak vyšel o jeden nižší.
+- **Měsíc je pásmo, ne řádek svého druhu**: tišší než rok, hlasitější než den.
+  Datum dne je `sticky` ve své vlastní grid area, takže drží, dokud jeho události
+  neprojdou, a pak ho vystrčí ten další.
+- **Řádek ukazuje jen to, co event má** — místo (s `MapPin`) a `EventMarks`
+  (opakování / hosté / zámek), sdílené s gridem. Prázdné sloty by se čtenáři
+  čtou jako chybějící data, ne jako „nic tam není".
+- **Detail se otevírá doprava** (`side="bottom" align="start"`), ne doleva. Řádek
+  je široký přes celý sloupec, takže `side="right"` neměl kam a Radix kartu
+  překlopil doleva. Bottom placement se ale **neposouvá po hlavní ose**: karta
+  vysoká 476px pod řádkem v y=349 přesahovala pod okno a na footer se nedalo
+  dosáhnout. Strop je proto `--radix-popover-content-available-height` — kolik
+  místa ta strana reálně má; karta uvnitř scrolluje, což už umí.
+- **Filtry kalendářů na telefonu jsou jeden vodorovný pás.** Titulek „Visible
+  calendars" zmizí z layoutu, ale zůstane jako přístupné jméno regionu
+  (`clip` místo `display: none`) — a pilulky se nezalamují, scrollují do strany
+  (`overscroll-behavior-x: contain`, skrytý scrollbar) jako v nativním klientovi.
+  Zalomený blok pilulek na 390px ukrojil třetinu obrazovky kalendáři.
+- `PLAYWRIGHT_ORIGIN` v `playwright.config.ts` — dev server nabídnutý jen na `::1`
+  se testuje beze druhé konfigurace.
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,

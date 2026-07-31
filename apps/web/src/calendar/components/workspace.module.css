@@ -619,6 +619,10 @@
 }
 
 .agendaDate {
+  position: sticky;
+  /* Sticks inside its own day's grid area, so the date stays readable while that
+     day's events scroll past and gives way to the next one. */
+  top: 0;
   align-self: start;
   padding-top: 14px;
   color: var(--text-muted);
@@ -633,9 +637,79 @@
   color: var(--accent-primary);
 }
 
+/* "Today" over its date: the name is what the eye is looking for, the date is
+   what confirms it. */
+.agendaDate strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.agendaDayToday .agendaDate strong {
+  color: var(--accent-primary);
+}
+
+/* A month is a band, not a row of its own kind — quieter than the year, louder
+   than a day. */
+.agendaMonth {
+  padding: var(--space-4) 28px var(--space-2);
+  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+}
+
+/* Days with nothing on them are never rendered, so this is the only place the
+   time between two groups can be seen at all. Deliberately quiet: it is the
+   absence of events, not an event. */
+.agendaGap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 28px;
+  color: var(--text-faint);
+  font-size: 0.63rem;
+  letter-spacing: 0.06em;
+}
+
+.agendaGap::before,
+.agendaGap::after {
+  height: 1px;
+  flex: 1;
+  background: var(--border-subtle);
+  content: "";
+}
+
+.agendaGap::before {
+  max-width: 96px;
+}
+
 .agendaEvents {
   display: grid;
   min-width: 0;
+}
+
+.agendaEventCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agendaEventWhere {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agendaEventWhere svg {
+  flex: none;
 }
 
 .agendaEvent {
@@ -643,7 +717,9 @@
   width: 100%;
   min-width: 0;
   min-height: 43px;
-  grid-template-columns: 120px 3px minmax(140px, 180px) minmax(90px, 1fr) 28px;
+  grid-template-columns:
+    120px 3px minmax(140px, 180px) auto
+    minmax(90px, 1fr) 28px;
   align-items: center;
   gap: 15px;
   padding: 0 18px 0 0;
@@ -1783,7 +1859,9 @@
   }
 
   .agendaEvent {
-    grid-template-columns: 102px 3px minmax(120px, 155px) minmax(76px, 1fr) 22px;
+    grid-template-columns:
+      102px 3px minmax(120px, 155px) auto
+      minmax(76px, 1fr) 22px;
     gap: 11px;
   }
   .workspace {
@@ -1876,7 +1954,7 @@
   }
 
   .agendaEvent {
-    grid-template-columns: 94px 3px minmax(0, 1fr) 20px;
+    grid-template-columns: 94px 3px minmax(0, 1fr) auto 20px;
     gap: 9px;
     padding-right: 10px;
   }
@@ -1885,7 +1963,9 @@
     display: none;
   }
 
-  .agendaYear {
+  .agendaYear,
+  .agendaMonth,
+  .agendaGap {
     padding-inline: 14px;
   }
 
@@ -1935,6 +2015,40 @@
     gap: 8px;
   }
 
+  /* A phone has no width to spend on a title over a wrapped block of pills. The
+     shelf becomes one sideways-scrolling strip; the label stays for the region's
+     accessible name but leaves the layout. */
+  .filterBar {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 7px 0;
+  }
+
+  .filterBarLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .filterCalendarList {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-inline: 14px;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .filterCalendarList::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filterPill {
+    flex: none;
+  }
+
   .navPair button {
     width: 34px;
     height: 36px;
@@ -1970,11 +2084,13 @@
 
   .agendaEvent {
     min-height: 39px;
-    grid-template-columns: 80px 3px minmax(0, 1fr) 18px;
+    grid-template-columns: 80px 3px minmax(0, 1fr) auto 18px;
     padding: 0 8px 0 12px;
   }
 
-  .agendaYear {
+  .agendaYear,
+  .agendaMonth,
+  .agendaGap {
     padding-inline: 12px;
   }
 

@@ -1,10 +1,12 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MapPin } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AGENDA_GROUP_PAGE,
+  freeDaysBetween,
   getAgendaGroups,
   getAgendaLabel,
+  relativeDayName,
 } from "../agenda-math";
 import {
   getEventDateLabel,
@@ -12,6 +14,7 @@ import {
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { eventHomeCalendarId } from "../event-permissions";
+import { EventMarks } from "./EventMarks";
 import {
   EventDetailsPopover,
   type EventActionHandlers,
@@ -31,6 +34,8 @@ const dayFormatter = new Intl.DateTimeFormat("en", {
   month: "short",
   weekday: "long",
 });
+
+const monthFormatter = new Intl.DateTimeFormat("en", { month: "long" });
 
 export function AgendaView({
   anchor,
@@ -64,7 +69,10 @@ export function AgendaView({
   const rootRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const visibleGroups = groups.slice(0, shown);
-  const todayKey = toDateKey(new Date());
+  // One reading of "now" per render, so the today highlight and the relative day
+  // names cannot disagree with each other.
+  const now = new Date();
+  const todayKey = toDateKey(now);
 
   useEffect(() => {
     const scrollRoot = rootRef.current?.parentElement;
@@ -119,17 +127,34 @@ export function AgendaView({
     >
       <ol className={styles.agendaList}>
         {visibleGroups.map((group, groupIndex) => {
+          const previous = visibleGroups[groupIndex - 1]?.date;
           const isNewYear =
-            groupIndex === 0 ||
-            visibleGroups[groupIndex - 1]?.date.getFullYear() !==
-              group.date.getFullYear();
+            groupIndex === 0 || previous?.getFullYear() !== group.date.getFullYear();
+          const isNewMonth =
+            !isNewYear && previous?.getMonth() !== group.date.getMonth();
           const isToday = group.key === todayKey;
+          const relative = relativeDayName(group.date, now);
+          // Days with nothing on them are not rendered, so the jump between two
+          // groups is the only place free time can be shown at all.
+          const freeDays = previous ? freeDaysBetween(previous, group.date) : 0;
 
           return (
             <Fragment key={group.key}>
               {isNewYear ? (
                 <li className={styles.agendaYear} aria-hidden="true">
                   <span>{group.date.getFullYear()}</span>
+                </li>
+              ) : null}
+              {isNewMonth ? (
+                <li className={styles.agendaMonth} aria-hidden="true">
+                  <span>{monthFormatter.format(group.date)}</span>
+                </li>
+              ) : null}
+              {freeDays > 0 ? (
+                <li className={styles.agendaGap}>
+                  <span>
+                    {freeDays === 1 ? "1 free day" : `${freeDays} free days`}
+                  </span>
                 </li>
               ) : null}
               <li
@@ -139,7 +164,14 @@ export function AgendaView({
                 data-agenda-date={group.key}
               >
                 <time className={styles.agendaDate} dateTime={group.key}>
-                  {dayFormatter.format(group.date)}
+                  {relative ? (
+                    <>
+                      <strong>{relative}</strong>
+                      <span>{dayFormatter.format(group.date)}</span>
+                    </>
+                  ) : (
+                    dayFormatter.format(group.date)
+                  )}
                 </time>
                 <div className={styles.agendaEvents}>
                   {group.items.map((event) => {
@@ -156,8 +188,10 @@ export function AgendaView({
                       <EventDetailsPopover
                         calendar={calendar}
                         calendars={calendars}
+                        align="start"
                         event={event}
                         key={event.id}
+                        side="bottom"
                         timeFormat={timeFormat}
                         weekStartsOn={weekStartsOn}
                         {...eventActions}
@@ -180,9 +214,24 @@ export function AgendaView({
                             className={styles.agendaEventRule}
                             style={{ backgroundColor: eventColor }}
                           />
-                          <span className={styles.agendaEventTitle}>
-                            {event.title}
+                          <span className={styles.agendaEventCopy}>
+                            <span className={styles.agendaEventTitle}>
+                              {event.title}
+                            </span>
+                            {/* Only what this event actually has: an agenda row
+                                with empty slots reads as missing data. */}
+                            {event.location ? (
+                              <span className={styles.agendaEventWhere}>
+                                <MapPin
+                                  aria-hidden="true"
+                                  size={12}
+                                  strokeWidth={1.6}
+                                />
+                                {event.location}
+                              </span>
+                            ) : null}
                           </span>
+                          <EventMarks event={event} />
                           <span className={styles.agendaEventCalendar}>
                             {calendar?.name ?? "Calendar"}
                           </span>

@@ -1,6 +1,13 @@
 .detailPopover {
   width: min(390px, calc(100vw - 28px));
-  max-height: min(620px, calc(100dvh - 28px));
+  /* Radix reports how much room the chosen side actually has. Below a full-width
+     agenda row there is less than the card's natural height, and a bottom-side
+     placement is not repositioned — without this the footer buttons sit under
+     the viewport with no way to reach them. */
+  max-height: min(
+    620px,
+    var(--radix-popover-content-available-height, calc(100dvh - 28px))
+  );
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;

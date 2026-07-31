@@ -669,8 +669,10 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
   await expect(page.getByRole("button", { name: /Studio open day/ })).toHaveCount(1);
 
   await page.getByRole("button", { name: /Design review/ }).click();
-  await expect(page.getByText("Studio B")).toBeVisible();
-  await expect(page.getByText("16:00 – 17:00")).toBeVisible();
+  // Scoped to the preview: the agenda row shows the location too.
+  const agendaPreview = page.getByRole("dialog", { name: "Design review" });
+  await expect(agendaPreview.getByText("Studio B")).toBeVisible();
+  await expect(agendaPreview.getByText("16:00 – 17:00")).toBeVisible();
   await page.keyboard.press("Escape");
 
   await page.getByRole("region", { name: /From Jul 26, 2026 agenda/ }).evaluate(

@@ -36,6 +36,37 @@ export function getAgendaLabel(
   }).format(anchor)}`;
 }
 
+/**
+ * The name a day answers to before its date does.
+ *
+ * An agenda is scanned for "when", so the two days everyone thinks of by name get
+ * their name; the rest stay dates, because "Thursday" three weeks out tells you
+ * nothing.
+ */
+export function relativeDayName(
+  date: Date,
+  now = new Date(),
+): string | undefined {
+  if (isSameDay(date, now)) return "Today";
+  const tomorrow = new Date(startOfDay(now));
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return isSameDay(date, tomorrow) ? "Tomorrow" : undefined;
+}
+
+/**
+ * How many days with nothing on them sit between two agenda groups.
+ *
+ * The list only renders days that have events, so without this a jump from the
+ * 27th to the 3rd looks like the 3rd comes next. Saying how much time is free is
+ * half of what an agenda is for.
+ */
+export function freeDaysBetween(previous: Date, next: Date): number {
+  const from = startOfDay(previous).getTime();
+  const to = startOfDay(next).getTime();
+  const days = Math.round((to - from) / 86_400_000) - 1;
+  return Math.max(0, days);
+}
+
 export function getAgendaGroups(
   events: Event[],
   anchor: Date,
