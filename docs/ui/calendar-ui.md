@@ -739,13 +739,35 @@ kosmetika nativní navigace.
 - Opraven kontrast `--text-muted` na 11px textu (3,2:1, pod AA) u pilulek i
   u `recurrenceBadge` — axe to na nové pilulce zachytil hned.
 
+### Fáze K — Pořadí Pages přetažením — **HOTOVO** (2026-07-30)
+
+`PUT /pages/reorder` konečně má UI. Řádek Page se chytne a přetáhne, seznam
+během tažení **ukazuje cílové pořadí** (ne čáru mezi řádky) a po puštění se pošle
+celé nové pořadí ids.
+
+- **Gesto:** myš se stane tažením po `DRAG_THRESHOLD_PX`, prst musí nejdřív
+  `TOUCH_HOLD_MS` držet — jinak by scrollování sidebaru přerovnávalo Pages. Escape
+  ruší, trailing click se spolkne (`consumeClick`), aby puštění nad jiným řádkem
+  tu Page zároveň neotevřelo. Žádný samostatný grip: řádek je celý úchyt, stejně
+  jako event v gridu.
+- **Klávesová alternativa (R10):** `Alt+↑/↓` na řádku, tvarem stejné jako
+  `Alt+šipky` u eventu. Výsledek hlásí live region — ne `role="status"`, ten už
+  patří toastu, a dva by ho udělaly dvojznačným.
+- **Optimisticky s rollbackem (R8):** pořadí se překreslí hned, chyba vrátí
+  původní seznam a řekne to toastem; seznam, který se na dobu round tripu vrátí
+  zpátky, se čte jako selhané tažení.
+- Rozměry řádků se **měří jednou na začátku** tažení. Průběžné měření by řádek
+  nechalo honit kurzor a blikat mezi dvěma sloty, protože preview pořadí jimi
+  samo hýbe.
+- „Set as default" pořád UI nemá — endpoint ho umí ve stejném zápisu
+  (`defaultPageId`), ale default přehazuje server při smazání a víc než to nikdo
+  nežádal.
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,
 tasks / focus time / OOO / appointment schedules. Žádné z toho nemá cenu, dokud
-neběží B a C. Reorder Pages a „set as default" mají hotový endpoint
-(`PUT /pages/reorder` umí obojí v jednom zápisu), ale žádné UI — pořadí je
-pořadí vzniku, dokud na ručním řazení nezačne sejít.
+neběží B a C.
 
 ## 7. Checklist na každý UI ticket
 

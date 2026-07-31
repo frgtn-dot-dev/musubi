@@ -85,6 +85,7 @@ type WorkspaceProps = {
   onPageChange: (pageId: string) => void;
   onCreatePage?: (request: CreatePageRequest) => Promise<PageDocument>;
   onDeletePage?: (id: string) => Promise<unknown>;
+  onReorderPages?: (pageIds: string[]) => Promise<unknown>;
   onSavePage?: (input: {
     baseRevision: number;
     config: PageConfigV1;
@@ -184,6 +185,10 @@ const unavailablePageDelete = async (): Promise<void> => {
   throw new Error("Page deletion is unavailable.");
 };
 
+const unavailablePageReorder = async (): Promise<void> => {
+  throw new Error("Page reordering is unavailable.");
+};
+
 const ignoreSettings = () => undefined;
 
 export function Workspace({
@@ -207,6 +212,7 @@ export function Workspace({
   onCreatePage = unavailablePageCreate,
   onDeletePage = unavailablePageDelete,
   onPageChange,
+  onReorderPages = unavailablePageReorder,
   onPatchSettings = unavailableSettings,
   onSavePage = unavailablePageSave,
   onRemoveEvent,
@@ -676,6 +682,11 @@ export function Workspace({
           setSettingsOpen(true);
         }}
         onPageChange={onPageChange}
+        onReorderPages={(pageIds) => {
+          void onReorderPages(pageIds).catch(() =>
+            notify("That order could not be saved."),
+          );
+        }}
         onSignOut={onSignOut}
         returnFocusRef={sidebarTriggerRef}
         syncLabel={

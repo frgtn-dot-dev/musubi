@@ -9,7 +9,12 @@ import {
 } from "@musubi/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "~/api/http";
-import { createPage, deletePage, savePage } from "~/api/resources";
+import {
+  createPage,
+  deletePage,
+  reorderPages,
+  savePage,
+} from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
 type CalendarVisibility = PageConfigV1["calendarVisibility"];
@@ -96,6 +101,25 @@ export function newPageConfig(
   };
 }
 
+/**
+ * The pages of `order`, then anything the order didn't mention.
+ *
+ * The server is the one that assigns positions; this is only so the list can show
+ * the new order before the write comes back. An id the caller doesn't know about
+ * keeps its place at the end rather than disappearing.
+ */
+export function sortPagesBy(
+  order: string[],
+  pages: PageDocument[],
+): PageDocument[] {
+  const ranked = new Map(order.map((id, index) => [id, index]));
+  return [...pages].sort(
+    (left, right) =>
+      (ranked.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+      (ranked.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
 export type SavePageResult =
   | { status: "saved"; page: PageDocument }
   | { status: "conflict" };
@@ -118,6 +142,22 @@ export function usePageMutations(userId: string) {
       const page = await createPage(request);
       replaceInCache(page);
       return page;
+    },
+    reorderPages: async (pageIds: string[]) => {
+      const previous = queryClient.getQueryData<PageDocument[]>(pagesKey);
+      // Paint the new order now: a list that snaps back for the length of a round
+      // trip reads as the drag having failed.
+      queryClient.setQueryData<PageDocument[]>(pagesKey, (current) =>
+        current ? sortPagesBy(pageIds, current) : current,
+      );
+      try {
+        const pages = await reorderPages({ pageIds });
+        queryClient.setQueryData<PageDocument[]>(pagesKey, pages);
+      } catch (error) {
+        // Put the old order back rather than leaving a lie on screen.
+        if (previous) queryClient.setQueryData(pagesKey, previous);
+        throw error;
+      }
     },
     deletePage: async (id: string) => {
       await deletePage(id);

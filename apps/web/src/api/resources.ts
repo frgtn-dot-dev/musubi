@@ -22,6 +22,7 @@ import {
   type CreatePageRequest,
   type Event,
   type PatchSettingsRequest,
+  type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
 import { z } from "zod";
@@ -81,6 +82,14 @@ export function savePage(id: string, request: SavePageRequest) {
     body: request,
     method: "PATCH",
     responseSchema: PageResponseSchema,
+  });
+}
+
+export function reorderPages(request: ReorderPagesRequest) {
+  return apiRequest("/api/v1/pages/reorder", {
+    body: request,
+    method: "PUT",
+    responseSchema: PagesResponseSchema,
   });
 }
 

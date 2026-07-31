@@ -1741,6 +1741,62 @@ test("flicks sideways to change period, but a held drag still creates", async ({
   await expect(page).toHaveURL(/date=2026-07-01/);
 });
 
+test("reorders pages by dragging a row, and by keyboard", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const workPageId = "22222222-2222-4222-8222-222222222222";
+  const writes: string[][] = [];
+  let pageState = [
+    defaultPage,
+    {
+      ...defaultPage,
+      id: workPageId,
+      isDefault: false,
+      name: "Work",
+      position: 1,
+    },
+  ];
+  await page.route("**/api/v1/pages", (route) => respond(route, pageState));
+  await page.route("**/api/v1/pages/reorder", async (route) => {
+    const body = route.request().postDataJSON() as { pageIds: string[] };
+    writes.push(body.pageIds);
+    pageState = body.pageIds.map((id, position) => ({
+      ...pageState.find((page) => page.id === id)!,
+      position,
+    }));
+    return respond(route, pageState);
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const rows = page.locator('[class*="pageRow_"]');
+  // Retrying assertion: the order is painted optimistically and then replaced by
+  // the response, so a one-shot read can land between the two.
+  const order = page.locator('[class*="pageRowMain"]');
+  await expect(rows).toHaveCount(2);
+  await expect(order).toHaveText(["My calendar", "Work"]);
+
+  // Drag the second row above the first.
+  const first = (await rows.nth(0).boundingBox())!;
+  const second = (await rows.nth(1).boundingBox())!;
+  await page.mouse.move(
+    second.x + second.width / 2,
+    second.y + second.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(first.x + first.width / 2, first.y + 4, { steps: 6 });
+  await page.mouse.up();
+
+  expect(writes[0]).toEqual([workPageId, DEFAULT_PAGE_ID]);
+  await expect(order).toHaveText(["Work", "My calendar"]);
+  // The release ended a drag, so it must not also have opened that page.
+  await expect(page).toHaveURL(new RegExp(`/app/p/${DEFAULT_PAGE_ID}/month`));
+
+  // Alt+arrows are the keyboard path to the same move (R10).
+  await rows.nth(1).getByRole("button", { exact: true, name: "My calendar" }).focus();
+  await page.keyboard.press("Alt+ArrowUp");
+  expect(writes[1]).toEqual([DEFAULT_PAGE_ID, workPageId]);
+  await expect(order).toHaveText(["My calendar", "Work"]);
+});
+
 test("moves an event to another day in the month grid", async ({ page }) => {
   await mockAuthenticatedReads(page);
   const writes: Array<{ end: string; start: string }> = [];

@@ -187,6 +187,18 @@
   padding-right: 34px;
 }
 
+/* The row being dragged: lifted off the list so it reads as held, and the slot it
+   would land in is where it already sits (the list previews the new order). */
+.pageRow[data-dragging] {
+  z-index: 1;
+  box-shadow: var(--shadow-overlay);
+}
+
+.pageRow[data-dragging] .pageRowMain {
+  background: var(--page-row-hover);
+  cursor: grabbing;
+}
+
 .pageRowEdit {
   position: absolute;
   top: 50%;

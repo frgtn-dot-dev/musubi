@@ -15,6 +15,8 @@ import type {
   User,
 } from "@musubi/types";
 import {
+  forwardRef,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
   useRef,
@@ -25,7 +27,9 @@ import { Avatar } from "~/ui/Avatar";
 import { IconButton } from "~/ui/Button";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { moveItem } from "../list-reorder";
 import { pageIconComponent, resolvePageIcon } from "../page-icons";
+import { useListReorder } from "../use-list-reorder";
 import { MiniCalendar } from "./MiniCalendar";
 import styles from "./workspace.module.css";
 
@@ -44,6 +48,8 @@ type SidebarProps = {
   onModalStateChange?: (modal: boolean) => void;
   onOpenSettings: () => void;
   onPageChange: (pageId: string) => void;
+  /** The full page order after a move, which is what the endpoint takes. */
+  onReorderPages: (pageIds: string[]) => void;
   onSignOut: () => void;
   pages: PageDocument[];
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
@@ -66,6 +72,7 @@ export function Sidebar({
   onOpenSettings,
   onDateChange,
   onPageChange,
+  onReorderPages,
   onSignOut,
   pages,
   returnFocusRef,
@@ -74,6 +81,30 @@ export function Sidebar({
   weekStartsOn,
 }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false);
+  const pageRowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [reorderMessage, setReorderMessage] = useState("");
+  const {
+    begin: beginReorder,
+    consumeClick: consumeReorderClick,
+    drag: reorderDrag,
+  } = useListReorder({
+    onCommit: ({ from, to }) =>
+      onReorderPages(moveItem(pages, from, to).map((page) => page.id)),
+  });
+  // While dragging, the list shows where the row would land.
+  const orderedPages = reorderDrag
+    ? moveItem(pages, reorderDrag.from, reorderDrag.to)
+    : pages;
+
+  /** Keyboard equivalent of the drag (R10), on the row that has focus. */
+  function movePageBy(index: number, offset: number) {
+    const to = index + offset;
+    if (to < 0 || to >= pages.length) return;
+    const page = pages[index];
+    if (!page) return;
+    onReorderPages(moveItem(pages, index, to).map((item) => item.id));
+    setReorderMessage(`${page.name} moved to ${to + 1} of ${pages.length}.`);
+  }
   const [overlay, setOverlay] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const restoreFocusOnCloseRef = useRef(false);
@@ -179,18 +210,47 @@ export function Sidebar({
               Pages
             </SectionLabel>
             <div className={styles.pageList}>
-              {pages.map((page) => (
+              {orderedPages.map((page, index) => (
                 <PageRow
                   key={page.id}
                   active={page.id === activePageId}
+                  dragging={
+                    reorderDrag !== undefined && index === reorderDrag.to
+                  }
                   icon={pageIconComponent(
                     resolvePageIcon(page.config.icon, page.isDefault),
                   )}
                   name={page.name}
                   onEdit={() => onEditPage(page)}
+                  onMoveBy={(offset) =>
+                    movePageBy(
+                      pages.findIndex((item) => item.id === page.id),
+                      offset,
+                    )
+                  }
+                  onPress={(event) =>
+                    beginReorder({
+                      boxes: pageRowRefs.current
+                        .filter((node): node is HTMLDivElement => Boolean(node))
+                        .map((node) => {
+                          const box = node.getBoundingClientRect();
+                          return { height: box.height, top: box.top };
+                        }),
+                      index: pages.findIndex((item) => item.id === page.id),
+                      pointerId: event.pointerId,
+                      pointerType: event.pointerType,
+                      time: event.timeStamp,
+                      y: event.clientY,
+                    })
+                  }
                   onSelect={() => {
+                    // A drag ended on this row; that release was not a choice.
+                    if (consumeReorderClick()) return;
                     onPageChange(page.id);
                     onClose();
+                  }}
+                  ref={(node) => {
+                    pageRowRefs.current[index] = node;
                   }}
                 />
               ))}
@@ -206,6 +266,12 @@ export function Sidebar({
                 }}
               />
             </div>
+            {/* Announces a keyboard move. A live region rather than role="status":
+                the toast already owns that role, and two of them would make
+                "the status message" ambiguous for both readers and tests. */}
+            <span aria-live="polite" className={styles.srOnly}>
+              {reorderMessage}
+            </span>
           </nav>
 
           <nav className={styles.sidebarUtilities} aria-label="Manage Musubi">
@@ -276,21 +342,28 @@ export function Sidebar({
  * focus — but it is a real, tabbable button, so the keyboard never depends on a
  * pointer state, and on touch (no hover) it stays visible.
  */
-function PageRow({
-  active,
-  icon: Icon,
-  name,
-  onEdit,
-  onSelect,
-}: {
-  active: boolean;
-  icon: LucideIcon;
-  name: string;
-  onEdit: () => void;
-  onSelect: () => void;
-}) {
+const PageRow = forwardRef<
+  HTMLDivElement,
+  {
+    active: boolean;
+    dragging: boolean;
+    icon: LucideIcon;
+    name: string;
+    onEdit: () => void;
+    onMoveBy: (offset: number) => void;
+    onPress: (event: ReactPointerEvent<HTMLElement>) => void;
+    onSelect: () => void;
+  }
+>(function PageRow(
+  { active, dragging, icon: Icon, name, onEdit, onMoveBy, onPress, onSelect },
+  ref,
+) {
   return (
-    <div className={styles.pageRow}>
+    <div
+      className={styles.pageRow}
+      data-dragging={dragging ? "" : undefined}
+      ref={ref}
+    >
       <RowAction
         className={`${styles.sidebarRow} ${styles.pageRowMain}`}
         aria-current={active ? "page" : undefined}
@@ -300,6 +373,14 @@ function PageRow({
         showChevron={false}
         size="compact"
         onClick={onSelect}
+        onKeyDown={(event) => {
+          // Alt+arrows move the row, the same shape as Alt+arrows on an event.
+          if (!event.altKey) return;
+          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+          event.preventDefault();
+          onMoveBy(event.key === "ArrowDown" ? 1 : -1);
+        }}
+        onPointerDown={onPress}
       />
       <IconButton
         className={styles.pageRowEdit}
@@ -312,4 +393,4 @@ function PageRow({
       </IconButton>
     </div>
   );
-}
+});
