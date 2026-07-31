@@ -61,6 +61,12 @@
   --text-22: 1.375rem;
   --text-26: 1.625rem;
 
+  /* A block that is not real yet — a create draft, or the trace a dragged event
+     left behind. Opaque, so it never reads as a see-through smear over whatever
+     is under it, and derived from the text colour so the overlay is dark on the
+     light theme and light on the dark one without a second definition. */
+  --draft-fill: color-mix(in srgb, var(--text-primary) 14%, var(--surface-canvas));
+
   --radius-sm: 5px;
   --radius-md: 9px;
   --radius-lg: 14px;

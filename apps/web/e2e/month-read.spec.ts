@@ -965,6 +965,35 @@ test("chooses an event time and duration from the time pickers", async ({
   ).toBe(30 * 60 * 1_000);
 });
 
+test("keeps the all-day toggle in one place when it is flipped", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { exact: true, name: "Event" }).click();
+
+  const toggle = page.locator('[class*="toggleRow"]');
+  const label = page.getByText("All day", { exact: true });
+  await expect(toggle).toBeVisible();
+  // Let the popover finish arriving before measuring where anything sits.
+  await page
+    .locator('[class*="createPopover"]')
+    .evaluate((el) =>
+      Promise.all(el.getAnimations().map((animation) => animation.finished)),
+    );
+
+  const timed = (await toggle.boundingBox())!.y;
+  await label.click();
+  await expect(page.getByRole("button", { name: /^Ends:/ })).toBeVisible();
+  // All-day swaps the time range for an end date in the same slot, so the toggle
+  // under it does not hop a row.
+  expect((await toggle.boundingBox())!.y).toBe(timed);
+
+  await label.click();
+  await expect(page.getByRole("combobox", { name: "Start time" })).toBeVisible();
+  expect((await toggle.boundingBox())!.y).toBe(timed);
+});
+
 test("keeps provider failures actionable without assuming a write succeeded", async ({
   page,
 }) => {

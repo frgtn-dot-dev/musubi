@@ -13,6 +13,7 @@ import {
   MapPin,
   Pencil,
   Repeat2,
+  Star,
   Trash2,
   UsersRound,
   X,
@@ -40,6 +41,7 @@ import { focusMovedToAnotherLayer } from "../layer-focus";
 import {
   canEditEvent,
   canRemoveEvent,
+  eventHomeCalendarId,
   getEditableCalendars,
   getEventHomeCalendar,
   getEventMutationError,
@@ -134,6 +136,7 @@ export function EventDetailsPopover({
   }>();
   const homeCalendar =
     getEventHomeCalendar(master, calendars) ?? calendar;
+  const homeCalendarId = eventHomeCalendarId(master);
   // A primitive, so the attendees effect can depend on it without re-running on
   // every re-render of the calendar list.
   const homeConnectionId = connectionOfCalendar(homeCalendar);
@@ -160,8 +163,10 @@ export function EventDetailsPopover({
       calendars.find((item) => item.id === calendarId),
     )
     .filter((item): item is Calendar => Boolean(item));
+  // The home calendar owns the colour, so the accent matches the block on the
+  // grid instead of whichever membership happens to sort first.
   const accentColor =
-    calendar?.color ?? eventCalendars[0]?.color ?? event.color;
+    homeCalendar?.color ?? calendar?.color ?? event.color;
   const deleteConsequence = removeCalendar?.provider
     ? `This change will also be sent to ${providerDisplayName(removeCalendar)}.`
     : master.recurrence
@@ -492,6 +497,17 @@ export function EventDetailsPopover({
                             style={{ backgroundColor: item.color }}
                           />
                           {item.name}
+                          {/* Which one it belongs to, not just where it shows up:
+                              the home calendar owns the colour, the invitations
+                              and where an edit is written. */}
+                          {item.id === homeCalendarId ? (
+                            <Star
+                              aria-label="Home calendar"
+                              className={styles.homePillMark}
+                              size={12}
+                              strokeWidth={1.8}
+                            />
+                          ) : null}
                         </li>
                       ))
                     ) : (

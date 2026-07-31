@@ -534,8 +534,14 @@
     overscroll-behavior: contain;
   }
 
+  /* The column heading belongs to the column, not to the list inside it: it stays
+     put while the calendars under it scroll. */
   .form[data-layout="page"] .calendarPlacementHeader {
+    position: sticky;
+    z-index: 1;
+    top: 0;
     grid-column: 1 / -1;
+    background: var(--surface-panel);
   }
 
   .form[data-layout="page"] .calendarGroup {

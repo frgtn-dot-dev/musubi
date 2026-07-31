@@ -801,10 +801,10 @@
 /* What the event leaves behind while it is being moved: its outline, so the
    place it came from stays readable and the move is comparable. */
 .timelineEvent[data-ghost] {
-  border: 1px dashed color-mix(in srgb, var(--event-foreground) 55%, transparent);
-  background: color-mix(in srgb, var(--event-color) 26%, transparent);
+  border: 1px solid var(--event-color);
+  background: var(--draft-fill);
   box-shadow: none;
-  opacity: 0.75;
+  color: var(--text-secondary);
   pointer-events: none;
 }
 
@@ -852,10 +852,10 @@
 
 /* What a dragged chip leaves behind on its own day. */
 .eventChip[data-ghost] {
-  background: color-mix(in srgb, var(--event-color) 24%, transparent);
+  border: 1px solid var(--event-color);
+  background: var(--draft-fill);
   box-shadow: none;
   color: var(--text-secondary);
-  opacity: 0.8;
   pointer-events: none;
 }
 
@@ -887,9 +887,9 @@
   align-items: stretch;
   width: calc(100% - 4px);
   padding: 2px 4px;
-  border: 1px solid var(--accent-primary);
+  border: 1px solid var(--draft-accent, var(--accent-primary));
   border-radius: var(--event-radius);
-  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  background: var(--draft-fill);
   pointer-events: none;
 }
 
@@ -926,11 +926,6 @@
   pointer-events: auto;
   touch-action: none;
   user-select: none;
-}
-
-/* Dashed while it is still a draft: nothing is saved yet. */
-.timeGridSelection[data-draft] {
-  border-style: dashed;
 }
 
 .timeGridSelection[data-dragging] {
@@ -1388,9 +1383,9 @@
   align-items: center;
   overflow: hidden;
   padding: 2px 6px;
-  border: 1px dashed var(--accent-primary);
+  border: 1px solid var(--draft-accent, var(--accent-primary));
   border-radius: 4px;
-  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  background: var(--draft-fill);
   color: var(--text-primary);
   font-size: 0.65rem;
   white-space: nowrap;

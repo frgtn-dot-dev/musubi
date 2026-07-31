@@ -28,7 +28,10 @@ import {
   yToMinutes,
   type TimeGeometry,
 } from "../time-geometry";
-import { canEditEvent } from "../event-permissions";
+import {
+  canEditEvent,
+  eventHomeCalendarId,
+} from "../event-permissions";
 import { EventMarks } from "./EventMarks";
 import {
   nextDragTimes,
@@ -92,6 +95,7 @@ type TimeGridViewProps = EventActionHandlers & {
   /** Drops the draft the open quick create describes, before a new one starts. */
   onCancelDraft?: () => void;
   pendingCreate?: {
+    color?: string;
     date: string;
     endTime?: string;
     startTime?: string;
@@ -541,7 +545,7 @@ export function TimeGridView({
   );
   const dayMode = view === "day";
   const dragPreviewColor = drag
-    ? (calendarsById.get(drag.event.calendars[0] ?? "")?.color ??
+    ? (calendarsById.get(eventHomeCalendarId(drag.event) ?? "")?.color ??
       drag.event.color)
     : "transparent";
 
@@ -696,7 +700,9 @@ export function TimeGridView({
           <span className={styles.timeGridAllDayLabel}>All day</span>
           <div className={styles.timeGridAllDayTrack}>
             {visibleAllDaySpans.map((span) => {
-              const calendar = calendarsById.get(span.event.calendars[0] ?? "");
+              const calendar = calendarsById.get(
+                eventHomeCalendarId(span.event) ?? "",
+              );
               const eventColor = calendar?.color ?? span.event.color;
 
               return (
@@ -839,13 +845,16 @@ export function TimeGridView({
                     className={styles.timeGridSelection}
                     data-draft={draftSlot && onMoveDraft ? "" : undefined}
                     data-dragging={draftDrag ? "" : undefined}
-                    style={{
-                      height: `${durationToHeight(
-                        selection.endMinutes - selection.startMinutes,
-                        geometry,
-                      )}px`,
-                      top: `${minutesToY(selection.startMinutes, geometry)}px`,
-                    }}
+                    style={
+                      {
+                        "--draft-accent": pendingCreate?.color,
+                        height: `${durationToHeight(
+                          selection.endMinutes - selection.startMinutes,
+                          geometry,
+                        )}px`,
+                        top: `${minutesToY(selection.startMinutes, geometry)}px`,
+                      } as CSSProperties
+                    }
                     onPointerDown={(pointerEvent) =>
                       startDraftDrag(pointerEvent, "move")
                     }
@@ -919,7 +928,7 @@ export function TimeGridView({
                         segment.event.id.startsWith(`${busyEventId}_`))
                     }
                     calendar={calendarsById.get(
-                      segment.event.calendars[0] ?? "",
+                      eventHomeCalendarId(segment.event) ?? "",
                     )}
                     calendars={calendars}
                     dayIndex={dayIndex}

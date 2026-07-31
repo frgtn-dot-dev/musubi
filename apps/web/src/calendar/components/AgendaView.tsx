@@ -11,6 +11,7 @@ import {
   getEventRangeLabel,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
+import { eventHomeCalendarId } from "../event-permissions";
 import {
   EventDetailsPopover,
   type EventActionHandlers,
@@ -143,7 +144,7 @@ export function AgendaView({
                 <div className={styles.agendaEvents}>
                   {group.items.map((event) => {
                     const calendar = calendarsById.get(
-                      event.calendars[0] ?? "",
+                      eventHomeCalendarId(event) ?? "",
                     );
                     const eventColor = calendar?.color ?? event.color;
                     const rangeLabel = getEventRangeLabel(

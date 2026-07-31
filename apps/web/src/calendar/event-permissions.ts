@@ -39,11 +39,22 @@ export function canRemoveEvent(event: Event, calendars: Calendar[]) {
   );
 }
 
+/**
+ * The calendar an event belongs to, as opposed to the ones it also appears in.
+ *
+ * One definition, because everything that shows an event has to agree on it: the
+ * colour it takes, the star on its pill, and where a write is routed. Falling
+ * back to the first membership covers events created before the field existed.
+ */
+export function eventHomeCalendarId(event: Event): string | undefined {
+  return event.originCalendarID ?? event.calendars[0];
+}
+
 export function getEventHomeCalendar(
   event: Event,
   calendars: Calendar[],
 ) {
-  const homeId = event.originCalendarID ?? event.calendars[0];
+  const homeId = eventHomeCalendarId(event);
   return calendars.find((calendar) => calendar.id === homeId);
 }
 

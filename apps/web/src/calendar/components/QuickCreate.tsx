@@ -16,7 +16,7 @@ import {
 import { getEventMutationError } from "../event-permissions";
 import { useWindowDrag } from "../use-window-drag";
 import { focusMovedToAnotherLayer } from "../layer-focus";
-import { EventEditorForm } from "./EventEditorForm";
+import { type EventWhen, EventEditorForm } from "./EventEditorForm";
 import styles from "./workspace.module.css";
 
 export type QuickCreateAnchor = {
@@ -31,6 +31,8 @@ type QuickCreateProps = {
   date: string;
   email: string;
   onCreate: (event: Event) => Promise<Event>;
+  /** Keeps the block on the grid in step with the fields describing it. */
+  onDraftChange?: (draft: EventWhen & { color?: string }) => void;
   onCreated: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
   /**
@@ -56,6 +58,7 @@ export function QuickCreate({
   date,
   email,
   onCreate,
+  onDraftChange,
   onCreated,
   onMoreOptions,
   onOpenChange,
@@ -199,6 +202,7 @@ export function QuickCreate({
               startTime: initialValues.startTime,
             }}
             onCancel={() => onOpenChange(false)}
+            onDraftChange={onDraftChange}
             onError={(error, values) =>
               getEventMutationError(
                 error,

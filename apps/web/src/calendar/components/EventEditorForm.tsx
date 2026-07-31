@@ -53,6 +53,18 @@ const LATEST_START_TIME = minutesToTime(
 );
 const LATEST_END_TIME = minutesToTime(LAST_MINUTE);
 
+/** What the grid's draft is drawn from: when it is, and which calendar's colour. */
+function draftSignature(values: EventFormValues): string {
+  return [
+    values.calendarId,
+    values.date,
+    values.endDate,
+    values.endTime,
+    values.isAllDay,
+    values.startTime,
+  ].join("|");
+}
+
 /** The "when" fields a gesture outside the form can move under it. */
 export type EventWhen = Pick<
   EventFormValues,
@@ -83,6 +95,13 @@ type EventEditorFormProps = {
    * already typed survives the move.
    */
   when?: EventWhen;
+  /**
+   * Grid ← form. The draft on the grid is the same event this form describes, so
+   * editing the time, the length or the calendar has to move and recolour it —
+   * otherwise the block says one thing and the fields another. Only fires on a
+   * real change, so the `when` prop coming back the other way cannot loop.
+   */
+  onDraftChange?: (draft: EventWhen & { color?: string }) => void;
   onCancel: () => void;
   onError: (error: unknown, values: EventFormValues) => FormError;
   onSubmit: (values: EventFormValues) => Promise<void>;
@@ -98,6 +117,7 @@ export function EventEditorForm({
   initialValues,
   layout = "popover",
   onCancel,
+  onDraftChange,
   onExpand,
   onError,
   onSubmit,
@@ -138,8 +158,21 @@ export function EventEditorForm({
   ].includes(values.recurrence);
 
   function patch(next: Partial<EventFormValues>) {
-    setValues((current) => ({ ...current, ...next }));
+    const merged = { ...values, ...next };
+    setValues(merged);
     setError(undefined);
+    if (onDraftChange && draftSignature(merged) !== draftSignature(values)) {
+      onDraftChange({
+        color: calendars.find(
+          (calendar) => calendar.id === merged.calendarId,
+        )?.color,
+        date: merged.date,
+        endDate: merged.endDate,
+        endTime: merged.endTime,
+        isAllDay: merged.isAllDay,
+        startTime: merged.startTime,
+      });
+    }
   }
 
   function changeStartTime(startTime: string) {
@@ -288,56 +321,45 @@ export function EventEditorForm({
           />
         </div>
 
+        {/* One slot, two occupants: a time range or the day it ends on. Both rows
+            are one control tall, so the toggle underneath never moves — it used
+            to hop a row every time it was flipped, because the time row above it
+            disappeared while the end-date row appeared below. */}
         {!values.isAllDay ? (
-          <>
-            <div className={styles.timeRow}>
-              <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
-              <span
-                aria-hidden="true"
-                className={`${styles.pickerLabel} ${styles.timeLabel}`}
-              >
-                Time
-              </span>
-              <TimePicker
-                disabled={saving}
-                label="Start time"
-                max={LATEST_START_TIME}
-                timeFormat={timeFormat}
-                value={values.startTime}
-                onChange={changeStartTime}
-              />
-              <span className={styles.timeSeparator}>to</span>
-              <TimePicker
-                disabled={saving}
-                label="End time"
-                max={LATEST_END_TIME}
-                min={minutesToTime(
-                  Math.min(
-                    LAST_MINUTE,
-                    (timeToMinutes(values.startTime) ?? 0) +
-                      TIME_SNAP_MINUTES,
-                  ),
-                )}
-                relativeTo={values.startTime}
-                timeFormat={timeFormat}
-                value={values.endTime}
-                onChange={(endTime) => patch({ endTime })}
-              />
-            </div>
-          </>
-        ) : null}
-
-        <Checkbox
-          checked={values.isAllDay}
-          className={styles.toggleRow}
-          disabled={saving}
-          label="All day"
-          onChange={(event) =>
-            patch({ isAllDay: event.target.checked })
-          }
-        />
-
-        {values.isAllDay ? (
+          <div className={styles.timeRow}>
+            <Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
+            <span
+              aria-hidden="true"
+              className={`${styles.pickerLabel} ${styles.timeLabel}`}
+            >
+              Time
+            </span>
+            <TimePicker
+              disabled={saving}
+              label="Start time"
+              max={LATEST_START_TIME}
+              timeFormat={timeFormat}
+              value={values.startTime}
+              onChange={changeStartTime}
+            />
+            <span className={styles.timeSeparator}>to</span>
+            <TimePicker
+              disabled={saving}
+              label="End time"
+              max={LATEST_END_TIME}
+              min={minutesToTime(
+                Math.min(
+                  LAST_MINUTE,
+                  (timeToMinutes(values.startTime) ?? 0) + TIME_SNAP_MINUTES,
+                ),
+              )}
+              relativeTo={values.startTime}
+              timeFormat={timeFormat}
+              value={values.endTime}
+              onChange={(endTime) => patch({ endTime })}
+            />
+          </div>
+        ) : (
           <div className={styles.pickerRow}>
             <CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
             <span aria-hidden="true" className={styles.pickerLabel}>
@@ -352,7 +374,17 @@ export function EventEditorForm({
               onChange={(endDate) => patch({ endDate })}
             />
           </div>
-        ) : null}
+        )}
+
+        <Checkbox
+          checked={values.isAllDay}
+          className={styles.toggleRow}
+          disabled={saving}
+          label="All day"
+          onChange={(event) =>
+            patch({ isAllDay: event.target.checked })
+          }
+        />
 
         {expanded ? (
           <Field

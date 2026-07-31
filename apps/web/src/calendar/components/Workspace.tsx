@@ -137,6 +137,8 @@ type WorkspaceProps = {
 
 type CreateIntent = {
   anchor: QuickCreateAnchor;
+  /** The chosen calendar's colour, so the draft block wears it too. */
+  color?: string;
   date: string;
   /** Set when days were dragged across in the month grid: an all-day range. */
   endDate?: string;
@@ -520,6 +522,7 @@ export function Workspace({
    * is not remounted and a title already typed into it survives the drag.
    */
   function moveCreateDraft(when: {
+    color?: string;
     date: string;
     endDate?: string;
     endTime?: string;
@@ -774,6 +777,7 @@ export function Workspace({
               pendingCreate={
                 createIntent
                   ? {
+                      color: createIntent.color,
                       date: createIntent.date,
                       endTime: createIntent.endTime,
                       startTime: createIntent.startTime,
@@ -851,7 +855,11 @@ export function Workspace({
               onMoveDraft={moveCreateDraft}
               pendingCreate={
                 createIntent
-                  ? { date: createIntent.date, endDate: createIntent.endDate }
+                  ? {
+                      color: createIntent.color,
+                      date: createIntent.date,
+                      endDate: createIntent.endDate,
+                    }
                   : undefined
               }
               onNotice={notify}
@@ -906,6 +914,17 @@ export function Workspace({
           key={createIntent.id}
           onCreate={onCreateEvent}
           onCreated={() => notify("Event created.")}
+          // The block on the grid and the fields in here describe one event, so
+          // editing the time, the length or the calendar moves and recolours it.
+          onDraftChange={(draft) =>
+            moveCreateDraft({
+              color: draft.color,
+              date: draft.date,
+              endDate: draft.isAllDay ? draft.endDate : undefined,
+              endTime: draft.isAllDay ? undefined : draft.endTime,
+              startTime: draft.isAllDay ? undefined : draft.startTime,
+            })
+          }
           onMoreOptions={
             onOpenFullEditor
               ? (values) => {

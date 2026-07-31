@@ -684,6 +684,29 @@ vlastní implementace by s ním zápasila; pinch zoom timeline — density je vl
 Page, takže by vznikly dva zdroje pravdy na tutéž věc; month→day drill zoom —
 kosmetika nativní navigace.
 
+### Fáze I — Draft, ghost a domovský kalendář — **HOTOVO** (2026-07-30)
+
+- **Přepínač All day se přestal hýbat.** Byl mezi časovým řádkem a řádkem „Ends",
+  takže při každém překlopení jeden nad ním zmizel a jeden pod ním vznikl a
+  checkbox skočil o řádek. Teď je **jeden slot pro dva obsahy** (čas nebo datum
+  konce) a přepínač je vždycky pod ním; oba řádky jsou vysoké jeden control, takže
+  se nemá kam pohnout.
+- **Draft a ghost už nejsou dashed ani průhledné.** Plná linka a **opaque
+  overlay** z nového tokenu `--draft-fill`, odvozeného z `--text-primary` — na
+  světlém tématu je tmavý, na tmavém světlý, jedna definice. Průhledný draft se
+  přes obsah pod sebou čte jako šmouha, ne jako blok.
+- **Ghost sleduje formulář.** Doteď tekla data jen grid → formulář (`when`); teď
+  i zpět (`onDraftChange` → `moveCreateDraft`), takže změna času, délky nebo
+  kalendáře v okně New event blok na mřížce **přesune a přebarví**
+  (`--draft-accent`). Signatura se porovnává, takže se ty dva směry nezacyklí.
+- **Barva eventu se bere z domovského kalendáře**, ne z prvního členství. Byla to
+  věcná chyba na sedmi místech (Month, Week/Day, all-day pásy, agenda, ghost při
+  tažení, accent v detailu). Pravidlo je teď jedno — `eventHomeCalendarId()` —
+  protože barva, hvězdička na pilulce i routování zápisu musí ukazovat na totéž.
+- **Domovský kalendář má v detailu hvězdičku** v pilulce.
+- **Hlavička sloupce Event calendars nescrolluje** s kalendáři pod sebou
+  (`position: sticky`).
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,

@@ -15,7 +15,10 @@ import {
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
-import { canEditEvent } from "../event-permissions";
+import {
+  canEditEvent,
+  eventHomeCalendarId,
+} from "../event-permissions";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
@@ -61,7 +64,7 @@ type MonthCalendarProps = EventActionHandlers & {
   /** The slot a quick-create popover is open for: the draft, shown as a pill. */
   /** Drops the draft the open quick create describes, before a new one starts. */
   onCancelDraft?: () => void;
-  pendingCreate?: { date: string; endDate?: string };
+  pendingCreate?: { color?: string; date: string; endDate?: string };
   /**
    * Move the draft to another day range while its popover is open. Absent leaves
    * the draft as a still pill.
@@ -200,7 +203,7 @@ export function MonthCalendar({
     [calendars],
   );
   const dragPreviewColor = drag
-    ? (calendarsById.get(drag.event.calendars[0] ?? "")?.color ??
+    ? (calendarsById.get(eventHomeCalendarId(drag.event) ?? "")?.color ??
       drag.event.color)
     : "transparent";
   const todayKey = toDateKey(new Date());
@@ -425,6 +428,13 @@ export function MonthCalendar({
                         // Nothing to grab while it is still being dragged out —
                         // the cell under it owns that gesture.
                         data-live={draftRange.live ? "" : undefined}
+                        style={
+                          pendingCreate?.color
+                            ? ({
+                                "--draft-accent": pendingCreate.color,
+                              } as CSSProperties)
+                            : undefined
+                        }
                         onPointerDown={
                           draftRange.live
                             ? undefined
@@ -451,7 +461,7 @@ export function MonthCalendar({
                     {visibleSegments.map((segment) => (
                       <EventPopover
                         calendar={calendarsById.get(
-                          segment.event.calendars[0] ?? "",
+                          eventHomeCalendarId(segment.event) ?? "",
                         )}
                         calendars={calendars}
                         continuesAfter={segment.continuesAfter}
@@ -542,7 +552,7 @@ export function MonthCalendar({
                               {daySegments.map((segment) => (
                                 <EventPopover
                                   calendar={calendarsById.get(
-                                    segment.event.calendars[0] ?? "",
+                                    eventHomeCalendarId(segment.event) ?? "",
                                   )}
                                   calendars={calendars}
                                   event={segment.event}
