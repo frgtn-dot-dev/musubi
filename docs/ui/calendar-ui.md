@@ -720,10 +720,11 @@ kosmetika nativní navigace.
   — u ostatních je pravá hrana pod blokem, který je překrývá.
 - **Tažený blok se rozšíří na celý sloupec** a po položení se vrátí do své lane,
   jako u Googlu: co držíš, to potřebuješ číst, a lane se stejně mění.
-- **Ghost je průhledný overlay** (`--ghost-fill`), draft zůstal opaque
-  (`--draft-fill`) — draft zastupuje blok, který bude, ghost je stopa po tom, kde
-  event byl, takže mřížka pod ním má být vidět. Ghost proto taky leží **nad**
-  čárami buněk, jinak by mu jimi prosvítaly.
+- **Draft i ghost jsou průhledný overlay** — jeden token `--draft-fill`, protože
+  oba leží *na* mřížce, ne místo ní: hodinové čáry a buňka pod nimi musí zůstat
+  čitelné. (Nejdřív jsem draft nechal opaque a ghost průhledný; dva tokeny pro
+  totéž nemají smysl, takže jsou sloučené.) Ghost proto taky leží **nad** čárami
+  buněk, jinak by mu jimi prosvítaly.
 - **Draft má vždycky viditelné úchyty** na horní a dolní hraně. Hover-only nápověda
   řekne jen tomu, kdo už ví, že tam jsou — a draft je celý o tom, že se jeho konce
   posouvají.

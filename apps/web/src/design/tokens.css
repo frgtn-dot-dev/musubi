@@ -61,15 +61,13 @@
   --text-22: 1.375rem;
   --text-26: 1.625rem;
 
-  /* A block that does not exist yet: the create draft. Opaque, because it stands
-     for something that will be there — a see-through one reads as a smear over
-     the grid rather than as a block. Derived from the text colour, so the overlay
-     is dark on the light theme and light on the dark one from one definition. */
-  --draft-fill: color-mix(in srgb, var(--text-primary) 14%, var(--surface-canvas));
-  /* The trace a dragged event leaves behind. Translucent on purpose: it marks
-     where the event *was*, so the grid it is sitting on has to stay visible
-     through it. */
-  --ghost-fill: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  /* A block that is not (yet) real: the create draft, and the trace a dragged
+     event leaves behind. Translucent, because both of them sit *on* the grid
+     rather than replacing it — the hour lines and the cell under them have to
+     stay legible through the block. Derived from the text colour, so the overlay
+     comes out dark on the light theme and light on the dark one from a single
+     definition. */
+  --draft-fill: color-mix(in srgb, var(--text-primary) 12%, transparent);
 
   --radius-sm: 5px;
   --radius-md: 9px;

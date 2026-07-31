@@ -842,7 +842,7 @@
   /* Same reason as the month chip: over the hour lines, not under them. */
   z-index: 20;
   border: 1px solid var(--event-color);
-  background: var(--ghost-fill);
+  background: var(--draft-fill);
   box-shadow: none;
   color: var(--text-secondary);
   pointer-events: none;
@@ -898,7 +898,7 @@
      canvas, not the mesh. */
   z-index: 4;
   border: 1px solid var(--event-color);
-  background: var(--ghost-fill);
+  background: var(--draft-fill);
   box-shadow: none;
   color: var(--text-secondary);
   pointer-events: none;
