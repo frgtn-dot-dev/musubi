@@ -108,6 +108,7 @@ export function AccountDialog({
   return (
     <>
       <Dialog
+        bodyLayout="flush"
         closeLabel="Close account"
         description="Your profile is visible to people you share calendars with."
         onOpenChange={handleOpenChange}
@@ -320,7 +321,11 @@ function EditNameDialog({
       size="compact"
       title="Display name"
     >
-      <form id="display-name-form" onSubmit={(event) => void saveName(event)}>
+      <form
+        className={styles.dialogForm}
+        id="display-name-form"
+        onSubmit={(event) => void saveName(event)}
+      >
         <Field
           description="Use the name people already know you by."
           label="Display name"
@@ -402,6 +407,7 @@ function DeleteAccountDialog({
       title="Delete account?"
     >
       <form
+        className={styles.dialogForm}
         id="delete-account-form"
         onSubmit={(event) => void removeAccount(event)}
       >

@@ -9,9 +9,11 @@ import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
 
 export type DialogSize = "compact" | "default" | "wide";
+export type DialogBodyLayout = "flush" | "padded";
 
 export type DialogProps = {
   bodyClassName?: string;
+  bodyLayout?: DialogBodyLayout;
   children: ReactNode;
   className?: string;
   closeLabel: string;
@@ -35,6 +37,7 @@ export type DialogProps = {
  */
 export function Dialog({
   bodyClassName,
+  bodyLayout = "padded",
   children,
   className,
   closeLabel,
@@ -61,6 +64,7 @@ export function Dialog({
             styles[`dialog_${size}`],
             className,
           )}
+          data-body-layout={bodyLayout}
           onOpenAutoFocus={(event) => {
             if (!initialFocus?.current) return;
             event.preventDefault();
@@ -97,7 +101,13 @@ export function Dialog({
               </IconButton>
             </DialogPrimitive.Close>
           </header>
-          <div className={classNames(styles.dialogBody, bodyClassName)}>
+          <div
+            className={classNames(
+              styles.dialogBody,
+              styles[`dialogBody_${bodyLayout}`],
+              bodyClassName,
+            )}
+          >
             {children}
           </div>
           {footer ? (

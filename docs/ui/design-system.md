@@ -163,6 +163,12 @@ They may share surfaces, headers, spacing, and motion, but their interaction
 contracts stay distinct. Every portaled layer follows R4b and R4c from
 `calendar-ui.md`.
 
+`Dialog` defaults to `bodyLayout="padded"`; use `bodyLayout="flush"` only for
+edge-to-edge rows or sections whose own readable content follows the layer
+axis. `Field` defaults to `variant="plain"`; `variant="section"` explicitly
+adds the inset and divider needed inside a flush collection. Combining a
+padded dialog body with a section field is a double-inset contract violation.
+
 Every public component has:
 
 - named variants instead of screen-specific CSS overrides;

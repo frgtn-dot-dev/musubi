@@ -77,7 +77,12 @@
   --date-header-height: 48px;
   --popover-width: 360px;
   --row-min-height: 62px;
-  --control-height: 48px;
+  --control-height: 44px;
+  --compact-control-height: 38px;
+  --layer-viewport-gutter: var(--space-6);
+  --layer-inline: var(--space-6);
+  --layer-body-block: var(--space-5);
+  --layer-footer-block: var(--space-4);
   /* One hour of the time grid. TimeGridView overrides it per density; the CSS
      grid and the JS geometry must derive from the same number or the cursor
      drifts against the time it points at. */
@@ -88,4 +93,13 @@
   --motion-fast: 140ms;
   --motion-standard: 220ms;
   --motion-slow: 300ms;
+}
+
+@media (max-width: 599px) {
+  :root {
+    --control-height: 48px;
+    --compact-control-height: 44px;
+    --layer-viewport-gutter: 0px;
+    --layer-inline: var(--space-5);
+  }
 }

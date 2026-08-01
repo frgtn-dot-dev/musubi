@@ -258,6 +258,7 @@ export function CalendarTransferDialog({
     <>
       <Dialog
         bodyClassName={styles.body}
+        bodyLayout="flush"
         closeLabel="Close calendars"
         description="Create and organize calendars from Musubi and your connected accounts."
         onOpenChange={handleOpenChange}
@@ -616,6 +617,7 @@ function EditCalendarDialog({
 
   return (
     <Dialog
+      bodyLayout="flush"
       closeLabel="Close calendar editor"
       description="Change how this calendar is named and identified across Musubi."
       footer={
@@ -646,7 +648,7 @@ function EditCalendarDialog({
         id="edit-calendar-form"
         onSubmit={(event) => void handleSubmit(event)}
       >
-        <Field label="Calendar name">
+        <Field label="Calendar name" variant="section">
           <input
             aria-label={`Rename ${calendar.name}`}
             disabled={busy}
@@ -694,6 +696,7 @@ function DeleteCalendarDialog({
 
   return (
     <Dialog
+      bodyClassName={styles.deleteDialogBody}
       closeLabel="Close calendar deletion"
       description="The calendar and every event in it will be permanently removed."
       footer={

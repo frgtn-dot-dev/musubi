@@ -302,7 +302,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  margin: var(--space-4);
+  margin: 0;
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: color-mix(
@@ -344,6 +344,10 @@
   color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
   font-size: var(--text-12);
   line-height: 1.45;
+}
+
+.deleteDialogBody .compactError {
+  margin: 0;
 }
 
 .error {

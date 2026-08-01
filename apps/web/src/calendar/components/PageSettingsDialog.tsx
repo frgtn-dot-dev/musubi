@@ -200,6 +200,7 @@ export function PageSettingsDialog({
 
   return (
     <Dialog
+      bodyLayout="flush"
       closeLabel="Close page settings"
       description="Applies to this page only, on every device."
       footer={
@@ -258,7 +259,7 @@ export function PageSettingsDialog({
           </div>
         ) : null}
 
-        <Field label="Page name">
+        <Field label="Page name" variant="section">
           <input
             disabled={busy}
             maxLength={80}
@@ -482,6 +483,7 @@ export function NewPageDialog({
 
   return (
     <Dialog
+      bodyLayout="flush"
       closeLabel="Close new page"
       description="It starts from the calendars you can see right now."
       footer={
@@ -512,7 +514,7 @@ export function NewPageDialog({
         id="new-page-form"
         onSubmit={(event) => void submit(event)}
       >
-        <Field label="Page name">
+        <Field label="Page name" variant="section">
           <input
             disabled={busy}
             maxLength={80}

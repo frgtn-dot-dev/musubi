@@ -286,6 +286,7 @@ export function EventEditorForm({
         className={styles.titleField}
         label="Event title"
         labelHidden
+        variant="section"
       >
         <input
           autoFocus
@@ -396,6 +397,7 @@ export function EventEditorForm({
               </span>
             }
             layout="inline"
+            variant="section"
           >
             <Select
               disabled={saving}
@@ -456,6 +458,7 @@ export function EventEditorForm({
                 Location
               </span>
             }
+            variant="section"
           >
             <input
               disabled={saving}
@@ -473,6 +476,7 @@ export function EventEditorForm({
                 Link
               </span>
             }
+            variant="section"
           >
             <input
               disabled={saving}
@@ -482,7 +486,11 @@ export function EventEditorForm({
               onChange={(event) => patch({ url: event.target.value })}
             />
           </Field>
-          <Field className={styles.descriptionField} label="Description">
+          <Field
+            className={styles.descriptionField}
+            label="Description"
+            variant="section"
+          >
             <textarea
               disabled={saving}
               placeholder="Add notes"

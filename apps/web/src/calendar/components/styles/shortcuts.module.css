@@ -1,6 +1,10 @@
+.body {
+  align-content: start;
+}
+
 .shortcutGroups {
   display: grid;
-  padding: 4px 18px 18px;
+  padding: 0;
   gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }

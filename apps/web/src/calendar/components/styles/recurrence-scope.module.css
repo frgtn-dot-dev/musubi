@@ -1,6 +1,6 @@
 .consequence {
   margin: 0;
-  padding: var(--space-3) var(--space-5) 0;
+  padding: 0;
   color: var(--text-secondary);
   font-size: var(--text-13);
   line-height: 1.5;
@@ -9,11 +9,11 @@
 .scopeOptions {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-5) 0;
+  padding: 0;
 }
 
 .error {
-  margin: var(--space-3) var(--space-5) 0;
+  margin: 0;
   padding: var(--space-3);
   border: 1px solid
     color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));

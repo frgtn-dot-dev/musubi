@@ -12,6 +12,7 @@ export function ShortcutsDialog({
 }) {
   return (
     <Dialog
+      bodyClassName={styles.body}
       closeLabel="Close shortcuts"
       description="Every shortcut runs the same action as its control."
       open={open}

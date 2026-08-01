@@ -344,12 +344,12 @@ describe("overlay primitives", () => {
     const trigger = screen.getByRole("button", { name: "Open editor" });
     await user.click(trigger);
 
-    expect(
-      screen.getByRole("dialog", {
+    const dialog = screen.getByRole("dialog", {
         name: "Edit event",
         description: "Choose the calendar and time for this event.",
-      }),
-    ).not.toBeNull();
+      });
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute("data-body-layout")).toBe("padded");
     expect(document.activeElement).not.toBe(trigger);
 
     await user.keyboard("{Escape}");

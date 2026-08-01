@@ -38,7 +38,7 @@ export function Field({
   label,
   labelHidden = false,
   layout = "stack",
-  variant = "section",
+  variant = "plain",
   ...containerProps
 }: FieldProps) {
   const generatedId = useId();

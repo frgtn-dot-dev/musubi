@@ -219,6 +219,7 @@ export function SettingsDialog({
 
   return (
     <Dialog
+      bodyLayout="flush"
       closeLabel="Close settings"
       description="Preferences sync across your Musubi devices."
       onOpenChange={handleOpenChange}

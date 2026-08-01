@@ -39,12 +39,12 @@
 }
 
 .button_compact {
-  min-height: 38px;
+  min-height: var(--compact-control-height);
 }
 
 .iconButton.button_compact {
-  width: 38px;
-  min-width: 38px;
+  width: var(--compact-control-height);
+  min-width: var(--compact-control-height);
 }
 
 .button_primary {
@@ -170,9 +170,7 @@
 
 .field {
   display: grid;
-  gap: 6px;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  gap: var(--space-2);
 }
 
 .field_inline {
@@ -184,6 +182,11 @@
 .field_plain {
   padding: 0;
   border-bottom: 0;
+}
+
+.field_section {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .fieldLabel {
@@ -229,6 +232,7 @@
 .fieldError {
   grid-column: 1 / -1;
   margin: 0;
+  margin-top: calc(-1 * var(--space-1));
   font-size: var(--text-11);
   line-height: 1.45;
 }
@@ -1008,8 +1012,18 @@
   top: 50%;
   left: 50%;
   display: flex;
-  width: min(520px, calc(100vw - var(--space-7)));
-  max-height: min(760px, calc(100dvh - var(--space-7)));
+  width: min(
+    520px,
+    calc(
+      100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
+    )
+  );
+  max-height: min(
+    760px,
+    calc(
+      100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
+    )
+  );
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-medium);
@@ -1022,11 +1036,21 @@
 }
 
 .dialog_compact {
-  width: min(390px, calc(100vw - var(--space-7)));
+  width: min(
+    400px,
+    calc(
+      100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
+    )
+  );
 }
 
 .dialog_wide {
-  width: min(720px, calc(100vw - var(--space-7)));
+  width: min(
+    720px,
+    calc(
+      100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
+    )
+  );
 }
 
 .dialogHeader {
@@ -1035,8 +1059,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-5) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-6) var(--layer-inline) 0;
 }
 
 .dialogHeading {
@@ -1086,14 +1109,36 @@
   overscroll-behavior: contain;
 }
 
+.dialogBody_padded {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--layer-body-block) var(--layer-inline);
+}
+
+.dialogBody_flush {
+  padding: 0;
+}
+
 .dialogFooter {
   display: flex;
   flex: none;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-5)
-    calc(var(--space-3) + env(safe-area-inset-bottom));
+  padding: 0 var(--layer-inline)
+    calc(var(--layer-footer-block) + env(safe-area-inset-bottom));
+}
+
+.dialog[data-body-layout="flush"] .dialogHeader {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dialog[data-body-layout="flush"] .dialogFooter {
+  padding-top: var(--layer-footer-block);
+  padding-bottom: calc(
+    var(--layer-footer-block) + env(safe-area-inset-bottom)
+  );
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-panel);
 }
@@ -1735,7 +1780,7 @@
   }
 
   .dialogHeader {
-    padding-top: var(--space-6);
+    padding-top: var(--space-7);
   }
 
   .dialogHeader::before {

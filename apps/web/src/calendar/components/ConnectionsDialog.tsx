@@ -256,6 +256,7 @@ export function ConnectionsDialog({
   return (
     <Dialog
       bodyClassName={styles.body}
+      bodyLayout="flush"
       closeLabel="Close connections"
       description="Keep outside calendars in sync or join one shared through Musubi."
       footer={
@@ -701,7 +702,7 @@ function CaldavForm({
         </div>
       </header>
       {!draft.apple ? (
-        <Field label="Server address">
+        <Field label="Server address" variant="section">
           <input
             autoFocus
             disabled={busy}
@@ -714,7 +715,10 @@ function CaldavForm({
           />
         </Field>
       ) : null}
-      <Field label={draft.apple ? "Apple ID email" : "Username"}>
+      <Field
+        label={draft.apple ? "Apple ID email" : "Username"}
+        variant="section"
+      >
         <input
           autoComplete="username"
           autoFocus={draft.apple}
@@ -726,7 +730,10 @@ function CaldavForm({
           }
         />
       </Field>
-      <Field label={draft.apple ? "App-specific password" : "Password"}>
+      <Field
+        label={draft.apple ? "App-specific password" : "Password"}
+        variant="section"
+      >
         <input
           autoComplete="current-password"
           disabled={busy}

@@ -33,6 +33,37 @@ function DialogExample() {
   );
 }
 
+function FlushDialogExample() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog
+      bodyLayout="flush"
+      closeLabel="Close calendar settings"
+      description="These settings apply to everyone using this calendar."
+      footer={
+        <>
+          <DialogClose>
+            <Button variant="secondary">Cancel</Button>
+          </DialogClose>
+          <Button onClick={() => setOpen(false)}>Save changes</Button>
+        </>
+      }
+      open={open}
+      title="Calendar settings"
+      trigger={<Button variant="secondary">Open flush dialog</Button>}
+      onOpenChange={setOpen}
+    >
+      <Field label="Calendar name" variant="section">
+        <input defaultValue="Family" />
+      </Field>
+      <Field label="Description" variant="section">
+        <input defaultValue="Plans everyone can see" />
+      </Field>
+    </Dialog>
+  );
+}
+
 const meta = {
   args: {
     children: null,
@@ -86,4 +117,23 @@ export const NarrowSheet: Story = {
   },
   play: openDialog,
   render: () => <DialogExample />,
+};
+
+export const FlushBody: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Open flush dialog" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Calendar settings",
+    });
+    await waitFor(() => expect(dialog).toBeVisible());
+  },
+  render: () => <FlushDialogExample />,
 };

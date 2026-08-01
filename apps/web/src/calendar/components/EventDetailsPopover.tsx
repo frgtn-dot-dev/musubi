@@ -806,6 +806,7 @@ export function EventDetailsPopover({
       ) : null}
 
       <Dialog
+        bodyClassName={styles.deleteDialogBody}
         closeLabel="Close delete event dialog"
         description={`“${event.title}” will be removed from your calendar.`}
         footer={

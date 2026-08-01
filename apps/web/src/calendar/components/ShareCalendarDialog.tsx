@@ -137,6 +137,7 @@ export function ShareCalendarDialog({
     <>
       <Dialog
         bodyClassName={styles.body}
+        bodyLayout="flush"
         closeLabel="Close sharing"
         description="Choose who can view or edit this calendar, and manage links for new members."
         footer={
