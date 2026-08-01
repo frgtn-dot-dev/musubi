@@ -425,9 +425,9 @@ const PageRow = forwardRef<
       <RowAction
         className={`${styles.sidebarRow} ${styles.pageRowMain}`}
         aria-current={active ? "page" : undefined}
-        data-selected={active ? "" : undefined}
         icon={<Icon size={18} strokeWidth={1.6} />}
         label={name}
+        selected={active}
         showChevron={false}
         size="compact"
         onClick={onSelect}

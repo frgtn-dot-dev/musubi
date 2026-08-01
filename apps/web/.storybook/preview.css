@@ -32,3 +32,11 @@
 .sb-field-width {
   width: min(100%, 420px);
 }
+
+.sb-settings-preview {
+  width: min(100%, 720px);
+  padding-bottom: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sheet);
+  background: var(--surface-canvas);
+}

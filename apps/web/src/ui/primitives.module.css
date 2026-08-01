@@ -477,6 +477,27 @@
   text-transform: uppercase;
 }
 
+.settingsSection {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--layer-body-block) var(--layer-inline) 0;
+}
+
+.settingsSection + .settingsSection {
+  padding-top: var(--space-8);
+}
+
+.settingsSectionRows {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+}
+
+.settingsSectionRows > :last-child {
+  border-bottom: 0;
+}
+
 .empty {
   display: grid;
   min-height: 180px;
@@ -913,6 +934,14 @@
   opacity: 0.5;
 }
 
+.rowAction[data-tone="destructive"]:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 7%,
+    var(--surface-panel)
+  );
+}
+
 .rowAction[data-tone="destructive"] .rowLabel,
 .rowAction[data-tone="destructive"] .rowIcon {
   color: color-mix(
@@ -938,8 +967,9 @@
 }
 
 .rowLabel {
-  color: var(--text-secondary);
-  font-size: var(--text-15);
+  color: var(--text-primary);
+  font-size: var(--text-14);
+  font-weight: 500;
 }
 
 .rowDetail {
@@ -977,6 +1007,14 @@
   flex: none;
 }
 
+.settingsSectionRows .rowAction:focus-visible {
+  outline-offset: -3px;
+}
+
+.settingsSectionRows .segmented {
+  background: var(--surface-canvas);
+}
+
 .row_compact {
   min-height: 44px;
   gap: var(--space-2);
@@ -990,7 +1028,9 @@
 }
 
 .row_compact .rowLabel {
+  color: var(--text-secondary);
   font-size: var(--text-13);
+  font-weight: 400;
 }
 
 .row_compact .rowDetail {

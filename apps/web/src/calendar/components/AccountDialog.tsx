@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import {
   type FormEvent,
-  type ReactNode,
   type RefObject,
   useId,
   useRef,
@@ -21,7 +20,7 @@ import { Button } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row, RowAction } from "~/ui/Row";
-import { SectionLabel } from "~/ui/SectionLabel";
+import { SettingsSection } from "~/ui/SettingsSection";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./styles/account.module.css";
 
@@ -155,7 +154,7 @@ export function AccountDialog({
             </div>
           </div>
 
-          <AccountSection title="Profile">
+          <SettingsSection title="Profile">
             <RowAction
               disabled={!user || busy}
               icon={<Pencil size={17} strokeWidth={1.7} />}
@@ -172,9 +171,9 @@ export function AccountDialog({
               label="Email"
               value={user?.email ?? "—"}
             />
-          </AccountSection>
+          </SettingsSection>
 
-          <AccountSection title="Security">
+          <SettingsSection title="Security">
             <RowAction
               detail="We’ll email you a secure reset link"
               disabled={!user?.email || busy}
@@ -183,22 +182,22 @@ export function AccountDialog({
               showChevron={false}
               onClick={() => void resetPassword()}
             />
-          </AccountSection>
+          </SettingsSection>
 
-          <AccountSection title="Danger zone">
+          <SettingsSection title="Danger zone">
             <RowAction
-              data-tone="destructive"
               detail="Requires an email confirmation before anything is removed"
               disabled={!user || busy}
               icon={<Trash2 size={17} strokeWidth={1.7} />}
               label="Delete account"
               ref={deleteActionRef}
+              tone="destructive"
               onClick={() => {
                 setError("");
                 setDeleteDialogOpen(true);
               }}
             />
-          </AccountSection>
+          </SettingsSection>
 
           {error ? (
             <div className={styles.error} role="alert">
@@ -236,23 +235,6 @@ export function AccountDialog({
         />
       ) : null}
     </>
-  );
-}
-
-function AccountSection({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title: string;
-}) {
-  return (
-    <section className={styles.section}>
-      <SectionLabel className={styles.sectionHeading} level={3}>
-        {title}
-      </SectionLabel>
-      <div className={styles.sectionRows}>{children}</div>
-    </section>
   );
 }
 

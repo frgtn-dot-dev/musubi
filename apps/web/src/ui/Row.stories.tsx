@@ -1,7 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
-import { Bell, ChevronRight, Moon, Palette } from "lucide-react";
+import {
+  Bell,
+  ChevronRight,
+  Moon,
+  Palette,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
+import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { Row, RowAction, RowOptions, RowToggle } from "./Row";
+import { SettingsSection } from "./SettingsSection";
 
 const THEME_OPTIONS = [
   { label: "System", value: "system" },
@@ -14,21 +22,23 @@ function InteractiveRows() {
   const [theme, setTheme] = useState<"dark" | "light" | "system">("system");
 
   return (
-    <div className="sb-panel">
-      <RowToggle
-        checked={notifications}
-        detail="Reminders for upcoming events"
-        icon={<Bell size={18} />}
-        label="Notifications"
-        onCheckedChange={setNotifications}
-      />
-      <RowOptions
-        icon={<Moon size={18} />}
-        label="Appearance"
-        onChange={setTheme}
-        options={THEME_OPTIONS}
-        value={theme}
-      />
+    <div className="sb-settings-preview">
+      <SettingsSection title="Preferences">
+        <RowToggle
+          checked={notifications}
+          detail="Reminders for upcoming events"
+          icon={<Bell size={18} />}
+          label="Notifications"
+          onCheckedChange={setNotifications}
+        />
+        <RowOptions
+          icon={<Moon size={18} />}
+          label="Appearance"
+          onChange={setTheme}
+          options={THEME_OPTIONS}
+          value={theme}
+        />
+      </SettingsSection>
     </div>
   );
 }
@@ -54,27 +64,93 @@ export const Overview: Story = {
   },
   decorators: [
     (Story) => (
-      <div className="sb-panel">
-        <Story />
+      <div className="sb-settings-preview">
+        <SettingsSection title="Presentation">
+          <Story />
+        </SettingsSection>
       </div>
     ),
   ],
 };
 
 export const Variants: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
   render: () => (
-    <div className="sb-panel">
-      <Row label="Read-only value" value="Week" />
-      <RowAction detail="Profile, theme, and preferences" label="Settings" />
-      <RowAction
-        label="Custom trailing content"
-        showChevron={false}
-        trailing={<ChevronRight size={17} />}
-      />
+    <div className="sb-settings-preview">
+      <SettingsSection title="Row variants">
+        <Row label="Read-only value" value="Week" />
+        <RowAction detail="Profile, theme, and preferences" label="Settings" />
+        <RowAction
+          label="Custom trailing content"
+          showChevron={false}
+          trailing={<ChevronRight size={17} />}
+        />
+        <RowToggle
+          checked
+          label="Notifications"
+          onCheckedChange={() => undefined}
+        />
+        <RowOptions
+          label="Theme"
+          options={THEME_OPTIONS}
+          value="system"
+          onChange={() => undefined}
+        />
+      </SettingsSection>
+    </div>
+  ),
+};
+
+export const States: Story = {
+  render: () => (
+    <div className="sb-settings-preview">
+      <SettingsSection title="States">
+        <RowAction
+          aria-current="page"
+          detail="The page currently shown in the calendar"
+          label="Selected page"
+          selected
+        />
+        <RowAction
+          detail="This action is unavailable while settings are saved"
+          disabled
+          label="Disabled action"
+        />
+        <RowAction
+          detail="Requires an email confirmation before anything is removed"
+          icon={<Trash2 size={17} strokeWidth={1.7} />}
+          label="Delete account"
+          tone="destructive"
+        />
+        <Row
+          detail="A deliberately long explanation verifies that rows grow without clipping or losing the trailing value."
+          label="Long content wraps naturally"
+          value="Synced"
+        />
+      </SettingsSection>
     </div>
   ),
 };
 
 export const Interactive: Story = {
+  render: () => <InteractiveRows />,
+};
+
+export const Narrow: Story = {
+  globals: {
+    viewport: {
+      isRotated: false,
+      value: "mobile1",
+    },
+  },
+  parameters: {
+    chromatic: {
+      modes: MOBILE_MODES,
+    },
+  },
   render: () => <InteractiveRows />,
 };

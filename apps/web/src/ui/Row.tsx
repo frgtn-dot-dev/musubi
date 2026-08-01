@@ -18,6 +18,7 @@ type RowContentProps = {
 };
 
 export type RowSize = "compact" | "default";
+export type RowTone = "default" | "destructive";
 
 function RowContent({
   detail,
@@ -83,8 +84,10 @@ export type RowActionProps = Omit<
   "children"
 > &
   Omit<RowContentProps, "trailing"> & {
+    selected?: boolean;
     showChevron?: boolean;
     size?: RowSize;
+    tone?: RowTone;
     trailing?: ReactNode;
   };
 
@@ -95,8 +98,10 @@ export const RowAction = forwardRef<HTMLButtonElement, RowActionProps>(
       detail,
       icon,
       label,
+      selected = false,
       showChevron = true,
       size = "default",
+      tone = "default",
       trailing,
       type = "button",
       value,
@@ -113,6 +118,8 @@ export const RowAction = forwardRef<HTMLButtonElement, RowActionProps>(
           size === "compact" && styles.row_compact,
           className,
         )}
+        data-selected={selected ? "" : undefined}
+        data-tone={tone === "destructive" ? tone : undefined}
         ref={ref}
         type={type}
       >
@@ -214,6 +221,7 @@ export function RowOptions<Value extends string>({
         size === "compact" && styles.row_compact,
         className,
       )}
+      aria-disabled={disabled || undefined}
       data-row-options=""
     >
       <RowContent detail={detail} icon={icon} label={label} />

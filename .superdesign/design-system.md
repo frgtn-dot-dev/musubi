@@ -92,6 +92,14 @@ belong to repeated rows and real region boundaries, never to a field by default.
 When edges disagree, fix the component that owns the shared axis instead of
 patching the feature consumer.
 
+Settings use an explicit inset-group pattern because named, bounded groups are
+faster to scan than one long flush list. `SettingsSection` aligns its title and
+group edge to the layer axis (24 px regular, 20 px touch), places the title 8 px
+above the group, and leaves 32 px between sections. The group uses the panel
+surface, subtle border, and 14 px radius without a gradient or shadow. Rows use
+their own 16 px internal inset, grow from a 62 px minimum, and draw focus rings
+inward so the rounded clipping edge never hides keyboard focus.
+
 ## Design workflow
 
 For redesign work, first reproduce the current real UI on the Superdesign

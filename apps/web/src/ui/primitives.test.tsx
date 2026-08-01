@@ -12,6 +12,7 @@ import { RouteState } from "./RouteState";
 import { Segmented } from "./Segmented";
 import { Select } from "./Select";
 import { SectionLabel } from "./SectionLabel";
+import { SettingsSection } from "./SettingsSection";
 import { Switch } from "./Switch";
 import { Toast } from "./Toast";
 
@@ -333,6 +334,46 @@ describe("row variants", () => {
         .getAllByRole("radio")
         .every((option) => (option as HTMLButtonElement).disabled),
     ).toBe(true);
+  });
+
+  it("exposes selected and destructive variants through the named API", () => {
+    render(
+      <>
+        <RowAction label="Current page" selected />
+        <RowAction label="Delete account" tone="destructive" />
+      </>,
+    );
+
+    expect(
+      screen
+        .getByRole("button", { name: "Current page" })
+        .hasAttribute("data-selected"),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole("button", { name: "Delete account" })
+        .getAttribute("data-tone"),
+    ).toBe("destructive");
+  });
+});
+
+describe("SettingsSection", () => {
+  it("groups row controls under a semantic heading", () => {
+    render(
+      <SettingsSection title="Appearance">
+        <RowToggle
+          checked
+          label="Show kanji"
+          onCheckedChange={vi.fn()}
+        />
+      </SettingsSection>,
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Appearance" }),
+    ).not.toBeNull();
+    expect(screen.getByRole("region", { name: "Appearance" })).not.toBeNull();
+    expect(screen.getByRole("switch", { name: "Show kanji" })).not.toBeNull();
   });
 });
 

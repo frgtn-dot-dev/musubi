@@ -137,6 +137,20 @@ insets belong to the outermost region.
 - A form uses one control height per density unless a multiline or domain
   control has an explicit semantic size.
 
+### Settings composition
+
+`SettingsSection` is the canonical scan unit for related preferences. Its title
+and group edge follow the layer axis (24 px regular, 20 px touch), the title sits
+8 px above the group, and separate sections use the 32 px section break. The
+group uses the panel surface, a subtle border, and the 14 px shared radius with
+no gradient or shadow. Rows retain their own 16 px component inset inside that
+edge; this is nested component rhythm, not a competing layer axis.
+
+Only repeated rows receive dividers. The group clips its surface and dividers,
+while row focus rings draw inward so keyboard focus is never hidden by the
+rounded edge. This inset structure was chosen over a fully flush list because
+the stronger grouping makes long settings dialogs substantially easier to scan.
+
 ### Ownership test
 
 When two edges do not align, fix the component that owns the shared axis. Do
@@ -168,6 +182,12 @@ edge-to-edge rows or sections whose own readable content follows the layer
 axis. `Field` defaults to `variant="plain"`; `variant="section"` explicitly
 adds the inset and divider needed inside a flush collection. Combining a
 padded dialog body with a section field is a double-inset contract violation.
+
+`SettingsSection` owns the heading, inset group surface, layer alignment, and
+spacing between settings groups. `Row` owns item content and interaction;
+`RowAction` exposes named `selected` and `tone="destructive"` states rather than
+requiring feature-owned data attributes. Features provide only domain copy and
+callbacks.
 
 Every public component has:
 
@@ -230,10 +250,10 @@ written to source, configuration, logs, or documentation.
 The baseline catalog visualizes the implemented color, typography, spacing,
 shape, motion, and responsive contracts. It also covers Button, Checkbox,
 ColorPicker, DatePicker, Dialog, Empty, Field, Row, SectionLabel, Segmented,
-Select, Switch, TimePicker, and Toast without forking their production
-implementations. Muted and faint color tokens may be shown as decorative
-swatches, but must not be presented as readable text when they do not satisfy
-the required contrast ratio.
+Select, SettingsSection, Switch, TimePicker, and Toast without forking their
+production implementations. Muted and faint color tokens may be shown as
+decorative swatches, but must not be presented as readable text when they do
+not satisfy the required contrast ratio.
 
 ## 7. Workflow
 
@@ -273,9 +293,11 @@ the required contrast ratio.
 
 ## 10. Adoption order
 
-1. Document the inventory and current system.
-2. Run Storybook around existing web primitives without moving them.
+1. Document the inventory and current system. *(Complete.)*
+2. Run Storybook around existing web primitives without moving them. *(Complete.)*
 3. Stabilize dialog, row, field, button, segmented control, and toast contracts.
+   *(Dialog, Field, Row, and SettingsSection complete; Button, Segmented, and
+   Toast remain.)*
 4. Extract canonical tokens and generate web/native representations. *(Theme
    colors complete; typography, dimensions, and motion remain incremental.)*
 5. Create platform packages only when dependencies and APIs are clear.

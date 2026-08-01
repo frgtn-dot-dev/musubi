@@ -8,7 +8,7 @@ import {
   LifeBuoy,
   UserRound,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import musubiPackage from "../../../../../package.json";
 import { ApiError } from "~/api/http";
 import { applyTheme } from "~/design/theme";
@@ -20,7 +20,7 @@ import {
   RowOptions,
   RowToggle,
 } from "~/ui/Row";
-import { SectionLabel } from "~/ui/SectionLabel";
+import { SettingsSection } from "~/ui/SettingsSection";
 import styles from "./styles/settings.module.css";
 
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -385,22 +385,5 @@ export function SettingsDialog({
         </div>
       )}
     </Dialog>
-  );
-}
-
-function SettingsSection({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title: string;
-}) {
-  return (
-    <section className={styles.section}>
-      <SectionLabel className={styles.sectionHeading} level={3}>
-        {title}
-      </SectionLabel>
-      <div className={styles.sectionRows}>{children}</div>
-    </section>
   );
 }
