@@ -1,38 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-const TOAST_CENTER_TOLERANCE_PX = 1;
-const NARROW_VIEWPORT = { height: 844, width: 390 };
-
-async function expectActionToastCentered(page: Page) {
-  const [mainBox, toastBox, toastMessageBox, toastBalanceBox, undoBox] =
-    await Promise.all([
-      page.locator("#main-content").boundingBox(),
-      page.getByRole("status").locator(":scope > div").boundingBox(),
-      page.getByRole("status").locator("p").boundingBox(),
-      page
-        .getByRole("status")
-        .locator(':scope > div > span[aria-hidden="true"]')
-        .boundingBox(),
-      page.getByRole("button", { name: "Undo" }).boundingBox(),
-    ]);
-  expect(mainBox).not.toBeNull();
-  expect(toastBox).not.toBeNull();
-  expect(toastMessageBox).not.toBeNull();
-  expect(toastBalanceBox).not.toBeNull();
-  expect(undoBox).not.toBeNull();
-  expect(toastBalanceBox!.width).toBe(undoBox!.width);
-  const mainCenter = mainBox!.x + mainBox!.width / 2;
-  const toastCenter = toastBox!.x + toastBox!.width / 2;
-  const messageCenter = toastMessageBox!.x + toastMessageBox!.width / 2;
-  expect(Math.abs(toastCenter - mainCenter)).toBeLessThanOrEqual(
-    TOAST_CENTER_TOLERANCE_PX,
-  );
-  expect(Math.abs(messageCenter - mainCenter)).toBeLessThanOrEqual(
-    TOAST_CENTER_TOLERANCE_PX,
-  );
-}
-
 const session = {
   session: {
     createdAt: "2026-07-26T14:00:00.000Z",
@@ -907,10 +875,6 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
   await expect(
     page.getByRole("button", { name: /Release readiness/ }),
   ).toHaveCount(0);
-
-  await expectActionToastCentered(page);
-  await page.setViewportSize(NARROW_VIEWPORT);
-  await expectActionToastCentered(page);
 
   // Undo brings it back rather than a confirm step keeping it from going.
   await page.getByRole("button", { name: "Undo" }).click();

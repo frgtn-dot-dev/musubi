@@ -53,11 +53,6 @@ export function Toast({
         data-has-action={hasAction ? "" : undefined}
         data-tone={tone}
       >
-        {hasAction ? (
-          <span aria-hidden="true" className={styles.toastActionBalance}>
-            {actionLabel}
-          </span>
-        ) : null}
         <p>{message}</p>
         {hasAction ? (
           <Button
