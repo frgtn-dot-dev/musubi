@@ -59,6 +59,12 @@ one icon, a concise label, an optional shortcut, disabled state, or a named
 destructive tone. Never create a menu for one action or use it for persistent
 form choices.
 
+Quick Create, event details, Month overflow, pickers, and general anchored
+layers all use the shared `PopoverContent` surface. Their feature-specific
+focus, drag, and propagation rules remain with their owners. Page deletion and
+discarding a dirty Page draft use `ConfirmationDialog`; native browser confirms
+are not part of the product UI.
+
 Every public component needs realistic Overview, Variants and States stories;
 add Narrow when anatomy changes. Support light/dark, keyboard operation,
 focus-visible, long content, disabled/pending/error states as applicable.

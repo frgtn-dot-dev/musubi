@@ -854,6 +854,33 @@ seznam sám říká, kde v čase jsme.
 - `PLAYWRIGHT_ORIGIN` v `playwright.config.ts` — dev server nabídnutý jen na `::1`
   se testuje beze druhé konfigurace.
 
+### Phase M — Shared layers and production catalog — **COMPLETE** (2026-08-01)
+
+- Quick Create, event details, and Month overflow now compose the shared
+  `PopoverContent` contract. Their domain-specific focus, drag, dismissal, and
+  portal event guards remain feature-owned; the portal, surface, collision
+  gutter, arrow, motion, and narrow sheet no longer have a second calendar-only
+  implementation.
+- The old global narrow-viewport Radix wrapper override was removed from
+  `workspace.module.css`. Only the shared anchored surface may move its own
+  popper wrapper into sheet geometry, so an unrelated future Radix control
+  cannot be moved by calendar feature CSS.
+- Page settings no longer calls `window.confirm`. Discarding a dirty draft and
+  deleting a Page use `ConfirmationDialog`, keep the safe action focused first,
+  return focus on cancellation, and keep delete failures inside the decision
+  layer. Delete still has no Undo because the server exposes no restore path.
+- Storybook renders the real Page settings dialog in regular and narrow modes,
+  including both confirmation branches. Authentication, `RouteState`, and
+  `Avatar` also have production-backed catalog coverage rather than copied
+  showcase markup.
+- The remaining authentication and route-state background gradients were
+  removed. Their readable 10–12 px metadata now uses `--text-secondary` rather
+  than the sub-AA muted token.
+
+No package extraction is part of this phase. The APIs are stable enough to
+catalog and reuse in place; moving files before the native catalog exists would
+create churn without reducing another implementation.
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,

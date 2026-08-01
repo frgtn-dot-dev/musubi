@@ -262,18 +262,7 @@
   display: grid;
   min-height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(
-      circle at 20% 10%,
-      color-mix(in srgb, var(--accent-primary) 9%, transparent),
-      transparent 35%
-    ),
-    radial-gradient(
-      circle at 80% 90%,
-      color-mix(in srgb, var(--text-muted) 8%, transparent),
-      transparent 38%
-    ),
-    var(--surface-canvas);
+  background: var(--surface-canvas);
 }
 
 .pageAmbient {
@@ -336,7 +325,7 @@
 
 .routeStateRequest {
   margin: var(--space-1) 0 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-10);
 }
@@ -434,7 +423,7 @@
   justify-content: center;
   gap: var(--space-1);
   margin: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: var(--text-12);
   text-align: center;
 }

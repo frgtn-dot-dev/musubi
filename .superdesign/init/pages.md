@@ -18,8 +18,9 @@ routes/login.tsx
 └─ auth/auth-client
 ```
 
-Candidate stories: empty form, invalid URL, pending sign-in, server error, light
-and dark. Extract only auth compositions; Field and Button remain primitives.
+Implemented stories cover sign-in, pending submission, server error, narrow,
+light, and dark states. Extract only auth compositions; Field and Button remain
+primitives.
 
 ## Web — calendar Page
 
@@ -42,8 +43,9 @@ routes/app/p.$pageId.$view.tsx
 └─ auth/auth-client
 ```
 
-Candidate stories: chrome shell with deterministic fixtures, each view in its
-own story, empty/loading/error shell, narrow toolbar and sidebar. Do not mock the
+Page settings now has deterministic regular, narrow, discard-confirmation, and
+delete-confirmation stories. Remaining candidates are the chrome shell, each
+view, empty/loading/error shell, narrow toolbar, and sidebar. Do not mock the
 entire product before component-level stories are stable.
 
 ## Web — create event
@@ -175,4 +177,3 @@ app/onboarding/index.tsx
 
 Candidate stories: empty profile, selected avatar, validation and saving.
 Scaffold is reusable within onboarding, not a global application layout.
-

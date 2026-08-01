@@ -203,10 +203,10 @@ that shared primitive owns their portal, collision gutter, surface, arrow,
 motion, and narrow bottom-sheet geometry. Consumers retain their role, focus
 policy, keyboard model, dimensions, and content anatomy. `Select`,
 `DatePicker`, `TimePicker`, and `ColorPicker` use this contract without being
-forced into one selection behavior. Calendar feature popovers keep their
-special drag and focus policies while they are migrated as a separate bounded
-step. Menus use their own command-navigation contract rather than turning
-`Popover` into a universal interaction component.
+forced into one selection behavior. Quick Create, event details, and Month
+overflow use the same physical shell while keeping their feature-owned drag,
+focus, and event-bubbling policies. Menus use their own command-navigation
+contract rather than turning `Popover` into a universal interaction component.
 
 `Menu` is that non-modal command-navigation contract. Radix Dropdown Menu owns
 menu-button semantics, roving focus, arrow navigation, typeahead, Escape
@@ -349,13 +349,13 @@ the Visual Tests panel is public metadata, but the project token must never be
 written to source, configuration, logs, or documentation.
 
 The baseline catalog visualizes the implemented color, typography, spacing,
-shape, motion, and responsive contracts. It also covers Button, Checkbox,
-ColorPicker, ConfirmationDialog, DatePicker, Dialog, Empty, Field, Row,
-Menu, Popover, SectionLabel, Segmented, Select, SettingsSection, Switch,
-TimePicker, and Toast without forking their production implementations. Muted
-and faint color tokens may be shown as decorative swatches, but must not be
-presented as readable text when they do not satisfy the required contrast
-ratio.
+shape, motion, and responsive contracts. It also covers Authentication,
+Avatar, Button, Checkbox, ColorPicker, ConfirmationDialog, DatePicker, Dialog,
+Empty, Field, Menu, Page settings, Popover, RouteState, Row, SectionLabel,
+Segmented, Select, SettingsSection, Switch, TimePicker, and Toast without
+forking their production implementations. Muted and faint color tokens may be
+shown as decorative swatches, but must not be presented as readable text when
+they do not satisfy the required contrast ratio.
 
 ## 7. Workflow
 

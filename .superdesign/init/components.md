@@ -12,6 +12,247 @@ uses the actual public APIs and accessibility behavior.
   currently live one directory higher.
 - Feature components compose these. They must not create another general shell.
 
+## apps/web/src/ui/Avatar.tsx
+
+```tsx
+import {
+  type CSSProperties,
+  type HTMLAttributes,
+} from "react";
+import { classNames } from "./class-names";
+import styles from "./primitives.module.css";
+
+export type AvatarProps = Omit<
+  HTMLAttributes<HTMLSpanElement>,
+  "children"
+> & {
+  image?: null | string;
+  name: string;
+  size?: number;
+};
+
+/**
+ * A decorative identity mark. The adjacent visible name remains the accessible
+ * label, so image and initial variants expose the same semantics.
+ */
+export function Avatar({
+  className,
+  image,
+  name,
+  size = 36,
+  style,
+  ...spanProps
+}: AvatarProps) {
+  const initial = name.trim().charAt(0).toLocaleUpperCase() || "M";
+  const avatarStyle = {
+    ...style,
+    "--avatar-size": `${size}px`,
+  } as CSSProperties;
+
+  return (
+    <span
+      {...spanProps}
+      aria-hidden="true"
+      className={classNames(styles.avatar, className)}
+      style={avatarStyle}
+    >
+      {image ? <img alt="" src={image} /> : initial}
+    </span>
+  );
+}
+```
+
+## apps/web/src/ui/AuthShell.tsx
+
+```tsx
+import type {
+  FormHTMLAttributes,
+  HTMLAttributes,
+  ReactNode,
+} from "react";
+import { BrandMark } from "~/components/BrandMark";
+import { Button, type ButtonProps } from "./Button";
+import { classNames } from "./class-names";
+import styles from "./primitives.module.css";
+
+type AuthShellProps = {
+  children: ReactNode;
+  eyebrow: ReactNode;
+  footer?: ReactNode;
+  introduction: ReactNode;
+  title: ReactNode;
+  utility?: ReactNode;
+};
+
+export function AuthShell({
+  children,
+  eyebrow,
+  footer,
+  introduction,
+  title,
+  utility,
+}: AuthShellProps) {
+  return (
+    <main className={styles.authPage} id="main-content" tabIndex={-1}>
+      <span className={styles.pageAmbient} aria-hidden="true">
+        結
+      </span>
+      <header className={styles.authTopBar}>
+        <div className={styles.authBrand} aria-label="Musubi">
+          <BrandMark aria-hidden="true" focusable="false" />
+          <span>MUSUBI</span>
+        </div>
+        {utility}
+      </header>
+
+      <section className={styles.authCard} aria-labelledby="login-title">
+        <p className={styles.pageEyebrow}>{eyebrow}</p>
+        <h1 id="login-title">{title}</h1>
+        <p className={styles.authIntroduction}>{introduction}</p>
+        {children}
+        {footer ? <div className={styles.authFooter}>{footer}</div> : null}
+      </section>
+    </main>
+  );
+}
+
+export function AuthForm({
+  children,
+  className,
+  ...formProps
+}: FormHTMLAttributes<HTMLFormElement>) {
+  return (
+    <form
+      {...formProps}
+      className={classNames(styles.authForm, className)}
+    >
+      {children}
+    </form>
+  );
+}
+
+export function AuthMessage({
+  children,
+  className,
+  ...messageProps
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...messageProps}
+      className={classNames(styles.authMessage, className)}
+      role="alert"
+      aria-live="polite"
+    >
+      {children}
+    </div>
+  );
+}
+
+export function AuthSubmit({ className, ...props }: ButtonProps) {
+  return (
+    <Button
+      {...props}
+      className={classNames(styles.authSubmit, className)}
+    />
+  );
+}
+
+type AuthSwitchProps = {
+  action: string;
+  children: ReactNode;
+  onAction: () => void;
+};
+
+export function AuthSwitch({
+  action,
+  children,
+  onAction,
+}: AuthSwitchProps) {
+  return (
+    <p className={styles.authSwitch}>
+      <span>{children}</span>
+      <Button size="compact" variant="ghost" onClick={onAction}>
+        {action}
+      </Button>
+    </p>
+  );
+}
+```
+
+## apps/web/src/ui/RouteState.tsx
+
+```tsx
+import { useId, type HTMLAttributes, type ReactNode } from "react";
+import { BrandMark } from "~/components/BrandMark";
+import { classNames } from "./class-names";
+import styles from "./primitives.module.css";
+
+export type RouteStateProps = Omit<
+  HTMLAttributes<HTMLElement>,
+  "children" | "title"
+> & {
+  actions?: ReactNode;
+  busy?: boolean;
+  description?: ReactNode;
+  eyebrow: ReactNode;
+  requestId?: string;
+  title: ReactNode;
+};
+
+/**
+ * Full-page feedback for loading, unavailable and terminal route states.
+ * Copy and actions stay with the caller; layout and accessibility do not.
+ */
+export function RouteState({
+  actions,
+  "aria-labelledby": labelledBy,
+  busy = false,
+  className,
+  description,
+  eyebrow,
+  id = "main-content",
+  requestId,
+  title,
+  ...mainProps
+}: RouteStateProps) {
+  const generatedTitleId = useId();
+  const titleId = labelledBy ?? generatedTitleId;
+
+  return (
+    <main
+      {...mainProps}
+      aria-busy={busy || undefined}
+      aria-labelledby={titleId}
+      className={classNames(styles.routeState, className)}
+      id={id}
+      tabIndex={-1}
+    >
+      <span className={styles.pageAmbient} aria-hidden="true">
+        結
+      </span>
+      <section className={styles.routeStateContent}>
+        <BrandMark
+          className={styles.routeStateMark}
+          aria-hidden="true"
+          focusable="false"
+        />
+        <p className={styles.pageEyebrow}>{eyebrow}</p>
+        <h1 id={titleId}>{title}</h1>
+        {description ? (
+          <p className={styles.routeStateDescription}>{description}</p>
+        ) : null}
+        {requestId ? (
+          <p className={styles.routeStateRequest}>Request ID: {requestId}</p>
+        ) : null}
+        {actions ? (
+          <div className={styles.routeStateActions}>{actions}</div>
+        ) : null}
+      </section>
+    </main>
+  );
+}
+```
+
 ## apps/web/src/ui/Button.tsx
 
 ```tsx

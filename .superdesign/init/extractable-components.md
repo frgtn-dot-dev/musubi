@@ -7,15 +7,18 @@ interaction risk and usefulness in Storybook—not file size alone.
 
 | Component | Current owner | Decision |
 |---|---|---|
-| Button / IconButton | web `src/ui` | Stable primitive; add stories in place first. |
-| Dialog / DialogClose | web `src/ui` | Stable shell; document desktop/sheet states. |
-| ConfirmationDialog | web `src/ui` | Stable confirm pattern; four production flows migrated. |
-| Popover / PopoverContent | web `src/ui` | Stable physical anchored-layer shell; keep consumer semantics and focus behavior separate. |
+| Button / IconButton | web `src/ui` | Stable primitive with catalogued variants and states. |
+| Avatar | web `src/ui` | Stable decorative identity mark with catalogued sizes. |
+| AuthShell / AuthForm / AuthMessage | web `src/ui` | Stable authentication composition; keep server and account logic in the route. |
+| RouteState | web `src/ui` | Stable full-page loading, unavailable, and error feedback composition. |
+| Dialog / DialogClose | web `src/ui` | Stable shell with regular and sheet states in the catalog. |
+| ConfirmationDialog | web `src/ui` | Stable confirm pattern used across production decision flows. |
+| Popover / PopoverContent | web `src/ui` | Stable physical anchored-layer shell used by pickers and calendar feature layers; keep consumer semantics and focus behavior separate. |
 | Menu / MenuContent / MenuItem | web `src/ui` | Stable command-list contract; no production consumer exists yet, so do not invent a one-item menu. |
-| Field | web `src/ui` | Stable label/description/error contract. |
-| Row variants | web `src/ui` | Stable settings/list pattern. |
-| Segmented, Switch, Checkbox, Select | web `src/ui` | Stabilize keyboard/state matrix in stories. |
-| Toast | web `src/ui` | Preserve action/no-action layout as two states. |
+| Field | web `src/ui` | Stable label/description/error contract with catalogued states. |
+| Row variants | web `src/ui` | Stable settings/list pattern with catalogued variants. |
+| Segmented, Switch, Checkbox, Select | web `src/ui` | Stable keyboard/state contracts covered in stories. |
+| Toast | web `src/ui` | Stable action/no-action and neutral/error feedback contract. |
 | Btn / Tap / Empty / Toast | native `components/ui` | Existing base; do not wrap in a universal React component. |
 | SettingRow variants | native `components` | Move only after API and stories are stable. |
 
