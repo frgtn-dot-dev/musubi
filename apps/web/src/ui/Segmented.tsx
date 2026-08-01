@@ -12,12 +12,15 @@ export type SegmentedOption<Value extends string> = {
   value: Value;
 };
 
+export type SegmentedSize = "compact" | "control";
+
 export type SegmentedProps<Value extends string> = {
   className?: string;
   disabled?: boolean;
   label: string;
   onChange: (value: Value) => void;
   options: ReadonlyArray<SegmentedOption<Value>>;
+  size?: SegmentedSize;
   value: Value;
 };
 
@@ -43,6 +46,7 @@ export function Segmented<Value extends string>({
   label,
   onChange,
   options,
+  size = "compact",
   value,
 }: SegmentedProps<Value>) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -57,7 +61,7 @@ export function Segmented<Value extends string>({
   function choose(index: number) {
     const option = options[index];
     if (!option || disabled || option.disabled) return;
-    onChange(option.value);
+    if (option.value !== value) onChange(option.value);
     optionRefs.current[index]?.focus();
   }
 
@@ -86,7 +90,12 @@ export function Segmented<Value extends string>({
     <div
       aria-disabled={disabled || undefined}
       aria-label={label}
-      className={classNames(styles.segmented, className)}
+      aria-orientation="horizontal"
+      className={classNames(
+        styles.segmented,
+        styles[`segmented_${size}`],
+        className,
+      )}
       role="radiogroup"
     >
       {options.map((option, index) => {

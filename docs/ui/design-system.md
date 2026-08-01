@@ -189,6 +189,18 @@ spacing between settings groups. `Row` owns item content and interaction;
 requiring feature-owned data attributes. Features provide only domain copy and
 callbacks.
 
+`Segmented` is a visible radio choice for two to four short, mutually exclusive
+options. It defaults to `size="compact"`; `size="control"` matches a regular
+form control. Options share the available width, stay on one line, and may
+compress their inline inset on touch viewports, but their labels must remain
+readable. If real labels cannot fit at 320 px without truncation, use `Select`
+instead of adding horizontal scrolling or wrapping the segmented control.
+
+Selection follows focus: arrows wrap and skip disabled options, while Home and
+End choose the first and last enabled option. A disabled group disables every
+radio. Choosing the already-selected option only restores focus and does not
+emit a duplicate change.
+
 Every public component has:
 
 - named variants instead of screen-specific CSS overrides;
@@ -296,7 +308,7 @@ not satisfy the required contrast ratio.
 1. Document the inventory and current system. *(Complete.)*
 2. Run Storybook around existing web primitives without moving them. *(Complete.)*
 3. Stabilize dialog, row, field, button, segmented control, and toast contracts.
-   *(Dialog, Field, Row, and SettingsSection complete; Button, Segmented, and
+   *(Dialog, Field, Row, SettingsSection, and Segmented complete; Button and
    Toast remain.)*
 4. Extract canonical tokens and generate web/native representations. *(Theme
    colors complete; typography, dimensions, and motion remain incremental.)*

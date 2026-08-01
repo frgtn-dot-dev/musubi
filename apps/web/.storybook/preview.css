@@ -33,6 +33,14 @@
   width: min(100%, 420px);
 }
 
+.sb-control-width {
+  width: min(100%, 280px);
+}
+
+.sb-control-width > * {
+  width: 100%;
+}
+
 .sb-settings-preview {
   width: min(100%, 720px);
   padding-bottom: var(--space-4);

@@ -100,6 +100,14 @@ surface, subtle border, and 14 px radius without a gradient or shadow. Rows use
 their own 16 px internal inset, grow from a 62 px minimum, and draw focus rings
 inward so the rounded clipping edge never hides keyboard focus.
 
+Segmented controls expose two to four short, mutually exclusive options. The
+compact size is the default; the control size matches regular form controls.
+Options share available width and remain on one line. Touch layouts may reduce
+their internal inset, but if the real labels still cannot fit at 320 px, use a
+Select rather than truncating, wrapping, or horizontally scrolling the choices.
+Arrow keys wrap and skip disabled options; Home and End select the first and
+last enabled choices.
+
 ## Design workflow
 
 For redesign work, first reproduce the current real UI on the Superdesign

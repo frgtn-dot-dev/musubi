@@ -152,7 +152,7 @@ describe("choice primitives", () => {
         label="Theme"
         options={[
           { label: "System", value: "system" },
-          { label: "Light", value: "light" },
+          { disabled: true, label: "Light", value: "light" },
           { label: "Dark", value: "dark" },
         ]}
         value="system"
@@ -163,17 +163,17 @@ describe("choice primitives", () => {
     const system = screen.getByRole("radio", { name: "System" });
     system.focus();
     await user.keyboard("{ArrowRight}");
-    expect(onChange).toHaveBeenLastCalledWith("light");
+    expect(onChange).toHaveBeenLastCalledWith("dark");
 
     rerender(
       <Segmented
         label="Theme"
         options={[
           { label: "System", value: "system" },
-          { label: "Light", value: "light" },
+          { disabled: true, label: "Light", value: "light" },
           { label: "Dark", value: "dark" },
         ]}
-        value="light"
+        value="dark"
         onChange={onChange}
       />,
     );
@@ -181,6 +181,30 @@ describe("choice primitives", () => {
     expect(onChange).toHaveBeenLastCalledWith("dark");
     await user.keyboard("{Home}");
     expect(onChange).toHaveBeenLastCalledWith("system");
+    expect(
+      screen
+        .getByRole("radiogroup", { name: "Theme" })
+        .getAttribute("aria-orientation"),
+    ).toBe("horizontal");
+  });
+
+  it("does not emit a duplicate change for the selected segment", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Segmented
+        label="Theme"
+        options={[
+          { label: "System", value: "system" },
+          { label: "Dark", value: "dark" },
+        ]}
+        value="system"
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("radio", { name: "System" }));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("keeps an enabled segmented option in the tab order", () => {
