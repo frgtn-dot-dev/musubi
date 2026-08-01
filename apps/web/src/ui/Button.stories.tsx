@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { Plus, Settings } from "lucide-react";
+import { DESKTOP_MODES } from "../../.storybook/modes";
 import { Button, IconButton } from "./Button";
 
 const meta = {
@@ -17,6 +18,11 @@ type Story = StoryObj<typeof meta>;
 export const Overview: Story = {};
 
 export const Variants: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
   render: () => (
     <div className="sb-stack">
       <div className="sb-row">

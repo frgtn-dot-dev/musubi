@@ -121,6 +121,27 @@ failures, not an informational baseline. The Chromatic visual testing addon is
 registered for reviewed visual baselines; publishing snapshots still requires
 an explicitly configured Chromatic project and token.
 
+Chromatic captures one default baseline for every story. Additional modes are
+reserved for high-value visual contracts rather than multiplied across the
+entire catalog: foundations, button variants, open dialogs and sheets, open
+selection layers, and all toast anatomies. The shared modes pin the theme,
+color scheme, locale, viewport, and touch capability. Chromatic also requests
+reduced motion and pauses remaining animations before capture.
+
+A visual contract for a portaled layer must use a `play` interaction to open
+the layer and wait until its entrance state is visibly complete. The same story
+therefore verifies interaction and accessibility before Chromatic captures it;
+a snapshot of only the closed trigger is not coverage for a dialog, sheet, or
+popover. Open-layer testing is required because hidden content is not included
+in the normal accessibility pass.
+
+Run a cloud build with `pnpm chromatic:web` and provide
+`CHROMATIC_PROJECT_TOKEN` through the environment. CI reads the same value
+from the GitHub Actions secret; forks and repositories without the secret skip
+publishing without exposing credentials. The committed project ID created by
+the Visual Tests panel is public metadata, but the project token must never be
+written to source, configuration, logs, or documentation.
+
 The baseline catalog visualizes the implemented color, typography, spacing,
 shape, motion, and responsive contracts. It also covers Button, Checkbox,
 ColorPicker, DatePicker, Dialog, Empty, Field, Row, SectionLabel, Segmented,

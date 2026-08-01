@@ -2,6 +2,7 @@ import { MUSUBI_CALENDAR_COLORS } from "@musubi/types";
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import type { CSSProperties, ReactNode } from "react";
 import { getReadableEventTextColor } from "~/calendar/event-color";
+import { DESKTOP_MODES } from "../../.storybook/modes";
 import styles from "./Foundations.stories.module.css";
 
 const SURFACE_TOKENS = [
@@ -365,7 +366,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Colors: Story = { render: () => <ColorsStory /> };
+export const Colors: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
+  render: () => <ColorsStory />,
+};
 export const Typography: Story = { render: () => <TypographyStory /> };
 export const SpacingAndShape: Story = { render: () => <SpacingStory /> };
 export const Motion: Story = { render: () => <MotionStory /> };

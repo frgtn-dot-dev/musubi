@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { useState } from "react";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
+import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { Button } from "./Button";
 import { Dialog, DialogClose } from "./Dialog";
 import { Field } from "./Field";
@@ -51,7 +53,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const openDialog: NonNullable<Story["play"]> = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(
+    canvas.getByRole("button", { name: "Open dialog" }),
+  );
+  const dialog = await screen.findByRole("dialog", { name: "Page settings" });
+  await waitFor(() => expect(dialog).toBeVisible());
+};
+
 export const Overview: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
+  play: openDialog,
   render: () => <DialogExample />,
 };
 
@@ -62,5 +79,11 @@ export const NarrowSheet: Story = {
       value: "mobile1",
     },
   },
+  parameters: {
+    chromatic: {
+      modes: MOBILE_MODES,
+    },
+  },
+  play: openDialog,
   render: () => <DialogExample />,
 };

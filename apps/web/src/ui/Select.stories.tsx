@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { BriefcaseBusiness, House, UsersRound } from "lucide-react";
 import { useState } from "react";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
+import { DESKTOP_MODES } from "../../.storybook/modes";
 import { Select, type SelectOption } from "./Select";
 
 const CALENDAR_OPTIONS: readonly SelectOption[] = [
@@ -55,6 +57,21 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("combobox", { name: "Calendar" }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: "Calendar options",
+    });
+    await waitFor(() => expect(listbox).toBeVisible());
+  },
   render: () => <CalendarSelect />,
 };
 

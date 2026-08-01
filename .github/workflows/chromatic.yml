@@ -1,0 +1,66 @@
+name: Chromatic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/chromatic.yml"
+      - "apps/web/**"
+      - "packages/calendar/**"
+      - "packages/types/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/chromatic.yml"
+      - "apps/web/**"
+      - "packages/calendar/**"
+      - "packages/types/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    name: Storybook visual regression
+    runs-on: ubuntu-latest
+    env:
+      CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+    steps:
+      - name: Report missing project token
+        if: env.CHROMATIC_PROJECT_TOKEN == ''
+        run: echo "::notice::Chromatic is ready but CHROMATIC_PROJECT_TOKEN is not configured."
+
+      - uses: actions/checkout@v6
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
+
+      - uses: actions/setup-node@v6
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - if: env.CHROMATIC_PROJECT_TOKEN != ''
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish and test Storybook
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
+        uses: chromaui/action@v18
+        with:
+          buildScriptName: storybook:build
+          externals: |
+            ../../packages/calendar/**
+            ../../packages/types/**
+          onlyChanged: true
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          workingDir: apps/web

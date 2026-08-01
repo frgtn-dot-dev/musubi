@@ -53,6 +53,10 @@ const preview: Preview = {
     a11y: {
       test: "error",
     },
+    chromatic: {
+      pauseAnimationAtEnd: true,
+      prefersReducedMotion: "reduce",
+    },
     controls: {
       matchers: {
         color: /(background|color)$/i,

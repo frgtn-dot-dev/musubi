@@ -51,6 +51,8 @@ coverage
 .nyc_output
 playwright-report/
 test-results/
+chromatic-build-*.xml
+chromatic-diagnostics.json
 
 # Builds
 dist

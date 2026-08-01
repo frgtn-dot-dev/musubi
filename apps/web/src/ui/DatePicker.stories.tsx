@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { useState } from "react";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
+import { DESKTOP_MODES } from "../../.storybook/modes";
 import { DatePicker } from "./DatePicker";
 import styles from "./PickerStories.module.css";
 
@@ -54,6 +56,21 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = {
+  parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: /^Date:/ }),
+    );
+    const calendar = await screen.findByRole("region", {
+      name: "Choose date",
+    });
+    await waitFor(() => expect(calendar).toBeVisible());
+  },
   render: () => <DatePickerExample title="Event date" />,
 };
 

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
+import { DESKTOP_MODES } from "../../.storybook/modes";
 import { Toast } from "./Toast";
 
 const meta = {
@@ -7,6 +8,9 @@ const meta = {
   },
   component: Toast,
   parameters: {
+    chromatic: {
+      modes: DESKTOP_MODES,
+    },
     layout: "fullscreen",
   },
   tags: ["autodocs"],
