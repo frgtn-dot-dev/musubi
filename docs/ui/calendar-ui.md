@@ -178,6 +178,7 @@ vzhled tlačítka.
 | zrušení akce | vždy `variant="secondary"` — stejná role musí mít stejnou váhu; `variant="text"` je pro terciární věci v toku („More options", „Back to calendar") |
 | modal / confirm | `Dialog` / `DialogClose` — jedna hlavička, focus trap, návrat focusu, mobilní sheet |
 | lightweight anchored layer | `PopoverContent` + Radix-backed `Popover*` exports — shared portal, surface, collision gutter and mobile sheet; the feature owns semantics and focus policy |
+| short command list | `MenuContent` / `MenuItem` — Radix-backed roving focus, typeahead, Escape and focus return; never wrap one direct action in a menu |
 | popsané pole | `Field` — label, description a error vazby generuje komponenta |
 | řádek nastavení či seznamu | `RowAction` / `RowToggle` / `RowOptions` |
 | malá volba | `Segmented`; boolean `Switch` / `Checkbox`; delší seznam `Select` |

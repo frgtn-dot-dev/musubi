@@ -4,8 +4,8 @@ import {
   type ComponentPropsWithoutRef,
   type ElementRef,
 } from "react";
+import anchoredStyles from "./AnchoredSurface.module.css";
 import { classNames } from "./class-names";
-import styles from "./Popover.module.css";
 
 const DEFAULT_COLLISION_PADDING = 12;
 const DEFAULT_SIDE_OFFSET = 8;
@@ -50,7 +50,7 @@ export const PopoverContent = forwardRef<
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
         {...contentProps}
-        className={classNames(styles.surface, className)}
+        className={classNames(anchoredStyles.surface, className)}
         collisionPadding={collisionPadding}
         data-mobile-surface={mobileSurface}
         data-ui="popover-content"
@@ -59,7 +59,10 @@ export const PopoverContent = forwardRef<
       >
         {children}
         {showArrow ? (
-          <PopoverPrimitive.Arrow aria-hidden="true" className={styles.arrow} />
+          <PopoverPrimitive.Arrow
+            aria-hidden="true"
+            className={anchoredStyles.arrow}
+          />
         ) : null}
       </PopoverPrimitive.Content>
     </PopoverPrimitive.Portal>

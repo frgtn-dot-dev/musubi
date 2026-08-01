@@ -11,6 +11,7 @@ interaction risk and usefulness in Storybook—not file size alone.
 | Dialog / DialogClose | web `src/ui` | Stable shell; document desktop/sheet states. |
 | ConfirmationDialog | web `src/ui` | Stable confirm pattern; four production flows migrated. |
 | Popover / PopoverContent | web `src/ui` | Stable physical anchored-layer shell; keep consumer semantics and focus behavior separate. |
+| Menu / MenuContent / MenuItem | web `src/ui` | Stable command-list contract; no production consumer exists yet, so do not invent a one-item menu. |
 | Field | web `src/ui` | Stable label/description/error contract. |
 | Row variants | web `src/ui` | Stable settings/list pattern. |
 | Segmented, Switch, Checkbox, Select | web `src/ui` | Stabilize keyboard/state matrix in stories. |

@@ -48,7 +48,16 @@ The web `PopoverContent` contract owns only the physical anchored layer: portal,
 the <=599 px edge-to-edge bottom-sheet transform. Feature and control consumers
 still own semantics, focus behavior, keyboard navigation, width and internal
 anatomy. Do not merge listbox, picker, event-preview and command-menu behavior
-into this shell; menu navigation will remain a separate contract.
+into this shell.
+
+Web command lists use the separate non-modal `Menu` contract. Radix Dropdown
+Menu owns menu-button semantics, roving focus, arrows, typeahead, Escape and
+focus return.
+The shared menu uses the same anchored canvas surface as Popover, requires an
+accessible label, and becomes a bottom command sheet at <=599 px. Items may have
+one icon, a concise label, an optional shortcut, disabled state, or a named
+destructive tone. Never create a menu for one action or use it for persistent
+form choices.
 
 Every public component needs realistic Overview, Variants and States stories;
 add Narrow when anatomy changes. Support light/dark, keyboard operation,
