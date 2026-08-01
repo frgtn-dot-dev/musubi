@@ -1,4 +1,3 @@
-import * as Popover from "@radix-ui/react-popover";
 import { endSeriesBefore, excludeOccurrence } from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import { providerDisplayName } from "@musubi/types";
@@ -32,6 +31,12 @@ import {
   ConfirmationNotice,
   DialogError,
 } from "~/ui/ConfirmationDialog";
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/Popover";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
@@ -54,7 +59,6 @@ import type { Notify } from "../notice";
 import { EventEditorForm } from "./EventEditorForm";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import styles from "./styles/event-details.module.css";
-import workspaceStyles from "./workspace.module.css";
 
 type TargetMutation = {
   calendarId: string;
@@ -373,19 +377,18 @@ export function EventDetailsPopover({
 
   return (
     <>
-      <Popover.Root open={open} onOpenChange={handleOpenChange}>
-        <Popover.Trigger
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger
           asChild
           onClick={(clickEvent) =>
             setTriggerElement(clickEvent.currentTarget)
           }
         >
           {children}
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
+        </PopoverTrigger>
+          <PopoverContent
             aria-labelledby={titleId}
-            className={`${workspaceStyles.popover} ${styles.detailPopover}`}
+            className={styles.detailPopover}
             collisionPadding={14}
             align={align}
             onClick={(clickEvent) => clickEvent.stopPropagation()}
@@ -465,14 +468,14 @@ export function EventDetailsPopover({
                       </span>
                     ) : null}
                   </div>
-                  <Popover.Close asChild>
+                  <PopoverClose asChild>
                     <IconButton
                       label="Close event details"
                       size="compact"
                     >
                       <X size={17} strokeWidth={1.6} />
                     </IconButton>
-                  </Popover.Close>
+                  </PopoverClose>
                 </header>
 
                 <div className={styles.detailsBody}>
@@ -780,9 +783,8 @@ export function EventDetailsPopover({
                 ) : null}
               </>
             )}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+          </PopoverContent>
+      </Popover>
 
       {deletePrompt === "scope" ? (
         <RecurrenceScopeDialog

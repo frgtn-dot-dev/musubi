@@ -1,4 +1,3 @@
-import * as Popover from "@radix-ui/react-popover";
 import {
   DEFAULT_CALENDAR_COLOR,
   type Calendar,
@@ -8,6 +7,12 @@ import {
 import { GripHorizontal, X } from "lucide-react";
 import { useRef } from "react";
 import { IconButton } from "~/ui/Button";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverClose,
+  PopoverContent,
+} from "~/ui/Popover";
 import {
   createEventFromForm,
   defaultEventFormValues,
@@ -102,17 +107,17 @@ export function QuickCreate({
   }
 
   return (
-    <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Anchor asChild>
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverAnchor asChild>
         <span
           className={styles.quickCreateAnchor}
           style={{ left: anchor.x, top: anchor.y }}
         />
-      </Popover.Anchor>
-      <Popover.Portal>
-        <Popover.Content
-          className={`${styles.popover} ${styles.createPopover}`}
+      </PopoverAnchor>
+        <PopoverContent
+          className={styles.createPopover}
           data-moved={windowDrag.moved ? "" : undefined}
+          showArrow={!windowDrag.moved}
           ref={contentRef}
           style={{
             transform: windowDrag.moved
@@ -183,11 +188,11 @@ export function QuickCreate({
               />
             ) : null}
             <h2>New event</h2>
-            <Popover.Close asChild>
+            <PopoverClose asChild>
               <IconButton label="Close new event" size="compact">
                 <X aria-hidden="true" size={17} strokeWidth={1.6} />
               </IconButton>
-            </Popover.Close>
+            </PopoverClose>
           </div>
           <EventEditorForm
             calendars={calendars}
@@ -217,8 +222,7 @@ export function QuickCreate({
             timeFormat={timeFormat}
             weekStartsOn={weekStartsOn}
           />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </PopoverContent>
+    </Popover>
   );
 }

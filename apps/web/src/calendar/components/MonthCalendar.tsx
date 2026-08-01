@@ -1,4 +1,3 @@
-import * as Popover from "@radix-ui/react-popover";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
   getMonthGrid,
@@ -13,6 +12,7 @@ import {
   useState,
 } from "react";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
 import {
@@ -519,8 +519,8 @@ export function MonthCalendar({
                       </div>
                     ) : null}
                     {overflow > 0 ? (
-                      <Popover.Root>
-                        <Popover.Trigger asChild>
+                      <Popover>
+                        <PopoverTrigger asChild>
                           <button
                             className={styles.moreEvents}
                             type="button"
@@ -528,16 +528,17 @@ export function MonthCalendar({
                           >
                             +{overflow} more
                           </button>
-                        </Popover.Trigger>
-                        <Popover.Portal>
-                          <Popover.Content
+                        </PopoverTrigger>
+                          <PopoverContent
                             align="center"
                             aria-label={`${getLongDateLabel(day)} events`}
-                            className={`${styles.popover} ${styles.monthOverflowPopover}`}
+                            className={styles.monthOverflowPopover}
                             collisionPadding={12}
                             role="dialog"
                             side="bottom"
                             sideOffset={8}
+                            onClick={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                           >
                             <div className={styles.monthOverflowHeader}>
                               <h2>{getLongDateLabel(day)}</h2>
@@ -571,9 +572,8 @@ export function MonthCalendar({
                                 />
                               ))}
                             </div>
-                          </Popover.Content>
-                        </Popover.Portal>
-                      </Popover.Root>
+                          </PopoverContent>
+                      </Popover>
                     ) : null}
                   </div>
                 </div>
