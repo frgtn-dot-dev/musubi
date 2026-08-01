@@ -1,4 +1,3 @@
-import * as Popover from "@radix-ui/react-popover";
 import type { Settings } from "@musubi/types";
 import { ChevronDown } from "lucide-react";
 import { useRef, useState } from "react";
@@ -7,6 +6,7 @@ import { MiniCalendar } from "~/calendar/components/MiniCalendar";
 import { toDateKey } from "~/calendar/date-key";
 import { Button } from "./Button";
 import { classNames } from "./class-names";
+import { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 import styles from "./primitives.module.css";
 
 export type DatePickerProps = {
@@ -64,14 +64,14 @@ export function DatePicker({
   }
 
   return (
-    <Popover.Root
+    <Popover
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) setDraft(value);
         setOpen(nextOpen);
       }}
     >
-      <Popover.Trigger asChild>
+      <PopoverTrigger asChild>
         <button
           aria-label={`${label}: ${
             validValue ? getLongDateLabel(anchor) : "Choose date"
@@ -85,75 +85,70 @@ export function DatePicker({
           </span>
           <ChevronDown aria-hidden="true" size={16} strokeWidth={1.5} />
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="start"
-          aria-label={`Choose ${label.toLocaleLowerCase()}`}
-          className={styles.datePickerPopover}
-          collisionPadding={12}
-          ref={contentRef}
-          side="left"
-          sideOffset={8}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            requestAnimationFrame(() => {
-              const selected =
-                contentRef.current?.querySelector<HTMLElement>(
-                  '[role="gridcell"][aria-selected="true"]',
-                );
-              selected?.focus();
-            });
-          }}
-        >
-          <MiniCalendar
-            anchor={anchor}
-            label={`Choose ${label.toLocaleLowerCase()}`}
-            max={max}
-            min={min}
-            onDateChange={choose}
-            weekStartsOn={weekStartsOn}
-          />
-          <div className={styles.datePickerEntry}>
-            <label>
-              <span>Exact date</span>
-              <input
-                aria-invalid={draft.length > 0 && !draftValid}
-                inputMode="numeric"
-                placeholder="YYYY-MM-DD"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" || !draftValid) return;
-                  event.preventDefault();
-                  choose(draft);
-                }}
-              />
-            </label>
-            <Button
-              disabled={!todayAvailable}
-              size="compact"
-              variant="ghost"
-              onClick={() => choose(today)}
-            >
-              Today
-            </Button>
-          </div>
-          <p
-            className={styles.datePickerHint}
-            role={draft.length > 0 && !draftValid ? "alert" : undefined}
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        aria-label={`Choose ${label.toLocaleLowerCase()}`}
+        className={styles.datePickerPopover}
+        ref={contentRef}
+        side="left"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          requestAnimationFrame(() => {
+            const selected =
+              contentRef.current?.querySelector<HTMLElement>(
+                '[role="gridcell"][aria-selected="true"]',
+              );
+            selected?.focus();
+          });
+        }}
+      >
+        <MiniCalendar
+          anchor={anchor}
+          label={`Choose ${label.toLocaleLowerCase()}`}
+          max={max}
+          min={min}
+          onDateChange={choose}
+          weekStartsOn={weekStartsOn}
+        />
+        <div className={styles.datePickerEntry}>
+          <label>
+            <span>Exact date</span>
+            <input
+              aria-invalid={draft.length > 0 && !draftValid}
+              inputMode="numeric"
+              placeholder="YYYY-MM-DD"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !draftValid) return;
+                event.preventDefault();
+                choose(draft);
+              }}
+            />
+          </label>
+          <Button
+            disabled={!todayAvailable}
+            size="compact"
+            variant="ghost"
+            onClick={() => choose(today)}
           >
-            {draft.length > 0 && !draftValid
-              ? min && draft < min
-                ? `Choose ${min} or later.`
-                : max && draft > max
-                  ? `Choose ${max} or earlier.`
-                  : "Use the format YYYY-MM-DD."
-              : "Type a date and press Enter."}
-          </p>
-          <Popover.Arrow className={styles.datePickerArrow} />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+            Today
+          </Button>
+        </div>
+        <p
+          className={styles.datePickerHint}
+          role={draft.length > 0 && !draftValid ? "alert" : undefined}
+        >
+          {draft.length > 0 && !draftValid
+            ? min && draft < min
+              ? `Choose ${min} or later.`
+              : max && draft > max
+                ? `Choose ${max} or earlier.`
+                : "Use the format YYYY-MM-DD."
+            : "Type a date and press Enter."}
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }

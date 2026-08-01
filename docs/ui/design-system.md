@@ -197,9 +197,16 @@ contracts stay distinct. Every portaled layer follows R4b and R4c from
 `calendar-ui.md`.
 
 Production modal flows import the shared `Dialog` contract; only that primitive
-imports Radix Dialog directly. Feature components may use Radix Popover for an
-anchored interaction until the corresponding shared popover or menu contract is
-stable, but must not reproduce modal overlay, heading, footer, or focus logic.
+imports Radix Dialog directly. General anchored layers compose `Popover`,
+`PopoverTrigger`, `PopoverAnchor`, `PopoverContent`, and `PopoverClose`; only
+that shared primitive owns their portal, collision gutter, surface, arrow,
+motion, and narrow bottom-sheet geometry. Consumers retain their role, focus
+policy, keyboard model, dimensions, and content anatomy. `Select`,
+`DatePicker`, `TimePicker`, and `ColorPicker` use this contract without being
+forced into one selection behavior. Calendar feature popovers keep their
+special drag and focus policies while they are migrated as a separate bounded
+step. A menu will receive its own command-navigation contract rather than
+turning `Popover` into a universal interaction component.
 
 `Dialog` defaults to `bodyLayout="padded"`; use `bodyLayout="flush"` only for
 edge-to-edge rows or sections whose own readable content follows the layer
@@ -335,10 +342,10 @@ written to source, configuration, logs, or documentation.
 The baseline catalog visualizes the implemented color, typography, spacing,
 shape, motion, and responsive contracts. It also covers Button, Checkbox,
 ColorPicker, ConfirmationDialog, DatePicker, Dialog, Empty, Field, Row,
-SectionLabel, Segmented, Select, SettingsSection, Switch, TimePicker, and Toast
-without forking their production implementations. Muted and faint color tokens
-may be shown as decorative swatches, but must not be presented as readable text
-when they do not satisfy the required contrast ratio.
+Popover, SectionLabel, Segmented, Select, SettingsSection, Switch, TimePicker,
+and Toast without forking their production implementations. Muted and faint
+color tokens may be shown as decorative swatches, but must not be presented as
+readable text when they do not satisfy the required contrast ratio.
 
 ## 7. Workflow
 

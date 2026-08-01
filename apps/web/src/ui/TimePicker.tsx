@@ -1,9 +1,9 @@
-import * as Popover from "@radix-ui/react-popover";
 import type { Settings } from "@musubi/types";
 import { ChevronDown } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { createTimeGeometry } from "~/calendar/time-geometry";
 import { classNames } from "./class-names";
+import { Popover, PopoverAnchor, PopoverContent } from "./Popover";
 import styles from "./primitives.module.css";
 
 const TIME_PATTERN = /^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i;
@@ -236,7 +236,7 @@ export function TimePicker({
         : "Type a valid time, such as 9, 9:30 or 21:15.";
 
   return (
-    <Popover.Root
+    <Popover
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
@@ -246,7 +246,7 @@ export function TimePicker({
         }
       }}
     >
-      <Popover.Anchor asChild>
+      <PopoverAnchor asChild>
         <div className={classNames(styles.timePicker, className)}>
           <input
             aria-activedescendant={
@@ -352,82 +352,78 @@ export function TimePicker({
             Type a time or use the arrow keys to choose from the list.
           </span>
         </div>
-      </Popover.Anchor>
-      <Popover.Portal>
-        {open ? (
-          <Popover.Content
-            align="start"
-            aria-label={`Choose ${label.toLocaleLowerCase()}`}
-            className={styles.timePickerPopover}
-            collisionPadding={12}
-            side="bottom"
-            sideOffset={6}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-            onInteractOutside={(event) => {
-              if (event.target === inputRef.current) {
-                event.preventDefault();
-              }
-            }}
-            onOpenAutoFocus={(event) => event.preventDefault()}
+      </PopoverAnchor>
+      {open ? (
+        <PopoverContent
+          align="start"
+          aria-label={`Choose ${label.toLocaleLowerCase()}`}
+          className={styles.timePickerPopover}
+          side="bottom"
+          sideOffset={6}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onInteractOutside={(event) => {
+            if (event.target === inputRef.current) {
+              event.preventDefault();
+            }
+          }}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <h2 className={styles.timePickerSheetTitle}>
+            Choose {label.toLocaleLowerCase()}
+          </h2>
+          <div
+            aria-label={`${label} options`}
+            className={styles.timePickerList}
+            id={`${id}-listbox`}
+            role="listbox"
           >
-            <h2 className={styles.timePickerSheetTitle}>
-              Choose {label.toLocaleLowerCase()}
-            </h2>
-            <div
-              aria-label={`${label} options`}
-              className={styles.timePickerList}
-              id={`${id}-listbox`}
-              role="listbox"
-            >
-              {options.map((time) => {
-                const minutes = timeToMinutes(time);
-                const duration =
-                  minutes !== null &&
-                  relativeMinutes !== null &&
-                  minutes > relativeMinutes
-                    ? durationLabel(minutes - relativeMinutes)
-                    : null;
-                const display = formatTimeValue(time, timeFormat);
+            {options.map((time) => {
+              const minutes = timeToMinutes(time);
+              const duration =
+                minutes !== null &&
+                relativeMinutes !== null &&
+                minutes > relativeMinutes
+                  ? durationLabel(minutes - relativeMinutes)
+                  : null;
+              const display = formatTimeValue(time, timeFormat);
 
-                return (
-                  <button
-                    aria-label={
-                      duration ? `${display}, ${duration}` : display
-                    }
-                    aria-selected={time === value}
-                    className={styles.timePickerOption}
-                    data-active={time === activeValue ? "" : undefined}
-                    id={`${id}-option-${time.replace(":", "-")}`}
-                    key={time}
-                    ref={(node) => {
-                      if (node) optionRefs.current.set(time, node);
-                      else optionRefs.current.delete(time);
-                    }}
-                    role="option"
-                    tabIndex={-1}
-                    type="button"
-                    onClick={() => choose(time)}
-                    onPointerDown={(event) => event.preventDefault()}
-                    onPointerMove={() => setActiveValue(time)}
-                  >
-                    <span>{display}</span>
-                    {duration ? <small>{duration}</small> : null}
-                  </button>
-                );
-              })}
-            </div>
-            <p
-              className={styles.timePickerHint}
-              role={invalid ? "alert" : undefined}
-            >
-              {invalid
-                ? error
-                : "Type a time, or use ↑ and ↓ to choose."}
-            </p>
-            <Popover.Arrow className={styles.timePickerArrow} />
-          </Popover.Content>
-        ) : null}
-      </Popover.Portal>
-    </Popover.Root>
+              return (
+                <button
+                  aria-label={
+                    duration ? `${display}, ${duration}` : display
+                  }
+                  aria-selected={time === value}
+                  className={styles.timePickerOption}
+                  data-active={time === activeValue ? "" : undefined}
+                  id={`${id}-option-${time.replace(":", "-")}`}
+                  key={time}
+                  ref={(node) => {
+                    if (node) optionRefs.current.set(time, node);
+                    else optionRefs.current.delete(time);
+                  }}
+                  role="option"
+                  tabIndex={-1}
+                  type="button"
+                  onClick={() => choose(time)}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onPointerMove={() => setActiveValue(time)}
+                >
+                  <span>{display}</span>
+                  {duration ? <small>{duration}</small> : null}
+                </button>
+              );
+            })}
+          </div>
+          <p
+            className={styles.timePickerHint}
+            role={invalid ? "alert" : undefined}
+          >
+            {invalid
+              ? error
+              : "Type a time, or use ↑ and ↓ to choose."}
+          </p>
+        </PopoverContent>
+      ) : null}
+    </Popover>
   );
 }

@@ -177,6 +177,7 @@ vzhled tlačítka.
 | akce a ikonová akce | `Button` / `IconButton`; navigace zůstává odkazem s `buttonClassName` |
 | zrušení akce | vždy `variant="secondary"` — stejná role musí mít stejnou váhu; `variant="text"` je pro terciární věci v toku („More options", „Back to calendar") |
 | modal / confirm | `Dialog` / `DialogClose` — jedna hlavička, focus trap, návrat focusu, mobilní sheet |
+| lightweight anchored layer | `PopoverContent` + Radix-backed `Popover*` exports — shared portal, surface, collision gutter and mobile sheet; the feature owns semantics and focus policy |
 | popsané pole | `Field` — label, description a error vazby generuje komponenta |
 | řádek nastavení či seznamu | `RowAction` / `RowToggle` / `RowOptions` |
 | malá volba | `Segmented`; boolean `Switch` / `Checkbox`; delší seznam `Select` |
@@ -186,7 +187,10 @@ vzhled tlačítka.
 
 Varianty patří do API primitiva (`variant`, `size`, `layout`), ne do
 descendant selektoru obrazovky. Moduly v `calendar/components/styles/` smějí
-popisovat jen doménový obsah uvnitř sdílené skořápky.
+popisovat jen doménový obsah uvnitř sdílené skořápky. `PopoverContent`
+deliberately does not define a role, keyboard model, or focus policy: a
+select-only combobox, editable time combobox, and event preview share a physical
+layer, not one interaction model.
 
 Responzivní ladder je jediný:
 

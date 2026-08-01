@@ -1,0 +1,71 @@
+.surface {
+  z-index: 140;
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-card);
+  outline: 0;
+  background: var(--surface-canvas);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text-primary);
+  animation: popover-in var(--motion-fast) ease both;
+}
+
+:global([data-radix-popper-content-wrapper]):has(.surface) {
+  z-index: 140 !important;
+}
+
+.arrow {
+  fill: var(--surface-canvas);
+  stroke: var(--border-medium);
+  stroke-width: 1px;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+}
+
+@media (max-width: 599px) {
+  :global([data-radix-popper-content-wrapper]):has(
+    .surface[data-mobile-surface="sheet"]
+  ) {
+    position: fixed !important;
+    z-index: 140 !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    min-width: 100% !important;
+    transform: none !important;
+  }
+
+  .surface[data-mobile-surface="sheet"] {
+    width: 100%;
+    max-height: calc(100dvh - var(--space-5));
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+    animation-name: popover-sheet-in;
+  }
+
+  .surface[data-mobile-surface="sheet"] .arrow {
+    display: none;
+  }
+}
+
+@keyframes popover-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface {
+    animation-duration: 0.01ms;
+  }
+}

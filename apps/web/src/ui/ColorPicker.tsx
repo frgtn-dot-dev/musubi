@@ -1,4 +1,3 @@
-import * as Popover from "@radix-ui/react-popover";
 import {
   MICROSOFT_CALENDAR_COLORS,
   MUSUBI_CALENDAR_COLORS,
@@ -14,6 +13,7 @@ import {
 } from "react";
 import { getReadableEventTextColor } from "~/calendar/event-color";
 import { classNames } from "./class-names";
+import { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 import styles from "./primitives.module.css";
 
 type PaletteColor = {
@@ -154,14 +154,14 @@ export function ColorPicker({
     : (normalizedValue ?? palette[0]!.hex);
 
   return (
-    <Popover.Root
+    <Popover
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) beginOpen();
         else setOpen(false);
       }}
     >
-      <Popover.Trigger asChild>
+      <PopoverTrigger asChild>
         <button
           aria-label={`${label}: ${triggerColor}`}
           className={classNames(styles.colorPickerTrigger, className)}
@@ -171,159 +171,157 @@ export function ColorPicker({
         >
           <span aria-hidden="true" className={styles.colorPickerSwatch} />
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="center"
-          aria-labelledby={`${id}-title`}
-          className={styles.colorPickerPopover}
-          collisionPadding={12}
-          data-ui="color-picker-popover"
-          side="bottom"
-          sideOffset={8}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            requestAnimationFrame(() =>
-              optionRefs.current.get(activeKey)?.focus(),
-            );
-          }}
+      </PopoverTrigger>
+      <PopoverContent
+        align="center"
+        aria-labelledby={`${id}-title`}
+        className={styles.colorPickerPopover}
+        side="bottom"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          requestAnimationFrame(() =>
+            optionRefs.current.get(activeKey)?.focus(),
+          );
+        }}
+      >
+        <div className={styles.colorPickerHeader}>
+          <h2 id={`${id}-title`}>Choose color</h2>
+          <p>
+            {microsoft
+              ? "Outlook supports these colors."
+              : "Choose a pigment or enter your own."}
+          </p>
+        </div>
+        <div
+          aria-label={`${label} options`}
+          className={styles.colorPickerGrid}
+          data-provider={microsoft ? "microsoft" : "musubi"}
+          role="listbox"
         >
-          <div className={styles.colorPickerHeader}>
-            <h2 id={`${id}-title`}>Choose color</h2>
-            <p>
-              {microsoft
-                ? "Outlook supports these colors."
-                : "Choose a pigment or enter your own."}
-            </p>
-          </div>
-          <div
-            aria-label={`${label} options`}
-            className={styles.colorPickerGrid}
-            data-provider={microsoft ? "microsoft" : "musubi"}
-            role="listbox"
-          >
-            {palette.map((color) => {
-              const selected = matches(color.hex, selectedKey);
-              const foreground = getReadableEventTextColor(color.hex);
+          {palette.map((color) => {
+            const selected = matches(color.hex, selectedKey);
+            const foreground = getReadableEventTextColor(color.hex);
 
-              return (
-                <button
-                  aria-label={`${displayName(color.name)}, ${color.hex}`}
-                  aria-selected={selected}
-                  className={styles.colorPickerOption}
-                  key={color.hex}
-                  ref={(node) => {
-                    if (node) optionRefs.current.set(color.hex, node);
-                    else optionRefs.current.delete(color.hex);
-                  }}
-                  role="option"
-                  tabIndex={activeKey === color.hex ? 0 : -1}
-                  type="button"
-                  onClick={() => choose(color.hex)}
-                  onFocus={() => setActiveKey(color.hex)}
-                  onKeyDown={(event) => moveFocus(event, color.hex)}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={styles.colorPickerOptionSwatch}
-                    style={{
-                      "--option-color": color.hex,
-                      "--option-foreground": foreground,
-                    } as CSSProperties}
-                  >
-                    {selected ? <Check size={18} strokeWidth={2} /> : null}
-                  </span>
-                  <span>{displayName(color.name)}</span>
-                </button>
-              );
-            })}
-            {!microsoft ? (
+            return (
               <button
-                aria-label="Custom color"
-                aria-selected={customSelected}
+                aria-label={`${displayName(color.name)}, ${color.hex}`}
+                aria-selected={selected}
                 className={styles.colorPickerOption}
+                key={color.hex}
                 ref={(node) => {
-                  if (node) optionRefs.current.set("custom", node);
-                  else optionRefs.current.delete("custom");
+                  if (node) optionRefs.current.set(color.hex, node);
+                  else optionRefs.current.delete(color.hex);
                 }}
                 role="option"
-                tabIndex={activeKey === "custom" ? 0 : -1}
+                tabIndex={activeKey === color.hex ? 0 : -1}
                 type="button"
-                onClick={openCustom}
-                onFocus={() => setActiveKey("custom")}
-                onKeyDown={(event) => moveFocus(event, "custom")}
+                onClick={() => choose(color.hex)}
+                onFocus={() => setActiveKey(color.hex)}
+                onKeyDown={(event) => moveFocus(event, color.hex)}
               >
                 <span
                   aria-hidden="true"
-                  className={styles.colorPickerCustomSwatch}
+                  className={styles.colorPickerOptionSwatch}
+                  style={
+                    {
+                      "--option-color": color.hex,
+                      "--option-foreground": foreground,
+                    } as CSSProperties
+                  }
                 >
-                  <Plus size={18} strokeWidth={1.5} />
+                  {selected ? <Check size={18} strokeWidth={2} /> : null}
                 </span>
-                <span>Custom</span>
+                <span>{displayName(color.name)}</span>
               </button>
-            ) : null}
-          </div>
-          {customOpen ? (
-            <div className={styles.colorPickerCustom}>
+            );
+          })}
+          {!microsoft ? (
+            <button
+              aria-label="Custom color"
+              aria-selected={customSelected}
+              className={styles.colorPickerOption}
+              ref={(node) => {
+                if (node) optionRefs.current.set("custom", node);
+                else optionRefs.current.delete("custom");
+              }}
+              role="option"
+              tabIndex={activeKey === "custom" ? 0 : -1}
+              type="button"
+              onClick={openCustom}
+              onFocus={() => setActiveKey("custom")}
+              onKeyDown={(event) => moveFocus(event, "custom")}
+            >
               <span
                 aria-hidden="true"
-                className={styles.colorPickerPreview}
-                style={{
+                className={styles.colorPickerCustomSwatch}
+              >
+                <Plus size={18} strokeWidth={1.5} />
+              </span>
+              <span>Custom</span>
+            </button>
+          ) : null}
+        </div>
+        {customOpen ? (
+          <div className={styles.colorPickerCustom}>
+            <span
+              aria-hidden="true"
+              className={styles.colorPickerPreview}
+              style={
+                {
                   "--preview-color":
                     validCustom ?? normalizedValue ?? palette[0]!.hex,
-                } as CSSProperties}
+                } as CSSProperties
+              }
+            />
+            <label>
+              <span>Hex color</span>
+              <input
+                aria-describedby={`${id}-custom-hint`}
+                aria-invalid={customDirty && !validCustom}
+                autoCapitalize="characters"
+                autoComplete="off"
+                maxLength={7}
+                placeholder="#B3A48A"
+                ref={customInputRef}
+                spellCheck={false}
+                value={customDraft}
+                onChange={(event) => {
+                  const nextDraft = event.target.value;
+                  const normalized = normalizeHexColor(nextDraft);
+                  setCustomDraft(nextDraft);
+                  setCustomDirty(true);
+                  if (normalized) onChange(normalized);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && validCustom) {
+                    event.preventDefault();
+                    setOpen(false);
+                  }
+                }}
               />
-              <label>
-                <span>Hex color</span>
-                <input
-                  aria-describedby={`${id}-custom-hint`}
-                  aria-invalid={customDirty && !validCustom}
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  maxLength={7}
-                  placeholder="#B3A48A"
-                  ref={customInputRef}
-                  spellCheck={false}
-                  value={customDraft}
-                  onChange={(event) => {
-                    const nextDraft = event.target.value;
-                    const normalized = normalizeHexColor(nextDraft);
-                    setCustomDraft(nextDraft);
-                    setCustomDirty(true);
-                    if (normalized) onChange(normalized);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && validCustom) {
-                      event.preventDefault();
-                      setOpen(false);
-                    }
-                  }}
-                />
-              </label>
-              <button
-                className={styles.colorPickerDone}
-                disabled={!validCustom}
-                type="button"
-                onClick={() => setOpen(false)}
-              >
-                Done
-              </button>
-              <p
-                id={`${id}-custom-hint`}
-                role={customDirty && !validCustom ? "alert" : undefined}
-              >
-                {customDirty && !validCustom
-                  ? "Enter six hexadecimal characters."
-                  : "Changes preview as you type."}
-              </p>
-            </div>
-          ) : null}
-          <p className={styles.colorPickerHint}>
-            Use arrow keys to move between colors.
-          </p>
-          <Popover.Arrow className={styles.colorPickerArrow} />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+            </label>
+            <button
+              className={styles.colorPickerDone}
+              disabled={!validCustom}
+              type="button"
+              onClick={() => setOpen(false)}
+            >
+              Done
+            </button>
+            <p
+              id={`${id}-custom-hint`}
+              role={customDirty && !validCustom ? "alert" : undefined}
+            >
+              {customDirty && !validCustom
+                ? "Enter six hexadecimal characters."
+                : "Changes preview as you type."}
+            </p>
+          </div>
+        ) : null}
+        <p className={styles.colorPickerHint}>
+          Use arrow keys to move between colors.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }

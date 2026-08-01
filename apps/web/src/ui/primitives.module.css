@@ -802,23 +802,11 @@
 }
 
 .selectPopover {
-  z-index: 150;
   width: max(
     var(--radix-popover-trigger-width),
     min(280px, calc(100vw - var(--space-6)))
   );
   max-height: min(360px, var(--radix-popover-content-available-height));
-  overflow: hidden;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-card);
-  outline: 0;
-  background: var(--surface-canvas);
-  box-shadow: var(--shadow-overlay);
-  animation: date-picker-in var(--motion-fast) ease both;
-}
-
-:global([data-radix-popper-content-wrapper]):has(.selectPopover) {
-  z-index: 150 !important;
 }
 
 .selectSheetTitle {
@@ -902,12 +890,6 @@
   visibility: visible;
 }
 
-.selectArrow {
-  fill: var(--surface-canvas);
-  stroke: var(--border-medium);
-  stroke-width: 1px;
-}
-
 .row {
   display: flex;
   width: 100%;
@@ -967,11 +949,7 @@
 
 .rowAction[data-tone="destructive"] .rowLabel,
 .rowAction[data-tone="destructive"] .rowIcon {
-  color: color-mix(
-    in srgb,
-    var(--accent-primary) 88%,
-    var(--text-primary)
-  );
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .rowIcon {
@@ -1077,15 +1055,11 @@
   display: flex;
   width: min(
     520px,
-    calc(
-      100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
-    )
+    calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
   );
   max-height: min(
     760px,
-    calc(
-      100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
-    )
+    calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
   );
   flex-direction: column;
   overflow: hidden;
@@ -1101,18 +1075,14 @@
 .dialog_compact {
   width: min(
     400px,
-    calc(
-      100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
-    )
+    calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
   );
 }
 
 .dialog_wide {
   width: min(
     720px,
-    calc(
-      100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter)
-    )
+    calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
   );
 }
 
@@ -1206,9 +1176,7 @@
 
 .dialog[data-body-layout="flush"] .dialogFooter {
   padding-top: var(--layer-footer-block);
-  padding-bottom: calc(
-    var(--layer-footer-block) + env(safe-area-inset-bottom)
-  );
+  padding-bottom: calc(var(--layer-footer-block) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-panel);
 }
@@ -1363,15 +1331,7 @@
 }
 
 .datePickerPopover {
-  z-index: 140;
   width: 304px;
-  overflow: hidden;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-card);
-  outline: 0;
-  background: var(--surface-canvas);
-  box-shadow: var(--shadow-overlay);
-  animation: date-picker-in var(--motion-fast) ease both;
 }
 
 .datePickerPopover h2,
@@ -1380,17 +1340,7 @@
 }
 
 .datePickerPopover.datePickerPopover [data-outside] {
-  color: color-mix(
-    in srgb,
-    var(--text-primary) 72%,
-    var(--surface-canvas)
-  );
-}
-
-:global([data-radix-popper-content-wrapper]):has(
-    .datePickerPopover
-  ) {
-  z-index: 140 !important;
+  color: color-mix(in srgb, var(--text-primary) 72%, var(--surface-canvas));
 }
 
 .datePickerEntry {
@@ -1447,12 +1397,6 @@
   color: var(--accent-primary);
 }
 
-.datePickerArrow {
-  fill: var(--surface-canvas);
-  stroke: var(--border-medium);
-  stroke-width: 1px;
-}
-
 .timePicker {
   position: relative;
   display: flex;
@@ -1497,21 +1441,7 @@
 }
 
 .timePickerPopover {
-  z-index: 140;
   width: 252px;
-  overflow: hidden;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-card);
-  outline: 0;
-  background: var(--surface-canvas);
-  box-shadow: var(--shadow-overlay);
-  animation: date-picker-in var(--motion-fast) ease both;
-}
-
-:global([data-radix-popper-content-wrapper]):has(
-    .timePickerPopover
-  ) {
-  z-index: 140 !important;
 }
 
 .timePickerList {
@@ -1585,12 +1515,6 @@
   color: var(--accent-primary);
 }
 
-.timePickerArrow {
-  fill: var(--surface-canvas);
-  stroke: var(--border-medium);
-  stroke-width: 1px;
-}
-
 .colorPickerTrigger {
   --picker-color: var(--surface-raised);
   display: inline-grid;
@@ -1629,21 +1553,7 @@
 }
 
 .colorPickerPopover {
-  z-index: 140;
   width: 316px;
-  overflow: hidden;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-card);
-  outline: 0;
-  background: var(--surface-canvas);
-  box-shadow: var(--shadow-overlay);
-  animation: date-picker-in var(--motion-fast) ease both;
-}
-
-:global([data-radix-popper-content-wrapper]):has(
-    .colorPickerPopover
-  ) {
-  z-index: 140 !important;
 }
 
 .colorPickerHeader {
@@ -1834,19 +1744,6 @@
   font-size: var(--text-11);
 }
 
-.colorPickerArrow {
-  fill: var(--surface-canvas);
-  stroke: var(--border-medium);
-  stroke-width: 1px;
-}
-
-@keyframes date-picker-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px) scale(0.99);
-  }
-}
-
 @keyframes dialog-overlay-in {
   from {
     opacity: 0;
@@ -1945,70 +1842,6 @@
     );
   }
 
-  :global([data-radix-popper-content-wrapper]):has(
-      .datePickerPopover
-    ) {
-    position: fixed !important;
-    z-index: 140 !important;
-    top: auto !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    min-width: 100% !important;
-    transform: none !important;
-  }
-
-  :global([data-radix-popper-content-wrapper]):has(
-      .timePickerPopover
-    ) {
-    position: fixed !important;
-    z-index: 140 !important;
-    top: auto !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    min-width: 100% !important;
-    transform: none !important;
-  }
-
-  :global([data-radix-popper-content-wrapper]):has(
-      .colorPickerPopover
-    ) {
-    position: fixed !important;
-    z-index: 140 !important;
-    top: auto !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    min-width: 100% !important;
-    transform: none !important;
-  }
-
-  :global([data-radix-popper-content-wrapper]):has(.selectPopover) {
-    position: fixed !important;
-    z-index: 150 !important;
-    top: auto !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    min-width: 100% !important;
-    transform: none !important;
-  }
-
-  .datePickerPopover,
-  .timePickerPopover,
-  .colorPickerPopover,
-  .selectPopover {
-    width: 100%;
-    max-height: calc(100dvh - var(--space-5));
-    padding-bottom: env(safe-area-inset-bottom);
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-    animation-name: dialog-sheet-in;
-  }
-
   .selectSheetTitle {
     position: relative;
     width: auto;
@@ -2093,13 +1926,6 @@
   .colorPickerOption {
     min-height: 72px;
   }
-
-  .datePickerArrow,
-  .timePickerArrow,
-  .colorPickerArrow,
-  .selectArrow {
-    display: none;
-  }
 }
 
 @keyframes dialog-sheet-in {
@@ -2116,11 +1942,7 @@
 
   .dialogOverlay,
   .dialog,
-  .toast,
-  .datePickerPopover,
-  .timePickerPopover,
-  .colorPickerPopover,
-  .selectPopover {
+  .toast {
     animation-duration: 0.01ms;
   }
 }

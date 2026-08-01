@@ -10,6 +10,7 @@ interaction risk and usefulness in Storybook—not file size alone.
 | Button / IconButton | web `src/ui` | Stable primitive; add stories in place first. |
 | Dialog / DialogClose | web `src/ui` | Stable shell; document desktop/sheet states. |
 | ConfirmationDialog | web `src/ui` | Stable confirm pattern; four production flows migrated. |
+| Popover / PopoverContent | web `src/ui` | Stable physical anchored-layer shell; keep consumer semantics and focus behavior separate. |
 | Field | web `src/ui` | Stable label/description/error contract. |
 | Row variants | web `src/ui` | Stable settings/list pattern. |
 | Segmented, Switch, Checkbox, Select | web `src/ui` | Stabilize keyboard/state matrix in stories. |

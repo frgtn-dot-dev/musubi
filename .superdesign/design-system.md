@@ -43,6 +43,13 @@ sheet for narrow/native modal detail, popover for anchored lightweight context,
 menu for immediate commands, toast for non-blocking feedback with at most one
 Undo action.
 
+The web `PopoverContent` contract owns only the physical anchored layer: portal,
+12 px collision gutter, canvas surface, elevation, arrow, entrance motion and
+the <=599 px edge-to-edge bottom-sheet transform. Feature and control consumers
+still own semantics, focus behavior, keyboard navigation, width and internal
+anatomy. Do not merge listbox, picker, event-preview and command-menu behavior
+into this shell; menu navigation will remain a separate contract.
+
 Every public component needs realistic Overview, Variants and States stories;
 add Narrow when anatomy changes. Support light/dark, keyboard operation,
 focus-visible, long content, disabled/pending/error states as applicable.

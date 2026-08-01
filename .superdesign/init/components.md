@@ -7,7 +7,7 @@ uses the actual public APIs and accessibility behavior.
 ## Current boundary
 
 - Web primitives live in `apps/web/src/ui` and use CSS Modules plus Radix for
-  modal behavior.
+  dialog and anchored-layer behavior.
 - Native primitives live in `apps/client/components/ui`; setting row variants
   currently live one directory higher.
 - Feature components compose these. They must not create another general shell.
@@ -163,7 +163,6 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   },
 );
 ```
-
 ## apps/web/src/ui/Dialog.tsx
 
 ```tsx
@@ -896,10 +895,86 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 );
 ```
 
+## apps/web/src/ui/Popover.tsx
+
+```tsx
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import {
+  forwardRef,
+  type ComponentPropsWithoutRef,
+  type ElementRef,
+} from "react";
+import { classNames } from "./class-names";
+import styles from "./Popover.module.css";
+
+const DEFAULT_COLLISION_PADDING = 12;
+const DEFAULT_SIDE_OFFSET = 8;
+
+export const Popover = PopoverPrimitive.Root;
+export const PopoverAnchor = PopoverPrimitive.Anchor;
+export const PopoverClose = PopoverPrimitive.Close;
+export const PopoverTrigger = PopoverPrimitive.Trigger;
+
+export type PopoverContentProps = ComponentPropsWithoutRef<
+  typeof PopoverPrimitive.Content
+> & {
+  /** Keep the anchored behavior on narrow viewports instead of using a sheet. */
+  mobileSurface?: "anchored" | "sheet";
+  /** Decorative pointer back to the trigger on anchored viewports. */
+  showArrow?: boolean;
+};
+
+/**
+ * Shared physical shell for lightweight anchored layers.
+ *
+ * Radix owns positioning, dismissal and focus hand-off. Consumers continue to
+ * own semantics, keyboard behavior, dimensions and content anatomy; this shell
+ * owns the portal, collision gutter, surface, motion and narrow sheet geometry.
+ */
+export const PopoverContent = forwardRef<
+  ElementRef<typeof PopoverPrimitive.Content>,
+  PopoverContentProps
+>(function PopoverContent(
+  {
+    children,
+    className,
+    collisionPadding = DEFAULT_COLLISION_PADDING,
+    mobileSurface = "sheet",
+    showArrow = true,
+    sideOffset = DEFAULT_SIDE_OFFSET,
+    ...contentProps
+  },
+  forwardedRef,
+) {
+  return (
+    <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Content
+        {...contentProps}
+        className={classNames(styles.surface, className)}
+        collisionPadding={collisionPadding}
+        data-mobile-surface={mobileSurface}
+        data-ui="popover-content"
+        ref={forwardedRef}
+        sideOffset={sideOffset}
+      >
+        {children}
+        {showArrow ? (
+          <PopoverPrimitive.Arrow aria-hidden="true" className={styles.arrow} />
+        ) : null}
+      </PopoverPrimitive.Content>
+    </PopoverPrimitive.Portal>
+  );
+});
+```
+
+`PopoverContent` is the shared physical layer, not a shared interaction model.
+It owns the portal, surface, collision gutter, arrow, motion and narrow sheet
+geometry. Consumers retain their roles, focus behavior, keyboard navigation,
+widths and content anatomy.
+
 ## apps/web/src/ui/Select.tsx
 
 ```tsx
-import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronDown } from "lucide-react";
 import {
   forwardRef,
@@ -911,6 +986,7 @@ import {
   useState,
 } from "react";
 import { classNames } from "./class-names";
+import { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 import styles from "./primitives.module.css";
 
 export type SelectOption = {
@@ -1075,14 +1151,14 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
     }
 
     return (
-      <Popover.Root
+      <Popover
         open={open}
         onOpenChange={(nextOpen) => {
           if (nextOpen) beginOpen();
           else setOpen(false);
         }}
       >
-        <Popover.Trigger asChild>
+        <PopoverTrigger asChild>
           <button
             {...triggerProps}
             aria-controls={listboxId}
@@ -1132,97 +1208,92 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
               strokeWidth={1.5}
             />
           </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          {open ? (
-            <Popover.Content
-              align="start"
-              aria-labelledby={titleId}
-              className={styles.selectPopover}
-              collisionPadding={12}
-              data-ui="select-popover"
-              side="bottom"
-              sideOffset={6}
-              onOpenAutoFocus={(event) => {
-                event.preventDefault();
-                requestAnimationFrame(() =>
-                  optionRefs.current.get(activeValue || initialValue)?.focus(),
-                );
-              }}
+        </PopoverTrigger>
+        {open ? (
+          <PopoverContent
+            align="start"
+            aria-labelledby={titleId}
+            className={styles.selectPopover}
+            side="bottom"
+            sideOffset={6}
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              requestAnimationFrame(() =>
+                optionRefs.current.get(activeValue || initialValue)?.focus(),
+              );
+            }}
+          >
+            <h2 className={styles.selectSheetTitle} id={titleId}>
+              {label}
+            </h2>
+            <div
+              aria-label={`${label} options`}
+              className={styles.selectList}
+              id={listboxId}
+              role="listbox"
             >
-              <h2 className={styles.selectSheetTitle} id={titleId}>
-                {label}
-              </h2>
-              <div
-                aria-label={`${label} options`}
-                className={styles.selectList}
-                id={listboxId}
-                role="listbox"
-              >
-                {options.map((option) => {
-                  const selected = option.value === value;
-                  const active = option.value === activeValue;
+              {options.map((option) => {
+                const selected = option.value === value;
+                const active = option.value === activeValue;
 
-                  return (
-                    <button
-                      aria-selected={selected}
-                      className={styles.selectOption}
-                      data-active={active ? "" : undefined}
-                      disabled={option.disabled}
-                      key={option.value}
-                      ref={(node) => {
-                        if (node) optionRefs.current.set(option.value, node);
-                        else optionRefs.current.delete(option.value);
-                      }}
-                      role="option"
-                      tabIndex={active ? 0 : -1}
-                      type="button"
-                      onClick={() => choose(option.value)}
-                      onFocus={() => setActiveValue(option.value)}
-                      onKeyDown={(event) => {
-                        if (
-                          event.key === "ArrowDown" ||
-                          event.key === "ArrowUp" ||
-                          event.key === "Home" ||
-                          event.key === "End"
-                        ) {
-                          event.preventDefault();
-                          moveActive(event.key);
-                        } else if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          choose(option.value);
-                        } else {
-                          handleTypeahead(event);
-                        }
-                      }}
+                return (
+                  <button
+                    aria-selected={selected}
+                    className={styles.selectOption}
+                    data-active={active ? "" : undefined}
+                    disabled={option.disabled}
+                    key={option.value}
+                    ref={(node) => {
+                      if (node) optionRefs.current.set(option.value, node);
+                      else optionRefs.current.delete(option.value);
+                    }}
+                    role="option"
+                    tabIndex={active ? 0 : -1}
+                    type="button"
+                    onClick={() => choose(option.value)}
+                    onFocus={() => setActiveValue(option.value)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "ArrowDown" ||
+                        event.key === "ArrowUp" ||
+                        event.key === "Home" ||
+                        event.key === "End"
+                      ) {
+                        event.preventDefault();
+                        moveActive(event.key);
+                      } else if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        choose(option.value);
+                      } else {
+                        handleTypeahead(event);
+                      }
+                    }}
+                  >
+                    <span
+                      aria-hidden={!option.icon || undefined}
+                      className={styles.selectOptionIcon}
                     >
-                      <span
-                        aria-hidden={!option.icon || undefined}
-                        className={styles.selectOptionIcon}
-                      >
-                        {option.icon}
-                      </span>
-                      <span className={styles.selectOptionCopy}>
-                        <span>{option.label}</span>
-                        {option.description ? (
-                          <small>{option.description}</small>
-                        ) : null}
-                      </span>
-                      <Check
-                        aria-hidden="true"
-                        className={styles.selectOptionCheck}
-                        size={16}
-                        strokeWidth={1.8}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-              <Popover.Arrow className={styles.selectArrow} />
-            </Popover.Content>
-          ) : null}
-        </Popover.Portal>
-      </Popover.Root>
+                      {option.icon}
+                    </span>
+                    <span className={styles.selectOptionCopy}>
+                      <span>{option.label}</span>
+                      {option.description ? (
+                        <small>{option.description}</small>
+                      ) : null}
+                    </span>
+                    <Check
+                      aria-hidden="true"
+                      className={styles.selectOptionCheck}
+                      size={16}
+                      strokeWidth={1.8}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        ) : null}
+      </Popover>
     );
   },
 );
