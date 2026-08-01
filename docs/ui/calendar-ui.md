@@ -494,6 +494,11 @@ Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 - **Mazání běžného eventu je na jeden klik**, bez potvrzovacího kroku. Confirm
   zůstal jen tam, kde ho Undo nezastoupí: série (potřebuje rozsah) a kalendář
   s providerem (změna už odešla jinam, restore by tam vznikl jako nový event).
+- Follow-up (2026-08-01): akční toast vyvažuje tlačítko vpravo stejně širokou
+  neinteraktivní rezervou vlevo. Samotná plocha toastu už na středu byla, ale
+  `Undo` posouvalo střed zprávy o 29,5 px doleva; oko sleduje text, takže celek
+  působil vyoseně. Rezerva je `aria-hidden`, nepřidává druhé ovládání ani druhé
+  čtení screen readeru, a třísloupcový layout drží na středu plochu i zprávu.
 
 **C2 — Rozsah série + drag opakovaných: HOTOVO** (2026-07-28)
 

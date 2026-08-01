@@ -1131,6 +1131,12 @@
   pointer-events: auto;
 }
 
+.toast[data-has-action] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding-inline: var(--space-2);
+}
+
 .toast[data-tone="error"] {
   border-color: color-mix(
     in srgb,
@@ -1142,6 +1148,20 @@
 .toast p {
   margin: 0;
   line-height: 1.4;
+  text-align: center;
+}
+
+.toastActionBalance {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--space-3);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-13);
+  font-weight: 500;
+  visibility: hidden;
 }
 
 .toastAction {
