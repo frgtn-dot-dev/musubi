@@ -100,14 +100,6 @@
   font-size: var(--text-10);
 }
 
-.textSample {
-  padding: var(--space-4);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-  color: var(--story-token);
-  font-size: var(--text-15);
-}
-
 .paletteSwatch {
   display: grid;
   min-height: 118px;

@@ -51,7 +51,7 @@
 }
 
 .value {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-11);
 }

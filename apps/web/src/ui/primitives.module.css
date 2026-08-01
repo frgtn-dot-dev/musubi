@@ -234,7 +234,7 @@
 }
 
 .fieldDescription {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .fieldError {
@@ -509,7 +509,7 @@
 
 .empty p {
   max-width: 34ch;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: var(--text-13);
   line-height: 1.5;
 }

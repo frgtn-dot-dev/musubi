@@ -113,11 +113,21 @@ behavior.
 
 The current web catalog uses Storybook 10.5 with the first-party TanStack React
 framework. Run it from the repository root with `pnpm storybook:web`; build the
-static catalog with `pnpm storybook:web:build`. The baseline catalog visualizes
-the implemented color, typography, spacing, shape, motion, and responsive
-contracts. It also covers Button, Checkbox, ColorPicker, DatePicker, Dialog,
-Empty, Field, Row, SectionLabel, Segmented, Select, Switch, TimePicker, and Toast
-without forking their production implementations.
+static catalog with `pnpm storybook:web:build`; run all story smoke, interaction,
+and accessibility tests in Chromium with `pnpm storybook:web:test`. Storybook
+tests use a dedicated Vitest 4 browser project, while the existing web unit suite
+remains isolated in its jsdom project. Accessibility violations are test
+failures, not an informational baseline. The Chromatic visual testing addon is
+registered for reviewed visual baselines; publishing snapshots still requires
+an explicitly configured Chromatic project and token.
+
+The baseline catalog visualizes the implemented color, typography, spacing,
+shape, motion, and responsive contracts. It also covers Button, Checkbox,
+ColorPicker, DatePicker, Dialog, Empty, Field, Row, SectionLabel, Segmented,
+Select, Switch, TimePicker, and Toast without forking their production
+implementations. Muted and faint color tokens may be shown as decorative
+swatches, but must not be presented as readable text when they do not satisfy
+the required contrast ratio.
 
 ## 6. Workflow
 

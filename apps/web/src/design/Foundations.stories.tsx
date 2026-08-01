@@ -152,24 +152,10 @@ function ColorsStory() {
         <SwatchGrid tokens={SURFACE_TOKENS} />
       </Section>
       <Section
-        description="Text hierarchy shown on the raised surface where muted roles are commonly used."
+        description="Text-role pigments shown as tokens. Primary and secondary carry content; muted and faint are reserved for decorative or disabled treatment."
         title="Text"
       >
-        <div className={styles.grid}>
-          {TEXT_TOKENS.map((token) => (
-            <article className={styles.tokenCard} key={token}>
-              <div
-                className={styles.textSample}
-                style={storyVariable("--story-token", `var(${token})`)}
-              >
-                Calendar details remain legible.
-              </div>
-              <div className={styles.tokenCopy}>
-                <code className={styles.tokenName}>{token}</code>
-              </div>
-            </article>
-          ))}
-        </div>
+        <SwatchGrid tokens={TEXT_TOKENS} />
       </Section>
       <Section
         description="Action emphasis, filled controls, and the non-committed draft veil."

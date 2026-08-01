@@ -14,7 +14,8 @@
     "storybook": "storybook dev -p 6006 --no-open",
     "storybook:build": "storybook build --output-dir storybook-static",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --project=unit",
+    "test:storybook": "vitest run --project=storybook",
     "lint": "eslint .storybook src --max-warnings 0",
     "test:e2e": "playwright test"
   },
@@ -47,6 +48,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.4",
+    "@vitest/browser-playwright": "4.1.10",
     "eslint": "9.39.4",
     "eslint-plugin-react-hooks": "7.1.1",
     "jsdom": "29.1.1",
