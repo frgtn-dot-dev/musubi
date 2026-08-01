@@ -58,10 +58,29 @@ native maps the same roles to its current theme aliases. The committed CSS is
 checked against the TypeScript source in the package test, so changing a theme
 value requires running `pnpm --filter @musubi/design-system generate`.
 
-Theme colors are the first extracted slice. Typography, dimensions, and motion
-remain in their platform token files until their units and optical contracts
-are explicit. Name a new value by role before adding it; a hardcoded color,
-gap, radius, or motion duration inside a component needs an explicit reason.
+Theme colors and stable typography, dimension, and motion foundations are the
+extracted slices today. They share renderer-free values where their units and
+optical roles are explicit. Name a new value by role before adding it; a
+hardcoded color, gap, radius, or motion duration inside a component needs an
+explicit reason.
+
+`packages/design-system` exports numeric `typeSizes`, `spacing`, `radii`,
+`controlHeights`, `componentDimensions`, and platform-tuned `motionDurations`.
+Web serializes them to rem, px, and ms in the generated `foundations.css`;
+native consumes the same numbers as density-independent values. The package
+self-check compares both generated CSS files with their TypeScript sources.
+
+The shared boundary is intentional:
+
+- type sizes are shared, while loaded font resource names and fallback stacks
+  remain renderer adapters;
+- spacing and general component radii are shared, while calendar geometry and
+  one-off optical offsets remain feature-owned;
+- control and row contracts are shared by density, while sidebar, tab, and grid
+  measurements keep their platform or domain owner;
+- motion shares `fast`, `standard`, and `slow` roles, with 140/220/300 ms on web
+  and 160/260/320 ms on native. Gesture-following and press-in timings remain
+  local because they respond directly to a finger rather than staged UI state.
 
 - A primitive token does not say where it is used (`shu-600`, `space-4`).
 - A semantic token communicates purpose (`text-secondary`, `surface-raised`).
@@ -352,6 +371,6 @@ not satisfy the required contrast ratio.
 3. Stabilize dialog, row, field, button, segmented control, and toast contracts.
    *(Complete.)*
 4. Extract canonical tokens and generate web/native representations. *(Theme
-   colors complete; typography, dimensions, and motion remain incremental.)*
+   colors and shared typography, dimension, and motion foundations complete.)*
 5. Create platform packages only when dependencies and APIs are clear.
 6. Add the React Native Web catalog, then on-device Storybook and composition.

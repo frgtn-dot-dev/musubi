@@ -5,3 +5,15 @@ export {
   type ThemeTokenName,
   type ThemeTokens,
 } from "./theme-tokens";
+export {
+  componentDimensions,
+  controlHeights,
+  motionDurations,
+  radii,
+  spacing,
+  typeSizes,
+  type MotionRole,
+  type RadiusName,
+  type SpacingStep,
+  type TypeSize,
+} from "./foundation-tokens";

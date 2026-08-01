@@ -1,4 +1,5 @@
 @import "@musubi/design-system/colors.css";
+@import "@musubi/design-system/foundations.css";
 
 @font-face {
   font-display: swap;
@@ -33,18 +34,6 @@
   --font-kanji: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* Shared type ramp. Nominal pixel names keep the design handoff readable;
-     rem values still respect the user's browser font-size preference. */
-  --text-10: 0.625rem;
-  --text-11: 0.6875rem;
-  --text-12: 0.75rem;
-  --text-13: 0.8125rem;
-  --text-14: 0.875rem;
-  --text-15: 0.9375rem;
-  --text-19: 1.1875rem;
-  --text-22: 1.375rem;
-  --text-26: 1.625rem;
-
   /* A block that is not (yet) real: the create draft, and the trace a dragged
      event leaves behind. A veil of the canvas itself — light on the light theme,
      dark on the dark one — so it mutes the grid under it without introducing a
@@ -52,33 +41,12 @@
      than replacing it. */
   --draft-fill: color-mix(in srgb, var(--surface-canvas) 72%, transparent);
 
-  --radius-sm: 5px;
-  --radius-md: 9px;
-  --radius-lg: 14px;
   --event-radius: 6px;
-  --radius-pill: 999px;
-  --radius-sheet: 20px;
-  --radius-card: 15px;
-  --radius-control: 10px;
-  --radius-chip: 8px;
-
-  /* Spacing scale — no ad-hoc gaps. */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-7: 28px;
-  --space-8: 32px;
 
   --sidebar-width: 244px;
   --toolbar-height: 132px;
   --date-header-height: 48px;
   --popover-width: 360px;
-  --row-min-height: 62px;
-  --control-height: 44px;
-  --compact-control-height: 38px;
   --layer-viewport-gutter: var(--space-6);
   --layer-inline: var(--space-6);
   --layer-body-block: var(--space-5);
@@ -89,16 +57,10 @@
   --hour-height: 64px;
 
   --focus-ring: 2px solid var(--accent-primary);
-
-  --motion-fast: 140ms;
-  --motion-standard: 220ms;
-  --motion-slow: 300ms;
 }
 
 @media (max-width: 599px) {
   :root {
-    --control-height: 48px;
-    --compact-control-height: 44px;
     --layer-viewport-gutter: 0px;
     --layer-inline: var(--space-5);
   }

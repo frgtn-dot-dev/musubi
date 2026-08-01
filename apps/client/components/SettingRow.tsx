@@ -3,7 +3,12 @@ import { Switch, View, Text } from "react-native";
 import { Mode } from "@musubi/calendar";
 import { Tap } from "@/components/ui/Tap";
 import { Feather } from "@expo/vector-icons";
-
+import {
+  componentDimensions,
+  radii,
+  spacing,
+  typeSizes,
+} from "@musubi/design-system";
 
 type ToggleProps = {
   label: string;
@@ -34,10 +39,10 @@ const rowStyle = {
   flexDirection: "row",
   justifyContent: "space-between",
   alignItems: "center",
-  paddingHorizontal: 16,
-  paddingVertical: 8,
+  paddingHorizontal: spacing[4],
+  paddingVertical: spacing[2],
   borderBottomWidth: 1,
-  minHeight: 62,
+  minHeight: componentDimensions.rowMinHeight,
 } as const;
 
 export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
@@ -50,7 +55,13 @@ export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
       accessibilityLabel={label}
       accessibilityState={{ checked: toggle }}
     >
-      <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg2 }}>
+      <Text
+        style={{
+          fontFamily: fonts.sans,
+          fontSize: typeSizes[15],
+          color: colors.fg2,
+        }}
+      >
         {label}
       </Text>
       <Switch
@@ -70,15 +81,27 @@ export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
 
 // Few options → pick in one tap: inline segmented pills, same visual language
 // as the member-role selector.
-export function SettingRowOptions({ label, value, options, onChange, labels }: OptionsProps) {
+export function SettingRowOptions({
+  label,
+  value,
+  options,
+  onChange,
+  labels,
+}: OptionsProps) {
   return (
     <View style={[rowStyle, { borderColor: colors.line }]}>
-      <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg2 }}>
+      <Text
+        style={{
+          fontFamily: fonts.sans,
+          fontSize: typeSizes[15],
+          color: colors.fg2,
+        }}
+      >
         {label}
       </Text>
       <View style={{
         flexDirection: "row",
-        borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2, gap: 2,
+        borderWidth: 1, borderColor: colors.line2, borderRadius: radii.pill, padding: 2, gap: 2,
       }}>
         {options.map((o) => {
           const active = o === value;
@@ -93,21 +116,21 @@ export function SettingRowOptions({ label, value, options, onChange, labels }: O
               accessibilityState={{ checked: active }}
               hitSlop={{ top: 8, bottom: 8 }}
               style={{
-                paddingHorizontal: 12,
+                paddingHorizontal: spacing[3],
                 paddingVertical: 5,
-                borderRadius: 999,
+                borderRadius: radii.pill,
                 borderCurve: "continuous",
                 overflow: "hidden",
               }}
             >
               {active ? (
                 <View pointerEvents="none" style={{
-                  position: "absolute", inset: 0, borderRadius: 999,
+                  position: "absolute", inset: 0, borderRadius: radii.pill,
                   backgroundColor: colors.fill,
                 }} />
               ) : null}
               <Text style={{
-                fontFamily: fonts.sans, fontSize: 11,
+                fontFamily: fonts.sans, fontSize: typeSizes[11],
                 color: active ? colors.onFill : colors.fg2,
               }}>
                 {displayLabel}
@@ -124,17 +147,35 @@ export function SettingRowAction({ label, detail, value, external, onPress }: Ac
   const content = (
     <>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg2 }}>
+        <Text
+          style={{
+            fontFamily: fonts.sans,
+            fontSize: typeSizes[15],
+            color: colors.fg2,
+          }}
+        >
           {label}
         </Text>
         {detail ? (
-          <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg4 }}>
+          <Text
+            style={{
+              fontFamily: fonts.sans,
+              fontSize: typeSizes[11],
+              color: colors.fg4,
+            }}
+          >
             {detail}
           </Text>
         ) : null}
       </View>
       {value ? (
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg4 }}>
+        <Text
+          style={{
+            fontFamily: fonts.sans,
+            fontSize: typeSizes[12],
+            color: colors.fg4,
+          }}
+        >
           {value}
         </Text>
       ) : null}
@@ -145,14 +186,18 @@ export function SettingRowAction({ label, detail, value, external, onPress }: Ac
   );
 
   if (!onPress) {
-    return <View style={[rowStyle, { borderColor: colors.line, gap: 12 }]}>{content}</View>;
+    return (
+      <View style={[rowStyle, { borderColor: colors.line, gap: spacing[3] }]}>
+        {content}
+      </View>
+    );
   }
 
   return (
     <Tap
       onPress={onPress}
       scaleTo={1}
-      style={[rowStyle, { borderColor: colors.line, gap: 12 }]}
+      style={[rowStyle, { borderColor: colors.line, gap: spacing[3] }]}
       accessibilityRole="button"
       accessibilityLabel={label}
     >

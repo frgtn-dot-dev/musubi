@@ -137,6 +137,14 @@
   background: var(--control-fill);
 }
 
+.dimensionBar {
+  width: var(--space-6);
+  height: var(--story-size);
+  flex: none;
+  border-radius: var(--radius-control);
+  background: var(--control-fill);
+}
+
 .radiusSample {
   width: 72px;
   height: 72px;

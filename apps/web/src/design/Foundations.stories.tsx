@@ -1,4 +1,5 @@
 import { MUSUBI_CALENDAR_COLORS } from "@musubi/types";
+import { spacing, typeSizes } from "@musubi/design-system";
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import type { CSSProperties, ReactNode } from "react";
 import { getReadableEventTextColor } from "~/calendar/event-color";
@@ -33,7 +34,7 @@ const BORDER_TOKENS = [
   "--border-strong",
 ] as const;
 
-const TYPE_SCALE = [10, 11, 12, 13, 14, 15, 19, 22, 26] as const;
+const TYPE_SCALE = Object.values(typeSizes);
 
 const FONT_FAMILIES = [
   { label: "Interface", token: "--font-sans", sample: "Plan the week" },
@@ -42,7 +43,7 @@ const FONT_FAMILIES = [
   { label: "Technical", token: "--font-mono", sample: "2026-08-01 09:30" },
 ] as const;
 
-const SPACING_SCALE = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const SPACING_SCALE = Object.keys(spacing);
 
 const RADIUS_TOKENS = [
   "--radius-sm",
@@ -60,6 +61,12 @@ const MOTION_TOKENS = [
   "--motion-fast",
   "--motion-standard",
   "--motion-slow",
+] as const;
+
+const DIMENSION_TOKENS = [
+  "--compact-control-height",
+  "--control-height",
+  "--row-min-height",
 ] as const;
 
 const BREAKPOINTS = [
@@ -284,6 +291,24 @@ function SpacingStory() {
                 <span
                   className={styles.radiusSample}
                   style={storyVariable("--story-radius", `var(${token})`)}
+                />
+                <code className={styles.tokenName}>{token}</code>
+              </div>
+            </article>
+          ))}
+        </div>
+      </Section>
+      <Section
+        description="Pointer and touch density share named control and row contracts rather than screen-owned heights."
+        title="Control geometry"
+      >
+        <div className={styles.grid}>
+          {DIMENSION_TOKENS.map((token) => (
+            <article className={styles.metricCard} key={token}>
+              <div className={styles.metricRow}>
+                <span
+                  className={styles.dimensionBar}
+                  style={storyVariable("--story-size", `var(${token})`)}
                 />
                 <code className={styles.tokenName}>{token}</code>
               </div>

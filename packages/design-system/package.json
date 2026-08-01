@@ -6,10 +6,11 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./colors.css": "./src/colors.css"
+    "./colors.css": "./src/colors.css",
+    "./foundations.css": "./src/foundations.css"
   },
   "scripts": {
-    "generate": "tsx scripts/generate-colors-css.ts",
+    "generate": "tsx scripts/generate-css.ts",
     "test": "tsx src/theme-tokens.test.ts",
     "typecheck": "tsc --noEmit"
   },

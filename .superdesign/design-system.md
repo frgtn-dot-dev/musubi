@@ -58,6 +58,14 @@ Adapt hierarchy and interaction; do not merely scale desktop down.
 
 ## Geometry and rhythm
 
+Renderer-free foundations live in `packages/design-system`: numeric type sizes,
+the spacing ladder, general radii, pointer/touch control heights, row height, and
+the `fast`/`standard`/`slow` motion roles. Web consumes generated rem/px/ms CSS;
+native consumes density-independent values with slightly longer motion durations
+for touch legibility. Font resource names, responsive shell measurements,
+calendar geometry, gesture timing, and optical exceptions remain platform or
+feature owned.
+
 Use the 4 px spacing ladder by relationship: 4 px adjacent, 8 px related,
 12 px control group, 16 px compact component inset, 20 px field group, 24 px
 layer inset, and 32 px section break. Do not choose spacing independently for a

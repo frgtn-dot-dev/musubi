@@ -8,6 +8,7 @@ import { Tap } from "@/components/ui/Tap";
 import { usePathname } from "expo-router";
 import { tabBarHeight } from "@/constants/layout";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { motionDurations } from "@musubi/design-system";
 
 // A single bottom toast — transient message with an optional action (e.g. Undo).
 // Imperative API so any code can raise one: `showToast({ message, actionLabel, onAction })`.
@@ -29,7 +30,7 @@ const useToastStore = create<ToastState>((set) => ({
 export const showToast = (t: Omit<Toast, "id">) => useToastStore.getState().show(t);
 
 const VISIBLE_MS = 4200;  // auto-dismiss after this
-const REVEAL_MS = 260;    // ease-in-out fade + small rise, both directions
+const REVEAL_MS = motionDurations.native.standard;
 const TRAVEL = 14;        // it only nudges up a little; the fade does the reveal
 const SIGN_IN_ACTIONS_H = 154; // Forgot + Continue + gap/padding; toast sits above both
 const TAB_PATHS = new Set(["/", "/calendars", "/agenda", "/settings"]);
