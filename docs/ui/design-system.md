@@ -69,7 +69,81 @@ gap, radius, or motion duration inside a component needs an explicit reason.
 - Responsive values use one ladder: 599 / 1023 / 1439 px.
 - Web px and native dp may differ, but the role and optical result should match.
 
-## 4. Components and layers
+## 4. Geometry and rhythm
+
+Spacing expresses relationships. It is not selected independently for each
+screen. Use the existing 4 px ladder through the following roles:
+
+| Relationship | Value | Use |
+|---|---:|---|
+| Adjacent | 4 px | title to description, label to supporting text |
+| Related | 8 px | icon to label, actions in one group |
+| Control group | 12 px | tightly related controls or choices |
+| Component inset | 16 px | compact cards, menus, and repeated rows |
+| Field group | 20 px | one complete field to the next |
+| Layer inset | 24 px | dialog header, body, and footer on regular viewports |
+| Section break | 32 px | distinct content groups inside one view |
+
+Do not substitute a nearby step because it looks acceptable in isolation. If a
+relationship repeatedly needs a different value, name the component exception
+and document why it cannot use the shared role.
+
+### Responsive density
+
+Layer interiors have two densities. Calendar breakpoints at 1023 and 1439 px
+may change application architecture, but do not silently change the internal
+rhythm of a dialog, popover, or menu.
+
+| Contract | Regular, ≥600 px | Touch, ≤599 px |
+|---|---:|---:|
+| Minimum viewport gutter around a modal | 24 px | sheet is edge-to-edge |
+| Dialog/sheet inline inset | 24 px | 20 px |
+| Dialog body block inset | 20 px | 20 px |
+| Dialog footer block inset | 16 px | 16 px + safe area |
+| Default control height | 44 px | 48 px |
+| Compact control height | 38 px | 44 px minimum target |
+
+Touch density adapts anatomy rather than shrinking regular UI. Dialogs become
+bottom sheets, actions wrap or stack when labels no longer fit, and safe-area
+insets belong to the outermost region.
+
+### Layer anatomy
+
+- A layer shell owns its viewport gutter, width, radius, elevation, and region
+  insets. Feature content must not compensate with negative margins.
+- Header, padded body, and footer share one inline axis. The default dialog body
+  is padded; edge-to-edge rows or sections require an explicit `flush` body
+  variant, and their readable content still aligns to the same axis.
+- Nested components own only their internal rhythm. A `Field` inside a padded
+  dialog must not add a second outer inset.
+- Whitespace establishes regions first. Header and footer separators are used
+  only when a scrolling body or repeated rows need a persistent boundary; a
+  short dialog must not become three bordered slabs.
+- A regular dialog footer keeps actions right-aligned, secondary before primary,
+  with an 8 px gap. Touch layouts preserve action order and stack only when the
+  labels or minimum targets do not fit.
+- Compact, default, and wide dialogs target 400, 520, and 720 px respectively,
+  always constrained by the viewport gutter. Text measure remains bounded even
+  in a wide dialog.
+
+### Form composition
+
+- Label to control uses 8 px; control to help or error text uses 4 px.
+- Complete fields are separated by 20 px; distinct field sections by 32 px.
+- A field does not receive a divider merely because it is a field. Dividers
+  belong to repeated row collections and true region boundaries.
+- Validation stays with the field that caused it and must not change the outer
+  alignment of the form.
+- A form uses one control height per density unless a multiline or domain
+  control has an explicit semantic size.
+
+### Ownership test
+
+When two edges do not align, fix the component that owns the shared axis. Do
+not patch the consumer. In particular, a dialog header at 24 px, a field at
+16 px, and a footer at 20 px are three competing systems, not visual nuance.
+
+## 5. Components and layers
 
 A component belongs in the shared layer when it has a stable general role, is
 repeated or clearly part of the common language, and can be described without a
@@ -97,7 +171,7 @@ Every public component has:
 - an accessible name, keyboard path, and correct focus return;
 - an API that describes role (`variant="danger"`), not appearance (`red=true`).
 
-## 5. Storybook contract
+## 6. Storybook contract
 
 Stories are colocated with their components (`Component.stories.tsx`). The
 catalog is grouped by role: `Foundations`, `Primitives`, `Patterns`, `Calendar`,
@@ -155,7 +229,7 @@ implementations. Muted and faint color tokens may be shown as decorative
 swatches, but must not be presented as readable text when they do not satisfy
 the required contrast ratio.
 
-## 6. Workflow
+## 7. Workflow
 
 1. Check the existing primitive and the rules in `calendar-ui.md`.
 2. If a general contract is missing, design it in Storybook with real content.
@@ -165,17 +239,19 @@ the required contrast ratio.
 5. Verify typecheck, lint, unit tests, Storybook build, and relevant a11y checks.
 6. Update this document when a change introduces a new rule.
 
-## 7. Definition of Done
+## 8. Definition of Done
 
 - No second implementation of existing general-purpose UI was introduced.
 - A domain component does not own a generic shell.
 - Values read from tokens and the component works in light and dark themes.
+- Padded regions share their documented axis; flush content is explicit.
+- Spacing describes one of the relationships in section 4 or a named exception.
 - The state and responsive matrix is visible in stories.
 - The core workflow is keyboard operable; color is not the only signal.
 - APIs and stories use realistic Musubi content, not `Lorem ipsum`.
 - The change does not violate R1–R12 or the checklist in `calendar-ui.md`.
 
-## 8. Anti-patterns
+## 9. Anti-patterns
 
 - copying Radix dialog markup into a feature component;
 - naming a general component after one screen;
@@ -185,8 +261,11 @@ the required contrast ratio.
 - a universal cross-platform React component full of `isWeb` branches;
 - presenting a Superdesign draft as implemented truth;
 - adding a token without a role or a magic number without a named constant.
+- applying different inline padding to a layer header, body, and footer;
+- removing shell padding in a story and rebuilding it inside feature content;
+- using dividers to compensate for weak spacing hierarchy.
 
-## 9. Adoption order
+## 10. Adoption order
 
 1. Document the inventory and current system.
 2. Run Storybook around existing web primitives without moving them.

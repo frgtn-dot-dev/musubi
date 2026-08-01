@@ -156,6 +156,11 @@ Aktuální systém obsahuje:
 | kalendář | `--sidebar-width`, `--toolbar-height`, `--date-header-height`, `--hour-height`, `--popover-width` |
 | motion | `--motion-fast/-standard/-slow`; globální reduced-motion pojistka |
 
+Layer and form spacing, responsive density, and ownership of shared alignment
+axes are defined in [`design-system.md` section 4](./design-system.md#4-geometry-and-rhythm).
+Those rules apply to every calendar layer; feature CSS must not establish a
+competing inset or rhythm.
+
 `--hour-height` nastavuje renderer z téhož `TimeGeometry`, který používá
 hit-testing, event layout i drag. Není dovoleno zavést druhou pixelovou
 konstantu pro tutéž časovou osu.
