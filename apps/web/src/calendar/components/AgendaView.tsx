@@ -37,10 +37,6 @@ const dayFormatter = new Intl.DateTimeFormat("en", {
 });
 
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long" });
-const monthYearFormatter = new Intl.DateTimeFormat("en", {
-  month: "long",
-  year: "numeric",
-});
 
 export function AgendaView({
   anchor,
@@ -134,17 +130,10 @@ export function AgendaView({
         {visibleGroups.map((group, groupIndex) => {
           const previous = visibleGroups[groupIndex - 1]?.date;
           const isNewYear =
-            previous !== undefined &&
-            previous.getFullYear() !== group.date.getFullYear();
-          // One band per month, carrying the year only when it changes: a
-          // separate year band would stick to the top of the list forever to say
-          // what the toolbar already says.
-          const month =
-            groupIndex === 0 || previous?.getMonth() !== group.date.getMonth()
-              ? (isNewYear ? monthYearFormatter : monthFormatter).format(
-                  group.date,
-                )
-              : undefined;
+            groupIndex === 0 ||
+            previous?.getFullYear() !== group.date.getFullYear();
+          const isNewMonth =
+            !isNewYear && previous?.getMonth() !== group.date.getMonth();
           const isToday = group.key === todayKey;
           const relative = relativeDayName(group.date, now);
           // Days with nothing on them are not rendered, so the jump between two
@@ -153,9 +142,18 @@ export function AgendaView({
 
           return (
             <Fragment key={group.key}>
-              {month ? (
+              {isNewYear ? (
+                <li
+                  className={styles.agendaYear}
+                  aria-hidden="true"
+                  data-agenda-year={group.date.getFullYear()}
+                >
+                  <span>{group.date.getFullYear()}</span>
+                </li>
+              ) : null}
+              {isNewMonth ? (
                 <li className={styles.agendaMonth} aria-hidden="true">
-                  <span>{month}</span>
+                  <span>{monthFormatter.format(group.date)}</span>
                 </li>
               ) : null}
               {freeDays >= AGENDA_FREE_DAYS_MIN ? (

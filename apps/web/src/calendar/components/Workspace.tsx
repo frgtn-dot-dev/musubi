@@ -112,6 +112,7 @@ type WorkspaceProps = {
     color: string;
     name: string;
   }) => Promise<Calendar>;
+  onDisconnectExternalCalendar?: (calendar: Calendar) => Promise<unknown>;
   onUpdateCalendar?: (calendar: Calendar) => Promise<Calendar>;
   onRemoveCalendar?: (calendar: Calendar) => Promise<Calendar>;
   onAdoptSettings?: (document: SettingsDocument) => void;
@@ -176,6 +177,10 @@ const unavailableCalendarWrite = async (): Promise<Calendar> => {
   throw new Error("Calendar management is unavailable.");
 };
 
+const unavailableCalendarDisconnect = async (): Promise<void> => {
+  throw new Error("External calendar disconnect is unavailable.");
+};
+
 const unavailableSettings = async (): Promise<SettingsDocument> => {
   throw new Error("Settings sync is unavailable.");
 };
@@ -217,6 +222,7 @@ export function Workspace({
   onLinkEvent = unavailableTargetMutation,
   onImportCalendar = unavailableImport,
   onCreateCalendar = unavailableCalendarWrite,
+  onDisconnectExternalCalendar = unavailableCalendarDisconnect,
   onUpdateCalendar = unavailableCalendarWrite,
   onRemoveCalendar = unavailableCalendarWrite,
   onGetSettingsDocument = unavailableSettings,
@@ -988,6 +994,7 @@ export function Workspace({
       <CalendarTransferDialog
         calendars={calendars}
         onCreate={onCreateCalendar}
+        onDisconnect={onDisconnectExternalCalendar}
         onExport={onExportCalendar}
         onImport={onImportCalendar}
         onManageMembers={(calendar) => {

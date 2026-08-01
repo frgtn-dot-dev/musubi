@@ -273,6 +273,53 @@ describe("Workspace", () => {
     ).toBe(false);
   });
 
+  it("stops syncing one external calendar without disconnecting its account", async () => {
+    const user = userEvent.setup();
+    const externalCalendar = {
+      ...fixtureCalendars[1]!,
+      accountId: "google-work",
+      accountLabel: "work@example.com",
+      provider: "google" as const,
+    };
+    const onDisconnectExternalCalendar = vi.fn(async () => undefined);
+
+    render(
+      <Workspace
+        {...commonProps}
+        calendars={[fixtureCalendars[0]!, externalCalendar]}
+        onDisconnectExternalCalendar={onDisconnectExternalCalendar}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Calendars" }));
+    const calendarsDialog = within(
+      screen.getByRole("dialog", { name: "Calendars" }),
+    );
+    const stopButton = calendarsDialog.getByRole("button", {
+      name: "Stop syncing Studio",
+    });
+    await user.click(stopButton);
+
+    const confirmation = within(
+      screen.getByRole("dialog", { name: "Stop syncing “Studio”?" }),
+    );
+    expect(
+      confirmation.getByText("Your Google Calendar account stays connected."),
+    ).not.toBeNull();
+    await user.click(confirmation.getByRole("button", { name: "Cancel" }));
+
+    await user.click(stopButton);
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Stop syncing “Studio”?" }),
+      ).getByRole("button", { name: "Stop syncing" }),
+    );
+
+    expect(onDisconnectExternalCalendar).toHaveBeenCalledWith(externalCalendar);
+    expect(screen.getByRole("status").textContent).toContain(
+      "Stopped syncing Studio.",
+    );
+  });
+
   it("keeps an unsaved page draft when the discard confirm is declined", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn();
@@ -342,6 +389,9 @@ describe("Workspace", () => {
 
     expect(screen.getByText("From Jul 26, 2026")).not.toBeNull();
     expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(5);
+    expect(container.querySelectorAll('[data-agenda-year="2026"]')).toHaveLength(
+      1,
+    );
     expect(
       container.querySelector('[data-agenda-date="2026-07-26"]'),
     ).toBeNull();

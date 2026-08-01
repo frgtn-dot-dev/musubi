@@ -270,13 +270,15 @@ can apply them.
 | `POST /api/v1/users/connections/caldav` | Validate credentials, store encrypted password, strict initial sync |
 | `DELETE /api/v1/users/connections/caldav` | Remove one account and its mirrors |
 | `POST /api/v1/users/connections/disconnect` | Disconnect one `{ provider, accountId }` |
-| `POST /api/v1/users/connections/calendars/disconnect` | Disable one mirrored `{ calendarId }` without touching provider |
+| `POST /api/v1/users/connections/calendars/disconnect` | Disable one mirrored `{ calendarId }` without touching provider; returns `{ id }` |
 
 The exact-account disconnect accepts `google`, `microsoft`, or `caldav`.
 OAuth unlink refusal falls back to clearing calendar credentials only for the
 matching `(user, provider, accountId)` row, so sibling accounts remain
 connected. The legacy Google revoke route is provider-wide because its request
 shape predates multi-account support and contains no account ID.
+Disconnecting one mirrored calendar also publishes `calendar_removed` to its
+members so another open client can evict the mirror and its events immediately.
 
 Provider behavior and limitations:
 [Google](/docs/providers/google/),

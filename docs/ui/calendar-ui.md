@@ -831,12 +831,11 @@ seznam sám říká, kde v čase jsme.
   Zalomený blok pilulek na 390px ukrojil třetinu obrazovky kalendáři.
 **Vizuální check ukázal tři věci, které z popisu nebyly vidět** (2026-07-31):
 
-- **Dvě sticky vrstvy nad sebou nemají v agendě co dělat.** Pásmo roku stálo
-  `top: 0` a datum dne taky — datum se schovávalo pod rok a jeho `padding-top`
-  se nelícoval s ničím. Rok navíc na telefonu držel u horní hrany natrvalo a
-  říkal „2026", což už říká toolbar. Rok proto **zmizel do pásma měsíce**
-  („January 2027", když se rok mění) a **sticky je jen datum dne** — neprůhledné,
-  protože přes tentýž pruh scrollují pásma měsíce a mezer.
+- **Two sticky layers must be intentional.** This iteration originally folded
+  the year into the month band and left only the day date sticky. Phase P later
+  restored the standalone year band after production use showed that its broader
+  orientation was more valuable; its stacking and opaque surface are now an
+  explicit part of the Agenda contract.
 - **„N free days" mezi každými dvěma řádky není informace, ale šum.** Týdenní
   event nechává šest prázdných dnů za každým výskytem, takže se pásmo objevovalo
   mezi vším. Hranice je `AGENDA_FREE_DAYS_MIN = 7` — celý týden, kdy čtenář
@@ -906,6 +905,37 @@ create churn without reducing another implementation.
   optimistic state transformation, dialog draft preservation, realtime order,
   and request validation; the Postgres integration scenario covers order-only
   preservation, default movement, invalid-order rollback, and legacy repair.
+
+### Phase O — Disconnect one provider calendar — **COMPLETE** (2026-08-01)
+
+- Calendar management exposes `Stop syncing` only on provider-backed mirrors.
+  The wording distinguishes this operation from disconnecting the account and
+  from deleting the source calendar at Google, Microsoft, or CalDAV.
+- The shared `ConfirmationDialog` names the affected calendar and explains the
+  boundary: the provider account, source calendar, and sibling mirrors remain
+  connected. There is no Undo because the server has no direct mirror restore
+  operation.
+- The calendar disappears optimistically and the previous cache is restored if
+  the request fails (R8). Calendar and event queries refresh after settlement.
+- The API returns the removed mirror id and broadcasts `calendar_removed`, so
+  other open sessions do not retain a calendar that this session disconnected.
+- Storybook catalogs both calendar management and its confirmation state. Unit
+  coverage owns the action wording, confirmation boundary, callback, toast, and
+  optimistic success path.
+
+### Phase P — Restore standalone Agenda years — **COMPLETE** (2026-08-01)
+
+- Production use favored the original standalone year band over folding the
+  year into a month label. The year therefore returns at the first visible group
+  and at every year boundary; the first month of that year is not duplicated as
+  a separate band, matching the earlier behavior.
+- The year is sticky with an opaque canvas surface and explicit stacking. Month
+  bands still scroll with their events, while each day date remains the local
+  sticky heading for its event group.
+- Later Agenda improvements remain intact: month rhythm uses
+  `--agenda-inline`, mobile spacing is variable-driven, short recurring gaps are
+  suppressed by `AGENDA_FREE_DAYS_MIN`, and event metadata and filter behavior
+  are unchanged.
 
 ### Vědomě odloženo
 

@@ -359,6 +359,17 @@ export function disconnectAccount(input: {
   });
 }
 
+export function disconnectExternalCalendar(calendarId: string) {
+  return apiRequest(
+    "/api/v1/users/connections/calendars/disconnect",
+    {
+      body: { calendarId },
+      method: "POST",
+      responseSchema: z.object({ id: z.string() }),
+    },
+  );
+}
+
 export function deleteAccount() {
   // Starts the email-confirmed Better Auth deletion; the account is only
   // removed when the user opens the link we email them.

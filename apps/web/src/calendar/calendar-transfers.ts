@@ -2,6 +2,7 @@ import type { Calendar } from "@musubi/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createCalendar,
+  disconnectExternalCalendar,
   exportCalendar,
   importCalendar,
   removeCalendar,
@@ -106,8 +107,33 @@ export function useCalendarTransfers(userId: string) {
     },
   });
 
+  const disconnectMutation = useMutation({
+    mutationFn: (calendar: Calendar) =>
+      disconnectExternalCalendar(calendar.id),
+    onMutate: async (calendar) => {
+      await queryClient.cancelQueries({ queryKey: calendarsKey });
+      const previous = queryClient.getQueryData<Calendar[]>(calendarsKey);
+      setCalendars((current) =>
+        current.filter((item) => item.id !== calendar.id),
+      );
+      return { previous };
+    },
+    onError: (_error, _calendar, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(calendarsKey, context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: calendarsKey });
+      void queryClient.invalidateQueries({
+        queryKey: ["events", origin, userId],
+      });
+    },
+  });
+
   return {
     createCalendar: createMutation.mutateAsync,
+    disconnectExternalCalendar: disconnectMutation.mutateAsync,
     exportCalendar,
     importCalendar: importMutation.mutateAsync,
     removeCalendar: removeMutation.mutateAsync,

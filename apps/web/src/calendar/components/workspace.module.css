@@ -581,9 +581,31 @@
   list-style: none;
 }
 
-/* A month band, carrying its year when it changes. Deliberately not sticky: the
-   day date above the events is the one heading worth pinning, and a second
-   sticky layer costs a phone a band of screen for the whole scroll. */
+.agendaYear {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  min-height: 31px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--agenda-inline);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: 0.83rem;
+}
+
+.agendaYear::after {
+  height: 1px;
+  flex: 1;
+  background: var(--border-subtle);
+  content: "";
+}
+
+/* Month bands scroll with their events; the year band owns the broader
+   orientation while the day date remains the local sticky heading. */
 .agendaMonth {
   padding: var(--space-4) var(--agenda-inline) var(--space-2);
   color: var(--text-secondary);

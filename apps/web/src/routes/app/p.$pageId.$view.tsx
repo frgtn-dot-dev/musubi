@@ -164,6 +164,9 @@ function WorkspaceRoute() {
       onExportCalendar={calendarTransfers.exportCalendar}
       onImportCalendar={calendarTransfers.importCalendar}
       onCreateCalendar={calendarTransfers.createCalendar}
+      onDisconnectExternalCalendar={
+        calendarTransfers.disconnectExternalCalendar
+      }
       onUpdateCalendar={calendarTransfers.updateCalendar}
       onRemoveCalendar={calendarTransfers.removeCalendar}
       onGetSettingsDocument={settingsMutations.getSettingsDocument}

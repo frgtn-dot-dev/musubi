@@ -4,7 +4,15 @@ import {
   providerDisplayName,
   type Calendar,
 } from "@musubi/types";
-import { Download, FileUp, Pencil, Plus, Trash2, Users } from "lucide-react";
+import {
+  Download,
+  FileUp,
+  Pencil,
+  Plus,
+  Trash2,
+  Unlink,
+  Users,
+} from "lucide-react";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -40,9 +48,10 @@ type ImportInput = {
   name: string;
 };
 
-type CalendarTransferDialogProps = {
+export type CalendarTransferDialogProps = {
   calendars: Calendar[];
   onCreate: (input: { color: string; name: string }) => Promise<Calendar>;
+  onDisconnect: (calendar: Calendar) => Promise<unknown>;
   onExport: (calendarId: string, connectionId?: string) => Promise<string>;
   onImport: (input: ImportInput) => Promise<ImportedCalendar>;
   onManageMembers: (calendar: Calendar) => void;
@@ -94,6 +103,7 @@ function calendarDetail(calendar: Calendar, external: boolean) {
 export function CalendarTransferDialog({
   calendars,
   onCreate,
+  onDisconnect,
   onExport,
   onImport,
   onManageMembers,
@@ -116,11 +126,16 @@ export function CalendarTransferDialog({
   const [newColor, setNewColor] = useState<string>(DEFAULT_CALENDAR_COLOR);
   const [editCalendar, setEditCalendar] = useState<Calendar>();
   const [deleteCalendar, setDeleteCalendar] = useState<Calendar>();
+  const [disconnectCalendar, setDisconnectCalendar] = useState<Calendar>();
   const [deleteError, setDeleteError] = useState<TransferError>();
-  const [busy, setBusy] = useState<"export" | "import" | "create" | "delete">();
+  const [disconnectError, setDisconnectError] = useState<TransferError>();
+  const [busy, setBusy] = useState<
+    "export" | "import" | "create" | "delete" | "disconnect"
+  >();
   const [error, setError] = useState<TransferError>();
   const editReturnFocusRef = useRef<HTMLButtonElement>(null);
   const deleteReturnFocusRef = useRef<HTMLButtonElement>(null);
+  const disconnectReturnFocusRef = useRef<HTMLButtonElement>(null);
   const groups = groupCalendars(calendars);
   const selectedExportId = calendars.some(
     (calendar) => calendar.id === exportCalendarId,
@@ -132,8 +147,10 @@ export function CalendarTransferDialog({
     if (!nextOpen) {
       setEditCalendar(undefined);
       setDeleteCalendar(undefined);
+      setDisconnectCalendar(undefined);
       setError(undefined);
       setDeleteError(undefined);
+      setDisconnectError(undefined);
     }
     onOpenChange(nextOpen);
   }
@@ -199,6 +216,29 @@ export function CalendarTransferDialog({
     } catch (removeError) {
       setDeleteError(
         transferError(removeError, "Could not delete the calendar."),
+      );
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!disconnectCalendar) return;
+    setBusy("disconnect");
+    setDisconnectError(undefined);
+    try {
+      await onDisconnect(disconnectCalendar);
+      onNotice(`Stopped syncing ${disconnectCalendar.name}.`);
+      if (exportCalendarId === disconnectCalendar.id) {
+        setExportCalendarId("");
+      }
+      setDisconnectCalendar(undefined);
+    } catch (disconnectFailure) {
+      setDisconnectError(
+        transferError(
+          disconnectFailure,
+          "Could not stop syncing this calendar.",
+        ),
       );
     } finally {
       setBusy(undefined);
@@ -313,6 +353,8 @@ export function CalendarTransferDialog({
             {groups.map((group) => (
               <CalendarGroup
                 busy={Boolean(busy)}
+                disconnectingCalendarId={disconnectCalendar?.id}
+                disconnectReturnFocus={disconnectReturnFocusRef}
                 group={group}
                 key={group.key}
                 onDelete={(calendar, button) => {
@@ -323,6 +365,11 @@ export function CalendarTransferDialog({
                 onEdit={(calendar, button) => {
                   editReturnFocusRef.current = button;
                   setEditCalendar(calendar);
+                }}
+                onDisconnect={(calendar, button) => {
+                  disconnectReturnFocusRef.current = button;
+                  setDisconnectError(undefined);
+                  setDisconnectCalendar(calendar);
                 }}
                 onManageMembers={onManageMembers}
               />
@@ -472,20 +519,42 @@ export function CalendarTransferDialog({
           returnFocus={deleteReturnFocusRef}
         />
       ) : null}
+
+      {disconnectCalendar ? (
+        <DisconnectExternalCalendarDialog
+          busy={busy === "disconnect"}
+          calendar={disconnectCalendar}
+          error={disconnectError}
+          onDisconnect={() => void handleDisconnect()}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && busy !== "disconnect") {
+              setDisconnectCalendar(undefined);
+              setDisconnectError(undefined);
+            }
+          }}
+          returnFocus={disconnectReturnFocusRef}
+        />
+      ) : null}
     </>
   );
 }
 
 function CalendarGroup({
   busy,
+  disconnectingCalendarId,
+  disconnectReturnFocus,
   group,
   onDelete,
+  onDisconnect,
   onEdit,
   onManageMembers,
 }: {
   busy: boolean;
+  disconnectingCalendarId?: string;
+  disconnectReturnFocus: RefObject<HTMLButtonElement | null>;
   group: CalendarSourceGroup;
   onDelete: (calendar: Calendar, button: HTMLButtonElement) => void;
+  onDisconnect: (calendar: Calendar, button: HTMLButtonElement) => void;
   onEdit: (calendar: Calendar, button: HTMLButtonElement) => void;
   onManageMembers: (calendar: Calendar) => void;
 }) {
@@ -542,6 +611,25 @@ function CalendarGroup({
                         onClick={() => onManageMembers(calendar)}
                       >
                         <Users size={16} strokeWidth={1.7} />
+                      </IconButton>
+                    ) : null}
+                    {external ? (
+                      <IconButton
+                        disabled={busy}
+                        label={`Stop syncing ${calendar.name}`}
+                        ref={
+                          disconnectingCalendarId === calendar.id
+                            ? disconnectReturnFocus
+                            : undefined
+                        }
+                        size="compact"
+                        title="Stop syncing calendar"
+                        variant="ghost"
+                        onClick={(event) =>
+                          onDisconnect(calendar, event.currentTarget)
+                        }
+                      >
+                        <Unlink size={15} strokeWidth={1.7} />
                       </IconButton>
                     ) : null}
                     {editable ? (
@@ -713,6 +801,49 @@ function DeleteCalendarDialog({
         <p>
           This can’t be undone. Shared members will also lose access to{" "}
           <strong>{calendar.name}</strong>.
+        </p>
+      </ConfirmationNotice>
+      {error ? (
+        <DialogError requestId={error.requestId}>{error.message}</DialogError>
+      ) : null}
+    </ConfirmationDialog>
+  );
+}
+
+function DisconnectExternalCalendarDialog({
+  busy,
+  calendar,
+  error,
+  onDisconnect,
+  onOpenChange,
+  returnFocus,
+}: {
+  busy: boolean;
+  calendar: Calendar;
+  error?: TransferError;
+  onDisconnect: () => void;
+  onOpenChange: (open: boolean) => void;
+  returnFocus: RefObject<HTMLElement | null>;
+}) {
+  const provider = providerDisplayName(calendar);
+
+  return (
+    <ConfirmationDialog
+      closeLabel="Close stop syncing confirmation"
+      confirmLabel="Stop syncing"
+      description="Its Musubi mirror and synced events will be removed."
+      loading={busy}
+      onConfirm={onDisconnect}
+      onOpenChange={onOpenChange}
+      open
+      returnFocus={returnFocus}
+      title={`Stop syncing “${calendar.name}”?`}
+    >
+      <ConfirmationNotice icon={<Unlink size={19} strokeWidth={1.7} />}>
+        <strong>Your {provider} account stays connected.</strong>
+        <p>
+          {calendar.name} stays unchanged in {provider}. Other calendars from
+          this account will continue syncing.
         </p>
       </ConfirmationNotice>
       {error ? (
