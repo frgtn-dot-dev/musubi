@@ -1,3 +1,4 @@
+import { themeTokens, type ThemeTokens } from "@musubi/design-system";
 import { StyleSheet } from "react-native";
 import { SCREEN_HEADER_HEIGHT } from "@/constants/layout";
 
@@ -9,42 +10,31 @@ export const fonts = {
   kanji: 'ShipporiMinchoB1_400Regular',
 };
 
-// Two zen palettes: sumi ink on night (dark) and ink on washi paper (light).
-const dark = {
-  bg: '#0c0c0e',
-  bg1: '#131316',
-  bg2: '#1a1a1e',
-  bg3: '#222226',
-  line: 'rgba(232,228,217,0.06)',
-  line2: 'rgba(232,228,217,0.10)',
-  line3: 'rgba(232,228,217,0.18)',
-  fg: '#e8e4d9',
-  fg2: 'rgba(232,228,217,0.72)',
-  fg3: 'rgba(232,228,217,0.48)',
-  fg4: 'rgba(232,228,217,0.28)',
-  accent: '#c8553d',
-  fill: '#e8e4d9',      // solid background of active pills / primary buttons
-  onFill: '#0c0c0e',    // text/icon sitting on `fill`
-};
+// Transitional aliases keep existing native components stable while their
+// values come from the same semantic roles as the web renderer.
+function makeNativePalette(tokens: ThemeTokens) {
+  return {
+    bg: tokens.surfaceCanvas,
+    bg1: tokens.surfacePanel,
+    bg2: tokens.surfaceRaised,
+    bg3: tokens.surfaceSunken,
+    line: tokens.borderSubtle,
+    line2: tokens.borderMedium,
+    line3: tokens.borderStrong,
+    fg: tokens.textPrimary,
+    fg2: tokens.textSecondary,
+    fg3: tokens.textMuted,
+    fg4: tokens.textFaint,
+    accent: tokens.accentPrimary,
+    fill: tokens.controlFill,
+    onFill: tokens.controlOnFill,
+  };
+}
 
-const light: typeof dark = {
-  bg: '#f4f1e8',
-  bg1: '#efebe0',
-  bg2: '#e8e3d5',
-  bg3: '#dfd9c9',
-  line: 'rgba(28,27,24,0.08)',
-  line2: 'rgba(28,27,24,0.13)',
-  line3: 'rgba(28,27,24,0.24)',
-  fg: '#1c1b18',
-  fg2: 'rgba(28,27,24,0.74)',
-  fg3: 'rgba(28,27,24,0.50)',
-  fg4: 'rgba(28,27,24,0.32)',
-  accent: '#b3492f', // deeper vermilion — keeps contrast on paper
-  fill: '#4a4741',      // dark warm grey, not full ink — softer active fills
-  onFill: '#f4f1e8',
-};
+const dark = makeNativePalette(themeTokens.dark);
+const light = makeNativePalette(themeTokens.light);
 
-export type ThemeScheme = 'dark' | 'light';
+export type ThemeScheme = keyof typeof themeTokens;
 
 // `colors`, `styles` and `calendarTheme` are MUTABLE singletons: every
 // component reads them at render time, so applyTheme() swaps their contents

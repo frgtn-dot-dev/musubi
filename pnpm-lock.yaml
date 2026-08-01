@@ -157,6 +157,9 @@ importers:
       '@musubi/calendar':
         specifier: workspace:*
         version: link:../../packages/calendar
+      '@musubi/design-system':
+        specifier: workspace:*
+        version: link:../../packages/design-system
       '@musubi/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -353,6 +356,9 @@ importers:
       '@musubi/calendar':
         specifier: workspace:*
         version: link:../../packages/calendar
+      '@musubi/design-system':
+        specifier: workspace:*
+        version: link:../../packages/design-system
       '@musubi/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -518,6 +524,18 @@ importers:
       tsx:
         specifier: ^4.22.4
         version: 4.23.0
+
+  packages/design-system:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.4
+        version: 25.9.4
+      tsx:
+        specifier: ^4.22.4
+        version: 4.23.0
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   packages/docs:
     dependencies:
@@ -12520,7 +12538,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
 
   '@types/chai@5.2.3':
     dependencies:
@@ -12529,7 +12547,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
 
   '@types/cors@2.8.19':
     dependencies:
@@ -12668,7 +12686,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.1':
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -12731,7 +12749,7 @@ snapshots:
 
   '@types/nodemailer@8.0.1':
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
 
   '@types/pg@8.20.0':
     dependencies:
@@ -12759,18 +12777,18 @@ snapshots:
 
   '@types/sax@1.2.7':
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
 
   '@types/semver@7.7.1': {}
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 25.9.5
+      '@types/node': 25.9.4
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -15139,7 +15157,7 @@ snapshots:
   expo-sqlite@56.0.5(expo@56.0.17)(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
     dependencies:
       await-lock: 2.2.2
-      expo: 56.0.17(@babel/core@7.29.7)(@expo/metro-runtime@56.0.18)(expo-router@56.2.16)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      expo: 56.0.17(@babel/core@7.29.7)(@expo/metro-runtime@56.0.18)(expo-router@56.2.16)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       react: 19.2.3
       react-native: 0.85.3(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)
 

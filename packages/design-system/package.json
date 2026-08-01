@@ -1,0 +1,21 @@
+{
+  "name": "@musubi/design-system",
+  "private": true,
+  "description": "Renderer-free design tokens and contracts shared by Musubi clients.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./colors.css": "./src/colors.css"
+  },
+  "scripts": {
+    "generate": "tsx scripts/generate-colors-css.ts",
+    "test": "tsx src/theme-tokens.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.4",
+    "tsx": "^4.22.4",
+    "typescript": "~5.9.3"
+  }
+}

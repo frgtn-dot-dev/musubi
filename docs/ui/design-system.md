@@ -52,11 +52,16 @@ button, field, menu, modal, popover, sheet, or toast.
 
 ## 3. Tokens
 
-Until `packages/design-system` exists, reference values live in
-`apps/web/src/design/tokens.css` and their native counterparts in
-`apps/client/constants/theme.ts`. Name a new value by role before adding it;
-a hardcoded color, gap, radius, or motion duration inside a component needs an
-explicit reason.
+`packages/design-system` is the canonical renderer-free source for shared
+semantic theme values. Web consumes its generated CSS custom properties;
+native maps the same roles to its current theme aliases. The committed CSS is
+checked against the TypeScript source in the package test, so changing a theme
+value requires running `pnpm --filter @musubi/design-system generate`.
+
+Theme colors are the first extracted slice. Typography, dimensions, and motion
+remain in their platform token files until their units and optical contracts
+are explicit. Name a new value by role before adding it; a hardcoded color,
+gap, radius, or motion duration inside a component needs an explicit reason.
 
 - A primitive token does not say where it is used (`shu-600`, `space-4`).
 - A semantic token communicates purpose (`text-secondary`, `surface-raised`).
@@ -186,6 +191,7 @@ the required contrast ratio.
 1. Document the inventory and current system.
 2. Run Storybook around existing web primitives without moving them.
 3. Stabilize dialog, row, field, button, segmented control, and toast contracts.
-4. Extract canonical tokens and generate web/native representations.
+4. Extract canonical tokens and generate web/native representations. *(Theme
+   colors complete; typography, dimensions, and motion remain incremental.)*
 5. Create platform packages only when dependencies and APIs are clear.
 6. Add the React Native Web catalog, then on-device Storybook and composition.

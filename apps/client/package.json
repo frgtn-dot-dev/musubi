@@ -24,6 +24,7 @@
     "@expo/ui": "~56.0.23",
     "@expo/vector-icons": "^15.1.1",
     "@musubi/calendar": "workspace:*",
+    "@musubi/design-system": "workspace:*",
     "@musubi/types": "workspace:*",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
