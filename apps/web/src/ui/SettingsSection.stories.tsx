@@ -121,5 +121,17 @@ export const Narrow: Story = {
       modes: MOBILE_MODES,
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const control = canvas.getByRole("radiogroup", {
+      name: "Default view",
+    });
+    const lastOption = canvas.getByRole("radio", { name: "Agenda" });
+    const controlEdge = control.getBoundingClientRect().right;
+    const optionEdge = lastOption.getBoundingClientRect().right;
+
+    await expect(optionEdge).toBeLessThanOrEqual(controlEdge);
+    await expect(control.scrollWidth).toBeLessThanOrEqual(control.clientWidth);
+  },
   render: () => <SettingsExample />,
 };

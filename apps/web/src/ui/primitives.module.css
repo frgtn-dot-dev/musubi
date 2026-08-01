@@ -553,6 +553,7 @@
 }
 
 .segmentedOption {
+  min-width: 0;
   min-height: 34px;
   flex: 1;
   padding-inline: var(--space-3);
@@ -1808,6 +1809,10 @@
     width: 100%;
     max-width: none;
     overflow: visible;
+  }
+
+  .rowOptions .segmentedOption {
+    padding-inline: var(--space-2);
   }
 
   .dialog,
