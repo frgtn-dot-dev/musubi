@@ -111,6 +111,12 @@ known critical violation. Add screenshot tests only after the base components
 stabilize; Storybook does not replace unit or end-to-end tests for domain
 behavior.
 
+The current web catalog uses Storybook 10.5 with the first-party TanStack React
+framework. Run it from the repository root with `pnpm storybook:web`; build the
+static catalog with `pnpm storybook:web:build`. The initial catalog covers the
+existing Button, Dialog, Field, Row, Segmented, and Toast primitives without
+forking their production implementations.
+
 ## 6. Workflow
 
 1. Check the existing primitive and the rules in `calendar-ui.md`.

@@ -11,9 +11,11 @@
     "build": "vite build",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview",
+    "storybook": "storybook dev -p 6006 --no-open",
+    "storybook:build": "storybook build --output-dir storybook-static",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "eslint .storybook src --max-warnings 0",
     "test:e2e": "playwright test"
   },
   "dependencies": {

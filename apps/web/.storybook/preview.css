@@ -1,0 +1,34 @@
+.sb-page {
+  display: grid;
+  min-height: 100vh;
+  min-width: min(100vw, 320px);
+  place-items: center;
+  padding: var(--space-8);
+}
+
+.sb-stack {
+  display: flex;
+  width: min(100%, 720px);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.sb-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sb-panel {
+  width: min(100%, 560px);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-panel);
+}
+
+.sb-field-width {
+  width: min(100%, 420px);
+}

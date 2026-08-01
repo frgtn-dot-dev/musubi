@@ -4,13 +4,13 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: [".output/**", "src/routeTree.gen.ts"],
+    ignores: [".output/**", "src/routeTree.gen.ts", "storybook-static/**"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: [".storybook/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: {
         projectService: true,
