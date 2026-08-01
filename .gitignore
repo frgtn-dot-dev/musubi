@@ -59,6 +59,7 @@ dist
 
 # AI tooling
 .claude/
+.superdesign/tmp/
 
 # Local notes
 TODO.md
