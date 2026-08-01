@@ -1,0 +1,84 @@
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
+import { BriefcaseBusiness, House, UsersRound } from "lucide-react";
+import { useState } from "react";
+import { Select, type SelectOption } from "./Select";
+
+const CALENDAR_OPTIONS: readonly SelectOption[] = [
+  {
+    description: "Your personal calendar",
+    icon: <House size={16} />,
+    label: "Personal",
+    value: "personal",
+  },
+  {
+    description: "Shared with the product team",
+    icon: <BriefcaseBusiness size={16} />,
+    label: "Work",
+    value: "work",
+  },
+  {
+    description: "Read-only external calendar",
+    disabled: true,
+    icon: <UsersRound size={16} />,
+    label: "Community",
+    value: "community",
+  },
+];
+
+function CalendarSelect({ compact = false }: { compact?: boolean }) {
+  const [value, setValue] = useState("work");
+
+  return (
+    <Select
+      label="Calendar"
+      onChange={setValue}
+      options={CALENDAR_OPTIONS}
+      size={compact ? "compact" : "default"}
+      value={value}
+    />
+  );
+}
+
+const meta = {
+  args: {
+    label: "Calendar",
+    onChange: () => undefined,
+    options: CALENDAR_OPTIONS,
+    value: "work",
+  },
+  component: Select,
+  tags: ["autodocs"],
+  title: "Primitives/Select",
+} satisfies Meta<typeof Select>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Overview: Story = {
+  render: () => <CalendarSelect />,
+};
+
+export const Compact: Story = {
+  render: () => <CalendarSelect compact />,
+};
+
+export const States: Story = {
+  render: () => (
+    <div className="sb-row">
+      <Select
+        label="Empty calendar selection"
+        onChange={() => undefined}
+        options={CALENDAR_OPTIONS}
+        placeholder="Choose a calendar"
+        value=""
+      />
+      <Select
+        disabled
+        label="Locked calendar"
+        onChange={() => undefined}
+        options={CALENDAR_OPTIONS}
+        value="personal"
+      />
+    </div>
+  ),
+};

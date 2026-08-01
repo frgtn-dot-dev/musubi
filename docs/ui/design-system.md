@@ -113,9 +113,11 @@ behavior.
 
 The current web catalog uses Storybook 10.5 with the first-party TanStack React
 framework. Run it from the repository root with `pnpm storybook:web`; build the
-static catalog with `pnpm storybook:web:build`. The initial catalog covers the
-existing Button, Dialog, Field, Row, Segmented, and Toast primitives without
-forking their production implementations.
+static catalog with `pnpm storybook:web:build`. The baseline catalog visualizes
+the implemented color, typography, spacing, shape, motion, and responsive
+contracts. It also covers Button, Checkbox, ColorPicker, DatePicker, Dialog,
+Empty, Field, Row, SectionLabel, Segmented, Select, Switch, TimePicker, and Toast
+without forking their production implementations.
 
 ## 6. Workflow
 
