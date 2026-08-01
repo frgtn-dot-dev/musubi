@@ -460,19 +460,21 @@ describe("overlay primitives", () => {
       <>
         <button type="button">Keep focus</button>
         <Toast
-          actionLabel="Undo"
+          action={{ label: "Undo", onClick: onAction }}
           message="Event moved."
-          onAction={onAction}
         />
       </>,
     );
 
     const focusTarget = screen.getByRole("button", { name: "Keep focus" });
     focusTarget.focus();
-    expect(screen.getByRole("status").textContent).toContain("Event moved.");
+    const status = screen.getByRole("status");
+    const undo = screen.getByRole("button", { name: "Undo" });
+    expect(status.textContent).toContain("Event moved.");
+    expect(status.contains(undo)).toBe(false);
     expect(document.activeElement).toBe(focusTarget);
 
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(undo);
     expect(onAction).toHaveBeenCalledOnce();
   });
 

@@ -110,6 +110,16 @@ the button geometry or accessible name. Icon-only buttons use the same roles
 and sizes, require an accessible label, and expose pressed or expanded state
 when they behave as toggles or layer triggers.
 
+Only one toast is visible at a time; a new notice replaces it. Neutral messages
+are polite status announcements, while errors are assertive alerts with a
+visible error icon and border tone. Toast messages are concise and do not take
+focus. The only action is Undo, represented by one label/callback object and
+kept outside the message's live region. Plain acknowledgements remain for 3.5
+seconds and Undo for 9 seconds. Message-only and Undo anatomies share one
+centered region and maximum width: plain padding is symmetrical, while the
+compact Undo inset must not shift the toast midpoint. Features may reposition
+the region above persistent chrome but do not alter its internal geometry.
+
 Segmented controls expose two to four short, mutually exclusive options. The
 compact size is the default; the control size matches regular form controls.
 Options share available width and remain on one line. Touch layouts may reduce

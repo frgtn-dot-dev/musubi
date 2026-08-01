@@ -1,3 +1,10 @@
+import type { ToastTone } from "~/ui/Toast";
+
+export type NoticeOptions = {
+  tone?: ToastTone;
+  undo?: () => Promise<unknown> | void;
+};
+
 /**
  * A toast message, optionally with the action that puts things back.
  *
@@ -7,5 +14,5 @@
  */
 export type Notify = (
   message: string,
-  undo?: () => Promise<unknown> | void,
+  options?: NoticeOptions,
 ) => void;

@@ -470,6 +470,7 @@ export function TimeGridView({
         error instanceof Error
           ? error.message
           : "That change could not be saved. The original time was restored.",
+        { tone: "error" },
       );
     }
   }

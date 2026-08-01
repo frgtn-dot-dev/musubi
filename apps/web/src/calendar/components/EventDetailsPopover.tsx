@@ -252,13 +252,15 @@ export function EventDetailsPopover({
             : "Following occurrences removed.",
           // Only the rule changed, so putting the old one back restores the
           // occurrences exactly.
-          () => onUpdateEvent(master),
+          { undo: () => onUpdateEvent(master) },
         );
       } else {
         const result = await onRemoveEvent(master);
         onNotice(
           result.removed ? "Event deleted." : "Event removed.",
-          undoableDelete ? () => onRestoreEvent!(master) : undefined,
+          undoableDelete
+            ? { undo: () => onRestoreEvent!(master) }
+            : undefined,
         );
       }
       setDeletePrompt(undefined);

@@ -69,6 +69,18 @@
   gap: var(--space-2);
 }
 
+.sb-toast-preview-top {
+  --toast-bottom: calc(50% + 72px);
+}
+
+.sb-toast-preview-middle {
+  --toast-bottom: 50%;
+}
+
+.sb-toast-preview-bottom {
+  --toast-bottom: calc(50% - 72px);
+}
+
 .sb-settings-preview {
   width: min(100%, 720px);
   padding-bottom: var(--space-4);

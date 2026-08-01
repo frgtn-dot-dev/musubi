@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { CircleAlert } from "lucide-react";
 import { Button } from "./Button";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
@@ -14,11 +15,15 @@ function getPortalTarget() {
 
 export type ToastTone = "neutral" | "error";
 
+export type ToastAction = {
+  label: string;
+  onClick: () => void;
+};
+
 export type ToastProps = {
-  actionLabel?: string;
+  action?: ToastAction;
   className?: string;
   message: ReactNode;
-  onAction?: () => void;
   tone?: ToastTone;
 };
 
@@ -27,10 +32,9 @@ export type ToastProps = {
  * can remain available for as long as the underlying operation requires.
  */
 export function Toast({
-  actionLabel,
+  action,
   className,
   message,
-  onAction,
   tone = "neutral",
 }: ToastProps) {
   const portalTarget = useSyncExternalStore(
@@ -38,30 +42,38 @@ export function Toast({
     getPortalTarget,
     () => null,
   );
-  const hasAction = Boolean(actionLabel && onAction);
   const isError = tone === "error";
 
   const content = (
-    <div
-      aria-atomic="true"
-      aria-live={isError ? "assertive" : "polite"}
-      className={classNames(styles.toastRegion, className)}
-      role={isError ? "alert" : "status"}
-    >
+    <div className={classNames(styles.toastRegion, className)}>
       <div
         className={styles.toast}
-        data-has-action={hasAction ? "" : undefined}
+        data-has-action={action ? "" : undefined}
         data-tone={tone}
       >
-        <p>{message}</p>
-        {hasAction ? (
+        {isError ? (
+          <CircleAlert
+            aria-hidden="true"
+            className={styles.toastIcon}
+            size={17}
+            strokeWidth={1.7}
+          />
+        ) : null}
+        <p
+          aria-atomic="true"
+          className={styles.toastMessage}
+          role={isError ? "alert" : "status"}
+        >
+          {message}
+        </p>
+        {action ? (
           <Button
             className={styles.toastAction}
             size="compact"
             variant="ghost"
-            onClick={onAction}
+            onClick={action.onClick}
           >
-            {actionLabel}
+            {action.label}
           </Button>
         ) : null}
       </div>

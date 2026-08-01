@@ -209,6 +209,27 @@ the accessible name and supplies the native tooltip fallback unless a custom
 `title` is provided. Toggle icon buttons expose `aria-pressed`, while buttons
 that open a layer expose the expanded state supplied by that layer primitive.
 
+`Toast` is a single transient notice, never a stack or activity log. A new
+notice replaces the current one. Neutral feedback uses a polite `status`; an
+error uses an assertive `alert`, a visible error icon, and the error border tone
+so color is not its only signal. Keep messages concise and self-contained. A
+persistent failure, multiple recovery choices, or content that requires reading
+belongs inline or in a dialog instead.
+
+The optional action is one object containing its label and callback, so a silent
+or inert half-action cannot render. It is reserved for Undo; generic navigation
+and multi-step recovery do not belong in a toast. The message owns the live
+region and the action is its sibling, keeping interactive content out of the
+announcement. Toasts never take focus, and their timer is owned by the feature:
+plain acknowledgements remain for 3.5 seconds while Undo remains for 9 seconds.
+
+The region is centered on its owning content area. Message-only toasts keep
+symmetrical inline padding; Undo toasts use the compact action inset without
+changing the region midpoint. Both use the same maximum width and remain within
+a 12 px viewport gutter on touch layouts. Feature code may move the region above
+persistent chrome through the documented `--toast-left` and `--toast-bottom`
+variables, but must not alter the toast's internal geometry.
+
 `Segmented` is a visible radio choice for two to four short, mutually exclusive
 options. It defaults to `size="compact"`; `size="control"` matches a regular
 form control. Options share the available width, stay on one line, and may
@@ -329,8 +350,7 @@ not satisfy the required contrast ratio.
 1. Document the inventory and current system. *(Complete.)*
 2. Run Storybook around existing web primitives without moving them. *(Complete.)*
 3. Stabilize dialog, row, field, button, segmented control, and toast contracts.
-   *(Dialog, Field, Row, SettingsSection, Button, and Segmented complete; Toast
-   remains.)*
+   *(Complete.)*
 4. Extract canonical tokens and generate web/native representations. *(Theme
    colors complete; typography, dimensions, and motion remain incremental.)*
 5. Create platform packages only when dependencies and APIs are clear.

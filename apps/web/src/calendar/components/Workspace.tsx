@@ -25,7 +25,7 @@ import {
   useState,
 } from "react";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { Toast } from "~/ui/Toast";
+import { Toast, type ToastTone } from "~/ui/Toast";
 import { getAgendaLabel } from "../agenda-math";
 import {
   getEventRangeLabel,
@@ -67,6 +67,9 @@ import { SettingsDialog } from "./SettingsDialog";
 import { TimeGridView } from "./TimeGridView";
 import { Toolbar } from "./Toolbar";
 import styles from "./workspace.module.css";
+
+const TOAST_ACKNOWLEDGEMENT_MS = 3_500;
+const TOAST_UNDO_MS = 9_000;
 
 type WorkspaceProps = {
   activeView: CalendarViewId;
@@ -252,10 +255,16 @@ export function Workspace({
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const [notice, setNotice] = useState<{
     message: string;
+    tone: ToastTone;
     undo?: () => Promise<unknown> | void;
   }>();
   const notify = useCallback<Notify>(
-    (message, undo) => setNotice({ message, undo }),
+    (message, options) =>
+      setNotice({
+        message,
+        tone: options?.tone ?? "neutral",
+        undo: options?.undo,
+      }),
     [],
   );
 
@@ -267,7 +276,7 @@ export function Workspace({
       await undo?.();
       notify("Change undone.");
     } catch {
-      notify("That change could not be undone.");
+      notify("That change could not be undone.", { tone: "error" });
     }
   }
 
@@ -345,11 +354,13 @@ export function Workspace({
       start.getTime() === event.start.getTime()
         ? "Event resized."
         : "Event moved.",
-      async () => {
-        for (const event of created) {
-          await onRemoveEvent(event);
-        }
-        await onUpdateEvent(master);
+      {
+        undo: async () => {
+          for (const event of created) {
+            await onRemoveEvent(event);
+          }
+          await onUpdateEvent(master);
+        },
       },
     );
   }
@@ -461,7 +472,7 @@ export function Workspace({
     // if it is still there when you notice the mistake.
     const timeout = window.setTimeout(
       () => setNotice(undefined),
-      notice.undo ? 9_000 : 3_500,
+      notice.undo ? TOAST_UNDO_MS : TOAST_ACKNOWLEDGEMENT_MS,
     );
     return () => window.clearTimeout(timeout);
   }, [notice]);
@@ -508,7 +519,9 @@ export function Workspace({
     } = {},
   ) {
     if (editableCalendars.length === 0) {
-      notify("You need edit access to a calendar to create events.");
+      notify("You need edit access to a calendar to create events.", {
+        tone: "error",
+      });
       return;
     }
 
@@ -691,7 +704,7 @@ export function Workspace({
         onReorderPages={(pageIds) =>
           // Rethrown so the sidebar knows to stop showing the order it asked for.
           onReorderPages(pageIds).catch((error: unknown) => {
-            notify("That order could not be saved.");
+            notify("That order could not be saved.", { tone: "error" });
             throw error;
           })
         }
@@ -907,12 +920,17 @@ export function Workspace({
 
         {notice ? (
           <Toast
-            actionLabel={notice.undo ? "Undo" : undefined}
+            action={
+              notice.undo
+                ? {
+                    label: "Undo",
+                    onClick: () => void runUndo(notice.undo),
+                  }
+                : undefined
+            }
             className={styles.workspaceToast}
             message={notice.message}
-            onAction={
-              notice.undo ? () => void runUndo(notice.undo) : undefined
-            }
+            tone={notice.tone}
           />
         ) : null}
       </main>

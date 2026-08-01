@@ -1258,9 +1258,16 @@
   );
 }
 
-.toast p {
+.toastMessage {
+  min-width: 0;
+  flex: 1 1 auto;
   margin: 0;
   line-height: 1.4;
+}
+
+.toastIcon {
+  flex: none;
+  color: var(--accent-primary);
 }
 
 .toastAction {
