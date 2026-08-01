@@ -9,6 +9,11 @@ import { AlertTriangle, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
+import {
+  ConfirmationDialog,
+  ConfirmationNotice,
+  DialogError,
+} from "~/ui/ConfirmationDialog";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
@@ -36,7 +41,7 @@ const DENSITY_OPTIONS = [
   { label: "Spacious", value: "spacious" },
 ] as const;
 
-type PageSettingsDialogProps = {
+export type PageSettingsDialogProps = {
   calendars: Calendar[];
   /** False for the last remaining page: the server would just backfill it. */
   canDelete: boolean;
@@ -84,6 +89,10 @@ export function PageSettingsDialog({
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState("");
+  const [confirmation, setConfirmation] = useState<"delete" | "discard">();
+  const [deleteError, setDeleteError] = useState("");
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const discardReturnFocusRef = useRef<HTMLElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const trimmedName = name.trim();
   const dirty =
@@ -125,7 +134,11 @@ export function PageSettingsDialog({
 
   function requestClose(nextOpen: boolean) {
     if (nextOpen) return;
-    if (dirty && !window.confirm("Discard your unsaved page changes?")) {
+    if (dirty) {
+      const activeElement = document.activeElement;
+      discardReturnFocusRef.current =
+        activeElement instanceof HTMLElement ? activeElement : null;
+      setConfirmation("discard");
       return;
     }
     onOpenChange(false);
@@ -177,18 +190,16 @@ export function PageSettingsDialog({
   async function remove() {
     // Soft-deleted server-side with no restore endpoint, so an Undo toast would
     // be a promise we can't keep — this delete earns its confirm.
-    if (!window.confirm(`Delete "${page.name}"? This cannot be undone.`)) {
-      return;
-    }
     setBusy(true);
-    setError("");
+    setDeleteError("");
     try {
       await onDeletePage(page.id);
       // Closing is the feedback, together with the row leaving the sidebar: the
       // route sends the calendar to the default page if this was the open one.
+      setConfirmation(undefined);
       onOpenChange(false);
     } catch {
-      setError("This page could not be deleted.");
+      setDeleteError("This page could not be deleted.");
       setBusy(false);
     }
   }
@@ -199,6 +210,7 @@ export function PageSettingsDialog({
   }
 
   return (
+    <>
     <Dialog
       bodyLayout="flush"
       closeLabel="Close page settings"
@@ -379,9 +391,13 @@ export function PageSettingsDialog({
             <Button
               disabled={busy}
               icon={<Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />}
+              ref={deleteButtonRef}
               size="compact"
               variant="secondary"
-              onClick={() => void remove()}
+              onClick={() => {
+                setDeleteError("");
+                setConfirmation("delete");
+              }}
             >
               Delete page
             </Button>
@@ -395,6 +411,47 @@ export function PageSettingsDialog({
         ) : null}
       </form>
     </Dialog>
+    <ConfirmationDialog
+      closeLabel="Close discard changes confirmation"
+      confirmLabel="Discard changes"
+      description={`Your edits to “${page.name}” have not been saved.`}
+      onConfirm={() => {
+        setConfirmation(undefined);
+        onOpenChange(false);
+      }}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setConfirmation(undefined);
+      }}
+      open={confirmation === "discard"}
+      returnFocus={discardReturnFocusRef}
+      title="Discard page changes?"
+    >
+      <ConfirmationNotice icon={<AlertTriangle size={18} strokeWidth={1.6} />}>
+        <strong>Your current Page draft will be lost.</strong>
+        <p>Name, icon, presentation, and visibility will stay unchanged.</p>
+      </ConfirmationNotice>
+    </ConfirmationDialog>
+
+    <ConfirmationDialog
+      closeLabel="Close delete page confirmation"
+      confirmLabel="Delete page"
+      description={`“${page.name}” will disappear from every device.`}
+      loading={busy && confirmation === "delete"}
+      onConfirm={() => void remove()}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !busy) setConfirmation(undefined);
+      }}
+      open={confirmation === "delete"}
+      returnFocus={deleteButtonRef}
+      title={`Delete “${page.name}”?`}
+    >
+      <ConfirmationNotice icon={<AlertTriangle size={18} strokeWidth={1.6} />}>
+        <strong>This cannot be undone.</strong>
+        <p>The server has no way to restore a deleted Page.</p>
+      </ConfirmationNotice>
+      {deleteError ? <DialogError>{deleteError}</DialogError> : null}
+    </ConfirmationDialog>
+    </>
   );
 }
 

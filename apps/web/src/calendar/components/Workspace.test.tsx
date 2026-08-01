@@ -200,8 +200,6 @@ describe("Workspace", () => {
       name: "Work",
       position: 1,
     };
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     const single = render(
       <Workspace {...commonProps} onDeletePage={onDeletePage} />,
     );
@@ -228,6 +226,11 @@ describe("Workspace", () => {
         name: "Delete page",
       }),
     );
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Delete “Work”?" }),
+      ).getByRole("button", { name: "Delete page" }),
+    );
 
     expect(onDeletePage).toHaveBeenCalledWith("work");
   });
@@ -235,9 +238,6 @@ describe("Workspace", () => {
   it("keeps an unsaved page draft when the discard confirm is declined", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn();
-    const confirmSpy = vi
-      .spyOn(window, "confirm")
-      .mockReturnValue(false);
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
@@ -251,14 +251,26 @@ describe("Workspace", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
     );
 
-    // Declining the confirm leaves the dialog and its draft alone.
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).not.toBeNull();
+    // Cancelling the product confirmation leaves the editor and draft alone.
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Discard page changes?" }),
+      ).getByRole("button", { name: "Cancel" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    ).not.toBeNull();
     expect(onSavePage).not.toHaveBeenCalled();
 
-    confirmSpy.mockReturnValue(true);
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+      within(
+        screen.getByRole("dialog", { name: "Page settings" }),
+      ).getByRole("button", { name: "Cancel" }),
+    );
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Discard page changes?" }),
+      ).getByRole("button", { name: "Discard changes" }),
     );
 
     expect(screen.queryByRole("dialog")).toBeNull();
