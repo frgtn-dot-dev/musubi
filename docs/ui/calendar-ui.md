@@ -796,9 +796,8 @@ celé nové pořadí ids.
   animovat má — řádek doklouže domů.
 - Rozměry řádků se **měří jednou na začátku** tažení. Průběžné měření by řádek
   nechalo honit kurzor, protože transformy s ním samy hýbou.
-- „Set as default" pořád UI nemá — endpoint ho umí ve stejném zápisu
-  (`defaultPageId`), ale default přehazuje server při smazání a víc než to nikdo
-  nežádal.
+- Default Page selection was completed in Phase N. The reorder endpoint remains
+  the single atomic write for both order and default ownership.
 
 ### Fáze L — Agenda a filtry na telefonu — **HOTOVO** (2026-07-31)
 
@@ -880,6 +879,33 @@ seznam sám říká, kde v čase jsme.
 No package extraction is part of this phase. The APIs are stable enough to
 catalog and reuse in place; moving files before the native catalog exists would
 create churn without reducing another implementation.
+
+### Phase N — Complete Page default behavior — **COMPLETE** (2026-08-01)
+
+- Page settings exposes `Set as default` as an immediate secondary action in a
+  standard settings row. A successful write changes the row to a persistent
+  `Default` status and announces the result through the shared toast. The dialog
+  stays open so an unrelated name, icon, presentation, or visibility draft is
+  never discarded by changing the default.
+- The action is optimistic and rolls the Page cache back on failure (R8). It
+  sends the full current Page order plus `defaultPageId`; order and default move
+  remain one server transaction rather than two writes that could diverge.
+- An order-only write now preserves the current default. The previous query
+  compared every Page id with an absent `defaultPageId`, which cleared every
+  `isDefault` flag during a normal drag reorder.
+- Replacement orders must contain every active owned Page exactly once. A stale,
+  partial, duplicated, or foreign list is rejected before the transaction
+  changes positions or the default.
+- Position and default changes increment Page revisions and update timestamps.
+  Realtime receivers can therefore accept the `page_updated` frames, then sort
+  their cache by the received positions; equal-revision echoes remain no-ops.
+- Listing Pages repairs legacy accounts that have Pages but no default by
+  promoting the first ordered Page. This is deterministic and guarded by the
+  existing one-active-default database index.
+- Storybook covers the real set-default interaction. Unit coverage owns the
+  optimistic state transformation, dialog draft preservation, realtime order,
+  and request validation; the Postgres integration scenario covers order-only
+  preservation, default movement, invalid-order rollback, and legacy repair.
 
 ### Vědomě odloženo
 

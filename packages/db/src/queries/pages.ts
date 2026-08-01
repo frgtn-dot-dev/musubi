@@ -118,40 +118,85 @@ export async function softDeletePage(
 
     const [promoted] = await tx
       .update(pages)
-      .set({ isDefault: true })
+      .set({
+        isDefault: true,
+        revision: sql`${pages.revision} + 1`,
+        updatedAt: new Date(),
+      })
       .where(eq(pages.id, heir.id))
       .returning();
     return { status: "deleted" as const, nextDefault: promoted };
   });
 }
 
+export type ReorderPagesResult =
+  | { status: "saved"; pages: PageRow[] }
+  | { status: "invalid_order" };
+
 export async function reorderPages(
   userID: string,
   pageIds: string[],
   defaultPageId?: string,
-): Promise<PageRow[]> {
-  await db.transaction(async (tx) => {
-    // Clear the flag first so setting the new default never trips the partial
-    // unique index mid-transaction.
-    if (defaultPageId) {
+): Promise<ReorderPagesResult> {
+  return db.transaction(async (tx) => {
+    const current = await tx
+      .select()
+      .from(pages)
+      .where(active(userID))
+      .orderBy(asc(pages.position), asc(pages.createdAt));
+    const currentById = new Map(current.map((page) => [page.id, page]));
+
+    // This is a replacement order, not a partial patch. Reject stale or foreign
+    // lists before changing anything, otherwise an omitted Page could retain a
+    // colliding position and an unknown default could leave the user with none.
+    if (
+      pageIds.length !== current.length ||
+      new Set(pageIds).size !== pageIds.length ||
+      pageIds.some((id) => !currentById.has(id)) ||
+      (defaultPageId !== undefined && !currentById.has(defaultPageId))
+    ) {
+      return { status: "invalid_order" as const };
+    }
+
+    const currentDefault = current.find((page) => page.isDefault)?.id;
+    // The first Page repairs accounts affected by older clients that submitted
+    // an order-only write which accidentally cleared every default flag.
+    const nextDefault = defaultPageId ?? currentDefault ?? current[0]?.id;
+
+    // Clear the old flag first so setting the new default never trips the
+    // one-active-default partial unique index mid-transaction. The revision is
+    // bumped once below together with any position change.
+    if (nextDefault !== currentDefault && currentDefault) {
       await tx
         .update(pages)
         .set({ isDefault: false })
-        .where(and(eq(pages.userID, userID), isNull(pages.deletedAt)));
+        .where(and(eq(pages.id, currentDefault), active(userID)));
     }
 
     for (const [position, id] of pageIds.entries()) {
+      const previous = currentById.get(id)!;
+      const isDefault = id === nextDefault;
+      if (previous.position === position && previous.isDefault === isDefault) {
+        continue;
+      }
       await tx
         .update(pages)
         .set({
           position,
-          isDefault: id === defaultPageId,
+          isDefault,
+          revision: sql`${pages.revision} + 1`,
+          updatedAt: new Date(),
         })
         .where(and(eq(pages.id, id), eq(pages.userID, userID), isNull(pages.deletedAt)));
     }
-  });
 
-  return listPages(userID);
+    const saved = await tx
+      .select()
+      .from(pages)
+      .where(active(userID))
+      .orderBy(asc(pages.position), asc(pages.createdAt));
+    return { pages: saved, status: "saved" as const };
+  });
 }
 
 // Lazy backfill: existing users have no Page until their first GET. The partial
@@ -162,7 +207,22 @@ export async function ensureDefaultPage(
   input: { name: string; config: unknown },
 ): Promise<PageRow[]> {
   const existing = await listPages(userID);
-  if (existing.length > 0) return existing;
+  if (existing.length > 0) {
+    if (existing.some((page) => page.isDefault)) return existing;
+
+    // At most one default is enforced by the partial unique index, but older
+    // order-only writes could leave zero. Repair that state deterministically.
+    const first = existing[0]!;
+    await db
+      .update(pages)
+      .set({
+        isDefault: true,
+        revision: sql`${pages.revision} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(pages.id, first.id), active(userID)));
+    return listPages(userID);
+  }
 
   try {
     await db.insert(pages).values({

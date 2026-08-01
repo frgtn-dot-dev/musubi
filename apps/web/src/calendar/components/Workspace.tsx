@@ -92,6 +92,7 @@ type WorkspaceProps = {
   onCreatePage?: (request: CreatePageRequest) => Promise<PageDocument>;
   onDeletePage?: (id: string) => Promise<unknown>;
   onReorderPages?: (pageIds: string[]) => Promise<unknown>;
+  onSetDefaultPage?: (id: string) => Promise<unknown>;
   onSavePage?: (input: {
     baseRevision: number;
     config: PageConfigV1;
@@ -195,6 +196,10 @@ const unavailablePageReorder = async (): Promise<void> => {
   throw new Error("Page reordering is unavailable.");
 };
 
+const unavailablePageDefault = async (): Promise<void> => {
+  throw new Error("Changing the default Page is unavailable.");
+};
+
 const ignoreSettings = () => undefined;
 
 export function Workspace({
@@ -219,6 +224,7 @@ export function Workspace({
   onDeletePage = unavailablePageDelete,
   onPageChange,
   onReorderPages = unavailablePageReorder,
+  onSetDefaultPage = unavailablePageDefault,
   onPatchSettings = unavailableSettings,
   onSavePage = unavailablePageSave,
   onRemoveEvent,
@@ -1043,6 +1049,7 @@ export function Workspace({
             if (result.status === "saved") setTempToggles(new Set());
             return result;
           }}
+          onSetDefaultPage={onSetDefaultPage}
           page={settingsPage}
         />
       ) : null}

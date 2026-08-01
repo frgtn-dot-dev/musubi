@@ -86,14 +86,59 @@ async function main() {
     });
     assert.equal(missing.status, "not_found");
 
-    // Reorder: Work moves ahead of the default and becomes the default.
+    // Reordering alone preserves the existing default and publishes newer
+    // revisions so another session can accept the SSE updates.
+    const orderOnly = await reorderPages(userID, [work.id, defaultID]);
+    assert.equal(orderOnly.status, "saved");
+    assert.equal(
+      orderOnly.status === "saved" &&
+        orderOnly.pages.find((page) => page.id === defaultID)?.isDefault,
+      true,
+    );
+    assert.equal(
+      orderOnly.status === "saved" &&
+        orderOnly.pages.find((page) => page.id === work.id)?.revision,
+      work.revision + 2,
+    );
+
+    // Work can then become the default without changing that order.
     const reordered = await reorderPages(userID, [work.id, defaultID], work.id);
+    assert.equal(reordered.status, "saved");
     assert.deepEqual(
-      reordered.map((page) => page.id),
+      reordered.status === "saved"
+        ? reordered.pages.map((page) => page.id)
+        : [],
       [work.id, defaultID],
     );
-    assert.equal(reordered[0].isDefault, true);
-    assert.equal(reordered[1].isDefault, false);
+    assert.equal(
+      reordered.status === "saved" && reordered.pages[0].isDefault,
+      true,
+    );
+    assert.equal(
+      reordered.status === "saved" && reordered.pages[1].isDefault,
+      false,
+    );
+
+    // A stale partial list is rejected atomically and cannot clear the default.
+    const invalid = await reorderPages(userID, [work.id]);
+    assert.equal(invalid.status, "invalid_order");
+    assert.equal(
+      (await listPages(userID)).find((page) => page.isDefault)?.id,
+      work.id,
+    );
+
+    // Existing accounts left without a default by an older order-only client
+    // are repaired on the next list/backfill read.
+    await db
+      .update(pages)
+      .set({ isDefault: false })
+      .where(eq(pages.userID, userID));
+    const repaired = await ensureDefaultPage(userID, {
+      name: "Unused because Pages already exist",
+      config: defaultPageConfig("month"),
+    });
+    assert.equal(repaired.find((page) => page.isDefault)?.id, work.id);
+    const heirBeforeDelete = repaired.find((page) => page.id === defaultID)!;
 
     // Deleting the default reassigns it to the next survivor by position.
     const removed = await softDeletePage(userID, work.id);
@@ -101,6 +146,12 @@ async function main() {
     assert.equal(
       removed.status === "deleted" && removed.nextDefault?.id,
       defaultID,
+    );
+    assert.ok(
+      removed.status === "deleted" &&
+        removed.nextDefault &&
+        removed.nextDefault.revision > heirBeforeDelete.revision,
+      "promoting a delete heir must publish a newer revision",
     );
     const survivors = await listPages(userID);
     assert.equal(survivors.length, 1);

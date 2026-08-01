@@ -103,6 +103,7 @@ const meta = {
       },
       status: "saved",
     }),
+    onSetDefaultPage: async () => undefined,
     page: WORK_PAGE,
   },
   component: PageSettingsDialog,
@@ -143,6 +144,22 @@ export const NarrowSheet: Story = {
     },
   },
   play: expectPageSettings,
+  render: (args) => <PageSettingsExample {...args} />,
+};
+
+export const SetAsDefault: Story = {
+  play: async () => {
+    const dialog = await screen.findByRole("dialog", { name: "Page settings" });
+    const pageDialog = within(dialog);
+    await userEvent.click(
+      pageDialog.getByRole("button", { name: "Set as default" }),
+    );
+    await waitFor(() =>
+      expect(
+        pageDialog.getByText("Default", { selector: "span" }),
+      ).toBeVisible(),
+    );
+  },
   render: (args) => <PageSettingsExample {...args} />,
 };
 

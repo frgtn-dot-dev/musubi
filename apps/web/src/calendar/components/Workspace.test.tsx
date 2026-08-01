@@ -235,6 +235,44 @@ describe("Workspace", () => {
     expect(onDeletePage).toHaveBeenCalledWith("work");
   });
 
+  it("sets a Page as default without discarding its unsaved draft", async () => {
+    const user = userEvent.setup();
+    const onSetDefaultPage = vi.fn(async () => undefined);
+    const workPage = {
+      ...commonProps.pages[0]!,
+      id: "work",
+      isDefault: false,
+      name: "Work",
+      position: 1,
+    };
+
+    render(
+      <Workspace
+        {...commonProps}
+        onSetDefaultPage={onSetDefaultPage}
+        pages={[...commonProps.pages, workPage]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Edit Work" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
+    await user.clear(dialog.getByLabelText("Page name"));
+    await user.type(dialog.getByLabelText("Page name"), "Deep work");
+    await user.click(
+      dialog.getByRole("button", { name: "Set as default" }),
+    );
+
+    expect(onSetDefaultPage).toHaveBeenCalledWith("work");
+    expect(dialog.getByText("Default", { selector: "span" })).not.toBeNull();
+    expect(
+      (dialog.getByLabelText("Page name") as HTMLInputElement).value,
+    ).toBe("Deep work");
+    expect(
+      dialog.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
+    ).toBe(false);
+  });
+
   it("keeps an unsaved page draft when the discard confirm is declined", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn();

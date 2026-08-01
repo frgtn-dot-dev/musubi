@@ -357,6 +357,11 @@ forking their production implementations. Muted and faint color tokens may be
 shown as decorative swatches, but must not be presented as readable text when
 they do not satisfy the required contrast ratio.
 
+Page settings composes standard section labels, rows, buttons, fields, and
+confirmation dialogs. `Set as default` is an immediate row action with inline
+pending/error feedback and a persistent status after success; it does not close
+the editor or discard an unrelated draft.
+
 ## 7. Workflow
 
 1. Check the existing primitive and the rules in `calendar-ui.md`.

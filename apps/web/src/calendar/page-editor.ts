@@ -120,6 +120,16 @@ export function sortPagesBy(
   );
 }
 
+export function markDefaultPage(
+  pages: PageDocument[],
+  defaultPageId: string,
+): PageDocument[] {
+  return pages.map((page) => ({
+    ...page,
+    isDefault: page.id === defaultPageId,
+  }));
+}
+
 export type SavePageResult =
   | { status: "saved"; page: PageDocument }
   | { status: "conflict" };
@@ -156,6 +166,30 @@ export function usePageMutations(userId: string) {
       } catch (error) {
         // Put the old order back rather than leaving a lie on screen.
         if (previous) queryClient.setQueryData(pagesKey, previous);
+        throw error;
+      }
+    },
+    setDefaultPage: async (defaultPageId: string) => {
+      const previous = queryClient.getQueryData<PageDocument[]>(pagesKey);
+      if (!previous?.some((page) => page.id === defaultPageId)) {
+        throw new Error("The default Page is not in the current Page list.");
+      }
+      if (previous.some((page) => page.id === defaultPageId && page.isDefault)) {
+        return;
+      }
+
+      queryClient.setQueryData<PageDocument[]>(
+        pagesKey,
+        markDefaultPage(previous, defaultPageId),
+      );
+      try {
+        const pages = await reorderPages({
+          defaultPageId,
+          pageIds: previous.map((page) => page.id),
+        });
+        queryClient.setQueryData<PageDocument[]>(pagesKey, pages);
+      } catch (error) {
+        queryClient.setQueryData(pagesKey, previous);
         throw error;
       }
     },

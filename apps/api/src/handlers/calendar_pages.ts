@@ -132,12 +132,18 @@ export async function handlerReorderPages(req: Request, res: Response) {
     throw new BadRequestError("Request is missing a valid page order.");
   }
 
-  const rows = await reorderPages(
+  const result = await reorderPages(
     req.user!.id,
     parsed.data.pageIds,
     parsed.data.defaultPageId,
   );
-  const pages = rows.map(pageDocument);
+  if (result.status === "invalid_order") {
+    throw new BadRequestError(
+      "Page order must contain every active page exactly once.",
+    );
+  }
+
+  const pages = result.pages.map(pageDocument);
   for (const page of pages) {
     notifyPages(req.user!.id, "page_updated", { page });
   }

@@ -43,10 +43,12 @@ routes/app/p.$pageId.$view.tsx
 └─ auth/auth-client
 ```
 
-Page settings now has deterministic regular, narrow, discard-confirmation, and
-delete-confirmation stories. Remaining candidates are the chrome shell, each
-view, empty/loading/error shell, narrow toolbar, and sidebar. Do not mock the
-entire product before component-level stories are stable.
+Page settings now has deterministic regular, narrow, set-as-default,
+discard-confirmation, and delete-confirmation stories. Changing the default is
+an immediate settings-row action that keeps the dialog and any unrelated draft
+open. Remaining candidates are the chrome shell, each view,
+empty/loading/error shell, narrow toolbar, and sidebar. Do not mock the entire
+product before component-level stories are stable.
 
 ## Web — create event
 

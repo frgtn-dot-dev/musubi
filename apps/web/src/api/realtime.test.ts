@@ -36,6 +36,19 @@ describe("upsertPageIntoList", () => {
     expect(result[0]!.name).toBe("new");
   });
 
+  it("re-sorts the list when a newer page position arrives", () => {
+    const first = page("a", 1);
+    const second = { ...page("b", 1), position: 1 };
+    const moved = { ...second, position: 0, revision: 2 };
+    const displaced = { ...first, position: 1, revision: 2 };
+
+    const afterMove = upsertPageIntoList([first, second], moved);
+    expect(afterMove.map((item) => item.id)).toEqual(["b", "a"]);
+    expect(
+      upsertPageIntoList(afterMove, displaced).map((item) => item.id),
+    ).toEqual(["b", "a"]);
+  });
+
   it("ignores an equal or older revision (echo of our own change)", () => {
     const list = [page("a", 3, "current")];
     expect(upsertPageIntoList(list, page("a", 3, "echo"))).toBe(list);

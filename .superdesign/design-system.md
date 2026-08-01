@@ -65,6 +65,11 @@ focus, drag, and propagation rules remain with their owners. Page deletion and
 discarding a dirty Page draft use `ConfirmationDialog`; native browser confirms
 are not part of the product UI.
 
+Changing the default Page is a secondary action inside a standard Page settings
+row. Success replaces the action with a quiet `Default` status while keeping the
+dialog and any unrelated draft open. Do not introduce a bespoke card, menu, or
+confirmation layer for this non-destructive write.
+
 Every public component needs realistic Overview, Variants and States stories;
 add Narrow when anatomy changes. Support light/dark, keyboard operation,
 focus-visible, long content, disabled/pending/error states as applicable.

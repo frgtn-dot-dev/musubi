@@ -19,6 +19,16 @@
   border-bottom: 0;
 }
 
+.defaultStatus {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
 .pillGrid {
   display: flex;
   border-top: 1px solid var(--border-subtle);

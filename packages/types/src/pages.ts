@@ -167,7 +167,23 @@ export const ReorderPagesRequestSchema = z
     pageIds: z.array(z.string().uuid()).min(1).max(100),
     defaultPageId: z.string().uuid().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(({ defaultPageId, pageIds }, context) => {
+    if (new Set(pageIds).size !== pageIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Page order must not contain duplicate ids.",
+        path: ["pageIds"],
+      });
+    }
+    if (defaultPageId && !pageIds.includes(defaultPageId)) {
+      context.addIssue({
+        code: "custom",
+        message: "The default page must be included in the page order.",
+        path: ["defaultPageId"],
+      });
+    }
+  });
 
 export type PageConfigV1 = z.infer<typeof PageConfigV1Schema>;
 export type PageDocument = z.infer<typeof PageDocumentSchema>;

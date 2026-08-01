@@ -5,7 +5,7 @@ import type {
   PageDocument,
   PageIcon,
 } from "@musubi/types";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
@@ -55,6 +55,7 @@ export type PageSettingsDialogProps = {
     id: string;
     name: string;
   }) => Promise<SavePageResult>;
+  onSetDefaultPage: (id: string) => Promise<unknown>;
   /** Follow a page created from a conflicting draft. */
   onOpenPage: (pageId: string) => void;
   page: PageDocument;
@@ -78,6 +79,7 @@ export function PageSettingsDialog({
   onOpenChange,
   onOpenPage,
   onSavePage,
+  onSetDefaultPage,
   page,
 }: PageSettingsDialogProps) {
   const [name, setName] = useState(page.name);
@@ -87,6 +89,8 @@ export function PageSettingsDialog({
   const [view, setView] = useState<PageConfigV1["view"]>(page.config.view);
   const [visibility, setVisibility] = useState(page.config.calendarVisibility);
   const [busy, setBusy] = useState(false);
+  const [isDefault, setIsDefault] = useState(page.isDefault);
+  const [settingDefault, setSettingDefault] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState<"delete" | "discard">();
@@ -204,6 +208,23 @@ export function PageSettingsDialog({
     }
   }
 
+  async function setAsDefault() {
+    if (isDefault || busy) return;
+    setBusy(true);
+    setSettingDefault(true);
+    setError("");
+    try {
+      await onSetDefaultPage(page.id);
+      setIsDefault(true);
+      onNotice(`“${page.name}” is now the default Page.`);
+    } catch {
+      setError("The default Page could not be changed.");
+    } finally {
+      setSettingDefault(false);
+      setBusy(false);
+    }
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void save();
@@ -287,6 +308,36 @@ export function PageSettingsDialog({
           value={icon}
           onChange={setIcon}
         />
+
+        <section className={styles.section}>
+          <SectionLabel className={styles.sectionHeading} level={3}>
+            General
+          </SectionLabel>
+          <div className={styles.sectionRows}>
+            <Row
+              label="Default Page"
+              detail="Opened when no specific Page was requested"
+              trailing={
+                isDefault ? (
+                  <span className={styles.defaultStatus}>
+                    <Check aria-hidden="true" size={14} strokeWidth={1.8} />
+                    Default
+                  </span>
+                ) : (
+                  <Button
+                    disabled={busy}
+                    loading={settingDefault}
+                    size="compact"
+                    variant="secondary"
+                    onClick={() => void setAsDefault()}
+                  >
+                    Set as default
+                  </Button>
+                )
+              }
+            />
+          </div>
+        </section>
 
         <section className={styles.section}>
           <SectionLabel className={styles.sectionHeading} level={3}>

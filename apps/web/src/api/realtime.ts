@@ -11,9 +11,18 @@ export function upsertPageIntoList(
   page: PageDocument,
 ): PageDocument[] {
   const existing = list.find((item) => item.id === page.id);
-  if (!existing) return [...list, page];
+  if (!existing) return sortPages([...list, page]);
   if (existing.revision >= page.revision) return list;
-  return list.map((item) => (item.id === page.id ? page : item));
+  return sortPages(list.map((item) => (item.id === page.id ? page : item)));
+}
+
+function sortPages(pages: PageDocument[]): PageDocument[] {
+  return pages.sort(
+    (left, right) =>
+      left.position - right.position ||
+      right.revision - left.revision ||
+      left.createdAt.getTime() - right.createdAt.getTime(),
+  );
 }
 
 type RealtimeMessage = { type?: string; payload?: Record<string, unknown> };

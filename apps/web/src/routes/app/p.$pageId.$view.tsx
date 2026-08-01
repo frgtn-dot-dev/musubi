@@ -172,6 +172,7 @@ function WorkspaceRoute() {
       onDeletePage={pageMutations.deletePage}
       onReorderPages={pageMutations.reorderPages}
       onSavePage={pageMutations.savePage}
+      onSetDefaultPage={pageMutations.setDefaultPage}
       pageId={pageId}
       onRemoveEvent={eventMutations.removeEvent}
       onPatchSettings={settingsMutations.patchSettings}

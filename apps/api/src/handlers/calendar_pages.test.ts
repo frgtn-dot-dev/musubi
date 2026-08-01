@@ -84,6 +84,23 @@ assert.equal(
   false,
   "reorder ids must be uuids",
 );
+const firstPageId = randomUUID();
+const secondPageId = randomUUID();
+assert.equal(
+  ReorderPagesRequestSchema.safeParse({
+    pageIds: [firstPageId, firstPageId],
+  }).success,
+  false,
+  "reorder ids must be unique",
+);
+assert.equal(
+  ReorderPagesRequestSchema.safeParse({
+    defaultPageId: secondPageId,
+    pageIds: [firstPageId],
+  }).success,
+  false,
+  "default page must be part of the replacement order",
+);
 
 // The default Page maps the settings agenda id and shows all calendars.
 {
