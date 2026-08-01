@@ -60,8 +60,25 @@ describe("Button primitives", () => {
     const button = screen.getByRole("button", { name: "Save" });
     expect(button.getAttribute("aria-busy")).toBe("true");
     expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.textContent).toBe("Save");
     await user.click(button);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("keeps icon content mounted while loading", () => {
+    const { rerender } = render(
+      <Button icon={<span data-testid="save-icon">+</span>}>Save</Button>,
+    );
+    const icon = screen.getByTestId("save-icon");
+
+    rerender(
+      <Button icon={<span data-testid="save-icon">+</span>} loading>
+        Save
+      </Button>,
+    );
+
+    expect(screen.getByTestId("save-icon")).toBe(icon);
+    expect(screen.getByRole("button", { name: "Save" })).not.toBeNull();
   });
 
   it("requires and renders an accessible name for icon-only actions", () => {
@@ -71,7 +88,21 @@ describe("Button primitives", () => {
       </IconButton>,
     );
 
-    expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Close" }).getAttribute("title"),
+    ).toBe("Close");
+  });
+
+  it("passes toggle state through the icon-only contract", () => {
+    render(
+      <IconButton aria-pressed="true" label="Toggle settings">
+        <span>×</span>
+      </IconButton>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Toggle settings", pressed: true }),
+    ).not.toBeNull();
   });
 });
 

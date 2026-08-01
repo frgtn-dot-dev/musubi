@@ -100,6 +100,16 @@ surface, subtle border, and 14 px radius without a gradient or shadow. Rows use
 their own 16 px internal inset, grow from a 62 px minimum, and draw focus rings
 inward so the rounded clipping edge never hides keyboard focus.
 
+Buttons use four semantic roles: one primary action per region, secondary for a
+supporting or cancel action, ghost for quiet toolbar and inline actions, and
+destructive only when consequences require explicit emphasis. The default
+control size matches form controls; compact belongs to dense chrome. At touch
+widths both sizes grow to the shared minimum targets. Labels stay concise and
+on one line, action groups stack when space runs out, and loading never changes
+the button geometry or accessible name. Icon-only buttons use the same roles
+and sizes, require an accessible label, and expose pressed or expanded state
+when they behave as toggles or layer triggers.
+
 Segmented controls expose two to four short, mutually exclusive options. The
 compact size is the default; the control size matches regular form controls.
 Options share available width and remain on one line. Touch layouts may reduce

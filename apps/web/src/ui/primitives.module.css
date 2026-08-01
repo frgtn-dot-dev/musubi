@@ -1,5 +1,6 @@
 .button,
 .iconButton {
+  position: relative;
   min-height: var(--control-height);
   border: 1px solid transparent;
   border-radius: var(--radius-control);
@@ -10,7 +11,7 @@
     background var(--motion-fast) ease,
     border-color var(--motion-fast) ease,
     color var(--motion-fast) ease,
-    transform var(--motion-fast) ease;
+    box-shadow var(--motion-fast) ease;
 }
 
 .button {
@@ -65,41 +66,31 @@
   color: var(--accent-on-primary);
 }
 
-.button_text,
 .button_ghost {
   border-color: transparent;
   background: transparent;
   color: var(--text-secondary);
 }
 
-.button:hover:not(:disabled),
-.iconButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-/* A button that owns an open popover or dialog is that layer's anchor: moving it
-   moves the layer. Radix marks the trigger, so the lift simply stops applying. */
-.button[data-state="open"]:hover:not(:disabled),
-.iconButton[data-state="open"]:hover:not(:disabled) {
-  transform: none;
-}
-
 .button_secondary:hover:not(:disabled),
-.button_text:hover:not(:disabled),
 .button_ghost:hover:not(:disabled) {
-  border-color: var(--border-strong);
   background: var(--surface-raised);
   color: var(--text-primary);
 }
 
+.button_secondary:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
 .button_primary:hover:not(:disabled),
 .button_destructive:hover:not(:disabled) {
-  box-shadow: 0 5px 16px rgb(0 0 0 / 10%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
 }
 
 .button_secondary[aria-expanded="true"],
 .button_secondary[aria-pressed="true"],
-.iconButton[aria-pressed="true"] {
+.button_ghost[aria-expanded="true"],
+.button_ghost[aria-pressed="true"] {
   border-color: var(--border-strong);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -109,7 +100,7 @@
 .iconButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
-  transform: none;
+  box-shadow: none;
 }
 
 .button[data-loading],
@@ -117,18 +108,38 @@
   cursor: wait;
 }
 
-.buttonIcon {
-  display: inline-grid;
-  flex: none;
-  place-content: center;
+.buttonContent {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
-.buttonIcon:empty {
-  display: none;
+.buttonIcon,
+.iconButtonContent {
+  display: grid;
+  flex: none;
+  place-content: center;
+  line-height: 0;
+}
+
+.button[data-loading] .buttonContent,
+.iconButton[data-loading] .iconButtonContent {
+  opacity: 0;
 }
 
 .buttonLabel {
   min-width: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.buttonSpinner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
 }
 
 .spinner {

@@ -147,7 +147,7 @@ export function ShareCalendarDialog({
                 className={styles.leaveButton}
                 disabled={busy}
                 icon={<UserRoundMinus size={16} strokeWidth={1.7} />}
-                variant="text"
+                variant="ghost"
                 onClick={() => void leaveCalendar()}
               >
                 Leave calendar
@@ -243,7 +243,7 @@ export function ShareCalendarDialog({
                               className={styles.transferButton}
                               disabled={busy}
                               size="compact"
-                              variant="text"
+                              variant="ghost"
                               onClick={(event) => {
                                 transferReturnFocusRef.current =
                                   event.currentTarget;

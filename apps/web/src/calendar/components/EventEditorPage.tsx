@@ -31,7 +31,7 @@ export function EventEditorPage({
           <Button
             className={styles.backButton}
             icon={<ArrowLeft size={16} strokeWidth={1.7} />}
-            variant="text"
+            variant="ghost"
             onClick={onBack}
           >
             Back to calendar

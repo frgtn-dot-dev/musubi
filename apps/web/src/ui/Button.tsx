@@ -10,7 +10,7 @@ export type ButtonVariant =
   | "primary"
   | "secondary"
   | "destructive"
-  | "text";
+  | "ghost";
 
 export type ButtonSize = "control" | "compact";
 
@@ -79,10 +79,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type}
       >
-        <span className={styles.buttonIcon} aria-hidden="true">
-          {loading ? <span className={styles.spinner} /> : icon}
+        <span className={styles.buttonContent}>
+          {icon ? (
+            <span className={styles.buttonIcon} aria-hidden="true">
+              {icon}
+            </span>
+          ) : null}
+          <span className={styles.buttonLabel}>{children}</span>
         </span>
-        <span className={styles.buttonLabel}>{children}</span>
+        {loading ? (
+          <span className={styles.buttonSpinner} aria-hidden="true">
+            <span className={styles.spinner} />
+          </span>
+        ) : null}
       </button>
     );
   },
@@ -96,7 +105,7 @@ export type IconButtonProps = Omit<
   label: string;
   loading?: boolean;
   size?: ButtonSize;
-  variant?: Exclude<ButtonVariant, "text"> | "ghost";
+  variant?: ButtonVariant;
 };
 
 /**
@@ -135,12 +144,17 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         data-loading={loading ? "" : undefined}
         disabled={blocked}
         ref={ref}
-        title={title}
+        title={title ?? label}
         type={type}
       >
-        <span aria-hidden="true">
-          {loading ? <span className={styles.spinner} /> : children}
+        <span className={styles.iconButtonContent} aria-hidden="true">
+          {children}
         </span>
+        {loading ? (
+          <span className={styles.buttonSpinner} aria-hidden="true">
+            <span className={styles.spinner} />
+          </span>
+        ) : null}
       </button>
     );
   },

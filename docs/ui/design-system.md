@@ -189,6 +189,26 @@ spacing between settings groups. `Row` owns item content and interaction;
 requiring feature-owned data attributes. Features provide only domain copy and
 callbacks.
 
+`Button` has four semantic variants. `primary` is the single strongest action
+in a region, `secondary` supports or cancels it, `ghost` is a quiet toolbar or
+inline action, and `destructive` is reserved for an action whose consequence
+needs explicit emphasis. Do not show two primary actions in one action group or
+use destructive styling as a generic brand accent. Dialog footers place the
+secondary action before the primary or destructive ending.
+
+The default `control` size matches form controls; `compact` belongs to dense
+toolbars, toast actions, and other bounded chrome. Both sizes grow to the shared
+minimum touch targets at 599 px and below. Labels are concise and remain on one
+line; action groups stack rather than wrapping a button label. Loading blocks a
+second activation, exposes `aria-busy`, and keeps the button's existing geometry
+and accessible name stable.
+
+`IconButton` uses the same variants and sizes but requires a `label`. Use it only
+when the glyph is established in the surrounding product context; the label is
+the accessible name and supplies the native tooltip fallback unless a custom
+`title` is provided. Toggle icon buttons expose `aria-pressed`, while buttons
+that open a layer expose the expanded state supplied by that layer primitive.
+
 `Segmented` is a visible radio choice for two to four short, mutually exclusive
 options. It defaults to `size="compact"`; `size="control"` matches a regular
 form control. Options share the available width, stay on one line, and may
@@ -207,7 +227,8 @@ Every public component has:
 - default, hover, focus-visible, pressed/selected, disabled, and pending/error
   states where they apply;
 - an accessible name, keyboard path, and correct focus return;
-- an API that describes role (`variant="danger"`), not appearance (`red=true`).
+- an API that describes role (`variant="destructive"`), not appearance
+  (`red=true`).
 
 ## 6. Storybook contract
 
@@ -308,8 +329,8 @@ not satisfy the required contrast ratio.
 1. Document the inventory and current system. *(Complete.)*
 2. Run Storybook around existing web primitives without moving them. *(Complete.)*
 3. Stabilize dialog, row, field, button, segmented control, and toast contracts.
-   *(Dialog, Field, Row, SettingsSection, and Segmented complete; Button and
-   Toast remain.)*
+   *(Dialog, Field, Row, SettingsSection, Button, and Segmented complete; Toast
+   remains.)*
 4. Extract canonical tokens and generate web/native representations. *(Theme
    colors complete; typography, dimensions, and motion remain incremental.)*
 5. Create platform packages only when dependencies and APIs are clear.
