@@ -100,6 +100,13 @@ belong to repeated rows and real region boundaries, never to a field by default.
 When edges disagree, fix the component that owns the shared axis instead of
 patching the feature consumer.
 
+Consequential prompts use `ConfirmationDialog`, a compact composition of the
+shared dialog shell. Cancel precedes the commit action and receives initial
+focus by default; typed confirmations focus their required field instead. The
+shared confirmation notice owns the inset consequence callout, while the shared
+dialog error owns alert semantics and optional request IDs. Feature dialogs do
+not recreate these regions in local CSS.
+
 Settings use an explicit inset-group pattern because named, bounded groups are
 faster to scan than one long flush list. `SettingsSection` aligns its title and
 group edge to the layer axis (24 px regular, 20 px touch), places the title 8 px

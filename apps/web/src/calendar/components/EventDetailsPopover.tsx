@@ -27,7 +27,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Attendee, RemoveEventResponse } from "~/api/contracts";
 import { getEventAttendees } from "~/api/resources";
 import { Button, IconButton } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import {
+  ConfirmationDialog,
+  ConfirmationNotice,
+  DialogError,
+} from "~/ui/ConfirmationDialog";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
@@ -807,47 +811,30 @@ export function EventDetailsPopover({
         />
       ) : null}
 
-      <Dialog
-        bodyClassName={styles.deleteDialogBody}
+      <ConfirmationDialog
         closeLabel="Close delete event dialog"
+        confirmLabel="Delete"
         description={`“${event.title}” will be removed from your calendar.`}
-        footer={
-          <>
-            <Button
-              disabled={busyAction === "delete"}
-              variant="secondary"
-              onClick={() => setDeletePrompt(undefined)}
-            >
-              Cancel
-            </Button>
-            <Button
-              loading={busyAction === "delete"}
-              variant="destructive"
-              onClick={() => void handleDelete()}
-            >
-              Delete
-            </Button>
-          </>
-        }
+        loading={busyAction === "delete"}
+        onConfirm={() => void handleDelete()}
         onOpenChange={(nextOpen) =>
           nextOpen || setDeletePrompt(undefined)
         }
         open={deletePrompt === "confirm"}
         returnFocus={triggerElement}
-        size="compact"
         title="Delete event?"
       >
-        <div className={styles.deleteConsequence}>
-          <AlertTriangle aria-hidden="true" size={19} strokeWidth={1.5} />
+        <ConfirmationNotice
+          icon={<AlertTriangle size={19} strokeWidth={1.5} />}
+        >
           <p>{deleteConsequence}</p>
-        </div>
+        </ConfirmationNotice>
         {actionError ? (
-          <ActionError
-            message={actionError.message}
-            requestId={actionError.requestId}
-          />
+          <DialogError requestId={actionError.requestId}>
+            {actionError.message}
+          </DialogError>
         ) : null}
-      </Dialog>
+      </ConfirmationDialog>
     </>
   );
 }

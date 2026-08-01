@@ -196,11 +196,23 @@ They may share surfaces, headers, spacing, and motion, but their interaction
 contracts stay distinct. Every portaled layer follows R4b and R4c from
 `calendar-ui.md`.
 
+Production modal flows import the shared `Dialog` contract; only that primitive
+imports Radix Dialog directly. Feature components may use Radix Popover for an
+anchored interaction until the corresponding shared popover or menu contract is
+stable, but must not reproduce modal overlay, heading, footer, or focus logic.
+
 `Dialog` defaults to `bodyLayout="padded"`; use `bodyLayout="flush"` only for
 edge-to-edge rows or sections whose own readable content follows the layer
 axis. `Field` defaults to `variant="plain"`; `variant="section"` explicitly
 adds the inset and divider needed inside a flush collection. Combining a
 padded dialog body with a section field is a double-inset contract violation.
+
+`ConfirmationDialog` composes the compact `Dialog` contract for one
+consequential decision. It owns Cancel-before-confirm action order, loading and
+disabled behavior, and safe initial focus on Cancel. A typed confirmation may
+move initial focus to its required field. `ConfirmationNotice` owns the
+consequence callout and `DialogError` owns alert semantics plus an optional
+request ID; features provide only the domain copy, icon, and operation.
 
 `SettingsSection` owns the heading, inset group surface, layer alignment, and
 spacing between settings groups. `Row` owns item content and interaction;
@@ -322,11 +334,11 @@ written to source, configuration, logs, or documentation.
 
 The baseline catalog visualizes the implemented color, typography, spacing,
 shape, motion, and responsive contracts. It also covers Button, Checkbox,
-ColorPicker, DatePicker, Dialog, Empty, Field, Row, SectionLabel, Segmented,
-Select, SettingsSection, Switch, TimePicker, and Toast without forking their
-production implementations. Muted and faint color tokens may be shown as
-decorative swatches, but must not be presented as readable text when they do
-not satisfy the required contrast ratio.
+ColorPicker, ConfirmationDialog, DatePicker, Dialog, Empty, Field, Row,
+SectionLabel, Segmented, Select, SettingsSection, Switch, TimePicker, and Toast
+without forking their production implementations. Muted and faint color tokens
+may be shown as decorative swatches, but must not be presented as readable text
+when they do not satisfy the required contrast ratio.
 
 ## 7. Workflow
 

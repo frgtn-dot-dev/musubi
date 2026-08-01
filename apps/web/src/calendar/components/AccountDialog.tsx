@@ -17,6 +17,11 @@ import { deleteAccount, uploadAvatar } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
+import {
+  ConfirmationDialog,
+  ConfirmationNotice,
+  DialogError,
+} from "~/ui/ConfirmationDialog";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row, RowAction } from "~/ui/Row";
@@ -360,32 +365,17 @@ function DeleteAccountDialog({
   }
 
   return (
-    <Dialog
+    <ConfirmationDialog
       closeLabel="Close account deletion"
+      confirmDisabled={!matches}
+      confirmForm="delete-account-form"
+      confirmLabel="Delete account"
       description="Permanently removes your account and data after you open the final confirmation link we email you."
-      footer={
-        <>
-          <DialogClose>
-            <Button disabled={busy} variant="secondary">
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            disabled={!matches}
-            form="delete-account-form"
-            loading={busy}
-            type="submit"
-            variant="destructive"
-          >
-            Delete account
-          </Button>
-        </>
-      }
       initialFocus={inputRef}
+      loading={busy}
       onOpenChange={onOpenChange}
       open={open}
       returnFocus={returnFocus}
-      size="compact"
       title="Delete account?"
     >
       <form
@@ -393,12 +383,13 @@ function DeleteAccountDialog({
         id="delete-account-form"
         onSubmit={(event) => void removeAccount(event)}
       >
-        <div className={styles.deleteWarning}>
-          <UserRound aria-hidden="true" size={19} strokeWidth={1.6} />
+        <ConfirmationNotice
+          icon={<UserRound size={19} strokeWidth={1.6} />}
+        >
           <p>
             Type <strong>{userName}</strong> exactly to continue.
           </p>
-        </div>
+        </ConfirmationNotice>
         <Field label={`Type ${userName} to confirm`}>
           <input
             autoComplete="off"
@@ -409,12 +400,8 @@ function DeleteAccountDialog({
             onChange={(event) => setConfirmation(event.target.value)}
           />
         </Field>
-        {error ? (
-          <div className={styles.dialogError} role="alert">
-            <p>{error}</p>
-          </div>
-        ) : null}
+        {error ? <DialogError>{error}</DialogError> : null}
       </form>
-    </Dialog>
+    </ConfirmationDialog>
   );
 }

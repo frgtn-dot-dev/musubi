@@ -20,6 +20,11 @@ import {
 } from "~/calendar/calendar-groups";
 import { Button, IconButton } from "~/ui/Button";
 import { ColorPicker } from "~/ui/ColorPicker";
+import {
+  ConfirmationDialog,
+  ConfirmationNotice,
+  DialogError,
+} from "~/ui/ConfirmationDialog";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
@@ -692,41 +697,28 @@ function DeleteCalendarDialog({
   onOpenChange: (open: boolean) => void;
   returnFocus: RefObject<HTMLElement | null>;
 }) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
-
   return (
-    <Dialog
-      bodyClassName={styles.deleteDialogBody}
+    <ConfirmationDialog
       closeLabel="Close calendar deletion"
+      confirmLabel="Delete calendar"
       description="The calendar and every event in it will be permanently removed."
-      footer={
-        <>
-          <DialogClose>
-            <Button disabled={busy} ref={cancelRef} variant="secondary">
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button loading={busy} variant="destructive" onClick={onDelete}>
-            Delete calendar
-          </Button>
-        </>
-      }
-      initialFocus={cancelRef}
+      loading={busy}
+      onConfirm={onDelete}
       onOpenChange={onOpenChange}
       open
       returnFocus={returnFocus}
-      size="compact"
       title={`Delete “${calendar.name}”?`}
     >
-      <div className={styles.deleteWarning}>
-        <Trash2 aria-hidden="true" size={19} strokeWidth={1.7} />
+      <ConfirmationNotice icon={<Trash2 size={19} strokeWidth={1.7} />}>
         <p>
           This can’t be undone. Shared members will also lose access to{" "}
           <strong>{calendar.name}</strong>.
         </p>
-      </div>
-      {error ? <ErrorMessage error={error} compact /> : null}
-    </Dialog>
+      </ConfirmationNotice>
+      {error ? (
+        <DialogError requestId={error.requestId}>{error.message}</DialogError>
+      ) : null}
+    </ConfirmationDialog>
   );
 }
 

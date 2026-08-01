@@ -11,6 +11,11 @@ import type { CalendarMember } from "~/api/contracts";
 import { useCalendarSharing } from "~/calendar/calendar-sharing";
 import { Avatar } from "~/ui/Avatar";
 import { Button, IconButton } from "~/ui/Button";
+import {
+  ConfirmationDialog,
+  ConfirmationNotice,
+  DialogError,
+} from "~/ui/ConfirmationDialog";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Segmented } from "~/ui/Segmented";
@@ -391,7 +396,6 @@ function TransferOwnershipDialog({
   returnFocus: RefObject<HTMLElement | null>;
   setOwner: (input: { role: string; userId: string }) => Promise<unknown>;
 }) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
   const { busy, error, run } = useAsyncAction();
 
   async function transferOwnership() {
@@ -404,44 +408,24 @@ function TransferOwnershipDialog({
   }
 
   return (
-    <Dialog
+    <ConfirmationDialog
       closeLabel="Close ownership transfer"
+      confirmLabel="Transfer ownership"
       description={`You will become an editor and lose access to sharing controls for ${calendar.name}.`}
-      footer={
-        <>
-          <DialogClose>
-            <Button disabled={busy} ref={cancelRef} variant="secondary">
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            loading={busy}
-            variant="destructive"
-            onClick={() => void transferOwnership()}
-          >
-            Transfer ownership
-          </Button>
-        </>
-      }
-      initialFocus={cancelRef}
+      loading={busy}
+      onConfirm={() => void transferOwnership()}
       onOpenChange={onOpenChange}
       open
       returnFocus={returnFocus}
-      size="compact"
       title={`Make ${member.name} the owner?`}
     >
-      <div className={styles.transferWarning}>
-        <ShieldCheck aria-hidden="true" size={19} strokeWidth={1.7} />
+      <ConfirmationNotice icon={<ShieldCheck size={19} strokeWidth={1.7} />}>
         <p>
           <strong>{member.name}</strong> will control members, invite links, and
           calendar settings. This change takes effect immediately.
         </p>
-      </div>
-      {error ? (
-        <div className={styles.dialogError} role="alert">
-          <p>{error}</p>
-        </div>
-      ) : null}
-    </Dialog>
+      </ConfirmationNotice>
+      {error ? <DialogError>{error}</DialogError> : null}
+    </ConfirmationDialog>
   );
 }

@@ -298,37 +298,9 @@
   min-height: 60px;
 }
 
-.deleteWarning {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: color-mix(
-    in srgb,
-    var(--accent-primary) 7%,
-    var(--surface-raised)
-  );
-  color: var(--text-primary);
-  font-size: var(--text-12);
-  line-height: 1.45;
-}
-
-.deleteWarning svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--accent-primary);
-}
-
-.deleteWarning p,
 .error p,
 .compactError p {
   margin: 0;
-}
-
-.deleteWarning strong {
-  font-weight: 600;
 }
 
 .error,
@@ -344,10 +316,6 @@
   color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
   font-size: var(--text-12);
   line-height: 1.45;
-}
-
-.deleteDialogBody .compactError {
-  margin: 0;
 }
 
 .error {

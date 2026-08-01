@@ -186,8 +186,7 @@
   color: var(--text-secondary);
 }
 
-.error,
-.dialogError {
+.error {
   border: 1px solid
     color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
   border-radius: var(--radius-md);
@@ -210,46 +209,12 @@
   padding: var(--space-3);
 }
 
-.dialogError {
-  margin: 0;
-  padding: var(--space-3);
-}
-
-.error p,
-.dialogError p,
-.transferWarning p {
+.error p {
   margin: 0;
 }
 
 .leaveButton {
   margin-right: auto;
-}
-
-.transferWarning {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: color-mix(
-    in srgb,
-    var(--accent-primary) 7%,
-    var(--surface-raised)
-  );
-  color: var(--text-primary);
-  font-size: var(--text-12);
-  line-height: 1.45;
-}
-
-.transferWarning svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--accent-primary);
-}
-
-.transferWarning strong {
-  font-weight: 600;
 }
 
 @media (max-width: 599px) {

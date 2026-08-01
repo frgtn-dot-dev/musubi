@@ -9,6 +9,7 @@ interaction risk and usefulness in Storybook—not file size alone.
 |---|---|---|
 | Button / IconButton | web `src/ui` | Stable primitive; add stories in place first. |
 | Dialog / DialogClose | web `src/ui` | Stable shell; document desktop/sheet states. |
+| ConfirmationDialog | web `src/ui` | Stable confirm pattern; four production flows migrated. |
 | Field | web `src/ui` | Stable label/description/error contract. |
 | Row variants | web `src/ui` | Stable settings/list pattern. |
 | Segmented, Switch, Checkbox, Select | web `src/ui` | Stabilize keyboard/state matrix in stories. |
@@ -41,8 +42,8 @@ animation implementations separate.
 
 ## Medium priority patterns
 
-- Confirm pattern: title, consequence, optional recurrence scope and ordered
-  secondary/destructive actions.
+- Recurrence scope confirmation: keep its multi-choice business flow separate
+  from the implemented two-action `ConfirmationDialog` pattern.
 - Settings section: SectionLabel plus row variants and loading/error feedback.
 - Picker field: labeled trigger, current value, clear/error and platform layer.
 - Identity row: Avatar, primary/secondary text and trailing action.
@@ -82,4 +83,3 @@ Do not extract when the proposed component:
 - accepts arbitrary style props instead of a small variant contract;
 - would duplicate an existing primitive during migration;
 - cannot demonstrate at least Overview, Variants and States with real content.
-
