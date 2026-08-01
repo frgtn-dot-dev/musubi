@@ -39,9 +39,7 @@
   height: 100vh;
   flex-direction: column;
   border-right: 1px solid var(--border-subtle);
-  background:
-    radial-gradient(circle at 18% 12%, rgb(255 255 255 / 14%), transparent 30%),
-    var(--surface-panel);
+  background: var(--surface-panel);
 }
 
 .sidebarHeader {
@@ -553,9 +551,7 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  background:
-    radial-gradient(circle at 70% -20%, rgb(255 255 255 / 10%), transparent 36%),
-    var(--surface-canvas);
+  background: var(--surface-canvas);
 }
 
 .calendarAreaMonth {

@@ -1119,6 +1119,13 @@
   padding: 0;
 }
 
+/* A first-level section supplies the flush body's row boundary, not a second
+   content axis. Nested section fields keep their local component inset. */
+.dialogBody_flush > .field_section,
+.dialogBody_flush > form > .field_section {
+  padding-inline: var(--layer-inline);
+}
+
 .dialogFooter {
   display: flex;
   flex: none;
