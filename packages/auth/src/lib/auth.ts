@@ -7,6 +7,15 @@ import { config, logger } from '@musubi/config';
 import { defaultPageConfig } from '@musubi/types';
 import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml } from '@musubi/emails';
 import { withVerifiedLanding } from './verified_landing';
+import { appleClientSecret, appleWebConfigured, type AppleWebCredentials } from './apple_secret';
+
+const appleWeb: AppleWebCredentials = {
+  keyId: config.social.appleKeyID,
+  privateKey: config.social.applePrivateKey,
+  servicesId: config.social.appleServicesID,
+  teamId: config.social.appleTeamID,
+};
+export const appleWebSignInEnabled = appleWebConfigured(appleWeb);
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -16,6 +25,9 @@ export const auth = betterAuth({
   baseURL: config.api.url,
   trustedOrigins: [
     "musubi://",
+    // Apple returns the browser flow as a cross-site POST from its own domain
+    // (`response_mode=form_post`), so the origin check has to know it.
+    "https://appleid.apple.com",
     "https://musubi.pro",
     "https://dev.musubi.pro",
     ...(config.api.environment === "dev" ? [
@@ -75,11 +87,23 @@ export const auth = betterAuth({
       prompt: "select_account",
     },
     apple: {
-      clientId: config.social.appleClientID,
-      // Native Sign in with Apple only: the identity token's `aud` claim is the
-      // app's bundle id, so Better Auth verifies the token against this (clientId
-      // + clientSecret are for the web redirect flow, which we don't use).
+      // Two registrations for one provider. The Services ID goes first because
+      // Better Auth takes the primary client id for the browser redirect; the
+      // bundle id stays in the list, and in `audience`, so the phone's identity
+      // token still verifies. With no Services ID this is exactly what it was
+      // before: the bundle id, native flow only.
+      clientId: appleWebSignInEnabled
+        ? [config.social.appleServicesID, config.social.appleClientID]
+        : config.social.appleClientID,
+      audience: [config.social.appleServicesID, config.social.appleClientID].filter(Boolean),
       appBundleIdentifier: "dev.frgtn.musubi",
+      // A getter, not a value: Apple wants a JWT signed with the .p8 key, and a
+      // fresh one per exchange is what keeps a server that has been up for six
+      // months from waking up unable to sign anyone in. Empty when the browser
+      // flow is not set up — then no client ever offers the button.
+      get clientSecret() {
+        return appleWebSignInEnabled ? appleClientSecret(appleWeb) : "";
+      },
     }
   },
   account: {

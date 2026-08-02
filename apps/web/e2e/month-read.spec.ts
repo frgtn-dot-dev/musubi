@@ -5007,8 +5007,10 @@ test("offers the sign-in providers this server can actually finish", async ({
       email: true,
       emailVerificationRequired: false,
       minClientVersion: "0.1.2",
-      // Apple is advertised for the phone, which uses the native token flow.
+      // Apple is advertised for the phone, which uses the native token flow —
+      // and deliberately not for the browser, which needs its own registration.
       socials: ["google", "microsoft", "apple"],
+      socialsWeb: ["google", "microsoft"],
       syncProviders: [],
     }),
   );
@@ -5075,4 +5077,58 @@ test("says so when a provider sign-in does not come back", async ({ page }) => {
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByRole("alert")).toContainText("did not come back");
+});
+
+test("offers Apple once the server has its browser registration", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, {
+      email: true,
+      emailVerificationRequired: false,
+      minClientVersion: "0.1.2",
+      socials: ["google", "apple"],
+      // A Services ID and a .p8 key are configured, so the redirect can come back.
+      socialsWeb: ["google", "apple"],
+      syncProviders: [],
+    }),
+  );
+  let social: unknown;
+  await page.route("**/api/auth/sign-in/social", (route) => {
+    social = route.request().postDataJSON();
+    return respond(route, { redirect: false, url: "https://appleid.apple.com/auth/authorize" });
+  });
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await expect.poll(() => social).toEqual(
+    expect.objectContaining({ provider: "apple" }),
+  );
+});
+
+test("hides Apple on an API too old to say what a browser can finish", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, {
+      email: true,
+      minClientVersion: "0.1.2",
+      // No socialsWeb: this list mixes the phone's flows in, and Apple's is one
+      // of them. Offering it would open a page with nowhere to return to.
+      socials: ["google", "apple"],
+      syncProviders: [],
+    }),
+  );
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Apple/ })).toHaveCount(0);
 });

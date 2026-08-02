@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { config } from "@musubi/config";
+import { appleWebSignInEnabled } from "@musubi/auth";
 
 // Which social logins this server can actually perform — a provider counts only
 // when its credentials are configured. Lets self-hosted clients render just the
@@ -17,6 +18,20 @@ function enabledSocials(): string[] {
   if (config.social.googleWebClientID) socials.push("google");
   if (config.social.microsoftClientID && config.social.microsoftClientSecret) socials.push("microsoft");
   if (config.social.appleClientID) socials.push("apple");
+  return socials;
+}
+
+// The same question for a browser, which needs more: a redirect flow cannot
+// finish without the secret, and Apple's browser flow is a whole separate
+// registration (Services ID + .p8 key) from the app's.
+//
+// A second field rather than a changed `socials`, because the released phone app
+// reads that one as a flat list and must keep seeing what it can do.
+function enabledWebSocials(): string[] {
+  const socials: string[] = [];
+  if (config.social.googleWebClientID && config.social.googleClientSecret) socials.push("google");
+  if (config.social.microsoftClientID && config.social.microsoftClientSecret) socials.push("microsoft");
+  if (appleWebSignInEnabled) socials.push("apple");
   return socials;
 }
 
@@ -39,6 +54,7 @@ export function handlerServer(_: Request, res: Response) {
   res.status(200).json({
     minClientVersion: "0.1.2",
     socials: enabledSocials(),
+    socialsWeb: enabledWebSocials(),
     syncProviders: enabledSyncProviders(),
     // Whether this server can send email. Password reset and in-app account
     // deletion both need it, so the client hides/adapts those when it's off.

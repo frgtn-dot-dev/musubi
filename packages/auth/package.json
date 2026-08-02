@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx src/lib/auth.test.ts"
+    "test": "tsx src/lib/auth.test.ts && tsx src/lib/apple_secret.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",

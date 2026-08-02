@@ -60,8 +60,16 @@ type SocialConfig = {
   googleClientSecret: string,
   appleClientID: string,
   // Apple Developer Team ID (10 chars) — used to build the apple-app-site-
-  // association file for iOS universal links (seamless invite opening).
+  // association file for iOS universal links (seamless invite opening), and as
+  // the issuer of the signed secret the browser flow needs.
   appleTeamID: string,
+  // Sign in with Apple in a BROWSER is a different registration from the app's:
+  // a Services ID plus a .p8 key, from which the server signs a short-lived
+  // secret (see packages/auth apple_secret.ts). Empty → no Apple button on the
+  // web, which is the state every install starts in.
+  appleServicesID: string,
+  appleKeyID: string,
+  applePrivateKey: string,
   microsoftClientID: string,
   microsoftClientSecret: string,
   // Entra tenant: "common" (any account incl. personal) unless self-hosting
@@ -123,6 +131,9 @@ const socialConfig: SocialConfig = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   appleClientID: process.env.APPLE_CLIENT_ID ?? "",
   appleTeamID: process.env.APPLE_TEAM_ID ?? "",
+  appleServicesID: process.env.APPLE_SERVICES_ID ?? "",
+  appleKeyID: process.env.APPLE_KEY_ID ?? "",
+  applePrivateKey: process.env.APPLE_PRIVATE_KEY ?? "",
   microsoftClientID: process.env.MICROSOFT_CLIENT_ID ?? "",
   microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
   microsoftTenantID: process.env.MICROSOFT_TENANT_ID ?? "common",

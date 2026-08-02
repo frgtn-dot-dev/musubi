@@ -42,5 +42,15 @@ export function ProviderGlyph({ provider }: { provider: string }) {
     );
   }
 
+  if (provider === "apple") {
+    // `currentColor`, unlike the other two: Apple's mark is monochrome and has to
+    // read on both the light and the dark surface the button sits on.
+    return (
+      <svg aria-hidden="true" fill="currentColor" focusable="false" height="18" viewBox="0 0 24 24" width="18">
+        <path d="M17.05 12.04c-.03-2.43 1.99-3.6 2.08-3.66-1.13-1.66-2.89-1.89-3.52-1.92-1.5-.15-2.93.88-3.69.88-.76 0-1.93-.86-3.17-.84-1.63.02-3.13.95-3.97 2.41-1.69 2.94-.43 7.29 1.21 9.68.8 1.17 1.76 2.48 3.01 2.43 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.15.76 1.3-.02 2.12-1.19 2.92-2.36.92-1.35 1.3-2.66 1.32-2.73-.03-.01-2.53-.97-2.56-3.85zM14.63 4.84c.67-.81 1.12-1.94.99-3.07-.96.04-2.13.64-2.82 1.45-.62.72-1.16 1.87-1.02 2.97 1.07.08 2.17-.54 2.85-1.35z" />
+      </svg>
+    );
+  }
+
   return null;
 }

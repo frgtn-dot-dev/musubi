@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { getServerOrigin } from "~/api/query-keys";
+import type { ServerCapabilities } from "~/api/contracts";
 import { getServerCapabilities } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
@@ -27,13 +28,27 @@ const loginSearchSchema = z.object({
   redirect: z.string().optional().catch(undefined),
 });
 
-// Providers a browser can actually complete. Apple is deliberately absent: this
-// server is set up for the native identity-token flow (bundle id, no web
-// Services ID), so an Apple button here would open a page that cannot come back.
 const WEB_PROVIDERS = [
   { id: "google", label: "Continue with Google" },
   { id: "microsoft", label: "Continue with Microsoft" },
+  { id: "apple", label: "Continue with Apple" },
 ] as const;
+
+/**
+ * Which of them this server can finish in a browser.
+ *
+ * `socialsWeb` is the answer when the server is new enough to give one. An older
+ * API only says which providers it accepts at all, and the phone's flows are in
+ * there too — Apple especially, which needs a separate browser registration — so
+ * the fallback drops it rather than offering a button that cannot come back.
+ */
+function browserProviders(capabilities: ServerCapabilities | undefined) {
+  const offered =
+    capabilities?.socialsWeb ??
+    capabilities?.socials.filter((social) => social !== "apple") ??
+    [];
+  return WEB_PROVIDERS.filter((provider) => offered.includes(provider.id));
+}
 
 export const Route = createFileRoute("/login")({
   validateSearch: loginSearchSchema,
@@ -63,9 +78,7 @@ function LoginRoute() {
     queryKey: ["server-capabilities", getServerOrigin()],
     staleTime: 5 * 60_000,
   });
-  const providers = WEB_PROVIDERS.filter((provider) =>
-    capabilities.data?.socials.includes(provider.id),
-  );
+  const providers = browserProviders(capabilities.data);
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

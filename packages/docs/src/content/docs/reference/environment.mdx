@@ -65,6 +65,9 @@ directly:
 | `POSTGRES_PASSWORD` | Yes | Compose refuses to start when missing |
 | `MUSUBI_TAG` | No | `latest`; pin a published image tag for controlled upgrades. One tag covers both the API and web images, so they can't end up mismatched |
 | `PUBLIC_HOST` | Full stack | Hostname the stack serves — Caddy takes a domain and gets HTTPS automatically, `:80` serves plain HTTP behind another proxy (defaults to `:80`). On Dokploy it is the hostname the Traefik routers match and is required |
+| `APPLE_SERVICES_ID` | No | Services ID for Sign in with Apple in a browser. With `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` and `APPLE_TEAM_ID` it turns the web Apple button on; the phone's native flow uses `APPLE_CLIENT_ID` and needs none of them |
+| `APPLE_KEY_ID` | No | Key ID of the "Sign in with Apple" `.p8` key |
+| `APPLE_PRIVATE_KEY` | No | Contents of that `.p8`. Escaped newlines (`\n`) are accepted so it fits one env line. The server signs Apple's short-lived client secret from it per exchange — there is no six-month token to rotate |
 | `REQUIRE_EMAIL_VERIFICATION` | No | `false`. `true` refuses sign-in until the address is confirmed, and sends the confirmation on sign-up and on every refused sign-in. Requires `SMTP_HOST` — the API refuses to boot otherwise. Applies to accounts that already exist, whose next sign-in is refused and mails them a link |
 | `TRAEFIK_CERT_RESOLVER` | No | Dokploy only — name of the Traefik certificate resolver. Defaults to `letsencrypt`, which is what a stock Dokploy install uses |
 | `PUBLIC_HTTP_PORT`, `PUBLIC_HTTPS_PORT` | No | Host ports the gateway publishes; default `80` and `443` |

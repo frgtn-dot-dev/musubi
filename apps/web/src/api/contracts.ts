@@ -94,6 +94,10 @@ export const ServerCapabilitiesSchema = z
     email: z.boolean().default(false),
     minClientVersion: z.string().optional(),
     socials: z.array(z.string()).default([]),
+    // Providers a BROWSER can finish. Narrower than `socials`, which also counts
+    // the phone's native flows. Absent on an API older than this field, and the
+    // login screen falls back accordingly.
+    socialsWeb: z.array(z.string()).optional(),
     syncProviders: z.array(z.string()).default([]),
   })
   .loose();
