@@ -1027,6 +1027,11 @@
   font-size: var(--text-10);
 }
 
+/* Layer order, bottom to top: dialogs at 120, anchored surfaces (popovers,
+   menus, pickers) at 140, the toast at 160. Popovers sit above dialogs because
+   most of them are opened from inside one — a select in a dialog has to paint
+   over it. A dialog raised *from* a popover inverts that pair, and says so with
+   `elevated`. */
 .dialogOverlay {
   position: fixed;
   z-index: 120;
@@ -1059,6 +1064,16 @@
   box-shadow: var(--shadow-overlay);
   transform: translate(-50%, -50%);
   animation: dialog-in var(--motion-standard) ease both;
+}
+
+/* Opened from a popover, so it has to clear the 140 that popover sits at —
+   otherwise the question hides behind the surface that asked it. */
+.dialogOverlay_elevated {
+  z-index: 150;
+}
+
+.dialog_elevated {
+  z-index: 151;
 }
 
 .dialog_compact {
@@ -1230,7 +1245,7 @@
 
 .toastRegion {
   position: fixed;
-  z-index: 130;
+  z-index: 160;
   bottom: var(
     --toast-bottom,
     calc(var(--space-5) + env(safe-area-inset-bottom))

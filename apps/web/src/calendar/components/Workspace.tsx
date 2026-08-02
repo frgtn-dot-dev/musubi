@@ -341,11 +341,10 @@ export function Workspace({
 
     const created: Event[] = [];
     const { creates, updates } = seriesEditWrites({
-      end,
+      edited: { ...event, end, start },
       master,
       occurrence: event,
       scope,
-      start,
     });
 
     setBusyEventId(master.id);

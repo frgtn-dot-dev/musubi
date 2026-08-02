@@ -4534,3 +4534,114 @@ test("offers the drawer toggle only where there is a drawer", async ({
   ).toBeVisible();
 });
 
+
+test("asks which occurrences an edited series applies to", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ body: Record<string, unknown>; method: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    const method = route.request().method();
+    if (method === "PUT" || method === "POST") {
+      writes.push({
+        body: route.request().postDataJSON() as Record<string, unknown>,
+        method,
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: /Weekly review/ }).first().click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Weekly retro");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  // Editing one occurrence of a series is the same question dragging one asks.
+  const scope = page.getByRole("dialog", { name: "Change recurring event" });
+  await expect(scope).toBeVisible();
+  await expect(scope).toContainText("Which events should take the changes");
+  expect(writes).toHaveLength(0);
+
+  await scope.getByRole("button", { name: "This event" }).click();
+
+  // The series keeps its own title minus this date; the edit becomes a
+  // standalone event.
+  await expect(page.getByRole("status")).toContainText("Occurrence updated.");
+  const updated = writes.find((write) => write.method === "PUT")!;
+  expect(updated.body.title).toBe("Weekly review");
+  expect(updated.body.recurrence).toContain("EXDATE:");
+  const created = writes.find((write) => write.method === "POST")!;
+  expect(created.body.title).toBe("Weekly retro");
+  expect(created.body.recurrence).toBeNull();
+});
+
+test("edits a whole series without moving it onto one date", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const writes: Array<Record<string, unknown>> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") {
+      writes.push(route.request().postDataJSON() as Record<string, unknown>);
+    }
+    return route.fallback();
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: /Weekly review/ }).first().click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Weekly retro");
+  await page.getByRole("button", { name: "Save" }).click();
+  await page
+    .getByRole("dialog", { name: "Change recurring event" })
+    .getByRole("button", { name: "All events" })
+    .click();
+
+  await expect(page.getByRole("status")).toContainText(
+    "Recurring series updated.",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes[0]!.title).toBe("Weekly retro");
+  // The master keeps its own first occurrence rather than jumping to the one
+  // that was edited.
+  expect(new Date(writes[0]!.start as string).toISOString()).toContain(
+    "2026-07-06",
+  );
+});
+
+
+
+test("asks the scope question above the layer that raised it", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: /Weekly review/ }).first().click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  const scope = page.getByRole("dialog", { name: "Change recurring event" });
+  await expect(scope).toBeVisible();
+
+  // The editor stays mounted so nothing typed is lost, but a popover paints
+  // above dialogs by default and would hide the question it just asked.
+  const box = (await scope.boundingBox())!;
+  const topmost = await page.evaluate(
+    ([x, y]) => {
+      const element = document.elementFromPoint(x, y);
+      return Boolean(element?.closest('[role="dialog"][data-state="open"]'));
+    },
+    [box.x + box.width / 2, box.y + 20],
+  );
+  expect(topmost).toBe(true);
+
+  // Dismissing it leaves the edit where it was rather than writing anything.
+  await scope.getByRole("button", { name: "Cancel" }).click();
+  await expect(scope).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "Edit series" }),
+  ).toBeVisible();
+});

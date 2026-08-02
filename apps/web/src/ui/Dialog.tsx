@@ -18,6 +18,11 @@ export type DialogProps = {
   className?: string;
   closeLabel: string;
   description: ReactNode;
+  /**
+   * Paint above anchored surfaces. For a dialog opened *from* a popover, which
+   * otherwise sits above it and hides the question it just asked.
+   */
+  elevated?: boolean;
   footer?: ReactNode;
   initialFocus?: RefObject<HTMLElement | null>;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +47,7 @@ export function Dialog({
   className,
   closeLabel,
   description,
+  elevated = false,
   footer,
   initialFocus,
   onOpenChange,
@@ -57,11 +63,17 @@ export function Dialog({
         <DialogPrimitive.Trigger asChild>{trigger}</DialogPrimitive.Trigger>
       ) : null}
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className={styles.dialogOverlay} />
+        <DialogPrimitive.Overlay
+          className={classNames(
+            styles.dialogOverlay,
+            elevated && styles.dialogOverlay_elevated,
+          )}
+        />
         <DialogPrimitive.Content
           className={classNames(
             styles.dialog,
             styles[`dialog_${size}`],
+            elevated && styles.dialog_elevated,
             className,
           )}
           data-body-layout={bodyLayout}

@@ -57,6 +57,7 @@ import {
 } from "../event-permissions";
 import type { Notify } from "../notice";
 import { EventEditorForm } from "./EventEditorForm";
+import { seriesEditWrites, type EditScope } from "../recurrence-edit";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import styles from "./styles/event-details.module.css";
 
@@ -137,6 +138,10 @@ export function EventDetailsPopover({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
+  // The edit waiting for its scope answer, kept whole so nothing typed is lost
+  // if the question is dismissed.
+  const [pendingEdit, setPendingEdit] = useState<Event>();
+  const [pendingEditScope, setPendingEditScope] = useState<EditScope>();
   const [pendingDeleteScope, setPendingDeleteScope] =
     useState<DeleteScope>();
   const [triggerElement, setTriggerElement] =
@@ -228,11 +233,70 @@ export function EventDetailsPopover({
   }
 
   async function handleUpdate(values: EventFormValues) {
+    // A series has to be asked which occurrences an edit belongs to — the same
+    // question dragging and deleting one already ask. Answering it before the
+    // write is why the form's own submit hands over rather than saving here.
+    if (master.recurrence && onRestoreEvent) {
+      setPendingEdit(updateEventFromForm(event, values));
+      return;
+    }
+
     await onUpdateEvent(updateEventFromForm(master, values));
-    onNotice(
-      master.recurrence ? "Recurring series updated." : "Event updated.",
-    );
+    onNotice("Event updated.");
     handleOpenChange(false);
+  }
+
+  /**
+   * Apply an edit at the chosen scope. `onRestoreEvent` creates the detached
+   * occurrence or the split-off series, which is the only new event any scope
+   * produces.
+   */
+  async function applyScopedEdit(edited: Event, scope: EditScope) {
+    setBusyAction("update");
+    setPendingEditScope(scope);
+    setActionError(undefined);
+
+    const { creates, updates } = seriesEditWrites({
+      edited,
+      master,
+      occurrence: event,
+      scope,
+    });
+
+    try {
+      // Sequential: the update carries the exclusion that keeps the created
+      // event from briefly showing twice.
+      for (const update of updates) {
+        await onUpdateEvent(update);
+      }
+      const created: Event[] = [];
+      for (const create of creates) {
+        created.push((await onRestoreEvent!(create)) as Event);
+      }
+
+      onNotice(
+        scope === "series"
+          ? "Recurring series updated."
+          : scope === "following"
+            ? "This and following events updated."
+            : "Occurrence updated.",
+        {
+          undo: async () => {
+            for (const event of created) {
+              await onRemoveEvent(event);
+            }
+            await onUpdateEvent(master);
+          },
+        },
+      );
+      setPendingEdit(undefined);
+      handleOpenChange(false);
+    } catch (error) {
+      setActionError(getEventMutationError(error, "update", homeCalendar));
+    } finally {
+      setBusyAction(undefined);
+      setPendingEditScope(undefined);
+    }
   }
 
   async function handleDelete(scope: DeleteScope = "series") {
@@ -791,6 +855,39 @@ export function EventDetailsPopover({
             )}
           </PopoverContent>
       </Popover>
+
+      {pendingEdit ? (
+        <RecurrenceScopeDialog
+          busyScope={pendingEditScope}
+          error={
+            actionError ? (
+              <>
+                <p>{actionError.message}</p>
+                {actionError.requestId ? (
+                  <span>Request {actionError.requestId}</span>
+                ) : null}
+              </>
+            ) : undefined
+          }
+          onResolve={(scope) => {
+            if (scope) {
+              void applyScopedEdit(pendingEdit, scope);
+            } else {
+              setPendingEdit(undefined);
+            }
+          }}
+          returnFocus={triggerElement}
+          /* Only when the edit actually moved it: otherwise the dialog would
+             announce a time change that never happened. */
+          timeLabel={
+            pendingEdit.start.getTime() === event.start.getTime() &&
+            pendingEdit.end.getTime() === event.end.getTime()
+              ? undefined
+              : getEventRangeLabel(pendingEdit, timeFormat)
+          }
+          title={pendingEdit.title}
+        />
+      ) : null}
 
       {deletePrompt === "scope" ? (
         <RecurrenceScopeDialog

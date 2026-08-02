@@ -57,10 +57,17 @@ export function RecurrenceScopeDialog({
   return (
     <Dialog
       closeLabel={`Close ${deleting ? "delete" : "change"} recurring event dialog`}
+      /* Always raised from an event's own layer — the preview popover or a drag
+         over the grid — so it has to clear the surface that asked. */
+      elevated
       description={
         deleting
           ? `Choose which events to remove from “${title}”.`
-          : `“${title}” moves to ${timeLabel}. Which events should change?`
+          : timeLabel
+            ? // The calendar behind the dialog still shows the old time, so the
+              // new one is spelled out rather than pointed at.
+              `“${title}” moves to ${timeLabel}. Which events should change?`
+            : `Which events should take the changes to “${title}”?`
       }
       footer={
         <Button

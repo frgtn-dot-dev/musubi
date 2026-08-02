@@ -29,12 +29,69 @@ const occurrence: Event = {
   start: new Date("2026-07-20T09:00:00Z"),
 };
 
+/** The occurrence as a drag would leave it: two hours later, same content. */
 const moved = {
-  end: new Date("2026-07-20T12:00:00Z"),
-  start: new Date("2026-07-20T11:00:00Z"),
+  edited: {
+    ...occurrence,
+    end: new Date("2026-07-20T12:00:00Z"),
+    start: new Date("2026-07-20T11:00:00Z"),
+  },
 };
 
 describe("seriesEditWrites", () => {
+  it("carries edited content into the scope that receives it", () => {
+    const edited = {
+      ...occurrence,
+      end: new Date("2026-07-20T12:00:00Z"),
+      location: "Studio B",
+      start: new Date("2026-07-20T11:00:00Z"),
+      title: "Standup (long)",
+    };
+
+    // The series takes the new content but only shifts by the delta.
+    const series = seriesEditWrites({
+      edited,
+      master,
+      occurrence,
+      scope: "series",
+    });
+    expect(series.updates[0]).toMatchObject({
+      id: master.id,
+      location: "Studio B",
+      title: "Standup (long)",
+    });
+    expect(series.updates[0]!.start.toISOString()).toBe(
+      "2026-07-06T11:00:00.000Z",
+    );
+
+    // The detached copy is the edit itself, cut loose from the rule.
+    const one = seriesEditWrites({
+      edited,
+      master,
+      occurrence,
+      scope: "occurrence",
+    });
+    expect(one.creates[0]).toMatchObject({
+      location: "Studio B",
+      recurrence: null,
+      title: "Standup (long)",
+    });
+    // The series it left keeps its own content, minus this date.
+    expect(one.updates[0]!.title).toBe(master.title);
+  });
+
+  it("takes a rewritten rule at face value when splitting", () => {
+    const { creates } = seriesEditWrites({
+      edited: { ...occurrence, recurrence: "FREQ=DAILY" },
+      master: { ...master, recurrence: "FREQ=WEEKLY;COUNT=5" },
+      occurrence,
+      scope: "following",
+    });
+
+    // Not the remaining count of a rule the user replaced.
+    expect(creates[0]!.recurrence).toBe("FREQ=DAILY");
+  });
+
   it("shifts the whole series by what the occurrence moved", () => {
     const { creates, updates } = seriesEditWrites({
       ...moved,
@@ -53,11 +110,10 @@ describe("seriesEditWrites", () => {
 
   it("keeps a resize on the edge that moved", () => {
     const { updates } = seriesEditWrites({
-      end: new Date("2026-07-20T11:00:00Z"),
+      edited: { ...occurrence, end: new Date("2026-07-20T11:00:00Z") },
       master,
       occurrence,
       scope: "series",
-      start: occurrence.start,
     });
 
     expect(updates[0]!.start.toISOString()).toBe("2026-07-06T09:00:00.000Z");
@@ -109,11 +165,14 @@ describe("seriesEditWrites", () => {
 
   it("treats a split at the first occurrence as moving the series", () => {
     const { creates, updates } = seriesEditWrites({
-      end: new Date("2026-07-06T12:00:00Z"),
+      edited: {
+        ...master,
+        end: new Date("2026-07-06T12:00:00Z"),
+        start: new Date("2026-07-06T11:00:00Z"),
+      },
       master,
       occurrence: master,
       scope: "following",
-      start: new Date("2026-07-06T11:00:00Z"),
     });
 
     expect(creates).toHaveLength(0);
