@@ -53,7 +53,7 @@ Nobody else is building exactly this: **an open calendar designed as social infr
 | 侘 | **Zen aesthetic** | Sumi ink on night / ink on washi paper, spring physics, deliberate haptics, kanji accents |
 | 鈴 | **Notifications** | Local reminders that survive edits, moves, and recurrence — even for synced events |
 | 卓 | **Android home-screen widgets** | Scrollable Agenda + adaptive month Calendar; recurring occurrences, deep-linked event/day detail, per-widget calendar filters, and light/dark themes |
-| 家 | **Self-hosting** | `docker-compose.yml` for the API, or `docker-compose.full.yml` for the whole stack — web client and API on one origin behind a gateway, HTTPS included |
+| 家 | **Self-hosting** | `docker-compose.yml` for the whole stack — web client and API on one origin behind a gateway, HTTPS included — or `docker-compose.api.yml` for the API alone |
 
 ### Sync providers
 
@@ -103,7 +103,7 @@ pnpm db:migrate
 pnpm dev            # api + client + docs, all in parallel
 ```
 
-The client uses custom native modules, so it needs a development build rather than Expo Go. Testing on a real device? Set `BETTER_AUTH_URL` and the app's server URL (welcome screen) to your machine's LAN IP (`http://192.168.x.x:7531`), not `localhost`. `docker-compose.yml` runs the API and Postgres; `docker-compose.full.yml` adds the web client and a Caddy gateway so both share one origin (which the browser client requires). Dokploy has its own `docker-compose.dokploy.yml`. Follow the [local development guide](https://musubi.pro/docs/guides/running-locally/) or the [self-hosting runbook](https://musubi.pro/docs/guides/self-hosting/).
+The client uses custom native modules, so it needs a development build rather than Expo Go. Testing on a real device? Set `BETTER_AUTH_URL` and the app's server URL (welcome screen) to your machine's LAN IP (`http://192.168.x.x:7531`), not `localhost`. `docker-compose.yml` runs the whole stack — web client, API, Postgres and a Caddy gateway that puts the first two on one origin (which the browser client requires); `docker-compose.api.yml` runs the API and Postgres alone, for mobile-only servers. Dokploy has its own `docker-compose.dokploy.yml`, same stack with Traefik labels instead of the gateway. Follow the [local development guide](https://musubi.pro/docs/guides/running-locally/) or the [self-hosting runbook](https://musubi.pro/docs/guides/self-hosting/).
 
 ## How it's built
 

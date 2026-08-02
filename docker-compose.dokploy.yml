@@ -1,4 +1,58 @@
+# Musubi — the full stack on Dokploy.
+#
+# Same three services as docker-compose.yml (web + API + database) minus the
+# Caddy gateway: Dokploy already runs Traefik, so the one-origin split lives in
+# Traefik labels instead. Everything else about the shape is identical, and it
+# has to be — the web client and the API MUST share one public origin, or the
+# session cookie stops being first-party and the browser hits CORS.
+#
+#   1. New Dokploy project → Compose, point it at this file.
+#   2. In the Environment tab set at least:
+#        PUBLIC_HOST=musubi.example.com   (the hostname, no scheme, no path)
+#        BETTER_AUTH_URL=https://musubi.example.com
+#        BETTER_AUTH_SECRET=...           (openssl rand -base64 32)
+#        POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
+#      Dokploy writes those into the .env this file reads.
+#   3. Deploy. Point the DNS record at the server first, or the certificate
+#      cannot be issued.
+#
+# Do NOT also add a Domain in the Dokploy UI for `web` or `api`: the labels below
+# already declare the routers, and a second one for the same host and path is
+# ambiguous. Routing is here so it is reviewable and moves with the repo.
+#
+# Upgrade: bump MUSUBI_TAG (or leave it `latest`) and redeploy. Roll back by
+# setting it to the previous version — the images are immutable per release.
 services:
+  # Everything that is not the API. Catch-all router, so it must stay the lowest
+  # priority of the three.
+  web:
+    image: frgtndev/musubi-web:${MUSUBI_TAG:-latest}
+    environment:
+      PORT: 3000
+    expose:
+      - "3000"
+    networks:
+      dokploy-network: {}
+      default: {}
+    labels:
+      traefik.enable: "true"
+      # Required whenever a container sits on more than one network: without it
+      # Traefik may pick `default` and route to an address it cannot reach.
+      traefik.docker.network: dokploy-network
+      traefik.http.services.musubi-web.loadbalancer.server.port: "3000"
+      traefik.http.routers.musubi-web.rule: Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your hostname}`)
+      traefik.http.routers.musubi-web.entrypoints: websecure
+      traefik.http.routers.musubi-web.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.musubi-web.priority: "1"
+      # Plain HTTP exists only to send people to HTTPS. One router for the whole
+      # host: it never reaches a backend, so which service it names is irrelevant.
+      traefik.http.middlewares.musubi-https.redirectscheme.scheme: https
+      traefik.http.middlewares.musubi-https.redirectscheme.permanent: "true"
+      traefik.http.routers.musubi-http.rule: Host(`${PUBLIC_HOST}`)
+      traefik.http.routers.musubi-http.entrypoints: web
+      traefik.http.routers.musubi-http.middlewares: musubi-https
+    restart: unless-stopped
+
   api:
     # Prebuilt image from Docker Hub (published on each GitHub Release by
     # .github/workflows/docker-publish.yml). Pin MUSUBI_TAG to a version so the
@@ -19,8 +73,35 @@ services:
         aliases:
           - musubi-api
       default: {}
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: dokploy-network
+      traefik.http.services.musubi-api.loadbalancer.server.port: "${API_SERVER_PORT:-7531}"
+      # The API owns /api/* — Better Auth on /api/auth/*, REST on /api/v1/*, the
+      # federation gateway underneath — plus four HTML pages for links that
+      # arrive from outside the app (cross-server invites, the emailed password
+      # reset and account-deletion confirmations, the iOS universal-link file).
+      # Those predate the web client and are shared with mobile, so they stay on
+      # the API and must not fall through to the catch-all above.
+      #
+      # Server-sent events at /api/stream need no special Traefik setting: it does
+      # not buffer response bodies, and flushes a stream every 100 ms by default.
+      traefik.http.routers.musubi-api.rule: >-
+        Host(`${PUBLIC_HOST}`) && (
+        PathPrefix(`/api`)
+        || PathPrefix(`/invite`)
+        || Path(`/reset-password`)
+        || Path(`/delete-account`)
+        || Path(`/.well-known/apple-app-site-association`)
+        )
+      traefik.http.routers.musubi-api.entrypoints: websecure
+      traefik.http.routers.musubi-api.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      # Above the web catch-all. Traefik would rank the longer rule first anyway;
+      # saying it out loud means an edit to either rule cannot silently swap them.
+      traefik.http.routers.musubi-api.priority: "100"
     # Do not scale this service horizontally. A second process sharing the same
-    # DB is rejected by the API's singleton advisory lock.
+    # DB is rejected by the API's singleton advisory lock, and SSE connections
+    # live in the process that accepted them.
     deploy:
       replicas: 1
     restart: unless-stopped
@@ -38,6 +119,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
 volumes:
   data:

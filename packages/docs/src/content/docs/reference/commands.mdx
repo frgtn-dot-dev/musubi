@@ -220,11 +220,12 @@ build environment. `app.config.ts` rejects a missing or malformed URL for the
   <TabItem label="Plain Docker Compose">
 
   ```sh
-  docker compose up -d
+  docker compose up -d              # full stack: gateway + web + api + db
   docker compose ps
   docker compose logs -f api
-  docker compose pull
-  docker compose up -d
+  docker compose pull && docker compose up -d
+
+  docker compose -f docker-compose.api.yml up -d   # API + db only
   ```
 
   </TabItem>
@@ -232,16 +233,18 @@ build environment. `app.config.ts` rejects a missing or malformed URL for the
 
   ```sh
   docker compose -f docker-compose.dokploy.yml config
-  docker compose -f docker-compose.dokploy.yml up -d
+  PUBLIC_HOST=musubi.example.com docker compose -f docker-compose.dokploy.yml up -d
   ```
 
-  The Dokploy file expects the external `dokploy-network`.
+  The Dokploy file expects the external `dokploy-network` and `PUBLIC_HOST`; in
+  Dokploy itself both come from the project, so this is only for checking the
+  file by hand.
 
   </TabItem>
   <TabItem label="Build API locally">
 
   In `docker-compose.yml`, replace the published `image:` with the commented
-  `build:` block, then run:
+  `build:` block (either service — the web image has one too), then run:
 
   ```sh
   docker compose up -d --build
