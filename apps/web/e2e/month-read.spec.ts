@@ -5351,3 +5351,62 @@ test("moves an account to a new address, asking the old one to approve", async (
   // somewhere the owner can't reach.
   await expect(page.getByRole("status")).toContainText("web-qa@example.invalid");
 });
+
+
+function multiWeekPage(weeks: number) {
+  return {
+    ...defaultPage,
+    config: {
+      ...defaultPage.config,
+      view: { configVersion: 1, id: "multi-week", weeks },
+    },
+  };
+}
+
+test("shows a run of whole weeks and pages a screen at a time", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/pages", (route) =>
+    respond(route, [multiWeekPage(8)]),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/multi-week?date=2026-07-26`);
+
+  // Whole weeks from the one the date falls in, running forward — and the span
+  // crosses months on purpose, which is the entire point of the view.
+  await expect(page.getByText("Jul 20 – Sep 13")).toBeVisible();
+  const grid = page.getByRole("grid", { name: /Jul 20/ });
+  await expect(grid.getByRole("row")).toHaveCount(9); // 8 weeks + the weekday header
+
+  // A page is a screen, not a week: eight weeks forward lands on the next span.
+  await page.getByRole("main").getByRole("button", { name: "Next" }).click();
+  await expect(page).toHaveURL(/date=2026-09-20/);
+  await expect(page.getByText("Sep 14 – Nov 8")).toBeVisible();
+
+  await page.getByRole("button", { name: "Today" }).click();
+  await expect(page).toHaveURL(/multi-week/);
+
+  await expectNoAccessibilityViolations(page);
+});
+
+test("keeps every day of a multi-week page equally lit", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/pages", (route) =>
+    respond(route, [multiWeekPage(4)]),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/multi-week?date=2026-07-26`);
+  const grid = page.getByRole("grid", { name: /Jul/ });
+  await expect(grid.getByRole("row")).toHaveCount(5);
+
+  // Month dims the days either side of it because they are padding. Here they
+  // are the subject, so nothing is dimmed — and the events on them are real.
+  await expect(
+    page.getByRole("button", { name: /Weekly review/ }).first(),
+  ).toBeVisible();
+
+  // The page's own count drives it: four weeks, not the month's six rows.
+  await page.getByRole("main").getByRole("button", { name: "Next" }).click();
+  await expect(page).toHaveURL(/date=2026-08-23/);
+});

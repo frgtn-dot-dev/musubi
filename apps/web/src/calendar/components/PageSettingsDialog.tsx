@@ -35,6 +35,13 @@ import type { Density } from "../time-geometry";
 import { CalendarVisibilityPill } from "./CalendarVisibilityPill";
 import styles from "./styles/page-settings.module.css";
 
+// Steps rather than a free number: every value between 12 and 16 weeks looks
+// the same, and a spinner invites fiddling with a setting nobody tunes twice.
+const WEEKS_OPTIONS = [1, 2, 3, 4, 6, 8, 12, 16, 20].map((weeks) => ({
+  label: weeks === 1 ? "1 week" : `${weeks} weeks`,
+  value: String(weeks),
+}));
+
 const DENSITY_OPTIONS = [
   { label: "Compact", value: "compact" },
   { label: "Comfortable", value: "comfortable" },
@@ -359,6 +366,28 @@ export function PageSettingsDialog({
                       setView((current) =>
                         "density" in current
                           ? { ...current, density: value as Density }
+                          : current,
+                      )
+                    }
+                  />
+                }
+              />
+            ) : null}
+            {"weeks" in view ? (
+              <Row
+                label="Weeks shown"
+                detail="How far ahead this page looks, in whole weeks"
+                trailing={
+                  <Select
+                    disabled={busy}
+                    label="Weeks shown"
+                    options={WEEKS_OPTIONS}
+                    size="compact"
+                    value={String(view.weeks)}
+                    onChange={(value) =>
+                      setView((current) =>
+                        "weeks" in current
+                          ? { ...current, weeks: Number(value) }
                           : current,
                       )
                     }

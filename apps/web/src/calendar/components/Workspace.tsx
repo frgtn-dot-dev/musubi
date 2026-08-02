@@ -27,7 +27,11 @@ import {
 import { SectionLabel } from "~/ui/SectionLabel";
 import { StaleBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
-import { viewDefinition } from "../view-registry";
+import {
+  DEFAULT_MULTI_WEEK_WEEKS,
+  multiWeekDays,
+  viewDefinition,
+} from "../view-registry";
 import {
   getEventRangeLabel,
   parseDateKey,
@@ -483,6 +487,13 @@ export function Workspace({
     "showAdjacentDays" in presentationView
       ? presentationView.showAdjacentDays
       : true;
+  // How many weeks a multi-week page shows. Read from the Page rather than from
+  // settings: a planning page wants eight, a "this fortnight" page wants two.
+  const weeks =
+    "weeks" in presentationView
+      ? presentationView.weeks
+      : DEFAULT_MULTI_WEEK_WEEKS;
+  const multiWeek = activeView === "multi-week";
 
   const pageTitle = activePage.name;
 
@@ -520,10 +531,11 @@ export function Workspace({
   const periodLabel = view.title(anchor, {
     compact: narrow,
     weekStartsOn: settings.weekStartsOn,
+    weeks,
   });
 
   function changePeriod(offset: number) {
-    onDateChange(toDateKey(view.step(anchor, offset)));
+    onDateChange(toDateKey(view.step(anchor, offset, { weeks })));
   }
 
   function openCreateAtDate(
@@ -887,8 +899,21 @@ export function Workspace({
               anchor={anchor}
               busyEventId={busyEventId}
               calendars={calendars}
+              // Multi-week is the same grid over a different run of days: every
+              // cell counts, so nothing is dimmed and the label names the span.
+              days={
+                multiWeek
+                  ? multiWeekDays(anchor, settings.weekStartsOn, weeks)
+                  : undefined
+              }
+              dimOutsideMonth={!multiWeek}
               events={visibleEvents}
-              showAdjacentDays={showAdjacentDays}
+              gridLabel={multiWeek ? `${periodLabel} calendar` : undefined}
+              // Below this a week row cannot hold a chip and a date. Twenty
+              // weeks then overflow the area and scroll, which beats twenty
+              // rows nobody can read.
+              rowMinHeight={multiWeek ? "84px" : undefined}
+              showAdjacentDays={multiWeek ? true : showAdjacentDays}
               onMoveEventToDate={async ({ dayKey, event }) => {
                 // Only the date changes; the time of day and length are kept.
                 const target = parseDateKey(dayKey);

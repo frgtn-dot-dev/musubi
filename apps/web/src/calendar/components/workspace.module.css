@@ -398,6 +398,11 @@
   white-space: nowrap;
 }
 
+/* A span is two dates, not a name: it needs the room more than the presence. */
+.monthTitle[data-view="multi-week"] {
+  font-size: clamp(1.15rem, 1.5vw, 1.45rem);
+}
+
 .eventButton {
   flex: none;
 }
@@ -1399,7 +1404,14 @@
   --month-event-gap: 3px;
   display: grid;
   min-height: 0;
-  grid-template-rows: repeat(6, minmax(0, 1fr));
+  /* Row count is set by the grid it draws — six for a month, one to twenty for
+     multi-week. The minimum is zero for Month, which must fit its area without
+     scrolling; multi-week raises it so a long run of weeks stays readable and
+     scrolls instead of collapsing. */
+  grid-template-rows: repeat(
+    var(--month-rows, 6),
+    minmax(var(--month-row-min, 0px), 1fr)
+  );
 }
 
 .monthWeek {

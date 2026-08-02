@@ -26,7 +26,7 @@ import styles from "./workspace.module.css";
 
 const DEFAULT_EVENT_CAPACITY = 3;
 
-function eventCapacityForGrid(grid: HTMLElement) {
+function eventCapacityForGrid(grid: HTMLElement, rows: number) {
   // SSR, jsdom and a temporarily hidden workspace do not have a measurable
   // layout. Keep the established density until a real grid size is available.
   if (grid.clientHeight <= 0) return DEFAULT_EVENT_CAPACITY;
@@ -40,7 +40,7 @@ function eventCapacityForGrid(grid: HTMLElement) {
     Number.parseFloat(styles.getPropertyValue("--month-event-height")) || 21;
   const eventGap =
     Number.parseFloat(styles.getPropertyValue("--month-event-gap")) || 3;
-  const rowHeight = grid.clientHeight / 6;
+  const rowHeight = grid.clientHeight / rows;
   const availableHeight = Math.max(0, rowHeight - fixedSpace);
 
   return Math.max(
@@ -51,6 +51,25 @@ function eventCapacityForGrid(grid: HTMLElement) {
 
 type MonthCalendarProps = EventActionHandlers & {
   anchor: Date;
+  /**
+   * The exact grid to draw, as whole weeks. Defaults to the anchor's month,
+   * which is what "Month" means; multi-week passes its own run of weeks and
+   * gets the same cells, chips, overflow and drag behaviour for free.
+   */
+  days?: Date[];
+  /** What a screen reader calls this grid. Defaults to the anchor's month. */
+  gridLabel?: string;
+  /**
+   * Smallest a week row may get. Month leaves it at zero so six rows always fit
+   * their area; a long multi-week run sets it and lets the area scroll.
+   */
+  rowMinHeight?: string;
+  /**
+   * Dim the days that fall outside the anchor's month. True for Month, where
+   * the edges are padding; false wherever every day on screen is equally the
+   * point.
+   */
+  dimOutsideMonth?: boolean;
   /** The event a write is in flight for, so its chip can say so. */
   busyEventId?: string;
   calendars: Calendar[];
@@ -92,7 +111,11 @@ export function MonthCalendar({
   anchor,
   busyEventId,
   calendars,
+  days: providedDays,
+  dimOutsideMonth = true,
   events,
+  gridLabel,
+  rowMinHeight,
   onCreateAtDate,
   onMonthChange,
   onMoveDraft,
@@ -174,16 +197,17 @@ export function MonthCalendar({
     onError: eventActions.onNotice,
   });
   const days = useMemo(
-    () => getMonthGrid(anchor, weekStartsOn),
-    [anchor, weekStartsOn],
+    () => providedDays ?? getMonthGrid(anchor, weekStartsOn),
+    [anchor, providedDays, weekStartsOn],
   );
   const weekdayLabels = getWeekdayLabels(weekStartsOn);
+  const rows = Math.max(1, Math.round(days.length / 7));
   const weeks = useMemo(
     () =>
-      Array.from({ length: 6 }, (_, weekIndex) =>
+      Array.from({ length: rows }, (_, weekIndex) =>
         days.slice(weekIndex * 7, weekIndex * 7 + 7),
       ),
-    [days],
+    [days, rows],
   );
   const eventsByDay = useMemo(
     () =>
@@ -224,7 +248,7 @@ export function MonthCalendar({
 
     function syncEventCapacity() {
       if (!grid) return;
-      const nextCapacity = eventCapacityForGrid(grid);
+      const nextCapacity = eventCapacityForGrid(grid, rows);
       setEventCapacity((current) =>
         current === nextCapacity ? current : nextCapacity,
       );
@@ -234,7 +258,9 @@ export function MonthCalendar({
     const observer = new ResizeObserver(syncEventCapacity);
     observer.observe(grid);
     return () => observer.disconnect();
-  }, []);
+    // Row count changes the height each row gets, and with it how many chips
+    // fit before "+N more" — a multi-week page re-measures when it grows.
+  }, [rows]);
 
   function focusCell(index: number) {
     const bounded = Math.min(days.length - 1, Math.max(0, index));
@@ -295,7 +321,7 @@ export function MonthCalendar({
       className={styles.monthView}
       data-event-capacity={eventCapacity}
       role="grid"
-      aria-label={`${anchor.toLocaleDateString("en", {
+      aria-label={gridLabel ?? `${anchor.toLocaleDateString("en", {
         month: "long",
         year: "numeric",
       })} calendar`}
@@ -307,7 +333,17 @@ export function MonthCalendar({
           </div>
         ))}
       </div>
-      <div className={styles.monthGrid} ref={gridRef} role="rowgroup">
+      <div
+        className={styles.monthGrid}
+        ref={gridRef}
+        role="rowgroup"
+        style={
+          {
+            "--month-rows": rows,
+            ...(rowMinHeight ? { "--month-row-min": rowMinHeight } : {}),
+          } as CSSProperties
+        }
+      >
         {weeks.map((week, weekIndex) => (
           <div
             className={styles.monthWeek}
@@ -318,7 +354,8 @@ export function MonthCalendar({
               const index = weekIndex * 7 + dayIndex;
               const dateKey = toDateKey(day);
               const daySegments = eventsByDay.get(dateKey) ?? [];
-              const inMonth = day.getMonth() === anchor.getMonth();
+              const inMonth =
+                !dimOutsideMonth || day.getMonth() === anchor.getMonth();
               const isToday = dateKey === todayKey;
               // A hidden adjacent day keeps its cell (so the month keeps its
               // height) but shows nothing and takes no clicks.

@@ -97,11 +97,26 @@ const AgendaViewSchema = z
   })
   .strict();
 
+// Long-range planning: a run of whole weeks that ignores month boundaries. The
+// count lives on the Page rather than in global settings — a "planning" page
+// wants eight weeks and a "today" page wants one, and that is a property of the
+// page, not of the person.
+const MultiWeekViewSchema = z
+  .object({
+    id: z.literal("multi-week"),
+    configVersion: z.literal(1),
+    // Twenty is the reference app's ceiling and about where a week row stops
+    // being able to show anything; one is a legitimate "just this week".
+    weeks: z.number().int().min(1).max(20).default(4),
+  })
+  .strict();
+
 export const BuiltInViewConfigSchema = z.discriminatedUnion("id", [
   DayViewSchema,
   WeekViewSchema,
   MonthViewSchema,
   AgendaViewSchema,
+  MultiWeekViewSchema,
 ]);
 
 export type BuiltInViewConfig = z.infer<typeof BuiltInViewConfigSchema>;
@@ -201,7 +216,9 @@ export function defaultPageConfig(view: PageViewId): PageConfigV1 {
         ? { id: "day", configVersion: 1 }
         : view === "agenda"
           ? { id: "agenda", configVersion: 1 }
-          : { id: "month", configVersion: 1 },
+          : view === "multi-week"
+            ? { id: "multi-week", configVersion: 1 }
+            : { id: "month", configVersion: 1 },
   );
   return {
     schemaVersion: 1,

@@ -100,7 +100,9 @@ export function Toolbar({
               </IconButton>
             </div>
           ) : null}
-          <p className={styles.monthTitle}>{periodLabel}</p>
+          <p className={styles.monthTitle} data-view={activeView}>
+            {periodLabel}
+          </p>
         </div>
 
         {/* Four chips need a row of their own on a phone, and that row was the

@@ -1014,6 +1014,29 @@ Po dokončení dolož: co je hotové, jaké invarianty zůstaly zachované, jak 
 klávesnice a screen reader, jak se řeší loading/pending/error/undo, jaké testy, a
 **každou odchylku od těchto pravidel i s důvodem**.
 
+
+## Multi-week (M8.1)
+
+První post-parity view a zároveň test, jestli view registry drží. Co z toho
+vzešlo a nedá se vyčíst z kódu:
+
+- `ViewDefinition` vznikla **před** multi-weekem, ne s ním. Views předtím
+  odpovídaly na „jaký rozsah", „o kolik posune šipka", „co říká toolbar" v
+  `if (view === …)` větvích ve `Workspace.tsx` a `workspace-queries.ts` — pátý
+  view by znamenal editovat kód těch čtyř, což PRD §16.2 zakazuje. Renderovací
+  `switch` v JSX zůstal schválně: komponenty v registry by natáhly celý strom
+  views i do `shortcuts.ts`.
+- Multi-week **není vlastní mřížka** — je to `MonthCalendar` s jiným seznamem
+  dnů (`days`), bez tlumení sousedních měsíců a s minimální výškou řádku.
+  Druhá implementace chipů, „+N more", dragu a klávesnice by se rozešla.
+- Počet týdnů je v **Page configu**, ne v settings: plánovací stránka chce osm
+  týdnů, „tenhle týden" jeden. To je vlastnost stránky, ne člověka.
+- Titulek v toolbaru je „Jul 20 – Oct 11" — krátké měsíce a rok jen když span
+  přechází přes rok. Dlouhá varianta se ořízne o ellipsis, což stojí datum.
+- Zatím **není**: matice více týdnů vedle sebe (v1 jsou pod sebou), drag mezi
+  týdny, kopírování modifikátorem, skrytí víkendů, barevná pravidla, search
+  highlight. Všechno jde přidat nad stejnou definicí.
+
 ## 8. Anti-patterny (červené vlajky v review)
 
 - Klik na event otevře plný formulář.

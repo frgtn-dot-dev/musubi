@@ -70,7 +70,8 @@ describe("the view registry", () => {
 
   it("falls back to month for anything it does not know", () => {
     expect(isCalendarView("month")).toBe(true);
-    expect(isCalendarView("multi-week")).toBe(false);
+    expect(isCalendarView("multi-week")).toBe(true);
+    expect(isCalendarView("gantt")).toBe(false);
     // A stale bookmark or a hand-edited URL lands somewhere real.
     expect(viewDefinition("nonsense").id).toBe("month");
   });
