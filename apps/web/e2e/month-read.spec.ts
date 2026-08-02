@@ -5432,3 +5432,127 @@ test("opens the same event popover from a week block", async ({ page }) => {
   await expect(popover.getByRole("button", { exact: true, name: "Edit" })).toBeVisible();
 });
 ;
+
+const SHARE_TOKEN = "c89f06867c4b99bddc0fe7fd83244b11";
+
+test("publishes an event as a page and can take it back", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let share: { indexable: boolean; mode: string } | null = null;
+  await page.route("**/api/v1/events/*/share", (route) => {
+    const method = route.request().method();
+    if (method === "PUT") {
+      share = route.request().postDataJSON() as typeof share;
+      return respond(route, {
+        ...share,
+        token: SHARE_TOKEN,
+        url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
+      });
+    }
+    if (method === "DELETE") {
+      share = null;
+      return route.fulfill({ body: "", status: 204 });
+    }
+    return respond(
+      route,
+      share
+        ? { ...share, token: SHARE_TOKEN, url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}` }
+        : null,
+    );
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: /Client call/ }).first().click();
+  await page.getByRole("button", { name: "Share event" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Share event" });
+  // Private until somebody says otherwise — an event is not published by
+  // existing, and the dialog has to open on that truth.
+  await expect(dialog.getByRole("radio", { name: /Private/ })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveCount(0);
+
+  await dialog.getByRole("radio", { name: "Anyone with the link" }).click();
+  await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveValue(
+    new RegExp(SHARE_TOKEN),
+  );
+  expect(share).toEqual({ indexable: false, mode: "link" });
+  // The link mode's promise is that it stays out of search, so it must not even
+  // offer the indexing choice.
+  await expect(dialog.getByRole("checkbox", { name: /search engines/ })).toHaveCount(0);
+
+  await dialog.getByRole("radio", { name: "Public" }).click();
+  // Clicking the label, not the input: the visible box sits over the 1px input,
+  // which is exactly how a person toggles it too.
+  await dialog.getByText("Allow search engines to list this page").click();
+  await expect(
+    dialog.getByRole("checkbox", { name: /search engines/ }),
+  ).toBeChecked();
+  expect(share).toEqual({ indexable: true, mode: "public" });
+
+  await expectNoAccessibilityViolations(page);
+
+  await dialog.getByRole("radio", { name: /Private/ }).click();
+  await expect(page.getByRole("status")).toContainText("no longer opens");
+  await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveCount(0);
+});
+
+test("shows a published event to someone with no account", async ({ page }) => {
+  await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+    respond(route, {
+      description: "Come see the presses.",
+      end: "2026-08-20T16:00:00.000Z",
+      indexable: false,
+      isAllDay: false,
+      isCanceled: false,
+      location: "Brno",
+      organizer: "Mika",
+      recurrence: null,
+      start: "2026-08-20T13:00:00.000Z",
+      title: "Studio open day",
+      url: null,
+    }),
+  );
+
+  await page.goto(`/e/${SHARE_TOKEN}`);
+
+  await expect(page.getByRole("heading", { name: "Studio open day" })).toBeVisible();
+  await expect(page.getByText("Organized by Mika")).toBeVisible();
+  await expect(page.getByText("Brno")).toBeVisible();
+  // The reader's timezone, spelled out: the organizer is often somewhere else,
+  // and a bare "3 pm" is a trap.
+  await expect(page.getByText("Europe/Prague")).toBeVisible();
+  await expect(page.getByText(/15:00 – 18:00|3:00/)).toBeVisible();
+
+  // No app around it, and nothing that needs a session.
+  await expect(page.getByRole("navigation", { name: "Pages" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add to calendar" })).toBeVisible();
+
+  // Not indexable: the page must say so itself, because the markup is identical
+  // to a public one.
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "noindex, nofollow",
+  );
+
+  await expectNoAccessibilityViolations(page);
+});
+
+test("says a withdrawn page is gone rather than showing an empty shell", async ({
+  page,
+}) => {
+  await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+    route.fulfill({
+      body: JSON.stringify({ error: "NotFound", message: "gone" }),
+      contentType: "application/json",
+      status: 404,
+    }),
+  );
+
+  await page.goto(`/e/${SHARE_TOKEN}`);
+
+  await expect(
+    page.getByRole("heading", { name: "This page is not available." }),
+  ).toBeVisible();
+});

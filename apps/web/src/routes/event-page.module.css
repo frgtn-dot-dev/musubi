@@ -1,0 +1,115 @@
+/* A published page is not the app: no shell, no sidebar, one card and the two
+   things a stranger actually wants — when it is, and how to keep it. */
+.page {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  min-height: 100dvh;
+  padding: var(--space-6) var(--space-4);
+  background: var(--surface-canvas);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 34rem;
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+
+.header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.brand svg {
+  width: 30px;
+  height: 30px;
+}
+
+.header h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  line-height: 1.15;
+}
+
+.organizer {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+}
+
+.cancelled {
+  justify-self: start;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: var(--text-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 0;
+  color: var(--text-primary);
+  font-size: var(--text-15);
+}
+
+.timezone,
+.repeats {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-14, var(--text-13));
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.secondaryLink {
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+}
+
+.footer {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-12);
+}

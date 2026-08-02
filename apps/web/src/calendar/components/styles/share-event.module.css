@@ -1,0 +1,58 @@
+.content {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.modes {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Readonly, not disabled: the link has to stay selectable when the clipboard
+   refuses — an insecure origin or a browser that asks first. */
+.linkField {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-12);
+}
+
+.indexRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.error {
+  margin: 0;
+  color: var(--accent-primary);
+  font-size: var(--text-12);
+}
+
+.note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}

@@ -232,6 +232,7 @@ Wherever the proxy lives, it has to make the same split:
 | `/api/*` | API | Better Auth, the REST surface, the federation gateway |
 | `/reset-password`, `/delete-account`, `/email-verified`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email. They predate the web client and are shared with mobile, so they stay on the API |
 | `/invite/*` | Web client | An invitation is a page you read and accept. On an API-only install the same path serves the API's hand-off page instead, which deep-links into the phone app |
+| `/e/*` | Web client | Published event pages. An API-only install has nobody to render them, so publishing an event there produces a link that goes nowhere — the feature belongs to the full stack |
 | everything else | Web client | The browser app |
 
 <Aside type="note">

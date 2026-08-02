@@ -2,6 +2,7 @@ import {
   AttendeesResponseSchema,
   CalendarMembersResponseSchema,
   CalendarsResponseSchema,
+  EventShareSchema,
   EventsResponseSchema,
   FederationConnectionsResponseSchema,
   ImportedCalendarSchema,
@@ -9,6 +10,7 @@ import {
   InvitesResponseSchema,
   PageResponseSchema,
   PagesResponseSchema,
+  PublicEventSchema,
   RemoveEventResponseSchema,
   ServerCapabilitiesSchema,
   SettingsDocumentResponseSchema,
@@ -317,6 +319,40 @@ export function getFederatedEvents(
     `/api/v1/federation/s/${connectionId}/api/v1/events`,
     { responseSchema: EventsResponseSchema, signal },
   );
+}
+
+export function getEventShare(eventId: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/events/${eventId}/share`, {
+    responseSchema: EventShareSchema.nullable(),
+    signal,
+  });
+}
+
+export function publishEvent(input: {
+  eventId: string;
+  indexable: boolean;
+  mode: "link" | "public";
+}) {
+  return apiRequest(`/api/v1/events/${input.eventId}/share`, {
+    body: { indexable: input.indexable, mode: input.mode },
+    method: "PUT",
+    responseSchema: EventShareSchema,
+  });
+}
+
+export function unpublishEvent(eventId: string) {
+  return apiRequest(`/api/v1/events/${eventId}/share`, {
+    method: "DELETE",
+    responseSchema: z.unknown(),
+  });
+}
+
+/** The public page's own read. No session, and none needed. */
+export function getPublicEvent(token: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/public/events/${token}`, {
+    responseSchema: PublicEventSchema,
+    signal,
+  });
 }
 
 export function getServerCapabilities(signal?: AbortSignal) {

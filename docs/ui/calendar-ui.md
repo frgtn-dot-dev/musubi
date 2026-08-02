@@ -1048,6 +1048,30 @@ vzešlo a nedá se vyčíst z kódu:
   highlight a zakládání eventu klikem do bloku. Všechno jde přidat nad stejnou
   definicí a stejným blokem.
 
+## Veřejné stránky eventů (M8.2)
+
+- Publikování je **vždy explicitní akt**: event bez řádku v `event_shares` je
+  privátní, což je každý event, dokud někdo neřekne jinak. Není žádný „výchozí
+  sdílený" stav, který by šlo přehlédnout.
+- V URL je **token, ne id eventu**. Id je uhodnutelné pro každého, kdo viděl jiné,
+  a odvolání musí umět zabít starou URL, aniž by se event přejmenoval všude jinde.
+  Odvolané řádky se nemažou — token musí zůstat spálený.
+- Režimy jsou tři, ne přepínač: `private` / `link` / `public`. **Přístup a
+  indexovatelnost jsou dvě různé otázky** (PRD §17.1) a jejich sloučení je přesně
+  to, jak se privátní věc objeví ve vyhledávání. API `link + indexable` odmítá.
+- Projekce pro anonymního čtenáře se skládá **klíč po klíči, nikdy spreadem** —
+  self-check přímo asertuje množinu klíčů, takže nový sloupec v dotazu nemůže
+  vylézt na veřejnou stránku omylem. Nikdy: účastníci, kalendář, jakékoli id.
+- Opakovaný event posílá **pravidlo, ne expanzi**. Recurrence je wall-clock, takže
+  server v UTC kontejneru by čtenáři v Praze půl roku ukazoval o hodinu vedle;
+  příští výskyt počítá stránka v zóně čtenáře.
+- Zrušený event stránku **má** (s cedulkou), protože 404 se čte jako rozbitý
+  odkaz a pošle člověka ptát se.
+- Zatím není: RSVP (samostatný bod M8), kapacita, vlastní vzhled stránky, cover,
+  `.ics` subscription feed. `.ics` soubor se skládá v prohlížeči z dat, která
+  stránka už má.
+
+
 ## 8. Anti-patterny (červené vlajky v review)
 
 - Klik na event otevře plný formulář.

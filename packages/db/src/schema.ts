@@ -242,6 +242,43 @@ export const eventsRelations = relations(events, ({ many, one }) => ({
 }));
 
 
+// A published event page. No row means the event is private, which is every
+// event until somebody says otherwise — publishing is always an explicit act.
+//
+// The token, not the event id, is what a URL carries: an id is guessable by
+// anyone who has seen another one, and revoking a share has to be able to kill
+// the old URL without renaming the event everywhere else.
+export const eventShares = pgTable("event_shares", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  eventID: uuid("event_id")
+    .references(() => events.id, { onDelete: "cascade" })
+    .notNull(),
+  // 128 bits of randomness, hex. Long enough that a link is a credential.
+  token: text("token").notNull().unique(),
+  // `link` — anyone holding the URL, never indexed. `public` — the same, but the
+  // page may say it can be indexed. Access control and indexability are separate
+  // questions and the PRD keeps them separate on purpose.
+  mode: text("mode").notNull(),
+  indexable: boolean("indexable").notNull().default(false),
+  createdBy: text("created_by")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  // Revoked shares are kept: the token must stay burned rather than be free to
+  // be issued again, and "this used to be public" is worth being able to see.
+  revokedAt: timestamp("revoked_at"),
+});
+
+export type NewEventShare = typeof eventShares.$inferInsert;
+
+export const eventSharesRelations = relations(eventShares, ({ one }) => ({
+  event: one(events, { fields: [eventShares.eventID], references: [events.id] }),
+}));
+
 export const calendarInvites = pgTable("calendar_invites", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -9,6 +9,12 @@ import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handler
 import { handlerConfirmDeleteUser, handlerDeleteUser, handlerGetAvatar, handlerResetUsers, handlerUploadAvatar } from "./handlers/users";
 import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerSetAttendance, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
+import {
+  handlerGetEventShare,
+  handlerGetPublicEvent,
+  handlerPutEventShare,
+  handlerRevokeEventShare,
+} from "./handlers/event_shares";
 import { ForbiddenError } from "@musubi/types";
 import { rateLimit } from "./middleware/rate_limit";
 import { handlerCreateCalendarInvite, handlerGetCalendarInvites, handlerRevokeInvite } from "./handlers/invites";
@@ -155,6 +161,11 @@ app.post("/api/v1/events/:eventId/link", requireAuth, wrap(handlerLinkEvent));
 app.post("/api/v1/events/:eventId/fork", requireAuth, wrap(handlerForkEvent));
 app.get("/api/v1/events/:eventId/attendees", requireAuth, wrap(handlerGetAttendees));
 app.put("/api/v1/events/:eventId/attendance", requireAuth, wrap(handlerSetAttendance));
+// Publishing an event page. Gated on editing the event — handing something to
+// the open internet is not a read.
+app.get("/api/v1/events/:eventId/share", requireAuth, wrap(handlerGetEventShare));
+app.put("/api/v1/events/:eventId/share", requireAuth, wrap(handlerPutEventShare));
+app.delete("/api/v1/events/:eventId/share", requireAuth, wrap(handlerRevokeEventShare));
 
 // Calendars — /google must stay before /:id (both one-segment GETs)
 app.get("/api/v1/calendars", requireAuth, wrap(handlerGetCalendars));
@@ -162,6 +173,9 @@ app.get("/api/v1/calendars/google", requireAuth, wrap(handlerGetGoogleCalendars)
 // Public: possession of the (unguessable, expiring) invite token IS the
 // credential — cross-server invitees have no session here yet.
 app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(handlerGetCalendarFromToken));
+// Public: the token IS the credential, same as an invite. Rate-limited per IP so
+// the space cannot be walked, and the projection is narrow by construction.
+app.get("/api/v1/public/events/:token", rateLimit(60, 15 * 60_000), wrap(handlerGetPublicEvent));
 app.get("/api/v1/calendars/:id/export", requireAuth, wrap(handlerExportCalendar)); // .ics snapshot
 app.get("/api/v1/calendars/:id", requireAuth, wrap(handlerGetCalendar));
 app.post("/api/v1/calendars", requireAuth, wrap(handlerCreateCalendar));

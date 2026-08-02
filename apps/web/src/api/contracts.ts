@@ -89,6 +89,41 @@ export const FederationConnectionsResponseSchema = z.array(
 
 export type FederationConnection = z.infer<typeof FederationConnectionSchema>;
 
+// A published event page. `null` from the API means the event is private, which
+// is every event nobody has published.
+export const EventShareSchema = z.object({
+  indexable: z.boolean(),
+  mode: z.enum(["link", "public"]),
+  token: z.string(),
+  url: z.string(),
+});
+
+export type EventShare = z.infer<typeof EventShareSchema>;
+
+/**
+ * What an anonymous reader of a published page gets.
+ *
+ * Narrow on purpose (`apps/api/handlers/event_shares.ts`): no attendees, no
+ * calendar, no ids. `recurrence` is the rule, not an expansion — the page works
+ * out the next occurrence in the READER's timezone, because recurrence is
+ * wall-clock and the server's zone is not the reader's.
+ */
+export const PublicEventSchema = z.object({
+  description: z.string().nullish(),
+  end: z.coerce.date(),
+  indexable: z.boolean().default(false),
+  isAllDay: z.boolean().default(false),
+  isCanceled: z.boolean().default(false),
+  location: z.string().nullish(),
+  organizer: z.string(),
+  recurrence: z.string().nullish(),
+  start: z.coerce.date(),
+  title: z.string(),
+  url: z.string().nullish(),
+});
+
+export type PublicEvent = z.infer<typeof PublicEventSchema>;
+
 export const ServerCapabilitiesSchema = z
   .object({
     email: z.boolean().default(false),

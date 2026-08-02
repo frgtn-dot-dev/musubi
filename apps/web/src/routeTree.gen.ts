@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ETokenRouteImport } from './routes/e.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppPPageIdViewRouteImport } from './routes/app/p.$pageId.$view'
 import { Route as AppPPageIdEventEventIdRouteImport } from './routes/app/p.$pageId.event.$eventId'
@@ -44,6 +45,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ETokenRoute = ETokenRouteImport.update({
+  id: '/e/$token',
+  path: '/e/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/favicon.ico': typeof FaviconDoticoRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
+  '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/favicon.ico': typeof FaviconDoticoRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
+  '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/favicon.ico': typeof FaviconDoticoRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
+  '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/favicon.ico'
     | '/healthz'
     | '/login'
+    | '/e/$token'
     | '/invite/$token'
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/favicon.ico'
     | '/healthz'
     | '/login'
+    | '/e/$token'
     | '/invite/$token'
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/favicon.ico'
     | '/healthz'
     | '/login'
+    | '/e/$token'
     | '/invite/$token'
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   FaviconDoticoRoute: typeof FaviconDoticoRoute
   HealthzRoute: typeof HealthzRoute
   LoginRoute: typeof LoginRoute
+  ETokenRoute: typeof ETokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
 }
 
@@ -179,6 +192,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/e/$token': {
+      id: '/e/$token'
+      path: '/e/$token'
+      fullPath: '/e/$token'
+      preLoaderRoute: typeof ETokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -232,6 +252,7 @@ const rootRouteChildren: RootRouteChildren = {
   FaviconDoticoRoute: FaviconDoticoRoute,
   HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
+  ETokenRoute: ETokenRoute,
   InviteTokenRoute: InviteTokenRoute,
 }
 export const routeTree = rootRouteImport
