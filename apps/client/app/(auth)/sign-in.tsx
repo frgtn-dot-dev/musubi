@@ -10,6 +10,7 @@ import SocialAuthButtons from "@/components/auth/SocialAuthButtons";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import { takePendingInviteHref } from "@/lib/pendingInvite";
 import { showToast } from "@/components/ui/Toast";
+import { alertEmailNotVerified, isEmailNotVerified } from "@/lib/emailVerification";
 
 export default function SignIn() {
   const { authClient, apiUrl } = useServer();
@@ -54,8 +55,14 @@ export default function SignIn() {
         const result = await authClient.signIn.email({ email, password });
         if (result.error) {
           warn();
-          Alert.alert("Sign In Failed", userFacingError(result.error, "Check your email and passphrase."));
           setIsLoading(false);
+          if (isEmailNotVerified(result.error)) {
+            alertEmailNotVerified(email.trim().toLowerCase(), (address) =>
+              authClient.sendVerificationEmail({ email: address }),
+            );
+            return;
+          }
+          Alert.alert("Sign In Failed", userFacingError(result.error, "Check your email and passphrase."));
         } else {
           success();
           router.replace((await takePendingInviteHref() ?? "/(tabs)") as any);
