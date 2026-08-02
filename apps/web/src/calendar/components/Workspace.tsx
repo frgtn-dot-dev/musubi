@@ -11,7 +11,6 @@ import type {
   User,
 } from "@musubi/types";
 import { seriesEditWrites, type EditScope } from "@musubi/calendar";
-import { addDays, addMonthPages } from "@musubi/calendar/layout";
 import type {
   Attendee,
   ImportedCalendar,
@@ -28,14 +27,12 @@ import {
 import { SectionLabel } from "~/ui/SectionLabel";
 import { StaleBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
-import { getAgendaLabel } from "../agenda-math";
+import { viewDefinition } from "../view-registry";
 import {
   getEventRangeLabel,
-  getMonthLabel,
   parseDateKey,
 } from "../calendar-math";
 import { toDateKey } from "../date-key";
-import { getTimeGridDays, getTimeGridLabel } from "../time-grid-math";
 import type { EventFormValues } from "../event-form";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
@@ -519,31 +516,14 @@ export function Workspace({
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const timeGridDays =
-    activeView === "day" || activeView === "week"
-      ? getTimeGridDays(anchor, activeView, settings.weekStartsOn)
-      : [];
-  const periodLabel =
-    activeView === "agenda"
-      ? getAgendaLabel(anchor, { compact: narrow })
-      : activeView === "day" || activeView === "week"
-        ? getTimeGridLabel(timeGridDays, activeView, { compact: narrow })
-        : getMonthLabel(anchor);
+  const view = viewDefinition(activeView);
+  const periodLabel = view.title(anchor, {
+    compact: narrow,
+    weekStartsOn: settings.weekStartsOn,
+  });
 
   function changePeriod(offset: number) {
-    const nextDate = (() => {
-      if (activeView === "day") {
-        return addDays(anchor, offset);
-      }
-
-      if (activeView === "week") {
-        return addDays(anchor, offset * 7);
-      }
-
-      return addMonthPages(anchor, offset);
-    })();
-
-    onDateChange(toDateKey(nextDate));
+    onDateChange(toDateKey(view.step(anchor, offset)));
   }
 
   function openCreateAtDate(
@@ -832,7 +812,7 @@ export function Workspace({
           // Flick sideways to move a period, like the native client's pager.
           // Agenda is one continuous list, so it has no period to page.
           onPointerDown={
-            activeView === "agenda" ? undefined : swipePeriod.onPointerDown
+            view.swipeable ? swipePeriod.onPointerDown : undefined
           }
         >
           {activeView === "agenda" ? (

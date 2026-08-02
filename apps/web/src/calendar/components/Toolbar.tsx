@@ -111,9 +111,8 @@ export function Toolbar({
             className={styles.viewSelect}
             label="Calendar view"
             options={calendarViews.map((view) => ({
-              disabled: !view.enabled,
               label: view.label,
-              value: view.id,
+              value: view.id as CalendarViewId,
             }))}
             size="compact"
             value={activeView}
@@ -124,9 +123,8 @@ export function Toolbar({
             className={styles.viewSwitcher}
             label="Calendar view"
             options={calendarViews.map((view) => ({
-              disabled: !view.enabled,
               label: view.label,
-              value: view.id,
+              value: view.id as CalendarViewId,
             }))}
             value={activeView}
             onChange={onViewChange}
