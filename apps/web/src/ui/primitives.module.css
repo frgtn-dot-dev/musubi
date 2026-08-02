@@ -517,6 +517,15 @@
   padding-top: var(--space-8);
 }
 
+/* Sits between the section heading and its rows, so it reads as a caveat for the
+   whole group rather than a detail of the first setting in it. */
+.settingsSectionDescription {
+  margin: calc(var(--space-2) * -1) 0 var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.5;
+}
+
 .settingsSectionRows {
   overflow: hidden;
   border: 1px solid var(--border-subtle);

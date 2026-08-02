@@ -318,10 +318,17 @@ export function SettingsDialog({
             />
           </SettingsSection>
 
-          <SettingsSection title="Notifications">
+          <SettingsSection
+            // The setting is shared with the phone, the delivery is not: a
+            // browser reminder would need a service worker and a push
+            // subscription, which Musubi does not run. Saying so beats a toggle
+            // that quietly does nothing where you are standing.
+            description="Reminders are delivered by the Musubi app on your phone. This browser does not send them."
+            title="Notifications"
+          >
             <RowToggle
               checked={settings.value.notificationsOnByDefault}
-              detail="New events start with notifications enabled"
+              detail="New events on any device start with a reminder"
               disabled={saving}
               label="On by default"
               onCheckedChange={(notificationsOnByDefault) =>

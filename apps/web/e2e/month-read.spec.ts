@@ -1247,6 +1247,13 @@ test("saves revisioned settings and applies display preferences", async ({
   );
   expect(sectionTops).toEqual([...sectionTops].sort((a, b) => a - b));
 
+  // The toggle is account-wide and worth having here, but the delivery is not:
+  // a browser sends no reminders, and a switch that says otherwise is a promise
+  // this client cannot keep.
+  await expect(settingsDialog).toContainText(
+    "Reminders are delivered by the Musubi app on your phone",
+  );
+
   await expect(
     settingsDialog.getByRole("radiogroup", { name: "Theme" }),
   ).toBeVisible();

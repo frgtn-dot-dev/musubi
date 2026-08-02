@@ -8,6 +8,8 @@ export type SettingsSectionProps = Omit<
   "children" | "title"
 > & {
   children: ReactNode;
+  /** One line under the heading, for what the whole group does or does not do. */
+  description?: ReactNode;
   title: ReactNode;
 };
 
@@ -20,6 +22,7 @@ export type SettingsSectionProps = Omit<
 export function SettingsSection({
   children,
   className,
+  description,
   title,
   ...sectionProps
 }: SettingsSectionProps) {
@@ -34,6 +37,9 @@ export function SettingsSection({
       <SectionLabel id={headingId} level={3}>
         {title}
       </SectionLabel>
+      {description ? (
+        <p className={styles.settingsSectionDescription}>{description}</p>
+      ) : null}
       <div className={styles.settingsSectionRows}>{children}</div>
     </section>
   );
