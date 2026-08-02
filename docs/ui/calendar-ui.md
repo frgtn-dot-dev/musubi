@@ -556,6 +556,22 @@ not be saved" a uživatel nevěděl, jestli jeho změna platí, nebo ne.
 - `window.confirm` v discardu draftu už dávno není (nahrazeno
   `ConfirmationDialog`) — ta poznámka tu zůstala zastaralá.
 
+**C5 — Parita mobilu: HOTOVO** (2026-08-02)
+
+- `seriesEditWrites` se přesunul do `@musubi/calendar`, aby web i mobil sdílely
+  jednu logiku a jeden test. Je **generický** přes `SeriesEditable` (start, end,
+  id, recurrence), takže balíček nezískal závislost na `@musubi/types` ani na
+  žádném rendereru, a každý klient si protáhne vlastní typ události.
+- Id pro rozdělenou sérii se předává (`newId`): React Native nemá
+  `crypto.randomUUID`, mobil dává svoje `uuidv7`.
+- Mobil se teď ptá stejnou otázkou (`chooseOption`, jeho vlastní idiom) při
+  uložení editace. Předtím `onEdit(master ?? event)` tiše přepsal celou sérii.
+- `chooseOption` dostal `onCancel`: bez něj by čekající promise nikdy nedoběhla.
+  Zrušení otázky **nezavře** composer — rozepsaná změna se neztratí, stejně jako
+  na webu.
+- Rozdělením vznikne nové id, takže připomínka za ním sama nepřejde. Odpojenému
+  výskytu se kopíruje offset ze série; jinak by o ni tiše přišel.
+
 Tím je fáze C uzavřená.
 
 ### Fáze D — Orientace a kontinuita — **HOTOVO** (2026-07-28)
