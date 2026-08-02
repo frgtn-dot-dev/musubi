@@ -49,11 +49,13 @@ export const PopoverContent = forwardRef<
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
+        /* Before the spread: a surface with a name of its own is what lets a
+           test or a style scope to *this* popover instead of any open one. */
+        data-ui="popover-content"
         {...contentProps}
         className={classNames(anchoredStyles.surface, className)}
         collisionPadding={collisionPadding}
         data-mobile-surface={mobileSurface}
-        data-ui="popover-content"
         ref={forwardedRef}
         sideOffset={sideOffset}
       >

@@ -1431,10 +1431,17 @@ test("creates a page from the sidebar and deletes it again", async ({
   await page
     .getByRole("button", { name: "Edit Work" })
     .click();
-  page.once("dialog", (dialog) => void dialog.accept());
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Delete page" })
+    .click();
+  // Soft-deleted with no restore endpoint, so this one asks before it goes.
+  await page
+    .getByRole("dialog", { name: "Delete “Work”?" })
+    .getByRole("button", { name: "Delete page" })
+    // The confirmation renders inside the settings dialog it guards, so the
+    // trigger is in scope too; the confirm's own action is the later one.
+    .last()
     .click();
 
   await expect(page).toHaveURL(new RegExp(`/app/p/${DEFAULT_PAGE_ID}/month`));
@@ -3693,8 +3700,10 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
+  // A phone folds a busy day into "+2 more", so the event under test has to be
+  // one the compact grid still shows. Same calendar and length as before.
   const eventButton = page
-    .getByRole("button", { name: /Client call/ })
+    .getByRole("button", { name: /Client presentation/ })
     .first();
   await eventButton.click();
   const sheet = page.getByRole("dialog").first();
@@ -3707,7 +3716,7 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
   // Tall content scrolls inside the sheet instead of running off the screen.
   expect(box.height).toBeLessThanOrEqual(720 * 0.86 + 1);
   await expect(
-    page.getByRole("heading", { name: "Client call" }),
+    page.getByRole("heading", { name: "Client presentation" }),
   ).toBeVisible();
   await expect(sheet.getByText("1 hr", { exact: true })).toBeVisible();
   await expect(
@@ -3715,7 +3724,7 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
   ).toBeVisible();
 
   const titleBox = (await sheet
-    .getByRole("heading", { name: "Client call" })
+    .getByRole("heading", { name: "Client presentation" })
     .boundingBox())!;
   const dateBox = (await sheet.getByText("Date", { exact: true }).boundingBox())!;
   const timeBox = (await sheet.getByText("Time", { exact: true }).boundingBox())!;
@@ -4444,3 +4453,4 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await page.mouse.up();
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
+

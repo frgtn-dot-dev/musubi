@@ -104,7 +104,7 @@
 
 .miniWeekdays abbr {
   padding-bottom: 3px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 0.6rem;
   text-align: center;
   text-decoration: none;
@@ -128,7 +128,7 @@
 }
 
 .miniDay[data-outside] {
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .miniDay[data-today] {
@@ -320,7 +320,7 @@
   align-items: center;
   gap: 8px;
   margin: 0 10px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 0.69rem;
 }
 
@@ -471,7 +471,9 @@
 }
 
 .searchField input::placeholder {
-  color: var(--text-faint);
+  /* A placeholder is text: it has to clear the same bar as the value it stands
+     in for. */
+  color: var(--text-muted);
 }
 
 .filterBar {
@@ -958,9 +960,15 @@
    with a real colour, so it stays itself and only goes quiet. The translucent
    overlay with a border belongs to a *new* event being drawn — see
    `.timeGridSelection` and `.dayDraft`. */
-.timelineEvent[data-ghost] {
+/* Opacity fades the text and the fill toward the page together, which collapses
+   the contrast between them — white on shu at 45% is 2:1. A ghost is the hole an
+   event left, so draw it as an outline with ink in it, not as a faded copy. */
+.timelineEvent[data-ghost],
+.eventChip[data-ghost] {
+  --event-foreground: var(--text-secondary);
+  border: 1px dashed color-mix(in srgb, var(--event-color) 60%, transparent);
+  background: color-mix(in srgb, var(--event-color) 18%, transparent);
   box-shadow: none;
-  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -1007,12 +1015,6 @@
 }
 
 /* What a dragged chip leaves behind on its own day. */
-.eventChip[data-ghost] {
-  box-shadow: none;
-  opacity: 0.45;
-  pointer-events: none;
-}
-
 /* The chip in the cell it is being dragged to. */
 .dragPreviewChip {
   min-height: 21px;
@@ -1166,7 +1168,7 @@
   top: 490px;
   left: 0;
   width: calc(var(--timeline-gutter) - 10px);
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 0.57rem;
   text-align: right;
 }
@@ -1417,7 +1419,7 @@
 }
 
 .dayOutside {
-  color: var(--text-faint);
+  color: var(--text-muted);
   background: color-mix(in srgb, var(--surface-panel) 20%, transparent);
 }
 
@@ -1448,8 +1450,11 @@
   color: var(--accent-on-primary);
 }
 
+/* The accent already sits on the day number's fill right next to this. Spending
+   it again on 9px letters over the day's tint lands at 4.50:1 — passing by a
+   hundredth, which is not a margin. The word carries itself in ink. */
 .todayLabel {
-  color: var(--accent-primary);
+  color: var(--text-secondary);
   font-size: 0.58rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1829,7 +1834,7 @@
     min-width: 0;
   }
 
-  .filterButton > span:last-child {
+  .toolbar .filterButton > span:last-child {
     display: none;
   }
 
@@ -1905,21 +1910,21 @@
 
   /* Today stays: R12 keeps range and navigation above everything that follows,
      and there is room for it next to the arrows. Only its padding gives way. */
-  .todayButton {
+  .toolbar .todayButton {
     padding: 0 11px;
     font-size: 0.74rem;
   }
 
   .toolbarActions .searchField,
-  .filterButton {
+  .toolbar .filterButton {
     display: none;
   }
 
-  .eventButton > span:last-child {
+  .toolbar .eventButton > span:last-child {
     display: none;
   }
 
-  .eventButton {
+  .toolbar .eventButton {
     width: 38px;
     padding: 0;
   }
@@ -2142,8 +2147,13 @@
 @media (max-width: 599px) {
   /* Create moves out of the toolbar and stays reachable with a thumb. It is the
      same button and the same handler — a second one would be a second thing to
-     keep in step. */
-  .eventButton {
+     keep in step.
+
+     Scoped to the toolbar on purpose: this competes with the Button primitive's
+     own single-class rules, and equal specificity would leave the winner to
+     whichever stylesheet the bundler happens to emit last. Every narrow-viewport
+     override of a primitive-backed control in here needs the same guard. */
+  .toolbar .eventButton {
     position: fixed;
     z-index: 40;
     right: 16px;

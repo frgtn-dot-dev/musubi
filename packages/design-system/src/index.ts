@@ -1,4 +1,10 @@
 export {
+  composite,
+  contrastRatio,
+  parseColor,
+  relativeLuminance,
+} from "./contrast";
+export {
   themeTokenCssVariables,
   themeTokens,
   type ThemeScheme,

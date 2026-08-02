@@ -17,7 +17,12 @@ export const themeTokens = {
     borderStrong: "rgba(28, 27, 24, 0.24)",
     textPrimary: "#1c1b18",
     textSecondary: "rgba(28, 27, 24, 0.74)",
-    textMuted: "rgba(28, 27, 24, 0.5)",
+    // The lightest ink that still clears 4.5:1 as small text on every surface —
+    // 0.64 gives 4.52:1 on the sunken one, which is the worst case. Anything
+    // lighter is a decoration, not text (see textFaint).
+    textMuted: "rgba(28, 27, 24, 0.64)",
+    // Icons, dividers and disabled controls only. Text in this level fails AA
+    // at every size, so it must not carry words.
     textFaint: "rgba(28, 27, 24, 0.32)",
     accentPrimary: "#b3492f",
     // Pure white keeps destructive controls above 4.5:1 on the shu accent.
@@ -37,7 +42,7 @@ export const themeTokens = {
     borderStrong: "rgba(232, 228, 217, 0.18)",
     textPrimary: "#e8e4d9",
     textSecondary: "rgba(232, 228, 217, 0.72)",
-    textMuted: "rgba(232, 228, 217, 0.48)",
+    textMuted: "rgba(232, 228, 217, 0.56)",
     textFaint: "rgba(232, 228, 217, 0.28)",
     accentPrimary: "#c8553d",
     accentOnPrimary: "#000",

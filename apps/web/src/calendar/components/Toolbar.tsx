@@ -147,6 +147,10 @@ export function Toolbar({
           </label>
           <Button
             aria-expanded={filtersOpen}
+            /* The label is dropped by CSS on a narrower toolbar, and a hidden
+               label is a missing name — the icon alone says nothing to a screen
+               reader. */
+            aria-label="Filters"
             className={styles.filterButton}
             icon={
               <SlidersHorizontal

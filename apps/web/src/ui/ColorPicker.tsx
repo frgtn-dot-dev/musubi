@@ -173,6 +173,7 @@ export function ColorPicker({
         </button>
       </PopoverTrigger>
       <PopoverContent
+        data-ui="color-picker-popover"
         align="center"
         aria-labelledby={`${id}-title`}
         className={styles.colorPickerPopover}

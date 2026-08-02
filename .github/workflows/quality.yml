@@ -41,6 +41,36 @@ jobs:
             exit 1
           fi
 
+  e2e:
+    name: Web end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Its own job, not part of `pnpm check`: the browser download and the dev
+      # server are the slow part, and keeping them off the critical path means
+      # typecheck/lint still report in under a minute.
+      - name: Install Playwright browser
+        run: pnpm --filter @musubi/web exec playwright install --with-deps chromium
+
+      - run: pnpm --filter @musubi/web test:e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/test-results
+          retention-days: 7
+
   docker:
     name: Build ${{ matrix.name }} image
     runs-on: ubuntu-latest

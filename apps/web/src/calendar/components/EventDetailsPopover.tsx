@@ -391,6 +391,12 @@ export function EventDetailsPopover({
             className={styles.detailPopover}
             collisionPadding={14}
             align={align}
+            /* This surface scrolls its own overflow, which makes it a scroll
+               container: an arrow poking out of its edge is clipped by the very
+               overflow rule that lets long details scroll, and still counts
+               toward scrollWidth — a phantom horizontal scrollbar for a
+               decoration nobody can see. */
+            showArrow={false}
             onClick={(clickEvent) => clickEvent.stopPropagation()}
             /* React portals bubble events to the React parent, not the DOM
                one: without this a press on the title reaches the day cell this

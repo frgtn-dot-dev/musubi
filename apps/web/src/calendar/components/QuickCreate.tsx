@@ -117,7 +117,12 @@ export function QuickCreate({
         <PopoverContent
           className={styles.createPopover}
           data-moved={windowDrag.moved ? "" : undefined}
-          showArrow={!windowDrag.moved}
+          /* The bubble scrolls its own overflow, so it is a scroll container:
+             an arrow poking out of its edge is clipped by that very rule and
+             still widens scrollWidth, which is a horizontal scrollbar for a
+             decoration nobody can see. Moving the window would orphan it
+             anyway. */
+          showArrow={false}
           ref={contentRef}
           style={{
             transform: windowDrag.moved

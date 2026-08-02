@@ -218,17 +218,15 @@
   border: 0;
 }
 
+/* A file input needs its own <label> to be clickable, so this group cannot be a
+   Field — but it must measure like one, or the column next to it sits two pixels
+   off. Composing the primitive is what keeps them from drifting again. */
 .cardFieldGroup {
-  display: grid;
-  gap: 6px;
+  composes: field from "../../../ui/primitives.module.css";
 }
 
 .cardControlLabel {
-  color: var(--text-primary);
-  font-size: var(--text-10);
-  font-weight: 500;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  composes: fieldLabel from "../../../ui/primitives.module.css";
 }
 
 .cardAction {

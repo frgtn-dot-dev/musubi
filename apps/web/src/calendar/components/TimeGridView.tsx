@@ -300,7 +300,12 @@ const TimelineEvent = memo(function TimelineEvent({
         style={
           {
             "--event-color": eventColor,
-            "--event-foreground": getReadableEventTextColor(eventColor),
+            // A ghost is drawn as an outline over the page, not as a filled
+            // block, so the event's own foreground would be white on a 18%
+            // tint. Ink is what stays readable there.
+            "--event-foreground": ghost
+              ? "var(--text-secondary)"
+              : getReadableEventTextColor(eventColor),
             height: `${Math.max(
               durationToHeight(duration, geometry) - 2,
               geometry.minEventHeight,
