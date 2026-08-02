@@ -5,7 +5,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
 import { defaultPageConfig } from '@musubi/types';
-import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml } from '@musubi/emails';
+import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml, getChangeEmailHtml } from '@musubi/emails';
 import { withVerifiedLanding } from './verified_landing';
 import { appleClientSecret, appleWebConfigured, type AppleWebCredentials } from './apple_secret';
 
@@ -130,6 +130,21 @@ export const auth = betterAuth({
     },
   },
   user: {
+    changeEmail: {
+      enabled: true,
+      // Who gets asked depends on where the trust is. A verified address is the
+      // one the account already proved, so the approval goes THERE — otherwise a
+      // stolen session could quietly move the account somewhere the owner cannot
+      // reach. An unverified address proves nothing, so Better Auth falls
+      // through to verifying the new one instead, which at least proves that.
+      sendChangeEmailConfirmation: async ({ newEmail, url, user }) => {
+        await sendEmail(
+          user.email,
+          "Approve your new email address",
+          getChangeEmailHtml(user.name, newEmail, withVerifiedLanding(url), "1 hour"),
+        );
+      },
+    },
     deleteUser: {
       enabled: true,
       // Email-confirmed deletion. When this is set, the initial request only

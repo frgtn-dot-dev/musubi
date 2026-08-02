@@ -203,6 +203,13 @@ next sign-in is refused and mails them a link — no data is lost and no action 
 needed from you, but it will surprise them. Say so before you flip it.
 </Aside>
 
+Changing an address works the same way from either client: a verified account is
+asked to approve the move **from its current address**, so a stolen session
+cannot walk off with the account; an unverified one confirms the new address
+instead. Either way the answer to "does that address already exist" is the same
+sentence, which is what keeps the form from being a way to test who has an
+account.
+
 <Aside type="note">
 The API refuses to start when this is `true` and `SMTP_HOST` is empty. That pair
 cannot serve anyone — the account is created, the confirmation never arrives, and

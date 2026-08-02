@@ -5309,3 +5309,38 @@ test("says an invitation is spent rather than showing an empty page", async ({
   ).toBeVisible();
   await expectNoAccessibilityViolations(page);
 });
+
+test("moves an account to a new address, asking the old one to approve", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let changeBody: unknown;
+  await page.route("**/api/auth/change-email", (route) => {
+    changeBody = route.request().postDataJSON();
+    return respond(route, { status: true });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Manage account" }).click();
+  const accountDialog = page.getByRole("dialog", { name: "Account" });
+  await accountDialog.getByRole("button", { name: /^Email/ }).click();
+
+  const editor = page.getByRole("dialog", { name: "Change email" });
+  await expect(editor).toContainText("Currently web-qa@example.invalid");
+  // The same address is not a change, and neither is half of one.
+  await editor.getByRole("textbox", { name: "New email" }).fill("web-qa@example.invalid");
+  await expect(editor.getByRole("button", { name: "Send the link" })).toBeDisabled();
+  await editor.getByRole("textbox", { name: "New email" }).fill("moved@");
+  await expect(editor.getByRole("button", { name: "Send the link" })).toBeDisabled();
+
+  await editor.getByRole("textbox", { name: "New email" }).fill("Moved@Example.invalid");
+  await editor.getByRole("button", { name: "Send the link" }).click();
+
+  // Lowercased before it leaves, so the address the server stores matches the
+  // one the person will type at the login screen.
+  expect(changeBody).toMatchObject({ newEmail: "moved@example.invalid" });
+  // Which inbox to look in is the whole answer here — and for a verified
+  // account it is the OLD one, so a stolen session cannot move the account
+  // somewhere the owner can't reach.
+  await expect(page.getByRole("status")).toContainText("web-qa@example.invalid");
+});

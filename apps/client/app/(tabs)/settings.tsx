@@ -45,6 +45,7 @@ export default function SettingsTab() {
   // In-app deletion is email-confirmed, so it needs the server to send email.
   // Assume it can until told otherwise (old servers omit the flag).
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
   useEffect(() => {
     if (!apiUrl) return;
     fetchWithTimeout(`${apiUrl}/api/v1/server`)
@@ -111,6 +112,35 @@ export default function SettingsTab() {
       warn();
       console.error("Name update failed:", e);
       showToast({ message: userFacingError(e, "Could not update your name.") });
+    }
+  };
+
+  const changeEmail = async (value: string) => {
+    const next = value.trim().toLowerCase();
+    const current = userSession.data?.user.email;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+      showToast({ message: "That does not look like an email address." });
+      return;
+    }
+    if (!current || next === current.toLowerCase()) return;
+    try {
+      const { error } = await authClient.changeEmail({ newEmail: next });
+      if (error) throw new Error(error.message);
+      success();
+      // Which inbox to check is the whole answer. A verified address approves
+      // the move itself, so a stolen session cannot take the account somewhere
+      // its owner can no longer reach; an unverified one proves the new address
+      // instead. The wording never says whether the new address already exists —
+      // the server answers the same either way, on purpose.
+      showToast({
+        message: userSession.data?.user.emailVerified
+          ? `Check ${current} — approve the change from there.`
+          : `Check ${next} for a link to confirm the new address.`,
+      });
+    } catch (e) {
+      warn();
+      console.error("Email change failed:", e);
+      showToast({ message: userFacingError(e, "Could not start the email change.") });
     }
   };
 
@@ -320,6 +350,13 @@ export default function SettingsTab() {
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
+          <Btn
+            label="Change Email"
+            variant="secondary"
+            onPress={() => emailEnabled
+              ? setEmailModalVisible(true)
+              : showToast({ message: "This server can't send email, so a change can't be confirmed here. Ask your server's administrator." })}
+          />
           <Btn label="Sign Out" variant="secondary" onPress={handleSignOut} />
           <Btn
             label="Delete Account"
@@ -330,6 +367,13 @@ export default function SettingsTab() {
           />
         </View>
       </ScrollView >
+      <InputModal
+        visible={emailModalVisible}
+        title="New email address"
+        placeholder={userSession.data?.user.email ?? "you@example.com"}
+        onClose={() => setEmailModalVisible(false)}
+        onConfirm={changeEmail}
+      />
       <InputModal
         visible={nameModalVisible}
         title="Display name"

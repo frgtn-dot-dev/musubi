@@ -24,7 +24,7 @@ import {
 } from "~/ui/ConfirmationDialog";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
-import { Row, RowAction } from "~/ui/Row";
+import { RowAction } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./styles/account.module.css";
@@ -37,6 +37,9 @@ type AccountDialogProps = {
 
 type AccountUser = {
   email: string;
+  // Decides who is asked to approve a change of address, so the copy can say
+  // which inbox to look in rather than guessing.
+  emailVerified?: boolean;
   image?: null | string;
   name: string;
 };
@@ -64,8 +67,10 @@ export function AccountDialog({
   const user = session.data?.user;
   const avatarInputId = useId();
   const nameActionRef = useRef<HTMLButtonElement>(null);
+  const emailActionRef = useRef<HTMLButtonElement>(null);
   const deleteActionRef = useRef<HTMLButtonElement>(null);
   const [nameEditorOpen, setNameEditorOpen] = useState(false);
+  const [emailEditorOpen, setEmailEditorOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const { busy, error, run, setError } = useAsyncAction();
 
@@ -73,6 +78,7 @@ export function AccountDialog({
     if (!nextOpen) {
       setError("");
       setNameEditorOpen(false);
+      setEmailEditorOpen(false);
       setDeleteDialogOpen(false);
     }
     onOpenChange(nextOpen);
@@ -171,10 +177,21 @@ export function AccountDialog({
                 setNameEditorOpen(true);
               }}
             />
-            <Row
+            <RowAction
+              detail={
+                user?.emailVerified
+                  ? "We’ll ask the current address to approve it"
+                  : "We’ll send a confirmation to the new address"
+              }
+              disabled={!user || busy}
               icon={<Mail size={17} strokeWidth={1.7} />}
               label="Email"
-              value={user?.email ?? "—"}
+              ref={emailActionRef}
+              value={user?.email}
+              onClick={() => {
+                setError("");
+                setEmailEditorOpen(true);
+              }}
             />
           </SettingsSection>
 
@@ -220,6 +237,17 @@ export function AccountDialog({
           onRefetch={() => session.refetch()}
           open
           returnFocus={nameActionRef}
+          user={user}
+        />
+      ) : null}
+
+      {user && emailEditorOpen ? (
+        <EditEmailDialog
+          key={user.email}
+          onNotice={onNotice}
+          onOpenChange={setEmailEditorOpen}
+          open
+          returnFocus={emailActionRef}
           user={user}
         />
       ) : null}
@@ -403,5 +431,99 @@ function DeleteAccountDialog({
         {error ? <DialogError>{error}</DialogError> : null}
       </form>
     </ConfirmationDialog>
+  );
+}
+
+function EditEmailDialog({
+  onNotice,
+  onOpenChange,
+  open,
+  returnFocus,
+  user,
+}: {
+  onNotice: (message: string) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  returnFocus: RefObject<HTMLElement | null>;
+  user: AccountUser;
+}) {
+  const [email, setEmail] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { busy, error, run } = useAsyncAction();
+  const next = email.trim().toLowerCase();
+  const canSave =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next) && next !== user.email.toLowerCase();
+
+  async function saveEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSave) return;
+    const sent = await run(async () => {
+      const result = await authClient.changeEmail({
+        callbackURL: "/",
+        newEmail: next,
+      });
+      if (result.error) throw new Error(result.error.message);
+      return true;
+    }, "Could not start the email change.");
+
+    if (sent) {
+      // Deliberately the same sentence whether or not the address is already
+      // taken: the server answers identically for that reason, and saying more
+      // here would turn this form into a way to test who has an account.
+      onNotice(
+        user.emailVerified
+          ? `Check ${user.email} — approve the change from there.`
+          : `Check ${next} for a link to confirm the new address.`,
+      );
+      onOpenChange(false);
+    }
+  }
+
+  return (
+    <Dialog
+      closeLabel="Close email"
+      description={
+        user.emailVerified
+          ? "Your current address has to approve the move, so a stolen session cannot take the account somewhere you can't reach."
+          : "We'll send a link to the new address. The change happens when you open it."
+      }
+      footer={
+        <>
+          <DialogClose>
+            <Button disabled={busy} variant="secondary">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button disabled={!canSave} form="email-form" loading={busy} type="submit">
+            Send the link
+          </Button>
+        </>
+      }
+      initialFocus={inputRef}
+      onOpenChange={onOpenChange}
+      open={open}
+      returnFocus={returnFocus}
+      size="compact"
+      title="Change email"
+    >
+      <form
+        className={styles.dialogForm}
+        id="email-form"
+        onSubmit={(event) => void saveEmail(event)}
+      >
+        <Field description={`Currently ${user.email}.`} label="New email">
+          <input
+            autoComplete="email"
+            inputMode="email"
+            placeholder="you@example.com"
+            ref={inputRef}
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
+        {error ? <p role="alert">{error}</p> : null}
+      </form>
+    </Dialog>
   );
 }
