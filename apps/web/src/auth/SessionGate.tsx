@@ -4,7 +4,9 @@ import {
   useNavigate,
   useRouter,
 } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { signOutAndReset } from "~/offline/sign-out";
 import { RouteState } from "~/ui/RouteState";
 import { AUTH_EXPIRED_EVENT, authClient } from "./auth-client";
 import { useSessionUser } from "./use-session-user";
@@ -14,6 +16,7 @@ export function SessionGate() {
   const location = useLocation();
   const navigate = useNavigate();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const redirecting = useRef(false);
   // The session cannot be confirmed with no network, and treating that as "not
   // signed in" would send someone with a perfectly good cookie to the login
@@ -24,12 +27,25 @@ export function SessionGate() {
 
   useEffect(() => {
     function refreshSession() {
-      void session.refetch().finally(() => router.invalidate());
+      // A 401 can mean a cookie that only needed re-reading, or a session that is
+      // genuinely over. Ask the server which, because only the second is a
+      // departure — and then the cache and the snapshot belong to nobody, so
+      // they go the same way as on a deliberate sign-out. A request that fails
+      // outright answers neither question and is left to the offline path.
+      void authClient
+        .getSession()
+        .then((result) =>
+          result.data
+            ? session.refetch()
+            : signOutAndReset({ queryClient }),
+        )
+        .catch(() => undefined)
+        .finally(() => router.invalidate());
     }
 
     window.addEventListener(AUTH_EXPIRED_EVENT, refreshSession);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, refreshSession);
-  }, [router, session]);
+  }, [queryClient, router, session]);
 
   useEffect(() => {
     if (

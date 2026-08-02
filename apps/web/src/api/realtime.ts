@@ -29,6 +29,16 @@ function sortPages(pages: PageDocument[]): PageDocument[] {
 
 type RealtimeMessage = { type?: string; payload?: Record<string, unknown> };
 
+// One stream per document, so one place to reach it from. Sign-out has to close
+// it *before* clearing the cache: a socket that is still open answers the next
+// server nudge by refetching, which would repopulate the departing account's
+// calendar into a cache that was just emptied.
+let closeActive: (() => void) | undefined;
+
+export function closeRealtimeStream() {
+  closeActive?.();
+}
+
 // Same-origin SSE. The browser `EventSource` can't set a bearer header, so this
 // relies on the Better Auth cookie session the web already uses. Cross-session
 // cache updates flow through here.
@@ -173,12 +183,16 @@ export function useServerStream(userId: string) {
       };
     }
 
-    open();
-
-    return () => {
+    function close() {
       closed = true;
       if (retry) clearTimeout(retry);
       source?.close();
-    };
+      if (closeActive === close) closeActive = undefined;
+    }
+
+    open();
+    closeActive = close;
+
+    return close;
   }, [origin, queryClient, userId]);
 }

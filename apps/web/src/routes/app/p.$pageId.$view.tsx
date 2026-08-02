@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useServerStream } from "~/api/realtime";
-import { authClient } from "~/auth/auth-client";
 import { useSessionUser } from "~/auth/use-session-user";
 import { useSnapshot } from "~/offline/SnapshotProvider";
+import { signOutAndReset } from "~/offline/sign-out";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
 import { useEventMutations } from "~/calendar/event-mutations";
@@ -252,7 +252,10 @@ function WorkspaceRoute() {
         })
       }
       onSignOut={() => {
-        void authClient.signOut().finally(() => queryClient.clear());
+        void signOutAndReset({
+          onDone: () => void navigate({ replace: true, to: "/login" }),
+          queryClient,
+        });
       }}
       onUpdateEvent={eventMutations.updateEvent}
     />

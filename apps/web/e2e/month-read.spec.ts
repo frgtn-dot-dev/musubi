@@ -4706,3 +4706,111 @@ test("brings the calendar forward when the live stream comes back", async ({
     expect(eventReads).toBeGreaterThan(whileDown);
   }).toPass({ timeout: 10_000 });
 });
+
+/** Which snapshots the browser is holding, if any. */
+function snapshotKeys(page: Page) {
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const request = indexedDB.open("musubi-offline");
+        request.onsuccess = () => {
+          const database = request.result;
+          if (![...database.objectStoreNames].includes("query-cache")) {
+            return resolve([]);
+          }
+          const read = database
+            .transaction("query-cache")
+            .objectStore("query-cache")
+            .getAllKeys();
+          read.onsuccess = () => resolve(read.result.map(String));
+          read.onerror = () => resolve([]);
+        };
+        request.onerror = () => resolve([]);
+      }),
+  );
+}
+
+test("starts from its snapshot with no server, then catches up", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+  // The snapshot is written on a throttle, so wait for it to land rather than
+  // reloading into an empty store.
+  await expect(async () => {
+    expect(
+      await page.evaluate(() => window.localStorage.getItem("musubi:last-session")),
+    ).toBeTruthy();
+    expect(await snapshotKeys(page)).not.toHaveLength(0);
+  }).toPass({ timeout: 5_000 });
+
+  // Everything the app talks to is gone — not refusing, unreachable, which is
+  // what a laptop off the network and a self-hosted server that is down both
+  // look like. `/src/**` has to keep loading or Vite itself cannot serve the app.
+  const dead = (route: Route) => route.abort();
+  for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+    await page.route(pattern, dead);
+  }
+  await page.reload();
+
+  // The five guarantees of offline v1 (`07-realtime-offline-federation.md:88-92`),
+  // seen from the outside: the calendar is there, it says how old it is, and it
+  // refuses to pretend a write went through.
+  await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+  const banner = page.getByRole("status").filter({ hasText: "Offline" });
+  await expect(banner).toContainText(/showing the calendar as it was .+ago|just now/);
+  await expect(banner).toContainText("Changes cannot be saved");
+
+  await page.getByRole("button", { name: /Client call/ }).first().click();
+  await page.getByRole("button", { exact: true, name: "Edit" }).click();
+  const title = page.getByRole("textbox", { name: "Event title" });
+  await title.fill("Renamed while offline");
+  await expect(
+    page.getByRole("button", { name: "No connection" }),
+  ).toBeDisabled();
+  // The typing survives — a draft is worth more than a cleared form.
+  await expect(title).toHaveValue("Renamed while offline");
+  await page.keyboard.press("Escape");
+
+  for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+    await page.unroute(pattern, dead);
+  }
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  // Back online the banner has to go, or a fresh calendar keeps apologising for
+  // being stale.
+  await expect(banner).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+});
+
+test("leaves nothing of the last account on a shared computer", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign out Web QA" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  // Not "eventually gone" — never rendered. `06-settings-pages-sync.md:175` is
+  // explicit that the login screen must not flash the previous user's data.
+  await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(0);
+  await expect(page.getByText("Web QA")).toHaveCount(0);
+
+  expect(
+    await page.evaluate(() => window.localStorage.getItem("musubi:last-session")),
+  ).toBeNull();
+  expect(await snapshotKeys(page)).toEqual([]);
+
+  // The next person, with the server unreachable, must reach the login page and
+  // not a snapshot: nothing local is left to restore.
+  const dead = (route: Route) => route.abort();
+  for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+    await page.route(pattern, dead);
+  }
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(0);
+});
