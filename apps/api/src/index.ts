@@ -12,7 +12,9 @@ import { requireAuth } from "./middleware/require_auth";
 import {
   handlerGetEventShare,
   handlerGetPublicEvent,
+  handlerGetPublicRsvp,
   handlerPutEventShare,
+  handlerPutPublicRsvp,
   handlerRevokeEventShare,
 } from "./handlers/event_shares";
 import { ForbiddenError } from "@musubi/types";
@@ -176,6 +178,10 @@ app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(hand
 // Public: the token IS the credential, same as an invite. Rate-limited per IP so
 // the space cannot be walked, and the projection is narrow by construction.
 app.get("/api/v1/public/events/:token", rateLimit(60, 15 * 60_000), wrap(handlerGetPublicEvent));
+// Answering needs a session — the page signs the guest in with an emailed code
+// first, so every RSVP is an address somebody proved.
+app.get("/api/v1/public/events/:token/rsvp", requireAuth, rateLimit(60, 15 * 60_000), wrap(handlerGetPublicRsvp));
+app.put("/api/v1/public/events/:token/rsvp", requireAuth, rateLimit(30, 15 * 60_000), wrap(handlerPutPublicRsvp));
 app.get("/api/v1/calendars/:id/export", requireAuth, wrap(handlerExportCalendar)); // .ics snapshot
 app.get("/api/v1/calendars/:id", requireAuth, wrap(handlerGetCalendar));
 app.post("/api/v1/calendars", requireAuth, wrap(handlerCreateCalendar));

@@ -265,6 +265,10 @@ export const eventShares = pgTable("event_shares", {
   // questions and the PRD keeps them separate on purpose.
   mode: text("mode").notNull(),
   indexable: boolean("indexable").notNull().default(false),
+  // What a reader of the page learns about who is coming. The organizer decides
+  // (PRD §18.2) — `counts` says how many, `names` says who, `hidden` says
+  // nothing. Never a default that reveals more than the previous state did.
+  attendeeVisibility: text("attendee_visibility").notNull().default("counts"),
   createdBy: text("created_by")
     .references(() => user.id, { onDelete: "cascade" })
     .notNull(),
@@ -277,6 +281,36 @@ export type NewEventShare = typeof eventShares.$inferInsert;
 
 export const eventSharesRelations = relations(eventShares, ({ one }) => ({
   event: one(events, { fields: [eventShares.eventID], references: [events.id] }),
+}));
+
+// An RSVP from the public page. Separate from `event_users`, which is member
+// attendance inside the app: mixing them would put a stranger who answered a
+// public link into the attendee list members see, and the organizer is supposed
+// to decide who learns about whom. The states differ too — attendance is a
+// boolean, an RSVP has a maybe.
+export const eventRsvps = pgTable("event_rsvps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  eventID: uuid("event_id")
+    .references(() => events.id, { onDelete: "cascade" })
+    .notNull(),
+  // Always a real (if passwordless) account: the address is proved by an email
+  // code before this row exists, so "12 going" means twelve confirmed people.
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  status: text("status").notNull(), // going | maybe | declined
+});
+
+export type NewEventRsvp = typeof eventRsvps.$inferInsert;
+
+export const eventRsvpsRelations = relations(eventRsvps, ({ one }) => ({
+  event: one(events, { fields: [eventRsvps.eventID], references: [events.id] }),
+  user: one(user, { fields: [eventRsvps.userID], references: [user.id] }),
 }));
 
 export const calendarInvites = pgTable("calendar_invites", {

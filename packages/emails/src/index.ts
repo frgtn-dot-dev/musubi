@@ -5,6 +5,7 @@ export { getPasswordResetHtml } from "./password_reset";
 export { getDeleteAccountHtml } from "./delete_account";
 export { getVerifyEmailHtml } from "./verify_email";
 export { getChangeEmailHtml } from "./change_email";
+export { getSignInCodeHtml } from "./sign_in_code";
 
 export async function sendEmail(to: string, subject: string, html: string) {
   try {

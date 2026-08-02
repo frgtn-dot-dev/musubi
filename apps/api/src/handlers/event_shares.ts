@@ -2,8 +2,13 @@ import { randomBytes } from "node:crypto";
 import {
   getEventShare,
   getSharedEvent,
+  getSharedEventId,
+  listEventRsvps,
+  nameAnonymousUser,
   revokeEventShare,
+  setEventRsvp,
   upsertEventShare,
+  type RsvpStatus,
 } from "@musubi/db";
 import { BadRequestError, NotFoundError } from "@musubi/types";
 import { Request, Response } from "express";
@@ -14,6 +19,8 @@ import { assertCanEditEvent } from "../permissions";
 // crawler is welcome. Access and indexability are separate questions: a public
 // event is not automatically an indexed one (PRD §17.1).
 const MODES = new Set(["link", "public"]);
+// What a reader learns about who is coming. The organizer decides (PRD §18.2).
+const VISIBILITIES = new Set(["counts", "hidden", "names"]);
 
 /**
  * 128 bits, hex. The URL is the credential, so it has to be unguessable in the
@@ -36,6 +43,7 @@ export async function handlerGetEventShare(req: Request, res: Response) {
   res.status(200).json(
     share
       ? {
+          attendeeVisibility: share.attendeeVisibility,
           indexable: share.indexable,
           mode: share.mode,
           token: share.token,
@@ -55,6 +63,7 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   const eventID = String(req.params.eventId);
   const mode = String(req.body?.mode ?? "");
   const indexable = req.body?.indexable === true;
+  const attendeeVisibility = String(req.body?.attendeeVisibility ?? "counts");
 
   if (!MODES.has(mode)) {
     throw new BadRequestError("mode must be 'link' or 'public'...");
@@ -64,10 +73,16 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   if (indexable && mode !== "public") {
     throw new BadRequestError("Only a public event page can be indexable...");
   }
+  if (!VISIBILITIES.has(attendeeVisibility)) {
+    throw new BadRequestError(
+      "attendeeVisibility must be counts, names or hidden...",
+    );
+  }
 
   await assertCanEditEvent(req.user!.id, eventID);
 
   const share = await upsertEventShare({
+    attendeeVisibility,
     createdBy: req.user!.id,
     eventID,
     indexable,
@@ -76,6 +91,7 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   });
 
   res.status(200).json({
+    attendeeVisibility: share.attendeeVisibility,
     indexable: share.indexable,
     mode: share.mode,
     token: share.token,
@@ -147,5 +163,79 @@ export function publicEventProjection(shared: SharedEventRow) {
     start: shared.start.toISOString(),
     title: shared.title,
     url: shared.url,
+  };
+}
+
+// ── RSVP ─────────────────────────────────────────────────────────────────────
+
+const RSVP_STATUSES = new Set(["declined", "going", "maybe"]);
+
+/**
+ * Answer a published event.
+ *
+ * Requires a session, and always has: the page signs the guest in with an
+ * emailed code first (`emailOTP`), so every row here is an address somebody
+ * proved. That is what lets a count mean something — and it is why no
+ * "unverified RSVP" state exists to be cleaned up later (PRD §18.3).
+ */
+export async function handlerPutPublicRsvp(req: Request, res: Response) {
+  const status = String(req.body?.status ?? "");
+  if (!RSVP_STATUSES.has(status)) {
+    throw new BadRequestError("status must be going, maybe or declined...");
+  }
+  // Somebody who arrived through an emailed code has an address and nothing
+  // else, and a list of blanks helps nobody. Only fills an empty name, so it
+  // can never rewrite the profile of a member who happens to answer.
+  const name = String(req.body?.name ?? "").trim().slice(0, 80);
+  if (name) await nameAnonymousUser(req.user!.id, name);
+
+  const share = await getSharedEventId(String(req.params.token));
+  if (!share) throw new NotFoundError("This event page is not available...");
+
+  await setEventRsvp({
+    eventID: share.eventID,
+    status: status as RsvpStatus,
+    userID: req.user!.id,
+  });
+
+  res.status(200).json(await rsvpSummary(share, req.user!.id));
+}
+
+/** The reader's own answer plus whatever the organizer lets readers see. */
+export async function handlerGetPublicRsvp(req: Request, res: Response) {
+  const share = await getSharedEventId(String(req.params.token));
+  if (!share) throw new NotFoundError("This event page is not available...");
+
+  res.status(200).json(await rsvpSummary(share, req.user!.id));
+}
+
+async function rsvpSummary(
+  share: { attendeeVisibility: string; eventID: string },
+  userID: string,
+) {
+  const rsvps = await listEventRsvps(share.eventID);
+
+  return {
+    counts: rsvpCounts(rsvps),
+    mine: rsvps.find((rsvp) => rsvp.userID === userID)?.status ?? null,
+    // Names only when the organizer said so, and only of people who are coming:
+    // "maybe" and "no" are answers people give in confidence.
+    names:
+      share.attendeeVisibility === "names"
+        ? rsvps
+            .filter((rsvp) => rsvp.status === "going")
+            // Never a blank in the list: an account can still be nameless if the
+            // answer came from somewhere that did not ask.
+            .map((rsvp) => rsvp.name.trim() || "Guest")
+        : [],
+    visibility: share.attendeeVisibility,
+  };
+}
+
+export function rsvpCounts(rsvps: Array<{ status: string }>) {
+  return {
+    declined: rsvps.filter((rsvp) => rsvp.status === "declined").length,
+    going: rsvps.filter((rsvp) => rsvp.status === "going").length,
+    maybe: rsvps.filter((rsvp) => rsvp.status === "maybe").length,
   };
 }

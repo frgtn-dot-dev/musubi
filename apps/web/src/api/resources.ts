@@ -12,6 +12,7 @@ import {
   PagesResponseSchema,
   PublicEventSchema,
   RemoveEventResponseSchema,
+  RsvpSummarySchema,
   ServerCapabilitiesSchema,
   SettingsDocumentResponseSchema,
   SettingsResponseSchema,
@@ -27,6 +28,7 @@ import {
   type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
+import type { RsvpStatus } from "./contracts";
 import { z } from "zod";
 import {
   apiRawJsonRequest,
@@ -329,12 +331,17 @@ export function getEventShare(eventId: string, signal?: AbortSignal) {
 }
 
 export function publishEvent(input: {
+  attendeeVisibility: "counts" | "hidden" | "names";
   eventId: string;
   indexable: boolean;
   mode: "link" | "public";
 }) {
   return apiRequest(`/api/v1/events/${input.eventId}/share`, {
-    body: { indexable: input.indexable, mode: input.mode },
+    body: {
+      attendeeVisibility: input.attendeeVisibility,
+      indexable: input.indexable,
+      mode: input.mode,
+    },
     method: "PUT",
     responseSchema: EventShareSchema,
   });
@@ -352,6 +359,26 @@ export function getPublicEvent(token: string, signal?: AbortSignal) {
   return apiRequest(`/api/v1/public/events/${token}`, {
     responseSchema: PublicEventSchema,
     signal,
+  });
+}
+
+/** The reader's own answer and the counts, once they have a session. */
+export function getEventRsvp(token: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/public/events/${token}/rsvp`, {
+    responseSchema: RsvpSummarySchema,
+    signal,
+  });
+}
+
+export function answerEvent(input: {
+  name?: string;
+  status: RsvpStatus;
+  token: string;
+}) {
+  return apiRequest(`/api/v1/public/events/${input.token}/rsvp`, {
+    body: { name: input.name, status: input.status },
+    method: "PUT",
+    responseSchema: RsvpSummarySchema,
   });
 }
 

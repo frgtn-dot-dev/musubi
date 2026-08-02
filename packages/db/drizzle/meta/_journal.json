@@ -260,6 +260,13 @@
       "when": 1785694078778,
       "tag": "0036_cynical_rhodey",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785695820564,
+      "tag": "0037_fat_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

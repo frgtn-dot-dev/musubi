@@ -113,3 +113,52 @@
   color: var(--text-muted);
   font-size: var(--text-12);
 }
+
+/* ── RSVP ─────────────────────────────────────────────────────────────────── */
+.rsvp {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rsvp h2 {
+  margin: 0;
+  font-size: var(--text-15);
+  font-weight: 500;
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rsvpState,
+.attending {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+}
+
+.rsvpForm {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+}
+
+.rsvpExplainer {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.5;
+}
+
+.rsvpError {
+  margin: 0;
+  color: var(--accent-primary);
+  font-size: var(--text-12);
+}

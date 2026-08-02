@@ -7,10 +7,12 @@ import {
   publishEvent,
   unpublishEvent,
 } from "~/api/resources";
+import type { EventShare } from "~/api/contracts";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { RowAction } from "~/ui/Row";
+import { Select } from "~/ui/Select";
 import styles from "./styles/share-event.module.css";
 
 type Mode = "link" | "private" | "public";
@@ -72,8 +74,18 @@ export function ShareEventDialog({
   });
 
   const publish = useMutation({
-    mutationFn: (input: { indexable: boolean; mode: "link" | "public" }) =>
-      publishEvent({ eventId, ...input }),
+    mutationFn: (input: {
+      attendeeVisibility?: EventShare["attendeeVisibility"];
+      indexable: boolean;
+      mode: "link" | "public";
+    }) =>
+      publishEvent({
+        attendeeVisibility:
+          input.attendeeVisibility ?? current?.attendeeVisibility ?? "counts",
+        eventId,
+        indexable: input.indexable,
+        mode: input.mode,
+      }),
     onSuccess: (result) => queryClient.setQueryData(shareKey, result),
   });
 
@@ -172,6 +184,32 @@ export function ShareEventDialog({
             >
               {copied ? "Copied" : "Copy"}
             </Button>
+          </div>
+        ) : null}
+
+        {current ? (
+          <div className={styles.visibilityRow}>
+            <Select
+              label="Who is coming"
+              options={[
+                { label: "Show how many", value: "counts" },
+                { label: "Show names", value: "names" },
+                { label: "Show nothing", value: "hidden" },
+              ]}
+              size="compact"
+              value={current.attendeeVisibility}
+              onChange={(value) =>
+                publish.mutate({
+                  attendeeVisibility: value as EventShare["attendeeVisibility"],
+                  indexable: current.indexable,
+                  mode: current.mode,
+                })
+              }
+            />
+            <p className={styles.note}>
+              Names are only ever those who said yes — a maybe and a no are
+              answers people give in confidence.
+            </p>
           </div>
         ) : null}
 

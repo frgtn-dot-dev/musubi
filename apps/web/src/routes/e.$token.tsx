@@ -5,6 +5,7 @@ import { CalendarPlus, MapPin, Repeat2 } from "lucide-react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
 import { BrandMark } from "~/components/BrandMark";
+import { RsvpBlock } from "./-rsvp-block";
 import { Button } from "~/ui/Button";
 import { RouteState } from "~/ui/RouteState";
 import styles from "./event-page.module.css";
@@ -122,6 +123,10 @@ function PublicEventRoute() {
         {event.description ? (
           <p className={styles.description}>{event.description}</p>
         ) : null}
+
+        {/* Only where somebody can be told: a server with no mail cannot send a
+            code, so the block would be a dead end (PRD §18.2). */}
+        {event.isCanceled ? null : <RsvpBlock token={token} />}
 
         <div className={styles.actions}>
           <Button

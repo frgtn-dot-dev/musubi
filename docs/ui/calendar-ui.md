@@ -1072,7 +1072,18 @@ vzešlo a nedá se vyčíst z kódu:
   příští výskyt počítá stránka v zóně čtenáře.
 - Zrušený event stránku **má** (s cedulkou), protože 404 se čte jako rozbitý
   odkaz a pošle člověka ptát se.
-- Zatím není: RSVP (samostatný bod M8), kapacita, vlastní vzhled stránky, cover,
+- **RSVP (M8.3)**: odpověď se drží v komponentě, dokud host nepotvrdí adresu —
+  v databázi nikdy nevznikne „nepotvrzená" odpověď, takže počet je vždy počet
+  skutečných lidí. Tím se zodpovídá otevřená otázka PRD §18.3. Identita je
+  passwordless přes Better Auth `emailOTP`; kód posílá server, účet vznikne až
+  jeho použitím. Jméno se zapisuje **jen do prázdného** účtu, aby druhá odpověď
+  nepřepsala profil člena, který na veřejný odkaz odpověděl.
+- RSVP je vlastní tabulka, ne `event_users`: to je členská účast uvnitř appky a
+  smíchání by cizího člověka z veřejného odkazu dostalo do seznamu, který vidí
+  členové. Stavy se navíc liší — účast je boolean, RSVP má „možná".
+- Jména vidí čtenář jen když to organizátor zapne, a **jen u těch, kdo řekli
+  ano**: „možná" a „ne" jsou odpovědi, které lidé dávají v důvěře.
+- Zatím není: kapacita, vlastní vzhled stránky, cover,
   `.ics` subscription feed. `.ics` soubor se skládá v prohlížeči z dat, která
   stránka už má.
 

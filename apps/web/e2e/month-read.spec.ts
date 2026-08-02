@@ -5496,7 +5496,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
   await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveValue(
     new RegExp(SHARE_TOKEN),
   );
-  expect(share).toEqual({ indexable: false, mode: "link" });
+  expect(share).toEqual({ attendeeVisibility: "counts", indexable: false, mode: "link" });
   // The link mode's promise is that it stays out of search, so it must not even
   // offer the indexing choice.
   await expect(dialog.getByRole("checkbox", { name: /search engines/ })).toHaveCount(0);
@@ -5508,7 +5508,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
   await expect(
     dialog.getByRole("checkbox", { name: /search engines/ }),
   ).toBeChecked();
-  expect(share).toEqual({ indexable: true, mode: "public" });
+  expect(share).toEqual({ attendeeVisibility: "counts", indexable: true, mode: "public" });
 
   await expectNoAccessibilityViolations(page);
 
@@ -5574,4 +5574,73 @@ test("says a withdrawn page is gone rather than showing an empty shell", async (
   await expect(
     page.getByRole("heading", { name: "This page is not available." }),
   ).toBeVisible();
+});
+
+test("lets a stranger answer after confirming their address", async ({ page }) => {
+  let rsvp: unknown;
+  let signedIn = false;
+  await page.route("**/api/auth/get-session", (route) =>
+    respond(
+      route,
+      signedIn
+        ? { session: { id: "s1" }, user: { email: "guest@example.com", id: "guest-1", name: "" } }
+        : null,
+    ),
+  );
+  await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+    respond(route, {
+      description: null,
+      end: "2026-08-20T16:00:00.000Z",
+      indexable: false,
+      isAllDay: false,
+      isCanceled: false,
+      location: null,
+      organizer: "Mika",
+      recurrence: null,
+      start: "2026-08-20T13:00:00.000Z",
+      title: "Studio open day",
+      url: null,
+    }),
+  );
+  let codeRequest: unknown;
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) => {
+    codeRequest = route.request().postDataJSON();
+    return respond(route, { success: true });
+  });
+  await page.route("**/api/auth/sign-in/email-otp", (route) => {
+    signedIn = true;
+    return respond(route, { token: "session", user: { id: "guest-1" } });
+  });
+  await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) => {
+    if (route.request().method() === "PUT") rsvp = route.request().postDataJSON();
+    return respond(route, {
+      counts: { declined: 0, going: 1, maybe: 0 },
+      mine: "going",
+      names: [],
+      visibility: "counts",
+    });
+  });
+
+  await page.goto(`/e/${SHARE_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+
+  // The order people expect: answer first, identify second.
+  await page.getByRole("button", { name: "Going" }).click();
+  await expect(page.getByText(/creates a Musubi account with no password/)).toBeVisible();
+
+  await page.getByLabel("Your name").fill("Jana K.");
+  await page.getByLabel("Email").fill("guest@example.com");
+  await page.getByRole("button", { name: "Send me a code" }).click();
+  expect(codeRequest).toMatchObject({ email: "guest@example.com", type: "sign-in" });
+
+  // Nothing is recorded until the address is confirmed — no half-answered row
+  // exists to be cleaned up, and a count is always a count of real people.
+  expect(rsvp).toBeUndefined();
+
+  await page.getByLabel("Code from your email").fill("123456");
+  await page.getByRole("button", { name: "Confirm" }).click();
+
+  await expect(page.getByText("You’re on the list.")).toBeVisible();
+  expect(rsvp).toEqual({ name: "Jana K.", status: "going" });
+  await expect(page.getByText("1 going")).toBeVisible();
 });

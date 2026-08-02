@@ -1,11 +1,11 @@
 import { betterAuth } from 'better-auth';
-import { bearer } from "better-auth/plugins";
+import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
 import { defaultPageConfig } from '@musubi/types';
-import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml, getChangeEmailHtml } from '@musubi/emails';
+import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml, getChangeEmailHtml, getSignInCodeHtml } from '@musubi/emails';
 import { withVerifiedLanding } from './verified_landing';
 import { appleClientSecret, appleWebConfigured, type AppleWebCredentials } from './apple_secret';
 
@@ -214,5 +214,17 @@ export const auth = betterAuth({
   plugins: [
     bearer(),
     expo(),
+    // Passwordless sign-in by emailed code. This is what turns "I want to RSVP"
+    // into an identity without asking a stranger to invent a password for a
+    // calendar app they may never open again (PRD §18.1) — and the code proves
+    // the address, so a confirmed answer means a real inbox.
+    emailOTP({
+      // Ten minutes: long enough to switch to a phone and read the mail, short
+      // enough that a code left in an inbox is not a standing key.
+      expiresIn: 10 * 60,
+      sendVerificationOTP: async ({ email, otp }) => {
+        await sendEmail(email, `${otp} is your Musubi code`, getSignInCodeHtml(otp, "10 minutes"));
+      },
+    }),
   ],
 });

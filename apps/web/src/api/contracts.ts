@@ -92,6 +92,7 @@ export type FederationConnection = z.infer<typeof FederationConnectionSchema>;
 // A published event page. `null` from the API means the event is private, which
 // is every event nobody has published.
 export const EventShareSchema = z.object({
+  attendeeVisibility: z.enum(["counts", "hidden", "names"]).default("counts"),
   indexable: z.boolean(),
   mode: z.enum(["link", "public"]),
   token: z.string(),
@@ -99,6 +100,21 @@ export const EventShareSchema = z.object({
 });
 
 export type EventShare = z.infer<typeof EventShareSchema>;
+
+/** Who is coming, as much of it as the organizer lets a reader see. */
+export const RsvpSummarySchema = z.object({
+  counts: z.object({
+    declined: z.number(),
+    going: z.number(),
+    maybe: z.number(),
+  }),
+  mine: z.enum(["declined", "going", "maybe"]).nullable(),
+  names: z.array(z.string()).default([]),
+  visibility: z.enum(["counts", "hidden", "names"]),
+});
+
+export type RsvpSummary = z.infer<typeof RsvpSummarySchema>;
+export type RsvpStatus = NonNullable<RsvpSummary["mine"]>;
 
 /**
  * What an anonymous reader of a published page gets.
