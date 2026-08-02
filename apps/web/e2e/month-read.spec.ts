@@ -4997,3 +4997,82 @@ test("says a new account is waiting on its confirmation link", async ({
   ).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });
+
+test("offers the sign-in providers this server can actually finish", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, {
+      email: true,
+      emailVerificationRequired: false,
+      minClientVersion: "0.1.2",
+      // Apple is advertised for the phone, which uses the native token flow.
+      socials: ["google", "microsoft", "apple"],
+      syncProviders: [],
+    }),
+  );
+  let social: unknown;
+  await page.route("**/api/auth/sign-in/social", (route) => {
+    social = route.request().postDataJSON();
+    // Stop before the real provider: a redirect off-origin ends the test.
+    return respond(route, { redirect: false, url: "https://accounts.example.com/oauth" });
+  });
+
+  await page.goto("/login?redirect=%2Fapp%2Fp%2Fmy-calendar%2Fweek");
+  await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue with Microsoft" }),
+  ).toBeVisible();
+  // A browser has nowhere to send an Apple sign-in on this server, so offering
+  // it would open a page that cannot come back.
+  await expect(page.getByRole("button", { name: /Apple/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect.poll(() => social).toEqual(
+    expect.objectContaining({
+      // The page someone was interrupted for has to survive the round trip.
+      callbackURL: "/app/p/my-calendar/week",
+      provider: "google",
+    }),
+  );
+
+  await expectNoAccessibilityViolations(page);
+});
+
+test("shows only the passphrase form on a server with no OAuth", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, {
+      email: false,
+      emailVerificationRequired: false,
+      minClientVersion: "0.1.2",
+      socials: [],
+      syncProviders: [],
+    }),
+  );
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+
+  // Self-hosted Musubi without credentials: no dead buttons, no lonely divider.
+  await expect(page.getByRole("button", { name: /Continue with/ })).toHaveCount(0);
+  await expect(page.getByText("or", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+});
+
+test("says so when a provider sign-in does not come back", async ({ page }) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+
+  // Where Better Auth returns the browser after a failed round trip.
+  await page.goto("/login?error=oauth");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByRole("alert")).toContainText("did not come back");
+});

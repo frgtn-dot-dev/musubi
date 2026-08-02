@@ -413,6 +413,36 @@
   width: 100%;
 }
 
+.authProviders {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.authProviders button {
+  width: 100%;
+}
+
+/* A hairline with the word sitting in a gap in it, rather than a line drawn
+   under a floating label — the gap is what makes it read as "or", not "next". */
+.authDivider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-12);
+  text-transform: lowercase;
+}
+
+.authDivider::before,
+.authDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
 .authFooter {
   margin-top: var(--space-5);
 }

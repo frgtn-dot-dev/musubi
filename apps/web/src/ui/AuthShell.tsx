@@ -81,6 +81,25 @@ export function AuthMessage({
   );
 }
 
+/**
+ * The "or" between the provider buttons and the email form.
+ *
+ * A rule with a word in it, not a heading: both halves are the same choice made
+ * two ways, and calling one of them a section would rank them.
+ */
+export function AuthDivider({ children }: { children: ReactNode }) {
+  return (
+    <div aria-hidden="true" className={styles.authDivider}>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+/** The provider buttons, stacked, above the divider. */
+export function AuthProviders({ children }: { children: ReactNode }) {
+  return <div className={styles.authProviders}>{children}</div>;
+}
+
 export function AuthSubmit({ className, ...props }: ButtonProps) {
   return (
     <Button

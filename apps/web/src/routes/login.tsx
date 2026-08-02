@@ -1,21 +1,39 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
+import { getServerOrigin } from "~/api/query-keys";
+import { getServerCapabilities } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import {
+  AuthDivider,
   AuthForm,
   AuthMessage,
+  AuthProviders,
   AuthShell,
   AuthSubmit,
   AuthSwitch,
 } from "~/ui/AuthShell";
+import { Button } from "~/ui/Button";
+import { ProviderGlyph } from "~/ui/ProviderGlyph";
 import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
 
 const loginSearchSchema = z.object({
+  // Better Auth sends the browser back here when a provider round trip fails —
+  // the person is on the login page again and deserves to know why.
+  error: z.string().optional().catch(undefined),
   redirect: z.string().optional().catch(undefined),
 });
+
+// Providers a browser can actually complete. Apple is deliberately absent: this
+// server is set up for the native identity-token flow (bundle id, no web
+// Services ID), so an Apple button here would open a page that cannot come back.
+const WEB_PROVIDERS = [
+  { id: "google", label: "Continue with Google" },
+  { id: "microsoft", label: "Continue with Microsoft" },
+] as const;
 
 export const Route = createFileRoute("/login")({
   validateSearch: loginSearchSchema,
@@ -37,13 +55,25 @@ const EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED";
 
 function LoginRoute() {
   const session = authClient.useSession();
-  const { redirect } = Route.useSearch();
+  const { error, redirect } = Route.useSearch();
+  // Which buttons this server can honour. A self-hosted Musubi with no OAuth
+  // credentials shows none of them rather than a button that dead-ends.
+  const capabilities = useQuery({
+    queryFn: ({ signal }) => getServerCapabilities(signal),
+    queryKey: ["server-capabilities", getServerOrigin()],
+    staleTime: 5 * 60_000,
+  });
+  const providers = WEB_PROVIDERS.filter((provider) =>
+    capabilities.data?.socials.includes(provider.id),
+  );
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(
+    error ? "That sign-in did not come back. Try again, or use your passphrase." : "",
+  );
   const [submitting, setSubmitting] = useState(false);
   // The address a confirmation link went to, which is also the sign that the
   // form has nothing left to do: there is no password to retry, only an inbox.
@@ -119,6 +149,24 @@ function LoginRoute() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function continueWith(provider: string) {
+    setMessage("");
+    setSubmitting(true);
+    // A full-page redirect to the provider and back; nothing after this runs on
+    // success. `callbackURL` is where the browser lands afterwards, so the
+    // redirect someone was interrupted for survives the round trip.
+    void authClient
+      .signIn.social({
+        callbackURL: safeRedirect(redirect),
+        errorCallbackURL: "/login?error=oauth",
+        provider,
+      })
+      .catch(() => {
+        setSubmitting(false);
+        setMessage("That sign-in could not be started. Try again in a moment.");
+      });
   }
 
   async function resendConfirmation() {
@@ -204,6 +252,25 @@ function LoginRoute() {
       title={signingUp ? "Begin simply." : "Pick up where you left off."}
       utility={<ThemeToggle />}
     >
+      {providers.length > 0 ? (
+        <>
+          <AuthProviders>
+            {providers.map((provider) => (
+              <Button
+                disabled={submitting}
+                icon={<ProviderGlyph provider={provider.id} />}
+                key={provider.id}
+                onClick={() => continueWith(provider.id)}
+                type="button"
+                variant="secondary"
+              >
+                {provider.label}
+              </Button>
+            ))}
+          </AuthProviders>
+          <AuthDivider>or</AuthDivider>
+        </>
+      ) : null}
       <AuthForm onSubmit={handleSubmit} noValidate>
         {signingUp ? (
           <Field label="Name" variant="plain">

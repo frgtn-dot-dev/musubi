@@ -4,9 +4,18 @@ import { config } from "@musubi/config";
 // Which social logins this server can actually perform — a provider counts only
 // when its credentials are configured. Lets self-hosted clients render just the
 // buttons that will work against their server (see welcome screen).
+//
+// Which flow a provider is set up for differs by platform, so this list is what
+// the server accepts and each client takes what it can use. Google is both: the
+// phone verifies an identity token against the web client id, the browser does a
+// redirect (which also needs the secret). Microsoft is redirect-only. Apple is
+// the phone alone — it is configured for the native token flow with a bundle id
+// and no web Services ID, so a browser has nothing to redirect to and the web
+// client filters it out.
 function enabledSocials(): string[] {
   const socials: string[] = [];
   if (config.social.googleWebClientID) socials.push("google");
+  if (config.social.microsoftClientID && config.social.microsoftClientSecret) socials.push("microsoft");
   if (config.social.appleClientID) socials.push("apple");
   return socials;
 }
