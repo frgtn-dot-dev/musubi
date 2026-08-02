@@ -26,6 +26,7 @@ import {
   useState,
 } from "react";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { StaleBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
 import { getAgendaLabel } from "../agenda-math";
 import {
@@ -79,6 +80,14 @@ type WorkspaceProps = {
   date: string;
   events: Event[];
   isRefreshing: boolean;
+  /**
+   * The server could not be reached, so what is on screen came from the local
+   * snapshot. `snapshotAt` is when that snapshot was written.
+   */
+  offline?: boolean;
+  snapshotAt?: number;
+  /** On screen is snapshot data while a refresh is in flight (`05:295-306`). */
+  stale?: boolean;
   onCreateEvent: (event: Event) => Promise<Event>;
   onDateChange: (date: string) => void;
   onForkEvent?: (input: {
@@ -215,6 +224,9 @@ export function Workspace({
   date,
   events,
   isRefreshing,
+  offline = false,
+  snapshotAt,
+  stale = false,
   onCreateEvent,
   onAdoptSettings = ignoreSettings,
   onDateChange,
@@ -731,7 +743,11 @@ export function Workspace({
         onSignOut={onSignOut}
         returnFocusRef={sidebarTriggerRef}
         syncLabel={
-          isRefreshing ? "Refreshing server data…" : "Connected to server"
+          offline
+            ? "Offline — showing saved data"
+            : isRefreshing
+              ? "Refreshing server data…"
+              : "Connected to server"
         }
         user={user}
         weekStartsOn={settings.weekStartsOn}
@@ -743,6 +759,14 @@ export function Workspace({
         inert={sidebarModal ? true : undefined}
         ref={mainRef}
       >
+        {offline ? (
+          <StaleBanner
+            savedAt={snapshotAt}
+            suffix="Changes cannot be saved until it is back."
+          />
+        ) : stale ? (
+          <StaleBanner savedAt={snapshotAt} tone="refreshing" />
+        ) : null}
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}

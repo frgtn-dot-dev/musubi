@@ -38,6 +38,7 @@ import {
   connectionOfCalendar,
   federatedConnectionMap,
 } from "../federation-routing";
+import { useSnapshot } from "~/offline/SnapshotProvider";
 import { createTimeGeometry } from "../time-geometry";
 import styles from "./styles/event-editor.module.css";
 
@@ -127,6 +128,9 @@ export function EventEditorForm({
   when,
 }: EventEditorFormProps) {
   const id = useId();
+  // What the app knows, not what the browser guesses: a self-hosted server that
+  // is down looks online to `navigator`.
+  const { offline } = useSnapshot();
   const [values, setValues] = useState(initialValues);
   const [expanded, setExpanded] = useState(!compact);
   const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
@@ -737,8 +741,18 @@ export function EventEditorForm({
             More options
           </Button>
         )}
-        <Button loading={saving} type="submit">
-          {saving ? "Saving…" : submitLabel}
+        {/* The form stays open and keeps everything typed — a draft is worth
+            more than a cleared screen — but the button says why it cannot go
+            (`07-realtime-offline-federation.md:103`). */}
+        <Button
+          disabled={offline}
+          loading={saving}
+          title={
+            offline ? "The server cannot be reached — nothing can be saved yet" : undefined
+          }
+          type="submit"
+        >
+          {offline ? "No connection" : saving ? "Saving…" : submitLabel}
         </Button>
       </div>
     </form>

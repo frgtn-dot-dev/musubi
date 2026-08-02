@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
-import { useOnlineStatus } from "~/api/online-status";
 import { useServerStream } from "~/api/realtime";
 import { authClient } from "~/auth/auth-client";
 import { useSessionUser } from "~/auth/use-session-user";
@@ -38,7 +37,6 @@ function WorkspaceRoute() {
   const { date } = Route.useSearch();
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
-  const online = useOnlineStatus();
   // Offline the session cannot be confirmed, so the last known account stands in
   // — otherwise every query key would say "anonymous" and the snapshot for the
   // real user would sit there unread.
@@ -59,6 +57,17 @@ function WorkspaceRoute() {
     workspace.pages,
     workspace.settings,
   ];
+  // One source for "the server did not answer", shared with every form that has
+  // to refuse a write (`SnapshotProvider`).
+  const offline = snapshot.offline;
+  // Restored data that this session has not re-fetched yet. `isFetchedAfterMount`
+  // is the honest test: `snapshot.restored` stays true all session, long after
+  // the first refresh made it moot.
+  const stale =
+    !offline &&
+    queries.some(
+      (query) => query.data !== undefined && !query.isFetchedAfterMount,
+    );
   // Waiting on the restore counts as loading: painting an empty calendar first
   // and filling it a frame later is worse than a moment of the loading state.
   const pending = queries.some((query) => query.isPending) || !snapshot.ready;
@@ -110,18 +119,22 @@ function WorkspaceRoute() {
     return (
       <WorkspaceDataState
         detail={
-          online
-            ? error instanceof Error
+          offline
+            ? "There is no saved copy of this calendar on this device yet. Reconnect and try again."
+            : error instanceof Error
               ? error.message
               : "The server did not return the complete calendar data."
-            : "Reconnect to the network, then retry this calendar."
         }
-        kind={online ? "error" : "offline"}
+        kind={offline ? "offline" : "error"}
         onRetry={() => {
           void Promise.all(queries.map((query) => query.refetch()));
         }}
         requestId={requestId}
-        title={online ? "We could not open this calendar." : "You are offline."}
+        title={
+          offline
+            ? "The server cannot be reached."
+            : "We could not open this calendar."
+        }
       />
     );
   }
@@ -155,6 +168,9 @@ function WorkspaceRoute() {
       date={date}
       events={workspace.mergedEvents?.events ?? []}
       isRefreshing={queries.some((query) => query.isFetching)}
+      offline={offline}
+      snapshotAt={snapshot.savedAt}
+      stale={stale}
       onCreateEvent={eventMutations.createEvent}
       onAdoptSettings={settingsMutations.adoptSettings}
       onForkEvent={eventMutations.forkEvent}

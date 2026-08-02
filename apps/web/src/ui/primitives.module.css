@@ -1950,3 +1950,30 @@
     animation-duration: 0.01ms;
   }
 }
+
+/* Offline notice. Accent bar rather than a neutral strip: this contradicts what
+   the calendar under it appears to say, and that deserves to be noticed once —
+   the same weight the mobile client gives it. */
+.staleBanner {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+  font-size: var(--text-12);
+  text-align: center;
+}
+
+.staleBanner svg {
+  flex: none;
+}
+
+/* Fresher data is already on the way, so this is a note, not a warning — the
+   accent is reserved for the case where nothing is coming. */
+.staleBanner[data-tone="refreshing"] {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}

@@ -9,6 +9,14 @@ import { routeTree } from "./routeTree.gen";
 export function getRouter() {
   const queryClient = new QueryClient({
     defaultOptions: {
+      mutations: {
+        // Without this a write attempted with no network is *paused*, not
+        // rejected: the promise never settles, the Save button spins forever and
+        // nothing tells the user anything. Failing fast lands in the error copy
+        // that already says what the failure left behind — and no offline write
+        // may look saved (`07-realtime-offline-federation.md:91`).
+        networkMode: "always",
+      },
       queries: {
         // Matched to how long a snapshot is allowed to live: a restored entry
         // that React Query garbage-collects on the way to the first paint would

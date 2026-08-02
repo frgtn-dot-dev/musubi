@@ -7,12 +7,23 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { isUnreachableError, useOnlineStatus } from "~/api/online-status";
 import { getServerOrigin } from "~/api/query-keys";
 import { authClient } from "~/auth/auth-client";
 import { createSnapshotPersister } from "./persister";
 import { readSessionMarker, writeSessionMarker } from "./session-marker";
 
 type SnapshotState = {
+  /**
+   * The server did not answer — either the browser reports no network, or the
+   * session request came back without anything resembling a reply. Anything on
+   * screen is therefore cached, and nothing can be written.
+   *
+   * Held here rather than read from `navigator.onLine` at each call site: that
+   * flag is true on a captive portal and true when a self-hosted server is
+   * simply down, so a form trusting it would offer to save into a void.
+   */
+  offline: boolean;
   /** When the restored data was written, so the UI can say how old it is. */
   savedAt: number | undefined;
   /** The restore has settled — the first paint can be the snapshot, not a spinner. */
@@ -21,6 +32,7 @@ type SnapshotState = {
 };
 
 const SnapshotContext = createContext<SnapshotState>({
+  offline: false,
   ready: true,
   restored: false,
   savedAt: undefined,
@@ -42,13 +54,19 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
   const session = authClient.useSession();
   const origin = getServerOrigin();
   const marker = useMemo(() => readSessionMarker(), []);
+  const online = useOnlineStatus();
   const userId = session.data?.user.id ?? marker?.id;
-  const [state, setState] = useState<SnapshotState>({
+  const offline = !online || isUnreachableError(session.error);
+  const [restore, setRestore] = useState<Omit<SnapshotState, "offline">>({
     // With nobody to restore for there is nothing to wait for.
     ready: !userId,
     restored: false,
     savedAt: undefined,
   });
+  const state = useMemo(
+    () => ({ ...restore, offline }),
+    [offline, restore],
+  );
 
   // Remember the account, so the next start can find its snapshot before the
   // server has answered — or without it answering at all.
@@ -75,7 +93,7 @@ export function SnapshotProvider({ children }: { children: ReactNode }) {
       // A restore that lands after the account changed would pour one user's
       // calendar into another's client.
       if (!active) return;
-      setState({
+      setRestore({
         ready: true,
         restored: result.restored,
         savedAt: result.savedAt,
