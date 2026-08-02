@@ -1,4 +1,9 @@
-import { endSeriesBefore, excludeOccurrence } from "@musubi/calendar";
+import {
+  endSeriesBefore,
+  excludeOccurrence,
+  seriesEditWrites,
+  type EditScope,
+} from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import { providerDisplayName } from "@musubi/types";
 import {
@@ -57,7 +62,7 @@ import {
 } from "../event-permissions";
 import type { Notify } from "../notice";
 import { EventEditorForm } from "./EventEditorForm";
-import { seriesEditWrites, type EditScope } from "../recurrence-edit";
+
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import styles from "./styles/event-details.module.css";
 

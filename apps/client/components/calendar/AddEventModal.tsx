@@ -51,7 +51,8 @@ type Props = {
   dockBottomInset?: number;
   onClose: () => void;
   onSave: (event: Event) => Promise<void>;
-  onEdit: (event: Event) => Promise<void>;
+  /** Resolving `false` means the save was called off — keep the composer open. */
+  onEdit: (event: Event) => Promise<boolean | void>;
   calendars: Calendar[];
   event?: Event;
 };
@@ -508,7 +509,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       }
 
       if (event?.id) {
-        await onEdit(eventConstruct);
+        // A recurring edit asks which occurrences it belongs to; backing out of
+        // that question must leave the form as it was, not close it empty.
+        if ((await onEdit(eventConstruct)) === false) return;
       } else {
         await onSave(eventConstruct);
       }

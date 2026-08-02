@@ -10,6 +10,7 @@ import type {
   SettingsPatch,
   User,
 } from "@musubi/types";
+import { seriesEditWrites, type EditScope } from "@musubi/calendar";
 import { addDays, addMonthPages } from "@musubi/calendar/layout";
 import type {
   Attendee,
@@ -37,7 +38,7 @@ import { getTimeGridDays, getTimeGridLabel } from "../time-grid-math";
 import type { EventFormValues } from "../event-form";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
-import { seriesEditWrites, type EditScope } from "../recurrence-edit";
+
 import { shortcutFor } from "../shortcuts";
 import { useSwipePeriod } from "../use-swipe-period";
 import {

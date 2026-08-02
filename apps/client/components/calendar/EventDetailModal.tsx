@@ -338,10 +338,10 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                     style={styles.modalActionBtn}
                     disabled={event ? false : true}
                     onPress={() => {
-                      // Recurring: edit the SERIES → prefill with the master's
-                      // anchor times, not the tapped occurrence's (saving those
-                      // would shift the whole series).
-                      onEdit(master ?? event!);
+                      // The tapped occurrence, with its own times: saving asks
+                      // which occurrences the edit belongs to, the same question
+                      // deleting one already asks.
+                      onEdit(event!);
                       handleClose();
                     }}
                   >

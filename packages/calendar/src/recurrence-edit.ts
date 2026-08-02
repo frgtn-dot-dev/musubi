@@ -1,17 +1,24 @@
-import type { Event } from "@musubi/types";
-import {
-  endSeriesBefore,
-  excludeOccurrence,
-  remainderRule,
-} from "@musubi/calendar";
+import { endSeriesBefore, excludeOccurrence, remainderRule } from "./recurrence";
 
 export type EditScope = "occurrence" | "following" | "series";
 
-export type SeriesEdit = {
+/**
+ * What the three scopes need from an event. Generic so each client keeps its own
+ * event type through the call — this package stays free of the type package and
+ * of any renderer.
+ */
+export type SeriesEditable = {
+  end: Date;
+  id: string;
+  recurrence?: string | null;
+  start: Date;
+};
+
+export type SeriesEdit<T> = {
   /** New events to add — a detached occurrence or the split-off series. */
-  creates: Event[];
+  creates: T[];
   /** Existing events to write, in order. Run these before the creates. */
-  updates: Event[];
+  updates: T[];
 };
 
 /**
@@ -24,17 +31,23 @@ export type SeriesEdit = {
  * Kept as data rather than as calls so the caller decides how to run and how to
  * undo them, and so each scope can be checked without a server.
  */
-export function seriesEditWrites({
+export function seriesEditWrites<T extends SeriesEditable>({
   edited,
   master,
+  newId = () => crypto.randomUUID(),
   occurrence,
   scope,
 }: {
-  edited: Event;
-  master: Event;
-  occurrence: Event;
+  edited: T;
+  master: T;
+  /**
+   * Id for an event a split creates. Defaults to `crypto.randomUUID`, which the
+   * browser has; React Native brings its own generator.
+   */
+  newId?: () => string;
+  occurrence: SeriesEditable;
   scope: EditScope;
-}): SeriesEdit {
+}): SeriesEdit<T> {
   if (!master.recurrence || scope === "series") {
     // The series takes the new content, but only *shifts* by what this
     // occurrence moved: setting the master to the occurrence's own dates would
@@ -60,10 +73,16 @@ export function seriesEditWrites({
     scope === "following" &&
     occurrence.start.getTime() <= master.start.getTime()
   ) {
-    return seriesEditWrites({ edited, master, occurrence, scope: "series" });
+    return seriesEditWrites({
+      edited,
+      master,
+      newId,
+      occurrence,
+      scope: "series",
+    });
   }
 
-  const detached = { ...edited, id: crypto.randomUUID() };
+  const detached = { ...edited, id: newId() };
 
   if (scope === "occurrence") {
     return {

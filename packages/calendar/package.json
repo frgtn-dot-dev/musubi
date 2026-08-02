@@ -7,7 +7,7 @@
     "./layout": "./src/layout/index.ts"
   },
   "scripts": {
-    "test": "tsx src/layout/layout.test.ts"
+    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence-edit.test.ts"
   },
   "private": true,
   "dependencies": {

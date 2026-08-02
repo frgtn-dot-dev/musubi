@@ -1,6 +1,7 @@
 import { Event } from "@musubi/types";
 import { AddEventModal } from "@/components/calendar/AddEventModal";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
+import { applySeriesEdit } from "@/lib/seriesEdit";
 import { useApi } from "@/services/api";
 import { liveEventDetail } from "@/lib/liveEvent";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
@@ -30,7 +31,17 @@ export function GlobalEventModals() {
         visible={composer.visible}
         onClose={composer.close}
         onSave={async (e) => { await addEvent(e, api); }}
-        onEdit={async (e) => { await updateEvent(e, api); }}
+        onEdit={async (edited) => {
+          // The composer was opened on one occurrence; which occurrences the
+          // edit belongs to is the composer's last question, not its first.
+          await applySeriesEdit({
+            addEvent: (event) => addEvent(event, api),
+            edited,
+            master: events.find((event) => event.id === edited.id),
+            occurrence: composer.prefilled ?? edited,
+            updateEvent: (event) => updateEvent(event, api),
+          });
+        }}
         calendars={calendars}
         event={composer.prefilled}
       />

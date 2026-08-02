@@ -1,4 +1,4 @@
-import type { EditScope } from "../recurrence-edit";
+import type { EditScope } from "@musubi/calendar";
 import type { ReactNode } from "react";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
