@@ -524,10 +524,25 @@ Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
 - Dialog se ptá **před** zápisem a v textu **říká nový čas**, protože kalendář za
   ním pořád ukazuje starý (nic se nezapsalo). Zavření dialogu nezapíše nic.
 
+**C3 — Rozsah i pro editaci formulářem: HOTOVO** (2026-08-02)
+
+- Editace jednoho výskytu přes formulář se ptá na rozsah stejně jako tah a
+  mazání. Předtím tiše přepsala celou sérii: přetáhneš výskyt → zeptá se,
+  přepíšeš mu název → změní všechny.
+- `seriesEditWrites` bere `edited` (událost, jak ji uživatel opustil) místo
+  `start`/`end`, takže jedna funkce unese změnu času i obsahu. `series` vezme
+  nový obsah, ale posune se jen o **delta** — nastavit masteru datum výskytu by
+  celou sérii přetáhlo na jedno datum.
+- Rozepsaná změna čeká ve stavu, dokud otázka nedostane odpověď; zavření otázky
+  nezapíše nic a formulář zůstane, jak byl.
+- Dialog říká nový čas **jen když se čas opravdu změnil**; jinak se ptá na
+  „změny“, ne na přesun.
+- Vrstvy: popovery jsou nad dialogy (většina dialogů nějaký popover obsahuje),
+  ale dialog vyvolaný **z** popoveru se musí povýšit — jinak se otázka schová za
+  vrstvu, která ji položila. `Dialog` má na to `elevated`.
+
 *Zbývá v C:* discard draftu stránky pořád `window.confirm` (Undo by muselo
-obnovit celý draft i edit mód); editace série přes formulář zapisuje celou sérii
-— tlačítko to říká („Edit series“), scope se tam ale hodí. Error copy podle čtyř
-otázek projít napříč.
+obnovit celý draft i edit mód). Error copy podle čtyř otázek projít napříč.
 
 ### Fáze D — Orientace a kontinuita — **HOTOVO** (2026-07-28)
 
