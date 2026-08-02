@@ -1043,6 +1043,11 @@ vzešlo a nedá se vyčíst z kódu:
   týdnů, „tenhle týden" jeden. To je vlastnost stránky, ne člověka.
 - Titulek v toolbaru je „Jul 20 – Oct 11" — krátké měsíce a rok jen když span
   přechází přes rok. Dlouhá varianta se ořízne o ellipsis, což stojí datum.
+- **Schované** (`hidden: true` v registry, 2026-08-02): view funguje a testy běží,
+  ale nenabízí se v přepínači ani v seznamu zkratek — zůstává jako koncept,
+  dostupný přes URL a přes Page config, dokud se nedoladí vzhled. Přesně na tohle
+  sloužilo pole `enabled`, které jsem při refaktoru vyhodil jako YAGNI; vrátilo se
+  o dvě hodiny později pod jiným jménem.
 - Zatím **není**: drag mezi týdny, kopírování modifikátorem, ruční nastavení
   řádků × sloupců (dnes jen auto), skrytí víkendů, barevná pravidla, search
   highlight a zakládání eventu klikem do bloku. Všechno jde přidat nad stejnou

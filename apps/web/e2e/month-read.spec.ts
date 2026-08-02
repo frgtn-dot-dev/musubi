@@ -5363,6 +5363,25 @@ function multiWeekPage(weeks: number) {
   };
 }
 
+test("keeps multi-week out of the switcher while it is still a concept", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // Reachable by URL and by Page config, but not offered: the view works and
+  // its tests run, it is simply not in front of people yet.
+  const switcher = page.getByRole("radiogroup", { name: "Calendar view" });
+  await expect(switcher.getByRole("radio", { name: "Month" })).toBeVisible();
+  await expect(switcher.getByRole("radio", { name: "Weeks" })).toHaveCount(0);
+
+  // The shortcut overlay lists the same set, so it must not advertise it either.
+  await page.keyboard.press("?");
+  const shortcuts = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(shortcuts).toContainText("Month");
+  await expect(shortcuts.getByText("Weeks")).toHaveCount(0);
+});
+
 test("lays weeks out as a matrix and pages a screen at a time", async ({
   page,
 }) => {

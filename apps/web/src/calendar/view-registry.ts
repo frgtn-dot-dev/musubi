@@ -40,6 +40,15 @@ export const MAX_MULTI_WEEK_WEEKS = 20;
 
 export type ViewDefinition = {
   /**
+   * Kept out of the view switcher and the shortcut list, but still reachable by
+   * URL and selectable in a Page config.
+   *
+   * For a view that exists and works but is not being offered yet — multi-week
+   * is a concept we want to keep exercising (its tests run, the registry
+   * contract covers it) without putting it in front of people mid-design.
+   */
+  hidden?: boolean;
+  /**
    * Agenda expands only the recurring events and keeps the rest as they are —
    * it is a forward-looking list, not a window. Every other view expands
    * everything inside its range.
@@ -116,6 +125,7 @@ export const calendarViews: ViewDefinition[] = [
   },
   {
     expandsRecurringOnly: false,
+    hidden: true,
     id: "multi-week",
     label: "Weeks",
     range: (anchor, { weeks = DEFAULT_MULTI_WEEK_WEEKS } = {}) => {
@@ -197,6 +207,9 @@ export type CalendarViewId =
 export function isCalendarView(value: string): value is CalendarViewId {
   return calendarViews.some((view) => view.id === value);
 }
+
+/** The views a person can pick. Hidden ones stay reachable by URL. */
+export const offeredViews = () => calendarViews.filter((view) => !view.hidden);
 
 /** The definition behind a view id. Month is the fallback, as everywhere else. */
 export function viewDefinition(id: string): ViewDefinition {

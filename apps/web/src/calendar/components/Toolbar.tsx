@@ -11,7 +11,7 @@ import { Button, IconButton } from "~/ui/Button";
 import { Segmented } from "~/ui/Segmented";
 import { Select } from "~/ui/Select";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
-import { calendarViews, type CalendarViewId } from "../view-registry";
+import { offeredViews, type CalendarViewId } from "../view-registry";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
@@ -112,7 +112,7 @@ export function Toolbar({
           <Select
             className={styles.viewSelect}
             label="Calendar view"
-            options={calendarViews.map((view) => ({
+            options={offeredViews().map((view) => ({
               label: view.label,
               value: view.id as CalendarViewId,
             }))}
@@ -124,7 +124,7 @@ export function Toolbar({
           <Segmented<CalendarViewId>
             className={styles.viewSwitcher}
             label="Calendar view"
-            options={calendarViews.map((view) => ({
+            options={offeredViews().map((view) => ({
               label: view.label,
               value: view.id as CalendarViewId,
             }))}

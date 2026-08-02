@@ -1,4 +1,4 @@
-import { calendarViews, type CalendarViewId } from "./view-registry";
+import { offeredViews, type CalendarViewId } from "./view-registry";
 
 export type ShortcutCommand =
   | { kind: "create" }
@@ -82,7 +82,7 @@ export const SHORTCUT_GROUPS: Array<{
     title: "Navigate",
   },
   {
-    items: calendarViews.map((view) => ({
+    items: offeredViews().map((view) => ({
       action: view.label,
       keys: view.id.slice(0, 1).toLocaleUpperCase(),
     })),
