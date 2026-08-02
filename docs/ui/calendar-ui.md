@@ -541,8 +541,22 @@ Tím je fáze B hotová. Zbývá jen scope pro opakované eventy (patří do C).
   ale dialog vyvolaný **z** popoveru se musí povýšit — jinak se otázka schová za
   vrstvu, která ji položila. `Dialog` má na to `elevated`.
 
-*Zbývá v C:* discard draftu stránky pořád `window.confirm` (Undo by muselo
-obnovit celý draft i edit mód). Error copy podle čtyř otázek projít napříč.
+**C4 — Error copy podle čtyř otázek: HOTOVO** (2026-08-02)
+
+Spec žádá po chybě čtyři odpovědi: *co selhalo · proč, když to víme · co s tím ·
+jestli se stav vrátil*. Poslední chyběla skoro všude — hláška končila u „could
+not be saved" a uživatel nevěděl, jestli jeho změna platí, nebo ne.
+
+- Každá hláška teď říká, co zbylo: „…and is still applied", „The pages went back
+  to the order they were in", „Nothing was added", „It went back to its previous
+  value". Text se ověřoval **proti kódu** — u reorderu a settings se stav
+  opravdu vrací, u mazání stránky opravdu ne.
+- Settings ukazovaly **strojový kód ze serveru** („server") místo věty; raw
+  `error.message` už uživatele nepotká, předává se jen `Request <id>`.
+- `window.confirm` v discardu draftu už dávno není (nahrazeno
+  `ConfirmationDialog`) — ta poznámka tu zůstala zastaralá.
+
+Tím je fáze C uzavřená.
 
 ### Fáze D — Orientace a kontinuita — **HOTOVO** (2026-07-28)
 

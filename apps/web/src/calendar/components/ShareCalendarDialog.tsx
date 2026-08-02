@@ -402,7 +402,7 @@ function TransferOwnershipDialog({
     const transferred = await run(async () => {
       await setOwner({ role: "owner", userId: member.id });
       return true;
-    }, "Ownership could not be transferred.");
+    }, "Ownership could not be transferred. You are still the owner — try again.");
 
     if (transferred) onTransferred();
   }

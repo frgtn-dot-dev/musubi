@@ -211,7 +211,7 @@ export function ConnectionsDialog({
         ? await getFederatedInvitePreview(parsed.server, parsed.token)
         : await getInvitePreview(parsed.token);
       setInvite({ parsed, preview });
-    }, "That invite could not be opened. It may have expired.");
+    }, "That invite could not be opened — it may have expired. Nothing was joined; ask for a fresh link.");
   }
 
   async function acceptInvite() {

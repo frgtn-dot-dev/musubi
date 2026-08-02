@@ -4645,3 +4645,33 @@ test("asks the scope question above the layer that raised it", async ({
     page.getByRole("dialog", { name: "Edit series" }),
   ).toBeVisible();
 });
+
+test("says what a failed write left behind", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/users/me/settings", (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({
+          body: JSON.stringify({ error: "server", requestId: "req-1" }),
+          contentType: "application/json",
+          status: 500,
+        })
+      : route.fallback(),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("radio", { name: "12 hour" }).click();
+
+  // An error has to answer what happened to the thing the user just touched —
+  // "could not be saved" alone leaves them guessing whether it stuck.
+  await expect(settingsDialog.getByRole("alert")).toContainText(
+    "could not be saved",
+  );
+  await expect(settingsDialog.getByRole("alert")).toContainText(
+    "went back to its previous value",
+  );
+  await expect(
+    settingsDialog.getByRole("radio", { name: "24 hour" }),
+  ).toHaveAttribute("aria-checked", "true");
+});

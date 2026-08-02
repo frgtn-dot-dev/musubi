@@ -92,6 +92,16 @@ function openProblemReport() {
   )}&body=${encodeURIComponent(body)}`;
 }
 
+/**
+ * Our sentence, not the server's word for it. A failed write returns a machine
+ * code ("server", "conflict"); showing that answers none of the four questions
+ * an error has to. The request id is the part worth passing on.
+ */
+function withRequestId(message: string, error: unknown) {
+  const requestId = error instanceof ApiError ? error.requestId : undefined;
+  return requestId ? `${message} (Request ${requestId})` : message;
+}
+
 export function SettingsDialog({
   onAdopt,
   onLoad,
@@ -197,9 +207,10 @@ export function SettingsDialog({
           setSettings(base);
           if (patch.theme) applyTheme(base.value.theme);
           setError(
-            refreshError instanceof Error
-              ? refreshError.message
-              : "Could not refresh conflicting settings.",
+            withRequestId(
+              "The newer settings could not be fetched. Your change went back to its previous value — try again.",
+              refreshError,
+            ),
           );
           return;
         }
@@ -208,9 +219,10 @@ export function SettingsDialog({
       setSettings(base);
       if (patch.theme) applyTheme(base.value.theme);
       setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "This setting could not be saved.",
+        withRequestId(
+          "This setting could not be saved. It went back to its previous value — try again.",
+          saveError,
+        ),
       );
     } finally {
       setSaving(false);

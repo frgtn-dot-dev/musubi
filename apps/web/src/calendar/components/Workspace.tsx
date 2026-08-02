@@ -288,7 +288,12 @@ export function Workspace({
       await undo?.();
       notify("Change undone.");
     } catch {
-      notify("That change could not be undone.", { tone: "error" });
+      notify(
+        // The undo is what failed, so the change it was reversing is still in
+        // place — saying only "could not be undone" leaves that ambiguous.
+        "That change could not be undone and is still applied. Try again.",
+        { tone: "error" },
+      );
     }
   }
 
@@ -715,7 +720,10 @@ export function Workspace({
         onReorderPages={(pageIds) =>
           // Rethrown so the sidebar knows to stop showing the order it asked for.
           onReorderPages(pageIds).catch((error: unknown) => {
-            notify("That order could not be saved.", { tone: "error" });
+            notify(
+              "That order could not be saved. The pages went back to the order they were in.",
+              { tone: "error" },
+            );
             throw error;
           })
         }

@@ -360,7 +360,7 @@ function DeleteAccountDialog({
     const deleted = await run(async () => {
       await deleteAccount();
       return true;
-    }, "Your account could not be deleted.");
+    }, "Your account could not be deleted. It is still active — try again.");
     if (deleted) onDeleted();
   }
 

@@ -167,7 +167,7 @@ export function PageSettingsDialog({
       onNotice("Page saved.");
       onOpenChange(false);
     } catch {
-      setError("This page could not be saved.");
+      setError("This page could not be saved. Your changes are still here — try again.");
     } finally {
       setBusy(false);
     }
@@ -185,7 +185,7 @@ export function PageSettingsDialog({
       onOpenChange(false);
       onOpenPage(created.id);
     } catch {
-      setError("The new page could not be created.");
+      setError("The new page could not be created. Nothing was added — try again.");
     } finally {
       setBusy(false);
     }
@@ -203,7 +203,7 @@ export function PageSettingsDialog({
       setConfirmation(undefined);
       onOpenChange(false);
     } catch {
-      setDeleteError("This page could not be deleted.");
+      setDeleteError("This page could not be deleted. It is still here — try again.");
       setBusy(false);
     }
   }
@@ -218,7 +218,7 @@ export function PageSettingsDialog({
       setIsDefault(true);
       onNotice(`“${page.name}” is now the default Page.`);
     } catch {
-      setError("The default Page could not be changed.");
+      setError("The default page could not be changed. It is still the one it was — try again.");
     } finally {
       setSettingDefault(false);
       setBusy(false);
@@ -584,7 +584,7 @@ export function NewPageDialog({
       await onCreate({ icon, name: trimmedName });
       onOpenChange(false);
     } catch {
-      setError("The new page could not be created.");
+      setError("The new page could not be created. Nothing was added — try again.");
       setBusy(false);
     }
   }
