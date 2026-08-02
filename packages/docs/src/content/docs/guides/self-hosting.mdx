@@ -240,6 +240,12 @@ already runs Traefik, so the split above lives in Traefik labels on the `web` an
 (hostname only, no scheme) plus the usual secrets in the Environment tab, and
 deploy.
 
+For a second, disposable instance off a branch there is
+`docker-compose.dokploy.dev.yml`: the same stack, but built from the checkout
+instead of pulling a published tag, with its own router names, database volume
+and secrets so a bad branch cannot reach production data. It needs its own OAuth
+redirect URIs registered for that hostname.
+
 Two things to know:
 
 - **Do not also add a Domain in the Dokploy UI** for `web` or `api`. The labels

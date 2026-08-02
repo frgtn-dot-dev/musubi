@@ -9,6 +9,7 @@ FROM base AS build
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
 COPY apps/web apps/web
 COPY packages/calendar packages/calendar
+COPY packages/design-system packages/design-system
 COPY packages/types packages/types
 RUN pnpm --filter @musubi/web... install --frozen-lockfile
 RUN pnpm --filter @musubi/web build
