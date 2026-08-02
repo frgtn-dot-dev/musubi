@@ -4919,3 +4919,81 @@ for (const { label, width } of [
     await expectNoAccessibilityViolations(page);
   });
 }
+
+test("explains an unconfirmed address instead of blaming the passphrase", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  // What a server with REQUIRE_EMAIL_VERIFICATION answers: a 403 carrying a code,
+  // not a message the client has to pattern-match.
+  await page.route("**/api/auth/sign-in/email", (route) =>
+    route.fulfill({
+      body: JSON.stringify({
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Email not verified",
+      }),
+      contentType: "application/json",
+      status: 403,
+    }),
+  );
+  let resends = 0;
+  await page.route("**/api/auth/send-verification-email", (route) => {
+    resends += 1;
+    return respond(route, { status: true });
+  });
+
+  await page.goto("/login");
+  // Until React has taken the form over, the browser submits it natively and
+  // reloads the page — the same trap the narrow-screen sign-in test waits out.
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("textbox", { name: "Email" }).fill("unconfirmed@example.com");
+  await page.getByLabel("Passphrase").fill("supersecret123");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // The passphrase was right. Saying "check your details" here sends someone to
+  // reset a password that works.
+  await expect(
+    page.getByRole("heading", { name: "Check your email." }),
+  ).toBeVisible();
+  await expect(page.getByText("unconfirmed@example.com")).toBeVisible();
+  // And the form is gone: nothing typed here can move this forward.
+  await expect(page.getByLabel("Passphrase")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Send the link again" }).click();
+  await expect(
+    page.getByRole("button", { name: "Link sent again" }),
+  ).toBeDisabled();
+  expect(resends).toBe(1);
+
+  await expectNoAccessibilityViolations(page);
+});
+
+test("says a new account is waiting on its confirmation link", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  // Sign-up succeeds but creates no session — `token: null` is how Better Auth
+  // says "verified addresses only".
+  await page.route("**/api/auth/sign-up/email", (route) =>
+    respond(route, {
+      token: null,
+      user: { email: "new@example.com", emailVerified: false, id: "u1", name: "New Person" },
+    }),
+  );
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Create one" }).click();
+  await page.getByLabel("Name").fill("New Person");
+  await page.getByLabel("Email").fill("new@example.com");
+  await page.getByLabel("Passphrase", { exact: true }).fill("supersecret123");
+  await page.getByLabel("Confirm passphrase").fill("supersecret123");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  // Redirecting instead would bounce off the session gate straight back to the
+  // login form, which reads as "it did not work".
+  await expect(
+    page.getByRole("heading", { name: "Check your email." }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
+});

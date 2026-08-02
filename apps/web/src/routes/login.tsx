@@ -30,6 +30,11 @@ function errorMessage(error: { message?: string } | null | undefined) {
   return error?.message ?? "We could not sign you in. Check your details and try again.";
 }
 
+// The server refuses a sign-in until the address is confirmed, when the operator
+// has asked for that. Better Auth answers with a code rather than only prose, so
+// this one case can be explained instead of read as a wrong passphrase.
+const EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED";
+
 function LoginRoute() {
   const session = authClient.useSession();
   const { redirect } = Route.useSearch();
@@ -40,6 +45,10 @@ function LoginRoute() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // The address a confirmation link went to, which is also the sign that the
+  // form has nothing left to do: there is no password to retry, only an inbox.
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState("");
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     if (session.data) {
@@ -84,7 +93,23 @@ function LoginRoute() {
             });
 
       if (result.error) {
+        if (
+          (result.error as { code?: string }).code === EMAIL_NOT_VERIFIED
+        ) {
+          // The server sends a fresh link on every refused sign-in, so this is a
+          // statement of fact rather than an instruction to do something.
+          setAwaitingConfirmation(normalizedEmail);
+          return;
+        }
         setMessage(errorMessage(result.error));
+        return;
+      }
+
+      // Signing up on a server that requires confirmation creates the account but
+      // no session — `token` is null. Redirecting would bounce straight back to
+      // this page with nothing said, which reads as a failure rather than a step.
+      if (!result.data?.token) {
+        setAwaitingConfirmation(normalizedEmail);
         return;
       }
 
@@ -96,9 +121,24 @@ function LoginRoute() {
     }
   }
 
+  async function resendConfirmation() {
+    setResent(true);
+    // Nothing branches on the outcome on purpose: whether the address exists is
+    // not this page's to reveal, and the person is told to check the inbox either
+    // way. A failure to send is the server's to log.
+    await authClient
+      .sendVerificationEmail({
+        callbackURL: "/",
+        email: awaitingConfirmation,
+      })
+      .catch(() => undefined);
+  }
+
   function switchMode() {
     setMode((current) => (current === "sign-in" ? "sign-up" : "sign-in"));
     setMessage("");
+    setAwaitingConfirmation("");
+    setResent(false);
     setPassword("");
     setConfirmPassword("");
   }
@@ -112,6 +152,36 @@ function LoginRoute() {
         eyebrow="Signed in"
         title="Opening your calendar…"
       />
+    );
+  }
+
+  // Nothing on the form can move this forward — the next step is in an inbox —
+  // so the form goes away rather than inviting a retry that cannot work.
+  if (awaitingConfirmation) {
+    return (
+      <AuthShell
+        eyebrow="One more step"
+        footer={
+          <AuthSwitch action="Back to sign in" onAction={switchMode}>
+            Confirmed it already?
+          </AuthSwitch>
+        }
+        introduction={`This server asks you to confirm your address before signing in. We sent a link to ${awaitingConfirmation} — it expires in an hour.`}
+        title="Check your email."
+        utility={<ThemeToggle />}
+      >
+        <AuthSubmit
+          disabled={resent}
+          onClick={() => void resendConfirmation()}
+          type="button"
+          variant="secondary"
+        >
+          {resent ? "Link sent again" : "Send the link again"}
+        </AuthSubmit>
+        <AuthMessage>
+          {resent ? "Give it a minute, then look in spam." : ""}
+        </AuthMessage>
+      </AuthShell>
     );
   }
 
