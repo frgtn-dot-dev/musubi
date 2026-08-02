@@ -75,7 +75,8 @@ Edit the `.env` you just downloaded and set your production values. Key variable
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Microsoft Entra ID app credentials — needed for Outlook calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/microsoft` as a Web redirect URI on the app registration; `MICROSOFT_TENANT_ID` defaults to `common` |
 | `APPLE_CLIENT_ID` | Enables native Sign in with Apple (iOS) — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |
 | `APPLE_TEAM_ID` | Apple Developer Team ID — serves the apple-app-site-association file so iOS invite links open the app directly (universal links). Optional; unset → the Safari hand-off still works |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset and account-deletion confirmation emails |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails |
+| `REQUIRE_EMAIL_VERIFICATION` | `true` refuses sign-in until the address is confirmed. Needs SMTP; the API refuses to boot without it. See [Requiring confirmed email addresses](#requiring-confirmed-email-addresses) |
 | `CALDAV_ENC_KEY` | Encrypts stored CalDAV passwords and federated Musubi member tokens — required before anyone connects a CalDAV account or a federated calendar |
 | `PUBLIC_HOST` | The hostname the gateway serves (e.g. `musubi.example.com` for automatic HTTPS, or `:80` for plain HTTP behind another proxy). Also the hostname the Dokploy routers match. Not used by the API-only file |
 | `FEDERATION_ALLOW_PRIVATE_HOSTS` | Allows federating with a Musubi server on a private address. Off in production: the API fetches other servers on a user's behalf, so private targets are refused to prevent internal network probing. Set `true` only if you genuinely federate servers on a LAN or the same box |
@@ -179,6 +180,34 @@ Password reset and account-deletion confirmation are fully self-contained: your 
 Both of those flows send an email, so **without `SMTP_*` configured they don't work**: email/password users can't reset a forgotten password, and in-app account deletion can't be confirmed. The client adapts — the API reports whether it can send email (`GET /api/v1/server` → `email`), so the app hides "Forgotten password?" and, for deletion, tells the user to contact the administrator. As the operator you can still reset a password or delete an account directly in Postgres. If you offer email/password sign-in to real users, configure SMTP. (Social-login users are unaffected by the reset gap — they have no password.)
 </Aside>
 
+## Requiring confirmed email addresses
+
+Off by default, because a private instance among people who know each other gains
+nothing from it, and a server with no SMTP would create accounts that can never
+sign in. Turn it on for anything with open registration — an unconfirmed address
+is a typo at best and someone else's inbox at worst:
+
+```sh
+REQUIRE_EMAIL_VERIFICATION=true
+```
+
+Sign-up then sends a confirmation link, and the link both verifies the address and
+signs the person in, landing them on the calendar (`/email-verified` on an
+API-only server). Links expire after an hour; a refused sign-in sends a fresh one,
+so nobody has to find a way to ask.
+
+<Aside type="caution" title="It applies to accounts that already exist">
+Every account created before you turned this on has an unconfirmed address. Their
+next sign-in is refused and mails them a link — no data is lost and no action is
+needed from you, but it will surprise them. Say so before you flip it.
+</Aside>
+
+<Aside type="note">
+The API refuses to start when this is `true` and `SMTP_HOST` is empty. That pair
+cannot serve anyone — the account is created, the confirmation never arrives, and
+nobody can sign in — so it fails at boot rather than at the first sign-up.
+</Aside>
+
 ## How one origin is split
 
 The default file runs four services: the API and database, the web client, and a
@@ -193,7 +222,7 @@ Wherever the proxy lives, it has to make the same split:
 |---|---|---|
 | `/api/stream` | API, unbuffered | Server-sent events. Caddy needs `flush_interval -1`, or it buffers the response and live updates arrive in clumps, or never |
 | `/api/*` | API | Better Auth, the REST surface, the federation gateway |
-| `/invite/*`, `/reset-password`, `/delete-account`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email or another server. They predate the web client and are shared with mobile, so they stay on the API |
+| `/invite/*`, `/reset-password`, `/delete-account`, `/email-verified`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email or another server. They predate the web client and are shared with mobile, so they stay on the API |
 | everything else | Web client | The browser app |
 
 <Aside type="note">

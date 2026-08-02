@@ -20,7 +20,7 @@ import {
   handlerSaveSettings,
 } from "./handlers/settings";
 import { handlerAppleAppSiteAssociation, handlerServer, handlerServerStatus } from "./handlers/server";
-import { handlerResetPasswordPage, handlerDeleteAccountPage } from "./handlers/pages";
+import { handlerResetPasswordPage, handlerDeleteAccountPage, handlerEmailVerifiedPage } from "./handlers/pages";
 import {
   handlerCreatePage,
   handlerDeletePage,
@@ -111,6 +111,7 @@ app.get("/invite/:token", handlerInvitePage(config.api.url));
 // in the query string is the credential, read client-side).
 app.get("/reset-password", handlerResetPasswordPage);
 app.get("/delete-account", handlerDeleteAccountPage);
+app.get("/email-verified", handlerEmailVerifiedPage);
 // iOS universal links — must live at the domain root, public, no auth.
 app.get("/.well-known/apple-app-site-association", handlerAppleAppSiteAssociation);
 // The user's connections to other Musubi servers (member tokens, encrypted at

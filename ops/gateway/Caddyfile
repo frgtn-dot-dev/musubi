@@ -31,8 +31,8 @@
 	}
 
 	# HTML hand-off pages the API serves for links that arrive from outside the
-	# app: cross-server invites, the emailed password reset and account deletion
-	# confirmations, and the iOS universal-link association. These deliberately
+	# app: cross-server invites, the emailed password reset, account deletion and
+	# email confirmation landings, and the iOS universal-link association. These deliberately
 	# stay on the API (they predate the web client and are shared with mobile),
 	# so the gateway must not send them to the web app.
 	handle /invite/* {
@@ -42,6 +42,9 @@
 		reverse_proxy {$API_UPSTREAM:api:7531}
 	}
 	handle /delete-account {
+		reverse_proxy {$API_UPSTREAM:api:7531}
+	}
+	handle /email-verified {
 		reverse_proxy {$API_UPSTREAM:api:7531}
 	}
 	handle /.well-known/apple-app-site-association {

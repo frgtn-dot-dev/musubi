@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 
 export { getPasswordResetHtml } from "./password_reset";
 export { getDeleteAccountHtml } from "./delete_account";
+export { getVerifyEmailHtml } from "./verify_email";
 
 export async function sendEmail(to: string, subject: string, html: string) {
   try {

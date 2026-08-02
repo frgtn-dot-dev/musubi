@@ -71,6 +71,12 @@ type SocialConfig = {
 
 type SecurityConfig = {
   caldavEncKey: string,
+  // Refuse sign-in until the address is confirmed. Off by default: a private
+  // instance among people who know each other gains nothing from it, and a
+  // server with no SMTP would lock every new account out. On for anything with
+  // open registration, where an unconfirmed address is a stranger's typo at
+  // best and someone else's inbox at worst.
+  requireEmailVerification: boolean,
   // Federation gateway SSRF guard: private/loopback targets are refused by
   // default. Self-hosters federating two servers on a LAN (or one box) must
   // opt in explicitly. Auto-enabled outside prod for the two-server dev setup.
@@ -122,8 +128,22 @@ const socialConfig: SocialConfig = {
   microsoftTenantID: process.env.MICROSOFT_TENANT_ID ?? "common",
 }
 
+function parseRequireEmailVerification() {
+  const required = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
+  // Fail at boot rather than at the first sign-up. This combination cannot serve
+  // anyone: the account is created, the confirmation never arrives, and the
+  // person can never sign in — a state no error message at the door explains.
+  if (required && !smtpConfig.host) {
+    throw new Error(
+      "REQUIRE_EMAIL_VERIFICATION=true needs SMTP_HOST — without mail nobody could ever confirm an address.",
+    );
+  }
+  return required;
+}
+
 const securityConfig: SecurityConfig = {
   caldavEncKey: process.env.CALDAV_ENC_KEY ?? "", // validated at use in the crypto helper
+  requireEmailVerification: parseRequireEmailVerification(),
   federationAllowPrivateHosts:
     process.env.FEDERATION_ALLOW_PRIVATE_HOSTS === "true"
     || envOrThrow("ENVIRONMENT") !== "prod",

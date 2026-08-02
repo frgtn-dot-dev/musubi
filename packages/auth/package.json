@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx src/lib/auth.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",
@@ -19,5 +19,6 @@
     "@musubi/emails": "workspace:*",
     "@musubi/types": "workspace:*",
     "better-auth": "^1.6.23"
-  }
+  },
+  "devDependencies": {}
 }

@@ -5,7 +5,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
 import { defaultPageConfig } from '@musubi/types';
-import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml } from '@musubi/emails';
+import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml } from '@musubi/emails';
+import { withVerifiedLanding } from './verified_landing';
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -28,11 +29,34 @@ export const auth = betterAuth({
   ],
   emailAndPassword: {
     enabled: true,
+    // Off unless the operator asks for it (REQUIRE_EMAIL_VERIFICATION), because
+    // a server with no SMTP would create accounts nobody could ever sign into.
+    // The config layer refuses that combination at boot.
+    requireEmailVerification: config.security.requireEmailVerification,
     sendResetPassword: async ({ user, token }, _) => {
       // Served by this API on its own origin (apps/api handlers/pages.ts), so
       // self-hosters don't depend on the central website.
       const customUrl = `${config.api.url}/reset-password?token=${token}`
       await sendEmail(user.email, "Reset your password", getPasswordResetHtml(user.name, customUrl, "1 hour"));
+    },
+  },
+  emailVerification: {
+    // Send on both events, so nobody is stuck: on sign-up because that is when
+    // the address is claimed, and on a refused sign-in because that is when the
+    // person notices — including every account that predates the flag being
+    // turned on, whose `emailVerified` is false through no fault of its own.
+    sendOnSignUp: config.security.requireEmailVerification,
+    sendOnSignIn: config.security.requireEmailVerification,
+    // The click both verifies and signs in. Sending someone to a login form to
+    // retype what they just proved is a step that only loses people.
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60, // 1 hour, same as password reset and account deletion
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendEmail(
+        user.email,
+        "Confirm your email",
+        getVerifyEmailHtml(user.name, withVerifiedLanding(url), "1 hour"),
+      );
     },
   },
   socialProviders: {

@@ -80,7 +80,8 @@ services:
       # The API owns /api/* — Better Auth on /api/auth/*, REST on /api/v1/*, the
       # federation gateway underneath — plus four HTML pages for links that
       # arrive from outside the app (cross-server invites, the emailed password
-      # reset and account-deletion confirmations, the iOS universal-link file).
+      # reset, account-deletion and email-confirmation landings, the iOS
+      # universal-link file).
       # Those predate the web client and are shared with mobile, so they stay on
       # the API and must not fall through to the catch-all above.
       #
@@ -92,6 +93,7 @@ services:
         || PathPrefix(`/invite`)
         || Path(`/reset-password`)
         || Path(`/delete-account`)
+        || Path(`/email-verified`)
         || Path(`/.well-known/apple-app-site-association`)
         )
       traefik.http.routers.musubi-api.entrypoints: websecure

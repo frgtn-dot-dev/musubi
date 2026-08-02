@@ -34,6 +34,10 @@ export function handlerServer(_: Request, res: Response) {
     // Whether this server can send email. Password reset and in-app account
     // deletion both need it, so the client hides/adapts those when it's off.
     email: config.smtp.host !== "",
+    // Whether a new account has to confirm its address before it can sign in.
+    // The client cannot infer this from a refused sign-in — "wrong password" and
+    // "not confirmed yet" look the same from outside — so it is said here.
+    emailVerificationRequired: config.security.requireEmailVerification,
   });
 }
 
