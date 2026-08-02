@@ -6,6 +6,8 @@ import { ApiError, ApiResponseError } from "~/api/http";
 import { useOnlineStatus } from "~/api/online-status";
 import { useServerStream } from "~/api/realtime";
 import { authClient } from "~/auth/auth-client";
+import { useSessionUser } from "~/auth/use-session-user";
+import { useSnapshot } from "~/offline/SnapshotProvider";
 import { toDateKey } from "~/calendar/date-key";
 import { Workspace } from "~/calendar/components/Workspace";
 import { useEventMutations } from "~/calendar/event-mutations";
@@ -37,34 +39,29 @@ function WorkspaceRoute() {
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const online = useOnlineStatus();
-  const session = authClient.useSession();
-  useServerStream(session.data?.user.id ?? "anonymous");
+  // Offline the session cannot be confirmed, so the last known account stands in
+  // — otherwise every query key would say "anonymous" and the snapshot for the
+  // real user would sit there unread.
+  const { user } = useSessionUser();
+  const userId = user?.id ?? "anonymous";
+  const snapshot = useSnapshot();
+  useServerStream(userId);
   const activeView: CalendarViewId =
     isCalendarView(view) ? view : "month";
-  const workspace = useWorkspaceQueries(
-    date,
-    session.data?.user.id ?? "anonymous",
-    activeView,
-  );
-  const eventMutations = useEventMutations(
-    session.data?.user.id ?? "anonymous",
-  );
-  const calendarTransfers = useCalendarTransfers(
-    session.data?.user.id ?? "anonymous",
-  );
-  const settingsMutations = useSettingsMutations(
-    session.data?.user.id ?? "anonymous",
-  );
-  const pageMutations = usePageMutations(
-    session.data?.user.id ?? "anonymous",
-  );
+  const workspace = useWorkspaceQueries(date, userId, activeView);
+  const eventMutations = useEventMutations(userId);
+  const calendarTransfers = useCalendarTransfers(userId);
+  const settingsMutations = useSettingsMutations(userId);
+  const pageMutations = usePageMutations(userId);
   const queries = [
     workspace.calendars,
     workspace.events,
     workspace.pages,
     workspace.settings,
   ];
-  const pending = queries.some((query) => query.isPending);
+  // Waiting on the restore counts as loading: painting an empty calendar first
+  // and filling it a frame later is worse than a moment of the loading state.
+  const pending = queries.some((query) => query.isPending) || !snapshot.ready;
   const errorQuery = queries.find((query) => query.error);
   const error = errorQuery?.error;
 
@@ -181,7 +178,7 @@ function WorkspaceRoute() {
       onPatchSettings={settingsMutations.patchSettings}
       onSetAttendance={eventMutations.setAttendance}
       settings={workspace.settings.data}
-      user={session.data!.user}
+      user={user!}
       onDateChange={(nextDate) =>
         void navigate({
           search: { date: nextDate },

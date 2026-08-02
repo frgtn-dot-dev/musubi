@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
-import { authClient } from "~/auth/auth-client";
+import { useSessionUser } from "~/auth/use-session-user";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
 import { EventEditorPage } from "~/calendar/components/EventEditorPage";
 import { toDateKey } from "~/calendar/date-key";
@@ -30,8 +30,10 @@ function NewEventRoute() {
   const { pageId } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const session = authClient.useSession();
-  const userId = session.data?.user.id ?? "anonymous";
+  // Same account resolution as the workspace: a snapshot read offline has to
+  // look under the right namespace.
+  const { user } = useSessionUser();
+  const userId = user?.id ?? "anonymous";
   const date = search.date ?? toDateKey(new Date());
   const workspace = useWorkspaceQueries(date, userId, search.view);
   const eventMutations = useEventMutations(userId);
@@ -81,7 +83,7 @@ function NewEventRoute() {
     await eventMutations.createEvent(
       createEventFromForm(
         values,
-        { email: session.data?.user.email ?? "", userId },
+        { email: user?.email ?? "", userId },
         calendar?.color ?? DEFAULT_CALENDAR_COLOR,
       ),
     );
