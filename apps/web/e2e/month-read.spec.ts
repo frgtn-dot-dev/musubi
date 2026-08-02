@@ -4454,3 +4454,62 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
 
+
+
+test("parks a stuck agenda day below the year band, not under it", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/agenda?date=2026-07-26`);
+  await expect(page.locator("[data-agenda-date]").first()).toBeVisible();
+
+  const scroller = page.locator('[class*="calendarArea"]');
+  await scroller.evaluate((element) => {
+    element.scrollTop = 90;
+  });
+
+  // Both are sticky and the year sits above, so a shared stop would slide the
+  // day label out of sight underneath it.
+  const geometry = await page.evaluate(() => {
+    const area = document
+      .querySelector('[class*="calendarArea"]')!
+      .getBoundingClientRect();
+    const year = document
+      .querySelector('[class*="agendaYear"]')!
+      .getBoundingClientRect();
+    const resting = [...document.querySelectorAll("[data-agenda-date]")]
+      .map((date) => date.getBoundingClientRect().top - area.top)
+      .filter((top) => top >= 0 && top < 60);
+
+    return { resting, yearBottom: year.bottom - area.top };
+  });
+
+  expect(geometry.resting.length).toBeGreaterThan(0);
+  for (const top of geometry.resting) {
+    expect(top).toBeGreaterThanOrEqual(geometry.yearBottom - 1);
+  }
+});
+
+test("keeps a page's settings button on its row, not under it", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const row = page.getByRole("button", { name: "My calendar", exact: true });
+  const settings = page.getByRole("button", { name: "Edit My calendar" });
+  await expect(row).toBeVisible();
+  const rowBox = (await row.boundingBox())!;
+  const settingsBox = (await settings.boundingBox())!;
+
+  // Overlaid on the row's right edge and centred on it — the row stays one line.
+  expect(settingsBox.x).toBeGreaterThan(rowBox.x + rowBox.width / 2);
+  expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(
+    rowBox.x + rowBox.width + 1,
+  );
+  expect(
+    Math.abs(
+      settingsBox.y + settingsBox.height / 2 - (rowBox.y + rowBox.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
+});

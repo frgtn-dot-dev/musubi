@@ -222,7 +222,10 @@
   }
 }
 
-.pageRowEdit {
+/* Scoped to the row: this is an IconButton, and the primitive's own
+   single-class rules would otherwise win on source order and drop the dots out
+   of the corner into the row's flow — the same guard the toolbar needs. */
+.pageRow .pageRowEdit {
   position: absolute;
   top: 50%;
   right: 4px;
@@ -578,6 +581,9 @@
      page inset. Media queries change the numbers, nothing else. */
   --agenda-date-column: 200px;
   --agenda-inline: 28px;
+  /* The year band's own height, including its rule. Both the band and whatever
+     stops beneath it read this one number, so they cannot drift apart. */
+  --agenda-year-height: 32px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -588,7 +594,7 @@
   z-index: 3;
   top: 0;
   display: flex;
-  min-height: 31px;
+  min-height: calc(var(--agenda-year-height) - 1px);
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--agenda-inline);
@@ -660,9 +666,13 @@
   position: sticky;
   /* Sticks inside its own day's grid area, so the date stays readable while that
      day's events scroll past, and the next day pushes it out. Opaque because a
-     month band or a gap band scrolls through the same strip. */
+     month band or a gap band scrolls through the same strip.
+
+     It comes to rest *below* the year band rather than at the viewport edge:
+     the year is sticky too and sits above it, so a shared stop would slide the
+     day label underneath it and out of sight. */
   z-index: 2;
-  top: 0;
+  top: var(--agenda-year-height);
   align-self: start;
   /* Sits on the first event's text, not above it: the row is 43px with its text
      centred, so the label's 10px cap lands at 16px. */
