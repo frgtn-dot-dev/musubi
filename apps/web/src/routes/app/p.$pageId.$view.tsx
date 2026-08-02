@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useServerStream } from "~/api/realtime";
+import { useProviderLinkReturn } from "~/calendar/connections";
 import { useSessionUser } from "~/auth/use-session-user";
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { signOutAndReset } from "~/offline/sign-out";
@@ -44,6 +45,9 @@ function WorkspaceRoute() {
   const userId = user?.id ?? "anonymous";
   const snapshot = useSnapshot();
   useServerStream(userId);
+  // Above <Workspace key={pageId}>: that remounts when the default-page sentinel
+  // resolves, and an import owned by the discarded instance finishes into nothing.
+  const providerLink = useProviderLinkReturn(userId);
   const activeView: CalendarViewId =
     isCalendarView(view) ? view : "month";
   const workspace = useWorkspaceQueries(date, userId, activeView);
@@ -251,6 +255,7 @@ function WorkspaceRoute() {
           to: "/app/p/$pageId/$view",
         })
       }
+      providerLink={providerLink}
       onSignOut={() => {
         void signOutAndReset({
           onDone: () => void navigate({ replace: true, to: "/login" }),

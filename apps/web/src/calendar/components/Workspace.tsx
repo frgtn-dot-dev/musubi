@@ -146,6 +146,12 @@ type WorkspaceProps = {
    */
   onOpenFullEditor?: (values: EventFormValues, event?: Event) => void;
   onSignOut: () => void;
+  /** State of a provider link that finished while the browser was away. */
+  providerLink?: {
+    error?: string;
+    importing: boolean;
+    linked: boolean;
+  };
   onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
   pageId: string;
@@ -250,6 +256,7 @@ export function Workspace({
   onOpenFullEditor,
   onSetAttendance = unavailableAttendance,
   onSignOut,
+  providerLink,
   onUpdateEvent,
   onViewChange,
   pageId,
@@ -405,6 +412,12 @@ export function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  // Coming back from a provider's consent screen, the dialog that started the
+  // link is long gone — so it reopens itself onto the freshly imported account.
+  // Derived rather than set in an effect, and dismissible like any other close.
+  const [linkNoticeDismissed, setLinkNoticeDismissed] = useState(false);
+  const showConnections =
+    connectionsOpen || (Boolean(providerLink?.linked) && !linkNoticeDismissed);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // The event a time write is in flight for. One gesture at a time, so one id.
   const [busyEventId, setBusyEventId] = useState<string>();
@@ -1039,12 +1052,17 @@ export function Workspace({
         onUpdate={onUpdateCalendar}
         open={calendarTransfersOpen}
       />
-      {connectionsOpen ? (
+      {showConnections ? (
         <ConnectionsDialog
           calendars={calendars}
+          importFailed={providerLink?.error}
+          importing={providerLink?.importing}
           onNotice={notify}
           onOpenChange={(open) => {
-            if (!open) setConnectionsOpen(false);
+            if (!open) {
+              setConnectionsOpen(false);
+              setLinkNoticeDismissed(true);
+            }
           }}
           open
           userId={user.id}

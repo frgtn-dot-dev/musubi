@@ -24,6 +24,7 @@ import {
   GOOGLE_CALENDAR_SCOPES,
   MICROSOFT_CALENDAR_SCOPES,
   useConnections,
+  rememberProviderLink,
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
 import { Button, IconButton } from "~/ui/Button";
@@ -38,6 +39,10 @@ import styles from "./styles/connections.module.css";
 
 type ConnectionsDialogProps = {
   calendars: Calendar[];
+  /** Why the import of a just-linked account failed, if it did. */
+  importFailed?: string;
+  /** A provider link is still importing its calendars, started before this opened. */
+  importing?: boolean;
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -96,6 +101,8 @@ function accountStatus(reconnect: boolean) {
 
 export function ConnectionsDialog({
   calendars,
+  importFailed,
+  importing,
   onNotice,
   onOpenChange,
   open,
@@ -135,6 +142,9 @@ export function ConnectionsDialog({
     // Better Auth redirects the page to the provider. Only an early error
     // returns to this dialog.
     await run(async () => {
+      // Before the page leaves, so the version of the app that comes back knows
+      // to import the calendars instead of showing an empty list.
+      rememberProviderLink(provider);
       const result = await authClient.linkSocial({
         callbackURL: window.location.href,
         provider,
@@ -334,9 +344,24 @@ export function ConnectionsDialog({
           ) : (
             <Empty
               className={styles.empty}
-              description="Connect an account below to see its calendars in Musubi."
+              // An account whose calendars are still being fetched is not a
+              // missing account, and saying "none" while one is arriving is how
+              // someone concludes the connection failed and does it again.
+              description={
+                importing
+                  ? "Fetching the calendars from the account you just connected."
+                  : importFailed
+                    ? `The account is linked, but its calendars could not be fetched. ${importFailed}`
+                    : "Connect an account below to see its calendars in Musubi."
+              }
               icon={<Link2 size={18} strokeWidth={1.7} />}
-              title="No connected accounts"
+              title={
+                importing
+                  ? "Importing…"
+                  : importFailed
+                    ? "Nothing imported yet"
+                    : "No connected accounts"
+              }
             />
           )}
         </section>

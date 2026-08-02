@@ -348,6 +348,24 @@ export function disconnectFederatedServer(server: string) {
   });
 }
 
+/**
+ * Pull in the calendars of every provider account this user has connected.
+ *
+ * The endpoint is named after Google for historical reasons; it runs the sync
+ * engine for the whole user, which is what a freshly linked account needs. The
+ * background scheduler does the same thing every few minutes — this is how the
+ * person who just linked something does not have to wait for it.
+ */
+export function syncProviderCalendars(signal?: AbortSignal) {
+  return apiRequest("/api/v1/calendars/google", {
+    responseSchema: z.unknown(),
+    signal,
+    // Talking to Google or Microsoft for every calendar takes longer than a
+    // normal read, and giving up early would leave a half-imported account.
+    timeoutMs: 60_000,
+  });
+}
+
 export function disconnectAccount(input: {
   accountId: string;
   provider: string;
