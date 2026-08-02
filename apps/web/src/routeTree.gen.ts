@@ -16,6 +16,7 @@ import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ETokenRouteImport } from './routes/e.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as STokenRouteImport } from './routes/s.$token'
 import { Route as AppPPageIdViewRouteImport } from './routes/app/p.$pageId.$view'
 import { Route as AppPPageIdEventEventIdRouteImport } from './routes/app/p.$pageId.event.$eventId'
 import { Route as AppPPageIdEventNewRouteImport } from './routes/app/p.$pageId.event.new'
@@ -55,6 +56,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const STokenRoute = STokenRouteImport.update({
+  id: '/s/$token',
+  path: '/s/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppPPageIdViewRoute = AppPPageIdViewRouteImport.update({
   id: '/p/$pageId/$view',
   path: '/p/$pageId/$view',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/s/$token': typeof STokenRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
   '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/s/$token': typeof STokenRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
   '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/s/$token': typeof STokenRoute
   '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
   '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/e/$token'
     | '/invite/$token'
+    | '/s/$token'
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
     | '/app/p/$pageId/event/new'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/e/$token'
     | '/invite/$token'
+    | '/s/$token'
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
     | '/app/p/$pageId/event/new'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/e/$token'
     | '/invite/$token'
+    | '/s/$token'
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
     | '/app/p/$pageId/event/new'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ETokenRoute: typeof ETokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
+  STokenRoute: typeof STokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -208,6 +221,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/s/$token': {
+      id: '/s/$token'
+      path: '/s/$token'
+      fullPath: '/s/$token'
+      preLoaderRoute: typeof STokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/p/$pageId/$view': {
       id: '/app/p/$pageId/$view'
       path: '/p/$pageId/$view'
@@ -254,6 +274,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ETokenRoute: ETokenRoute,
   InviteTokenRoute: InviteTokenRoute,
+  STokenRoute: STokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1097,6 +1097,31 @@ vzešlo a nedá se vyčíst z kódu:
   stránka už má.
 
 
+## Scheduler — group poll (M8.4)
+
+- Je to **group poll, ne booking page**. Poll hledá termín, který vyhovuje všem;
+  booking page rozdává sloty z organizátorova volna. PRD §19.2 to výslovně
+  odděluje a míchat je do jedné obrazovky je ta chyba, před kterou varuje.
+- **Konec slotu počítá server z délky ankety**, ne z klienta: jedna anketa se ptá
+  na jednu délku schůzky a sloty, které se o ní neshodnou, dělají z překryvu
+  nesmysl.
+- „Pokud bude nutné" je **plnohodnotná odpověď, ne chybějící ano** — a v pořadí
+  slotů slouží jako tiebreak, ne jako polovina hlasu. Slot, kde dva řekli ano,
+  bije slot, kde čtyři řekli „když to jinak nejde".
+- Vedoucí slot se **zvýrazní, nevybere**. Dva termíny můžou být na remízu a volba
+  je organizátorova; `bestSlots` proto vrací pole, ne jeden slot.
+- Zápis hlasů **nahrazuje celou sadu** jednoho člověka. Kdyby klient poslal jen
+  cizí sloty, smazalo by mu to odpovědi — proto se to odmítá 400. Odhlásit se jde
+  prázdným polem, které to říká.
+- Dostupnost z vlastního kalendáře se **nikdy neposílá na server**: stránka to
+  napíše nad formulář ještě předtím, než host zmáčkne tlačítko (PRD §19.1).
+- Event zakládá **server** při rozhodnutí, ne klient — jinak by se anketa a
+  kalendář mohly rozejít v tom, co bylo domluveno.
+- Zatím není: deadline v UI (schéma i API ho mají), předvyplnění dostupnosti
+  z vlastního kalendáře, upozornění účastníkům po rozhodnutí, výběr kalendáře
+  při zakládání eventu (bere první zapisovatelný).
+
+
 ## 8. Anti-patterny (červené vlajky v review)
 
 - Klik na event otevře plný formulář.

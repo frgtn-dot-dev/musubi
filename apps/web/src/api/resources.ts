@@ -11,6 +11,8 @@ import {
   InvitesResponseSchema,
   PageResponseSchema,
   PagesResponseSchema,
+  PollSchema,
+  PollSummarySchema,
   PublicEventSchema,
   RemoveEventResponseSchema,
   RsvpSummarySchema,
@@ -29,7 +31,7 @@ import {
   type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
-import type { RsvpStatus } from "./contracts";
+import type { RsvpStatus, VoteValue } from "./contracts";
 import { z } from "zod";
 import {
   apiRawJsonRequest,
@@ -388,6 +390,59 @@ export function answerEvent(input: {
     body: { name: input.name, status: input.status },
     method: "PUT",
     responseSchema: RsvpSummarySchema,
+  });
+}
+
+// ── Scheduling ───────────────────────────────────────────────────────────────
+
+export function getPolls(signal?: AbortSignal) {
+  return apiRequest("/api/v1/scheduling/polls", {
+    responseSchema: z.array(PollSummarySchema),
+    signal,
+  });
+}
+
+export function createPoll(input: {
+  description?: string;
+  durationMinutes: number;
+  slots: Array<{ start: string }>;
+  title: string;
+}) {
+  return apiRequest("/api/v1/scheduling/polls", {
+    body: input,
+    method: "POST",
+    responseSchema: PollSummarySchema,
+  });
+}
+
+/** Open by token — reading a poll needs no session, answering does. */
+export function getPoll(token: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/public/polls/${token}`, {
+    responseSchema: PollSchema,
+    signal,
+  });
+}
+
+export function votePoll(input: {
+  token: string;
+  votes: Array<{ slotID: string; value: VoteValue }>;
+}) {
+  return apiRequest(`/api/v1/public/polls/${input.token}/votes`, {
+    body: { votes: input.votes },
+    method: "PUT",
+    responseSchema: PollSchema,
+  });
+}
+
+export function decidePoll(input: {
+  calendarId: string;
+  pollId: string;
+  slotId: string;
+}) {
+  return apiRequest(`/api/v1/scheduling/polls/${input.pollId}/decide`, {
+    body: { calendarId: input.calendarId, slotId: input.slotId },
+    method: "POST",
+    responseSchema: z.object({ eventId: z.string(), slotId: z.string() }),
   });
 }
 

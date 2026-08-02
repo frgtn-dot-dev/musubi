@@ -59,6 +59,7 @@ import { AgendaView } from "./AgendaView";
 import { CalendarVisibilityPill } from "./CalendarVisibilityPill";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
+import { SchedulingDialog } from "./SchedulingDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import { MultiWeekCalendar } from "./MultiWeekCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
@@ -414,6 +415,8 @@ export function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [schedulingOpen, setSchedulingOpen] = useState(false);
+  const schedulingTriggerRef = useRef<HTMLButtonElement>(null);
   // Coming back from a provider's consent screen, the dialog that started the
   // link is long gone — so it reopens itself onto the freshly imported account.
   // Derived rather than set in an effect, and dismissible like any other close.
@@ -734,6 +737,10 @@ export function Workspace({
         onManageConnections={() => {
           setSidebarOpen(false);
           setConnectionsOpen(true);
+        }}
+        onOpenScheduling={() => {
+          setSidebarOpen(false);
+          setSchedulingOpen(true);
         }}
         onEditPage={(page) => {
           setSidebarOpen(false);
@@ -1089,6 +1096,17 @@ export function Workspace({
           userId={user.id}
         />
       ) : null}
+      {schedulingOpen ? (
+        <SchedulingDialog
+          calendars={calendars}
+          onNotice={notify}
+          onOpenChange={(open) => {
+            if (!open) setSchedulingOpen(false);
+          }}
+          returnFocus={schedulingTriggerRef}
+        />
+      ) : null}
+
       {accountOpen ? (
         <AccountDialog
           onNotice={notify}

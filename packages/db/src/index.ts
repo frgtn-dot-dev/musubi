@@ -9,6 +9,7 @@ export * from './queries/sessions';
 export * from './queries/settings';
 export * from './queries/pages';
 export * from './queries/event_shares';
+export * from './queries/scheduling';
 export * from './queries/external';
 export * from './queries/caldav';
 export * from './queries/oauth';

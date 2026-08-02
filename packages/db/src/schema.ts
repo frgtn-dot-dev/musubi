@@ -283,6 +283,82 @@ export const eventSharesRelations = relations(eventShares, ({ one }) => ({
   event: one(events, { fields: [eventShares.eventID], references: [events.id] }),
 }));
 
+// ── Scheduling (group poll) ──────────────────────────────────────────────────
+// "When can everyone meet?" — a set of candidate slots people mark up. This is
+// the group poll from PRD §19.1, deliberately NOT a booking page: a poll looks
+// for a time that suits everyone, a booking page hands out one of the
+// organizer's free slots. Mixing them is what the PRD warns against.
+export const schedulingPolls = pgTable("scheduling_polls", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  ownerID: text("owner_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  durationMinutes: integer("duration_minutes").notNull(),
+  // The link is the invitation, same as a published event page: unguessable,
+  // and revocable by closing the poll rather than by renaming anything.
+  token: text("token").notNull().unique(),
+  deadline: timestamp("deadline"),
+  // Set when the organizer picks. The poll stays readable afterwards so people
+  // who voted can see what was chosen without hunting for the calendar invite.
+  chosenSlotID: uuid("chosen_slot_id"),
+  eventID: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+  closedAt: timestamp("closed_at"),
+});
+
+export type NewSchedulingPoll = typeof schedulingPolls.$inferInsert;
+
+export const schedulingSlots = pgTable("scheduling_slots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pollID: uuid("poll_id")
+    .references(() => schedulingPolls.id, { onDelete: "cascade" })
+    .notNull(),
+  start: timestamp("start_at").notNull(),
+  end: timestamp("end_at").notNull(),
+});
+
+export type NewSchedulingSlot = typeof schedulingSlots.$inferInsert;
+
+// One row per person per slot. `yes` / `if-needed` / `no` — the middle one is
+// what makes a poll converge, so it is a first-class answer rather than an
+// absence.
+export const schedulingVotes = pgTable("scheduling_votes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  slotID: uuid("slot_id")
+    .references(() => schedulingSlots.id, { onDelete: "cascade" })
+    .notNull(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  value: text("value").notNull(),
+});
+
+export type NewSchedulingVote = typeof schedulingVotes.$inferInsert;
+
+export const schedulingPollsRelations = relations(schedulingPolls, ({ many, one }) => ({
+  owner: one(user, { fields: [schedulingPolls.ownerID], references: [user.id] }),
+  slots: many(schedulingSlots),
+}));
+
+export const schedulingSlotsRelations = relations(schedulingSlots, ({ many, one }) => ({
+  poll: one(schedulingPolls, {
+    fields: [schedulingSlots.pollID],
+    references: [schedulingPolls.id],
+  }),
+  votes: many(schedulingVotes),
+}));
+
 // An RSVP from the public page. Separate from `event_users`, which is member
 // attendance inside the app: mixing them would put a stranger who answered a
 // public link into the attendee list members see, and the organizer is supposed

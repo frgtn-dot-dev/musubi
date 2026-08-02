@@ -5663,3 +5663,162 @@ test("lets a stranger answer after confirming their address", async ({ page }) =
   expect(rsvp).toEqual({ name: "Jana K.", status: "going" });
   await expect(page.getByText("1 going")).toBeVisible();
 });
+
+const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2";
+
+test("creates a poll, collects answers and turns one into an event", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let created: unknown;
+  let decided: unknown;
+  const poll = {
+    closedAt: null,
+    createdAt: "2026-07-26T09:00:00.000Z",
+    durationMinutes: 60,
+    id: "poll-1",
+    title: "Studio planning",
+    token: POLL_TOKEN,
+    url: `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+  };
+  await page.route("**/api/v1/scheduling/polls", (route) => {
+    if (route.request().method() === "POST") {
+      created = route.request().postDataJSON();
+      return respond(route, poll, 201);
+    }
+    return respond(route, [poll]);
+  });
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, {
+      chosenSlotID: null,
+      closed: false,
+      description: null,
+      durationMinutes: 60,
+      mine: {},
+      respondents: 2,
+      slots: [
+        {
+          end: "2026-08-18T14:00:00.000Z",
+          id: "slot-tue",
+          ifNeeded: [],
+          no: ["Adam"],
+          start: "2026-08-18T13:00:00.000Z",
+          yes: ["Mika"],
+        },
+        {
+          end: "2026-08-19T14:00:00.000Z",
+          id: "slot-wed",
+          ifNeeded: ["Mika"],
+          no: [],
+          start: "2026-08-19T13:00:00.000Z",
+          yes: ["Adam", "Zoe"],
+        },
+      ],
+      title: "Studio planning",
+    }),
+  );
+  await page.route("**/api/v1/scheduling/polls/*/decide", (route) => {
+    decided = route.request().postDataJSON();
+    return respond(route, { eventId: "event-1", slotId: "slot-wed" });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Find a time" }).click();
+  const dialog = page.getByRole("dialog", { name: "Find a time" });
+
+  await dialog.getByLabel("What is it about").fill("Studio planning");
+  // Exact: the poll row below reads "60 minutes · waiting for answers", which a
+  // substring match happily grabs too.
+  await dialog.getByRole("button", { exact: true, name: "60 min" }).click();
+  await dialog.getByRole("textbox", { name: "Day 1" }).fill("2026-08-18");
+  await dialog.getByRole("textbox", { name: "Time 1" }).fill("15:00");
+  await dialog.getByRole("button", { name: "Another time" }).click();
+  await dialog.getByRole("textbox", { name: "Day 2" }).fill("2026-08-19");
+  await dialog.getByRole("textbox", { name: "Time 2" }).fill("15:00");
+  await dialog.getByRole("button", { name: "Create the poll" }).click();
+
+  // The organizer types a wall clock where they are; the wire carries instants.
+  // The dialog renames itself to the poll once it opens the results, so the
+  // locator has to stop asking for "Find a time".
+  const results = page.getByRole("dialog", { name: "Studio planning" });
+  await expect(results.getByRole("textbox", { name: "Poll link" })).toBeVisible();
+  expect(created).toMatchObject({ durationMinutes: 60, title: "Studio planning" });
+  expect((created as { slots: unknown[] }).slots).toHaveLength(2);
+
+  // Results, with the leader marked but nothing picked for them — two times can
+  // tie, and choosing is the organizer's job.
+  await expect(results.getByText("Yes: Adam, Zoe")).toBeVisible();
+  await expect(results.getByText(/If needed: Mika/)).toBeVisible();
+
+  await results.getByRole("button", { name: "Pick this" }).nth(1).click();
+
+  await expect(page.getByRole("status")).toContainText("event is in your calendar");
+  expect(decided).toMatchObject({ slotId: "slot-wed" });
+});
+
+test("answers a poll as somebody with no account", async ({ page }) => {
+  let signedIn = false;
+  let sentVotes: unknown;
+  await page.route("**/api/auth/get-session", (route) =>
+    respond(
+      route,
+      signedIn ? { session: { id: "s" }, user: { email: "z@example.com", id: "guest", name: "" } } : null,
+    ),
+  );
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+    respond(route, { success: true }),
+  );
+  await page.route("**/api/auth/sign-in/email-otp", (route) => {
+    signedIn = true;
+    return respond(route, { token: "t", user: { id: "guest" } });
+  });
+  const body = {
+    chosenSlotID: null,
+    closed: false,
+    description: "Which afternoon?",
+    durationMinutes: 60,
+    mine: {},
+    respondents: 1,
+    slots: [
+      {
+        end: "2026-08-18T14:00:00.000Z",
+        id: "slot-tue",
+        ifNeeded: [],
+        no: [],
+        start: "2026-08-18T13:00:00.000Z",
+        yes: ["Mika"],
+      },
+    ],
+    title: "Studio planning",
+  };
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, body),
+  );
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}/votes`, (route) => {
+    sentVotes = route.request().postDataJSON();
+    return respond(route, { ...body, mine: { "slot-tue": "yes" }, respondents: 2 });
+  });
+
+  await page.goto(`/s/${POLL_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByRole("heading", { name: "Studio planning" })).toBeVisible();
+  await expect(page.getByText("Yes: Mika")).toBeVisible();
+
+  await page.getByRole("button", { name: "Yes", exact: true }).click();
+  // Said before the button is pressed, not after: what leaves the browser is the
+  // answers and a name — never the reader's own calendar.
+  await expect(page.getByText(/Your own calendar is never sent/)).toBeVisible();
+  expect(sentVotes).toBeUndefined();
+
+  await page.getByLabel("Your name").fill("Zoe");
+  await page.getByLabel("Email").fill("z@example.com");
+  await page.getByRole("button", { name: "Send me a code" }).click();
+  await page.getByLabel("Code from your email").fill("123456");
+  await page.getByRole("button", { name: "Confirm and send" }).click();
+
+  // Wait for the answer to land before reading what was sent — the click
+  // resolves when it is dispatched, not when the request comes back.
+  await expect(page.getByRole("button", { name: "Answers saved" })).toBeDisabled();
+  expect(sentVotes).toEqual({ votes: [{ slotID: "slot-tue", value: "yes" }] });
+});

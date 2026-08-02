@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   CircleCheck,
   Layers3,
   Link2,
@@ -47,6 +48,7 @@ type SidebarProps = {
   onManageAccount: () => void;
   onManageCalendars: () => void;
   onManageConnections: () => void;
+  onOpenScheduling: () => void;
   onModalStateChange?: (modal: boolean) => void;
   onOpenSettings: () => void;
   onPageChange: (pageId: string) => void;
@@ -70,6 +72,7 @@ export function Sidebar({
   onManageAccount,
   onManageCalendars,
   onManageConnections,
+  onOpenScheduling,
   onModalStateChange,
   onOpenSettings,
   onDateChange,
@@ -335,6 +338,14 @@ export function Sidebar({
               showChevron={false}
               size="compact"
               onClick={onManageConnections}
+            />
+            <RowAction
+              className={styles.sidebarRow}
+              icon={<CalendarClock size={18} strokeWidth={1.6} />}
+              label="Find a time"
+              showChevron={false}
+              size="compact"
+              onClick={onOpenScheduling}
             />
             <RowAction
               className={styles.sidebarRow}

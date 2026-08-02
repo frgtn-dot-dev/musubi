@@ -154,6 +154,45 @@ export const PublicEventSchema = z.object({
 
 export type PublicEvent = z.infer<typeof PublicEventSchema>;
 
+// ── Scheduling (group poll) ──────────────────────────────────────────────────
+export const PollSlotSchema = z.object({
+  end: z.coerce.date(),
+  id: z.string(),
+  ifNeeded: z.array(z.string()).default([]),
+  no: z.array(z.string()).default([]),
+  start: z.coerce.date(),
+  yes: z.array(z.string()).default([]),
+});
+
+export const PollSchema = z.object({
+  chosenSlotID: z.string().nullish(),
+  closed: z.boolean().default(false),
+  description: z.string().nullish(),
+  durationMinutes: z.number(),
+  /** The reader's own answers, keyed by slot. Empty when nobody is signed in. */
+  mine: z.record(z.string(), z.enum(["if-needed", "no", "yes"])).default({}),
+  respondents: z.number().default(0),
+  slots: z.array(PollSlotSchema).default([]),
+  title: z.string(),
+});
+
+export type Poll = z.infer<typeof PollSchema>;
+export type PollSlot = z.infer<typeof PollSlotSchema>;
+export type VoteValue = "if-needed" | "no" | "yes";
+
+/** A poll in the organizer's own list. */
+export const PollSummarySchema = z.object({
+  closedAt: z.coerce.date().nullish(),
+  createdAt: z.coerce.date(),
+  durationMinutes: z.number(),
+  id: z.string(),
+  title: z.string(),
+  token: z.string(),
+  url: z.string(),
+});
+
+export type PollSummary = z.infer<typeof PollSummarySchema>;
+
 export const ServerCapabilitiesSchema = z
   .object({
     email: z.boolean().default(false),

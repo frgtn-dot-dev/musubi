@@ -10,6 +10,13 @@ import { handlerConfirmDeleteUser, handlerDeleteUser, handlerGetAvatar, handlerR
 import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerSetAttendance, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
 import {
+  handlerCreatePoll,
+  handlerDecidePoll,
+  handlerGetPoll,
+  handlerListPolls,
+  handlerVotePoll,
+} from "./handlers/scheduling";
+import {
   handlerGetEventRsvps,
   handlerGetEventShare,
   handlerGetPublicEvent,
@@ -178,6 +185,15 @@ app.get("/api/v1/calendars/google", requireAuth, wrap(handlerGetGoogleCalendars)
 // Public: possession of the (unguessable, expiring) invite token IS the
 // credential — cross-server invitees have no session here yet.
 app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(handlerGetCalendarFromToken));
+// Scheduling (group poll, PRD §19.1). Creating and deciding belong to the
+// organizer; reading is open by token so somebody can see what they are being
+// asked before identifying themselves, and voting needs a session.
+app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
+app.post("/api/v1/scheduling/polls", requireAuth, wrap(handlerCreatePoll));
+app.post("/api/v1/scheduling/polls/:pollId/decide", requireAuth, wrap(handlerDecidePoll));
+app.get("/api/v1/public/polls/:token", rateLimit(60, 15 * 60_000), wrap(handlerGetPoll));
+app.put("/api/v1/public/polls/:token/votes", requireAuth, rateLimit(60, 15 * 60_000), wrap(handlerVotePoll));
+
 // Public: the token IS the credential, same as an invite. Rate-limited per IP so
 // the space cannot be walked, and the projection is narrow by construction.
 app.get("/api/v1/public/events/:token", rateLimit(60, 15 * 60_000), wrap(handlerGetPublicEvent));
