@@ -8,6 +8,7 @@
     "dev": "expo start --clear --localhost",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
+    "test": "vitest run",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -87,7 +88,8 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~56.0.4",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "4.1.10"
   },
   "private": true
 }
