@@ -55,6 +55,13 @@ Run an individual layer while iterating:
 | Client ESLint | `pnpm lint` |
 | Workspace peer dependencies | `pnpm peers:check` |
 | Release/toolchain metadata | `pnpm release:verify` |
+| Secrets in the browser bundle | `pnpm scan:bundle` |
+
+`pnpm scan:bundle` builds the web client with a canary in every server-only
+variable (`BETTER_AUTH_SECRET`, `DATABASE_URL`, `SMTP_PASS`, …) and fails if one
+of them turns up in a file the browser can fetch. It also matches private-key
+blocks, credentialled database URLs and provider key prefixes, and — on a machine
+that has a real `.env` — the actual values in it. CI runs it as its own job.
 
 <Aside type="note" title="The lint gate uses a warning budget">
 `pnpm lint` has zero errors and permits exactly 108 known warnings from React
