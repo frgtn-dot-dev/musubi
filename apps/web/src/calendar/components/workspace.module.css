@@ -352,8 +352,10 @@
   display: none;
 }
 
-.mobileClose {
-  display: none !important;
+/* Same guard as the drawer toggle: only the narrow layout has a drawer to
+   close, and the primitive's own display rule sits at equal specificity. */
+.sidebar .mobileClose {
+  display: none;
 }
 
 .toolbar {
@@ -400,7 +402,11 @@
   flex: none;
 }
 
-.sidebarMenuButton {
+/* Desktop keeps the sidebar in place, so the drawer toggle has nothing to open.
+   Scoped past the IconButton primitive's own display rule — at equal specificity
+   the bundler's emit order decides, and the button leaked onto the desktop
+   toolbar. */
+.toolbar .sidebarMenuButton {
   display: none;
 }
 
@@ -1902,9 +1908,9 @@
     pointer-events: auto;
   }
 
-  .mobileClose,
-  .sidebarMenuButton {
-    display: inline-flex !important;
+  .sidebar .mobileClose,
+  .toolbar .sidebarMenuButton {
+    display: inline-flex;
   }
 
   .toolbarControls {

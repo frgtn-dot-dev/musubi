@@ -4513,3 +4513,24 @@ test("keeps a page's settings button on its row, not under it", async ({
     ),
   ).toBeLessThanOrEqual(1);
 });
+
+test("offers the drawer toggle only where there is a drawer", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // Desktop keeps the sidebar in place, so a toggle for it opens nothing.
+  await expect(
+    page.getByRole("button", { name: "Open navigation" }),
+  ).toBeHidden();
+
+  await page.setViewportSize({ height: 720, width: 390 });
+  const toggle = page.getByRole("button", { name: "Open navigation" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(
+    page.getByRole("button", { name: "Close navigation" }).first(),
+  ).toBeVisible();
+});
+
