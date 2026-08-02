@@ -16,8 +16,12 @@ import { Request, Response } from "express";
 import { assertCan } from "../permissions";
 
 const VOTE_VALUES = new Set(["if-needed", "no", "yes"]);
-/** Enough to compare a working week of options; beyond it a poll is a survey. */
-const MAX_SLOTS = 30;
+/**
+ * Enough to ask about a month of days at a couple of times each — the organizer
+ * picks days and times separately, so the count multiplies rather than adds.
+ * Beyond this a poll stops being a question and becomes a survey.
+ */
+const MAX_SLOTS = 60;
 const MAX_TITLE = 120;
 
 function pollToken() {

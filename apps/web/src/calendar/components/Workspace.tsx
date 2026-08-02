@@ -1104,6 +1104,7 @@ export function Workspace({
             if (!open) setSchedulingOpen(false);
           }}
           returnFocus={schedulingTriggerRef}
+          weekStartsOn={settings.weekStartsOn}
         />
       ) : null}
 

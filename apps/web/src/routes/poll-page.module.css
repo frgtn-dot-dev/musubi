@@ -1,5 +1,40 @@
 /* The poll page shares the published-event shell; only the answer grid is its
    own. */
+.day {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  /* Sticky so the day a row belongs to stays readable while scrolling a long
+     horizon on a phone. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2) 0;
+  background: var(--surface-panel, var(--surface-canvas));
+}
+
+.dayName {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  font-weight: 600;
+}
+
+.allLabel {
+  align-self: center;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .slots {
   display: grid;
   gap: var(--space-2);

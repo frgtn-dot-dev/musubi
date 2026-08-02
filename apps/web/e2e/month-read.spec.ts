@@ -5784,6 +5784,9 @@ test("creates a poll, collects answers and turns one into an event", async ({
     return respond(route, { eventId: "event-1", slotId: "slot-wed" });
   });
 
+  // The day grid opens on the real current month, so the clock decides which
+  // days are on screen. Pin it, or this test passes only in August.
+  await page.clock.setFixedTime(new Date("2026-08-03T10:00:00"));
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await page.getByRole("button", { name: "Find a time" }).click();
   const dialog = page.getByRole("dialog", { name: "Find a time" });
@@ -5792,11 +5795,14 @@ test("creates a poll, collects answers and turns one into an event", async ({
   // Exact: the poll row below reads "60 minutes · waiting for answers", which a
   // substring match happily grabs too.
   await dialog.getByRole("button", { exact: true, name: "60 min" }).click();
-  await dialog.getByRole("textbox", { name: "Day 1" }).fill("2026-08-18");
-  await dialog.getByRole("textbox", { name: "Time 1" }).fill("15:00");
-  await dialog.getByRole("button", { name: "Another time" }).click();
-  await dialog.getByRole("textbox", { name: "Day 2" }).fill("2026-08-19");
-  await dialog.getByRole("textbox", { name: "Time 2" }).fill("15:00");
+  // Days and times are asked separately, so one time covers every day picked —
+  // that is the whole point of the grid, and what makes a long horizon bearable.
+  await dialog.getByRole("button", { name: "Remove 18:00" }).click();
+  await dialog.getByLabel("Add a time").fill("15:00");
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
+  await dialog.getByRole("button", { exact: true, name: "18" }).click();
+  await dialog.getByRole("button", { exact: true, name: "19" }).click();
+  await expect(dialog.getByText("2 days × 1 time = 2 options")).toBeVisible();
   await dialog.getByRole("button", { name: "Create the poll" }).click();
 
   // The organizer types a wall clock where they are; the wire carries instants.
@@ -5816,6 +5822,38 @@ test("creates a poll, collects answers and turns one into an event", async ({
 
   await expect(page.getByRole("status")).toContainText("event is in your calendar");
   expect(decided).toMatchObject({ slotId: "slot-wed" });
+});
+
+test("picks poll days by dragging a run and by taking a weekday column", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/scheduling/polls", (route) => respond(route, []));
+  await page.clock.setFixedTime(new Date("2026-08-03T10:00:00"));
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Find a time" }).click();
+  const dialog = page.getByRole("dialog", { name: "Find a time" });
+  const day = (date: string) =>
+    dialog.getByRole("button", { exact: true, name: date });
+
+  // A run of days is one gesture. The direction comes from where the drag
+  // started, so this must land on five days and not on one.
+  await day("10").hover();
+  await page.mouse.down();
+  for (const date of ["11", "12", "13", "14"]) await day(date).hover();
+  await page.mouse.up();
+  await expect(dialog.getByText("5 days × 1 time = 5 options")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Clear 5 days" }).click();
+  await expect(dialog.getByText("Pick at least one day")).toBeVisible();
+
+  // A weekday header takes every one of that weekday in view, and takes it back.
+  const column = dialog.getByTitle(/^Select every/).first();
+  await column.click();
+  await expect(dialog.getByText(/^\d+ days × 1 time/)).toBeVisible();
+  await dialog.getByTitle(/^Clear every/).first().click();
+  await expect(dialog.getByText("Pick at least one day")).toBeVisible();
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {

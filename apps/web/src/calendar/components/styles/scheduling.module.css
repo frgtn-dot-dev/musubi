@@ -32,17 +32,131 @@
   text-transform: uppercase;
 }
 
-.slots {
+.field {
   display: grid;
   gap: var(--space-2);
   justify-items: start;
 }
 
-.slotRow {
-  display: flex;
-  align-items: end;
-  gap: var(--space-2);
+.fieldLabel {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.picker {
   width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  /* A drag across days must not turn into a text selection of the numbers. */
+  user-select: none;
+  touch-action: none;
+}
+
+.pickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.pickerMonth {
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  font-weight: 600;
+}
+
+.pickerWeekdays,
+.pickerGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.pickerWeekday {
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.pickerWeekday:hover {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.pickerDay {
+  display: grid;
+  place-items: center;
+  /* Deliberately not square: a square month grid is 400px tall and pushes the
+     times and the button off screen, which is what people came here for. */
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.pickerDay[data-outside] {
+  color: var(--text-muted);
+}
+
+.pickerDay[data-today] {
+  border-color: var(--border-strong, var(--border-subtle));
+  font-weight: 600;
+}
+
+.pickerDay:hover {
+  background: var(--surface-raised);
+}
+
+.pickerDay[aria-pressed="true"] {
+  background: var(--accent-primary);
+  color: var(--accent-on-primary, #fff);
+}
+
+.times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timeInput {
+  padding: 7px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
+.clear {
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.summary {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
 }
 
 .list {

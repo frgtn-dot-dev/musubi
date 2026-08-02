@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  eventPagePalette,
+  eventPagePaletteVariables,
+} from "@musubi/design-system";
 import { CalendarClock, Check, Info } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import type { Poll, PollSlot, VoteValue } from "~/api/contracts";
 import { getPoll, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
@@ -118,7 +122,15 @@ function PollRoute() {
   }
 
   return (
-    <main className={styles.page} id="main-content" tabIndex={-1}>
+    // The published-event shell reads its colours from palette variables, so a
+    // poll — which nobody themes — sets the default one rather than leaving
+    // every border and surface resolving to nothing.
+    <main
+      className={styles.page}
+      id="main-content"
+      style={eventPagePaletteVariables(eventPagePalette(undefined)) as CSSProperties}
+      tabIndex={-1}
+    >
       <article className={styles.card}>
         <header className={styles.header}>
           <span aria-hidden="true" className={styles.brand}>
@@ -144,32 +156,37 @@ function PollRoute() {
           </p>
         ) : null}
 
-        <ul className={pollStyles.slots}>
-          {data.slots.map((slot) => (
-            <li className={pollStyles.slot} key={slot.id}>
-              <div className={pollStyles.slotWhen}>
-                <CalendarClock aria-hidden="true" size={15} strokeWidth={1.6} />
-                <span>{formatSlot(slot)}</span>
-              </div>
-              <Tally slot={slot} />
-              {data.closed ? null : (
+        {/* Grouped by day, because a poll spanning three weeks is a long page and
+            "I'm away that whole week" is the answer people actually have. Each
+            day heading answers its own times in one press. */}
+        {groupByDay(data.slots).map(([day, slots]) => (
+          <section className={pollStyles.day} key={day}>
+            <header className={pollStyles.dayHead}>
+              <h2 className={pollStyles.dayName}>{day}</h2>
+              {data.closed || slots.length < 2 ? null : (
                 <div
-                  aria-label={`Your answer for ${formatSlot(slot)}`}
+                  aria-label={`Answer every time on ${day}`}
                   className={pollStyles.answers}
                   role="group"
                 >
+                  {/* Named, because the buttons below say the same three words:
+                      this row answers the whole day, those answer one time. */}
+                  <span className={pollStyles.allLabel}>All</span>
                   {ANSWERS.map((option) => (
                     <Button
-                      aria-pressed={answers[slot.id] === option.value}
+                      aria-pressed={slots.every(
+                        (slot) => answers[slot.id] === option.value,
+                      )}
                       key={option.value}
                       size="compact"
-                      variant={
-                        answers[slot.id] === option.value ? "primary" : "secondary"
-                      }
+                      title={`${option.label} to all ${slots.length} times on ${day}`}
+                      variant="secondary"
                       onClick={() =>
                         setDraft((current) => ({
                           ...current,
-                          [slot.id]: option.value,
+                          ...Object.fromEntries(
+                            slots.map((slot) => [slot.id, option.value]),
+                          ),
                         }))
                       }
                     >
@@ -178,9 +195,53 @@ function PollRoute() {
                   ))}
                 </div>
               )}
-            </li>
-          ))}
-        </ul>
+            </header>
+
+            <ul className={pollStyles.slots}>
+              {slots.map((slot) => (
+                <li className={pollStyles.slot} key={slot.id}>
+                  <div className={pollStyles.slotWhen}>
+                    <CalendarClock
+                      aria-hidden="true"
+                      size={15}
+                      strokeWidth={1.6}
+                    />
+                    <span>{formatTime(slot)}</span>
+                  </div>
+                  <Tally slot={slot} />
+                  {data.closed ? null : (
+                    <div
+                      aria-label={`Your answer for ${formatSlot(slot)}`}
+                      className={pollStyles.answers}
+                      role="group"
+                    >
+                      {ANSWERS.map((option) => (
+                        <Button
+                          aria-pressed={answers[slot.id] === option.value}
+                          key={option.value}
+                          size="compact"
+                          variant={
+                            answers[slot.id] === option.value
+                              ? "primary"
+                              : "secondary"
+                          }
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              [slot.id]: option.value,
+                            }))
+                          }
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
 
         {data.closed ? null : session.data ? (
           <div className={pollStyles.send}>
@@ -267,32 +328,57 @@ function PollRoute() {
 }
 
 function Tally({ slot }: { slot: PollSlot }) {
-  if (slot.yes.length + slot.ifNeeded.length + slot.no.length === 0) {
-    return <p className={pollStyles.tally}>No answers yet</p>;
-  }
+  // Joined, not concatenated: a slot only somebody was unsure about used to read
+  // "· If needed: Mika", separator and all.
+  const parts = [
+    slot.yes.length > 0 ? `Yes: ${slot.yes.join(", ")}` : null,
+    slot.ifNeeded.length > 0 ? `If needed: ${slot.ifNeeded.join(", ")}` : null,
+    slot.no.length > 0 ? `No: ${slot.no.length}` : null,
+  ].filter(Boolean);
 
   return (
     <p className={pollStyles.tally}>
-      {slot.yes.length > 0 ? <>Yes: {slot.yes.join(", ")}</> : null}
-      {slot.ifNeeded.length > 0 ? (
-        <> · If needed: {slot.ifNeeded.join(", ")}</>
-      ) : null}
-      {slot.no.length > 0 ? <> · No: {slot.no.length}</> : null}
+      {parts.length > 0 ? parts.join(" · ") : "No answers yet"}
     </p>
   );
 }
 
-/** In the reader's own timezone, which for a poll across places is the point. */
-function formatSlot(slot: Pick<Poll["slots"][number], "end" | "start">): string {
-  const day = new Intl.DateTimeFormat(undefined, {
+/**
+ * Slots under the day they fall on, in the order the organizer offered them.
+ *
+ * Grouped in the reader's own timezone — the same slot can be Friday night in
+ * Prague and Friday afternoon in Boston, and each reader should see their own.
+ */
+function groupByDay(slots: PollSlot[]): Array<[string, PollSlot[]]> {
+  const days = new Map<string, PollSlot[]>();
+  for (const slot of slots) {
+    const day = formatDay(slot.start);
+    const existing = days.get(day);
+    if (existing) existing.push(slot);
+    else days.set(day, [slot]);
+  }
+
+  return [...days];
+}
+
+function formatDay(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
     day: "numeric",
     month: "short",
     weekday: "short",
-  }).format(slot.start);
+  }).format(date);
+}
+
+/** In the reader's own timezone, which for a poll across places is the point. */
+function formatTime(slot: Pick<Poll["slots"][number], "end" | "start">): string {
   const time = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
 
-  return `${day}, ${time.format(slot.start)} – ${time.format(slot.end)}`;
+  return `${time.format(slot.start)} – ${time.format(slot.end)}`;
+}
+
+function formatSlot(slot: Pick<Poll["slots"][number], "end" | "start">): string {
+  return `${formatDay(slot.start)}, ${formatTime(slot)}`;
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Copy, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, Copy, Plus, X } from "lucide-react";
 import { useState, type RefObject } from "react";
-import type { Calendar } from "@musubi/types";
+import type { Calendar, Settings } from "@musubi/types";
 import type { PollSummary } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
 import {
@@ -10,10 +10,11 @@ import {
   getPoll,
   getPolls,
 } from "~/api/resources";
-import { Button, IconButton } from "~/ui/Button";
+import { Button } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
+import { PollDayPicker } from "./PollDayPicker";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/scheduling.module.css";
@@ -21,7 +22,11 @@ import styles from "./styles/scheduling.module.css";
 /** Sensible meeting lengths. A free number field invites 37-minute meetings. */
 const DURATIONS = [15, 30, 45, 60, 90];
 
-type Draft = { date: string; time: string };
+/**
+ * Matches the API's cap. Beyond this a poll stops being a question and becomes a
+ * survey — and the grid people have to answer stops fitting on a phone.
+ */
+const MAX_POLL_SLOTS = 60;
 
 /**
  * Finding a time everyone can make — the organizer's half.
@@ -36,11 +41,13 @@ export function SchedulingDialog({
   onNotice,
   onOpenChange,
   returnFocus,
+  weekStartsOn,
 }: {
   calendars: Calendar[];
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   returnFocus: RefObject<HTMLElement | null>;
+  weekStartsOn: Settings["weekStartsOn"];
 }) {
   const queryClient = useQueryClient();
   const pollsKey = ["polls", getServerOrigin()];
@@ -81,6 +88,7 @@ export function SchedulingDialog({
               onNotice("Poll created. Send the link to the people you need.");
               setOpenPoll(poll);
             }}
+            weekStartsOn={weekStartsOn}
           />
 
           <section className={styles.section}>
@@ -115,29 +123,34 @@ export function SchedulingDialog({
   );
 }
 
-function NewPoll({ onCreated }: { onCreated: (poll: PollSummary) => void }) {
+function NewPoll({
+  onCreated,
+  weekStartsOn,
+}: {
+  onCreated: (poll: PollSummary) => void;
+  weekStartsOn: Settings["weekStartsOn"];
+}) {
   const [title, setTitle] = useState("");
   const [durationMinutes, setDuration] = useState(60);
-  const [slots, setSlots] = useState<Draft[]>([{ date: "", time: "" }]);
+  const [days, setDays] = useState<string[]>([]);
+  const [times, setTimes] = useState<string[]>(["18:00"]);
+  const [newTime, setNewTime] = useState("");
+
+  // Days × times. Written out because it is what the poll actually asks, and
+  // because seeing "6 days × 2 times = 12 options" is what stops somebody
+  // producing sixty by accident.
+  const slots = days.flatMap((day) =>
+    times.map((time) => ({ start: new Date(`${day}T${time}`).toISOString() })),
+  );
+  const tooMany = slots.length > MAX_POLL_SLOTS;
 
   const create = useMutation({
     mutationFn: () =>
-      createPoll({
-        durationMinutes,
-        // Local wall clock in, ISO out: the organizer picks "Tuesday at two"
-        // where they are, and everyone else's page renders it where they are.
-        slots: slots
-          .filter((slot) => slot.date && slot.time)
-          .map((slot) => ({
-            start: new Date(`${slot.date}T${slot.time}`).toISOString(),
-          })),
-        title: title.trim(),
-      }),
+      createPoll({ durationMinutes, slots, title: title.trim() }),
     onSuccess: onCreated,
   });
 
-  const ready =
-    title.trim().length > 0 && slots.some((slot) => slot.date && slot.time);
+  const ready = title.trim().length > 0 && slots.length > 0 && !tooMany;
 
   return (
     <section className={styles.section}>
@@ -150,6 +163,66 @@ function NewPoll({ onCreated }: { onCreated: (poll: PollSummary) => void }) {
             onChange={(event) => setTitle(event.target.value)}
           />
         </Field>
+
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>Which days</span>
+          <PollDayPicker
+            onChange={setDays}
+            selected={days}
+            weekStartsOn={weekStartsOn}
+          />
+          {days.length > 0 ? (
+            <button
+              className={styles.clear}
+              type="button"
+              onClick={() => setDays([])}
+            >
+              Clear {days.length} {days.length === 1 ? "day" : "days"}
+            </button>
+          ) : null}
+        </div>
+
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>At what time</span>
+          {/* One set of times for every chosen day. That is the whole trick for
+              a long horizon: three weeks of evenings is three weeks and one
+              time, not twenty-one rows. */}
+          <div className={styles.times}>
+            {times.map((time) => (
+              <Button
+                aria-label={`Remove ${time}`}
+                icon={<X size={13} strokeWidth={1.8} />}
+                key={time}
+                size="compact"
+                variant="secondary"
+                onClick={() =>
+                  setTimes((current) => current.filter((item) => item !== time))
+                }
+              >
+                {time}
+              </Button>
+            ))}
+            <input
+              aria-label="Add a time"
+              className={styles.timeInput}
+              type="time"
+              value={newTime}
+              onChange={(event) => setNewTime(event.target.value)}
+            />
+            <Button
+              disabled={!newTime || times.includes(newTime)}
+              icon={<Plus size={14} strokeWidth={1.8} />}
+              size="compact"
+              variant="secondary"
+              onClick={() => {
+                setTimes((current) => [...current, newTime].sort());
+                setNewTime("");
+              }}
+            >
+              Add
+            </Button>
+          </div>
+        </div>
 
         <fieldset className={styles.durations}>
           <legend>How long</legend>
@@ -166,67 +239,17 @@ function NewPoll({ onCreated }: { onCreated: (poll: PollSummary) => void }) {
           ))}
         </fieldset>
 
-        <div className={styles.slots}>
-          {slots.map((slot, index) => (
-            <div className={styles.slotRow} key={index}>
-              <Field label={index === 0 ? "Day" : ""} variant="plain">
-                <input
-                  aria-label={`Day ${index + 1}`}
-                  type="date"
-                  value={slot.date}
-                  onChange={(event) =>
-                    setSlots((current) =>
-                      current.map((item, position) =>
-                        position === index
-                          ? { ...item, date: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-              </Field>
-              <Field label={index === 0 ? "Time" : ""} variant="plain">
-                <input
-                  aria-label={`Time ${index + 1}`}
-                  type="time"
-                  value={slot.time}
-                  onChange={(event) =>
-                    setSlots((current) =>
-                      current.map((item, position) =>
-                        position === index
-                          ? { ...item, time: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-              </Field>
-              {slots.length > 1 ? (
-                <IconButton
-                  label={`Remove time ${index + 1}`}
-                  size="compact"
-                  onClick={() =>
-                    setSlots((current) =>
-                      current.filter((_, position) => position !== index),
-                    )
-                  }
-                >
-                  <Trash2 size={15} strokeWidth={1.6} />
-                </IconButton>
-              ) : null}
-            </div>
-          ))}
-          <Button
-            icon={<Plus size={15} strokeWidth={1.7} />}
-            size="compact"
-            variant="secondary"
-            onClick={() =>
-              setSlots((current) => [...current, { date: "", time: "" }])
-            }
-          >
-            Another time
-          </Button>
-        </div>
+        <p className={tooMany ? styles.error : styles.summary}>
+          {slots.length === 0
+            ? "Pick at least one day and one time."
+            : `${days.length} ${days.length === 1 ? "day" : "days"} × ${times.length} ${
+                times.length === 1 ? "time" : "times"
+              } = ${slots.length} options${
+                tooMany
+                  ? ` — ${MAX_POLL_SLOTS} is the most a poll can ask about`
+                  : ""
+              }`}
+        </p>
 
         {create.error ? (
           <p className={styles.error} role="alert">
