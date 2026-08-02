@@ -1026,16 +1026,27 @@ vzešlo a nedá se vyčíst z kódu:
   view by znamenal editovat kód těch čtyř, což PRD §16.2 zakazuje. Renderovací
   `switch` v JSX zůstal schválně: komponenty v registry by natáhly celý strom
   views i do `shortcuts.ts`.
-- Multi-week **není vlastní mřížka** — je to `MonthCalendar` s jiným seznamem
-  dnů (`days`), bez tlumení sousedních měsíců a s minimální výškou řádku.
-  Druhá implementace chipů, „+N more", dragu a klávesnice by se rozešla.
+- Multi-week je **matice samostatných týdenních bloků** (`MultiWeekCalendar`),
+  ne jeden dlouhý měsíc — reference je [MultiWeek](https://www.multiweek.app/),
+  kde jde o srovnání týdnů vedle sebe. Počet sloupců se počítá z šířky
+  (`MIN_BLOCK_WIDTH_PX`), zbytek se zalomí do řádků; na telefonu vyjde 1 sloupec.
+- Blok je **čtecí mini time grid**, ne `TimeGridView`. Dvacet živých gridů by
+  neslo drag, resize, hit-testing a now-marker dvacetkrát. Sdílí se **matematika**
+  (`getDaySegments`, `assignOverlapColumns`, `overlapPlacement`), takže nabitý
+  čtvrtek vypadá nabitě i tady, a klik otevře tentýž popover jako všude jinde.
+  Hodinové linky jsou CSS gradient, ne elementy — jinak by to bylo 280 divů,
+  které nic nedělají.
+- Okno hodin je konstanta 7–21 (`VISIBLE_START_HOUR`). Celý den v bloku vysokém
+  190 px je šmouha; události mimo okno se **ořezávají na hranu, ne zahazují**,
+  jinak by blok lhal o tom, jak je den plný. Nastavitelné okno je v PRD §16.1.
 - Počet týdnů je v **Page configu**, ne v settings: plánovací stránka chce osm
   týdnů, „tenhle týden" jeden. To je vlastnost stránky, ne člověka.
 - Titulek v toolbaru je „Jul 20 – Oct 11" — krátké měsíce a rok jen když span
   přechází přes rok. Dlouhá varianta se ořízne o ellipsis, což stojí datum.
-- Zatím **není**: matice více týdnů vedle sebe (v1 jsou pod sebou), drag mezi
-  týdny, kopírování modifikátorem, skrytí víkendů, barevná pravidla, search
-  highlight. Všechno jde přidat nad stejnou definicí.
+- Zatím **není**: drag mezi týdny, kopírování modifikátorem, ruční nastavení
+  řádků × sloupců (dnes jen auto), skrytí víkendů, barevná pravidla, search
+  highlight a zakládání eventu klikem do bloku. Všechno jde přidat nad stejnou
+  definicí a stejným blokem.
 
 ## 8. Anti-patterny (červené vlajky v review)
 

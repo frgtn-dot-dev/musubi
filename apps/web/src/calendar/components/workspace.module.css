@@ -2218,3 +2218,134 @@
     opacity: 1;
   }
 }
+
+
+/* ── Multi-week ──────────────────────────────────────────────────────────────
+   A matrix of week blocks: as many columns as fit at a readable width, the rest
+   wrapped into rows. The area scrolls — twenty weeks squeezed into one viewport
+   would be a texture, not a calendar. */
+.multiWeek {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  grid-template-columns: repeat(var(--multi-week-columns, 1), minmax(0, 1fr));
+  /* Rows share the height when they fit and stop shrinking when they do not, so
+     four weeks fill the screen and twenty scroll at a readable size. */
+  grid-auto-rows: minmax(190px, 1fr);
+  overflow: auto;
+  height: 100%;
+}
+
+.weekBlock {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+}
+
+.weekBlockHeader,
+.weekBlockGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.weekBlockHeader {
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+
+.weekBlockDay {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 5px 2px;
+  font-size: var(--text-11);
+  /* One line, always: a wrapping header would make one block taller than the
+     rest of its row and break the comparison the matrix exists for. */
+  white-space: nowrap;
+}
+
+.weekBlockDay + .weekBlockDay {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.weekBlockWeekday {
+  color: var(--text-muted);
+}
+
+.weekBlockDate {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.weekBlockDay[data-today] .weekBlockDate {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* The hour lines are a background, not elements: twenty blocks × fourteen hours
+   would be 280 divs that never do anything. */
+.weekBlockGrid {
+  position: relative;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--border-subtle) 0,
+    var(--border-subtle) 1px,
+    transparent 1px,
+    transparent calc(100% / 14)
+  );
+}
+
+.weekBlockColumn {
+  position: relative;
+  min-width: 0;
+}
+
+.weekBlockColumn + .weekBlockColumn {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.weekBlockColumn[data-today] {
+  background: var(--surface-today, rgba(200, 85, 61, 0.06));
+}
+
+.weekBlockEvent,
+.weekBlockAllDay {
+  position: absolute;
+  z-index: 1;
+  overflow: hidden;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--event-color, var(--accent-primary));
+  color: #fff;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.weekBlockEvent {
+  min-height: 6px;
+}
+
+/* All-day sits at the top of its column, above the timed blocks, the way the
+   real week grid stacks them. */
+.weekBlockAllDay {
+  top: 1px;
+  height: 11px;
+}
+
+@media (max-width: 599px) {
+  .multiWeek {
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+}

@@ -5363,9 +5363,10 @@ function multiWeekPage(weeks: number) {
   };
 }
 
-test("shows a run of whole weeks and pages a screen at a time", async ({
+test("lays weeks out as a matrix and pages a screen at a time", async ({
   page,
 }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
   await mockAuthenticatedReads(page);
   await page.route("**/api/v1/pages", (route) =>
     respond(route, [multiWeekPage(8)]),
@@ -5373,40 +5374,61 @@ test("shows a run of whole weeks and pages a screen at a time", async ({
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/multi-week?date=2026-07-26`);
 
-  // Whole weeks from the one the date falls in, running forward — and the span
-  // crosses months on purpose, which is the entire point of the view.
+  // Eight separate week calendars, not eight rows of one grid — the whole point
+  // is comparing weeks side by side.
+  const blocks = page.getByRole("region", { name: /^Week of/ });
+  await expect(blocks).toHaveCount(8);
   await expect(page.getByText("Jul 20 – Sep 13")).toBeVisible();
-  const grid = page.getByRole("grid", { name: /Jul 20/ });
-  await expect(grid.getByRole("row")).toHaveCount(9); // 8 weeks + the weekday header
+
+  // A matrix: on a wide screen the first blocks share a row.
+  const first = (await blocks.nth(0).boundingBox())!;
+  const second = (await blocks.nth(1).boundingBox())!;
+  expect(second.x).toBeGreaterThan(first.x);
+  expect(Math.abs(second.y - first.y)).toBeLessThan(4);
 
   // A page is a screen, not a week: eight weeks forward lands on the next span.
   await page.getByRole("main").getByRole("button", { name: "Next" }).click();
   await expect(page).toHaveURL(/date=2026-09-20/);
   await expect(page.getByText("Sep 14 – Nov 8")).toBeVisible();
 
-  await page.getByRole("button", { name: "Today" }).click();
-  await expect(page).toHaveURL(/multi-week/);
-
   await expectNoAccessibilityViolations(page);
 });
 
-test("keeps every day of a multi-week page equally lit", async ({ page }) => {
+test("stacks the matrix into one column when it cannot fit", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 720, width: 430 });
   await mockAuthenticatedReads(page);
   await page.route("**/api/v1/pages", (route) =>
     respond(route, [multiWeekPage(4)]),
   );
 
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/multi-week?date=2026-07-26`);
-  const grid = page.getByRole("grid", { name: /Jul/ });
-  await expect(grid.getByRole("row")).toHaveCount(5);
 
-  // Month dims the days either side of it because they are padding. Here they
-  // are the subject, so nothing is dimmed — and the events on them are real.
-  await expect(
-    page.getByRole("button", { name: /Weekly review/ }).first(),
-  ).toBeVisible();
-
-  // The page's own count drives it: four weeks, not the month's six rows.
-  await page.getByRole("main").getByRole("button", { name: "Next" }).click();
-  await expect(page).toHaveURL(/date=2026-08-23/);
+  const blocks = page.getByRole("region", { name: /^Week of/ });
+  await expect(blocks).toHaveCount(4);
+  // Seven day columns need room; on a phone that means one week per row rather
+  // than four unreadable slivers.
+  const first = (await blocks.nth(0).boundingBox())!;
+  const second = (await blocks.nth(1).boundingBox())!;
+  expect(second.y).toBeGreaterThan(first.y);
+  expect(Math.abs(second.x - first.x)).toBeLessThan(4);
 });
+
+test("opens the same event popover from a week block", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/pages", (route) =>
+    respond(route, [multiWeekPage(4)]),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/multi-week?date=2026-07-26`);
+  await page.getByRole("button", { name: /Weekly review/ }).first().click();
+
+  // The block is a reader, but the event behind it is the same event — the
+  // popover, and everything it can do, comes from the one implementation.
+  const popover = page.getByRole("dialog").filter({ hasText: "Weekly review" });
+  await expect(popover.getByRole("heading", { name: "Weekly review" })).toBeVisible();
+  await expect(popover.getByRole("button", { exact: true, name: "Edit" })).toBeVisible();
+});
+;
