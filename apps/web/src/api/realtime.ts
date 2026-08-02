@@ -1,6 +1,8 @@
 import { PageDocumentSchema, type PageDocument } from "@musubi/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { authClient, notifyAuthExpired } from "~/auth/auth-client";
+import { reconnectDelay } from "./backoff";
 import { getServerOrigin, queryKeys } from "./query-keys";
 
 // Merge a realtime Page into the cached list, keeping it idempotent: a strictly
@@ -28,8 +30,14 @@ function sortPages(pages: PageDocument[]): PageDocument[] {
 type RealtimeMessage = { type?: string; payload?: Record<string, unknown> };
 
 // Same-origin SSE. The browser `EventSource` can't set a bearer header, so this
-// relies on the Better Auth cookie session the web already uses, and reconnects
-// on its own. Cross-session cache updates flow through here.
+// relies on the Better Auth cookie session the web already uses. Cross-session
+// cache updates flow through here.
+//
+// The socket reconnects on its own; the *data* does not. Anything emitted while
+// this tab was away is gone, because there is no durable event log to replay
+// from — so every successful connect ends with a refresh, which
+// `07-realtime-offline-federation.md:35` names as the authority after a
+// reconnect. Without it the cache silently diverges after any blip.
 export function useServerStream(userId: string) {
   const queryClient = useQueryClient();
   const origin = getServerOrigin();
@@ -37,7 +45,10 @@ export function useServerStream(userId: string) {
   useEffect(() => {
     if (typeof window === "undefined" || userId === "anonymous") return;
 
-    const source = new EventSource("/api/stream");
+    let source: EventSource | undefined;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+    let closed = false;
     const pagesKey = queryKeys.pages(origin, userId);
     const settingsKey = queryKeys.settings(origin, userId);
     const calendarsKey = queryKeys.calendars(origin, userId);
@@ -56,7 +67,7 @@ export function useServerStream(userId: string) {
       );
     }
 
-    source.onmessage = (event) => {
+    function handleMessage(event: MessageEvent<string>) {
       let message: RealtimeMessage;
       try {
         message = JSON.parse(event.data) as RealtimeMessage;
@@ -97,8 +108,77 @@ export function useServerStream(userId: string) {
         default:
           break;
       }
-    };
+    }
 
-    return () => source.close();
+    /**
+     * Everything this stream owns, re-read from the server.
+     *
+     * Scoped to the keys the stream can change, not a blanket cache reset: a
+     * dialog's members list or an invite preview has nothing to do with a dropped
+     * connection.
+     */
+    function refresh() {
+      for (const queryKey of [
+        calendarsKey,
+        federatedKey,
+        pagesKey,
+        settingsKey,
+        eventsPrefix,
+      ]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    }
+
+    function open() {
+      if (closed) return;
+
+      source = new EventSource("/api/stream");
+      source.onmessage = handleMessage;
+
+      source.onopen = () => {
+        attempt = 0;
+        // Also runs on the very first connect, where it costs one refetch of
+        // data the queries were fetching anyway and keeps one code path.
+        refresh();
+      };
+
+      source.onerror = () => {
+        // `EventSource` retries by itself, but on its own schedule and without
+        // ever refreshing. Taking the socket over means one policy: our backoff,
+        // and a refresh every time it comes back.
+        source?.close();
+        if (closed) return;
+        attempt += 1;
+
+        // A closed socket says nothing about why. An expired session looks
+        // exactly like a flaky network here, and retrying that forever is the
+        // loop `07-realtime-offline-federation.md:56-61` forbids — so ask once
+        // who we are, and stop if the answer is nobody.
+        void authClient
+          .getSession()
+          .then((result) => {
+            if (closed) return;
+            if (result.data) {
+              retry = setTimeout(open, reconnectDelay(attempt));
+              return;
+            }
+            closed = true;
+            notifyAuthExpired();
+          })
+          .catch(() => {
+            // The session request failed too, so the server is unreachable
+            // rather than refusing us. Keep trying.
+            if (!closed) retry = setTimeout(open, reconnectDelay(attempt));
+          });
+      };
+    }
+
+    open();
+
+    return () => {
+      closed = true;
+      if (retry) clearTimeout(retry);
+      source?.close();
+    };
   }, [origin, queryClient, userId]);
 }

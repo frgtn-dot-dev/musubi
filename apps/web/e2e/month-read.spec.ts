@@ -4677,3 +4677,32 @@ test("says what a failed write left behind", async ({ page }) => {
 });
 
 
+
+test("brings the calendar forward when the live stream comes back", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let eventReads = 0;
+  await page.route("**/api/v1/events", (route) => {
+    if (route.request().method() === "GET") eventReads += 1;
+    return route.fallback();
+  });
+  // The stream is down before the app opens it, so it starts out reconnecting.
+  const streamDown = (route: Route) => route.abort();
+  await page.route("**/api/stream", streamDown);
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+  const whileDown = eventReads;
+
+  await page.unroute("**/api/stream", streamDown);
+  await page.route("**/api/stream", (route) =>
+    route.fulfill({ body: ":ok\n\n", contentType: "text/event-stream" }),
+  );
+
+  // Nothing arrives over the stream to say what changed, so a reopen has to
+  // refetch: anything that happened while it was down is otherwise invisible.
+  await expect(async () => {
+    expect(eventReads).toBeGreaterThan(whileDown);
+  }).toPass({ timeout: 10_000 });
+});
