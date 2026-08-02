@@ -6,6 +6,7 @@ import {
   SettingsDocumentSchema,
   SettingsSchema,
 } from "@musubi/types";
+import { defaultEventPageTheme, EventPageThemeSchema } from "@musubi/types";
 import { z } from "zod";
 
 export const CalendarsResponseSchema = z.array(CalendarSchema);
@@ -94,6 +95,7 @@ export type FederationConnection = z.infer<typeof FederationConnectionSchema>;
 export const EventShareSchema = z.object({
   attendeeVisibility: z.enum(["counts", "hidden", "names"]).default("counts"),
   indexable: z.boolean(),
+  theme: EventPageThemeSchema.default(defaultEventPageTheme),
   mode: z.enum(["link", "public"]),
   token: z.string(),
   url: z.string(),
@@ -148,6 +150,7 @@ export const PublicEventSchema = z.object({
   organizer: z.string(),
   recurrence: z.string().nullish(),
   start: z.coerce.date(),
+  theme: EventPageThemeSchema.default(defaultEventPageTheme),
   title: z.string(),
   url: z.string().nullish(),
 });

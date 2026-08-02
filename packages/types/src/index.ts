@@ -3,6 +3,7 @@ export * from "./user";
 export * from "./calendar";
 export * from "./event";
 export * from "./invite";
+export * from "./event_page";
 export * from "./settings";
 export * from "./pages";
 export * from "./google";

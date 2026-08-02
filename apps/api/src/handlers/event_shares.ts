@@ -10,7 +10,11 @@ import {
   upsertEventShare,
   type RsvpStatus,
 } from "@musubi/db";
-import { BadRequestError, NotFoundError } from "@musubi/types";
+import {
+  BadRequestError,
+  EventPageThemeSchema,
+  NotFoundError,
+} from "@musubi/types";
 import { Request, Response } from "express";
 import { config } from "@musubi/config";
 import { assertCanEditEvent } from "../permissions";
@@ -46,6 +50,7 @@ export async function handlerGetEventShare(req: Request, res: Response) {
           attendeeVisibility: share.attendeeVisibility,
           indexable: share.indexable,
           mode: share.mode,
+          theme: EventPageThemeSchema.parse(share.theme ?? {}),
           token: share.token,
           url: shareUrl(share.token),
         }
@@ -64,6 +69,13 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   const mode = String(req.body?.mode ?? "");
   const indexable = req.body?.indexable === true;
   const attendeeVisibility = String(req.body?.attendeeVisibility ?? "counts");
+  // Parsed against the closed set, never stored as given: this is the boundary
+  // that keeps "no arbitrary CSS" true, so an unknown key or value is a refusal
+  // rather than something that ends up in a style attribute later.
+  const theme = EventPageThemeSchema.safeParse(req.body?.theme ?? {});
+  if (!theme.success) {
+    throw new BadRequestError("That page style is not one of the options...");
+  }
 
   if (!MODES.has(mode)) {
     throw new BadRequestError("mode must be 'link' or 'public'...");
@@ -83,6 +95,7 @@ export async function handlerPutEventShare(req: Request, res: Response) {
 
   const share = await upsertEventShare({
     attendeeVisibility,
+    theme: theme.data,
     createdBy: req.user!.id,
     eventID,
     indexable,
@@ -94,6 +107,7 @@ export async function handlerPutEventShare(req: Request, res: Response) {
     attendeeVisibility: share.attendeeVisibility,
     indexable: share.indexable,
     mode: share.mode,
+    theme: share.theme,
     token: share.token,
     url: shareUrl(share.token),
   });
@@ -124,6 +138,7 @@ export async function handlerGetPublicEvent(req: Request, res: Response) {
 
 export type SharedEventRow = {
   description: null | string;
+  theme?: unknown;
   end: Date;
   indexable: boolean;
   isAllDay: boolean;
@@ -161,6 +176,11 @@ export function publicEventProjection(shared: SharedEventRow) {
     organizer: shared.organizerName,
     recurrence: shared.recurrence,
     start: shared.start.toISOString(),
+    // Parsed on the way out as well: a row written before a knob existed, or by
+    // an older server, still renders as a valid look instead of a broken one.
+    theme: EventPageThemeSchema.parse(
+      (shared.theme && typeof shared.theme === "object") ? shared.theme : {},
+    ),
     title: shared.title,
     url: shared.url,
   };

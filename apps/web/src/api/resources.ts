@@ -31,6 +31,7 @@ import {
   type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
+import type { EventPageTheme } from "@musubi/types";
 import type { RsvpStatus, VoteValue } from "./contracts";
 import { z } from "zod";
 import {
@@ -338,12 +339,14 @@ export function publishEvent(input: {
   eventId: string;
   indexable: boolean;
   mode: "link" | "public";
+  theme: EventPageTheme;
 }) {
   return apiRequest(`/api/v1/events/${input.eventId}/share`, {
     body: {
       attendeeVisibility: input.attendeeVisibility,
       indexable: input.indexable,
       mode: input.mode,
+      theme: input.theme,
     },
     method: "PUT",
     responseSchema: EventShareSchema,

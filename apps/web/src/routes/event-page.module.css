@@ -1,5 +1,9 @@
 /* A published page is not the app: no shell, no sidebar, one card and the two
    things a stranger actually wants — when it is, and how to keep it. */
+/* The page paints itself from the palette the organizer chose, which arrives as
+   custom properties on the root element. Everything below reads those rather
+   than the app's tokens: a published page is themeable, the app is not — and the
+   palettes are a closed, contrast-proven set (`@musubi/design-system`). */
 .page {
   display: grid;
   align-content: center;
@@ -7,7 +11,82 @@
   gap: var(--space-4);
   min-height: 100dvh;
   padding: var(--space-6) var(--space-4);
-  background: var(--surface-canvas);
+  background: var(--page-background, var(--surface-canvas));
+  color: var(--page-text, var(--text-primary));
+
+  /* App components used on this page — buttons, fields — read the app's control
+     tokens, which are the light theme's. Remapped here so the RSVP flow stays
+     usable on every palette: `PRD §17.3` puts accessibility and the RSVP flow on
+     the fixed side, and a dark palette that swallowed the answer buttons would
+     break both. */
+  --control-fill: var(--page-accent);
+  --control-on-fill: var(--page-accent-text);
+  --accent-primary: var(--page-accent);
+  --accent-on-primary: var(--page-accent-text);
+  --text-primary: var(--page-text);
+  --text-secondary: var(--page-muted);
+  --text-muted: var(--page-muted);
+  --border-medium: var(--page-border);
+  --border-subtle: var(--page-border);
+  --border-strong: var(--page-accent);
+  --surface-raised: var(--page-raised);
+  --surface-canvas: var(--page-surface);
+}
+
+/* Covers are decoration drawn from the same palette — never an upload, which
+   would be a moderation surface and an unbounded contrast risk. */
+.page[data-cover="wash"] {
+  background-image: radial-gradient(
+    120% 80% at 50% 0%,
+    color-mix(in oklab, var(--page-accent) 22%, transparent),
+    transparent 70%
+  );
+}
+
+.page[data-cover="grid"] {
+  background-image:
+    linear-gradient(
+      color-mix(in oklab, var(--page-accent) 12%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--page-accent) 12%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 32px 32px;
+}
+
+.page[data-font="sans"] .card h1 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+/* Poster: the title and the date are the message, at display size. The same
+   content in the same order — a layout variant, not a second page. */
+.page[data-layout="poster"] .card {
+  max-width: 30rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.page[data-layout="poster"] .card h1 {
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  line-height: 1.05;
+}
+
+.page[data-layout="poster"] .facts dd,
+.page[data-layout="poster"] .actions,
+.page[data-layout="poster"] .answers {
+  justify-content: center;
+}
+
+/* Links style themselves here: this route has no app shell to inherit from, and
+   the browser's default blue ignores the palette entirely. */
+.card a,
+.footer a {
+  color: var(--page-accent, var(--accent-primary));
+  text-underline-offset: 3px;
 }
 
 .card {
@@ -16,9 +95,9 @@
   width: 100%;
   max-width: 34rem;
   padding: var(--space-6);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--page-border);
   border-radius: var(--radius-lg);
-  background: var(--surface-raised);
+  background: var(--page-surface, var(--surface-raised));
 }
 
 .header {
@@ -40,7 +119,7 @@
 
 .organizer {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--page-muted, var(--text-secondary));
   font-size: var(--text-13);
 }
 
@@ -49,8 +128,8 @@
   margin: 0;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--accent-primary);
-  color: #fff;
+  background: var(--page-accent, var(--accent-primary));
+  color: var(--page-accent-text, #fff);
   font-size: var(--text-11);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -63,7 +142,7 @@
 }
 
 .facts dt {
-  color: var(--text-muted);
+  color: var(--page-muted, var(--text-muted));
   font-size: var(--text-11);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -75,7 +154,7 @@
   align-items: center;
   gap: 6px;
   margin: 3px 0 0;
-  color: var(--text-primary);
+  color: var(--page-text, var(--text-primary));
   font-size: var(--text-15);
 }
 
@@ -84,13 +163,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--text-secondary);
+  color: var(--page-muted, var(--text-secondary));
   font-size: var(--text-12);
 }
 
 .description {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--page-muted, var(--text-secondary));
   font-size: var(--text-14, var(--text-13));
   line-height: 1.6;
   white-space: pre-wrap;
@@ -104,13 +183,13 @@
 }
 
 .secondaryLink {
-  color: var(--text-secondary);
+  color: var(--page-accent, var(--text-secondary));
   font-size: var(--text-13);
 }
 
 .footer {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--page-muted, var(--text-muted));
   font-size: var(--text-12);
 }
 
@@ -119,7 +198,7 @@
   display: grid;
   gap: var(--space-3);
   padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--page-border);
 }
 
 .rsvp h2 {
@@ -134,10 +213,15 @@
   gap: var(--space-2);
 }
 
+/* The chosen answer is painted inline in the component, not here: the app's
+   button styles and this stylesheet are separate modules whose order is decided
+   by the bundler, and the RSVP flow is on the fixed side of `PRD §17.3` — it has
+   to read correctly in every palette rather than win a cascade fight. */
+
 .rsvpState,
 .attending {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--page-muted, var(--text-secondary));
   font-size: var(--text-13);
 }
 

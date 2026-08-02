@@ -26,6 +26,7 @@ export async function getEventShare(
  */
 export async function upsertEventShare(input: {
   attendeeVisibility: string;
+  theme?: unknown;
   createdBy: string;
   eventID: string;
   indexable: boolean;
@@ -41,6 +42,7 @@ export async function upsertEventShare(input: {
         attendeeVisibility: input.attendeeVisibility,
         indexable: input.indexable,
         mode: input.mode,
+        ...(input.theme === undefined ? {} : { theme: input.theme }),
       })
       .where(eq(eventShares.id, existing.id))
       .returning();
@@ -51,6 +53,7 @@ export async function upsertEventShare(input: {
     .insert(eventShares)
     .values({
       attendeeVisibility: input.attendeeVisibility,
+      ...(input.theme === undefined ? {} : { theme: input.theme }),
       createdBy: input.createdBy,
       eventID: input.eventID,
       indexable: input.indexable,
@@ -84,6 +87,7 @@ export async function getSharedEvent(token: string) {
       end: events.end,
       attendeeVisibility: eventShares.attendeeVisibility,
       indexable: eventShares.indexable,
+      theme: eventShares.theme,
       isAllDay: events.isAllDay,
       isCanceled: events.isCanceled,
       location: events.location,

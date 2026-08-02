@@ -1092,6 +1092,20 @@ vzešlo a nedá se vyčíst z kódu:
   tentýž problém s vrstvami, co je popsaný výš. Odznak s počtem u ikony sdílení
   **není** schválně: stál by jeden request při každém otevření libovolného
   eventu kvůli funkci, kterou většina eventů nikdy nepoužije.
+- **Vzhled stránky (M8.5)**: paleta / layout / cover / písmo jsou **uzavřené
+  množiny** validované Zodem na API. Tím se drží PRD §17.3 („žádné libovolné CSS
+  a JavaScript") jako vlastnost systému, ne jako slib — barva, která se do
+  systému nedostane, nemůže rozbít kontrast.
+- Palety **dokazují svůj kontrast** self-checkem v `@musubi/design-system` (text,
+  muted, accent, accent-text, na surface i na background). Práh pro accent na
+  ploše je 4.5:1, ne 3:1, protože accent barví i odkazy v běžné velikosti — což
+  odhalil až axe na `/e/<token>` (4.34:1) a poté se zvedl práh i palety.
+- Stránka si přemapovává **app tokeny** (`--control-fill`, `--text-primary`, …)
+  na paletu. Bez toho tlačítka RSVP na tmavé paletě zmizela, a RSVP flow je v PRD
+  na straně **pevných** věcí. Palety proto nesou i `border` a `raised` explicitně,
+  místo počítání přes `color-mix`.
+- Cover je kresba z palety, nikdy nahraný obrázek: upload je moderační plocha a
+  neomezené riziko pro kontrast.
 - Zatím není: kapacita, vlastní vzhled stránky, cover,
   `.ics` subscription feed. `.ics` soubor se skládá v prohlížeči z dat, která
   stránka už má.

@@ -37,6 +37,7 @@ const BASE: SharedEventRow = {
     "organizer",
     "recurrence",
     "start",
+    "theme",
     "title",
     "url",
   ]);
@@ -61,6 +62,16 @@ const BASE: SharedEventRow = {
       `${forbidden} must never reach a public event page`,
     );
   }
+
+  // The look is part of the page, and it always parses to a complete, valid
+  // theme — an older row with no theme at all still renders as the default
+  // rather than as nothing.
+  assert.deepEqual(projection.theme, {
+    cover: "none",
+    font: "serif",
+    layout: "classic",
+    palette: "sand",
+  });
 
   // The organizer is a display name, never an address.
   assert.equal(projection.organizer, "Sharer");

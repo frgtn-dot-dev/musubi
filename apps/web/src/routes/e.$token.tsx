@@ -4,6 +4,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CalendarPlus, MapPin, Repeat2 } from "lucide-react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
+import {
+  eventPagePalette,
+  eventPagePaletteVariables,
+} from "@musubi/design-system";
+import type { CSSProperties } from "react";
 import { BrandMark } from "~/components/BrandMark";
 import { RsvpBlock } from "./-rsvp-block";
 import { Button } from "~/ui/Button";
@@ -61,8 +66,18 @@ function PublicEventRoute() {
   const event = page.data;
   const occurrence = nextOccurrence(event);
 
+  const palette = eventPagePalette(event.theme.palette);
+
   return (
-    <main className={styles.page} id="main-content" tabIndex={-1}>
+    <main
+      className={styles.page}
+      data-cover={event.theme.cover}
+      data-font={event.theme.font}
+      data-layout={event.theme.layout}
+      id="main-content"
+      style={eventPagePaletteVariables(palette) as CSSProperties}
+      tabIndex={-1}
+    >
       {/* The indexing decision travels with the data, not with the route: a page
           shared "anyone with the link" must stay out of search even though the
           markup is identical. */}

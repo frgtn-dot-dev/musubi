@@ -5507,11 +5507,18 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
   await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveValue(
     new RegExp(SHARE_TOKEN),
   );
-  expect(share).toEqual({ attendeeVisibility: "counts", indexable: false, mode: "link" });
+  expect(share).toMatchObject({
+    attendeeVisibility: "counts",
+    indexable: false,
+    mode: "link",
+  });
   // The link mode's promise is that it stays out of search, so it must not even
   // offer the indexing choice.
   await expect(dialog.getByRole("checkbox", { name: /search engines/ })).toHaveCount(0);
 
+  // The look is part of publishing, and it is a closed set of choices.
+  await expect(dialog.getByRole("group", { name: "Palette" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Moss" }).click();
   await expect(dialog.getByRole("heading", { name: /2 going/ })).toBeVisible();
   await expect(dialog.getByText("Adam, Zoe")).toBeVisible();
   await expect(dialog.getByText("Cyril")).toBeVisible();
@@ -5523,7 +5530,13 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
   await expect(
     dialog.getByRole("checkbox", { name: /search engines/ }),
   ).toBeChecked();
-  expect(share).toEqual({ attendeeVisibility: "counts", indexable: true, mode: "public" });
+  expect(share).toMatchObject({
+    attendeeVisibility: "counts",
+    indexable: true,
+    mode: "public",
+    // Whatever else changed, the chosen palette rides along on every write.
+    theme: { palette: "moss" },
+  });
 
   await expectNoAccessibilityViolations(page);
 
@@ -5573,6 +5586,55 @@ test("shows a published event to someone with no account", async ({ page }) => {
     "content",
     "noindex, nofollow",
   );
+
+  await expectNoAccessibilityViolations(page);
+});
+
+test("wears the look the organizer chose, without breaking what is fixed", async ({
+  page,
+}) => {
+  await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+    respond(route, {
+      description: "Presses running.",
+      end: "2026-08-20T16:00:00.000Z",
+      indexable: false,
+      isAllDay: false,
+      isCanceled: false,
+      location: "Brno",
+      organizer: "Mika",
+      recurrence: null,
+      start: "2026-08-20T13:00:00.000Z",
+      theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
+      title: "Studio open day",
+      url: null,
+    }),
+  );
+
+  await page.goto(`/e/${SHARE_TOKEN}`);
+  const main = page.getByRole("main");
+  await expect(main).toHaveAttribute("data-layout", "poster");
+  await expect(main).toHaveAttribute("data-cover", "grid");
+
+  // The palette arrives as custom properties, which is what the page paints
+  // from — a chosen look, not a stylesheet the organizer can write.
+  expect(
+    await main.evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("--page-accent").trim(),
+    ),
+  ).toBe("#c96f4a");
+
+  // And everything on the fixed side of the PRD still works on a dark palette:
+  // the answer reads as chosen, and the form that follows is usable.
+  await page.getByRole("button", { name: "Going" }).click();
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(async () =>
+      page
+        .getByRole("button", { name: "Going" })
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .toBe("rgb(201, 111, 74)");
+  await expect(page.getByLabel("Email")).toBeVisible();
 
   await expectNoAccessibilityViolations(page);
 });

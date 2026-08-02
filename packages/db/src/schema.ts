@@ -269,6 +269,10 @@ export const eventShares = pgTable("event_shares", {
   // (PRD §18.2) — `counts` says how many, `names` says who, `hidden` says
   // nothing. Never a default that reveals more than the previous state did.
   attendeeVisibility: text("attendee_visibility").notNull().default("counts"),
+  // How the page looks — a closed set of choices validated at the handler
+  // (`@musubi/types` EventPageThemeSchema), stored as JSONB so adding a knob
+  // later is a schema change in one place rather than a migration per knob.
+  theme: jsonb("theme").notNull().default({}),
   createdBy: text("created_by")
     .references(() => user.id, { onDelete: "cascade" })
     .notNull(),
