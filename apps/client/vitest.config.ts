@@ -17,6 +17,9 @@ export default defineConfig({
     alias: { "@": root },
   },
   test: {
+    // Pinned for the same reason as apps/web: local-time arithmetic must not
+    // depend on the machine's zone. Prague observes daylight saving, UTC doesn't.
+    env: { TZ: "Europe/Prague" },
     environment: "node",
     include: ["**/*.spec.ts"],
   },

@@ -7,6 +7,13 @@ import { defineConfig } from "vitest/config";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// One timezone for every run, whatever the machine is set to. Calendar code is
+// full of local-time arithmetic, so a suite that passes in Prague and fails in a
+// UTC CI container (or the reverse) is not a suite. Prague rather than UTC on
+// purpose: it observes daylight saving, so the tests exercise offsets that
+// change instead of one that never does.
+const TIMEZONE = "Europe/Prague";
+
 export default defineConfig({
   plugins: [viteReact()],
   resolve: {
@@ -18,6 +25,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
+          env: { TZ: TIMEZONE },
           environment: "jsdom",
           globals: true,
           include: ["src/**/*.test.{ts,tsx}"],

@@ -14,6 +14,10 @@ export default defineConfig({
   testDir: "./e2e",
   use: {
     baseURL: origin,
+    // Same reason as the unit suites: the browser gets one timezone and locale
+    // regardless of the machine, and it is one that observes daylight saving.
+    locale: "en-GB",
+    timezoneId: "Europe/Prague",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

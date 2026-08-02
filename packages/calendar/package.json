@@ -1,13 +1,13 @@
 {
   "name": "@musubi/calendar",
-  "description": "Musubi calendar logic — recurrence, date helpers, and layout math.",
+  "description": "Musubi calendar logic \u2014 recurrence, date helpers, and layout math.",
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./layout": "./src/layout/index.ts"
   },
   "scripts": {
-    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence-edit.test.ts"
+    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/recurrence-edit.test.ts"
   },
   "private": true,
   "dependencies": {
