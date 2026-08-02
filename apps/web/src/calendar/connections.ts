@@ -11,7 +11,7 @@ import {
   syncProviderCalendars,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import type { ParsedInvite } from "./invite-link";
+import type { ParsedInvite } from "@musubi/types";
 
 // Calendar scopes are requested at connect time — distinct from sign-in, which
 // only needs identity. Better Auth links the extra account server-side.

@@ -19,7 +19,7 @@ import { authClient } from "~/auth/auth-client";
 import {
   parseInviteLink,
   type ParsedInvite,
-} from "~/calendar/invite-link";
+} from "@musubi/types";
 import {
   GOOGLE_CALENDAR_SCOPES,
   MICROSOFT_CALENDAR_SCOPES,

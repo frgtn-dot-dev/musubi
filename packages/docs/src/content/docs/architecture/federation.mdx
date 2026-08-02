@@ -61,8 +61,9 @@ The `user` table gains two columns: `isExternal` (this row is a shadow account �
 
 | Piece | File | What it does |
 |---|---|---|
-| Registry | `apps/client/services/federation.ts` | federated accounts `{server, token, userID}` — **source of truth is the home server** (`getMusubiAccounts` on every refresh), SecureStore is the offline fallback cache; proves an existing shadow on later accepts and rotates legacy/near-expiry tokens |
-| Invite screen | `app/invite/[token].tsx` | reads the `?server=` param; remote → public preview + federation accept; local → the native join, unchanged |
+| Registry | `apps/client/services/federation.ts` | federated accounts `{id, server, label, userID}` — **no token since v1.5**; source of truth is the home server (`GET /api/v1/federation/connections`), SecureStore is the offline fallback cache. Reads and writes go through the home gateway |
+| Servers screen | `components/calendar/SyncCalendarModal.tsx` (`musubi` step) | Sync Calendar → **Musubi server**: paste an invite link (parsed by the shared `parseInviteLink`, then handed to the invite screen) and see the connected servers, each with its state and a disconnect |
+| Invite screen | `app/invite/[token].tsx` | reads the `?server=` param; remote → public preview + federation accept; local → the native join, unchanged. Reached from a tapped link **or** from a pasted one |
 | Sync | `hooks/useRefreshData.ts` | after the home sync, pulls calendars + events from every federated server (v1: full fetch), tags calendars `provider: "musubi"` + `serverUrl`, merges into the same stores/cache |
 | Write routing | `services/api.ts` | calendar-scoped methods consult `remoteForCalendar()`; remote calendars go to their origin with the member token — same endpoints, same shapes |
 | Composer guard | `components/calendar/AddEventModal.tsx` | an event's calendars must share one origin server (cross-server linking is v3) |

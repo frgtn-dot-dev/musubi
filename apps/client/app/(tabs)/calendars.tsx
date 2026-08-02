@@ -187,7 +187,12 @@ export default function CalendarsTab() {
         // Full (not delta) sync: a newly connected account's events predate the
         // delta cursor, so a delta wouldn't pull them (same trap as invite join).
         onConnected={(provider) => {
-          refresh({ full: true, providerSync: provider !== "caldav" }).catch(() => { });
+          // Federation and CalDAV have no server-side provider sync to trigger:
+          // one is another Musubi server behind the gateway, the other imported
+          // its events when it connected. Both still need a FULL refresh — their
+          // events predate the delta cursor.
+          const providerSync = provider !== "caldav" && provider !== "musubi";
+          refresh({ full: true, providerSync }).catch(() => { });
         }}
       />
       <CalendarDetail
