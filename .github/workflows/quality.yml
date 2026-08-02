@@ -71,6 +71,26 @@ jobs:
           path: apps/web/test-results
           retention-days: 7
 
+  bundle:
+    name: Client bundle secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Builds the client with a canary in every server-only variable and fails if
+      # any of them reaches a file the browser can fetch. Its own job because it
+      # needs a production build, which `pnpm check` deliberately does not do.
+      - run: node scripts/scan-client-bundle.mjs
+
   docker:
     name: Build ${{ matrix.name }} image
     runs-on: ubuntu-latest

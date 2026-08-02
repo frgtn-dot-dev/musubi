@@ -1,5 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Page,
+  type Route,
+} from "@playwright/test";
 
 const session = {
   session: {
@@ -231,8 +237,11 @@ async function expectNoAccessibilityViolations(page: Page) {
   expect(results.violations).toEqual([]);
 }
 
+// Takes a Page or a whole BrowserContext: the mock is nothing but route handlers
+// over one closure of state, so registering it on a context gives every page in it
+// the SAME backend — which is what a two-session test needs.
 async function mockAuthenticatedReads(
-  page: Page,
+  page: Page | BrowserContext,
   eventResponse: typeof events = events,
   calendarResponse: typeof calendars = calendars,
   failWritesForCalendarId?: string,
@@ -4814,3 +4823,99 @@ test("leaves nothing of the last account on a shared computer", async ({
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(0);
 });
+
+test("carries one session's edit into the other over the stream", async ({
+  browser,
+}) => {
+  // One context, one mock, two pages: two tabs of the same account against the
+  // same backend, which is what the server's SSE fan-out is for.
+  const context = await browser.newContext();
+  await mockAuthenticatedReads(context);
+
+  // Frames the second session is waiting for. Playwright cannot push into an
+  // open response, so instead its stream request parks until there is something
+  // to say, then delivers that frame and ends — the client reconnects on its own.
+  const pending: string[] = [];
+  await context.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") {
+      pending.push("event_updated");
+    }
+    return route.fallback();
+  });
+
+  const first = await context.newPage();
+  const second = await context.newPage();
+  await second.route("**/api/stream", async (route) => {
+    for (let waited = 0; pending.length === 0 && waited < 10_000; waited += 50) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const type = pending.shift();
+    if (!type) return route.abort();
+    return route.fulfill({
+      body: `data: ${JSON.stringify({ payload: {}, type })}\n\n`,
+      contentType: "text/event-stream",
+    });
+  });
+
+  const url = `/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`;
+  await first.goto(url);
+  await second.goto(url);
+  await expect(
+    second.getByRole("button", { name: /Client call/ }).first(),
+  ).toBeVisible();
+
+  await first.getByRole("button", { name: /Client call/ }).first().click();
+  await first.getByRole("button", { exact: true, name: "Edit" }).click();
+  await first
+    .getByRole("textbox", { name: "Event title" })
+    .fill("Renamed in the first tab");
+  await first.getByRole("button", { name: "Save" }).click();
+  await expect(first.getByRole("status")).toContainText("Event updated.");
+
+  // The frame carries no event data — `07-realtime-offline-federation.md:35` is
+  // explicit that there is no durable log to replay, so a notification is a cue
+  // to refetch, not the change itself. The second tab must land on the new title
+  // without anybody reloading it.
+  await expect(
+    second.getByRole("button", { name: /Renamed in the first tab/ }).first(),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(second.getByRole("button", { name: /Client call/ })).toHaveCount(0);
+
+  await context.close();
+});
+
+// 200% is where a person with low vision lives all day; 320 CSS px is what WCAG
+// 1.4.10 actually demands (400% of a 1280 px viewport). Both, because a layout
+// can survive one step and break at the next.
+for (const { label, width } of [
+  { label: "200%", width: 640 },
+  { label: "400%", width: 320 },
+]) {
+  test(`stays usable at ${label} zoom`, async ({ page }) => {
+    await mockAuthenticatedReads(page);
+    await page.setViewportSize({ height: 512, width });
+
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+    await expect(
+      page.getByRole("heading", { name: "My calendar" }),
+    ).toBeVisible();
+
+    // Nothing may scroll the document sideways: a reader who has to pan left and
+    // right to read one row is the exact failure the criterion is about.
+    const overflow = await page.evaluate(() => {
+      const { documentElement: root } = document;
+      return root.scrollWidth - root.clientWidth;
+    });
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    // And the controls are still reachable, not merely present.
+    await page.getByRole("button", { name: "Today" }).click();
+    await page.getByRole("button", { name: "Open navigation" }).click();
+    await expect(
+      page.getByRole("button", { name: "Sign out Web QA" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await expectNoAccessibilityViolations(page);
+  });
+}
