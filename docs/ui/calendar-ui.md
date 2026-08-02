@@ -571,6 +571,10 @@ not be saved" a uživatel nevěděl, jestli jeho změna platí, nebo ne.
   na webu.
 - Rozdělením vznikne nové id, takže připomínka za ním sama nepřejde. Odpojenému
   výskytu se kopíruje offset ze série; jinak by o ni tiše přišel.
+- `apps/client` dostal **vitest** (`pnpm --filter @musubi/client test`, součást
+  root `pnpm test`) — react-native a expo se mockují na švu, takže logika běží
+  v nodu. Soubory jsou `*.spec.ts`: assert-based `*.test.ts` vedle nich si
+  nechávají svůj běžec (tsx z root skriptu), jeden suffix na běžce.
 
 Tím je fáze C uzavřená.
 
