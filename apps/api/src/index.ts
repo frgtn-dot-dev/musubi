@@ -10,6 +10,7 @@ import { handlerConfirmDeleteUser, handlerDeleteUser, handlerGetAvatar, handlerR
 import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerSetAttendance, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
 import {
+  handlerGetEventRsvps,
   handlerGetEventShare,
   handlerGetPublicEvent,
   handlerGetPublicRsvp,
@@ -168,6 +169,8 @@ app.put("/api/v1/events/:eventId/attendance", requireAuth, wrap(handlerSetAttend
 app.get("/api/v1/events/:eventId/share", requireAuth, wrap(handlerGetEventShare));
 app.put("/api/v1/events/:eventId/share", requireAuth, wrap(handlerPutEventShare));
 app.delete("/api/v1/events/:eventId/share", requireAuth, wrap(handlerRevokeEventShare));
+// Who answered. For the organizer, so it ignores the reader-facing visibility.
+app.get("/api/v1/events/:eventId/rsvps", requireAuth, wrap(handlerGetEventRsvps));
 
 // Calendars — /google must stay before /:id (both one-segment GETs)
 app.get("/api/v1/calendars", requireAuth, wrap(handlerGetCalendars));

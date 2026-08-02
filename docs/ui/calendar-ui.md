@@ -1083,6 +1083,15 @@ vzešlo a nedá se vyčíst z kódu:
   členové. Stavy se navíc liší — účast je boolean, RSVP má „možná".
 - Jména vidí čtenář jen když to organizátor zapne, a **jen u těch, kdo řekli
   ano**: „možná" a „ne" jsou odpovědi, které lidé dávají v důvěře.
+- **Organizátor vidí odpovědi vždycky** (`GET /events/:id/rsvps`, gated stejně
+  jako editace) — nastavení viditelnosti řídí, co vidí *čtenář stránky*, ne
+  vlastník eventu. První verze to zaměňovala a při „Show nothing" neviděl
+  odpovědi nikdo.
+- V dialogu sdílení jsou přepínače řádky, ne `Select`: dialog se otevírá z
+  popoveru a dropdown si otevírá vlastní popover, který se zaskládá pod něj —
+  tentýž problém s vrstvami, co je popsaný výš. Odznak s počtem u ikony sdílení
+  **není** schválně: stál by jeden request při každém otevření libovolného
+  eventu kvůli funkci, kterou většina eventů nikdy nepoužije.
 - Zatím není: kapacita, vlastní vzhled stránky, cover,
   `.ics` subscription feed. `.ics` soubor se skládá v prohlížeči z dat, která
   stránka už má.

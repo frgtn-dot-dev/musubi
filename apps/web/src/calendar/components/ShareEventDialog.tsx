@@ -3,6 +3,7 @@ import { Check, Copy, Globe, Link2, Lock } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { getServerOrigin } from "~/api/query-keys";
 import {
+  getEventRsvps,
   getEventShare,
   publishEvent,
   unpublishEvent,
@@ -12,7 +13,6 @@ import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { RowAction } from "~/ui/Row";
-import { Select } from "~/ui/Select";
 import styles from "./styles/share-event.module.css";
 
 type Mode = "link" | "private" | "public";
@@ -40,6 +40,30 @@ const MODES: Array<{
     icon: Globe,
     label: "Public",
     value: "public",
+  },
+];
+
+const VISIBILITIES: Array<{
+  detail: string;
+  label: string;
+  value: EventShare["attendeeVisibility"];
+}> = [
+  {
+    detail: "Readers see how many people are coming",
+    label: "Show how many",
+    value: "counts",
+  },
+  {
+    // Only the yeses, ever: a maybe and a no are answers people give in
+    // confidence, and publishing them would be a different promise.
+    detail: "Readers see the names of people who said yes",
+    label: "Show names",
+    value: "names",
+  },
+  {
+    detail: "Readers learn nothing about who answered",
+    label: "Show nothing",
+    value: "hidden",
   },
 ];
 
@@ -73,6 +97,15 @@ export function ShareEventDialog({
     queryKey: shareKey,
   });
 
+  // The organizer's own view of the answers. Fetched here rather than badged on
+  // the event, which would cost a request every time anyone opened any event's
+  // details for a feature most events never use.
+  const rsvps = useQuery({
+    queryFn: ({ signal }) => getEventRsvps(eventId, signal),
+    queryKey: ["event-rsvps", getServerOrigin(), eventId],
+    refetchOnWindowFocus: true,
+  });
+
   const publish = useMutation({
     mutationFn: (input: {
       attendeeVisibility?: EventShare["attendeeVisibility"];
@@ -99,6 +132,8 @@ export function ShareEventDialog({
   });
 
   const current = share.data;
+  const counts = rsvps.data?.counts ?? { declined: 0, going: 0, maybe: 0 };
+  const answered = counts.going + counts.maybe + counts.declined > 0;
   const mode: Mode = current?.mode ?? "private";
   const busy = publish.isPending || unpublish.isPending;
   const error = publish.error ?? unpublish.error;
@@ -120,6 +155,10 @@ export function ShareEventDialog({
       bodyLayout="flush"
       closeLabel="Close sharing"
       description={`Publish “${eventTitle}” as a page, or keep it private.`}
+      // Opened from the event popover, so it has to sit above it — and so do the
+      // select's options, which otherwise open behind the popover and look like
+      // a dropdown that does nothing.
+      elevated
       onOpenChange={onOpenChange}
       open
       returnFocus={returnFocus}
@@ -189,27 +228,37 @@ export function ShareEventDialog({
 
         {current ? (
           <div className={styles.visibilityRow}>
-            <Select
-              label="Who is coming"
-              options={[
-                { label: "Show how many", value: "counts" },
-                { label: "Show names", value: "names" },
-                { label: "Show nothing", value: "hidden" },
-              ]}
-              size="compact"
-              value={current.attendeeVisibility}
-              onChange={(value) =>
-                publish.mutate({
-                  attendeeVisibility: value as EventShare["attendeeVisibility"],
-                  indexable: current.indexable,
-                  mode: current.mode,
-                })
-              }
-            />
-            <p className={styles.note}>
-              Names are only ever those who said yes — a maybe and a no are
-              answers people give in confidence.
-            </p>
+            {/* Rows, not a select: this dialog opens from the event popover, and
+                a dropdown's own popover layers behind it — the same trap the
+                layer order in `docs/ui/calendar-ui.md` records. The pattern also
+                matches the modes above. */}
+            <div
+              aria-label="What readers see about who is coming"
+              className={styles.modes}
+              role="radiogroup"
+            >
+              {VISIBILITIES.map((option) => (
+                <RowAction
+                  aria-checked={current.attendeeVisibility === option.value}
+                  detail={option.detail}
+                  disabled={busy}
+                  key={option.value}
+                  label={option.label}
+                  role="radio"
+                  showChevron={false}
+                  value={
+                    current.attendeeVisibility === option.value ? "On" : undefined
+                  }
+                  onClick={() =>
+                    publish.mutate({
+                      attendeeVisibility: option.value,
+                      indexable: current.indexable,
+                      mode: current.mode,
+                    })
+                  }
+                />
+              ))}
+            </div>
           </div>
         ) : null}
 
@@ -227,6 +276,21 @@ export function ShareEventDialog({
               }
             />
           </div>
+        ) : null}
+
+        {answered ? (
+          <section aria-labelledby="rsvp-answers-title" className={styles.answers}>
+            <h3 id="rsvp-answers-title">
+              {counts.going} going
+              {counts.maybe > 0 ? ` · ${counts.maybe} maybe` : ""}
+              {counts.declined > 0 ? ` · ${counts.declined} can’t` : ""}
+            </h3>
+            {/* Always shown to whoever can edit the event, whatever readers of
+                the page are allowed to see — the setting above is about them. */}
+            <AnswerList label="Going" names={rsvps.data?.going ?? []} />
+            <AnswerList label="Maybe" names={rsvps.data?.maybe ?? []} />
+            <AnswerList label="Can’t go" names={rsvps.data?.declined ?? []} />
+          </section>
         ) : null}
 
         {error ? (
@@ -249,5 +313,16 @@ export function ShareEventDialog({
         </DialogClose>
       </div>
     </Dialog>
+  );
+}
+
+function AnswerList({ label, names }: { label: string; names: string[] }) {
+  if (names.length === 0) return null;
+
+  return (
+    <p className={styles.answerLine}>
+      <span className={styles.answerLabel}>{label}</span>
+      {names.join(", ")}
+    </p>
   );
 }

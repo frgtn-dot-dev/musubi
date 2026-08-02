@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  groupRsvps,
   publicEventProjection,
   type SharedEventRow,
 } from "./event_shares";
@@ -95,6 +96,32 @@ assert.equal(publicEventProjection(BASE).recurrence, null);
   const projection = publicEventProjection({ ...BASE, isCanceled: true });
   assert.equal(projection.isCanceled, true);
   assert.equal(projection.title, "Studio open day");
+}
+
+// ── The organizer's list ─────────────────────────────────────────────────────
+// Grouped, named and sorted — and it exists at all because the reader-facing
+// visibility must not blind the person who owns the event.
+{
+  const grouped = groupRsvps([
+    { name: "Zoe", status: "going" },
+    { name: "  ", status: "going" },
+    { name: "Adam", status: "going" },
+    { name: "Bea", status: "maybe" },
+    { name: "Cyril", status: "declined" },
+  ]);
+
+  assert.deepEqual(grouped.counts, { declined: 1, going: 3, maybe: 1 });
+  // Alphabetical, and a nameless account still appears rather than vanishing.
+  assert.deepEqual(grouped.going, ["Adam", "Guest", "Zoe"]);
+  assert.deepEqual(grouped.maybe, ["Bea"]);
+  assert.deepEqual(grouped.declined, ["Cyril"]);
+}
+
+// Nobody yet is an empty list, not a missing one — the dialog renders either.
+{
+  const empty = groupRsvps([]);
+  assert.deepEqual(empty.counts, { declined: 0, going: 0, maybe: 0 });
+  assert.deepEqual(empty.going, []);
 }
 
 console.log("event share projection self-check: OK");

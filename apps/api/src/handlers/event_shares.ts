@@ -232,6 +232,38 @@ async function rsvpSummary(
   };
 }
 
+/**
+ * Who answered, for the person running the event.
+ *
+ * Deliberately NOT filtered by `attendeeVisibility`: that setting decides what a
+ * READER of the page learns. An organizer who set it to "show nothing" still has
+ * to be able to see the answers — otherwise the feature collects replies nobody
+ * can read, which is how it shipped an hour ago.
+ */
+export async function handlerGetEventRsvps(req: Request, res: Response) {
+  const eventID = String(req.params.eventId);
+  await assertCanEditEvent(req.user!.id, eventID);
+
+  res.status(200).json(groupRsvps(await listEventRsvps(eventID)));
+}
+
+export function groupRsvps(rsvps: Array<{ name: string; status: string }>) {
+  const named = (status: string) =>
+    rsvps
+      .filter((rsvp) => rsvp.status === status)
+      // An account that arrived through a code and never gave a name still has
+      // to appear — a blank row would read as a bug.
+      .map((rsvp) => rsvp.name.trim() || "Guest")
+      .sort((left, right) => left.localeCompare(right));
+
+  return {
+    counts: rsvpCounts(rsvps),
+    declined: named("declined"),
+    going: named("going"),
+    maybe: named("maybe"),
+  };
+}
+
 export function rsvpCounts(rsvps: Array<{ status: string }>) {
   return {
     declined: rsvps.filter((rsvp) => rsvp.status === "declined").length,

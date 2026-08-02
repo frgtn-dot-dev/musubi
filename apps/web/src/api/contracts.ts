@@ -114,6 +114,20 @@ export const RsvpSummarySchema = z.object({
 });
 
 export type RsvpSummary = z.infer<typeof RsvpSummarySchema>;
+
+/** The organizer's own view: every answer, whatever readers are allowed to see. */
+export const EventRsvpsSchema = z.object({
+  counts: z.object({
+    declined: z.number(),
+    going: z.number(),
+    maybe: z.number(),
+  }),
+  declined: z.array(z.string()).default([]),
+  going: z.array(z.string()).default([]),
+  maybe: z.array(z.string()).default([]),
+});
+
+export type EventRsvps = z.infer<typeof EventRsvpsSchema>;
 export type RsvpStatus = NonNullable<RsvpSummary["mine"]>;
 
 /**

@@ -2,6 +2,7 @@ import {
   AttendeesResponseSchema,
   CalendarMembersResponseSchema,
   CalendarsResponseSchema,
+  EventRsvpsSchema,
   EventShareSchema,
   EventsResponseSchema,
   FederationConnectionsResponseSchema,
@@ -358,6 +359,14 @@ export function unpublishEvent(eventId: string) {
 export function getPublicEvent(token: string, signal?: AbortSignal) {
   return apiRequest(`/api/v1/public/events/${token}`, {
     responseSchema: PublicEventSchema,
+    signal,
+  });
+}
+
+/** Every answer, for the organizer. Ignores the reader-facing visibility. */
+export function getEventRsvps(eventId: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/events/${eventId}/rsvps`, {
+    responseSchema: EventRsvpsSchema,
     signal,
   });
 }

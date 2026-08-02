@@ -62,3 +62,35 @@
   gap: var(--space-2);
   justify-items: start;
 }
+
+/* Who answered. Shown to whoever can edit the event, regardless of what the
+   page is set to reveal to its readers. */
+.answers {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.answers h3 {
+  margin: 0;
+  font-size: var(--text-13);
+  font-weight: 500;
+}
+
+.answerLine {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.5;
+}
+
+.answerLabel {
+  flex: none;
+  min-width: 4.5em;
+  color: var(--text-muted);
+}

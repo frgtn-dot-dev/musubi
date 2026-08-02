@@ -5479,6 +5479,17 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
     );
   });
 
+  // Somebody has already answered, and the organizer must be able to read that
+  // whatever the page is set to show its readers.
+  await page.route("**/api/v1/events/*/rsvps", (route) =>
+    respond(route, {
+      counts: { declined: 1, going: 2, maybe: 0 },
+      declined: ["Cyril"],
+      going: ["Adam", "Zoe"],
+      maybe: [],
+    }),
+  );
+
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
   await page.getByRole("button", { name: /Client call/ }).first().click();
   await page.getByRole("button", { name: "Share event" }).click();
@@ -5501,6 +5512,10 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
   // offer the indexing choice.
   await expect(dialog.getByRole("checkbox", { name: /search engines/ })).toHaveCount(0);
 
+  await expect(dialog.getByRole("heading", { name: /2 going/ })).toBeVisible();
+  await expect(dialog.getByText("Adam, Zoe")).toBeVisible();
+  await expect(dialog.getByText("Cyril")).toBeVisible();
+
   await dialog.getByRole("radio", { name: "Public" }).click();
   // Clicking the label, not the input: the visible box sits over the 1px input,
   // which is exactly how a person toggles it too.
@@ -5511,6 +5526,10 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
   expect(share).toEqual({ attendeeVisibility: "counts", indexable: true, mode: "public" });
 
   await expectNoAccessibilityViolations(page);
+
+  // Hiding the list from readers must not hide it from the organizer.
+  await dialog.getByRole("radio", { name: "Show nothing" }).click();
+  await expect(dialog.getByText("Adam, Zoe")).toBeVisible();
 
   await dialog.getByRole("radio", { name: /Private/ }).click();
   await expect(page.getByRole("status")).toContainText("no longer opens");
