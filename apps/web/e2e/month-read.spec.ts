@@ -5222,3 +5222,90 @@ test("says so when the import fails instead of showing an empty list", async ({
     page.getByRole("dialog", { name: "Connections" }),
   ).toContainText("could not be fetched");
 });
+
+const INVITE_TOKEN = "8f14e45fceea167a5a36dedd4bea2543";
+
+function invitePreview() {
+  return {
+    color: "#6f7f6a",
+    events: [
+      {
+        end: new Date(Date.now() + 90 * 60_000).toISOString(),
+        id: "shared-1",
+        isAllDay: false,
+        start: new Date(Date.now() + 60 * 60_000).toISOString(),
+        title: "Team lunch",
+      },
+    ],
+    id: "shared-calendar",
+    members: [{ id: "owner-1", image: null, name: "Mika" }],
+    name: "Studio",
+  };
+}
+
+test("shows an invitation in the browser and joins it", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.route(`**/api/v1/calendars/tokens/${INVITE_TOKEN}`, (route) =>
+    respond(route, invitePreview()),
+  );
+  let joined: unknown;
+  await page.route("**/api/v1/calendars/members/*", (route) => {
+    joined = { body: route.request().postDataJSON(), url: route.request().url() };
+    return respond(route, { id: "shared-calendar", joined: true });
+  });
+
+  await page.goto(`/invite/${INVITE_TOKEN}`);
+
+  // The point of a preview: what you are joining and who is already on it,
+  // before you decide — not a deep link to an app you may not have.
+  await expect(page.getByRole("heading", { name: "Studio" })).toBeVisible();
+  await expect(page.getByText("Mika shared a calendar with you.")).toBeVisible();
+  await expect(page.getByText("Team lunch")).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+
+  await page.getByRole("button", { name: "Join this calendar" }).click();
+  await expect(page).toHaveURL(/\/app\/p\/default\/month/);
+  expect(joined).toMatchObject({
+    body: { token: INVITE_TOKEN },
+    url: expect.stringContaining("/calendars/members/shared-calendar"),
+  });
+});
+
+test("carries an invitation through sign in", async ({ page }) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  await page.route(`**/api/v1/calendars/tokens/${INVITE_TOKEN}`, (route) =>
+    respond(route, invitePreview()),
+  );
+
+  await page.goto(`/invite/${INVITE_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { name: "Studio" })).toBeVisible();
+
+  // Joining writes membership, so it needs an account here — and the invitation
+  // has to survive that detour, or the person lands on an empty calendar and the
+  // link is already spent.
+  await page.getByRole("button", { name: "Create an account to join" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?redirect=%2Finvite%2F${INVITE_TOKEN}`),
+  );
+});
+
+test("says an invitation is spent rather than showing an empty page", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.route(`**/api/v1/calendars/tokens/${INVITE_TOKEN}`, (route) =>
+    route.fulfill({
+      body: JSON.stringify({ error: "NotFound", message: "Invite not found." }),
+      contentType: "application/json",
+      status: 404,
+    }),
+  );
+
+  await page.goto(`/invite/${INVITE_TOKEN}`);
+
+  await expect(
+    page.getByRole("heading", { name: "This invitation is no longer open." }),
+  ).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+});

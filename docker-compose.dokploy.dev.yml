@@ -74,12 +74,12 @@ services:
       traefik.enable: "true"
       traefik.docker.network: dokploy-network
       traefik.http.services.musubi-dev-api.loadbalancer.server.port: "${API_SERVER_PORT:-7531}"
-      # Identical split to production: /api/* plus the four HTML pages the API
-      # serves for links that arrive from outside the app.
+      # Identical split to production: /api/* plus the HTML pages the API serves
+      # for links that arrive from outside the app. Invitations go to the web
+      # client, which can show and accept them.
       traefik.http.routers.musubi-dev-api.rule: >-
         Host(`${PUBLIC_HOST}`) && (
         PathPrefix(`/api`)
-        || PathPrefix(`/invite`)
         || Path(`/reset-password`)
         || Path(`/delete-account`)
         || Path(`/email-verified`)

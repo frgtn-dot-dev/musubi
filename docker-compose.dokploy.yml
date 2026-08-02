@@ -78,10 +78,10 @@ services:
       traefik.docker.network: dokploy-network
       traefik.http.services.musubi-api.loadbalancer.server.port: "${API_SERVER_PORT:-7531}"
       # The API owns /api/* — Better Auth on /api/auth/*, REST on /api/v1/*, the
-      # federation gateway underneath — plus four HTML pages for links that
-      # arrive from outside the app (cross-server invites, the emailed password
-      # reset, account-deletion and email-confirmation landings, the iOS
-      # universal-link file).
+      # federation gateway underneath — plus the HTML pages for links that arrive
+      # from outside the app (password reset, account deletion, email
+      # confirmation, the iOS universal-link file). Invitations are NOT here:
+      # with a web client on this origin they open as a page you can accept.
       # Those predate the web client and are shared with mobile, so they stay on
       # the API and must not fall through to the catch-all above.
       #
@@ -90,7 +90,6 @@ services:
       traefik.http.routers.musubi-api.rule: >-
         Host(`${PUBLIC_HOST}`) && (
         PathPrefix(`/api`)
-        || PathPrefix(`/invite`)
         || Path(`/reset-password`)
         || Path(`/delete-account`)
         || Path(`/email-verified`)

@@ -56,7 +56,12 @@ export const Route = createFileRoute("/login")({
 });
 
 function safeRedirect(value: string | undefined) {
-  return value?.startsWith("/app/") ? value : "/app/p/default/month";
+  // Same-origin app paths only — an attacker-supplied absolute URL here would
+  // turn the login page into an open redirect. `/invite/` is allowed alongside
+  // the workspace so an invitation survives the sign-in it just asked for.
+  return value?.startsWith("/app/") || value?.startsWith("/invite/")
+    ? value
+    : "/app/p/default/month";
 }
 
 function errorMessage(error: { message?: string } | null | undefined) {

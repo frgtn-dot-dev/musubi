@@ -223,7 +223,8 @@ Wherever the proxy lives, it has to make the same split:
 |---|---|---|
 | `/api/stream` | API, unbuffered | Server-sent events. Caddy needs `flush_interval -1`, or it buffers the response and live updates arrive in clumps, or never |
 | `/api/*` | API | Better Auth, the REST surface, the federation gateway |
-| `/invite/*`, `/reset-password`, `/delete-account`, `/email-verified`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email or another server. They predate the web client and are shared with mobile, so they stay on the API |
+| `/reset-password`, `/delete-account`, `/email-verified`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email. They predate the web client and are shared with mobile, so they stay on the API |
+| `/invite/*` | Web client | An invitation is a page you read and accept. On an API-only install the same path serves the API's hand-off page instead, which deep-links into the phone app |
 | everything else | Web client | The browser app |
 
 <Aside type="note">
