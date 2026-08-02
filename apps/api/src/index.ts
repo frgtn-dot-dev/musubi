@@ -9,6 +9,7 @@ import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handler
 import { handlerConfirmDeleteUser, handlerDeleteUser, handlerGetAvatar, handlerResetUsers, handlerUploadAvatar } from "./handlers/users";
 import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerSetAttendance, handlerUpdateEvent } from "./handlers/events";
 import { requireAuth } from "./middleware/require_auth";
+import { ForbiddenError } from "@musubi/types";
 import { rateLimit } from "./middleware/rate_limit";
 import { handlerCreateCalendarInvite, handlerGetCalendarInvites, handlerRevokeInvite } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
@@ -53,20 +54,41 @@ const allowedOrigins = [
   ] : []),
 ];
 
+// Sign in with Apple in a browser comes back as a cross-site POST from Apple's
+// own domain (`response_mode=form_post`), so that one request carries
+// `Origin: https://appleid.apple.com`. It is allowed for that single callback
+// path and nowhere else — the request still has to pass Better Auth's state and
+// origin checks, and no other endpoint has any business trusting Apple.
+const APPLE_FORM_POST_ORIGIN = "https://appleid.apple.com";
+const APPLE_CALLBACK_PATH = "/api/auth/callback/apple";
+
+function originsFor(path: string) {
+  return path === APPLE_CALLBACK_PATH
+    ? [...allowedOrigins, APPLE_FORM_POST_ORIGIN]
+    : allowedOrigins;
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 // First so even parser/CORS failures are measured and receive a correlation id.
 app.use(middlewareMetrics);
 app.use(middlewareLogHandler);
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
+app.use(cors((req, done) => {
+  const permitted = originsFor(req.path);
+  done(null, {
+    credentials: true,
+    origin: (origin, callback) => {
+      // No Origin header at all is a same-origin or non-browser caller (the
+      // mobile app, curl), which this API serves by design.
+      if (!origin || permitted.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      // Forbidden, not a crash: a request from somewhere we do not serve is an
+      // answer, and logging it as a 500 buries real faults.
+      callback(new ForbiddenError("Origin is not allowed to call this API."));
+    },
+  });
 }));
 app.use(express.json({ limit: "512kb" })); // avatars arrive as base64 JSON
 
