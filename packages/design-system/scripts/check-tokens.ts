@@ -63,6 +63,28 @@ for (const { from, key, to } of changed) {
   console.log(`  ${key}: ${from} → ${to}${source}`);
 }
 
+// ── Alpha that went missing on the way there ────────────────────────────────
+// Penpot resolves every colour token to 6-digit hex, so a translucent one comes
+// home solid. Contrast would not catch it — near-black on cream passes easily —
+// and the palette would be quietly flattened, which is why this runs first.
+const flattened = changed.filter(({ from, to }) => {
+  const wasTranslucent = from.replace(/^#/, "").length === 8;
+  const isTranslucent = to.replace(/^#/, "").length === 8;
+  return wasTranslucent && !isTranslucent;
+});
+
+if (flattened.length > 0) {
+  console.log(
+    `\n${flattened.length} colour(s) lost their alpha — a design tool that stores`,
+  );
+  console.log("only 6-digit hex did this, and it is not a decision anybody made:");
+  for (const { from, key, to } of flattened) {
+    console.log(`  ${key}: ${from} → ${to}`);
+  }
+  console.log("Keep the values in the source. Do not apply these.");
+  process.exit(1);
+}
+
 // ── Whether the palette still holds ─────────────────────────────────────────
 // Applied to a copy of the real palette so a file that only carries three colours
 // is still judged against the surfaces those three will land on.
