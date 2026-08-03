@@ -7,6 +7,7 @@ import { Field } from "./Field";
 import {
   AuthForm,
   AuthMessage,
+  AuthProviders,
   AuthShell,
   AuthSubmit,
   AuthSwitch,
@@ -24,6 +25,16 @@ function SignInExample({ initialError = "" }: { initialError?: string }) {
 
   return (
     <AuthShell
+      aside={
+        <>
+          <p>You can also continue with an account you already have.</p>
+          <AuthProviders>
+            <Button variant="secondary">Continue with Google</Button>
+            <Button variant="secondary">Continue with Microsoft</Button>
+            <Button variant="secondary">Continue with Apple</Button>
+          </AuthProviders>
+        </>
+      }
       eyebrow="Private by default"
       introduction="Open your calendars from your own Musubi server."
       title="Welcome back"
@@ -91,6 +102,23 @@ export const SignIn: Story = {
 export const ServerError: Story = {
   render: () => (
     <SignInExample initialError="We could not reach this Musubi server." />
+  ),
+};
+
+/** One column at every width — what onboarding's short steps use. */
+export const Stacked: Story = {
+  render: () => (
+    <AuthShell
+      eyebrow="Step 1 of 3"
+      introduction="Two questions and you are in. Everything here can be changed later in settings."
+      layout="stacked"
+      title="Welcome to Musubi"
+    >
+      <Field label="Your name">
+        <input defaultValue="Mika" />
+      </Field>
+      <Button>Continue</Button>
+    </AuthShell>
   ),
 };
 

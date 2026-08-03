@@ -9,19 +9,32 @@ import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
 
 type AuthShellProps = {
+  /**
+   * The second way in, in a column of its own behind a rule. Providers are an
+   * alternative to the form, not a step before it, and stacking them above it
+   * made them read as the first thing to try.
+   */
+  aside?: ReactNode;
   children: ReactNode;
   eyebrow: ReactNode;
   footer?: ReactNode;
   introduction: ReactNode;
+  /**
+   * `stacked` keeps the one-column card at every width. For a flow of short
+   * steps the two columns leave the form floating beside two lines of copy.
+   */
+  layout?: "columns" | "stacked";
   title: ReactNode;
   utility?: ReactNode;
 };
 
 export function AuthShell({
+  aside,
   children,
   eyebrow,
   footer,
   introduction,
+  layout = "columns",
   title,
   utility,
 }: AuthShellProps) {
@@ -38,7 +51,11 @@ export function AuthShell({
         {utility}
       </header>
 
-      <section className={styles.authCard} aria-labelledby="login-title">
+      <section
+        className={styles.authCard}
+        aria-labelledby="login-title"
+        data-layout={aside ? "split" : layout}
+      >
         <div className={styles.authCopy}>
           <p className={styles.pageEyebrow}>{eyebrow}</p>
           <h1 id="login-title">{title}</h1>
@@ -46,8 +63,18 @@ export function AuthShell({
         </div>
         <div className={styles.authContent}>
           {children}
-          {footer ? <div className={styles.authFooter}>{footer}</div> : null}
+          {footer && !aside ? (
+            <div className={styles.authFooter}>{footer}</div>
+          ) : null}
         </div>
+        {/* The footer follows the aside: with a column of its own it belongs
+            under the rule, not stranded below the submit button. */}
+        {aside ? (
+          <aside className={styles.authAside}>
+            {aside}
+            {footer ? <div className={styles.authFooter}>{footer}</div> : null}
+          </aside>
+        ) : null}
       </section>
     </main>
   );
@@ -85,21 +112,7 @@ export function AuthMessage({
   );
 }
 
-/**
- * The "or" between the provider buttons and the email form.
- *
- * A rule with a word in it, not a heading: both halves are the same choice made
- * two ways, and calling one of them a section would rank them.
- */
-export function AuthDivider({ children }: { children: ReactNode }) {
-  return (
-    <div aria-hidden="true" className={styles.authDivider}>
-      <span>{children}</span>
-    </div>
-  );
-}
-
-/** The provider buttons, stacked, above the divider. */
+/** The provider buttons, stacked, in the aside column. */
 export function AuthProviders({ children }: { children: ReactNode }) {
   return <div className={styles.authProviders}>{children}</div>;
 }

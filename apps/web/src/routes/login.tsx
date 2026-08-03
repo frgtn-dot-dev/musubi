@@ -8,7 +8,6 @@ import { getServerCapabilities } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import {
-  AuthDivider,
   AuthForm,
   AuthMessage,
   AuthProviders,
@@ -286,6 +285,29 @@ function LoginRoute() {
 
   return (
     <AuthShell
+      aside={
+        providers.length > 0 ? (
+          <>
+            <p className={styles.authAsideLead}>
+              You can also continue with an account you already have.
+            </p>
+            <AuthProviders>
+              {providers.map((provider) => (
+                <Button
+                  disabled={submitting}
+                  icon={<ProviderGlyph provider={provider.id} />}
+                  key={provider.id}
+                  onClick={() => continueWith(provider.id)}
+                  type="button"
+                  variant="secondary"
+                >
+                  {provider.label}
+                </Button>
+              ))}
+            </AuthProviders>
+          </>
+        ) : undefined
+      }
       eyebrow={signingUp ? "A new shared space" : "Welcome back"}
       footer={
         <AuthSwitch
@@ -303,25 +325,6 @@ function LoginRoute() {
       title={signingUp ? "Begin simply." : "Pick up where you left off."}
       utility={<ThemeToggle />}
     >
-      {providers.length > 0 ? (
-        <>
-          <AuthProviders>
-            {providers.map((provider) => (
-              <Button
-                disabled={submitting}
-                icon={<ProviderGlyph provider={provider.id} />}
-                key={provider.id}
-                onClick={() => continueWith(provider.id)}
-                type="button"
-                variant="secondary"
-              >
-                {provider.label}
-              </Button>
-            ))}
-          </AuthProviders>
-          <AuthDivider>or</AuthDivider>
-        </>
-      ) : null}
       <AuthForm onSubmit={handleSubmit} noValidate>
         {signingUp ? (
           <Field label="Name" variant="plain">

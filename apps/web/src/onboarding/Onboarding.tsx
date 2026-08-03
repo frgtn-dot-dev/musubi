@@ -20,6 +20,30 @@ import styles from "./onboarding.module.css";
 const STEPS = 3;
 
 /**
+ * Three marks, the current one lit.
+ *
+ * `role="img"` with a label: the dots are a picture of the progress, and a
+ * screen reader needs the sentence they replaced, not three empty spans.
+ */
+function StepDots({ step }: { step: number }) {
+  return (
+    <span
+      aria-label={`Step ${step} of ${STEPS}`}
+      className={styles.dots}
+      role="img"
+    >
+      {Array.from({ length: STEPS }, (_, index) => (
+        <span
+          aria-hidden="true"
+          data-current={index + 1 === step ? "" : undefined}
+          key={index}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
  * First run in the browser.
  *
  * The same three questions the phone asks (`apps/client/app/onboarding`), gated
@@ -111,9 +135,47 @@ export function Onboarding({
     }, "Could not start the connection.");
   }
 
+  const primaryAction =
+    step < STEPS ? (
+      <Button
+        loading={busy}
+        onClick={() =>
+          void attempt(async () => {
+            if (step === 1) {
+              const trimmed = name.trim();
+              if (trimmed && trimmed !== userName) {
+                const result = await authClient.updateUser({ name: trimmed });
+                if (result?.error) throw new Error(result.error.message);
+              }
+            }
+            if (step === 2 && personal) {
+              const trimmed = calendarName.trim() || "Personal";
+              if (trimmed !== personal.name || color !== personal.color) {
+                await onUpdateCalendar({ ...personal, color, name: trimmed });
+              }
+            }
+            setStep(step + 1);
+          }, "That could not be saved. Try again.")
+        }
+      >
+        Continue
+      </Button>
+    ) : (
+      <Button
+        loading={busy}
+        variant={providers.length > 0 ? "secondary" : "primary"}
+        onClick={() =>
+          void attempt(finish, "Could not finish setting up. Try again.")
+        }
+      >
+        {providers.length > 0 ? "Not now" : "Open my calendar"}
+      </Button>
+    );
+
   return (
     <AuthShell
-      eyebrow={`Step ${step} of ${STEPS}`}
+      eyebrow={<StepDots step={step} />}
+      layout="stacked"
       introduction={
         step === 1
           ? "Two questions and you are in. Everything here can be changed later in settings."
@@ -131,20 +193,26 @@ export function Onboarding({
       utility={<ThemeToggle />}
     >
       <div className={styles.step}>
+        {/* The step's one answer and the way onward share a line: a single
+            field with the button parked underneath reads as a form that lost
+            the rest of itself. */}
         {step === 1 ? (
-          <Field label="Your name">
-            <input
-              autoComplete="name"
-              name="name"
-              placeholder="How other people see you"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
+          <div className={styles.fieldRow}>
+            <Field label="Your name">
+              <input
+                autoComplete="name"
+                name="name"
+                placeholder="How other people see you"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+            {primaryAction}
+          </div>
         ) : null}
 
         {step === 2 ? (
-          <>
+          <div className={styles.fieldRow}>
             <Field label="Calendar name">
               <input
                 name="calendar"
@@ -153,12 +221,8 @@ export function Onboarding({
                 onChange={(event) => setCalendarName(event.target.value)}
               />
             </Field>
-            <ColorPicker
-              label="Colour"
-              value={color}
-              onChange={setColor}
-            />
-          </>
+            <ColorPicker label="Colour" value={color} onChange={setColor} />
+          </div>
         ) : null}
 
         {step === 3 ? (
@@ -196,8 +260,8 @@ export function Onboarding({
           </p>
         ) : null}
 
-        <div className={styles.actions}>
-          {step > 1 ? (
+        {step > 1 ? (
+          <div className={styles.actions}>
             <Button
               disabled={busy}
               variant="secondary"
@@ -205,50 +269,9 @@ export function Onboarding({
             >
               Back
             </Button>
-          ) : null}
-
-          {step < STEPS ? (
-            <Button
-              loading={busy}
-              onClick={() =>
-                void attempt(async () => {
-                  if (step === 1) {
-                    const trimmed = name.trim();
-                    if (trimmed && trimmed !== userName) {
-                      const result = await authClient.updateUser({
-                        name: trimmed,
-                      });
-                      if (result?.error) throw new Error(result.error.message);
-                    }
-                  }
-                  if (step === 2 && personal) {
-                    const trimmed = calendarName.trim() || "Personal";
-                    if (trimmed !== personal.name || color !== personal.color) {
-                      await onUpdateCalendar({
-                        ...personal,
-                        color,
-                        name: trimmed,
-                      });
-                    }
-                  }
-                  setStep(step + 1);
-                }, "That could not be saved. Try again.")
-              }
-            >
-              Continue
-            </Button>
-          ) : (
-            <Button
-              loading={busy}
-              variant={providers.length > 0 ? "secondary" : "primary"}
-              onClick={() =>
-                void attempt(finish, "Could not finish setting up. Try again.")
-              }
-            >
-              {providers.length > 0 ? "Not now" : "Open my calendar"}
-            </Button>
-          )}
-        </div>
+            {primaryAction}
+          </div>
+        ) : null}
       </div>
     </AuthShell>
   );
