@@ -27,7 +27,7 @@ import {
   handlerPutPublicRsvp,
   handlerRevokeEventShare,
 } from "./handlers/event_shares";
-import { ForbiddenError } from "@musubi/types";
+import { BadRequestError, ForbiddenError } from "@musubi/types";
 import { rateLimit } from "./middleware/rate_limit";
 import { handlerCreateCalendarInvite, handlerGetCalendarInvites, handlerRevokeInvite } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
@@ -120,6 +120,19 @@ app.all("/api/auth/{*any}", toNodeHandler(auth));
 // Grouped by resource to mirror docs/reference/server.mdx.
 const wrap = (handler: (req: any, res: any) => Promise<unknown>): express.RequestHandler =>
   (req, res, next) => { Promise.resolve(handler(req, res)).catch(next); };
+
+// Clients address an occurrence of a series as "<uuid>_<timestamp>", but only
+// the master is a row. Checked once here rather than in each handler: without
+// it the id reaches Postgres, which rejects the cast and turns a client mistake
+// into a 500 with a query in the log.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+app.param("eventId", (_req, _res, next, value: string) => {
+  next(
+    UUID.test(value)
+      ? undefined
+      : new BadRequestError("eventId must be an event id, not an occurrence."),
+  );
+});
 
 // Server (public)
 app.get("/api/v1/server", handlerServer);

@@ -39,8 +39,11 @@
   content: "";
 }
 
+/* Grows into the free space so the header's buttons stay together on the right;
+   space-between alone parked Share in the middle of the row. */
 .titleBlock {
   display: grid;
+  flex: 1;
   min-width: 0;
   gap: var(--space-2);
 }
@@ -204,18 +207,78 @@
 
 .attendeeSection {
   display: grid;
-  justify-items: start;
+  gap: var(--space-3);
+}
+
+.attendeeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* The toggle carries the label, so it inherits the heading's type instead of
+   the button's and drops the inset that would push the label off the column. */
+.attendeeToggle {
   gap: var(--space-2);
+  padding-inline: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
 }
 
-.attendeeSection .sectionHeading {
-  margin-bottom: 0;
+.facepile {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
 }
 
-.attendeeSection strong {
-  color: var(--text-primary);
-  font-size: var(--text-13);
-  font-weight: 500;
+/* A ring in the canvas colour is what separates the overlapping circles. */
+.facepile > * {
+  border: 2px solid var(--surface-canvas);
+}
+
+.facepile > * + * {
+  margin-left: -10px;
+}
+
+.facepileMore {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.attendeeList {
+  display: grid;
+  max-height: 216px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  gap: var(--space-3);
+  list-style: none;
+}
+
+.attendeeList li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.attendeeList span {
+  overflow: hidden;
+  font-size: var(--text-14);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendarActions {
@@ -320,11 +383,10 @@
   padding-inline: var(--space-2);
 }
 
-/* One step away from the three routine actions. Same row and same silhouette —
-   colour and this gap are what say the next press is the one that cannot be
-   taken back. */
+/* One step away from the three routine actions. Same row, same silhouette, same
+   column width — colour alone says the next press cannot be taken back. A left
+   margin only shrank this one button out of alignment with its neighbours. */
 .deleteAction {
-  margin-left: var(--space-2);
   color: var(--accent-primary);
 }
 

@@ -10,6 +10,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   CopyPlus,
   FileText,
@@ -31,6 +33,7 @@ import type {
 import { useEffect, useId, useRef, useState } from "react";
 import type { Attendee, RemoveEventResponse } from "~/api/contracts";
 import { getEventAttendees } from "~/api/resources";
+import { Avatar } from "~/ui/Avatar";
 import { Button, IconButton } from "~/ui/Button";
 import {
   ConfirmationDialog,
@@ -96,6 +99,9 @@ export type EventActionHandlers = {
   onUpdateEvent: (event: Event) => Promise<Event>;
   user: { id: string; name: string };
 };
+
+/** Faces before the pile turns into "+N", the same count the phone shows. */
+const FACEPILE_LIMIT = 7;
 
 type DeleteScope = "occurrence" | "following" | "series";
 type DeletePrompt = "confirm" | "scope";
@@ -187,6 +193,7 @@ export function EventDetailsPopover({
   );
   const canAddToCalendar = targetCalendars.length > 0;
   const [attendees, setAttendees] = useState<Attendee[]>();
+  const [attendeesOpen, setAttendeesOpen] = useState(false);
   const isAttending =
     attendees?.some((attendee) => attendee.id === user.id) ?? false;
   const eventCalendars = event.calendars
@@ -688,33 +695,98 @@ export function EventDetailsPopover({
                       aria-labelledby={guestsTitleId}
                       className={styles.attendeeSection}
                     >
-                      <div className={styles.sectionHeading}>
-                        <UsersRound aria-hidden="true" size={17} />
-                        <SectionLabel id={guestsTitleId} level={3}>
-                          Guests
+                      {/* Same anatomy as the phone: the count doubles as the
+                          expand toggle, the answer sits on the right. */}
+                      <div className={styles.attendeeHeader}>
+                        {/* The button lives inside the heading, not the other
+                            way round: a heading is not phrasing content, so a
+                            button wrapping it is invalid markup. */}
+                        <SectionLabel
+                          className={styles.attendeeHeading}
+                          id={guestsTitleId}
+                          level={3}
+                        >
+                          <Button
+                            aria-expanded={attendeesOpen}
+                            className={styles.attendeeToggle}
+                            disabled={!attendees}
+                            icon={
+                              <UsersRound
+                                aria-hidden="true"
+                                size={15}
+                                strokeWidth={1.6}
+                              />
+                            }
+                            size="compact"
+                            variant="ghost"
+                            onClick={() => setAttendeesOpen((open) => !open)}
+                          >
+                            {attendees
+                              ? `Attendees · ${attendees.length}`
+                              : "Attendees"}
+                            {attendeesOpen ? (
+                              <ChevronUp aria-hidden="true" size={14} />
+                            ) : (
+                              <ChevronDown aria-hidden="true" size={14} />
+                            )}
+                          </Button>
                         </SectionLabel>
-                      </div>
-                      <strong>
-                        {!attendees
-                          ? "Loading guests…"
-                          : `${attendees.length} attending`}
-                      </strong>
-                      {attendees ? (
-                        <>
-                          <p>
-                            {attendees.map((item) => item.name).join(", ") ||
-                              "Be the first to attend."}
-                          </p>
+                        {attendees ? (
                           <Button
                             loading={busyAction === "attendance"}
                             size="compact"
-                            variant="secondary"
+                            variant={isAttending ? "secondary" : "primary"}
                             onClick={() => void handleAttendance()}
                           >
                             {isAttending ? "Leave" : "Attend"}
                           </Button>
-                        </>
-                      ) : null}
+                        ) : null}
+                      </div>
+
+                      {/* The facepile falls apart into the list — one or the
+                          other, never both. */}
+                      {!attendees ? (
+                        <p>Loading guests…</p>
+                      ) : attendees.length === 0 ? (
+                        <p>Be the first to attend.</p>
+                      ) : attendeesOpen ? (
+                        <ul className={styles.attendeeList}>
+                          {attendees.map((item) => (
+                            <li key={item.id}>
+                              <Avatar
+                                image={item.image}
+                                name={item.name}
+                                size={32}
+                              />
+                              <span>{item.name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <button
+                          aria-label="Show every attendee"
+                          className={styles.facepile}
+                          type="button"
+                          onClick={() => setAttendeesOpen(true)}
+                        >
+                          {attendees.slice(0, FACEPILE_LIMIT).map((item) => (
+                            <Avatar
+                              image={item.image}
+                              key={item.id}
+                              name={item.name}
+                              size={32}
+                            />
+                          ))}
+                          {attendees.length > FACEPILE_LIMIT ? (
+                            <span
+                              aria-hidden="true"
+                              className={styles.facepileMore}
+                            >
+                              +{attendees.length - FACEPILE_LIMIT}
+                            </span>
+                          ) : null}
+                        </button>
+                      )}
                     </section>
                   ) : null}
 
@@ -886,7 +958,9 @@ export function EventDetailsPopover({
 
       {sharing ? (
         <ShareEventDialog
-          eventId={event.id}
+          /* The master, like every other write here: an occurrence is addressed
+             as "<uuid>_<timestamp>" and only the master exists as a row. */
+          eventId={master.id}
           eventTitle={event.title}
           onNotice={onNotice}
           onOpenChange={(open) => {
