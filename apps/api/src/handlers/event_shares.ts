@@ -85,6 +85,12 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   if (indexable && mode !== "public") {
     throw new BadRequestError("Only a public event page can be indexable...");
   }
+  // Publishing straight from the public page: the account was made a moment ago
+  // by an emailed code, and "Organized by" reads from the profile. Only fills an
+  // empty name, so it can never rewrite an existing one.
+  const organizer = String(req.body?.name ?? "").trim().slice(0, 80);
+  if (organizer) await nameAnonymousUser(req.user!.id, organizer);
+
   if (!VISIBILITIES.has(attendeeVisibility)) {
     throw new BadRequestError(
       "attendeeVisibility must be counts, names or hidden...",

@@ -11,7 +11,7 @@ import { PollForm } from "~/calendar/components/PollForm";
 import { BrandMark } from "~/components/BrandMark";
 import { EmailIdentity } from "~/components/EmailIdentity";
 import { Button } from "~/ui/Button";
-import styles from "./find-a-time.module.css";
+import styles from "~/components/public-page.module.css";
 
 const TITLE = "Find a time everyone can make — Musubi";
 const DESCRIPTION =

@@ -6007,6 +6007,96 @@ test("picks poll days by dragging a run and by taking a weekday column", async (
   await expect(dialog.getByText("Pick at least one day")).toBeVisible();
 });
 
+test("makes an event page from the public page with no account", async ({
+  page,
+}) => {
+  let signedIn = false;
+  let created: { calendars: string[]; start: string; title: string } | undefined;
+  let published: { mode: string; name?: string } | undefined;
+  await page.route("**/api/auth/get-session", (route) =>
+    respond(
+      route,
+      signedIn
+        ? { session: { id: "s" }, user: { email: "z@example.com", id: "guest", name: "" } }
+        : null,
+    ),
+  );
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+    respond(route, { success: true }),
+  );
+  await page.route("**/api/auth/sign-in/email-otp", (route) => {
+    signedIn = true;
+    return respond(route, { token: "t", user: { id: "guest" } });
+  });
+  await page.route("**/api/v1/calendars", (route) =>
+    respond(route, [
+      { ...calendars[0], id: "cal-personal", isDefault: true, name: "Personal" },
+    ]),
+  );
+  await page.route("**/api/v1/events", (route) => {
+    created = route.request().postDataJSON();
+    return respond(
+      route,
+      { ...created, creatorID: "guest", id: "event-1", isCanceled: false },
+      201,
+    );
+  });
+  await page.route("**/api/v1/events/event-1/share", (route) => {
+    published = route.request().postDataJSON();
+    return respond(route, {
+      attendeeVisibility: "counts",
+      indexable: false,
+      mode: "link",
+      theme: { cover: "wash", font: "serif", layout: "classic", palette: "sand" },
+      token: "abc",
+      url: "http://127.0.0.1:3000/e/abc",
+    });
+  });
+  await page.clock.setFixedTime(new Date("2026-08-03T10:00:00"));
+
+  await page.goto("/new-event");
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "index, follow",
+  );
+
+  await page.getByLabel("What is happening").fill("Studio opening");
+  // The date picker is a button and a mini calendar, not a text field.
+  await page.getByRole("button", { name: /^Date:/ }).click();
+  await page
+    .getByRole("gridcell", { name: "Thursday, August 20, 2026" })
+    .click();
+  await page.getByLabel("From").fill("17:30");
+  await page.getByLabel("Where (optional)").fill("Studio, Brno");
+  // The length is kept when the start moves, rather than the event shrinking.
+  await expect(page.getByLabel("To")).toHaveValue("18:30");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // Still nothing on the server: the address comes first.
+  expect(created).toBeUndefined();
+  await page.getByLabel("Your name").fill("Zoe");
+  await page.getByLabel("Email").fill("z@example.com");
+  await page.getByRole("button", { name: "Send me a code" }).click();
+  await page.getByLabel("Code from your email").fill("123456");
+  await page.getByRole("button", { name: "Confirm and publish" }).click();
+
+  await expect(page.getByRole("textbox", { name: "Event link" })).toHaveValue(
+    "http://127.0.0.1:3000/e/abc",
+  );
+  // Into the personal calendar the account already has, at the wall clock typed
+  // in Europe/Prague, and unlisted rather than indexable.
+  expect(created).toMatchObject({
+    calendars: ["cal-personal"],
+    location: "Studio, Brno",
+    start: "2026-08-20T15:30:00.000Z",
+    title: "Studio opening",
+  });
+  expect(published).toMatchObject({ mode: "link", name: "Zoe" });
+
+  await expectNoAccessibilityViolations(page);
+});
+
 test("makes a poll from the public page with no account", async ({ page }) => {
   let signedIn = false;
   let created: { name?: string; slots: Array<{ start: string }> } | undefined;

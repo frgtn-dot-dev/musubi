@@ -339,6 +339,8 @@ export function publishEvent(input: {
   eventId: string;
   indexable: boolean;
   mode: "link" | "public";
+  /** Names an account that has none yet — a page made from /new-event. */
+  name?: string;
   theme: EventPageTheme;
 }) {
   return apiRequest(`/api/v1/events/${input.eventId}/share`, {
@@ -346,6 +348,7 @@ export function publishEvent(input: {
       attendeeVisibility: input.attendeeVisibility,
       indexable: input.indexable,
       mode: input.mode,
+      name: input.name,
       theme: input.theme,
     },
     method: "PUT",

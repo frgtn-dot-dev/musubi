@@ -15,6 +15,7 @@ import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
 import { Route as FindATimeRouteImport } from './routes/find-a-time'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NewEventRouteImport } from './routes/new-event'
 import { Route as ETokenRouteImport } from './routes/e.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as STokenRouteImport } from './routes/s.$token'
@@ -50,6 +51,11 @@ const HealthzRoute = HealthzRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewEventRoute = NewEventRouteImport.update({
+  id: '/new-event',
+  path: '/new-event',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ETokenRoute = ETokenRouteImport.update({
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/find-a-time': typeof FindATimeRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
+  '/new-event': typeof NewEventRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/s/$token': typeof STokenRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/find-a-time': typeof FindATimeRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
+  '/new-event': typeof NewEventRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/s/$token': typeof STokenRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/find-a-time': typeof FindATimeRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
+  '/new-event': typeof NewEventRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/s/$token': typeof STokenRoute
@@ -135,6 +144,7 @@ export interface FileRouteTypes {
     | '/find-a-time'
     | '/healthz'
     | '/login'
+    | '/new-event'
     | '/e/$token'
     | '/invite/$token'
     | '/s/$token'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/find-a-time'
     | '/healthz'
     | '/login'
+    | '/new-event'
     | '/e/$token'
     | '/invite/$token'
     | '/s/$token'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/find-a-time'
     | '/healthz'
     | '/login'
+    | '/new-event'
     | '/e/$token'
     | '/invite/$token'
     | '/s/$token'
@@ -178,6 +190,7 @@ export interface RootRouteChildren {
   FindATimeRoute: typeof FindATimeRoute
   HealthzRoute: typeof HealthzRoute
   LoginRoute: typeof LoginRoute
+  NewEventRoute: typeof NewEventRoute
   ETokenRoute: typeof ETokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   STokenRoute: typeof STokenRoute
@@ -225,6 +238,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/new-event': {
+      id: '/new-event'
+      path: '/new-event'
+      fullPath: '/new-event'
+      preLoaderRoute: typeof NewEventRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/e/$token': {
@@ -293,6 +313,7 @@ const rootRouteChildren: RootRouteChildren = {
   FindATimeRoute: FindATimeRoute,
   HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
+  NewEventRoute: NewEventRoute,
   ETokenRoute: ETokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   STokenRoute: STokenRoute,
