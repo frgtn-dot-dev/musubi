@@ -100,3 +100,53 @@ export function penpotTokens(): TokenGroup {
     text: dimensions(typeSizes),
   };
 }
+
+type Leaf = { $value?: unknown };
+
+/**
+ * Every leaf with a `$value`, keyed by its dotted path.
+ *
+ * Walked rather than indexed, because a design tool is free to nest differently,
+ * reorder, or add `$description` on the way out. Only the leaves are the
+ * agreement, and only their paths have to match.
+ */
+export function flattenTokens(
+  node: unknown,
+  path: string[] = [],
+): Map<string, string> {
+  const found = new Map<string, string>();
+  if (typeof node !== "object" || node === null) return found;
+
+  const value = (node as Leaf).$value;
+  if (value !== undefined) {
+    found.set(path.join("."), String(value));
+    return found;
+  }
+
+  for (const [key, child] of Object.entries(node)) {
+    // `$type`, `$description` and anything else the spec puts beside a value.
+    if (key.startsWith("$")) continue;
+    for (const [leafPath, leafValue] of flattenTokens(child, [...path, key])) {
+      found.set(leafPath, leafValue);
+    }
+  }
+
+  return found;
+}
+
+/**
+ * `#1c1b1814` back to the `rgba()` form `theme-tokens.ts` is written in.
+ *
+ * The source keeps translucent colours as `rgba()` so the alpha is a number
+ * somebody can reason about — 0.08 is a hairline, 0x14 is a lookup.
+ */
+export function toSourceColor(hex: string): string {
+  const digits = hex.replace(/^#/, "");
+  if (digits.length !== 8) return hex.toLowerCase();
+
+  const channel = (index: number) =>
+    Number.parseInt(digits.slice(index * 2, index * 2 + 2), 16);
+  const alpha = Number((channel(3) / 255).toFixed(2));
+
+  return `rgba(${channel(0)}, ${channel(1)}, ${channel(2)}, ${alpha})`;
+}

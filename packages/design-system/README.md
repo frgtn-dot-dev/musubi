@@ -33,6 +33,22 @@ are the token names exactly as the code spells them (`light.surfaceCanvas`, not
 Colours are 8-digit hex when translucent (`#1c1b1814`) and 6-digit when not.
 Dimensions and durations carry their unit (`16px`, `220ms`).
 
+Check an export before applying it:
+
+```
+pnpm check-tokens ~/Downloads/musubi-tokens.json
+```
+
+It prints what changed, in the form the source is written in (`#1c1b1814` comes
+back as `rgba(28, 27, 24, 0.08)`, so it can be pasted straight in), and then runs
+the palette's own contrast rules over the result. Exit 1 means a text colour
+stopped clearing 4.5:1 somewhere — those lines must not be applied. Tokens the
+file omits are left alone; keys that are not Musubi tokens are listed and ignored.
+
+It never writes `theme-tokens.ts`. That file carries the reasoning for each value
+— why `textMuted` is exactly 0.64, which surface is its worst case — and a
+generator would replace all of it with a hex code.
+
 Two things deliberately do not travel:
 
 - **`shadowOverlay`** is a whole CSS shadow — offsets, blur and a colour — not a

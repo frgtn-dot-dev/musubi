@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { penpotTokens } from "./penpot-tokens";
+import { parseColor } from "./contrast";
+import {
+  flattenTokens,
+  penpotTokens,
+  toSourceColor,
+} from "./penpot-tokens";
 import { themeTokens } from "./theme-tokens";
 
 const generatedPath = fileURLToPath(
@@ -51,6 +56,54 @@ const generatedPath = fileURLToPath(
   assert.equal(tokens.motion!.standard!.$value, "220ms");
   assert.equal(tokens.motion!.standard!.$type, "duration");
   assert.equal(tokens.radius!.pill!.$value, "999px");
+}
+
+// ── And back in again ────────────────────────────────────────────────────────
+// A design tool may nest differently, reorder, or hang a `$description` beside a
+// value on the way out. Only the leaf paths are the agreement, so reading has to
+// find them wherever they sit.
+{
+  const nested = {
+    light: {
+      $description: "edited in a design tool",
+      surfaceCanvas: { $type: "color", $value: "#f4f1e8" },
+    },
+    spacing: { 4: { $type: "dimension", $value: "18px" } },
+  };
+  const flat = flattenTokens(nested);
+  assert.equal(flat.get("light.surfaceCanvas"), "#f4f1e8");
+  assert.equal(flat.get("spacing.4"), "18px");
+  assert.equal(flat.size, 2, "$description is not a token");
+
+  // The whole export flattens to one leaf per token and nothing else.
+  const round = flattenTokens(penpotTokens());
+  assert.equal(round.get("light.borderSubtle"), "#1c1b1814");
+  assert.equal(round.get("motion.standard"), "220ms");
+
+  // Translucent colours come home as the `rgba()` the source is written in, so a
+  // value can be pasted straight in. Opaque ones stay hex, as the source has them.
+  assert.equal(toSourceColor("#1c1b1814"), "rgba(28, 27, 24, 0.08)");
+  assert.equal(toSourceColor("#f4f1e8f0"), "rgba(244, 241, 232, 0.94)");
+  assert.equal(toSourceColor("#B3492F"), "#b3492f");
+
+  // Every colour survives the trip out and back — as a colour, which is the claim
+  // the loop actually makes. Not as a string: the source writes white as `#fff`
+  // and it comes home as `#ffffff`, which is the same white.
+  for (const [name, value] of Object.entries(themeTokens.light)) {
+    if (name.startsWith("shadow")) continue;
+    const returned = parseColor(toSourceColor(round.get(`light.${name}`)!));
+    const original = parseColor(value);
+    assert.deepEqual(
+      returned.rgb,
+      original.rgb,
+      `light.${name} changed colour on the round trip`,
+    );
+    // 8-bit alpha, so 0.74 comes home as 0.74 and not 0.7411764705882353.
+    assert.ok(
+      Math.abs(returned.alpha - original.alpha) < 0.005,
+      `light.${name} alpha drifted: ${original.alpha} → ${returned.alpha}`,
+    );
+  }
 }
 
 // ── The committed file is the current one ────────────────────────────────────
