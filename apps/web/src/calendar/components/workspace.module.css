@@ -1431,9 +1431,6 @@
   --month-day-fixed-space: 38px;
   --month-event-height: 21px;
   --month-event-gap: 3px;
-  /* What a cell takes out of its own width: both paddings and the divider. An
-     all-day bar has to add it back for every further cell it reaches into. */
-  --month-cell-gutter: 15px;
   display: grid;
   min-height: 0;
   /* Row count is set by the grid it draws — six for a month, one to twenty for
@@ -1469,9 +1466,7 @@
    the divider — so the 1px border stays uncovered and draws a line through it. On
    a solid chip that seam is invisible; through the draft's translucent fill it is
    not, so the cell holding a draft drops the clip while it is on screen. */
-.dayCell:has(.dayDraft),
-.dayCell:has(.eventChipBar),
-.dayCell:has([data-drag-preview]) {
+.dayCell:has(.dayDraft) {
   overflow: visible;
 }
 
@@ -1522,14 +1517,10 @@
   text-transform: uppercase;
 }
 
-/* Fixed lines, not content-sized ones: a lane a bar reserved but this day does
-   not fill has to hold its height, or the block below it slides up under the
-   bar. Same height the capacity measurement assumes. */
 .dayEvents {
   --event-bleed: 8px;
   display: grid;
-  grid-auto-rows: var(--month-event-height);
-  gap: var(--month-event-gap);
+  gap: 3px;
   padding-top: 3px;
 }
 
@@ -1560,10 +1551,7 @@
     transform var(--motion-fast) ease;
 }
 
-/* `data-hovered` is set on every segment of a multi-day event at once, so the
-   whole span lifts rather than the one cell under the pointer. */
 .eventChip:hover,
-.eventChip[data-hovered],
 .eventChip:focus-visible {
   color: var(--event-foreground);
   filter: saturate(1.1);
@@ -1576,8 +1564,7 @@
 }
 
 .eventChip[data-state="open"],
-.eventChip[data-state="open"]:hover,
-.eventChip[data-state="open"][data-hovered] {
+.eventChip[data-state="open"]:hover {
   transform: none;
 }
 
@@ -1613,22 +1600,6 @@
 .eventChipContinuesBoth {
   width: calc(100% + var(--event-bleed) + var(--event-bleed));
   border-radius: 0;
-}
-
-/* One all-day event, one element, laid across the days it covers. Inline left,
-   width and top come from the week's layout; the continuation classes may only
-   square off the ends. */
-/* One all-day event, one element. It starts in its own cell and reaches across
-   the ones it covers, so it is drawn over their content rather than under it. */
-.monthGrid[data-dragging] .eventChipBar {
-  pointer-events: none;
-}
-
-.eventChipBar {
-  position: relative;
-  z-index: 3;
-  margin: 0;
-  justify-self: start;
 }
 
 .eventChipLabelVisible {

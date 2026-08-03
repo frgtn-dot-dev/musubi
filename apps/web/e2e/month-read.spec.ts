@@ -570,10 +570,8 @@ test("reads, filters and signs out of the authenticated Month", async ({
   await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
   await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
-  // All-day events are one bar per week, however many days they cover: the
-  // retreat sits inside one week, the holiday crosses into a second.
-  await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /Family holiday/ })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(5);
+  await expect(page.getByRole("button", { name: /Family holiday/ })).toHaveCount(6);
   await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(5);
 
   await page.getByRole("button", { name: /Studio retreat/ }).first().click();
@@ -5937,54 +5935,6 @@ test("a press that closes a dialog does not also create an event", async ({
   // dismissal rather than about the gesture.
   await page.mouse.click(x, y);
   await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
-});
-
-test("keeps a dragged all-day bar its own length", async ({ page }) => {
-  await mockAuthenticatedReads(page);
-  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-
-  const bar = page.getByRole("button", { name: /Studio retreat/ }).first();
-  await expect(bar).toBeVisible();
-  const from = (await bar.boundingBox())!;
-  const target = page.locator('[data-day-key="2026-07-14"]');
-  const to = (await target.boundingBox())!;
-
-  await page.mouse.move(from.x + 30, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
-    steps: 10,
-  });
-
-  const preview = target.locator("[data-drag-preview]");
-  await expect(preview).toHaveCount(1);
-  // Five days long before the drag, five days long during it: dropping it
-  // moves the event, it does not cut it down to a single day.
-  const previewBox = (await preview.boundingBox())!;
-  expect(Math.abs(previewBox.width - to.width * 5)).toBeLessThan(2);
-
-  await page.keyboard.press("Escape");
-  await page.mouse.up();
-});
-
-test("draws a multi-day all-day event as one bar per week", async ({
-  page,
-}) => {
-  await mockAuthenticatedReads(page);
-  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-
-  // Family holiday runs Fri 17 to Wed 22: three days in one week, three in the
-  // next. One event, so one bar in each of them — not a chip per cell.
-  const bars = page.getByRole("button", { name: /Family holiday/ });
-  await expect(bars).toHaveCount(2);
-
-  const cell = (await page
-    .locator('[data-day-key="2026-07-14"]')
-    .boundingBox())!;
-  for (const bar of await bars.all()) {
-    const box = (await bar.boundingBox())!;
-    // Three columns wide, within a pixel of the cells underneath it.
-    expect(Math.abs(box.width - cell.width * 3)).toBeLessThan(2);
-  }
 });
 
 test("stays inside its box with twenty calendars", async ({ page }) => {
