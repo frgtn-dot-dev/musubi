@@ -16,6 +16,7 @@ import { useCalendarTransfers } from "~/calendar/calendar-transfers";
 import { useSettingsMutations } from "~/calendar/settings-mutations";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
+import { Onboarding } from "~/onboarding/Onboarding";
 import {
   isCalendarView,
   type CalendarViewId,
@@ -158,6 +159,23 @@ function WorkspaceRoute() {
         kind="error"
         onRetry={() => void workspace.pages.refetch()}
         title="No calendar pages available."
+      />
+    );
+  }
+
+  // First run, in place rather than at another route: a reactive redirect here
+  // races the very queries it depends on. Not while offline — the flag cannot be
+  // written without a server, and a snapshot that predates it would ask again on
+  // every cold start.
+  if (!offline && workspace.settings.data.onboarded !== true) {
+    return (
+      <Onboarding
+        calendars={workspace.mergedCalendars}
+        onGetSettingsDocument={settingsMutations.getSettingsDocument}
+        onPatchSettings={settingsMutations.patchSettings}
+        onUpdateCalendar={calendarTransfers.updateCalendar}
+        userName={user?.name ?? ""}
+        onDone={() => void workspace.settings.refetch()}
       />
     );
   }

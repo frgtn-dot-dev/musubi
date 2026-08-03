@@ -5792,6 +5792,83 @@ test("a press that dismisses a preview does not also start a draft", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("walks a new account through onboarding once", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+
+  // Overrides after the shared mock, so these win: an account that has never
+  // finished setting up.
+  let revision = 1;
+  let state = { ...settings, onboarded: false };
+  let patched: unknown;
+  let renamed: unknown;
+  let named: unknown;
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, { syncProviders: ["google"] }),
+  );
+  await page.route("**/api/auth/update-user", (route) => {
+    named = route.request().postDataJSON();
+    return respond(route, { status: true });
+  });
+  await page.route("**/api/v1/users/settings", (route) => respond(route, state));
+  await page.route("**/api/v1/users/settings/document", (route) =>
+    respond(route, {
+      revision,
+      updatedAt: "2026-07-26T14:00:00.000Z",
+      value: state,
+    }),
+  );
+  await page.route("**/api/v1/users/me/settings", (route) => {
+    patched = route.request().postDataJSON();
+    revision += 1;
+    state = { ...state, onboarded: true };
+    return respond(route, {
+      revision,
+      updatedAt: "2026-07-26T14:01:00.000Z",
+      value: state,
+    });
+  });
+  await page.route("**/api/v1/calendars", async (route) => {
+    if (route.request().method() !== "PUT") return route.fallback();
+    renamed = route.request().postDataJSON();
+    return respond(route, renamed);
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Welcome to Musubi" }),
+  ).toBeVisible();
+  await expect(page.getByText("Step 1 of 3")).toBeVisible();
+
+  await page.getByLabel("Your name").fill("Zoe Novák");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // Step two renames the calendar the server already made — it never creates one.
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Your calendar" }),
+  ).toBeVisible();
+  await page.getByLabel("Calendar name").fill("Home");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Anything to bring/ }),
+  ).toBeVisible();
+  // Offered because this server advertises it, not because it was hard-coded.
+  await expect(
+    page.getByRole("button", { name: /Connect Google Calendar/ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Not now" }).click();
+
+  // Through to the calendar, and the flag is set so it never asks again.
+  await expect(page.getByRole("grid").first()).toBeVisible();
+  expect(named).toMatchObject({ name: "Zoe Novák" });
+  expect(renamed).toMatchObject({ name: "Home" });
+  expect(patched).toMatchObject({ baseRevision: 1, patch: { onboarded: true } });
+
+  await page.reload();
+  await expect(page.getByRole("grid").first()).toBeVisible();
+  await expect(page.getByText("Step 1 of 3")).toHaveCount(0);
+});
+
 const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2";
 
 test("creates a poll, collects answers and turns one into an event", async ({
