@@ -6396,6 +6396,66 @@ test("ui catalogue", async ({ page }) => {
   console.log(`${index} screenshots in ${UI_SHOTS}/${UI_SHOTS_THEME}`);
 });
 
+test("keeps the time on a chip while the cell can hold one", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  const chipState = () =>
+    page.evaluate(() => {
+      // The first cell with something in it: an empty day has no chip to read,
+      // and the month opens on one.
+      const cell = [...document.querySelectorAll('[class*="dayEvents"]')].find(
+        (el) => el.querySelector('[class*="eventTime"]'),
+      )!;
+      const time = cell.querySelector('[class*="eventTime"]');
+
+      return {
+        cell: Math.round(cell.getBoundingClientRect().width),
+        // One row per chip. The marks sit at `grid-column: -2`, so a
+        // single-column chip pushes them under the title and doubles its height.
+        heights: [
+          ...new Set(
+            [...cell.querySelectorAll('[class*="eventChip"]')].map((el) =>
+              Math.round(el.getBoundingClientRect().height),
+            ),
+          ),
+        ],
+        timeShown: time
+          ? window.getComputedStyle(time).display !== "none"
+          : false,
+      };
+    });
+
+  // 1023px is where the sidebar becomes a drawer, so the cells get *wider* than
+  // they are on a 1200px desktop. Keyed to the viewport, the time was dropped
+  // here (137px cells) and kept there (122px cells).
+  for (const width of [1023, 760]) {
+    await page.setViewportSize({ height: 900, width });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+    await expect(
+      page.getByRole("button", { name: /Weekly review/ }).first(),
+    ).toBeVisible();
+    const state = await chipState();
+    expect(state.cell).toBeGreaterThan(95);
+    expect(state.timeShown).toBe(true);
+    expect(state.heights).toHaveLength(1);
+  }
+
+  // Narrow enough that a time would leave no title: it goes, and the chip stays
+  // one row tall.
+  for (const width of [600, 390]) {
+    await page.setViewportSize({ height: 844, width });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+    await expect(
+      page.getByRole("button", { name: /Weekly review/ }).first(),
+    ).toBeVisible();
+    const state = await chipState();
+    expect(state.cell).toBeLessThan(95);
+    expect(state.timeShown).toBe(false);
+    expect(state.heights).toHaveLength(1);
+  }
+});
+
 test("counts what a search matched", async ({ page }) => {
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);

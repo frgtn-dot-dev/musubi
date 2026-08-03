@@ -2034,22 +2034,40 @@
   }
 
   .eventChip {
-    grid-template-columns: minmax(0, 1fr);
     padding-inline: 4px;
-  }
-
-  .eventTime {
-    display: none;
-  }
-
-  .eventTitle {
-    grid-column: 1;
   }
 
   .workspaceToast {
     --toast-left: 50%;
     --toast-bottom: 14px;
     width: calc(100vw - 24px);
+  }
+}
+
+/* The chip drops its time when the day cell is too narrow to hold one, which is
+   about 95px — the time itself is 27px and a title needs the rest to say
+   anything. That is a threshold on the cell, not on the window: below 1024px the
+   sidebar becomes a drawer and the cells get *wider*, so keyed to the viewport
+   this hid the time at 1023px (cell 137px) while showing it at 1200px (cell
+   122px). Seven columns of 95px, with no sidebar, is 665px. */
+@media (max-width: 664px) {
+  /* Scoped to the day cell, because the cell is the thing that ran out of room:
+     the same chip inside the "+N more" list has the width of a popover and keeps
+     its time.
+
+     Two columns, not one — the marks sit at `grid-column: -2`, and in a
+     single-column grid that line is the title's own, which put the recurrence
+     icon on a second row and made every repeating chip twice as tall. */
+  .dayEvents .eventChip {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dayEvents .eventChip .eventTitle {
+    grid-column: 1;
+  }
+
+  .dayEvents .eventTime {
+    display: none;
   }
 }
 
@@ -2196,10 +2214,18 @@
     display: none;
   }
 
+  /* One column, and nothing but the title in it. The marks are decoration the
+     screen reader never sees, and in a 49px cell they were taking a row of their
+     own under the name — a repeating event became a chip twice as tall as the
+     one next to it. */
   .eventChip {
     grid-template-columns: minmax(0, 1fr);
     min-height: 20px;
     gap: 0;
+  }
+
+  .dayEvents .eventChip .eventMarks {
+    display: none;
   }
 
   .eventTitle {
