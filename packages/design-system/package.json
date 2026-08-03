@@ -11,7 +11,7 @@
   },
   "scripts": {
     "generate": "tsx scripts/generate-css.ts",
-    "test": "tsx src/theme-tokens.test.ts && tsx src/event-page-themes.test.ts",
+    "test": "tsx src/theme-tokens.test.ts && tsx src/event-page-themes.test.ts && tsx src/penpot-tokens.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

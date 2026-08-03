@@ -4,6 +4,7 @@ export {
   parseColor,
   relativeLuminance,
 } from "./contrast";
+export { penpotTokens } from "./penpot-tokens";
 export {
   themeTokenCssVariables,
   themeTokens,

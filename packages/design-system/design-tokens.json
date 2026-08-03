@@ -1,0 +1,314 @@
+{
+  "dark": {
+    "surfaceCanvas": {
+      "$type": "color",
+      "$value": "#0c0c0e"
+    },
+    "surfacePanel": {
+      "$type": "color",
+      "$value": "#131316"
+    },
+    "surfaceRaised": {
+      "$type": "color",
+      "$value": "#1a1a1e"
+    },
+    "surfaceSunken": {
+      "$type": "color",
+      "$value": "#222226"
+    },
+    "surfaceOverlay": {
+      "$type": "color",
+      "$value": "#131316f5"
+    },
+    "borderSubtle": {
+      "$type": "color",
+      "$value": "#e8e4d90f"
+    },
+    "borderMedium": {
+      "$type": "color",
+      "$value": "#e8e4d91a"
+    },
+    "borderStrong": {
+      "$type": "color",
+      "$value": "#e8e4d92e"
+    },
+    "textPrimary": {
+      "$type": "color",
+      "$value": "#e8e4d9"
+    },
+    "textSecondary": {
+      "$type": "color",
+      "$value": "#e8e4d9b8"
+    },
+    "textMuted": {
+      "$type": "color",
+      "$value": "#e8e4d98f"
+    },
+    "textFaint": {
+      "$type": "color",
+      "$value": "#e8e4d947"
+    },
+    "accentPrimary": {
+      "$type": "color",
+      "$value": "#c8553d"
+    },
+    "accentOnPrimary": {
+      "$type": "color",
+      "$value": "#000000"
+    },
+    "controlFill": {
+      "$type": "color",
+      "$value": "#e8e4d9"
+    },
+    "controlOnFill": {
+      "$type": "color",
+      "$value": "#0c0c0e"
+    }
+  },
+  "light": {
+    "surfaceCanvas": {
+      "$type": "color",
+      "$value": "#f4f1e8"
+    },
+    "surfacePanel": {
+      "$type": "color",
+      "$value": "#efebe0"
+    },
+    "surfaceRaised": {
+      "$type": "color",
+      "$value": "#e8e3d5"
+    },
+    "surfaceSunken": {
+      "$type": "color",
+      "$value": "#dfd9c9"
+    },
+    "surfaceOverlay": {
+      "$type": "color",
+      "$value": "#f4f1e8f0"
+    },
+    "borderSubtle": {
+      "$type": "color",
+      "$value": "#1c1b1814"
+    },
+    "borderMedium": {
+      "$type": "color",
+      "$value": "#1c1b1821"
+    },
+    "borderStrong": {
+      "$type": "color",
+      "$value": "#1c1b183d"
+    },
+    "textPrimary": {
+      "$type": "color",
+      "$value": "#1c1b18"
+    },
+    "textSecondary": {
+      "$type": "color",
+      "$value": "#1c1b18bd"
+    },
+    "textMuted": {
+      "$type": "color",
+      "$value": "#1c1b18a3"
+    },
+    "textFaint": {
+      "$type": "color",
+      "$value": "#1c1b1852"
+    },
+    "accentPrimary": {
+      "$type": "color",
+      "$value": "#b3492f"
+    },
+    "accentOnPrimary": {
+      "$type": "color",
+      "$value": "#ffffff"
+    },
+    "controlFill": {
+      "$type": "color",
+      "$value": "#4a4741"
+    },
+    "controlOnFill": {
+      "$type": "color",
+      "$value": "#f4f1e8"
+    }
+  },
+  "motion": {
+    "fast": {
+      "$type": "duration",
+      "$value": "140ms"
+    },
+    "standard": {
+      "$type": "duration",
+      "$value": "220ms"
+    },
+    "slow": {
+      "$type": "duration",
+      "$value": "300ms"
+    }
+  },
+  "motionNative": {
+    "fast": {
+      "$type": "duration",
+      "$value": "160ms"
+    },
+    "standard": {
+      "$type": "duration",
+      "$value": "260ms"
+    },
+    "slow": {
+      "$type": "duration",
+      "$value": "320ms"
+    }
+  },
+  "radius": {
+    "sm": {
+      "$type": "dimension",
+      "$value": "5px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "9px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "14px"
+    },
+    "pill": {
+      "$type": "dimension",
+      "$value": "999px"
+    },
+    "sheet": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "card": {
+      "$type": "dimension",
+      "$value": "15px"
+    },
+    "control": {
+      "$type": "dimension",
+      "$value": "10px"
+    },
+    "chip": {
+      "$type": "dimension",
+      "$value": "8px"
+    }
+  },
+  "size": {
+    "rowMinHeight": {
+      "$type": "dimension",
+      "$value": "62px"
+    },
+    "controlPointer": {
+      "$type": "dimension",
+      "$value": "44px"
+    },
+    "controlPointerCompact": {
+      "$type": "dimension",
+      "$value": "38px"
+    },
+    "controlTouch": {
+      "$type": "dimension",
+      "$value": "48px"
+    },
+    "controlTouchCompact": {
+      "$type": "dimension",
+      "$value": "44px"
+    }
+  },
+  "spacing": {
+    "1": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "2": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "3": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "5": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "7": {
+      "$type": "dimension",
+      "$value": "28px"
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "32px"
+    }
+  },
+  "text": {
+    "10": {
+      "$type": "dimension",
+      "$value": "10px"
+    },
+    "11": {
+      "$type": "dimension",
+      "$value": "11px"
+    },
+    "12": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "13": {
+      "$type": "dimension",
+      "$value": "13px"
+    },
+    "14": {
+      "$type": "dimension",
+      "$value": "14px"
+    },
+    "15": {
+      "$type": "dimension",
+      "$value": "15px"
+    },
+    "16": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "18": {
+      "$type": "dimension",
+      "$value": "18px"
+    },
+    "19": {
+      "$type": "dimension",
+      "$value": "19px"
+    },
+    "20": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "22": {
+      "$type": "dimension",
+      "$value": "22px"
+    },
+    "24": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "26": {
+      "$type": "dimension",
+      "$value": "26px"
+    },
+    "28": {
+      "$type": "dimension",
+      "$value": "28px"
+    },
+    "32": {
+      "$type": "dimension",
+      "$value": "32px"
+    }
+  }
+}
