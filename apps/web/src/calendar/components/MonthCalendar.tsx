@@ -1,5 +1,6 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
+  eventDayKeys,
   getMonthGrid,
   segmentEventsByDay as bucketEventsByDay,
 } from "@musubi/calendar/layout";
@@ -12,6 +13,7 @@ import {
   useState,
 } from "react";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
+import { layOutMonthWeek } from "../month-week-layout";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
@@ -19,6 +21,7 @@ import {
   canEditEvent,
   eventHomeCalendarId,
 } from "../event-permissions";
+import { useLayerDismissGuard } from "../layer-focus";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
@@ -127,6 +130,10 @@ export function MonthCalendar({
   weekStartsOn,
   ...eventActions
 }: MonthCalendarProps) {
+  // A click that closed a layer is doing that and nothing else. Only the click
+  // is guarded, not the press: a drag that begins over an open draft is meant
+  // to replace it, which is a gesture and not a dismissal.
+  const dismissGuard = useLayerDismissGuard();
   const {
     begin: beginRangeCreate,
     consumeClick,
@@ -239,6 +246,36 @@ export function MonthCalendar({
   const [eventCapacity, setEventCapacity] = useState(
     DEFAULT_EVENT_CAPACITY,
   );
+  /**
+   * Each week laid out: where the all-day bars go, and which line every other
+   * block is left with. One bar per week rather than a chip per cell — see
+   * `month-week-layout.ts`.
+   */
+  const weekLayouts = useMemo(
+    () =>
+      weeks.map((week) => {
+        // The draft owns the top line wherever it appears.
+        const laneOffset =
+          draftRange &&
+          draftRange.from <= toDateKey(week[6]!) &&
+          draftRange.to >= toDateKey(week[0]!)
+            ? 1
+            : 0;
+
+        return layOutMonthWeek({
+          capacity: eventCapacity,
+          days: week,
+          events,
+          laneOffset,
+          timedByDay: week.map((day) =>
+            (eventsByDay.get(toDateKey(day)) ?? [])
+              .filter((segment) => !segment.event.isAllDay)
+              .map((segment) => segment.event),
+          ),
+        });
+      }),
+    [draftRange, eventCapacity, events, eventsByDay, weeks],
+  );
   const cellRefs = useRef<Array<HTMLDivElement | null>>([]);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -335,6 +372,10 @@ export function MonthCalendar({
       </div>
       <div
         className={styles.monthGrid}
+        /* A bar reaches across cells it does not belong to, so a lookup by
+           point would answer with the day it starts on. While something is
+           being dragged the bars step out of the way. */
+        data-dragging={drag || draftDrag || range ? "" : undefined}
         ref={gridRef}
         role="rowgroup"
         style={
@@ -360,19 +401,26 @@ export function MonthCalendar({
               // A hidden adjacent day keeps its cell (so the month keeps its
               // height) but shows nothing and takes no clicks.
               const muted = !inMonth && !showAdjacentDays;
-              // If not every event fits, one measured slot belongs to the
-              // "+N more" control. This mirrors the calendar pattern where the
-              // month grid stays fixed and density yields to explicit overflow.
-              const visibleCount =
-                daySegments.length > eventCapacity
-                  ? Math.max(0, eventCapacity - 1)
-                  : eventCapacity;
+              const placement = weekLayouts[weekIndex]!.days[dayIndex]!;
+              // How wide the preview of a dragged all-day event should be here.
+              const dragPreviewColumns =
+                drag && drag.event.isAllDay
+                  ? Math.min(
+                      week.length - dayIndex,
+                      eventDayKeys(drag.event).length,
+                    )
+                  : 1;
+              // Only this day's own blocks live in the cell; the all-day bars
+              // are drawn once for the whole week, over the top of it.
               const visibleSegments = muted
                 ? []
-                : daySegments.slice(0, visibleCount);
-              const overflow = muted
-                ? 0
-                : daySegments.length - visibleSegments.length;
+                : daySegments.filter(
+                    (segment) =>
+                      !segment.event.isAllDay &&
+                      (placement.rowOf.get(segment.event.id) ?? 0) <
+                        placement.rowCapacity,
+                  );
+              const overflow = muted ? 0 : placement.overflow;
 
               return (
                 <div
@@ -422,7 +470,8 @@ export function MonthCalendar({
                   data-day-key={dateKey}
                   onClick={(event) => {
                     // A drag already opened quick create for its range.
-                    if (muted || consumeClick()) return;
+                    if (muted || consumeClick() || dismissGuard.consumeDismiss())
+                      return;
                     onCreateAtDate?.(dateKey, event.currentTarget);
                   }}
                   onFocus={() => setFocusedIndex(index)}
@@ -466,11 +515,14 @@ export function MonthCalendar({
                         // the cell under it owns that gesture.
                         data-live={draftRange.live ? "" : undefined}
                         style={
-                          pendingCreate?.color
-                            ? ({
-                                "--draft-accent": pendingCreate.color,
-                              } as CSSProperties)
-                            : undefined
+                          {
+                            // Top line of the cell, and every all-day lane in
+                            // the week has been pushed down one to leave it.
+                            gridRow: 1,
+                            ...(pendingCreate?.color
+                              ? { "--draft-accent": pendingCreate.color }
+                              : {}),
+                          } as CSSProperties
                         }
                         onPointerDown={
                           draftRange.live
@@ -495,6 +547,55 @@ export function MonthCalendar({
                           : ""}
                       </div>
                     ) : null}
+                    {/* An all-day event is one element for the whole week it
+                        covers, drawn in the cell it starts in and reaching
+                        across the ones after it. The week is the only place it
+                        breaks, and both sides of that break stay square. */}
+                    {weekLayouts[weekIndex]!.bars
+                      .filter((bar) => bar.startCol === dayIndex && !muted)
+                      .map((bar) => (
+                        <EventPopover
+                          calendar={calendarsById.get(
+                            eventHomeCalendarId(bar.event) ?? "",
+                          )}
+                          calendars={calendars}
+                          continuesAfter={bar.continuesAfter}
+                          continuesBefore={bar.continuesBefore}
+                          event={bar.event}
+                          ghost={drag?.event.id === bar.event.id}
+                          key={bar.event.id}
+                          onBeginDrag={
+                            onMoveEventToDate &&
+                            canEditEvent(
+                              eventActions.getEventMaster(bar.event),
+                              calendars,
+                            )
+                              ? (pointerEvent) => {
+                                  if (pointerEvent.button !== 0) return;
+                                  beginMonthDrag({
+                                    event: bar.event,
+                                    originDayKey: dateKey,
+                                    pointerId: pointerEvent.pointerId,
+                                    x: pointerEvent.clientX,
+                                    y: pointerEvent.clientY,
+                                  });
+                                }
+                              : undefined
+                          }
+                          pending={
+                            busyEventId !== undefined &&
+                            (bar.event.id === busyEventId ||
+                              bar.event.id.startsWith(`${busyEventId}_`))
+                          }
+                          span={{
+                            columns: bar.endCol - bar.startCol + 1,
+                            lane: bar.lane,
+                          }}
+                          timeFormat={timeFormat}
+                          weekStartsOn={weekStartsOn}
+                          {...eventActions}
+                        />
+                      ))}
                     {visibleSegments.map((segment) => (
                       <EventPopover
                         calendar={calendarsById.get(
@@ -511,6 +612,7 @@ export function MonthCalendar({
                             segment.event.id.startsWith(`${busyEventId}_`))
                         }
                         key={segment.event.id}
+                        row={placement.rowOf.get(segment.event.id)}
                         onBeginDrag={
                           onMoveEventToDate &&
                           canEditEvent(
@@ -549,6 +651,15 @@ export function MonthCalendar({
                             "--event-color": dragPreviewColor,
                             "--event-foreground":
                               getReadableEventTextColor(dragPreviewColor),
+                            /* A multi-day bar keeps its length while it is
+                               being moved: shrinking to one cell says the drop
+                               would shorten the event, which it would not.
+                               Clipped at the end of the week, like the bar. */
+                            ...(drag.event.isAllDay
+                              ? {
+                                  width: `calc(${dragPreviewColumns} * 100% + ${dragPreviewColumns} * var(--month-cell-gutter))`,
+                                }
+                              : {}),
                           } as CSSProperties
                         }
                       >
@@ -561,6 +672,9 @@ export function MonthCalendar({
                           <button
                             className={styles.moreEvents}
                             type="button"
+                            // The line after the last one that fits, whether or
+                            // not this day filled the ones above it.
+                            style={{ gridRow: placement.rowCapacity + 1 }}
                             onClick={(event) => event.stopPropagation()}
                           >
                             +{overflow} more
