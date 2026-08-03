@@ -75,7 +75,9 @@
 
 .createBar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* Name, where, colour, add. The destination column collapses to nothing when
+     there is no connected account to choose between. */
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--space-2);
   margin: 0 var(--space-5) var(--space-5);
@@ -100,6 +102,10 @@
 .createBar > input:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 1px;
+}
+
+.destination {
+  max-width: 11rem;
 }
 
 .calendarDot {

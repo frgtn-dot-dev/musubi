@@ -17,6 +17,7 @@ import {
   type ChangeEvent,
   type FormEvent,
   type RefObject,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -39,7 +40,7 @@ import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { Select } from "~/ui/Select";
 import { connectionOfCalendar } from "../federation-routing";
-import { ProviderIcon } from "./ProviderIcon";
+import { AccountMark } from "./ProviderIcon";
 import styles from "./styles/calendars.module.css";
 
 type ImportInput = {
@@ -50,7 +51,12 @@ type ImportInput = {
 
 export type CalendarTransferDialogProps = {
   calendars: Calendar[];
-  onCreate: (input: { color: string; name: string }) => Promise<Calendar>;
+  onCreate: (input: {
+    accountId?: string;
+    color: string;
+    name: string;
+    provider?: string;
+  }) => Promise<Calendar>;
   onDisconnect: (calendar: Calendar) => Promise<unknown>;
   onExport: (calendarId: string, connectionId?: string) => Promise<string>;
   onImport: (input: ImportInput) => Promise<ImportedCalendar>;
@@ -124,6 +130,8 @@ export function CalendarTransferDialog({
   const [ics, setIcs] = useState("");
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState<string>(DEFAULT_CALENDAR_COLOR);
+  // "" is this server. Anything else is `provider:accountId`.
+  const [destinationKey, setDestinationKey] = useState("");
   const [editCalendar, setEditCalendar] = useState<Calendar>();
   const [deleteCalendar, setDeleteCalendar] = useState<Calendar>();
   const [disconnectCalendar, setDisconnectCalendar] = useState<Calendar>();
@@ -137,6 +145,35 @@ export function CalendarTransferDialog({
   const deleteReturnFocusRef = useRef<HTMLButtonElement>(null);
   const disconnectReturnFocusRef = useRef<HTMLButtonElement>(null);
   const groups = groupCalendars(calendars);
+  /**
+   * The accounts a new calendar can be made in.
+   *
+   * Read off the calendars already synced, the same way the phone does it: an
+   * account with no calendar in it has nothing to hang a label on, and the sync
+   * engine gives every connected account at least its default one.
+   */
+  const accounts = useMemo(() => {
+    const seen = new Map<
+      string,
+      { accountId: string; label: string; provider: string }
+    >();
+    for (const calendar of calendars) {
+      if (!calendar.provider || !calendar.accountId) continue;
+      if (connectionOfCalendar(calendar)) continue; // another Musubi server
+      const key = `${calendar.provider}:${calendar.accountId}`;
+      if (seen.has(key)) continue;
+      seen.set(key, {
+        accountId: calendar.accountId,
+        label: calendar.accountLabel?.trim() || providerDisplayName(calendar),
+        provider: calendar.provider,
+      });
+    }
+
+    return [...seen.values()];
+  }, [calendars]);
+  const destination = accounts.find(
+    (account) => `${account.provider}:${account.accountId}` === destinationKey,
+  );
   const selectedExportId = calendars.some(
     (calendar) => calendar.id === exportCalendarId,
   )
@@ -189,10 +226,16 @@ export function CalendarTransferDialog({
     setError(undefined);
     try {
       const calendar = await onCreate({
+        accountId: destination?.accountId,
         color: newColor,
         name: newName.trim(),
+        provider: destination?.provider,
       });
-      onNotice(`${calendar.name} created.`);
+      onNotice(
+        destination
+          ? `${calendar.name} created in ${destination.label}.`
+          : `${calendar.name} created.`,
+      );
       setNewName("");
       setNewColor(DEFAULT_CALENDAR_COLOR);
     } catch (createError) {
@@ -334,10 +377,30 @@ export function CalendarTransferDialog({
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
             />
+            {accounts.length > 0 ? (
+              <Select
+                className={styles.destination}
+                disabled={busy === "create"}
+                label="Where"
+                options={[
+                  { label: "On this server", value: "" },
+                  ...accounts.map((account) => ({
+                    label: account.label,
+                    value: `${account.provider}:${account.accountId}`,
+                  })),
+                ]}
+                value={destinationKey}
+                onChange={setDestinationKey}
+              />
+            ) : null}
             <ColorPicker
               className={styles.formColorPicker}
               disabled={busy === "create"}
               label="New calendar color"
+              /* Outlook accepts nine preset colours and nothing else, so the
+                 picker follows the destination rather than offering a colour the
+                 provider will refuse. */
+              provider={destination?.provider ?? null}
               value={newColor}
               onChange={setNewColor}
             />
@@ -565,7 +628,7 @@ function CalendarGroup({
       className={styles.group}
     >
       <header className={styles.groupHeader}>
-        <ProviderIcon flavor={group.flavor} />
+        <AccountMark flavor={group.flavor} />
         <div>
           <h3 id={`calendar-group-${group.key}`}>{group.title}</h3>
           <p>{group.detail}</p>
@@ -575,9 +638,15 @@ function CalendarGroup({
         {group.calendars.map((calendar) => {
           const federatedId = connectionOfCalendar(calendar);
           const external = Boolean(calendar.provider) && !federatedId;
-          const editable = !external && can(calendar.role, "editCalendar");
+          // A synced calendar is editable and shareable like any other: the
+          // server renames it on the provider first and refuses if the account
+          // is not yours, so the rule lives there rather than being guessed here.
+          const editable = can(calendar.role, "editCalendar");
+          // Deleting a synced calendar deletes it on the provider. "Stop
+          // syncing" is the reversible thing to offer, and it is right there.
           const deletable =
             editable &&
+            !external &&
             !calendar.isDefault &&
             can(calendar.role, "deleteCalendar");
 
@@ -603,7 +672,7 @@ function CalendarGroup({
                 }
                 trailing={
                   <span className={styles.rowActions}>
-                    {!external ? (
+                    {!federatedId ? (
                       <IconButton
                         disabled={busy}
                         label={`Share ${calendar.name}`}

@@ -34,7 +34,8 @@ import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
-import { ProviderIcon } from "./ProviderIcon";
+import { ProviderGlyph } from "~/ui/ProviderGlyph";
+import { AccountMark, ProviderIcon } from "./ProviderIcon";
 import styles from "./styles/connections.module.css";
 
 type ConnectionsDialogProps = {
@@ -299,7 +300,7 @@ export function ConnectionsDialog({
                   <Row
                     className={styles.connectionRow}
                     detail={account.providerName}
-                    icon={<ProviderIcon flavor={account.flavor} />}
+                    icon={<AccountMark flavor={account.flavor} />}
                     label={
                       <span className={styles.rowLabel}>
                         <span>{account.label}</span>
@@ -522,19 +523,19 @@ export function ConnectionsDialog({
               {providers.includes("google") ? (
                 <Button
                   disabled={busy}
-                  icon={<ProviderIcon flavor="google" />}
+                  icon={<ProviderGlyph provider="google" />}
                   variant="secondary"
                   onClick={() =>
                     void connectSocial("google", GOOGLE_CALENDAR_SCOPES)
                   }
                 >
-                  Connect Google Calendar
+                  Google Calendar
                 </Button>
               ) : null}
               {providers.includes("microsoft") ? (
                 <Button
                   disabled={busy}
-                  icon={<ProviderIcon flavor="microsoft" />}
+                  icon={<ProviderGlyph provider="microsoft" />}
                   variant="secondary"
                   onClick={() =>
                     void connectSocial(
@@ -543,14 +544,14 @@ export function ConnectionsDialog({
                     )
                   }
                 >
-                  Connect Outlook
+                  Outlook
                 </Button>
               ) : null}
               {providers.includes("caldav") ? (
                 <>
                   <Button
                     disabled={busy}
-                    icon={<ProviderIcon flavor="apple" />}
+                    icon={<ProviderGlyph provider="apple" />}
                     variant="secondary"
                     onClick={(event) =>
                       openCaldav(
@@ -564,7 +565,7 @@ export function ConnectionsDialog({
                       )
                     }
                   >
-                    Connect Apple / iCloud
+                    Apple / iCloud
                   </Button>
                   <Button
                     disabled={busy}
@@ -582,7 +583,7 @@ export function ConnectionsDialog({
                       )
                     }
                   >
-                    Connect other (CalDAV)
+                    CalDAV
                   </Button>
                 </>
               ) : null}

@@ -2279,6 +2279,62 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("creates a calendar inside a connected account", async ({ page }) => {
+  const withAccount = [
+    calendars[0]!,
+    {
+      ...calendars[1]!,
+      accountId: "google-work",
+      accountLabel: "work@example.com",
+      provider: "google",
+    },
+  ];
+  await mockAuthenticatedReads(page, events, withAccount);
+  let created: { accountId?: string; provider?: string } | undefined;
+  await page.route("**/api/v1/calendars", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    created = route.request().postDataJSON();
+    return respond(
+      route,
+      {
+        accountId: "google-work",
+        accountLabel: "work@example.com",
+        color: "#B3A48A",
+        creatorID: "web-qa",
+        id: "cal-new",
+        isDefault: false,
+        members: [],
+        name: "Studio hours",
+        provider: "google",
+        role: "owner",
+      },
+      201,
+    );
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.getByRole("button", { name: "Calendars" }).click();
+  const dialog = page.getByRole("dialog", { name: "Calendars" });
+
+  await dialog.getByPlaceholder("New calendar").fill("Studio hours");
+  // The destination is offered because an account is connected; with none, the
+  // control is not there at all.
+  await dialog.getByRole("combobox", { name: "Where" }).click();
+  await page.getByRole("option", { name: "work@example.com" }).click();
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
+
+  // Provider and account go with it, which is what makes the server create it on
+  // Google first and import the mirror. The cleared field is the flow finishing:
+  // an error would have left the name where it was, with a message under it.
+  await expect(dialog.getByPlaceholder("New calendar")).toHaveValue("");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  expect(created).toMatchObject({
+    accountId: "google-work",
+    name: "Studio hours",
+    provider: "google",
+  });
+});
+
 test("groups calendars by server and connected account", async ({ page }) => {
   const groupedCalendars = [
     calendars[0]!,
@@ -2322,12 +2378,23 @@ test("groups calendars by server and connected account", async ({ page }) => {
       exact: true,
     }),
   ).toHaveCount(2);
+  // A synced calendar is a calendar: it can be renamed, recoloured and shared
+  // with people here, the same as one kept on this server. The server renames it
+  // on the provider first and refuses if the account is somebody else's.
   await expect(
     googleGroup.getByRole("button", { name: "Rename Studio" }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     googleGroup.getByRole("button", { name: "Share Studio" }),
+  ).toBeVisible();
+  // Deleting is not offered, because on a provider it is not reversible. The
+  // reversible thing — stop syncing — is in its place.
+  await expect(
+    googleGroup.getByRole("button", { name: "Delete Studio" }),
   ).toHaveCount(0);
+  await expect(
+    googleGroup.getByRole("button", { name: "Stop syncing Studio" }),
+  ).toBeVisible();
 
   const [musubiBox, googleBox] = await Promise.all([
     musubiGroup.boundingBox(),
@@ -2599,10 +2666,10 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 
   // Capability-gated add buttons.
   await expect(
-    page.getByRole("button", { name: "Connect Google Calendar" }),
+    page.getByRole("button", { exact: true, name: "Google Calendar" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Connect Apple / iCloud" }),
+    page.getByRole("button", { exact: true, name: "Apple / iCloud" }),
   ).toBeVisible();
 
   // Connected account shows and disconnects.
@@ -2616,7 +2683,7 @@ test("connects and disconnects calendar providers", async ({ page }) => {
   expect(disconnectBody).toEqual({ accountId: "acc-1", provider: "google" });
 
   // CalDAV/Apple connect form.
-  await page.getByRole("button", { name: "Connect Apple / iCloud" }).click();
+  await page.getByRole("button", { exact: true, name: "Apple / iCloud" }).click();
   await page
     .getByRole("textbox", { name: "Apple ID email" })
     .fill("me@icloud.com");
@@ -2681,7 +2748,8 @@ test("keeps connections usable as a mobile sheet", async ({ page }) => {
   ).toBeVisible();
 
   const apple = sheet.getByRole("button", {
-    name: "Connect Apple / iCloud",
+    exact: true,
+    name: "Apple / iCloud",
   });
   await apple.click();
   const email = sheet.getByRole("textbox", { name: "Apple ID email" });

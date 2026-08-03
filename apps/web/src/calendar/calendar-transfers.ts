@@ -46,14 +46,24 @@ export function useCalendarTransfers(userId: string) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: { color: string; name: string }) =>
+    mutationFn: (input: {
+      /** A connected account to make it in, or nothing for this server. */
+      accountId?: string;
+      color: string;
+      name: string;
+      provider?: string;
+    }) =>
       createCalendar({
+        accountId: input.accountId ?? null,
         color: input.color,
         // id/creatorID are server-assigned; members must satisfy the schema.
         creatorID: userId,
         id: "new",
         members: [],
         name: input.name,
+        // With both of these the server creates it on the provider first and
+        // imports the mirror, exactly as the sync engine would.
+        provider: input.provider ?? null,
       }),
     onSuccess: (calendar) => {
       setCalendars((current) => [
