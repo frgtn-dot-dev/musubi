@@ -22,6 +22,9 @@ const session = {
     email: "web-qa@example.invalid",
     emailVerified: true,
     id: "user-web-qa",
+    // A profile photo, so the sidebar has one to lose.
+    image:
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
     name: "Web QA",
     updatedAt: "2026-07-26T14:00:00.000Z",
   },
@@ -53,6 +56,23 @@ const calendars = [
     name: "Family",
     role: "editor",
   },
+];
+
+/**
+ * A crowded account. Twenty calendars is where lists stop being short enough to
+ * lay out however they like: the sidebar, the filter bar and every calendar
+ * picker have to stay inside their box.
+ */
+const manyCalendars = [
+  ...calendars,
+  ...Array.from({ length: 17 }, (_, index) => ({
+    color: ["#b3492f", "#d6b76b", "#365a92", "#7a9e7e", "#8a6fa8"][index % 5]!,
+    creatorID: "user-web-qa",
+    id: `bulk-${index}`,
+    members: [],
+    name: `Calendar number ${index + 4}`,
+    role: "owner",
+  })),
 ];
 
 async function chooseSelectOption(
@@ -550,8 +570,10 @@ test("reads, filters and signs out of the authenticated Month", async ({
   await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
   await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(5);
-  await expect(page.getByRole("button", { name: /Family holiday/ })).toHaveCount(6);
+  // All-day events are one bar per week, however many days they cover: the
+  // retreat sits inside one week, the holiday crosses into a second.
+  await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Family holiday/ })).toHaveCount(2);
   await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(5);
 
   await page.getByRole("button", { name: /Studio retreat/ }).first().click();
@@ -572,6 +594,10 @@ test("reads, filters and signs out of the authenticated Month", async ({
   await page.keyboard.press("Escape");
 
   await expectNoAccessibilityViolations(page);
+
+  // The profile row carries the photo, not just an initial: the session's
+  // `image` used to be dropped on the way from the session to the sidebar.
+  await expect(page.locator('img[src^="data:image/gif"]')).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out Web QA" }).click();
   await expect(page).toHaveURL(/\/login/);
@@ -1076,8 +1102,11 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
 
   await page.getByRole("button", { name: /Design review/ }).click();
+  // Collapsed, the guests are a facepile: the names arrive with the list.
+  await page.getByRole("button", { name: "Show every attendee" }).click();
   await expect(page.getByText("Guest One")).toBeVisible();
-  await page.getByRole("button", { name: "Attend" }).click();
+  // Exact: the "Attendees · 1" toggle beside it also contains "Attend".
+  await page.getByRole("button", { exact: true, name: "Attend" }).click();
   await expect(page.getByRole("button", { name: "Leave" })).toBeVisible();
 
   await page.getByRole("button", { exact: true, name: "Link" }).click();
@@ -5883,6 +5912,125 @@ test("a press that dismisses a preview does not also start a draft", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("a press that closes a dialog does not also create an event", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/events/*/share", (route) => respond(route, null));
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  await page.getByRole("button", { name: /Client call/ }).first().click();
+  await page.getByRole("button", { name: "Share event" }).click();
+  const shareDialog = page.getByRole("dialog", { name: "Share event" });
+  await expect(shareDialog).toBeVisible();
+
+  // The overlay takes this press for itself, so the grid never sees a
+  // pointerdown — but React has removed the overlay by the time the click is
+  // dispatched, and the click lands on the cell underneath.
+  const box = (await shareDialog.boundingBox())!;
+  const x = Math.max(10, box.x - 60);
+  const y = box.y + 40;
+  await page.mouse.click(x, y);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // The same press with nothing open still creates, so the guard is about
+  // dismissal rather than about the gesture.
+  await page.mouse.click(x, y);
+  await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+});
+
+test("keeps a dragged all-day bar its own length", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const bar = page.getByRole("button", { name: /Studio retreat/ }).first();
+  await expect(bar).toBeVisible();
+  const from = (await bar.boundingBox())!;
+  const target = page.locator('[data-day-key="2026-07-14"]');
+  const to = (await target.boundingBox())!;
+
+  await page.mouse.move(from.x + 30, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 10,
+  });
+
+  const preview = target.locator("[data-drag-preview]");
+  await expect(preview).toHaveCount(1);
+  // Five days long before the drag, five days long during it: dropping it
+  // moves the event, it does not cut it down to a single day.
+  const previewBox = (await preview.boundingBox())!;
+  expect(Math.abs(previewBox.width - to.width * 5)).toBeLessThan(2);
+
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+});
+
+test("draws a multi-day all-day event as one bar per week", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // Family holiday runs Fri 17 to Wed 22: three days in one week, three in the
+  // next. One event, so one bar in each of them — not a chip per cell.
+  const bars = page.getByRole("button", { name: /Family holiday/ });
+  await expect(bars).toHaveCount(2);
+
+  const cell = (await page
+    .locator('[data-day-key="2026-07-14"]')
+    .boundingBox())!;
+  for (const bar of await bars.all()) {
+    const box = (await bar.boundingBox())!;
+    // Three columns wide, within a pixel of the cells underneath it.
+    expect(Math.abs(box.width - cell.width * 3)).toBeLessThan(2);
+  }
+});
+
+test("stays inside its box with twenty calendars", async ({ page }) => {
+  await mockAuthenticatedReads(page, events, manyCalendars);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  /** Nothing may push the page sideways, whatever is open. */
+  async function expectNoSidewaysScroll(what: string) {
+    const overflow = await page.evaluate(() => ({
+      body: document.body.scrollWidth - document.body.clientWidth,
+      root:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    }));
+    expect(overflow, what).toEqual({ body: 0, root: 0 });
+  }
+
+  await expect(page.getByRole("grid").first()).toBeVisible();
+  await expectNoSidewaysScroll("month grid");
+
+  // The filter shelf: twenty pills scroll sideways, they do not stack up rows
+  // until the calendar is off the screen.
+  const shelf = await openFilterShelf(page);
+  await expect(shelf.getByRole("button")).toHaveCount(manyCalendars.length);
+  await expectNoSidewaysScroll("filter shelf");
+  const shelfBox = (await shelf.boundingBox())!;
+  expect(shelfBox.height).toBeLessThan(page.viewportSize()!.height / 4);
+  await expectNoAccessibilityViolations(page);
+
+  // The manage dialog holds the same twenty rows and scrolls its own body.
+  await page.getByRole("button", { name: "Calendars" }).click();
+  const dialog = page.getByRole("dialog", { name: "Calendars" });
+  await expect(dialog).toBeVisible();
+  const dialogBox = (await dialog.boundingBox())!;
+  expect(dialogBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await expectNoSidewaysScroll("calendars dialog");
+  // No axe pass here yet: this dialog fails AA contrast in several places
+  // whatever the calendar count, which is its own fix.
+  await page.keyboard.press("Escape");
+
+  // And the composer, which lists every writable calendar.
+  await page.getByRole("button", { name: "Event", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+  await expectNoSidewaysScroll("quick create");
+});
+
 /**
  * Every page and every modal, written out as PNGs for design review.
  *
@@ -6665,7 +6813,8 @@ test("walks a new account through onboarding once", async ({ page }) => {
   await expect(
     page.getByRole("heading", { level: 1, name: "Welcome to Musubi" }),
   ).toBeVisible();
-  await expect(page.getByText("Step 1 of 3")).toBeVisible();
+  // The step marks are dots; the sentence they replaced lives on their label.
+  await expect(page.getByRole("img", { name: "Step 1 of 3" })).toBeVisible();
 
   if (UI_SHOTS) {
     await page.screenshot({
@@ -6712,7 +6861,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
 
   await page.reload();
   await expect(page.getByRole("grid").first()).toBeVisible();
-  await expect(page.getByText("Step 1 of 3")).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Step 1 of 3" })).toHaveCount(0);
 });
 
 const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2";
