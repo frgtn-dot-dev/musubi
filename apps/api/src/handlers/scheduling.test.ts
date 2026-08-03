@@ -27,19 +27,23 @@ const SLOTS = [
 // Nothing about anybody's calendar: availability is worked out in the
 // participant's own browser and only the answers are ever sent.
 {
-  const projection = pollProjection(POLL, SLOTS, [
+  const votes = [
     { name: "Zoe", slotID: "slot-tue", userID: "u1", value: "yes" },
     { name: "Adam", slotID: "slot-tue", userID: "u2", value: "if-needed" },
     { name: "", slotID: "slot-tue", userID: "u3", value: "no" },
     { name: "Zoe", slotID: "slot-wed", userID: "u1", value: "yes" },
     { name: "Adam", slotID: "slot-wed", userID: "u2", value: "yes" },
-  ]);
+  ];
+  const projection = pollProjection(POLL, SLOTS, votes);
 
   assert.deepEqual(Object.keys(projection).sort(), [
     "chosenSlotID",
     "closed",
     "description",
     "durationMinutes",
+    "mine",
+    "mineID",
+    "people",
     "respondents",
     "slots",
     "title",
@@ -53,6 +57,47 @@ const SLOTS = [
   assert.deepEqual(wednesday!.yes, ["Adam", "Zoe"]);
   // Three people answered, five votes — a respondent is a person, not a click.
   assert.equal(projection.respondents, 3);
+
+  // One row per person, for the grid: names and answers, never a user id, and
+  // never a calendar.
+  assert.deepEqual(projection.people, [
+    { answers: { "slot-tue": "yes", "slot-wed": "yes" }, id: "1", name: "Zoe" },
+    {
+      answers: { "slot-tue": "if-needed", "slot-wed": "yes" },
+      id: "2",
+      name: "Adam",
+    },
+    { answers: { "slot-tue": "no" }, id: "3", name: "Guest" },
+  ]);
+  assert.ok(
+    !JSON.stringify(projection).includes("u1"),
+    "a projection must not carry account ids to strangers holding the link",
+  );
+
+  // Nobody signed in: no row is theirs, and no answers are theirs.
+  assert.equal(projection.mineID, null);
+  assert.deepEqual(projection.mine, {});
+
+  // Signed in: their own row is named, so the grid can show it once and let them
+  // edit it rather than printing them twice.
+  const asAdam = pollProjection(POLL, SLOTS, votes, "u2");
+  assert.equal(asAdam.mineID, "2");
+  assert.deepEqual(asAdam.mine, { "slot-tue": "if-needed", "slot-wed": "yes" });
+
+  // Somebody who has not answered yet is nobody's row.
+  assert.equal(pollProjection(POLL, SLOTS, votes, "u9").mineID, null);
+
+  // Two people with one name stay two rows — a poll of Jans is still a poll of
+  // people, and merging them would lose an answer.
+  const jans = pollProjection(POLL, SLOTS, [
+    { name: "Jan", slotID: "slot-tue", userID: "a", value: "yes" },
+    { name: "Jan", slotID: "slot-tue", userID: "b", value: "no" },
+  ]);
+  assert.equal(jans.people.length, 2);
+  assert.deepEqual(
+    jans.people.map((person) => person.answers["slot-tue"]),
+    ["yes", "no"],
+  );
 }
 
 // ── Which slot wins ──────────────────────────────────────────────────────────

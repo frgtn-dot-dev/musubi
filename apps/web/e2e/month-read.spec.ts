@@ -5878,6 +5878,10 @@ test("answers a poll as somebody with no account", async ({ page }) => {
     description: "Which afternoon?",
     durationMinutes: 60,
     mine: {},
+    mineID: null,
+    people: [
+      { answers: { "slot-tue": "yes", "slot-wed": "no" }, id: "1", name: "Mika" },
+    ],
     respondents: 1,
     slots: [
       {
@@ -5888,6 +5892,14 @@ test("answers a poll as somebody with no account", async ({ page }) => {
         start: "2026-08-18T13:00:00.000Z",
         yes: ["Mika"],
       },
+      {
+        end: "2026-08-19T14:00:00.000Z",
+        id: "slot-wed",
+        ifNeeded: [],
+        no: ["Mika"],
+        start: "2026-08-19T13:00:00.000Z",
+        yes: [],
+      },
     ],
     title: "Studio planning",
   };
@@ -5896,16 +5908,32 @@ test("answers a poll as somebody with no account", async ({ page }) => {
   );
   await page.route(`**/api/v1/public/polls/${POLL_TOKEN}/votes`, (route) => {
     sentVotes = route.request().postDataJSON();
-    return respond(route, { ...body, mine: { "slot-tue": "yes" }, respondents: 2 });
+    return respond(route, {
+      ...body,
+      mine: { "slot-tue": "yes" },
+      mineID: "2",
+      people: [
+        ...body.people,
+        { answers: { "slot-tue": "yes" }, id: "2", name: "Zoe" },
+      ],
+      respondents: 2,
+    });
   });
 
   await page.goto(`/s/${POLL_TOKEN}`);
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByRole("heading", { name: "Studio planning" })).toBeVisible();
-  await expect(page.getByText("Yes: Mika")).toBeVisible();
+  // Somebody else's row is readable before you have said who you are — the
+  // whole point of the grid is seeing who can make what.
+  const mika = page.getByRole("row", { name: /^Mika/ });
+  await expect(mika).toContainText("✓");
+  await expect(mika).toContainText("✕");
 
-  await page.getByRole("button", { name: "Yes", exact: true }).click();
+  // One control per cell, cycling: nothing to answer means nothing pressed yet.
+  const myTuesday = page
+    .getByRole("button", { name: /18 Aug.*have not answered/ });
+  await myTuesday.click();
   // Said before the button is pressed, not after: what leaves the browser is the
   // answers and a name — never the reader's own calendar.
   await expect(page.getByText(/Your own calendar is never sent/)).toBeVisible();
@@ -5920,5 +5948,67 @@ test("answers a poll as somebody with no account", async ({ page }) => {
   // Wait for the answer to land before reading what was sent — the click
   // resolves when it is dispatched, not when the request comes back.
   await expect(page.getByRole("button", { name: "Answers saved" })).toBeDisabled();
-  expect(sentVotes).toEqual({ votes: [{ slotID: "slot-tue", value: "yes" }] });
+  // The name rides along, so a link-only participant is not "Guest" to everyone
+  // else in the grid.
+  expect(sentVotes).toEqual({
+    name: "Zoe",
+    votes: [{ slotID: "slot-tue", value: "yes" }],
+  });
+  await expect(page.getByRole("row", { name: /^Zoe/ })).toContainText("✓");
+
+  // A table of coloured marks is exactly where contrast and headers go wrong.
+  await expectNoAccessibilityViolations(page);
+});
+
+test("cycles a poll answer through yes, if needed and no", async ({ page }) => {
+  await page.route("**/api/auth/get-session", (route) =>
+    respond(route, {
+      session: { id: "s" },
+      user: { email: "z@example.com", id: "guest", name: "Zoe" },
+    }),
+  );
+  let sentVotes: { votes?: Array<{ value: string }> } | undefined;
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, {
+      chosenSlotID: null,
+      closed: false,
+      durationMinutes: 60,
+      mine: {},
+      mineID: null,
+      people: [],
+      respondents: 0,
+      slots: [
+        {
+          end: "2026-08-18T14:00:00.000Z",
+          id: "slot-tue",
+          ifNeeded: [],
+          no: [],
+          start: "2026-08-18T13:00:00.000Z",
+          yes: [],
+        },
+      ],
+      title: "Studio planning",
+    }),
+  );
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}/votes`, (route) => {
+    sentVotes = route.request().postDataJSON();
+    return route.fulfill({ status: 500, body: "{}" , contentType: "application/json" });
+  });
+
+  await page.goto(`/s/${POLL_TOKEN}`);
+  const cell = () => page.getByRole("button", { name: /18 Aug/ });
+
+  await cell().click();
+  await expect(cell()).toHaveAttribute("aria-label", /you answered yes/);
+  await cell().click();
+  await expect(cell()).toHaveAttribute("aria-label", /you answered if needed/);
+  await cell().click();
+  await expect(cell()).toHaveAttribute("aria-label", /you answered no/);
+  // Round, not a dead end: a wrong click is undone by carrying on clicking.
+  await cell().click();
+  await expect(cell()).toHaveAttribute("aria-label", /you answered yes/);
+
+  await page.getByRole("button", { name: "Send my answers" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  expect(sentVotes?.votes).toEqual([{ slotID: "slot-tue", value: "yes" }]);
 });

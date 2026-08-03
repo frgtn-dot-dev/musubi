@@ -167,6 +167,13 @@ export const PollSlotSchema = z.object({
   yes: z.array(z.string()).default([]),
 });
 
+/** One participant's row in the grid: who they are and how they answered. */
+export const PollPersonSchema = z.object({
+  answers: z.record(z.string(), z.enum(["if-needed", "no", "yes"])).default({}),
+  id: z.string(),
+  name: z.string(),
+});
+
 export const PollSchema = z.object({
   chosenSlotID: z.string().nullish(),
   closed: z.boolean().default(false),
@@ -174,12 +181,16 @@ export const PollSchema = z.object({
   durationMinutes: z.number(),
   /** The reader's own answers, keyed by slot. Empty when nobody is signed in. */
   mine: z.record(z.string(), z.enum(["if-needed", "no", "yes"])).default({}),
+  /** Which row in `people` is the reader's, so the grid shows them once. */
+  mineID: z.string().nullish(),
+  people: z.array(PollPersonSchema).default([]),
   respondents: z.number().default(0),
   slots: z.array(PollSlotSchema).default([]),
   title: z.string(),
 });
 
 export type Poll = z.infer<typeof PollSchema>;
+export type PollPerson = z.infer<typeof PollPersonSchema>;
 export type PollSlot = z.infer<typeof PollSlotSchema>;
 export type VoteValue = "if-needed" | "no" | "yes";
 

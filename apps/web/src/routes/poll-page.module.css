@@ -1,76 +1,173 @@
 /* The poll page shares the published-event shell; only the answer grid is its
    own. */
-.day {
-  display: grid;
-  gap: var(--space-2);
+/* The grid: people down, times across. Wide by nature, so it scrolls sideways
+   inside its own box and never takes the page with it — and the name column
+   stays put, because a row of ticks with no name is nothing. */
+/* Wider than a published event card: that one is a column of prose, this is a
+   table, and squeezing a week of columns into reading width helps nobody. */
+.card {
+  width: min(64rem, 100%);
+  max-width: none;
 }
 
-.dayHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  /* Sticky so the day a row belongs to stays readable while scrolling a long
-     horizon on a phone. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: var(--space-2) 0;
-  background: var(--surface-panel, var(--surface-canvas));
-}
-
-.dayName {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--text-13);
-  font-weight: 600;
-}
-
-.allLabel {
-  align-self: center;
-  color: var(--text-secondary);
-  font-size: var(--text-11);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.slots {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.slot {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
+.gridWrap {
+  overflow-x: auto;
+  max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-canvas);
 }
 
-.slotWhen {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-primary);
-  font-size: var(--text-14, var(--text-13));
+.grid {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--text-12);
 }
 
-.tally {
+.gridCaption {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  text-align: left;
+}
+
+.grid th,
+.grid td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.grid tr:last-child th,
+.grid tr:last-child td {
+  border-bottom: 0;
+}
+
+.corner,
+.rowHead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 8rem;
+  max-width: 12rem;
+  overflow: hidden;
+  border-left: 0;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.corner {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dayHead {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.timeHead {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.countRow th,
+.countRow td {
+  background: var(--surface-raised);
+}
+
+.count {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.countIfNeeded {
+  margin-left: 3px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.cell {
+  padding: 0;
+}
+
+/* Your own row, marked so it is findable in a tall grid. */
+.yourRow th,
+.yourRow td {
+  background: color-mix(in oklab, var(--accent-primary) 8%, transparent);
+}
+
+.cellButton {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 3rem;
+  min-height: 2.25rem;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.cellButton:hover {
+  background: color-mix(in oklab, var(--accent-primary) 16%, transparent);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-12);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Shape and letter carry the meaning; colour only reinforces it. */
+.mark[data-value="yes"] {
+  background: color-mix(in oklab, #2f7d4f 18%, transparent);
+  color: #1f5c39;
+}
+
+.mark[data-value="if-needed"] {
+  background: color-mix(in oklab, #b07d1a 20%, transparent);
+  color: #7a5406;
+}
+
+.mark[data-value="no"] {
+  background: color-mix(in oklab, #b3402f 16%, transparent);
+  color: #8c2f21;
+}
+
+.markNone {
+  color: var(--text-muted);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-12);
-  line-height: 1.5;
 }
 
-.answers {
+.legendItem {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  gap: 5px;
 }
 
 .send {

@@ -4,7 +4,7 @@ import {
   eventPagePalette,
   eventPagePaletteVariables,
 } from "@musubi/design-system";
-import { CalendarClock, Check, Info } from "lucide-react";
+import { Check, Info } from "lucide-react";
 import { useState, type CSSProperties, type FormEvent } from "react";
 import type { Poll, PollSlot, VoteValue } from "~/api/contracts";
 import { getPoll, votePoll } from "~/api/resources";
@@ -58,8 +58,10 @@ function PollRoute() {
   });
 
   const vote = useMutation({
-    mutationFn: (votes: Array<{ slotID: string; value: VoteValue }>) =>
-      votePoll({ token, votes }),
+    mutationFn: (input: {
+      name?: string;
+      votes: Array<{ slotID: string; value: VoteValue }>;
+    }) => votePoll({ ...input, token }),
     onSuccess: (result) => {
       queryClient.setQueryData(pollKey, result);
       setDraft({});
@@ -116,9 +118,15 @@ function PollRoute() {
   }
 
   function send() {
-    vote.mutate(
-      Object.entries(answers).map(([slotID, value]) => ({ slotID, value })),
-    );
+    vote.mutate({
+      // Sent with the answers so a link-only participant stops being "Guest" to
+      // everyone else in the grid. A signed-in account keeps the name it has.
+      name: name.trim() || undefined,
+      votes: Object.entries(answers).map(([slotID, value]) => ({
+        slotID,
+        value,
+      })),
+    });
   }
 
   return (
@@ -131,7 +139,7 @@ function PollRoute() {
       style={eventPagePaletteVariables(eventPagePalette(undefined)) as CSSProperties}
       tabIndex={-1}
     >
-      <article className={styles.card}>
+      <article className={`${styles.card} ${pollStyles.card}`}>
         <header className={styles.header}>
           <span aria-hidden="true" className={styles.brand}>
             <BrandMark focusable="false" />
@@ -156,92 +164,119 @@ function PollRoute() {
           </p>
         ) : null}
 
-        {/* Grouped by day, because a poll spanning three weeks is a long page and
-            "I'm away that whole week" is the answer people actually have. Each
-            day heading answers its own times in one press. */}
-        {groupByDay(data.slots).map(([day, slots]) => (
-          <section className={pollStyles.day} key={day}>
-            <header className={pollStyles.dayHead}>
-              <h2 className={pollStyles.dayName}>{day}</h2>
-              {data.closed || slots.length < 2 ? null : (
-                <div
-                  aria-label={`Answer every time on ${day}`}
-                  className={pollStyles.answers}
-                  role="group"
-                >
-                  {/* Named, because the buttons below say the same three words:
-                      this row answers the whole day, those answer one time. */}
-                  <span className={pollStyles.allLabel}>All</span>
-                  {ANSWERS.map((option) => (
-                    <Button
-                      aria-pressed={slots.every(
-                        (slot) => answers[slot.id] === option.value,
-                      )}
-                      key={option.value}
-                      size="compact"
-                      title={`${option.label} to all ${slots.length} times on ${day}`}
-                      variant="secondary"
-                      onClick={() =>
-                        setDraft((current) => ({
-                          ...current,
-                          ...Object.fromEntries(
-                            slots.map((slot) => [slot.id, option.value]),
-                          ),
-                        }))
-                      }
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </header>
+        {/* People down, times across — the shape of the question. Everybody's
+            answers stay visible while you give your own, because "who else can
+            make Tuesday" is what a poll is for. */}
+        <div className={pollStyles.gridWrap}>
+          <table className={pollStyles.grid}>
+            <caption className={pollStyles.gridCaption}>
+              Who can make which time. Your own row is the last one.
+            </caption>
+            <thead>
+              <tr>
+                <th className={pollStyles.corner} rowSpan={2} scope="col">
+                  Participants
+                </th>
+                {groupByDay(data.slots).map(([day, slots]) => (
+                  <th
+                    className={pollStyles.dayHead}
+                    colSpan={slots.length}
+                    key={day}
+                    scope="colgroup"
+                  >
+                    {day}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {data.slots.map((slot) => (
+                  <th className={pollStyles.timeHead} key={slot.id} scope="col">
+                    {formatStart(slot.start)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
 
-            <ul className={pollStyles.slots}>
-              {slots.map((slot) => (
-                <li className={pollStyles.slot} key={slot.id}>
-                  <div className={pollStyles.slotWhen}>
-                    <CalendarClock
-                      aria-hidden="true"
-                      size={15}
-                      strokeWidth={1.6}
-                    />
-                    <span>{formatTime(slot)}</span>
-                  </div>
-                  <Tally slot={slot} />
-                  {data.closed ? null : (
-                    <div
-                      aria-label={`Your answer for ${formatSlot(slot)}`}
-                      className={pollStyles.answers}
-                      role="group"
-                    >
-                      {ANSWERS.map((option) => (
-                        <Button
-                          aria-pressed={answers[slot.id] === option.value}
-                          key={option.value}
-                          size="compact"
-                          variant={
-                            answers[slot.id] === option.value
-                              ? "primary"
-                              : "secondary"
-                          }
-                          onClick={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              [slot.id]: option.value,
-                            }))
-                          }
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+            <tbody>
+              {/* The count first, because it answers the question before anyone
+                  reads a single row. */}
+              <tr className={pollStyles.countRow}>
+                <th className={pollStyles.rowHead} scope="row">
+                  Yes
+                </th>
+                {data.slots.map((slot) => (
+                  <td className={pollStyles.count} key={slot.id}>
+                    {slot.yes.length}
+                    {slot.ifNeeded.length > 0 ? (
+                      <span className={pollStyles.countIfNeeded}>
+                        +{slot.ifNeeded.length}
+                      </span>
+                    ) : null}
+                  </td>
+                ))}
+              </tr>
+
+              {data.people
+                .filter((person) => person.id !== data.mineID)
+                .map((person) => (
+                  <tr key={person.id}>
+                    <th className={pollStyles.rowHead} scope="row">
+                      {person.name}
+                    </th>
+                    {data.slots.map((slot) => (
+                      <td className={pollStyles.cell} key={slot.id}>
+                        <Mark value={person.answers[slot.id]} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+
+              <tr className={pollStyles.yourRow}>
+                <th className={pollStyles.rowHead} scope="row">
+                  {session.data?.user.name?.trim() || name.trim() || "You"}
+                </th>
+                {data.slots.map((slot) => (
+                  <td className={pollStyles.cell} key={slot.id}>
+                    {data.closed ? (
+                      <Mark value={answers[slot.id]} />
+                    ) : (
+                      // One control per cell rather than three: a grid this wide
+                      // has no room for a button trio, and cycling is how a
+                      // spreadsheet-shaped thing is expected to behave.
+                      <button
+                        aria-label={`${formatSlot(slot)} — ${
+                          answers[slot.id]
+                            ? `you answered ${LABELS[answers[slot.id]!]}`
+                            : "you have not answered"
+                        }. Change your answer.`}
+                        className={pollStyles.cellButton}
+                        data-value={answers[slot.id] ?? "none"}
+                        type="button"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            [slot.id]: nextAnswer(answers[slot.id]),
+                          }))
+                        }
+                      >
+                        <Mark value={answers[slot.id]} />
+                      </button>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p className={pollStyles.legend}>
+          {ANSWERS.map((option) => (
+            <span className={pollStyles.legendItem} key={option.value}>
+              <Mark value={option.value} />
+              {option.label}
+            </span>
+          ))}
+        </p>
 
         {data.closed ? null : session.data ? (
           <div className={pollStyles.send}>
@@ -327,19 +362,33 @@ function PollRoute() {
   );
 }
 
-function Tally({ slot }: { slot: PollSlot }) {
-  // Joined, not concatenated: a slot only somebody was unsure about used to read
-  // "· If needed: Mika", separator and all.
-  const parts = [
-    slot.yes.length > 0 ? `Yes: ${slot.yes.join(", ")}` : null,
-    slot.ifNeeded.length > 0 ? `If needed: ${slot.ifNeeded.join(", ")}` : null,
-    slot.no.length > 0 ? `No: ${slot.no.length}` : null,
-  ].filter(Boolean);
+const LABELS: Record<VoteValue, string> = {
+  "if-needed": "if needed",
+  no: "no",
+  yes: "yes",
+};
+
+/** Cleared rather than stuck on "no": three states and a way back out. */
+function nextAnswer(current: undefined | VoteValue): VoteValue {
+  if (current === "yes") return "if-needed";
+  if (current === "if-needed") return "no";
+
+  return "yes";
+}
+
+/**
+ * One answer in one cell.
+ *
+ * Shape as well as colour — a grid read only by hue is unreadable to anyone who
+ * cannot separate red from green, and this is the whole content of the page.
+ */
+function Mark({ value }: { value?: VoteValue }) {
+  if (!value) return <span className={pollStyles.markNone}>·</span>;
 
   return (
-    <p className={pollStyles.tally}>
-      {parts.length > 0 ? parts.join(" · ") : "No answers yet"}
-    </p>
+    <span className={pollStyles.mark} data-value={value}>
+      {value === "yes" ? "\u2713" : value === "if-needed" ? "!" : "\u2715"}
+    </span>
   );
 }
 
@@ -366,6 +415,14 @@ function formatDay(date: Date): string {
     day: "numeric",
     month: "short",
     weekday: "short",
+  }).format(date);
+}
+
+/** Just the start: one poll is one length of meeting, and the header says it. */
+function formatStart(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
   }).format(date);
 }
 

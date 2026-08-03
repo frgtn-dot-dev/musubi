@@ -427,11 +427,13 @@ export function getPoll(token: string, signal?: AbortSignal) {
 }
 
 export function votePoll(input: {
+  /** Only for somebody who arrived by link: it names their empty account. */
+  name?: string;
   token: string;
   votes: Array<{ slotID: string; value: VoteValue }>;
 }) {
   return apiRequest(`/api/v1/public/polls/${input.token}/votes`, {
-    body: { votes: input.votes },
+    body: { name: input.name, votes: input.votes },
     method: "PUT",
     responseSchema: PollSchema,
   });

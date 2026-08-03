@@ -8,6 +8,7 @@ import {
   listPollSlots,
   listPollVotes,
   listPolls,
+  nameAnonymousUser,
   setPollVotes,
 } from "@musubi/db";
 import { BadRequestError, ForbiddenError, NotFoundError } from "@musubi/types";
@@ -99,16 +100,7 @@ export async function handlerGetPoll(req: Request, res: Response) {
     listPollVotes(poll.id),
   ]);
 
-  res.status(200).json({
-    ...pollProjection(poll, slots, votes),
-    mine: req.user
-      ? Object.fromEntries(
-          votes
-            .filter((vote) => vote.userID === req.user!.id)
-            .map((vote) => [vote.slotID, vote.value]),
-        )
-      : {},
-  });
+  res.status(200).json(pollProjection(poll, slots, votes, req.user?.id));
 }
 
 export type PollRow = {
@@ -134,15 +126,41 @@ export function pollProjection(
   poll: PollRow,
   slots: SlotRow[],
   votes: VoteRow[],
+  /** Who is asking, when anybody is: their own row is the one they can edit. */
+  viewerID?: string,
 ) {
-  const people = new Set(votes.map((vote) => vote.userID));
+  // One row per person who has answered, because the grid participants read is
+  // people down and times across. Identified by a number local to this poll and
+  // not by the user id: two people called Jan must stay two rows, and a stranger
+  // holding the link has no business learning account ids. Sorted by user id so
+  // the numbering is the same on every request — a row that renumbered between
+  // polls would move under the reader's cursor.
+  const userIDs = [...new Set(votes.map((vote) => vote.userID))].sort();
+  const people = userIDs.map((userID, index) => {
+    const theirs = votes.filter((vote) => vote.userID === userID);
+
+    return {
+      answers: Object.fromEntries(
+        theirs.map((vote) => [vote.slotID, vote.value]),
+      ),
+      id: String(index + 1),
+      name: theirs[0]?.name.trim() || "Guest",
+    };
+  });
+
+  const viewerIndex = viewerID ? userIDs.indexOf(viewerID) : -1;
 
   return {
     chosenSlotID: poll.chosenSlotID,
     closed: Boolean(poll.closedAt),
     description: poll.description,
     durationMinutes: poll.durationMinutes,
-    respondents: people.size,
+    /** The reader's own answers. Empty when nobody is signed in. */
+    mine: viewerIndex >= 0 ? people[viewerIndex]!.answers : {},
+    /** Which row is theirs, so the grid does not show them twice. */
+    mineID: viewerIndex >= 0 ? people[viewerIndex]!.id : null,
+    people,
+    respondents: userIDs.length,
     slots: slots.map((slot) => {
       const forSlot = votes.filter((vote) => vote.slotID === slot.id);
       const named = (value: string) =>
@@ -220,6 +238,12 @@ export async function handlerVotePoll(req: Request, res: Response) {
     }
   }
 
+  // Somebody who arrived by link has an account with no name on it, and a grid
+  // row reading "Guest" is useless to everyone else. Only fills an empty name —
+  // a poll never renames an existing account.
+  const name = String(req.body?.name ?? "").trim();
+  if (name) await nameAnonymousUser(req.user!.id, name);
+
   await setPollVotes(
     poll.id,
     req.user!.id,
@@ -234,14 +258,7 @@ export async function handlerVotePoll(req: Request, res: Response) {
     listPollVotes(poll.id),
   ]);
 
-  res.status(200).json({
-    ...pollProjection(poll, slots, saved),
-    mine: Object.fromEntries(
-      saved
-        .filter((vote) => vote.userID === req.user!.id)
-        .map((vote) => [vote.slotID, vote.value]),
-    ),
-  });
+  res.status(200).json(pollProjection(poll, slots, saved, req.user!.id));
 }
 
 /**
