@@ -141,9 +141,12 @@
   color: var(--text-muted);
 }
 
+/* Today is the accent, the same as in the sidebar's calendar and on the month
+   grid. A ring here read as "chosen" in the one grid whose whole job is choosing
+   days, which is the wrong thing for it to look like. */
 .pickerDay[data-today] {
-  border-color: var(--border-strong, var(--border-subtle));
-  font-weight: 600;
+  color: var(--accent-primary);
+  font-weight: 700;
 }
 
 .pickerDay:hover {
@@ -183,9 +186,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.minutesOr,
 .minutesUnit {
   color: var(--text-secondary);
   font-size: var(--text-12);
+}
+
+.minutesOr {
+  padding-right: 2px;
 }
 
 .clear {

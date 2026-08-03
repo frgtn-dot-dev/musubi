@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Info } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { VoteValue } from "~/api/contracts";
@@ -13,6 +13,11 @@ import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
 import styles from "./event-page.module.css";
 import pollStyles from "./poll-page.module.css";
+
+/** The reader's own timezone, which is the one every slot above is written in. */
+function localZone() {
+  return new Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
 
 export const Route = createFileRoute("/s/$token")({
   component: PollRoute,
@@ -69,6 +74,14 @@ function PollRoute() {
   if (poll.isError) {
     return (
       <RouteState
+        /* Somewhere to go: without this the page is a wall. Whoever sent the link
+           is the only one who can restore it, so the offer is the thing this
+           reader can do on their own. */
+        actions={
+          <Link className={styles.secondaryLink} to="/find-a-time">
+            Ask people for a time yourself
+          </Link>
+        }
         description="The link may have been withdrawn, or the poll no longer exists."
         eyebrow="Musubi"
         title="This poll is not available."
@@ -172,7 +185,17 @@ function PollRoute() {
             person deciding and the people answering see one picture. */}
         <PollGrid
           answers={answers}
-          caption="Who can make which time. Your own row is the last one."
+          /* Before anyone has answered, the grid needs to say what to do with it;
+             after that it only needs to say what it shows. Both name the timezone,
+             because the same slot is Friday night in one place and Friday
+             afternoon in another and these times are the reader's own. */
+          caption={
+            data.closed
+              ? `How everyone answered. Times in ${localZone()}.`
+              : Object.keys(answers).length > 0
+                ? `Who can make which time. Times in ${localZone()}.`
+                : `Fill in your own row — the last one — then send. Times in ${localZone()}.`
+          }
           chosenSlotID={data.chosenSlotID}
           mineID={data.mineID}
           people={data.people}

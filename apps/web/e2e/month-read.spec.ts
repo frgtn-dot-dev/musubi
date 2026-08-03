@@ -6647,7 +6647,9 @@ test("creates a poll, collects answers and turns one into an event", async ({
   // The same grid the participants answered on, so the person deciding reads the
   // picture they filled in — Mika's row, and the count under each column.
   await expect(results.getByRole("row", { name: /^Mika/ })).toContainText("✓");
-  await expect(results.getByRole("row", { name: /^Yes/ })).toContainText("2");
+  await expect(
+    results.getByRole("row", { name: /^Can make it/ }),
+  ).toContainText("2");
   await expect(results.getByText(/people have answered/)).toBeVisible();
 
   // Nothing is picked for them: two times can tie, and choosing is the

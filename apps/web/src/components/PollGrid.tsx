@@ -119,8 +119,10 @@ export function PollGrid({
             {/* The count first, because it answers the question before anyone
                 reads a single row. */}
             <tr className={styles.countRow}>
+              {/* Not "Yes": in a column of people's names, a row labelled with an
+                  answer reads as somebody called Yes. */}
               <th className={styles.rowHead} scope="row">
-                Yes
+                Can make it
               </th>
               {slots.map((slot) => (
                 <td

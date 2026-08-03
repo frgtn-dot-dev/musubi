@@ -156,8 +156,11 @@ export function PollForm({
             {minutes} min
           </Button>
         ))}
-        {/* One control, so the unit never wraps onto a line of its own. */}
+        {/* "or" earns its word: the field carries the same value as the chips, so
+            without it the number beside a lit-up "60 min" reads as a second,
+            contradictory setting instead of the way to type a sixth one. */}
         <span className={styles.minutesField}>
+          <span className={styles.minutesOr}>or</span>
           <input
             aria-label="Minutes"
             className={styles.minutes}

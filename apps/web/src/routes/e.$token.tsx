@@ -1,6 +1,6 @@
 import { expandRecurringEvents } from "@musubi/calendar";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarPlus, MapPin, Repeat2 } from "lucide-react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
@@ -56,6 +56,14 @@ function PublicEventRoute() {
   if (page.isError) {
     return (
       <RouteState
+        /* Same reasoning as the missing poll: only the organizer can bring the
+           page back, so the way out offered here is the one the reader can take
+           without them. */
+        actions={
+          <Link className={styles.secondaryLink} to="/new-event">
+            Make an event page of your own
+          </Link>
+        }
         description="The link may have been turned off, or the event is no longer there."
         eyebrow="Musubi"
         title="This page is not available."

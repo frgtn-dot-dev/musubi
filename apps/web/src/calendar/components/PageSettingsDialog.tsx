@@ -322,8 +322,8 @@ export function PageSettingsDialog({
           </SectionLabel>
           <div className={styles.sectionRows}>
             <Row
-              label="Default Page"
-              detail="Opened when no specific Page was requested"
+              label="Default page"
+              detail="Opened when a link does not name one"
               trailing={
                 isDefault ? (
                   <span className={styles.defaultStatus}>

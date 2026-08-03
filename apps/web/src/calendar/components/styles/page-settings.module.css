@@ -55,9 +55,13 @@
   text-transform: uppercase;
 }
 
+/* Six across, so twelve icons are always two even rows. `auto-fit` gave the
+   narrow dialog seven and the wide one all twelve, and a row of seven above a row
+   of five reads as a grid that ran out rather than a set of choices. */
 .iconGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  grid-template-columns: repeat(6, 44px);
+  justify-content: start;
   gap: var(--space-2);
 }
 

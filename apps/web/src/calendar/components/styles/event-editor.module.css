@@ -571,8 +571,12 @@
     min-height: 56px;
   }
 
+  /* Cancel belongs beside Create, not a thousand pixels away at the other end of
+     the page. Space-between is right for the compact layout, where the left slot
+     is "More options" — a disclosure rather than the other half of a pair. */
   .form[data-layout="page"] .actions {
     min-height: var(--control-height);
+    justify-content: flex-end;
     padding: 0;
   }
 }

@@ -699,7 +699,11 @@ export function TimeGridView({
     >
       <div className={styles.timeGridSticky}>
         <div className={styles.timeGridDayHeader}>
-          <div aria-hidden="true" />
+          {/* The corner above the hour axis: this names the zone every hour on
+              the axis is written in, so it belongs at the top of that axis. It
+              used to be dropped 490px down the scrolling canvas, where it read
+              as a label for whatever hour it happened to land between. */}
+          <span className={styles.timeGridZone}>{timeZoneLabel(now)}</span>
           {days.map((day) => {
             const today = isSameDay(day, now);
 
@@ -787,9 +791,6 @@ export function TimeGridView({
             {hour > 0 ? <span>{hourLabel(hour, timeFormat)}</span> : null}
           </div>
         ))}
-        <span className={styles.timeGridZone} aria-hidden="true">
-          {timeZoneLabel(now)}
-        </span>
         <div className={styles.timeGridColumns}>
           {days.map((day, dayIndex) => {
             const today = isSameDay(day, now);

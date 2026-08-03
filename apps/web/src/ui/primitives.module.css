@@ -1402,14 +1402,17 @@
   color: var(--accent-primary);
 }
 
+/* The chevron sits against the date, not against the far edge of the row. Pushed
+   apart, the value read as text and the arrow as something belonging to the row
+   itself — 80px of nothing between a control and its own affordance. */
 .datePickerTrigger {
   display: flex;
   min-width: 0;
   min-height: 38px;
   flex: 1;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  justify-content: flex-start;
+  gap: var(--space-1);
   padding: 0;
   border: 0;
   outline: 0;
@@ -1423,6 +1426,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.datePickerTrigger:hover:not(:disabled) {
+  color: var(--text-primary);
 }
 
 .datePickerTrigger:disabled {
