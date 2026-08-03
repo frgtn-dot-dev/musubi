@@ -11,6 +11,7 @@ import {
   getPolls,
 } from "~/api/resources";
 import { Button } from "~/ui/Button";
+import { TimePicker } from "~/ui/TimePicker";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
@@ -19,8 +20,10 @@ import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/scheduling.module.css";
 
-/** Sensible meeting lengths. A free number field invites 37-minute meetings. */
+/** Quick presets. The field beside them takes anything from 5 minutes to a day. */
 const DURATIONS = [15, 30, 45, 60, 90];
+const MIN_DURATION = 5; // The API's floor.
+const MAX_DURATION = 24 * 60;
 
 /**
  * Matches the API's cap. Beyond this a poll stops being a question and becomes a
@@ -41,12 +44,14 @@ export function SchedulingDialog({
   onNotice,
   onOpenChange,
   returnFocus,
+  timeFormat,
   weekStartsOn,
 }: {
   calendars: Calendar[];
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   returnFocus: RefObject<HTMLElement | null>;
+  timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
 }) {
   const queryClient = useQueryClient();
@@ -88,6 +93,7 @@ export function SchedulingDialog({
               onNotice("Poll created. Send the link to the people you need.");
               setOpenPoll(poll);
             }}
+            timeFormat={timeFormat}
             weekStartsOn={weekStartsOn}
           />
 
@@ -125,16 +131,26 @@ export function SchedulingDialog({
 
 function NewPoll({
   onCreated,
+  timeFormat,
   weekStartsOn,
 }: {
   onCreated: (poll: PollSummary) => void;
+  timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
 }) {
   const [title, setTitle] = useState("");
-  const [durationMinutes, setDuration] = useState(60);
+  // Held as text so the field can be empty while it is being retyped; five
+  // presets do not cover everybody's meeting.
+  const [duration, setDuration] = useState("60");
   const [days, setDays] = useState<string[]>([]);
   const [times, setTimes] = useState<string[]>(["18:00"]);
-  const [newTime, setNewTime] = useState("");
+  const [newTime, setNewTime] = useState("19:00");
+
+  const durationMinutes = Number(duration);
+  const durationValid =
+    Number.isInteger(durationMinutes) &&
+    durationMinutes >= MIN_DURATION &&
+    durationMinutes <= MAX_DURATION;
 
   // Days × times. Written out because it is what the poll actually asks, and
   // because seeing "6 days × 2 times = 12 options" is what stops somebody
@@ -150,7 +166,8 @@ function NewPoll({
     onSuccess: onCreated,
   });
 
-  const ready = title.trim().length > 0 && slots.length > 0 && !tooMany;
+  const ready =
+    title.trim().length > 0 && slots.length > 0 && !tooMany && durationValid;
 
   return (
     <section className={styles.section}>
@@ -202,12 +219,12 @@ function NewPoll({
                 {time}
               </Button>
             ))}
-            <input
-              aria-label="Add a time"
+            <TimePicker
               className={styles.timeInput}
-              type="time"
+              label="Add a time"
+              timeFormat={timeFormat}
               value={newTime}
-              onChange={(event) => setNewTime(event.target.value)}
+              onChange={setNewTime}
             />
             <Button
               disabled={!newTime || times.includes(newTime)}
@@ -232,12 +249,29 @@ function NewPoll({
               key={minutes}
               size="compact"
               variant={durationMinutes === minutes ? "primary" : "secondary"}
-              onClick={() => setDuration(minutes)}
+              onClick={() => setDuration(String(minutes))}
             >
               {minutes} min
             </Button>
           ))}
+          <input
+            aria-label="Minutes"
+            className={styles.minutes}
+            inputMode="numeric"
+            max={MAX_DURATION}
+            min={MIN_DURATION}
+            type="number"
+            value={duration}
+            onChange={(event) => setDuration(event.target.value)}
+          />
+          <span className={styles.minutesUnit}>min</span>
         </fieldset>
+
+        {duration !== "" && !durationValid ? (
+          <p className={styles.error} role="alert">
+            A slot lasts between {MIN_DURATION} minutes and a whole day.
+          </p>
+        ) : null}
 
         <p className={tooMany ? styles.error : styles.summary}>
           {slots.length === 0

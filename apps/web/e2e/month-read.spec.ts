@@ -5726,6 +5726,72 @@ test("lets a stranger answer after confirming their address", async ({ page }) =
   await expect(page.getByText("1 going")).toBeVisible();
 });
 
+test("opens a day-view preview on screen, not over the sidebar", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+
+  await page.getByRole("button", { name: /Project check-in/ }).first().click();
+  const preview = page.getByRole("dialog").first();
+  await expect(preview).toBeVisible();
+
+  // A day column is as wide as the grid, so there is no room to the right of a
+  // block: the preview used to flip left, across the sidebar and off the screen.
+  const box = (await preview.boundingBox())!;
+  const width = page.viewportSize()!.width;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
+});
+
+test("a press that dismisses a preview does not also start a draft", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
+
+  await page.getByRole("button", { name: /Project check-in/ }).first().click();
+  await expect(page.getByRole("dialog").first()).toBeVisible();
+
+  // Press on empty grid, far below the events: that press is dismissing the
+  // preview, and it used to leave a draft flashing up behind it.
+  // Empty grid, well clear of the morning events. The column is taller than the
+  // viewport, so the point comes from the viewport rather than from its box.
+  const column = page.locator("[data-time-grid-column]").first();
+  const bounds = (await column.boundingBox())!;
+  const x = bounds.x + bounds.width / 2;
+  const y = page.viewportSize()!.height - 120;
+  await page.mouse.click(x, y);
+
+  // Nothing is open at all: no preview, and no composer for a draft nobody asked
+  // for — that draft flashing up behind the preview was the bug.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // The same press with nothing open does open the composer, so the guard is
+  // about dismissal and not about the gesture.
+  await page.mouse.click(x, y);
+  await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+
+  // The month grid creates from a click on a cell, so it had the same hole.
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.getByRole("button", { name: /Project check-in/ }).first().click();
+  await expect(page.getByRole("dialog").first()).toBeVisible();
+  const cell = page
+    .getByRole("grid")
+    .first()
+    .getByRole("gridcell", { name: /July 17, 2026/ });
+  const cellBox = (await cell.boundingBox())!;
+  // Dragging out a range, which is the month grid's create gesture: the press
+  // that dismisses a preview must not begin one.
+  await page.mouse.move(cellBox.x + 20, cellBox.y + cellBox.height - 12);
+  await page.mouse.down();
+  await page.mouse.move(cellBox.x + cellBox.width * 2, cellBox.y + cellBox.height - 12, {
+    steps: 6,
+  });
+  await page.mouse.up();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
 const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2";
 
 test("creates a poll, collects answers and turns one into an event", async ({
@@ -5800,6 +5866,8 @@ test("creates a poll, collects answers and turns one into an event", async ({
   await dialog.getByRole("button", { name: "Remove 18:00" }).click();
   await dialog.getByLabel("Add a time").fill("15:00");
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
+  // Not one of the five presets, which is the point of the field beside them.
+  await dialog.getByLabel("Minutes").fill("25");
   await dialog.getByRole("button", { exact: true, name: "18" }).click();
   await dialog.getByRole("button", { exact: true, name: "19" }).click();
   await expect(dialog.getByText("2 days × 1 time = 2 options")).toBeVisible();
@@ -5810,8 +5878,14 @@ test("creates a poll, collects answers and turns one into an event", async ({
   // locator has to stop asking for "Find a time".
   const results = page.getByRole("dialog", { name: "Studio planning" });
   await expect(results.getByRole("textbox", { name: "Poll link" })).toBeVisible();
-  expect(created).toMatchObject({ durationMinutes: 60, title: "Studio planning" });
-  expect((created as { slots: unknown[] }).slots).toHaveLength(2);
+  expect(created).toMatchObject({ durationMinutes: 25, title: "Studio planning" });
+  const sent = (created as { slots: Array<{ start: string }> }).slots;
+  expect(sent).toHaveLength(2);
+  // The organizer typed a wall clock in Europe/Prague; both days carry it.
+  expect(sent.map((slot) => slot.start)).toEqual([
+    "2026-08-18T13:00:00.000Z",
+    "2026-08-19T13:00:00.000Z",
+  ]);
 
   // Results, with the leader marked but nothing picked for them — two times can
   // tie, and choosing is the organizer's job.

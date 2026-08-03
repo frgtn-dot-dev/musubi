@@ -21,6 +21,7 @@ import {
   useState,
 } from "react";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
+import { useLayerDismissGuard } from "../layer-focus";
 import { getReadableEventTextColor } from "../event-color";
 import {
   durationToHeight,
@@ -128,6 +129,8 @@ type TimelineEventProps = EventActionHandlers & {
   calendars: Calendar[];
   dayIndex: number;
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
+  /** Where the preview opens; Day has no room beside a full-width block. */
+  detailSide: "bottom" | "right";
   /** Live times while this event is being dragged, else undefined. */
   dragTimes?: DragTimes;
   /**
@@ -197,6 +200,7 @@ const TimelineEvent = memo(function TimelineEvent({
   calendars,
   dayIndex,
   daySegment,
+  detailSide,
   dragTimes,
   draggable,
   geometry,
@@ -277,6 +281,7 @@ const TimelineEvent = memo(function TimelineEvent({
       calendar={calendar}
       calendars={calendars}
       event={event}
+      side={detailSide}
       timeFormat={timeFormat}
       weekStartsOn={weekStartsOn}
       {...eventActions}
@@ -415,6 +420,15 @@ export function TimeGridView({
   );
   const [now, setNow] = useState(() => new Date());
   const hasToday = days.some((day) => isSameDay(day, now));
+  /**
+   * Beside the block in Week, under it in Day.
+   *
+   * A day column is as wide as the grid, so there is nothing to the right of a
+   * block to open into: Radix flipped the preview to the left instead, where it
+   * covered the sidebar and ran off the screen.
+   */
+  const detailSide = days.length === 1 ? "bottom" : "right";
+  const dismissGuard = useLayerDismissGuard();
   const rootRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   // Last applied geometry, so a density change can rescale scroll instead of
@@ -723,6 +737,7 @@ export function TimeGridView({
                   calendars={calendars}
                   event={span.event}
                   key={span.event.id}
+                  side="bottom"
                   timeFormat={timeFormat}
                   weekStartsOn={weekStartsOn}
                   {...eventActions}
@@ -795,6 +810,9 @@ export function TimeGridView({
                   if (
                     !onCreateAtTime ||
                     pointerEvent.button !== 0 ||
+                    // This press is dismissing a preview or a menu; it must not
+                    // also leave a draft behind the thing it just closed.
+                    dismissGuard.pressDismissedLayer() ||
                     (pointerEvent.target instanceof Element &&
                       pointerEvent.target.closest("button"))
                   ) {
@@ -815,6 +833,10 @@ export function TimeGridView({
                     !onCreateAtTime ||
                     // A drag already answered "when" — don't create twice.
                     consumeClick() ||
+                    // The press this click belongs to closed a layer. Radix
+                    // dismisses on pointerdown, so nothing is open to ask about
+                    // by now — the press had to be remembered.
+                    dismissGuard.consumeDismiss() ||
                     (event.target instanceof Element &&
                       event.target.closest("button"))
                   ) {
@@ -934,6 +956,7 @@ export function TimeGridView({
                 ) : null}
                 {segmentsByDay[dayIndex]?.map((segment) => (
                   <TimelineEvent
+                    detailSide={detailSide}
                     pending={
                       busyEventId !== undefined &&
                       (segment.event.id === busyEventId ||
