@@ -1,8 +1,10 @@
 import type { Settings } from "@musubi/types";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
+import { toDateKey } from "../date-key";
 import { PollDayPicker } from "./PollDayPicker";
 import { Button } from "~/ui/Button";
+import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { TimePicker } from "~/ui/TimePicker";
 import styles from "./styles/scheduling.module.css";
@@ -19,6 +21,8 @@ const MAX_DURATION = 24 * 60;
 const MAX_POLL_SLOTS = 60;
 
 export type PollDraft = {
+  /** End of the chosen day, in the organizer's own zone. Absent means no limit. */
+  deadline?: string;
   durationMinutes: number;
   slots: Array<{ start: string }>;
   title: string;
@@ -56,6 +60,9 @@ export function PollForm({
   const [days, setDays] = useState<string[]>([]);
   const [times, setTimes] = useState<string[]>(["18:00"]);
   const [newTime, setNewTime] = useState("19:00");
+  // Empty by default: most polls are answered in a day or two and a deadline
+  // nobody asked for is one more decision at the point of writing the question.
+  const [deadline, setDeadline] = useState("");
 
   const durationMinutes = Number(duration);
   const durationValid =
@@ -181,6 +188,38 @@ export function PollForm({
         </p>
       ) : null}
 
+      {/* Optional, and last: a poll works without one, and the server refuses a
+          vote after it rather than anything having to run on a schedule. */}
+      <div className={styles.deadlineRow}>
+        <span className={styles.deadlineLabel}>Answers close</span>
+        {deadline ? (
+          <>
+            <DatePicker
+              label="Answers close"
+              min={toDateKey(new Date())}
+              value={deadline}
+              weekStartsOn={weekStartsOn}
+              onChange={setDeadline}
+            />
+            <button
+              className={styles.clear}
+              type="button"
+              onClick={() => setDeadline("")}
+            >
+              No deadline
+            </button>
+          </>
+        ) : (
+          <button
+            className={styles.clear}
+            type="button"
+            onClick={() => setDeadline(toDateKey(new Date()))}
+          >
+            Set a date
+          </button>
+        )}
+      </div>
+
       <p className={tooMany ? styles.error : styles.summary}>
         {slots.length === 0
           ? "Pick at least one day and one time."
@@ -205,7 +244,16 @@ export function PollForm({
         disabled={!ready}
         loading={busy}
         onClick={() =>
-          onSubmit({ durationMinutes, slots, title: title.trim() })
+          onSubmit({
+            durationMinutes,
+            slots,
+            title: title.trim(),
+            // The end of that day where the organizer is, not midnight UTC: a
+            // deadline of "Friday" that expires at 2am Friday would be a trap.
+            ...(deadline
+              ? { deadline: new Date(`${deadline}T23:59:59`).toISOString() }
+              : {}),
+          })
         }
       >
         {submitLabel}

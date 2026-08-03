@@ -369,55 +369,167 @@ export function ConnectionsDialog({
           )}
         </section>
 
-        <section
-          aria-labelledby="connections-invite-title"
-          className={styles.section}
-        >
-          <SectionHeading
-            description="Use an invite from this or another Musubi server."
-            id="connections-invite-title"
-            title="Join a shared calendar"
-          />
-          {invite ? (
-            <InvitePreview
-              busy={busy}
-              invite={invite}
-              onCancel={() => {
-                setInvite(undefined);
-                setError("");
-                focusInviteInput();
-              }}
-              onJoin={() => void acceptInvite()}
+        {/* Both sit in the side column, stacked at its top: placed in two rows of
+            the outer grid, their heights came from the left column and left 130px
+            of nothing between them whenever no federated server filled the cell
+            beside the invite form. */}
+        <div className={styles.side}>
+          <section
+            aria-labelledby="connections-invite-title"
+            className={styles.section}
+          >
+            <SectionHeading
+              description="Use an invite from this or another Musubi server."
+              id="connections-invite-title"
+              title="Join a shared calendar"
             />
-          ) : (
-            <form
-              className={styles.inviteForm}
-              onSubmit={(event) => void previewInvite(event)}
-            >
-              <Field
-                className={styles.inviteField}
-                description="Paste the full link or just its invite token."
-                label="Invite link"
+            {invite ? (
+              <InvitePreview
+                busy={busy}
+                invite={invite}
+                onCancel={() => {
+                  setInvite(undefined);
+                  setError("");
+                  focusInviteInput();
+                }}
+                onJoin={() => void acceptInvite()}
+              />
+            ) : (
+              <form
+                className={styles.inviteForm}
+                onSubmit={(event) => void previewInvite(event)}
               >
-                <input
-                  disabled={busy}
-                  placeholder="https://server/invite/…"
-                  ref={inviteInputRef}
-                  value={inviteValue}
-                  onChange={(event) => setInviteValue(event.target.value)}
-                />
-              </Field>
-              <Button
-                className={styles.inviteSubmit}
-                disabled={!inviteValue.trim()}
-                loading={busy}
-                type="submit"
-              >
-                Open invite
-              </Button>
-            </form>
-          )}
-        </section>
+                <Field
+                  className={styles.inviteField}
+                  description="Paste the full link or just its invite token."
+                  label="Invite link"
+                >
+                  <input
+                    disabled={busy}
+                    placeholder="https://server/invite/…"
+                    ref={inviteInputRef}
+                    value={inviteValue}
+                    onChange={(event) => setInviteValue(event.target.value)}
+                  />
+                </Field>
+                <Button
+                  className={styles.inviteSubmit}
+                  disabled={!inviteValue.trim()}
+                  loading={busy}
+                  type="submit"
+                >
+                  Open invite
+                </Button>
+              </form>
+            )}
+          </section>
+          <section
+            aria-labelledby="connections-add-title"
+            className={styles.section}
+          >
+            <SectionHeading
+              description="Choose where your other calendars live."
+              id="connections-add-title"
+              title="Add a connection"
+            />
+            {connections.capabilities.isPending ? (
+              <p aria-live="polite" className={styles.loading}>
+                Loading connection options…
+              </p>
+            ) : connections.capabilities.isError ? (
+              <p className={styles.sectionError} role="alert">
+                Connection options could not be loaded.
+              </p>
+            ) : providers.length > 0 ? (
+              <div className={styles.providerButtons}>
+                {providers.includes("google") ? (
+                  <Button
+                    disabled={busy}
+                    icon={<ProviderGlyph provider="google" />}
+                    variant="secondary"
+                    onClick={() =>
+                      void connectSocial("google", GOOGLE_CALENDAR_SCOPES)
+                    }
+                  >
+                    Google Calendar
+                  </Button>
+                ) : null}
+                {providers.includes("microsoft") ? (
+                  <Button
+                    disabled={busy}
+                    icon={<ProviderGlyph provider="microsoft" />}
+                    variant="secondary"
+                    onClick={() =>
+                      void connectSocial(
+                        "microsoft",
+                        MICROSOFT_CALENDAR_SCOPES,
+                      )
+                    }
+                  >
+                    Outlook
+                  </Button>
+                ) : null}
+                {providers.includes("caldav") ? (
+                  <>
+                    <Button
+                      disabled={busy}
+                      icon={<ProviderGlyph provider="apple" />}
+                      variant="secondary"
+                      onClick={(event) =>
+                        openCaldav(
+                          {
+                            apple: true,
+                            password: "",
+                            serverUrl: APPLE_CALDAV_URL,
+                            username: "",
+                          },
+                          event.currentTarget,
+                        )
+                      }
+                    >
+                      Apple / iCloud
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      /* A bare glyph, like the three brand marks beside it: the
+                         bordered pill `ProviderIcon` draws is for a source badge
+                         in a list, and here it made CalDAV the odd one out. */
+                      icon={<Globe size={17} strokeWidth={1.7} />}
+                      variant="secondary"
+                      onClick={(event) =>
+                        openCaldav(
+                          {
+                            apple: false,
+                            password: "",
+                            serverUrl: "",
+                            username: "",
+                          },
+                          event.currentTarget,
+                        )
+                      }
+                    >
+                      CalDAV
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className={styles.loading}>
+                This server does not offer external calendar connections.
+              </p>
+            )}
+
+            {caldav ? (
+              <CaldavForm
+                busy={busy}
+                draft={caldav}
+                onCancel={closeCaldav}
+                onChange={setCaldav}
+                onSubmit={(event) => void submitCaldav(event)}
+              />
+            ) : null}
+          </section>
+        </div>
 
         {federatedServers.length > 0 ? (
           <section
@@ -501,113 +613,6 @@ export function ConnectionsDialog({
             </ul>
           </section>
         ) : null}
-
-        <section
-          aria-labelledby="connections-add-title"
-          className={styles.section}
-        >
-          <SectionHeading
-            description="Choose where your other calendars live."
-            id="connections-add-title"
-            title="Add a connection"
-          />
-          {connections.capabilities.isPending ? (
-            <p aria-live="polite" className={styles.loading}>
-              Loading connection options…
-            </p>
-          ) : connections.capabilities.isError ? (
-            <p className={styles.sectionError} role="alert">
-              Connection options could not be loaded.
-            </p>
-          ) : providers.length > 0 ? (
-            <div className={styles.providerButtons}>
-              {providers.includes("google") ? (
-                <Button
-                  disabled={busy}
-                  icon={<ProviderGlyph provider="google" />}
-                  variant="secondary"
-                  onClick={() =>
-                    void connectSocial("google", GOOGLE_CALENDAR_SCOPES)
-                  }
-                >
-                  Google Calendar
-                </Button>
-              ) : null}
-              {providers.includes("microsoft") ? (
-                <Button
-                  disabled={busy}
-                  icon={<ProviderGlyph provider="microsoft" />}
-                  variant="secondary"
-                  onClick={() =>
-                    void connectSocial(
-                      "microsoft",
-                      MICROSOFT_CALENDAR_SCOPES,
-                    )
-                  }
-                >
-                  Outlook
-                </Button>
-              ) : null}
-              {providers.includes("caldav") ? (
-                <>
-                  <Button
-                    disabled={busy}
-                    icon={<ProviderGlyph provider="apple" />}
-                    variant="secondary"
-                    onClick={(event) =>
-                      openCaldav(
-                        {
-                          apple: true,
-                          password: "",
-                          serverUrl: APPLE_CALDAV_URL,
-                          username: "",
-                        },
-                        event.currentTarget,
-                      )
-                    }
-                  >
-                    Apple / iCloud
-                  </Button>
-                  <Button
-                    disabled={busy}
-                    /* A bare glyph, like the three brand marks beside it: the
-                       bordered pill `ProviderIcon` draws is for a source badge
-                       in a list, and here it made CalDAV the odd one out. */
-                    icon={<Globe size={17} strokeWidth={1.7} />}
-                    variant="secondary"
-                    onClick={(event) =>
-                      openCaldav(
-                        {
-                          apple: false,
-                          password: "",
-                          serverUrl: "",
-                          username: "",
-                        },
-                        event.currentTarget,
-                      )
-                    }
-                  >
-                    CalDAV
-                  </Button>
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <p className={styles.loading}>
-              This server does not offer external calendar connections.
-            </p>
-          )}
-
-          {caldav ? (
-            <CaldavForm
-              busy={busy}
-              draft={caldav}
-              onCancel={closeCaldav}
-              onChange={setCaldav}
-              onSubmit={(event) => void submitCaldav(event)}
-            />
-          ) : null}
-        </section>
 
         {error ? (
           <div className={styles.error} role="alert">

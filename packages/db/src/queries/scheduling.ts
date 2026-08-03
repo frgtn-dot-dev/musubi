@@ -113,17 +113,30 @@ export async function setPollVotes(
   });
 }
 
+/**
+ * Stop taking answers.
+ *
+ * With a slot the poll was decided and an event exists; without one it was closed
+ * for some other reason — the meeting was arranged elsewhere, or nobody could
+ * make any of it. Both leave the poll readable, so the people who answered can
+ * still see what came of it.
+ */
 export async function closePoll(input: {
-  chosenSlotID: string;
-  eventID: string;
+  chosenSlotID?: string;
+  eventID?: string;
   pollID: string;
 }) {
   await db
     .update(schedulingPolls)
     .set({
-      chosenSlotID: input.chosenSlotID,
+      chosenSlotID: input.chosenSlotID ?? null,
       closedAt: new Date(),
-      eventID: input.eventID,
+      eventID: input.eventID ?? null,
     })
     .where(eq(schedulingPolls.id, input.pollID));
+}
+
+/** Slots and votes go with it: both cascade from the poll's own row. */
+export async function deletePoll(pollID: string) {
+  await db.delete(schedulingPolls).where(eq(schedulingPolls.id, pollID));
 }

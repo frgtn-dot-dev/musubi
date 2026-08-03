@@ -409,6 +409,8 @@ export function getPolls(signal?: AbortSignal) {
 }
 
 export function createPoll(input: {
+  /** When answers stop being taken, if the organizer set a date. */
+  deadline?: string;
   description?: string;
   durationMinutes: number;
   /** Names an account that has none yet — a poll made from the public page. */
@@ -453,6 +455,23 @@ export function decidePoll(input: {
     body: { calendarId: input.calendarId, slotId: input.slotId },
     method: "POST",
     responseSchema: z.object({ eventId: z.string(), slotId: z.string() }),
+  });
+}
+
+/** Stop taking answers without picking a time. The poll stays readable. */
+export function closePoll(pollId: string) {
+  return apiRequest(`/api/v1/scheduling/polls/${pollId}/close`, {
+    body: {},
+    method: "POST",
+    responseSchema: z.object({ closed: z.boolean() }),
+  });
+}
+
+/** Removes the poll and every answer on it. Any event a decision made stays. */
+export function deletePoll(pollId: string) {
+  return apiRequest(`/api/v1/scheduling/polls/${pollId}`, {
+    method: "DELETE",
+    responseSchema: z.unknown(),
   });
 }
 

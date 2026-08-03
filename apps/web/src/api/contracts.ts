@@ -176,7 +176,10 @@ export const PollPersonSchema = z.object({
 
 export const PollSchema = z.object({
   chosenSlotID: z.string().nullish(),
+  /** Shut to new answers, whether by hand or by a deadline that has gone by. */
   closed: z.boolean().default(false),
+  /** When it shuts on its own, if it does. */
+  deadline: z.coerce.date().nullish(),
   description: z.string().nullish(),
   durationMinutes: z.number(),
   /** The reader's own answers, keyed by slot. Empty when nobody is signed in. */
@@ -196,8 +199,14 @@ export type VoteValue = "if-needed" | "no" | "yes";
 
 /** A poll in the organizer's own list. */
 export const PollSummarySchema = z.object({
+  /** Set when a time was picked; a poll can be closed without one. */
+  chosenSlotID: z.string().nullish(),
+  /** Shut to answers, decided by the server: a deadline is a clock comparison. */
+  closed: z.boolean().default(false),
+  /** When the organizer closed it, which a passed deadline does not set. */
   closedAt: z.coerce.date().nullish(),
   createdAt: z.coerce.date(),
+  deadline: z.coerce.date().nullish(),
   durationMinutes: z.number(),
   id: z.string(),
   title: z.string(),

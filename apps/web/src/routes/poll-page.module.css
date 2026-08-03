@@ -65,6 +65,14 @@
   justify-items: start;
 }
 
+/* Why the grid will not take an answer, or when it will stop. Quieter than the
+   decided line: this is a condition, not the result everyone came for. */
+.closedNote {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
 .decided {
   display: flex;
   align-items: center;

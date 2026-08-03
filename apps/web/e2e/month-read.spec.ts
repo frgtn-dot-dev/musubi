@@ -6027,8 +6027,11 @@ test("ui catalogue", async ({ page }) => {
   await page.route("**/api/v1/scheduling/polls", (route) =>
     respond(route, [
       {
+        chosenSlotID: null,
+        closed: false,
         closedAt: null,
         createdAt: "2026-07-26T09:00:00.000Z",
+        deadline: "2026-08-08T21:59:59.000Z",
         durationMinutes: 60,
         id: "poll-1",
         title: "Studio planning",
@@ -6454,6 +6457,83 @@ test("keeps the time on a chip while the cell can hold one", async ({
     expect(state.timeShown).toBe(false);
     expect(state.heights).toHaveLength(1);
   }
+});
+
+test("closes and deletes a poll", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  let closed = false;
+  let deleted = false;
+  const poll = (overrides: Record<string, unknown> = {}) => ({
+    chosenSlotID: null,
+    closed,
+    closedAt: closed ? "2026-08-03T10:00:00.000Z" : null,
+    createdAt: "2026-07-26T09:00:00.000Z",
+    deadline: null,
+    durationMinutes: 60,
+    id: "poll-1",
+    title: "Studio planning",
+    token: POLL_TOKEN,
+    url: `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+    ...overrides,
+  });
+
+  await page.route("**/api/v1/scheduling/polls", (route) =>
+    respond(route, deleted ? [] : [poll()]),
+  );
+  await page.route(`**/api/v1/scheduling/polls/poll-1/close`, (route) => {
+    closed = true;
+    return respond(route, { closed: true });
+  });
+  await page.route(`**/api/v1/scheduling/polls/poll-1`, (route) => {
+    deleted = true;
+    return respond(route, undefined, 204);
+  });
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, {
+      chosenSlotID: null,
+      closed,
+      deadline: null,
+      durationMinutes: 60,
+      mine: {},
+      mineID: null,
+      people: [{ answers: { s1: "yes" }, id: "1", name: "Adam" }],
+      respondents: 1,
+      slots: [
+        {
+          end: "2026-08-10T14:00:00.000Z",
+          id: "s1",
+          ifNeeded: [],
+          no: [],
+          start: "2026-08-10T13:00:00.000Z",
+          yes: ["Adam"],
+        },
+      ],
+      title: "Studio planning",
+    }),
+  );
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.getByRole("button", { exact: true, name: "Find a time" }).click();
+  await page.getByRole("button", { name: /Studio planning/ }).click();
+
+  // Deciding used to be the only way to shut a poll, so an organizer who sorted
+  // the meeting out elsewhere had to invent an event or leave the link open.
+  await page.getByRole("button", { name: "Stop taking answers" }).click();
+  await expect(page.getByRole("status")).toContainText("Poll closed");
+  await expect(
+    page.getByRole("button", { name: /Studio planning/ }),
+  ).toContainText("Closed, no time picked");
+
+  // Deleting says what goes with it, and takes a confirmation.
+  await page.getByRole("button", { name: /Studio planning/ }).click();
+  await expect(page.getByRole("button", { name: "Pick" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Delete poll" }).click();
+  const confirm = page.getByRole("dialog", { name: /Delete “Studio planning”/ });
+  await expect(confirm).toContainText("1 person has answered");
+  await confirm.getByRole("button", { name: "Delete poll" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Poll deleted");
+  await expect(page.getByText("No polls yet")).toBeVisible();
 });
 
 test("counts what a search matched", async ({ page }) => {

@@ -8,6 +8,7 @@ import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
 import {
+  formatDay,
   formatSlot,
   PollGrid,
   PollLegend,
@@ -183,6 +184,18 @@ function PollRoute() {
           <p className={pollStyles.decided}>
             <Check aria-hidden="true" size={15} strokeWidth={2} />
             Decided: {formatSlot(chosen)}
+          </p>
+        ) : data.closed ? (
+          // Shut with nothing picked. Without this the grid is simply read-only
+          // and a person clicks their row wondering why nothing happens.
+          <p className={pollStyles.closedNote}>
+            {data.deadline
+              ? `Answers closed on ${formatDay(data.deadline)}. Nothing has been picked yet.`
+              : "This poll is closed to new answers. Nothing has been picked yet."}
+          </p>
+        ) : data.deadline ? (
+          <p className={pollStyles.closedNote}>
+            Answers close on {formatDay(data.deadline)}.
           </p>
         ) : null}
 

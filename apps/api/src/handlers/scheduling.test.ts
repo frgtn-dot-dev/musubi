@@ -4,6 +4,7 @@ import { bestSlots, pollProjection } from "./scheduling";
 const POLL = {
   chosenSlotID: null,
   closedAt: null,
+  deadline: null,
   description: "Which afternoon suits everyone?",
   durationMinutes: 60,
   title: "Studio planning",
@@ -22,6 +23,19 @@ const SLOTS = [
   },
 ];
 
+// ── A deadline shuts the poll without anything having to run ────────────────
+{
+  const past = { ...POLL, deadline: new Date(Date.now() - 60_000) };
+  const future = { ...POLL, deadline: new Date(Date.now() + 60_000) };
+  assert.equal(pollProjection(past, SLOTS, []).closed, true);
+  assert.equal(pollProjection(future, SLOTS, []).closed, false);
+  // Closed by hand still reads as closed, deadline or none.
+  assert.equal(
+    pollProjection({ ...POLL, closedAt: new Date() }, SLOTS, []).closed,
+    true,
+  );
+}
+
 // ── What a participant sees ──────────────────────────────────────────────────
 // Names and answers, because a poll is people coordinating with each other.
 // Nothing about anybody's calendar: availability is worked out in the
@@ -39,6 +53,7 @@ const SLOTS = [
   assert.deepEqual(Object.keys(projection).sort(), [
     "chosenSlotID",
     "closed",
+    "deadline",
     "description",
     "durationMinutes",
     "mine",

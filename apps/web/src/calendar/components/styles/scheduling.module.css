@@ -189,6 +189,24 @@
   font-variant-numeric: tabular-nums;
 }
 
+.deadlineRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.deadlineLabel {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The picker sizes to its own date here rather than stretching the row. */
+.deadlineRow > :global(button):first-of-type {
+  flex: none;
+}
+
 .linkCaption {
   margin: 0;
   color: var(--text-secondary);
@@ -300,6 +318,23 @@
 
 .footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
+}
+
+/* Back, and stopping the poll — the two that leave things where they are. */
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.deletePoll {
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
+}
+
+.deletePoll:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  color: var(--accent-primary);
 }

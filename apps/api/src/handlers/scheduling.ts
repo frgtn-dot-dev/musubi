@@ -3,6 +3,7 @@ import {
   closePoll,
   createEvent,
   createPoll,
+  deletePoll,
   getPollById,
   getPollByToken,
   listPollSlots,
@@ -85,7 +86,22 @@ export async function handlerListPolls(req: Request, res: Response) {
   const polls = await listPolls(req.user!.id);
 
   res.status(200).json(
-    polls.map((poll) => ({ ...poll, url: pollUrl(poll.token) })),
+    polls.map((poll) => ({
+      ...poll,
+      // Whether it still takes answers, worked out here rather than in the
+      // browser: the deadline is a wall-clock comparison and the server's clock
+      // is the one that refuses a vote, so it is the one that gets to say.
+      closed: pollIsClosed(poll),
+      url: pollUrl(poll.token),
+    })),
+  );
+}
+
+/** Shut to answers, for either reason. */
+function pollIsClosed(poll: { closedAt: Date | null; deadline: Date | null }) {
+  return (
+    Boolean(poll.closedAt) ||
+    Boolean(poll.deadline && poll.deadline.getTime() < Date.now())
   );
 }
 
@@ -112,6 +128,7 @@ export async function handlerGetPoll(req: Request, res: Response) {
 export type PollRow = {
   chosenSlotID: null | string;
   closedAt: Date | null;
+  deadline: Date | null;
   description: null | string;
   durationMinutes: number;
   title: string;
@@ -158,7 +175,14 @@ export function pollProjection(
 
   return {
     chosenSlotID: poll.chosenSlotID,
-    closed: Boolean(poll.closedAt),
+    /**
+     * Shut to new answers, for either reason. A passed deadline counts, worked out
+     * on read: nothing has to run on a schedule for a poll to stop taking answers,
+     * and `handlerVotePoll` refuses on the same comparison.
+     */
+    closed: pollIsClosed(poll),
+    /** When it shuts on its own, so a participant can see the clock too. */
+    deadline: poll.deadline,
     description: poll.description,
     durationMinutes: poll.durationMinutes,
     /** The reader's own answers. Empty when nobody is signed in. */
@@ -309,4 +333,44 @@ export async function handlerDecidePoll(req: Request, res: Response) {
   await closePoll({ chosenSlotID: slot.id, eventID: event.id, pollID: poll.id });
 
   res.status(200).json({ eventId: event.id, slotId: slot.id });
+}
+
+/**
+ * Stop taking answers without picking anything.
+ *
+ * Deciding was the only way to close a poll, so an organizer who sorted the
+ * meeting out another way had to either invent an event or leave the link open
+ * for good. The poll stays readable — the people who answered keep their answers.
+ */
+export async function handlerClosePoll(req: Request, res: Response) {
+  const poll = await getPollById(String(req.params.pollId));
+  if (!poll) throw new NotFoundError("Poll not found...");
+  if (poll.ownerID !== req.user!.id) {
+    throw new ForbiddenError("Only the organizer can close a poll...");
+  }
+  if (poll.closedAt) throw new BadRequestError("This poll is already closed...");
+
+  await closePoll({ pollID: poll.id });
+
+  res.status(200).json({ closed: true });
+}
+
+/**
+ * Remove a poll and everything answered on it.
+ *
+ * Not reversible, and not the same as closing: the link stops resolving and the
+ * answers are gone. Any event a decision created stays where it is — it is in
+ * people's calendars by then, and deleting a poll is not a way to cancel a
+ * meeting.
+ */
+export async function handlerDeletePoll(req: Request, res: Response) {
+  const poll = await getPollById(String(req.params.pollId));
+  if (!poll) throw new NotFoundError("Poll not found...");
+  if (poll.ownerID !== req.user!.id) {
+    throw new ForbiddenError("Only the organizer can delete a poll...");
+  }
+
+  await deletePoll(poll.id);
+
+  res.status(204).end();
 }

@@ -11,7 +11,9 @@ import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEv
 import { requireAuth } from "./middleware/require_auth";
 import {
   handlerCreatePoll,
+  handlerClosePoll,
   handlerDecidePoll,
+  handlerDeletePoll,
   handlerGetPoll,
   handlerListPolls,
   handlerVotePoll,
@@ -191,6 +193,8 @@ app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(hand
 app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
 app.post("/api/v1/scheduling/polls", requireAuth, wrap(handlerCreatePoll));
 app.post("/api/v1/scheduling/polls/:pollId/decide", requireAuth, wrap(handlerDecidePoll));
+app.post("/api/v1/scheduling/polls/:pollId/close", requireAuth, wrap(handlerClosePoll));
+app.delete("/api/v1/scheduling/polls/:pollId", requireAuth, wrap(handlerDeletePoll));
 app.get("/api/v1/public/polls/:token", rateLimit(60, 15 * 60_000), wrap(handlerGetPoll));
 app.put("/api/v1/public/polls/:token/votes", requireAuth, rateLimit(60, 15 * 60_000), wrap(handlerVotePoll));
 

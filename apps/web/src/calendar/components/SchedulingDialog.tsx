@@ -5,15 +5,23 @@ import type { Calendar, Settings } from "@musubi/types";
 import type { PollSummary } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
 import {
+  closePoll,
   createPoll,
   decidePoll,
+  deletePoll,
   getPoll,
   getPolls,
 } from "~/api/resources";
 import { Button } from "~/ui/Button";
-import { Dialog, DialogClose } from "~/ui/Dialog";
+import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
+import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
-import { formatSlot, PollGrid, PollLegend } from "~/components/PollGrid";
+import {
+  formatDay,
+  formatSlot,
+  PollGrid,
+  PollLegend,
+} from "~/components/PollGrid";
 import { PollForm } from "./PollForm";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
@@ -67,6 +75,18 @@ export function SchedulingDialog({
         <PollResults
           calendars={calendars}
           onBack={() => setOpenPoll(undefined)}
+          onChanged={(message) => {
+            void queryClient.invalidateQueries({ queryKey: pollsKey });
+            // And the poll's own answers: closing it changes what the detail view
+            // may offer, and this query outlives the trip back to the list — so
+            // reopening it showed Pick buttons for a poll that no longer takes
+            // answers.
+            void queryClient.invalidateQueries({
+              queryKey: ["poll", openPoll.token],
+            });
+            setOpenPoll(undefined);
+            onNotice(message);
+          }}
           onDecided={() => {
             void queryClient.invalidateQueries({ queryKey: pollsKey });
             setOpenPoll(undefined);
@@ -93,11 +113,7 @@ export function SchedulingDialog({
               <div className={styles.list}>
                 {polls.data.map((poll) => (
                   <RowAction
-                    detail={
-                      poll.closedAt
-                        ? "Decided"
-                        : `${poll.durationMinutes} minutes · waiting for answers`
-                    }
+                    detail={pollDetail(poll)}
                     icon={<CalendarClock size={17} strokeWidth={1.7} />}
                     key={poll.id}
                     label={poll.title}
@@ -147,19 +163,43 @@ function NewPoll({
   );
 }
 
+/**
+ * What a poll in the list is doing, in one line.
+ *
+ * "Decided" was said of anything closed, including a poll shut without a time —
+ * and a deadline was never mentioned at all, so the one fact that changes whether
+ * you need to chase people was the one the row left out.
+ */
+function pollDetail(poll: PollSummary) {
+  if (poll.closedAt) {
+    return poll.chosenSlotID ? "Decided" : "Closed, no time picked";
+  }
+  // Closed without the organizer closing it: the deadline ran out.
+  if (poll.closed) return "Answers have closed";
+
+  const waiting = `${poll.durationMinutes} minutes · waiting for answers`;
+  return poll.deadline
+    ? `${waiting} until ${formatDay(poll.deadline)}`
+    : waiting;
+}
+
 function PollResults({
   calendars,
   onBack,
+  onChanged,
   onDecided,
   onNotice,
   poll,
 }: {
   calendars: Calendar[];
   onBack: () => void;
+  /** A close or a delete: the list behind this view is now out of date. */
+  onChanged: (message: string) => void;
   onDecided: () => void;
   onNotice: (message: string) => void;
   poll: PollSummary;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   // The event lands in the first calendar the organizer can write to. Choosing
   // which one is a question for the day this poll grows a "create in…" row; a
   // select here would be a third thing to answer while picking a time.
@@ -175,6 +215,16 @@ function PollResults({
     mutationFn: (slotId: string) =>
       decidePoll({ calendarId, pollId: poll.id, slotId }),
     onSuccess: onDecided,
+  });
+
+  const close = useMutation({
+    mutationFn: () => closePoll(poll.id),
+    onSuccess: () => onChanged("Poll closed. The answers stay readable."),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deletePoll(poll.id),
+    onSuccess: () => onChanged("Poll deleted."),
   });
 
   const data = answers.data;
@@ -213,6 +263,18 @@ function PollResults({
             It is in your calendar, and the poll is closed to new answers.
           </p>
         </div>
+      ) : data?.closed ? (
+        // Shut with nothing picked — a deadline went by, or the organizer closed
+        // it. Saying "decided" here would be a lie, and saying nothing leaves a
+        // grid of Pick buttons that are simply gone.
+        <p className={styles.summary}>
+          {/* `closedAt` is what the organizer set; a deadline that ran out closes
+              the poll without setting it, so this tells the two apart without
+              reading the clock in a render. */}
+          {poll.closedAt || !data.deadline
+            ? "This poll is closed. Nothing was picked."
+            : `Answers closed on ${formatDay(data.deadline)}. Nothing was picked.`}
+        </p>
       ) : (
         <p className={styles.summary}>
           {data
@@ -222,6 +284,9 @@ function PollResults({
                   data.respondents === 1 ? "person has" : "people have"
                 } answered. Pick a time when you have enough of them.`
             : "Loading answers…"}
+          {data?.deadline && !data.closed
+            ? ` Answers close on ${formatDay(data.deadline)}.`
+            : ""}
         </p>
       )}
 
@@ -297,14 +362,64 @@ function PollResults({
         </p>
       ) : null}
 
+      {close.error ?? remove.error ? (
+        <p className={styles.error} role="alert">
+          {(close.error ?? remove.error)!.message}
+        </p>
+      ) : null}
+
+      {/* Managing the poll, not navigating: deleting sits on its own side of the
+          row, because it is the one press here that cannot be taken back. "Done"
+          used to sit beside "Back" doing the same job the header's close does. */}
       <div className={styles.footer}>
-        <Button variant="secondary" onClick={onBack}>
-          Back
+        <Button
+          className={styles.deletePoll}
+          loading={remove.isPending}
+          variant="ghost"
+          onClick={() => setConfirmingDelete(true)}
+        >
+          Delete poll
         </Button>
-        <DialogClose>
-          <Button variant="secondary">Done</Button>
-        </DialogClose>
+        <span className={styles.footerActions}>
+          {data && !data.closed ? (
+            <Button
+              loading={close.isPending}
+              title="Stop taking answers without picking a time"
+              variant="secondary"
+              onClick={() => close.mutate()}
+            >
+              Stop taking answers
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={onBack}>
+            Back
+          </Button>
+        </span>
       </div>
+
+      <ConfirmationDialog
+        closeLabel="Keep the poll"
+        confirmLabel="Delete poll"
+        description={
+          data?.respondents
+            ? `${data.respondents} ${
+                data.respondents === 1 ? "person has" : "people have"
+              } answered. Their answers go with it.`
+            : "Nobody has answered it yet."
+        }
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+        onOpenChange={setConfirmingDelete}
+        open={confirmingDelete}
+        title={`Delete “${poll.title}”?`}
+      >
+        <p>
+          The link stops working and the answers are gone. This cannot be undone.
+          {chosen
+            ? " The event it created stays in the calendars it is in."
+            : ""}
+        </p>
+      </ConfirmationDialog>
     </div>
   );
 }
