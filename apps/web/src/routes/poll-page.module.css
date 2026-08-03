@@ -69,11 +69,16 @@
    table, and squeezing a week of columns into reading width helps nobody. */
 .card {
   width: min(64rem, 100%);
+  min-width: 0;
   max-width: none;
 }
 
 .gridBox {
   overflow: hidden;
+  /* A grid item is `min-width: auto` by default, so a forty-column table pushes
+     this box — and the card, and the document — wider than the screen instead of
+     scrolling inside it. Zero is what makes the scroller below actually scroll. */
+  min-width: 0;
   max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -84,6 +89,7 @@
    under the caption as well. */
 .gridWrap {
   overflow-x: auto;
+  min-width: 0;
 }
 
 .grid {
@@ -278,8 +284,13 @@
   line-height: 1;
 }
 
+/* Deliberately not `position: absolute`, the usual recipe for this: with no
+   positioned ancestor its containing block is the page itself, so one of these
+   per empty cell sat outside the grid's scroller — forty of them made the whole
+   document scroll sideways. In flow it is a 1px box inside a fixed-size mark and
+   changes nothing. */
 .visuallyHidden {
-  position: absolute;
+  display: block;
   overflow: hidden;
   clip-path: inset(50%);
   width: 1px;

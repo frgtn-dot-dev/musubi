@@ -6008,6 +6008,52 @@ test("makes a poll from the public page with no account", async ({ page }) => {
   await expectNoAccessibilityViolations(page);
 });
 
+test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  const slots = [];
+  for (let day = 3; day <= 24; day += 1) {
+    for (const hour of [13, 17]) {
+      slots.push({
+        end: `2026-08-${String(day).padStart(2, "0")}T${hour + 1}:00:00.000Z`,
+        id: `s${day}-${hour}`,
+        ifNeeded: [],
+        no: [],
+        start: `2026-08-${String(day).padStart(2, "0")}T${hour}:00:00.000Z`,
+        yes: [],
+      });
+    }
+  }
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, {
+      chosenSlotID: null,
+      closed: false,
+      durationMinutes: 60,
+      mine: {},
+      mineID: null,
+      people: [{ answers: {}, id: "1", name: "Mika" }],
+      respondents: 1,
+      slots,
+      title: "Studio planning",
+    }),
+  );
+
+  await page.goto(`/s/${POLL_TOKEN}`);
+  await expect(page.getByRole("heading", { name: "Studio planning" })).toBeVisible();
+
+  // Forty-four columns: the table has to scroll inside its box and take nothing
+  // else with it. A grid item's `min-width: auto` is what lets wide content push
+  // its own container wider, and then the document scrolls sideways instead.
+  const scroller = page.locator("[class*=gridWrap]");
+  expect(await scroller.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(
+    true,
+  );
+  const document = await page.evaluate(() => ({
+    client: window.document.documentElement.clientWidth,
+    scroll: window.document.documentElement.scrollWidth,
+  }));
+  expect(document.scroll).toBeLessThanOrEqual(document.client);
+});
+
 test("answers a poll as somebody with no account", async ({ page }) => {
   let signedIn = false;
   let sentVotes: unknown;
