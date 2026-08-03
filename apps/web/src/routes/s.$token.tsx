@@ -1,24 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Info } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
-import type { Poll, PollSlot, VoteValue } from "~/api/contracts";
+import { useState, type FormEvent } from "react";
+import type { VoteValue } from "~/api/contracts";
 import { getPoll, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
+import { formatSlot, PollGrid, PollLegend } from "~/components/PollGrid";
 import { Button } from "~/ui/Button";
 import { Field } from "~/ui/Field";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { RouteState } from "~/ui/RouteState";
 import styles from "./event-page.module.css";
 import pollStyles from "./poll-page.module.css";
-
-const ANSWERS: Array<{ label: string; value: VoteValue }> = [
-  { label: "Yes", value: "yes" },
-  { label: "If needed", value: "if-needed" },
-  { label: "No", value: "no" },
-];
 
 export const Route = createFileRoute("/s/$token")({
   component: PollRoute,
@@ -45,11 +39,6 @@ function PollRoute() {
   // `null` is "answered, then cleared" — different from a slot never touched,
   // which is what lets withdrawing one answer be sent rather than ignored.
   const [draft, setDraft] = useState<Record<string, VoteValue | null>>({});
-  const [openCell, setOpenCell] = useState<string>();
-  // Read inside a closing menu's callbacks, which run after the next menu has
-  // already opened — state captured in those closures is a render behind.
-  const openCellRef = useRef(openCell);
-  openCellRef.current = openCell;
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -133,7 +122,6 @@ function PollRoute() {
 
   function pick(slotID: string, value: null | VoteValue) {
     setDraft((current) => ({ ...current, [slotID]: value }));
-    setOpenCell(undefined);
   }
 
   function send() {
@@ -180,187 +168,36 @@ function PollRoute() {
           </p>
         ) : null}
 
-        {/* People down, times across — the shape of the question. Everybody's
-            answers stay visible while you give your own, because "who else can
-            make Tuesday" is what a poll is for. */}
-        <div className={pollStyles.gridBox}>
-          {/* Outside the scrolling box: an instruction that slides away when you
-              scroll to Friday is not an instruction. */}
-          <p className={pollStyles.gridCaption} id="grid-caption">
-            Who can make which time. Your own row is the last one.
-          </p>
-          <div className={pollStyles.gridWrap}>
-            <table aria-describedby="grid-caption" className={pollStyles.grid}>
-            <thead>
-              <tr>
-                <th className={pollStyles.corner} rowSpan={2} scope="col">
-                  Participants
-                </th>
-                {groupByDay(data.slots).map(([day, slots]) => (
-                  <th
-                    className={pollStyles.dayHead}
-                    colSpan={slots.length}
-                    key={day}
-                    scope="colgroup"
-                  >
-                    {day}
-                  </th>
-                ))}
-              </tr>
-              <tr>
-                {data.slots.map((slot) => (
-                  <th className={pollStyles.timeHead} key={slot.id} scope="col">
-                    {formatStart(slot.start)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+        {/* People down, times across — the same grid the organizer reads, so the
+            person deciding and the people answering see one picture. */}
+        <PollGrid
+          answers={answers}
+          caption="Who can make which time. Your own row is the last one."
+          chosenSlotID={data.chosenSlotID}
+          mineID={data.mineID}
+          people={data.people}
+          slots={data.slots}
+          yourRow={
+            myName ? (
+              myName
+            ) : (
+              // Typed in the row it names, so it is obvious whose row it is.
+              // Confirming the address still happens below — this only says who
+              // to call you.
+              <input
+                aria-label="Your name"
+                autoComplete="name"
+                className={pollStyles.nameInput}
+                placeholder="Your name…"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            )
+          }
+          onAnswer={data.closed ? undefined : pick}
+        />
 
-            <tbody>
-              {/* The count first, because it answers the question before anyone
-                  reads a single row. */}
-              <tr className={pollStyles.countRow}>
-                <th className={pollStyles.rowHead} scope="row">
-                  Yes
-                </th>
-                {data.slots.map((slot) => (
-                  <td className={pollStyles.count} key={slot.id}>
-                    {slot.yes.length}
-                    {slot.ifNeeded.length > 0 ? (
-                      <span className={pollStyles.countIfNeeded}>
-                        +{slot.ifNeeded.length}
-                      </span>
-                    ) : null}
-                  </td>
-                ))}
-              </tr>
-
-              {data.people
-                .filter((person) => person.id !== data.mineID)
-                .map((person) => (
-                  <tr key={person.id}>
-                    <th className={pollStyles.rowHead} scope="row">
-                      {person.name}
-                    </th>
-                    {data.slots.map((slot) => (
-                      <td className={pollStyles.cell} key={slot.id}>
-                        <Mark value={person.answers[slot.id]} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-
-              <tr className={pollStyles.yourRow}>
-                <th className={pollStyles.rowHead} scope="row">
-                  {myName ? (
-                    myName
-                  ) : (
-                    // Typed in the row it names, so it is obvious whose row it
-                    // is. Confirming the address still happens below — this only
-                    // says who to call you.
-                    <input
-                      aria-label="Your name"
-                      autoComplete="name"
-                      className={pollStyles.nameInput}
-                      placeholder="Your name…"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                    />
-                  )}
-                </th>
-                {data.slots.map((slot) => (
-                  <td className={pollStyles.cell} key={slot.id}>
-                    {data.closed ? (
-                      <Mark value={answers[slot.id]} />
-                    ) : (
-                      // A menu rather than a cycling button: three answers plus
-                      // clearing is four presses away by cycling, and a grid is
-                      // where you go to set one cell and be done.
-                      <Popover
-                        onOpenChange={(open) =>
-                          setOpenCell((current) => {
-                            if (open) return slot.id;
-
-                            // Only this cell's own menu may close it. Clicking
-                            // straight from one cell to another used to open the
-                            // new menu and then shut it again: the old menu's
-                            // close callback landed last and wiped the state the
-                            // new trigger had just set.
-                            return current === slot.id ? undefined : current;
-                          })
-                        }
-                        open={openCell === slot.id}
-                      >
-                        <PopoverTrigger asChild>
-                          <button
-                            aria-label={`${formatSlot(slot)} — ${
-                              answers[slot.id]
-                                ? `you answered ${LABELS[answers[slot.id]!]}`
-                                : "you have not answered"
-                            }. Change your answer.`}
-                            className={pollStyles.cellButton}
-                            type="button"
-                          >
-                            <Mark silent value={answers[slot.id]} />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="center"
-                          aria-label={`Your answer for ${formatSlot(slot)}`}
-                          className={pollStyles.picker}
-                          mobileSurface="anchored"
-                          onCloseAutoFocus={(event) => {
-                            // Closing because another cell was just opened: this
-                            // menu would pull focus back to its own cell, which
-                            // is outside the new menu — and a non-modal popover
-                            // closes itself the moment focus leaves it. Tapping
-                            // from cell to cell used to shut the new menu that
-                            // way, immediately after opening it.
-                            const next = openCellRef.current;
-                            if (next && next !== slot.id) event.preventDefault();
-                          }}
-                        >
-                          {ANSWERS.map((option) => (
-                            <button
-                              aria-pressed={answers[slot.id] === option.value}
-                              className={pollStyles.pick}
-                              key={option.value}
-                              type="button"
-                              onClick={() => pick(slot.id, option.value)}
-                            >
-                              <Mark silent value={option.value} />
-                              {option.label}
-                            </button>
-                          ))}
-                          {answers[slot.id] ? (
-                            <button
-                              className={pollStyles.pick}
-                              type="button"
-                              onClick={() => pick(slot.id, null)}
-                            >
-                              <Mark silent />
-                              Clear
-                            </button>
-                          ) : null}
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-            </table>
-          </div>
-        </div>
-
-        <p className={pollStyles.legend}>
-          {ANSWERS.map((option) => (
-            <span className={pollStyles.legendItem} key={option.value}>
-              <Mark silent value={option.value} />
-              {option.label}
-            </span>
-          ))}
-        </p>
+        <PollLegend />
 
         {data.closed ? null : session.data ? (
           <div className={pollStyles.send}>
@@ -435,90 +272,8 @@ function PollRoute() {
   );
 }
 
-const LABELS: Record<VoteValue, string> = {
-  "if-needed": "if needed",
-  no: "no",
-  yes: "yes",
-};
 
-/**
- * One answer in one cell.
- *
- * Shape as well as colour — a grid read only by hue is unreadable to anyone who
- * cannot separate red from green, and this is the whole content of the page.
- */
-function Mark({
-  silent,
-  value,
-}: {
-  /** Beside a written label: the glyph is then decoration, and naming a button
-      "! If needed" instead of "If needed" is how it goes wrong. */
-  silent?: boolean;
-  value?: VoteValue | null;
-}) {
-  // An empty slot, drawn as an empty box: a dot reads like an answer, and in the
-  // reader's own row the box is also the thing they are meant to click.
-  if (!value) {
-    return (
-      <span aria-hidden={silent} className={pollStyles.markNone}>
-        {silent ? null : (
-          <span className={pollStyles.visuallyHidden}>No answer</span>
-        )}
-      </span>
-    );
-  }
 
-  return (
-    <span aria-hidden={silent} className={pollStyles.mark} data-value={value}>
-      {value === "yes" ? "\u2713" : value === "if-needed" ? "!" : "\u2715"}
-    </span>
-  );
-}
 
-/**
- * Slots under the day they fall on, in the order the organizer offered them.
- *
- * Grouped in the reader's own timezone — the same slot can be Friday night in
- * Prague and Friday afternoon in Boston, and each reader should see their own.
- */
-function groupByDay(slots: PollSlot[]): Array<[string, PollSlot[]]> {
-  const days = new Map<string, PollSlot[]>();
-  for (const slot of slots) {
-    const day = formatDay(slot.start);
-    const existing = days.get(day);
-    if (existing) existing.push(slot);
-    else days.set(day, [slot]);
-  }
 
-  return [...days];
-}
 
-function formatDay(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "short",
-    weekday: "short",
-  }).format(date);
-}
-
-/** Just the start: one poll is one length of meeting, and the header says it. */
-function formatStart(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-/** In the reader's own timezone, which for a poll across places is the point. */
-function formatTime(slot: Pick<Poll["slots"][number], "end" | "start">): string {
-  const time = new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  return `${time.format(slot.start)} – ${time.format(slot.end)}`;
-}
-
-function formatSlot(slot: Pick<Poll["slots"][number], "end" | "start">): string {
-  return `${formatDay(slot.start)}, ${formatTime(slot)}`;
-}

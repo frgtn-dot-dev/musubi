@@ -163,8 +163,10 @@
   gap: 3px;
 }
 
+/* A label needs air under it, or it reads as the first row of the list rather
+   than as the name of it. */
 .sidebarSectionLabel {
-  margin: 0 8px 10px;
+  margin: 0 8px 14px;
 }
 
 .sidebarRow,

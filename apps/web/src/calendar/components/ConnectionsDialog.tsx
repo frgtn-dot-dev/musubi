@@ -4,6 +4,7 @@ import {
   type Calendar,
 } from "@musubi/types";
 import {
+  Globe,
   Link2,
   Plus,
   RefreshCw,
@@ -569,7 +570,10 @@ export function ConnectionsDialog({
                   </Button>
                   <Button
                     disabled={busy}
-                    icon={<ProviderIcon flavor="caldav" />}
+                    /* A bare glyph, like the three brand marks beside it: the
+                       bordered pill `ProviderIcon` draws is for a source badge
+                       in a list, and here it made CalDAV the odd one out. */
+                    icon={<Globe size={17} strokeWidth={1.7} />}
                     variant="secondary"
                     onClick={(event) =>
                       openCaldav(

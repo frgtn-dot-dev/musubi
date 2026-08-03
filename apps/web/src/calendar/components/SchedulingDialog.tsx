@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Copy } from "lucide-react";
+import { CalendarClock, Check, Copy } from "lucide-react";
 import { useState, type RefObject } from "react";
 import type { Calendar, Settings } from "@musubi/types";
 import type { PollSummary } from "~/api/contracts";
@@ -13,6 +13,7 @@ import {
 import { Button } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
+import { formatSlot, PollGrid, PollLegend } from "~/components/PollGrid";
 import { PollForm } from "./PollForm";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
@@ -177,16 +178,94 @@ function PollResults({
   });
 
   const data = answers.data;
-  // The leader is highlighted, never auto-picked: two times can tie, and the
-  // choice is the organizer's to make.
+  // The leaders are marked, never auto-picked: two times can tie, and the choice
+  // is the organizer's to make.
   const best = data
     ? Math.max(0, ...data.slots.map((slot) => slot.yes.length))
     : 0;
+  const leading =
+    data && best > 0
+      ? data.slots
+          .filter((slot) => slot.yes.length === best)
+          .map((slot) => slot.id)
+      : [];
+  const chosen = data?.slots.find((slot) => slot.id === data.chosenSlotID);
 
   return (
-    <div className={styles.content}>
+    <div className={styles.results}>
+      {chosen ? (
+        // What was decided, in words, at the top: the grid below is the evidence,
+        // not the answer.
+        <div className={styles.decidedPanel}>
+          <p className={styles.decidedWhen}>
+            <Check aria-hidden="true" size={16} strokeWidth={2} />
+            {formatSlot(chosen)}
+          </p>
+          <p className={styles.decidedWho}>
+            {chosen.yes.length > 0
+              ? `${chosen.yes.join(", ")} said yes`
+              : "Nobody had said yes to this one"}
+            {chosen.ifNeeded.length > 0
+              ? ` · ${chosen.ifNeeded.join(", ")} if needed`
+              : ""}
+          </p>
+          <p className={styles.decidedNote}>
+            It is in your calendar, and the poll is closed to new answers.
+          </p>
+        </div>
+      ) : (
+        <p className={styles.summary}>
+          {data
+            ? data.respondents === 0
+              ? "Nobody has answered yet. The link is below."
+              : `${data.respondents} ${
+                  data.respondents === 1 ? "person has" : "people have"
+                } answered. Pick a time when you have enough of them.`
+            : "Loading answers…"}
+        </p>
+      )}
+
+      {data ? (
+        <PollGrid
+          action={
+            data.closed
+              ? undefined
+              : (slot) => (
+                  <Button
+                    disabled={!calendarId}
+                    loading={decide.isPending && decide.variables === slot.id}
+                    size="compact"
+                    title={`Pick ${formatSlot(slot)}`}
+                    variant={
+                      leading.includes(slot.id) ? "primary" : "secondary"
+                    }
+                    onClick={() => decide.mutate(slot.id)}
+                  >
+                    Pick
+                  </Button>
+                )
+          }
+          caption={
+            data.closed
+              ? "How everyone answered."
+              : "Who can make which time. The most yeses are marked."
+          }
+          chosenSlotID={data.chosenSlotID}
+          leadingSlotIDs={leading}
+          people={data.people}
+          slots={data.slots}
+        />
+      ) : null}
+
+      <PollLegend />
+
       <div className={styles.linkRow}>
-        <input aria-label="Poll link" className={styles.linkField} readOnly value={poll.url} />
+        <input
+          aria-label="Poll link"
+          className={styles.linkField}
+          readOnly
+          value={poll.url}
+        />
         <Button
           icon={<Copy size={15} strokeWidth={1.6} />}
           size="compact"
@@ -195,56 +274,13 @@ function PollResults({
             void navigator.clipboard
               .writeText(poll.url)
               .then(() => onNotice("Link copied."))
-              .catch(() => onNotice("Could not copy — select the link instead."));
+              .catch(() =>
+                onNotice("Could not copy — select the link instead."),
+              );
           }}
         >
           Copy
         </Button>
-      </div>
-
-      {data?.closed ? (
-        <p className={styles.decided}>This poll is decided.</p>
-      ) : null}
-
-      <div className={styles.list}>
-        {data?.slots.map((slot) => (
-          <div
-            className={styles.result}
-            data-leading={
-              !data.closed && best > 0 && slot.yes.length === best ? "" : undefined
-            }
-            key={slot.id}
-          >
-            <div>
-              <p className={styles.resultWhen}>
-                {new Intl.DateTimeFormat(undefined, {
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                  month: "short",
-                  weekday: "short",
-                }).format(slot.start)}
-              </p>
-              <p className={styles.resultWho}>
-                {slot.yes.length > 0 ? `Yes: ${slot.yes.join(", ")}` : "No yes yet"}
-                {slot.ifNeeded.length > 0
-                  ? ` · If needed: ${slot.ifNeeded.join(", ")}`
-                  : ""}
-              </p>
-            </div>
-            {data.closed ? null : (
-              <Button
-                disabled={!calendarId}
-                loading={decide.isPending && decide.variables === slot.id}
-                size="compact"
-                variant="secondary"
-                onClick={() => decide.mutate(slot.id)}
-              >
-                Pick this
-              </Button>
-            )}
-          </div>
-        ))}
       </div>
 
       {decide.error ? (

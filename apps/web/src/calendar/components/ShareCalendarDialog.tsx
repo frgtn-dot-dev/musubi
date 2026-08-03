@@ -20,6 +20,7 @@ import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Segmented } from "~/ui/Segmented";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { Select } from "~/ui/Select";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./styles/sharing.module.css";
 
@@ -31,6 +32,21 @@ type ShareCalendarDialogProps = {
 };
 
 type MemberAccess = "editor" | "viewer";
+
+/** Relative, not absolute: nobody thinks "expires on the 14th" about a link. */
+const EXPIRY_OPTIONS = [
+  { label: "In 24 hours", value: "1" },
+  { label: "In 7 days", value: "7" },
+  { label: "In 30 days", value: "30" },
+  { label: "Never", value: "0" },
+];
+
+const USE_OPTIONS = [
+  { label: "One person", value: "1" },
+  { label: "Up to 5", value: "5" },
+  { label: "Up to 25", value: "25" },
+  { label: "No limit", value: "" },
+];
 
 const MEMBER_ACCESS_OPTIONS = [
   { label: "Viewer", value: "viewer" },
@@ -52,6 +68,10 @@ export function ShareCalendarDialog({
   const sharing = useCalendarSharing(userId, calendar);
   const { busy, error, run, setError } = useAsyncAction();
   const [transferMember, setTransferMember] = useState<CalendarMember>();
+  // What the next link will allow. Defaults that expire and run out, because a
+  // link with neither limit is the one still working in a group chat next year.
+  const [expiresInDays, setExpiresInDays] = useState("7");
+  const [maxUses, setMaxUses] = useState("");
   const transferReturnFocusRef = useRef<HTMLButtonElement>(null);
 
   const open = Boolean(calendar);
@@ -105,10 +125,14 @@ export function ShareCalendarDialog({
   }
 
   async function createInvite() {
+    const days = Number(expiresInDays);
     const created = await run(async () => {
       await sharing.createInvite({
-        expiresAt: null,
-        maxUses: null,
+        // Counted from now: "expires in a week" is what people mean, and an
+        // absolute date would need a picker to say the same thing.
+        expiresAt:
+          days > 0 ? new Date(Date.now() + days * 24 * 60 * 60_000) : null,
+        maxUses: maxUses === "" ? null : Number(maxUses),
       });
       return true;
     }, "Could not create an invite link.");
@@ -163,15 +187,7 @@ export function ShareCalendarDialog({
                 Done
               </Button>
             </DialogClose>
-            {sharing.canInvite ? (
-              <Button
-                icon={<Link2 size={16} strokeWidth={1.7} />}
-                loading={busy}
-                onClick={() => void createInvite()}
-              >
-                Create invite link
-              </Button>
-            ) : null}
+
           </>
         }
         onOpenChange={handleOpenChange}
@@ -295,6 +311,35 @@ export function ShareCalendarDialog({
                   </SectionLabel>
                   <p>Anyone with a link joins as a viewer.</p>
                 </div>
+              </div>
+
+              {/* Both limits are the server's already — this is where they get
+                  chosen, next to the links they apply to. */}
+              <div className={styles.inviteOptions}>
+                <Select
+                  disabled={busy}
+                  label="Expires"
+                  options={EXPIRY_OPTIONS}
+                  size="compact"
+                  value={expiresInDays}
+                  onChange={setExpiresInDays}
+                />
+                <Select
+                  disabled={busy}
+                  label="How many people"
+                  options={USE_OPTIONS}
+                  size="compact"
+                  value={maxUses}
+                  onChange={setMaxUses}
+                />
+                <Button
+                  icon={<Link2 size={16} strokeWidth={1.7} />}
+                  loading={busy}
+                  size="compact"
+                  onClick={() => void createInvite()}
+                >
+                  Create invite link
+                </Button>
               </div>
 
               {sharing.invites.isPending ? (

@@ -2440,13 +2440,15 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   await page.route("**/api/v1/calendars/*/invites", (route) =>
     respond(route, invites),
   );
+  let inviteRequest: { expiresAt: null | string; maxUses: null | number } | undefined;
   await page.route("**/api/v1/calendars/invites", (route) => {
     inviteSeq += 1;
+    inviteRequest = route.request().postDataJSON();
     const created = {
       calendarID: "44444444-4444-4444-8444-444444444444",
-      expiresAt: null,
+      expiresAt: inviteRequest!.expiresAt,
       id: `invite-${inviteSeq}`,
-      maxUses: null,
+      maxUses: inviteRequest!.maxUses,
       uses: 0,
     };
     invites = [...invites, created];
@@ -2483,10 +2485,21 @@ test("manages members and invite links for a calendar", async ({ page }) => {
   ).toHaveAttribute("aria-checked", "true");
 
   // Create then revoke an invite link.
+  // A link with limits: the default is a week and no cap, and both are chosen
+  // here rather than being decided for the organizer.
+  await page
+    .getByRole("combobox", { name: "How many people" })
+    .click();
+  await page.getByRole("option", { name: "Up to 5" }).click();
   await page.getByRole("button", { name: "Create invite link" }).click();
   await expect(
     page.getByRole("textbox", { name: "Invite link" }),
   ).toHaveValue(/\/invite\/invite-1$/);
+  expect(inviteRequest).toMatchObject({ maxUses: 5 });
+  // Seven days by default, counted from now rather than left open forever.
+  const expiry = new Date(inviteRequest!.expiresAt!).getTime() - Date.now();
+  expect(expiry).toBeGreaterThan(6.5 * 24 * 60 * 60_000);
+  expect(expiry).toBeLessThan(7.5 * 24 * 60 * 60_000);
   await page.getByRole("button", { name: "Revoke invite link" }).click();
   await expect(
     page.getByRole("textbox", { name: "Invite link" }),
@@ -6065,6 +6078,76 @@ test("ui catalogue", async ({ page }) => {
   await layer("dialog-calendars", "Calendars");
   await layer("dialog-connections", "Connections");
   await layer("dialog-scheduling", "Find a time");
+
+  // The results of a poll, and the same poll once it is decided: both are the
+  // grid, so the person deciding reads what the answerers filled in.
+  for (const [name, chosen] of [
+    ["dialog-poll-results", null],
+    ["dialog-poll-decided", "s10-13"],
+  ] as const) {
+    await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+      respond(route, {
+        chosenSlotID: chosen,
+        closed: Boolean(chosen),
+        durationMinutes: 60,
+        mine: {},
+        mineID: null,
+        people: [
+          {
+            answers: { "s10-13": "yes", "s10-17": "if-needed", "s11-13": "no" },
+            id: "1",
+            name: "Mika Novotná",
+          },
+          {
+            answers: { "s10-13": "yes", "s11-13": "yes", "s11-17": "if-needed" },
+            id: "2",
+            name: "Adam",
+          },
+        ],
+        respondents: 2,
+        slots: [
+          ["s10-13", "10", 13],
+          ["s10-17", "10", 17],
+          ["s11-13", "11", 13],
+          ["s11-17", "11", 17],
+        ].map(([id, day, hour]) => ({
+          end: `2026-08-${day}T${Number(hour) + 1}:00:00.000Z`,
+          id: String(id),
+          ifNeeded: id === "s10-17" ? ["Mika Novotná"] : id === "s11-17" ? ["Adam"] : [],
+          no: id === "s11-13" ? ["Mika Novotná"] : [],
+          start: `2026-08-${day}T${hour}:00:00.000Z`,
+          yes:
+            id === "s10-13"
+              ? ["Adam", "Mika Novotná"]
+              : id === "s11-13"
+                ? ["Adam"]
+                : [],
+        })),
+        title: "Studio planning",
+      }),
+    );
+    try {
+      // A fresh document between the two: the poll query is cached for half a
+      // minute, so the second state would otherwise be a screenshot of the first.
+      await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+      await page.waitForLoadState("networkidle");
+      await page
+        .getByRole("button", { exact: true, name: "Find a time" })
+        .first()
+        .click({ timeout: 5_000 });
+      await page
+        .getByRole("button", { name: /Studio planning/ })
+        .click({ timeout: 5_000 });
+      const dialog = page.getByRole("dialog", { name: "Studio planning" });
+      await dialog.waitFor({ state: "visible", timeout: 5_000 });
+      await shot(`app-${name}`, dialog);
+    } catch {
+      missed.push(name);
+    } finally {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+    }
+  }
   await layer("dialog-account", "Manage account");
   await layer("dialog-new-page", "New page");
   // The page each sidebar row edits, which is a hover action rather than a row.
@@ -6269,6 +6352,16 @@ test("creates a poll, collects answers and turns one into an event", async ({
       description: null,
       durationMinutes: 60,
       mine: {},
+      mineID: null,
+      people: [
+        {
+          answers: { "slot-tue": "yes", "slot-wed": "if-needed" },
+          id: "1",
+          name: "Mika",
+        },
+        { answers: { "slot-tue": "no", "slot-wed": "yes" }, id: "2", name: "Adam" },
+        { answers: { "slot-wed": "yes" }, id: "3", name: "Zoe" },
+      ],
       respondents: 2,
       slots: [
         {
@@ -6333,12 +6426,15 @@ test("creates a poll, collects answers and turns one into an event", async ({
     "2026-08-19T13:00:00.000Z",
   ]);
 
-  // Results, with the leader marked but nothing picked for them — two times can
-  // tie, and choosing is the organizer's job.
-  await expect(results.getByText("Yes: Adam, Zoe")).toBeVisible();
-  await expect(results.getByText(/If needed: Mika/)).toBeVisible();
+  // The same grid the participants answered on, so the person deciding reads the
+  // picture they filled in — Mika's row, and the count under each column.
+  await expect(results.getByRole("row", { name: /^Mika/ })).toContainText("✓");
+  await expect(results.getByRole("row", { name: /^Yes/ })).toContainText("2");
+  await expect(results.getByText(/people have answered/)).toBeVisible();
 
-  await results.getByRole("button", { name: "Pick this" }).nth(1).click();
+  // Nothing is picked for them: two times can tie, and choosing is the
+  // organizer's job. The leaders are marked, and Wednesday is the second column.
+  await results.getByRole("button", { name: "Pick" }).nth(1).click();
 
   await expect(page.getByRole("status")).toContainText("event is in your calendar");
   expect(decided).toMatchObject({ slotId: "slot-wed" });
@@ -6579,7 +6675,7 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
   // Forty-four columns: the table has to scroll inside its box and take nothing
   // else with it. A grid item's `min-width: auto` is what lets wide content push
   // its own container wider, and then the document scrolls sideways instead.
-  const scroller = page.locator("[class*=gridWrap]");
+  const scroller = page.locator("[class*=scroller]");
   expect(await scroller.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(
     true,
   );
