@@ -805,6 +805,9 @@ export function Workspace({
           periodLabel={periodLabel}
           periodNavigation={activeView !== "agenda"}
           periodName={activeView === "agenda" ? "agenda start" : activeView}
+          /* Exactly the list the views below are handed, so the number and the
+             grid can never disagree. */
+          searchMatches={visibleEvents.length}
           searchQuery={searchQuery}
           searchRef={searchRef}
         />

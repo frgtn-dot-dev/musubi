@@ -10,7 +10,10 @@
    to keep the thing you came back to check. */
 @media (min-width: 900px) {
   .content {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    /* A rail, not a half. The list holds one row per poll, and at 2fr it took
+       400px of a 1020px dialog to show it — space the day picker beside it can
+       actually use. */
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
     align-items: start;
     min-height: 0;
     height: 100%;

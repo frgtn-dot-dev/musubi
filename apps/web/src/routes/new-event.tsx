@@ -176,6 +176,27 @@ function NewEventRoute() {
         ) : asked && !session.data ? (
           <section className={styles.step}>
             <h2>Last thing: who is inviting?</h2>
+            {/* The page as it will be published, read back before an address is
+                handed over — the same review `/find-a-time` gives its poll. */}
+            <dl className={styles.summary}>
+              <dt>Event</dt>
+              <dd>{draft.title.trim()}</dd>
+              <dt>When</dt>
+              <dd>
+                {new Intl.DateTimeFormat(undefined, {
+                  day: "numeric",
+                  month: "long",
+                  weekday: "long",
+                }).format(new Date(`${draft.date}T${draft.start}`))}
+                , {draft.start} – {draft.end}
+              </dd>
+              {draft.location.trim() ? (
+                <>
+                  <dt>Where</dt>
+                  <dd>{draft.location.trim()}</dd>
+                </>
+              ) : null}
+            </dl>
             <EmailIdentity
               askName
               busy={publish.isPending}

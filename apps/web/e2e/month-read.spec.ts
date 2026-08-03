@@ -6386,6 +6386,26 @@ test("ui catalogue", async ({ page }) => {
   console.log(`${index} screenshots in ${UI_SHOTS}/${UI_SHOTS_THEME}`);
 });
 
+test("counts what a search matched", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+
+  // A month grid keeps all forty-two cells while filtering, so the number is the
+  // only quick answer to "did that match anything".
+  await page.getByRole("searchbox", { name: "Search events" }).fill("review");
+  const count = page.getByRole("status").filter({ hasText: /events? in view/ });
+  await expect(count).toContainText(/[1-9]\d* events in view match/);
+  await expect(page.getByRole("button", { name: /Weekly review/ }).first()).toBeVisible();
+
+  await page.getByRole("searchbox", { name: "Search events" }).fill("nothing here");
+  await expect(count).toContainText("0 events in view match");
+
+  // Cleared, the badge goes: a count of everything is not a search result.
+  await page.getByRole("searchbox", { name: "Search events" }).fill("");
+  await expect(count).toHaveCount(0);
+});
+
 test("draws the plus on the narrow create button", async ({ page }) => {
   await mockAuthenticatedReads(page);
   await page.setViewportSize({ height: 844, width: 390 });

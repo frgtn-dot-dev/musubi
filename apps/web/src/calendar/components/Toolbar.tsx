@@ -30,6 +30,8 @@ type ToolbarProps = {
   periodLabel: string;
   periodNavigation?: boolean;
   periodName: string;
+  /** How many events the query matched in the period on screen. */
+  searchMatches?: number;
   searchQuery: string;
   /** So the "/" shortcut can put the caret in the field. */
   searchRef?: RefObject<HTMLInputElement | null>;
@@ -51,6 +53,7 @@ export function Toolbar({
   periodLabel,
   periodNavigation = true,
   periodName,
+  searchMatches,
   searchQuery,
   searchRef,
 }: ToolbarProps) {
@@ -144,6 +147,20 @@ export function Toolbar({
               value={searchQuery}
               onChange={(event) => onSearch(event.target.value)}
             />
+            {/* The grid keeps every empty day while filtering, so without this a
+                query that matched six events looks the same as one that matched
+                none until you have read all forty-two cells. Scoped out loud:
+                only the period on screen has been searched. */}
+            {searchQuery.trim() ? (
+              <output aria-live="polite" className={styles.searchCount}>
+                <span className={styles.srOnly}>
+                  {searchMatches === 1
+                    ? "1 event in view matches"
+                    : `${searchMatches ?? 0} events in view match`}
+                </span>
+                <span aria-hidden="true">{searchMatches ?? 0}</span>
+              </output>
+            ) : null}
           </label>
           <Button
             aria-expanded={filtersOpen}

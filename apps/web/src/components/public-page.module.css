@@ -132,6 +132,31 @@
   font-size: var(--text-15, var(--text-14));
 }
 
+/* Label above value, so a long list of days wraps under its own label instead of
+   pushing the column apart. */
+.summary {
+  display: grid;
+  width: 100%;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.summary dt {
+  color: var(--text-muted);
+  font-size: var(--text-11);
+}
+
+.summary dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-12);
+}
+
 .disclosure {
   display: flex;
   gap: 6px;

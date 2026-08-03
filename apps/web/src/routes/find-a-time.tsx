@@ -88,6 +88,11 @@ function FindATimeRoute() {
         ) : draft && !session.data ? (
           <section className={styles.step}>
             <h2>Last thing: who is asking?</h2>
+            {/* What is about to be made, before an address is handed over. The
+                draft was held on this page and could only be checked by going
+                back to the form, which is a poor way to review a thing you are
+                one press from creating. */}
+            <DraftSummary draft={draft} />
             <EmailIdentity
               askName
               busy={create.isPending}
@@ -134,6 +139,42 @@ function FindATimeRoute() {
       </p>
     </main>
   );
+}
+
+/** The poll as it stands, read back in a sentence or two. */
+function DraftSummary({ draft }: { draft: PollDraft }) {
+  const starts = draft.slots.map((slot) => new Date(slot.start));
+  const days = [...new Set(starts.map((start) => dayLabel(start)))];
+  const times = [...new Set(starts.map((start) => timeLabel(start)))];
+
+  return (
+    <dl className={styles.summary}>
+      <dt>Asking about</dt>
+      <dd>{draft.title}</dd>
+      <dt>{days.length === 1 ? "Day" : "Days"}</dt>
+      <dd>{days.join(", ")}</dd>
+      <dt>{times.length === 1 ? "Time" : "Times"}</dt>
+      <dd>
+        {times.join(", ")} · {draft.durationMinutes} minutes each
+      </dd>
+    </dl>
+  );
+}
+
+function dayLabel(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    weekday: "short",
+  }).format(date);
+}
+
+function timeLabel(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    hour12: false,
+    minute: "2-digit",
+  }).format(date);
 }
 
 /** The link, which is the whole product of this page. */

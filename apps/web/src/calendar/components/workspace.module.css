@@ -508,6 +508,18 @@
   color: var(--text-muted);
 }
 
+/* Inside the field, so a live count costs no calendar rows: a band under the
+   toolbar would push the last week of the month off a laptop screen. */
+.searchCount {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .filterBar {
   display: grid;
   min-height: 51px;
