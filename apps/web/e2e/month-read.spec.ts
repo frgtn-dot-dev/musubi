@@ -6220,6 +6220,29 @@ test("ui catalogue", async ({ page }) => {
   console.log(`${index} screenshots in ${UI_SHOTS}/${UI_SHOTS_THEME}`);
 });
 
+test("keeps the sidebar's Pages label off the first page row", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  const label = page.getByRole("heading", { name: "Pages" });
+  await label.waitFor();
+
+  // Measured, not declared: the bottom margin this used to rely on never applied
+  // once — `.sectionLabel` in the primitives sets `margin: 0` at the same
+  // specificity and lands later in the bundle, so it won on order. The space is
+  // the section's gap now, and this is what tells us if it goes away again.
+  const gap = await page.evaluate(() => {
+    const heading = window.document.querySelector("#pages-label")!;
+    const list = window.document.querySelector('[class*="pageList"]')!;
+
+    return (
+      list.getBoundingClientRect().top - heading.getBoundingClientRect().bottom
+    );
+  });
+  expect(gap).toBeGreaterThanOrEqual(8);
+});
+
 test("walks a new account through onboarding once", async ({ page }) => {
   if (UI_SHOTS) {
     await page.addInitScript(

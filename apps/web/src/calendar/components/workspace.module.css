@@ -153,7 +153,13 @@
   );
 }
 
+/* The gap belongs to the section, not to the label.
+   `.sidebarSectionLabel` used to carry a bottom margin and it never once applied:
+   `.sectionLabel` in the primitives sets `margin: 0` at the same specificity and
+   lands later in the bundle, so it won on order every time. */
 .sidebarSection {
+  display: grid;
+  gap: 10px;
   padding: 16px 14px;
 }
 
@@ -163,10 +169,9 @@
   gap: 3px;
 }
 
-/* A label needs air under it, or it reads as the first row of the list rather
-   than as the name of it. */
+/* Inline padding only: the space under it is the section's gap now. */
 .sidebarSectionLabel {
-  margin: 0 8px 14px;
+  padding: 0 8px;
 }
 
 .sidebarRow,
