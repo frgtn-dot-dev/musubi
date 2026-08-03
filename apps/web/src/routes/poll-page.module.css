@@ -1,3 +1,65 @@
+/* The poll page borrows the published-event card, header and footer, but not its
+   theming: an event page wears the palette its organizer chose, while a poll is
+   a working document and follows the reader's own light/dark setting. The
+   `--page-*` variables those shared rules read are therefore mapped here onto
+   the app's tokens, which is what makes the whole page switch with the theme. */
+.page {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  min-height: 100dvh;
+  padding: var(--space-6) var(--space-4);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+
+  --page-accent: var(--accent-primary);
+  --page-accent-text: var(--accent-on-primary);
+  --page-background: var(--surface-canvas);
+  --page-border: var(--border-subtle);
+  --page-muted: var(--text-secondary);
+  --page-raised: var(--surface-raised);
+  --page-surface: var(--surface-panel);
+  --page-text: var(--text-primary);
+
+}
+
+/* Answer colours. Not tokens, because nothing else in the app means "yes" in
+   green. On the root and not on the page, because the answer menu is portalled
+   to the end of the body and would otherwise inherit none of them. */
+:global(:root) {
+  --answer-yes: #1f5c39;
+  --answer-yes-fill: rgba(47, 125, 79, 0.18);
+  --answer-maybe: #7a5406;
+  --answer-maybe-fill: rgba(176, 125, 26, 0.2);
+  --answer-no: #8c2f21;
+  --answer-no-fill: rgba(179, 64, 47, 0.16);
+}
+
+:global(:root[data-theme="dark"]) {
+  --answer-yes: #7fd6a2;
+  --answer-yes-fill: rgba(127, 214, 162, 0.16);
+  --answer-maybe: #e6c266;
+  --answer-maybe-fill: rgba(230, 194, 102, 0.16);
+  --answer-no: #f0958a;
+  --answer-no-fill: rgba(240, 149, 138, 0.16);
+}
+
+/* The shared footer link is 12px accent-coloured text. The accent token misses
+   AA against the dark canvas by 0.02 (and by more on raised surfaces, in both
+   themes) — a brand colour is not mine to change on the way past, so the link
+   carries its own weight here instead. */
+.page a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.themeRow {
+  display: flex;
+  justify-content: flex-end;
+  width: min(64rem, 100%);
+}
+
 /* The poll page shares the published-event shell; only the answer grid is its
    own. */
 /* The grid: people down, times across. Wide by nature, so it scrolls sideways
@@ -10,12 +72,18 @@
   max-width: none;
 }
 
-.gridWrap {
-  overflow-x: auto;
+.gridBox {
+  overflow: hidden;
   max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-canvas);
+}
+
+/* Only the table scrolls, so the scrollbar sits directly under it rather than
+   under the caption as well. */
+.gridWrap {
+  overflow-x: auto;
 }
 
 .grid {
@@ -25,11 +93,11 @@
 }
 
 .gridCaption {
+  margin: 0;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: var(--text-12);
-  text-align: left;
 }
 
 .grid th,
@@ -103,10 +171,16 @@
   padding: 0;
 }
 
-/* Your own row, marked so it is findable in a tall grid. */
+/* Your own row, marked so it is findable in a tall grid. Mixed with the surface
+   rather than with transparent: the name column is sticky, and a translucent
+   sticky cell shows the times sliding along underneath it. */
 .yourRow th,
 .yourRow td {
-  background: color-mix(in oklab, var(--accent-primary) 8%, transparent);
+  background: color-mix(in oklab, var(--accent-primary) 8%, var(--surface-canvas));
+}
+
+.yourRow .rowHead {
+  background: color-mix(in oklab, var(--accent-primary) 8%, var(--surface-raised));
 }
 
 .cellButton {
@@ -120,12 +194,39 @@
   cursor: pointer;
 }
 
-.cellButton:hover {
+.cellButton:hover,
+.cellButton[data-state="open"] {
   background: color-mix(in oklab, var(--accent-primary) 16%, transparent);
 }
 
-.mark {
+/* The answer menu for one cell. */
+.picker {
   display: grid;
+  gap: 2px;
+  padding: 4px;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  font-size: var(--text-13);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick:hover,
+.pick[aria-pressed="true"] {
+  background: var(--surface-raised);
+}
+
+.mark {
+  display: inline-grid;
   place-items: center;
   width: 1.35rem;
   height: 1.35rem;
@@ -137,22 +238,41 @@
 
 /* Shape and letter carry the meaning; colour only reinforces it. */
 .mark[data-value="yes"] {
-  background: color-mix(in oklab, #2f7d4f 18%, transparent);
-  color: #1f5c39;
+  background: var(--answer-yes-fill);
+  color: var(--answer-yes);
 }
 
 .mark[data-value="if-needed"] {
-  background: color-mix(in oklab, #b07d1a 20%, transparent);
-  color: #7a5406;
+  background: var(--answer-maybe-fill);
+  color: var(--answer-maybe);
 }
 
 .mark[data-value="no"] {
-  background: color-mix(in oklab, #b3402f 16%, transparent);
-  color: #8c2f21;
+  background: var(--answer-no-fill);
+  color: var(--answer-no);
 }
 
 .markNone {
   color: var(--text-muted);
+}
+
+.nameInput {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+/* The shared event-page error colour is the accent, which as 12px text misses AA
+   in the dark scheme. The "no" colour is contrast-checked in both. */
+.error {
+  margin: 0;
+  color: var(--answer-no);
+  font-size: var(--text-12);
 }
 
 .legend {

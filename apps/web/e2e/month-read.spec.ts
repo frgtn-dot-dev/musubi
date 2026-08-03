@@ -5930,15 +5930,15 @@ test("answers a poll as somebody with no account", async ({ page }) => {
   await expect(mika).toContainText("✓");
   await expect(mika).toContainText("✕");
 
-  // One control per cell, cycling: nothing to answer means nothing pressed yet.
-  const myTuesday = page
-    .getByRole("button", { name: /18 Aug.*have not answered/ });
-  await myTuesday.click();
+  // A cell opens a menu; the menu sets the answer.
+  await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
+  await page.getByRole("button", { name: "Yes", exact: true }).click();
   // Said before the button is pressed, not after: what leaves the browser is the
   // answers and a name — never the reader's own calendar.
   await expect(page.getByText(/Your own calendar is never sent/)).toBeVisible();
   expect(sentVotes).toBeUndefined();
 
+  // The name belongs in the row it names, which is where the grid asks for it.
   await page.getByLabel("Your name").fill("Zoe");
   await page.getByLabel("Email").fill("z@example.com");
   await page.getByRole("button", { name: "Send me a code" }).click();
@@ -5960,7 +5960,7 @@ test("answers a poll as somebody with no account", async ({ page }) => {
   await expectNoAccessibilityViolations(page);
 });
 
-test("cycles a poll answer through yes, if needed and no", async ({ page }) => {
+test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await page.route("**/api/auth/get-session", (route) =>
     respond(route, {
       session: { id: "s" },
@@ -5997,18 +5997,32 @@ test("cycles a poll answer through yes, if needed and no", async ({ page }) => {
 
   await page.goto(`/s/${POLL_TOKEN}`);
   const cell = () => page.getByRole("button", { name: /18 Aug/ });
+  const choose = async (answer: string) => {
+    await cell().click();
+    await page.getByRole("button", { exact: true, name: answer }).click();
+  };
 
-  await cell().click();
-  await expect(cell()).toHaveAttribute("aria-label", /you answered yes/);
-  await cell().click();
+  await choose("If needed");
   await expect(cell()).toHaveAttribute("aria-label", /you answered if needed/);
-  await cell().click();
+  await choose("No");
   await expect(cell()).toHaveAttribute("aria-label", /you answered no/);
-  // Round, not a dead end: a wrong click is undone by carrying on clicking.
-  await cell().click();
-  await expect(cell()).toHaveAttribute("aria-label", /you answered yes/);
 
+  // Clearing exists, and only once there is something to clear — a wrong click
+  // must be undoable, not merely overwritable.
+  await choose("Clear");
+  await expect(cell()).toHaveAttribute("aria-label", /have not answered/);
+  await cell().click();
+  await expect(page.getByRole("button", { exact: true, name: "Clear" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await choose("Yes");
   await page.getByRole("button", { name: "Send my answers" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   expect(sentVotes?.votes).toEqual([{ slotID: "slot-tue", value: "yes" }]);
+
+  // The page follows the reader's theme, and a grid of tinted marks is exactly
+  // where a dark scheme goes quietly unreadable.
+  await page.getByRole("button", { name: /Use dark theme/ }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expectNoAccessibilityViolations(page);
 });

@@ -1,17 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  eventPagePalette,
-  eventPagePaletteVariables,
-} from "@musubi/design-system";
 import { Check, Info } from "lucide-react";
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { Poll, PollSlot, VoteValue } from "~/api/contracts";
 import { getPoll, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
+import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
 import { Button } from "~/ui/Button";
 import { Field } from "~/ui/Field";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { RouteState } from "~/ui/RouteState";
 import styles from "./event-page.module.css";
 import pollStyles from "./poll-page.module.css";
@@ -44,7 +42,10 @@ function PollRoute() {
   const session = authClient.useSession();
   const pollKey = ["poll", token];
 
-  const [draft, setDraft] = useState<Record<string, VoteValue>>({});
+  // `null` is "answered, then cleared" — different from a slot never touched,
+  // which is what lets withdrawing one answer be sent rather than ignored.
+  const [draft, setDraft] = useState<Record<string, VoteValue | null>>({});
+  const [openCell, setOpenCell] = useState<string>();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -86,7 +87,16 @@ function PollRoute() {
   const chosen = data.slots.find((slot) => slot.id === data.chosenSlotID);
   // What is on screen: their saved answers, with anything they have just clicked
   // laid over the top.
-  const answers: Record<string, VoteValue> = { ...data.mine, ...draft };
+  const answers: Record<string, VoteValue | null> = { ...data.mine, ...draft };
+  // What their own row is called. The projection wins over the session because it
+  // is what everybody else sees, and it is already right the moment a name is
+  // sent. "Guest" is the projection's placeholder for an empty name, so it counts
+  // as no name at all — which is what puts the field back.
+  const myRow = data.people.find((person) => person.id === data.mineID);
+  const myName =
+    (myRow && myRow.name !== "Guest" ? myRow.name : "") ||
+    session.data?.user.name?.trim() ||
+    "";
   const unsaved = Object.keys(draft).length > 0;
 
   async function requestCode(event: FormEvent<HTMLFormElement>) {
@@ -117,28 +127,30 @@ function PollRoute() {
     send();
   }
 
+  function pick(slotID: string, value: null | VoteValue) {
+    setDraft((current) => ({ ...current, [slotID]: value }));
+    setOpenCell(undefined);
+  }
+
   function send() {
     vote.mutate({
       // Sent with the answers so a link-only participant stops being "Guest" to
       // everyone else in the grid. A signed-in account keeps the name it has.
       name: name.trim() || undefined,
-      votes: Object.entries(answers).map(([slotID, value]) => ({
-        slotID,
-        value,
-      })),
+      votes: Object.entries(answers)
+        .filter(([, value]) => value !== null)
+        .map(([slotID, value]) => ({ slotID, value: value! })),
     });
   }
 
   return (
-    // The published-event shell reads its colours from palette variables, so a
-    // poll — which nobody themes — sets the default one rather than leaving
-    // every border and surface resolving to nothing.
-    <main
-      className={styles.page}
-      id="main-content"
-      style={eventPagePaletteVariables(eventPagePalette(undefined)) as CSSProperties}
-      tabIndex={-1}
-    >
+    <main className={pollStyles.page} id="main-content" tabIndex={-1}>
+      {/* A poll is a working page, not a poster: it follows the reader's system
+          setting and lets them override it, like the app does. */}
+      <div className={pollStyles.themeRow}>
+        <ThemeToggle />
+      </div>
+
       <article className={`${styles.card} ${pollStyles.card}`}>
         <header className={styles.header}>
           <span aria-hidden="true" className={styles.brand}>
@@ -167,11 +179,14 @@ function PollRoute() {
         {/* People down, times across — the shape of the question. Everybody's
             answers stay visible while you give your own, because "who else can
             make Tuesday" is what a poll is for. */}
-        <div className={pollStyles.gridWrap}>
-          <table className={pollStyles.grid}>
-            <caption className={pollStyles.gridCaption}>
-              Who can make which time. Your own row is the last one.
-            </caption>
+        <div className={pollStyles.gridBox}>
+          {/* Outside the scrolling box: an instruction that slides away when you
+              scroll to Friday is not an instruction. */}
+          <p className={pollStyles.gridCaption} id="grid-caption">
+            Who can make which time. Your own row is the last one.
+          </p>
+          <div className={pollStyles.gridWrap}>
+            <table aria-describedby="grid-caption" className={pollStyles.grid}>
             <thead>
               <tr>
                 <th className={pollStyles.corner} rowSpan={2} scope="col">
@@ -233,46 +248,94 @@ function PollRoute() {
 
               <tr className={pollStyles.yourRow}>
                 <th className={pollStyles.rowHead} scope="row">
-                  {session.data?.user.name?.trim() || name.trim() || "You"}
+                  {myName ? (
+                    myName
+                  ) : (
+                    // Typed in the row it names, so it is obvious whose row it
+                    // is. Confirming the address still happens below — this only
+                    // says who to call you.
+                    <input
+                      aria-label="Your name"
+                      autoComplete="name"
+                      className={pollStyles.nameInput}
+                      placeholder="Your name…"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                  )}
                 </th>
                 {data.slots.map((slot) => (
                   <td className={pollStyles.cell} key={slot.id}>
                     {data.closed ? (
                       <Mark value={answers[slot.id]} />
                     ) : (
-                      // One control per cell rather than three: a grid this wide
-                      // has no room for a button trio, and cycling is how a
-                      // spreadsheet-shaped thing is expected to behave.
-                      <button
-                        aria-label={`${formatSlot(slot)} — ${
-                          answers[slot.id]
-                            ? `you answered ${LABELS[answers[slot.id]!]}`
-                            : "you have not answered"
-                        }. Change your answer.`}
-                        className={pollStyles.cellButton}
-                        data-value={answers[slot.id] ?? "none"}
-                        type="button"
-                        onClick={() =>
-                          setDraft((current) => ({
-                            ...current,
-                            [slot.id]: nextAnswer(answers[slot.id]),
-                          }))
+                      // A menu rather than a cycling button: three answers plus
+                      // clearing is four presses away by cycling, and a grid is
+                      // where you go to set one cell and be done.
+                      <Popover
+                        onOpenChange={(open) =>
+                          setOpenCell(open ? slot.id : undefined)
                         }
+                        open={openCell === slot.id}
                       >
-                        <Mark value={answers[slot.id]} />
-                      </button>
+                        <PopoverTrigger asChild>
+                          <button
+                            aria-label={`${formatSlot(slot)} — ${
+                              answers[slot.id]
+                                ? `you answered ${LABELS[answers[slot.id]!]}`
+                                : "you have not answered"
+                            }. Change your answer.`}
+                            className={pollStyles.cellButton}
+                            type="button"
+                          >
+                            <Mark silent value={answers[slot.id]} />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="center"
+                          aria-label={`Your answer for ${formatSlot(slot)}`}
+                          className={pollStyles.picker}
+                          mobileSurface="anchored"
+                        >
+                          {ANSWERS.map((option) => (
+                            <button
+                              aria-pressed={answers[slot.id] === option.value}
+                              className={pollStyles.pick}
+                              key={option.value}
+                              type="button"
+                              onClick={() => pick(slot.id, option.value)}
+                            >
+                              <Mark silent value={option.value} />
+                              {option.label}
+                            </button>
+                          ))}
+                          {answers[slot.id] ? (
+                            <button
+                              className={pollStyles.pick}
+                              type="button"
+                              onClick={() => pick(slot.id, null)}
+                            >
+                              <span aria-hidden="true" className={pollStyles.markNone}>
+                                ·
+                              </span>
+                              Clear
+                            </button>
+                          ) : null}
+                        </PopoverContent>
+                      </Popover>
                     )}
                   </td>
                 ))}
               </tr>
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
 
         <p className={pollStyles.legend}>
           {ANSWERS.map((option) => (
             <span className={pollStyles.legendItem} key={option.value}>
-              <Mark value={option.value} />
+              <Mark silent value={option.value} />
               {option.label}
             </span>
           ))}
@@ -288,7 +351,7 @@ function PollRoute() {
               {unsaved ? "Send my answers" : "Answers saved"}
             </Button>
             {vote.error ? (
-              <p className={styles.rsvpError} role="alert">
+              <p className={pollStyles.error} role="alert">
                 {vote.error.message}
               </p>
             ) : null}
@@ -319,17 +382,7 @@ function PollRoute() {
                 />
               </Field>
             ) : (
-              <>
-                <Field label="Your name">
-                  <input
-                    autoComplete="name"
-                    name="name"
-                    placeholder="How the organizer knows you"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </Field>
-                <Field label="Email">
+              <Field label="Email">
                   <input
                     autoCapitalize="none"
                     autoComplete="email"
@@ -341,11 +394,10 @@ function PollRoute() {
                     onChange={(event) => setEmail(event.target.value)}
                   />
                 </Field>
-              </>
             )}
 
             {message ? (
-              <p className={styles.rsvpError} role="alert">
+              <p className={pollStyles.error} role="alert">
                 {message}
               </p>
             ) : null}
@@ -368,25 +420,31 @@ const LABELS: Record<VoteValue, string> = {
   yes: "yes",
 };
 
-/** Cleared rather than stuck on "no": three states and a way back out. */
-function nextAnswer(current: undefined | VoteValue): VoteValue {
-  if (current === "yes") return "if-needed";
-  if (current === "if-needed") return "no";
-
-  return "yes";
-}
-
 /**
  * One answer in one cell.
  *
  * Shape as well as colour — a grid read only by hue is unreadable to anyone who
  * cannot separate red from green, and this is the whole content of the page.
  */
-function Mark({ value }: { value?: VoteValue }) {
-  if (!value) return <span className={pollStyles.markNone}>·</span>;
+function Mark({
+  silent,
+  value,
+}: {
+  /** Beside a written label: the glyph is then decoration, and naming a button
+      "! If needed" instead of "If needed" is how it goes wrong. */
+  silent?: boolean;
+  value?: VoteValue | null;
+}) {
+  if (!value) {
+    return (
+      <span aria-hidden={silent} className={pollStyles.markNone}>
+        ·
+      </span>
+    );
+  }
 
   return (
-    <span className={pollStyles.mark} data-value={value}>
+    <span aria-hidden={silent} className={pollStyles.mark} data-value={value}>
       {value === "yes" ? "\u2713" : value === "if-needed" ? "!" : "\u2715"}
     </span>
   );
