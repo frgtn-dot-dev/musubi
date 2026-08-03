@@ -3,6 +3,7 @@ import {
   expect,
   test,
   type BrowserContext,
+  type Locator,
   type Page,
   type Route,
 } from "@playwright/test";
@@ -5792,7 +5793,270 @@ test("a press that dismisses a preview does not also start a draft", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+/**
+ * Every page and every modal, written out as PNGs for design review.
+ *
+ * Skipped unless a target directory is given, because it is not a test — it
+ * asserts nothing. It reuses the mocks above so the shots contain the same
+ * calendar the suite exercises rather than an empty one.
+ *
+ *   UI_SHOTS=ui-catalog pnpm exec playwright test -g "ui catalogue"
+ *   UI_SHOTS=ui-catalog UI_SHOTS_THEME=dark pnpm exec playwright test -g "ui catalogue"
+ */
+const UI_SHOTS = process.env.UI_SHOTS;
+const UI_SHOTS_THEME = process.env.UI_SHOTS_THEME === "dark" ? "dark" : "light";
+
+test("ui catalogue", async ({ page }) => {
+  test.skip(!UI_SHOTS, "Set UI_SHOTS=<directory> to write the catalogue.");
+  test.setTimeout(240_000);
+
+  let index = 0;
+  const shot = async (name: string, target?: Locator) => {
+    index += 1;
+    const file = `${UI_SHOTS}/${UI_SHOTS_THEME}/${String(index).padStart(2, "0")}-${name}.png`;
+    // Let motion settle: every layer here fades and lifts on open.
+    await page.waitForTimeout(350);
+    await (target ?? page).screenshot({
+      path: file,
+      ...(target ? {} : { fullPage: true }),
+    });
+  };
+  // The theme is a stored preference, so it has to be there before first paint.
+  await page.addInitScript(
+    (theme) => window.localStorage.setItem("musubi-theme", theme),
+    UI_SHOTS_THEME,
+  );
+
+  // ── Public pages, nobody signed in ────────────────────────────────────────
+  await page.route("**/api/auth/get-session", (route) => respond(route, null));
+  await page.route("**/api/v1/server", (route) =>
+    respond(route, { syncProviders: ["google", "microsoft", "caldav"] }),
+  );
+  await page.clock.setFixedTime(new Date("2026-08-03T10:00:00"));
+
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+  await shot("login");
+
+  await page.goto("/find-a-time");
+  await page.waitForLoadState("networkidle");
+  await shot("public-find-a-time");
+  await page.getByLabel("What is it about").fill("Studio planning");
+  await page.getByRole("button", { exact: true, name: "10" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await shot("public-find-a-time-identity");
+
+  await page.goto("/new-event");
+  await page.waitForLoadState("networkidle");
+  await shot("public-new-event");
+
+  await page.route(`**/api/v1/calendars/tokens/${INVITE_TOKEN}`, (route) =>
+    respond(route, invitePreview()),
+  );
+  await page.goto(`/invite/${INVITE_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+  await shot("public-invite");
+
+  await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+    respond(route, {
+      description: "Doors at six. Presses running all evening.",
+      end: "2026-08-20T16:00:00.000Z",
+      indexable: false,
+      isAllDay: false,
+      isCanceled: false,
+      location: "Studio, Brno",
+      organizer: "Mika Novotná",
+      recurrence: null,
+      start: "2026-08-20T13:00:00.000Z",
+      theme: { cover: "wash", font: "serif", layout: "classic", palette: "sand" },
+      title: "Studio open day",
+      url: null,
+    }),
+  );
+  await page.goto(`/e/${SHARE_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+  await shot("public-event-page");
+
+  const pollSlots = [];
+  for (const day of [10, 11, 12]) {
+    for (const hour of [13, 17]) {
+      pollSlots.push({
+        end: `2026-08-${day}T${hour + 1}:00:00.000Z`,
+        id: `s${day}-${hour}`,
+        ifNeeded: hour === 17 ? ["Adam"] : [],
+        no: day === 12 ? ["Mika Novotná"] : [],
+        start: `2026-08-${day}T${hour}:00:00.000Z`,
+        yes: day === 10 ? ["Mika Novotná", "Adam"] : [],
+      });
+    }
+  }
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, {
+      chosenSlotID: null,
+      closed: false,
+      description: "Which afternoon suits the studio session?",
+      durationMinutes: 60,
+      mine: {},
+      mineID: null,
+      people: [
+        {
+          answers: { "s10-13": "yes", "s10-17": "if-needed", "s12-13": "no" },
+          id: "1",
+          name: "Mika Novotná",
+        },
+        { answers: { "s10-13": "yes", "s11-17": "if-needed" }, id: "2", name: "Adam" },
+      ],
+      respondents: 2,
+      slots: pollSlots,
+      title: "Studio planning",
+    }),
+  );
+  await page.goto(`/s/${POLL_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+  await shot("public-poll-grid");
+  await page.getByRole("button", { name: /11 Aug, 15:00/ }).click();
+  await shot("public-poll-answer-menu", page.getByRole("dialog").first());
+
+  await page.goto("/s/deadbeefdeadbeefdeadbeefdeadbeef");
+  await page.waitForLoadState("networkidle");
+  await shot("public-poll-missing");
+
+  // ── The app ───────────────────────────────────────────────────────────────
+  await mockAuthenticatedReads(page);
+  await page.route("**/api/v1/scheduling/polls", (route) =>
+    respond(route, [
+      {
+        closedAt: null,
+        createdAt: "2026-07-26T09:00:00.000Z",
+        durationMinutes: 60,
+        id: "poll-1",
+        title: "Studio planning",
+        token: POLL_TOKEN,
+        url: `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+      },
+    ]),
+  );
+
+  // A date the fixtures have events on, so every view has something in it.
+  for (const view of ["month", "week", "day", "schedule"]) {
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=2026-07-23`);
+    await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /Project check-in/ }).first(),
+    ).toBeVisible();
+    await shot(`app-${view}`);
+  }
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.waitForLoadState("networkidle");
+
+  // The event preview, and the composer a press on empty grid opens.
+  await page.getByRole("button", { name: /Project check-in/ }).first().click();
+  await shot("app-event-preview", page.getByRole("dialog").first());
+  await page.keyboard.press("Escape");
+
+  // Every layer, by the control that opens it. One that cannot be found is
+  // reported and skipped rather than ending the run: this is a catalogue, and a
+  // missing shot is better than nineteen missing ones.
+  const missed: string[] = [];
+  const layer = async (name: string, trigger: string) => {
+    try {
+      await page
+        .getByRole("button", { exact: true, name: trigger })
+        .first()
+        .click({ timeout: 5_000 });
+      const dialog = page.getByRole("dialog").first();
+      await dialog.waitFor({ state: "visible", timeout: 5_000 });
+      await shot(`app-${name}`, dialog);
+    } catch {
+      missed.push(`${name} (${trigger})`);
+    } finally {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+    }
+  };
+
+  await layer("quick-create", "Event");
+  await layer("dialog-settings", "Settings");
+  await layer("dialog-calendars", "Calendars");
+  await layer("dialog-connections", "Connections");
+  await layer("dialog-scheduling", "Find a time");
+  await layer("dialog-account", "Manage account");
+  await layer("dialog-new-page", "New page");
+  // The page each sidebar row edits, which is a hover action rather than a row.
+  await layer("dialog-page-settings", "Edit My calendar");
+
+  // Not layers: the filter bar and the search field live in the toolbar, so they
+  // are states of the page rather than things on top of it.
+  await page.getByRole("button", { exact: true, name: "Filters" }).click();
+  await shot("app-filters-open");
+  await page.getByRole("button", { exact: true, name: "Filters" }).click();
+
+  // The search field is always in the toolbar; nothing opens it.
+  await page.getByRole("searchbox", { name: "Search events" }).fill("review");
+  await shot("app-search");
+
+  // Keyboard shortcuts. A fresh page, because the handler is on the window and
+  // the key means something else inside a field.
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.waitForLoadState("networkidle");
+  await page.locator("body").press("?");
+  const shortcuts = page.getByRole("dialog").first();
+  if (await shortcuts.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await shot("app-dialog-shortcuts", shortcuts);
+    await page.keyboard.press("Escape");
+  } else {
+    missed.push("shortcuts (?)");
+  }
+
+  // The full editor is a route, not a layer.
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/event/new?date=2026-07-26&view=month`);
+  await page.waitForLoadState("networkidle");
+  await shot("app-event-editor");
+
+  // Publishing an event, from the preview it belongs to. Back to the calendar
+  // first: the full editor above is a route, and it left the grid behind.
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.waitForLoadState("networkidle");
+  try {
+    await page
+      .getByRole("button", { name: /Client call/ })
+      .first()
+      .click({ timeout: 5_000 });
+    await page
+      .getByRole("button", { name: "Share event" })
+      .click({ timeout: 5_000 });
+    const share = page.getByRole("dialog", { name: "Share event" });
+    await share.waitFor({ state: "visible", timeout: 5_000 });
+    await shot("app-dialog-share-event", share);
+  } catch {
+    missed.push("share-event");
+  } finally {
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+  }
+
+  // Narrow: the sidebar becomes a drawer, and the grid becomes one column.
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.waitForLoadState("networkidle");
+  await shot("app-mobile-month");
+  await page.getByRole("button", { name: /navigation/i }).first().click();
+  await shot("app-mobile-navigation");
+
+  // Said out loud, so a gap in the catalogue is never mistaken for a screen that
+  // does not exist.
+  if (missed.length > 0) console.log(`Not captured: ${missed.join(", ")}`);
+  console.log(`${index} screenshots in ${UI_SHOTS}/${UI_SHOTS_THEME}`);
+});
+
 test("walks a new account through onboarding once", async ({ page }) => {
+  if (UI_SHOTS) {
+    await page.addInitScript(
+      (theme) => window.localStorage.setItem("musubi-theme", theme),
+      UI_SHOTS_THEME,
+    );
+  }
   await mockAuthenticatedReads(page);
 
   // Overrides after the shared mock, so these win: an account that has never
@@ -5839,6 +6103,12 @@ test("walks a new account through onboarding once", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("Step 1 of 3")).toBeVisible();
 
+  if (UI_SHOTS) {
+    await page.screenshot({
+      fullPage: true,
+      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/30-app-onboarding-1-name.png`,
+    });
+  }
   await page.getByLabel("Your name").fill("Zoe Novák");
   await page.getByRole("button", { name: "Continue" }).click();
 
@@ -5846,6 +6116,12 @@ test("walks a new account through onboarding once", async ({ page }) => {
   await expect(
     page.getByRole("heading", { level: 1, name: "Your calendar" }),
   ).toBeVisible();
+  if (UI_SHOTS) {
+    await page.screenshot({
+      fullPage: true,
+      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/31-app-onboarding-2-calendar.png`,
+    });
+  }
   await page.getByLabel("Calendar name").fill("Home");
   await page.getByRole("button", { name: "Continue" }).click();
 
@@ -5856,6 +6132,12 @@ test("walks a new account through onboarding once", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Connect Google Calendar/ }),
   ).toBeVisible();
+  if (UI_SHOTS) {
+    await page.screenshot({
+      fullPage: true,
+      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/32-app-onboarding-3-connect.png`,
+    });
+  }
   await page.getByRole("button", { name: "Not now" }).click();
 
   // Through to the calendar, and the flag is set so it never asks again.
