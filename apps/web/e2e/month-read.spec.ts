@@ -6608,6 +6608,12 @@ test("keeps the sidebar's Pages label off the first page row", async ({
   expect(gap).toBeGreaterThanOrEqual(8);
 });
 
+/**
+ * Onboarding is a separate test because it needs an account that has never seen
+ * the app, which the catalogue's mocks cannot be talked into mid-run. Its shot
+ * numbers are written by hand and start past the catalogue's last one — they used
+ * to be 30–32 and collided with the dialogs that now sit there.
+ */
 test("walks a new account through onboarding once", async ({ page }) => {
   if (UI_SHOTS) {
     await page.addInitScript(
@@ -6664,7 +6670,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
   if (UI_SHOTS) {
     await page.screenshot({
       fullPage: true,
-      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/30-app-onboarding-1-name.png`,
+      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/40-app-onboarding-1-name.png`,
     });
   }
   await page.getByLabel("Your name").fill("Zoe Novák");
@@ -6677,7 +6683,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
   if (UI_SHOTS) {
     await page.screenshot({
       fullPage: true,
-      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/31-app-onboarding-2-calendar.png`,
+      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/41-app-onboarding-2-calendar.png`,
     });
   }
   await page.getByLabel("Calendar name").fill("Home");
@@ -6693,7 +6699,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
   if (UI_SHOTS) {
     await page.screenshot({
       fullPage: true,
-      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/32-app-onboarding-3-connect.png`,
+      path: `${UI_SHOTS}/${UI_SHOTS_THEME}/42-app-onboarding-3-connect.png`,
     });
   }
   await page.getByRole("button", { name: "Not now" }).click();
