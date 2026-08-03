@@ -117,7 +117,7 @@ export function DialogError({
   return (
     <div className={styles.dialogError} role="alert">
       <p>{children}</p>
-      {requestId ? <span>Request {requestId}</span> : null}
+      {requestId ? <span>Request ID: {requestId}</span> : null}
     </div>
   );
 }

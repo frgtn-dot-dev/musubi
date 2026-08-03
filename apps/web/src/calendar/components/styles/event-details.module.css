@@ -320,7 +320,11 @@
   padding-inline: var(--space-2);
 }
 
+/* One step away from the three routine actions. Same row and same silhouette —
+   colour and this gap are what say the next press is the one that cannot be
+   taken back. */
 .deleteAction {
+  margin-left: var(--space-2);
   color: var(--accent-primary);
 }
 

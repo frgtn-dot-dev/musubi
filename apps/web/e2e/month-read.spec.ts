@@ -1105,7 +1105,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
   );
 
   await page.getByRole("button", { name: /Design review/ }).click();
-  await page.getByRole("button", { exact: true, name: "Fork" }).click();
+  await page.getByRole("button", { exact: true, name: "Copy" }).click();
   await expect(
     page.getByRole("heading", { name: "Make an independent copy" }),
   ).toBeVisible();
@@ -1300,7 +1300,12 @@ test("recovers when settings fail to load", async ({ page }) => {
   await page.goto("/app/p/my-calendar/week?date=2026-07-26");
   await page.getByRole("button", { name: "Settings" }).click();
 
-  await expect(page.getByRole("alert")).toContainText("Not Found");
+  // The HTTP status text never reaches the reader: "Not Found" named the
+  // transport and told nobody what to do about it.
+  await expect(page.getByRole("alert")).toContainText(
+    "Settings could not be loaded.",
+  );
+  await expect(page.getByRole("alert")).not.toContainText("Not Found");
   await expect(page.getByText("Loading settings…")).toHaveCount(0);
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(
@@ -3209,7 +3214,7 @@ test("manages account identity and gates account deletion", async ({
     Promise.all(element.getAnimations().map((animation) => animation.finished)),
   );
 
-  const sectionHeadings = ["Profile", "Security", "Danger zone"];
+  const sectionHeadings = ["Profile", "Security", "Leaving Musubi"];
   const sectionTops = await Promise.all(
     sectionHeadings.map(async (name) =>
       (
@@ -3252,10 +3257,10 @@ test("manages account identity and gates account deletion", async ({
   await expect(nameDialog).toBeHidden();
 
   await accountDialog
-    .getByRole("button", { name: /Reset password/ })
+    .getByRole("button", { name: /Reset passphrase/ })
     .click();
   await expect(page.locator('[class*="toastRegion"]')).toContainText(
-    "Check your email for a link to reset your password.",
+    "Check your email for a link to set a new passphrase.",
   );
 
   await accountDialog
@@ -5893,7 +5898,7 @@ const UI_SHOTS_THEME = process.env.UI_SHOTS_THEME === "dark" ? "dark" : "light";
 
 test("ui catalogue", async ({ page }) => {
   test.skip(!UI_SHOTS, "Set UI_SHOTS=<directory> to write the catalogue.");
-  test.setTimeout(240_000);
+  test.setTimeout(600_000);
 
   await page.setViewportSize({ height: 900, width: 1440 });
 
@@ -6203,6 +6208,139 @@ test("ui catalogue", async ({ page }) => {
     await page.keyboard.press("Escape");
   }
 
+  // ── Layers reached from inside another layer ──────────────────────────────
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.waitForLoadState("networkidle");
+  // Both are reached through the Calendars dialog, and closing one of them closes
+  // it too — so each gets its own trip in from the calendar.
+  for (const [name, row, dialog] of [
+    ["app-dialog-share-calendar", /^Share /, /Share/],
+    ["app-confirm-delete-calendar", /^Delete /, /Delete/],
+  ] as const) {
+    try {
+      await page
+        .getByRole("button", { exact: true, name: "Calendars" })
+        .click({ timeout: 5_000 });
+      await page
+        .getByRole("button", { name: row })
+        .first()
+        .click({ timeout: 5_000 });
+      const layer = page.getByRole("dialog", { name: dialog });
+      await layer.waitFor({ state: "visible", timeout: 5_000 });
+      await shot(name, layer);
+    } catch {
+      missed.push(name);
+    } finally {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+    }
+  }
+
+  // ── Feedback: the question before a write, and the answer after one ────────
+  // Editing one date of a series asks which events it means. It is the only
+  // question this product asks mid-write, so it is worth looking at.
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  await page.waitForLoadState("networkidle");
+  try {
+    await page
+      .getByRole("button", { name: /Weekly review/ })
+      .first()
+      .click({ timeout: 5_000 });
+    await page
+      .getByRole("button", { exact: true, name: "Edit" })
+      .click({ timeout: 5_000 });
+    await page
+      .getByRole("textbox", { name: "Event title" })
+      .fill("Weekly retro", { timeout: 5_000 });
+    await page.getByRole("button", { name: "Save" }).click({ timeout: 5_000 });
+    const scope = page.getByRole("dialog", { name: "Change recurring event" });
+    await scope.waitFor({ state: "visible", timeout: 5_000 });
+    await shot("app-dialog-recurrence-scope", scope);
+  } catch {
+    missed.push("recurrence-scope");
+  } finally {
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(250);
+  }
+
+  // A delete and its undo offer, then the same delete refused by the server.
+  // Both are the toast, which is the only thing in the product that speaks
+  // after the fact, and neither had a shot in this catalogue before.
+  const toast = page.locator('[class*="workspaceToast"]');
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.waitForLoadState("networkidle");
+  try {
+    await page
+      .getByRole("button", { name: /Client call/ })
+      .first()
+      .click({ timeout: 5_000 });
+    await page
+      .getByRole("button", { exact: true, name: "Delete" })
+      .click({ timeout: 5_000 });
+    await toast.waitFor({ state: "visible", timeout: 5_000 });
+    await shot("app-toast-undo", toast);
+  } catch {
+    missed.push("toast-undo");
+  }
+
+  // A write the server refuses. It is reported inside the popover the delete was
+  // started from rather than as a toast, so that is what gets photographed.
+  const refuse = (route: Route) =>
+    route.request().method() === "DELETE"
+      ? respond(route, { message: "Nope" }, 500)
+      : route.fallback();
+  await page.route("**/api/v1/events**", refuse);
+  try {
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+    await page.waitForLoadState("networkidle");
+    await page
+      .getByRole("button", { name: /Project check-in/ })
+      .first()
+      .click({ timeout: 5_000 });
+    const popover = page.getByRole("dialog").first();
+    await page
+      .getByRole("button", { exact: true, name: "Delete" })
+      .click({ timeout: 5_000 });
+    await popover
+      .getByRole("alert")
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await shot("app-event-write-refused", popover);
+  } catch {
+    missed.push("event-write-refused");
+  } finally {
+    await page.unroute("**/api/v1/events**", refuse);
+    await page.keyboard.press("Escape");
+  }
+
+  // ── Nothing yet: the states a new account actually opens on ───────────────
+  const nothing = (route: Route) =>
+    route.request().method() === "GET"
+      ? respond(route, { events: [], instances: [] })
+      : route.fallback();
+  await page.route("**/api/v1/events**", nothing);
+  await page.route("**/api/v1/scheduling/polls", (route) => respond(route, []));
+  try {
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+    await page.waitForLoadState("networkidle");
+    await shot("app-empty-month");
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/schedule?date=2026-07-23`);
+    await page.waitForLoadState("networkidle");
+    await shot("app-empty-schedule");
+    await page
+      .getByRole("button", { exact: true, name: "Find a time" })
+      .click({ timeout: 5_000 });
+    const scheduling = page.getByRole("dialog").first();
+    await scheduling.waitFor({ state: "visible", timeout: 5_000 });
+    await shot("app-empty-polls", scheduling);
+    await page.keyboard.press("Escape");
+  } catch {
+    missed.push("empty states");
+  } finally {
+    await page.unroute("**/api/v1/events**", nothing);
+  }
+
   // Narrow: the sidebar becomes a drawer, and the grid becomes one column.
   await page.setViewportSize({ height: 844, width: 390 });
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
@@ -6211,6 +6349,34 @@ test("ui catalogue", async ({ page }) => {
   await page.getByRole("button", { name: /navigation/i }).first().click();
   await shot("app-mobile-navigation");
 
+  // Last, because it takes the network away for good: the snapshot start and the
+  // strip that says how old what you are looking at is.
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  await page.waitForLoadState("networkidle");
+  try {
+    await expect(async () => {
+      expect(
+        await page.evaluate(() =>
+          window.localStorage.getItem("musubi:last-session"),
+        ),
+      ).toBeTruthy();
+      expect(await snapshotKeys(page)).not.toHaveLength(0);
+    }).toPass({ timeout: 10_000 });
+    const dead = (route: Route) => route.abort();
+    for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+      await page.route(pattern, dead);
+    }
+    await page.reload();
+    await page
+      .getByRole("button", { name: /Client call/ })
+      .first()
+      .waitFor({ timeout: 10_000 });
+    await shot("app-offline-snapshot");
+  } catch {
+    missed.push("offline-snapshot");
+  }
+
   // Said out loud, so a gap in the catalogue is never mistaken for a screen that
   // does not exist.
   if (missed.length > 0) console.log(`Not captured: ${missed.join(", ")}`);
@@ -6218,6 +6384,35 @@ test("ui catalogue", async ({ page }) => {
     console.log(`Taller than the window:\n  ${overflow.join("\n  ")}`);
   }
   console.log(`${index} screenshots in ${UI_SHOTS}/${UI_SHOTS_THEME}`);
+});
+
+test("draws the plus on the narrow create button", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // Measured, not looked at: the rule that hides the word on a phone used to
+  // match the primitive's content wrapper — the button's only direct span — and
+  // took the icon with it, leaving a plain dark circle with nothing in it.
+  const plus = page.getByRole("button", { name: "Event" }).locator("svg");
+  await expect(plus).toBeVisible();
+  const box = (await plus.boundingBox())!;
+  expect(box.width).toBeGreaterThan(10);
+  expect(box.height).toBeGreaterThan(10);
+  // And the word is still gone, which is what the rule was for. `textContent`
+  // would still read it, so this asks the layout instead.
+  await expect(
+    page.getByRole("button", { name: "Event" }).getByText("Event"),
+  ).toBeHidden();
+});
+
+test("puts an unknown view back in the address bar", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  // "schedule" is not a view: it renders the month, and the URL used to keep
+  // claiming otherwise, so a copied link and the view picker disagreed.
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/schedule?date=2026-07-23`);
+  await expect(page.getByRole("radio", { name: "Month" })).toBeChecked();
+  await expect(page).toHaveURL(/\/month\?date=2026-07-23$/);
 });
 
 test("keeps the sidebar's Pages label off the first page row", async ({

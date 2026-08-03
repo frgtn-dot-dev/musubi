@@ -670,65 +670,77 @@ function CalendarGroup({
                     ) : null}
                   </span>
                 }
+                /* Three fixed slots — share, rename, remove — kept even when a
+                   row has nothing to put in one. Right-aligning whatever a row
+                   happened to have moved the same action to a different place on
+                   every line, so "where do I share this?" had to be answered per
+                   row instead of once per column. */
                 trailing={
                   <span className={styles.rowActions}>
-                    {!federatedId ? (
-                      <IconButton
-                        disabled={busy}
-                        label={`Share ${calendar.name}`}
-                        size="compact"
-                        title="Members and sharing"
-                        onClick={() => onManageMembers(calendar)}
-                      >
-                        <Users size={16} strokeWidth={1.7} />
-                      </IconButton>
-                    ) : null}
-                    {external ? (
-                      <IconButton
-                        disabled={busy}
-                        label={`Stop syncing ${calendar.name}`}
-                        ref={
-                          disconnectingCalendarId === calendar.id
-                            ? disconnectReturnFocus
-                            : undefined
-                        }
-                        size="compact"
-                        title="Stop syncing calendar"
-                        variant="ghost"
-                        onClick={(event) =>
-                          onDisconnect(calendar, event.currentTarget)
-                        }
-                      >
-                        <Unlink size={15} strokeWidth={1.7} />
-                      </IconButton>
-                    ) : null}
-                    {editable ? (
-                      <IconButton
-                        disabled={busy}
-                        label={`Rename ${calendar.name}`}
-                        size="compact"
-                        title="Edit calendar"
-                        onClick={(event) =>
-                          onEdit(calendar, event.currentTarget)
-                        }
-                      >
-                        <Pencil size={15} strokeWidth={1.7} />
-                      </IconButton>
-                    ) : null}
-                    {deletable ? (
-                      <IconButton
-                        disabled={busy}
-                        label={`Delete ${calendar.name}`}
-                        size="compact"
-                        title="Delete calendar"
-                        variant="ghost"
-                        onClick={(event) =>
-                          onDelete(calendar, event.currentTarget)
-                        }
-                      >
-                        <Trash2 size={15} strokeWidth={1.7} />
-                      </IconButton>
-                    ) : null}
+                    <span className={styles.rowActionSlot}>
+                      {federatedId ? null : (
+                        <IconButton
+                          disabled={busy}
+                          label={`Share ${calendar.name}`}
+                          size="compact"
+                          title="Members and sharing"
+                          onClick={() => onManageMembers(calendar)}
+                        >
+                          <Users size={16} strokeWidth={1.7} />
+                        </IconButton>
+                      )}
+                    </span>
+                    <span className={styles.rowActionSlot}>
+                      {editable ? (
+                        <IconButton
+                          disabled={busy}
+                          label={`Rename ${calendar.name}`}
+                          size="compact"
+                          title="Edit calendar"
+                          onClick={(event) =>
+                            onEdit(calendar, event.currentTarget)
+                          }
+                        >
+                          <Pencil size={15} strokeWidth={1.7} />
+                        </IconButton>
+                      ) : null}
+                    </span>
+                    {/* Taking the calendar away, whichever form that takes here:
+                        a synced one stops syncing, one of ours is deleted. */}
+                    <span className={styles.rowActionSlot}>
+                      {external ? (
+                        <IconButton
+                          disabled={busy}
+                          label={`Stop syncing ${calendar.name}`}
+                          ref={
+                            disconnectingCalendarId === calendar.id
+                              ? disconnectReturnFocus
+                              : undefined
+                          }
+                          size="compact"
+                          title="Stop syncing calendar"
+                          variant="ghost"
+                          onClick={(event) =>
+                            onDisconnect(calendar, event.currentTarget)
+                          }
+                        >
+                          <Unlink size={15} strokeWidth={1.7} />
+                        </IconButton>
+                      ) : deletable ? (
+                        <IconButton
+                          disabled={busy}
+                          label={`Delete ${calendar.name}`}
+                          size="compact"
+                          title="Delete calendar"
+                          variant="ghost"
+                          onClick={(event) =>
+                            onDelete(calendar, event.currentTarget)
+                          }
+                        >
+                          <Trash2 size={15} strokeWidth={1.7} />
+                        </IconButton>
+                      ) : null}
+                    </span>
                   </span>
                 }
               />
@@ -933,7 +945,7 @@ function ErrorMessage({
   return (
     <div className={compact ? styles.compactError : styles.error} role="alert">
       <p>{error.message}</p>
-      {error.requestId ? <span>Request {error.requestId}</span> : null}
+      {error.requestId ? <span>Request ID: {error.requestId}</span> : null}
     </div>
   );
 }

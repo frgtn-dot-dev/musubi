@@ -355,6 +355,17 @@
   color: var(--text-muted);
 }
 
+/* An address is one line or it is nothing. The avatar and the sign-out button
+   leave about 100px here, so anything longer than "you@short.tld" wrapped
+   mid-word into two lines and made the row taller than the one above it. The
+   whole address is in the dialog this row opens. */
+.profileEmail {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebarBackdrop {
   display: none;
 }
@@ -1955,7 +1966,10 @@
     display: none;
   }
 
-  .toolbar .eventButton > span:last-child {
+  /* The label goes, the plus stays. Two spans deep on purpose: the button's only
+     direct child is the primitive's content wrapper, so `> span:last-child` hid
+     the icon along with the word and left a blank circle. */
+  .toolbar .eventButton > span > span:last-child {
     display: none;
   }
 

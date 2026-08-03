@@ -111,8 +111,8 @@ export function AccountDialog({
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (result.error) throw new Error(result.error.message);
-      onNotice("Check your email for a link to reset your password.");
-    }, "Could not start a password reset.");
+      onNotice("Check your email for a link to set a new passphrase.");
+    }, "Could not start a passphrase reset.");
   }
 
   return (
@@ -197,16 +197,16 @@ export function AccountDialog({
 
           <SettingsSection title="Security">
             <RowAction
-              detail="We’ll email you a secure reset link"
+              detail="We’ll email you a link to set a new one"
               disabled={!user?.email || busy}
               icon={<KeyRound size={17} strokeWidth={1.7} />}
-              label="Reset password"
+              label="Reset passphrase"
               showChevron={false}
               onClick={() => void resetPassword()}
             />
           </SettingsSection>
 
-          <SettingsSection title="Danger zone">
+          <SettingsSection title="Leaving Musubi">
             <RowAction
               detail="Requires an email confirmation before anything is removed"
               disabled={!user || busy}

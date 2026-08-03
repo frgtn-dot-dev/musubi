@@ -202,9 +202,17 @@
 }
 
 .rowActions {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 32px;
   align-items: center;
   gap: 2px;
+}
+
+/* A slot is a column whether or not this row can do that thing. */
+.rowActionSlot {
+  display: grid;
+  place-items: center;
 }
 
 .rowActions button[aria-label^="Delete"] {

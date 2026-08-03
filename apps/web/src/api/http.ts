@@ -73,9 +73,13 @@ async function parseJson(response: Response): Promise<unknown> {
 function throwApiError(response: Response, payload: unknown): never {
   const correlationId = responseRequestId(response, payload);
   const envelope = ApiErrorEnvelopeSchema.safeParse(payload);
+  // Never `response.statusText`: it put "Internal Server Error" into sentences
+  // people read ("Musubi could not delete this event. Internal Server Error"),
+  // which names the HTTP layer and says nothing about what to do. The request id
+  // travels with the error for whoever reads the logs.
   const message = envelope.success
     ? envelope.data.message ?? envelope.data.error
-    : response.statusText || "The Musubi server rejected the request.";
+    : "The server did not say why.";
 
   if (response.status === 401) {
     notifyAuthExpired();

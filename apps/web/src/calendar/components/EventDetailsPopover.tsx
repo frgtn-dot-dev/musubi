@@ -852,7 +852,10 @@ export function EventDetailsPopover({
                           variant="secondary"
                           onClick={() => showTargetCalendars("fork")}
                         >
-                          Fork
+                          {/* "Copy", not "Fork": the picker this opens already
+                              says "Make an independent copy", and forking is
+                              something people do to repositories. */}
+                          Copy
                         </Button>
                       </>
                     ) : null}
@@ -901,7 +904,7 @@ export function EventDetailsPopover({
               <>
                 <p>{actionError.message}</p>
                 {actionError.requestId ? (
-                  <span>Request {actionError.requestId}</span>
+                  <span>Request ID: {actionError.requestId}</span>
                 ) : null}
               </>
             ) : undefined
@@ -936,7 +939,7 @@ export function EventDetailsPopover({
               <>
                 <p>{actionError.message}</p>
                 {actionError.requestId ? (
-                  <span>Request {actionError.requestId}</span>
+                  <span>Request ID: {actionError.requestId}</span>
                 ) : null}
               </>
             ) : undefined
@@ -1011,7 +1014,7 @@ function ActionError({
   return (
     <div className={styles.actionError} role="alert">
       <p>{message}</p>
-      {requestId ? <span>Request {requestId}</span> : null}
+      {requestId ? <span>Request ID: {requestId}</span> : null}
     </div>
   );
 }

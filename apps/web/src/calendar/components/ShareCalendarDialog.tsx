@@ -204,9 +204,14 @@ export function ShareCalendarDialog({
                 <SectionLabel id="sharing-members-title">Members</SectionLabel>
                 <p>People who already have access to this calendar.</p>
               </div>
-              <span className={styles.count}>
-                {members.length} {members.length === 1 ? "person" : "people"}
-              </span>
+              {/* Nothing rather than "0 people" while the list is on its way:
+                  a count is a fact about the calendar, and zero is the one
+                  answer that changes what someone does next. */}
+              {sharing.members.isPending ? null : (
+                <span className={styles.count}>
+                  {members.length} {members.length === 1 ? "person" : "people"}
+                </span>
+              )}
             </div>
 
             {sharing.members.isPending ? (

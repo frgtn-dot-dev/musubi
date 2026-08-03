@@ -355,7 +355,7 @@ export function ConnectionsDialog({
                   ? "Fetching the calendars from the account you just connected."
                   : importFailed
                     ? `The account is linked, but its calendars could not be fetched. ${importFailed}`
-                    : "Connect an account below to see its calendars in Musubi."
+                    : "Pick a provider on the right to see its calendars in Musubi."
               }
               icon={<Link2 size={18} strokeWidth={1.7} />}
               title={

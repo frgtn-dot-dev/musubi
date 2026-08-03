@@ -715,7 +715,7 @@ export function EventEditorForm({
       {error ? (
         <div className={styles.formError} role="alert">
           <p>{error.message}</p>
-          {error.requestId ? <span>Request {error.requestId}</span> : null}
+          {error.requestId ? <span>Request ID: {error.requestId}</span> : null}
         </div>
       ) : null}
 

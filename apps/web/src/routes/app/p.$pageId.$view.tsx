@@ -89,15 +89,18 @@ function WorkspaceRoute() {
       ? (pages.find((page) => page.isDefault) ?? pages[0])?.id
       : undefined;
 
+  // Put the address bar back in step with what is on screen. An unrecognised view
+  // renders the month, so leaving `/schedule` in the URL means the page, the view
+  // picker and the link someone copies all disagree.
   useEffect(() => {
-    if (!fallbackPageId) return;
+    if (!fallbackPageId && view === activeView) return;
     void navigate({
-      params: { pageId: fallbackPageId, view: activeView },
+      params: { pageId: fallbackPageId ?? pageId, view: activeView },
       replace: true,
       search: { date },
       to: "/app/p/$pageId/$view",
     });
-  }, [activeView, date, fallbackPageId, navigate]);
+  }, [activeView, date, fallbackPageId, navigate, pageId, view]);
 
   if (pending) {
     return (
