@@ -408,6 +408,8 @@ export function getPolls(signal?: AbortSignal) {
 export function createPoll(input: {
   description?: string;
   durationMinutes: number;
+  /** Names an account that has none yet — a poll made from the public page. */
+  name?: string;
   slots: Array<{ start: string }>;
   title: string;
 }) {

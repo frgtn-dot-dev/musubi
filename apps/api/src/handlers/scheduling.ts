@@ -60,6 +60,12 @@ export async function handlerCreatePoll(req: Request, res: Response) {
     return { end: new Date(start.getTime() + durationMinutes * 60_000), start };
   });
 
+  // A poll made from the public page belongs to an account created seconds ago,
+  // which has no name on it. Only fills an empty one — creating a poll never
+  // renames an existing account.
+  const organizer = String(req.body?.name ?? "").trim();
+  if (organizer) await nameAnonymousUser(req.user!.id, organizer);
+
   const poll = await createPoll(
     {
       deadline: req.body?.deadline ? new Date(String(req.body.deadline)) : null,

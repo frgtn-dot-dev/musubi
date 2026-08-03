@@ -5930,6 +5930,84 @@ test("picks poll days by dragging a run and by taking a weekday column", async (
   await expect(dialog.getByText("Pick at least one day")).toBeVisible();
 });
 
+test("makes a poll from the public page with no account", async ({ page }) => {
+  let signedIn = false;
+  let created: { name?: string; slots: Array<{ start: string }> } | undefined;
+  await page.route("**/api/auth/get-session", (route) =>
+    respond(
+      route,
+      signedIn
+        ? { session: { id: "s" }, user: { email: "z@example.com", id: "guest", name: "" } }
+        : null,
+    ),
+  );
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+    respond(route, { success: true }),
+  );
+  await page.route("**/api/auth/sign-in/email-otp", (route) => {
+    signedIn = true;
+    return respond(route, { token: "t", user: { id: "guest" } });
+  });
+  await page.route("**/api/v1/scheduling/polls", (route) => {
+    if (route.request().method() !== "POST") return respond(route, []);
+    created = route.request().postDataJSON();
+    return respond(
+      route,
+      {
+        closedAt: null,
+        createdAt: "2026-08-03T09:00:00.000Z",
+        durationMinutes: 45,
+        id: "poll-1",
+        title: "Studio planning",
+        token: POLL_TOKEN,
+        url: `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+      },
+      201,
+    );
+  });
+  await page.clock.setFixedTime(new Date("2026-08-03T10:00:00"));
+
+  await page.goto("/find-a-time");
+  // Indexable, unlike the poll it makes: this page is the door.
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "index, follow",
+  );
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Find a time everyone can make/ }),
+  ).toBeVisible();
+
+  // This page is server-rendered and the grid only answers once React is
+  // attached, so a press before hydration lands on nothing.
+  await page.waitForLoadState("networkidle");
+
+  await page.getByLabel("What is it about").fill("Studio planning");
+  await page.getByRole("button", { exact: true, name: "45 min" }).click();
+  await page.getByRole("button", { exact: true, name: "10" }).click();
+  await page.getByRole("button", { exact: true, name: "11" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // Nothing exists yet: the question is built first, the address second.
+  expect(created).toBeUndefined();
+  await expect(page.getByText(/makes you a Musubi account with no password/)).toBeVisible();
+
+  await page.getByLabel("Your name").fill("Zoe");
+  await page.getByLabel("Email").fill("z@example.com");
+  await page.getByRole("button", { name: "Send me a code" }).click();
+  await page.getByLabel("Code from your email").fill("123456");
+  await page.getByRole("button", { name: "Confirm and create the poll" }).click();
+
+  await expect(page.getByRole("textbox", { name: "Poll link" })).toHaveValue(
+    `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+  );
+  // The name rides along, so the poll is not from "Guest" — the account it went
+  // to was made a second ago and has none.
+  expect(created).toMatchObject({ durationMinutes: 45, name: "Zoe" });
+  expect(created!.slots).toHaveLength(2);
+
+  await expectNoAccessibilityViolations(page);
+});
+
 test("answers a poll as somebody with no account", async ({ page }) => {
   let signedIn = false;
   let sentVotes: unknown;

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
+import { Route as FindATimeRouteImport } from './routes/find-a-time'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ETokenRouteImport } from './routes/e.$token'
@@ -34,6 +35,11 @@ const AppRoute = AppRouteImport.update({
 const FaviconDoticoRoute = FaviconDoticoRouteImport.update({
   id: '/favicon.ico',
   path: '/favicon.ico',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FindATimeRoute = FindATimeRouteImport.update({
+  id: '/find-a-time',
+  path: '/find-a-time',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthzRoute = HealthzRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/favicon.ico': typeof FaviconDoticoRoute
+  '/find-a-time': typeof FindATimeRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/e/$token': typeof ETokenRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/favicon.ico': typeof FaviconDoticoRoute
+  '/find-a-time': typeof FindATimeRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/e/$token': typeof ETokenRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/favicon.ico': typeof FaviconDoticoRoute
+  '/find-a-time': typeof FindATimeRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/e/$token': typeof ETokenRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/favicon.ico'
+    | '/find-a-time'
     | '/healthz'
     | '/login'
     | '/e/$token'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/favicon.ico'
+    | '/find-a-time'
     | '/healthz'
     | '/login'
     | '/e/$token'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/favicon.ico'
+    | '/find-a-time'
     | '/healthz'
     | '/login'
     | '/e/$token'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   FaviconDoticoRoute: typeof FaviconDoticoRoute
+  FindATimeRoute: typeof FindATimeRoute
   HealthzRoute: typeof HealthzRoute
   LoginRoute: typeof LoginRoute
   ETokenRoute: typeof ETokenRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       path: '/favicon.ico'
       fullPath: '/favicon.ico'
       preLoaderRoute: typeof FaviconDoticoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/find-a-time': {
+      id: '/find-a-time'
+      path: '/find-a-time'
+      fullPath: '/find-a-time'
+      preLoaderRoute: typeof FindATimeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/healthz': {
@@ -270,6 +290,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   FaviconDoticoRoute: FaviconDoticoRoute,
+  FindATimeRoute: FindATimeRoute,
   HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
   ETokenRoute: ETokenRoute,
