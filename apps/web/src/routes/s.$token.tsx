@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Info } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { Poll, PollSlot, VoteValue } from "~/api/contracts";
 import { getPoll, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
@@ -46,6 +46,10 @@ function PollRoute() {
   // which is what lets withdrawing one answer be sent rather than ignored.
   const [draft, setDraft] = useState<Record<string, VoteValue | null>>({});
   const [openCell, setOpenCell] = useState<string>();
+  // Read inside a closing menu's callbacks, which run after the next menu has
+  // already opened — state captured in those closures is a render behind.
+  const openCellRef = useRef(openCell);
+  openCellRef.current = openCell;
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -274,7 +278,16 @@ function PollRoute() {
                       // where you go to set one cell and be done.
                       <Popover
                         onOpenChange={(open) =>
-                          setOpenCell(open ? slot.id : undefined)
+                          setOpenCell((current) => {
+                            if (open) return slot.id;
+
+                            // Only this cell's own menu may close it. Clicking
+                            // straight from one cell to another used to open the
+                            // new menu and then shut it again: the old menu's
+                            // close callback landed last and wiped the state the
+                            // new trigger had just set.
+                            return current === slot.id ? undefined : current;
+                          })
                         }
                         open={openCell === slot.id}
                       >
@@ -296,6 +309,16 @@ function PollRoute() {
                           aria-label={`Your answer for ${formatSlot(slot)}`}
                           className={pollStyles.picker}
                           mobileSurface="anchored"
+                          onCloseAutoFocus={(event) => {
+                            // Closing because another cell was just opened: this
+                            // menu would pull focus back to its own cell, which
+                            // is outside the new menu — and a non-modal popover
+                            // closes itself the moment focus leaves it. Tapping
+                            // from cell to cell used to shut the new menu that
+                            // way, immediately after opening it.
+                            const next = openCellRef.current;
+                            if (next && next !== slot.id) event.preventDefault();
+                          }}
                         >
                           {ANSWERS.map((option) => (
                             <button
@@ -315,9 +338,7 @@ function PollRoute() {
                               type="button"
                               onClick={() => pick(slot.id, null)}
                             >
-                              <span aria-hidden="true" className={pollStyles.markNone}>
-                                ·
-                              </span>
+                              <Mark silent />
                               Clear
                             </button>
                           ) : null}
@@ -435,10 +456,14 @@ function Mark({
   silent?: boolean;
   value?: VoteValue | null;
 }) {
+  // An empty slot, drawn as an empty box: a dot reads like an answer, and in the
+  // reader's own row the box is also the thing they are meant to click.
   if (!value) {
     return (
       <span aria-hidden={silent} className={pollStyles.markNone}>
-        ·
+        {silent ? null : (
+          <span className={pollStyles.visuallyHidden}>No answer</span>
+        )}
       </span>
     );
   }

@@ -87,7 +87,11 @@
 }
 
 .grid {
-  border-collapse: collapse;
+  /* Separate, not collapsed: Chrome paints collapsed borders on the table rather
+     than the cell, and a sticky cell then wobbles a pixel each way as you scroll
+     and lets the grid show through the seam. */
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   font-size: var(--text-12);
 }
@@ -103,10 +107,15 @@
 .grid th,
 .grid td {
   padding: 7px 10px;
+  border-right: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
-  border-left: 1px solid var(--border-subtle);
   text-align: center;
   white-space: nowrap;
+}
+
+.grid th:last-child,
+.grid td:last-child {
+  border-right: 0;
 }
 
 .grid tr:last-child th,
@@ -118,11 +127,11 @@
 .rowHead {
   position: sticky;
   left: 0;
-  z-index: 1;
+  /* Above every scrolling cell, and opaque, or the times slide through it. */
+  z-index: 2;
   min-width: 8rem;
   max-width: 12rem;
   overflow: hidden;
-  border-left: 0;
   background: var(--surface-raised);
   color: var(--text-primary);
   font-weight: 500;
@@ -253,7 +262,29 @@
 }
 
 .markNone {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
+}
+
+/* In your own row the empty box is a target, so it says so. */
+.cellButton .markNone::after {
+  content: "+";
+  font-size: var(--text-12);
+  line-height: 1;
+}
+
+.visuallyHidden {
+  position: absolute;
+  overflow: hidden;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
 }
 
 .nameInput {

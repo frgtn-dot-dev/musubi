@@ -5960,6 +5960,56 @@ test("answers a poll as somebody with no account", async ({ page }) => {
   await expectNoAccessibilityViolations(page);
 });
 
+test("tapping from one poll cell to the next keeps the new menu open", async ({
+  browser,
+}) => {
+  // A touch context on purpose: with a mouse the old menu dismissed on
+  // pointerdown, before the new one existed. On touch the dismissal waits for the
+  // click, so the closing menu pulled focus back to its own cell *after* the new
+  // menu had opened — and a non-modal popover closes when focus leaves it. The
+  // second menu flashed and vanished, and only on a touchscreen.
+  const context = await browser.newContext({ hasTouch: true });
+  const page = await context.newPage();
+  const slot = (day: string, id: string) => ({
+    end: `2026-08-${day}T14:00:00.000Z`,
+    id,
+    ifNeeded: [],
+    no: [],
+    start: `2026-08-${day}T13:00:00.000Z`,
+    yes: [],
+  });
+  await page.route("**/api/auth/get-session", (route) =>
+    respond(route, {
+      session: { id: "s" },
+      user: { email: "z@example.com", id: "guest", name: "Zoe" },
+    }),
+  );
+  await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+    respond(route, {
+      chosenSlotID: null,
+      closed: false,
+      durationMinutes: 60,
+      mine: {},
+      mineID: null,
+      people: [],
+      respondents: 0,
+      slots: [slot("18", "slot-tue"), slot("19", "slot-wed")],
+      title: "Studio planning",
+    }),
+  );
+
+  await page.goto(`/s/${POLL_TOKEN}`);
+  await page.getByRole("button", { name: /18 Aug/ }).tap();
+  await expect(page.getByRole("dialog", { name: /18 Aug/ })).toBeVisible();
+  await page.getByRole("button", { name: /19 Aug/ }).tap();
+  // Settled, not sampled: a retrying assertion would happily catch the flash.
+  await page.waitForTimeout(600);
+  await expect(page.getByRole("dialog", { name: /19 Aug/ })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /18 Aug/ })).toHaveCount(0);
+
+  await context.close();
+});
+
 test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await page.route("**/api/auth/get-session", (route) =>
     respond(route, {
@@ -5986,6 +6036,14 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
           start: "2026-08-18T13:00:00.000Z",
           yes: [],
         },
+        {
+          end: "2026-08-19T14:00:00.000Z",
+          id: "slot-wed",
+          ifNeeded: [],
+          no: [],
+          start: "2026-08-19T13:00:00.000Z",
+          yes: [],
+        },
       ],
       title: "Studio planning",
     }),
@@ -5999,7 +6057,12 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   const cell = () => page.getByRole("button", { name: /18 Aug/ });
   const choose = async (answer: string) => {
     await cell().click();
-    await page.getByRole("button", { exact: true, name: answer }).click();
+    // Scoped to this cell's own menu: a menu that is animating out is still in
+    // the document for a moment, so "the Yes button" is briefly ambiguous.
+    await page
+      .getByRole("dialog", { name: /18 Aug/ })
+      .getByRole("button", { exact: true, name: answer })
+      .click();
   };
 
   await choose("If needed");
@@ -6012,7 +6075,11 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await choose("Clear");
   await expect(cell()).toHaveAttribute("aria-label", /have not answered/);
   await cell().click();
-  await expect(page.getByRole("button", { exact: true, name: "Clear" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("dialog", { name: /18 Aug/ })
+      .getByRole("button", { exact: true, name: "Clear" }),
+  ).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await choose("Yes");
