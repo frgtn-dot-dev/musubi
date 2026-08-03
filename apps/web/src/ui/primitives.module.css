@@ -997,7 +997,10 @@
   color: var(--control-on-fill);
 }
 
-.rowAction[data-selected] :is(.rowLabel, .rowDetail, .rowIcon) {
+/* `.rowValue` belongs in here too: it keeps its own muted near-black otherwise,
+   which on a selected row's dark fill is unreadable — measured at
+   rgba(28, 27, 24, 0.74) on rgb(74, 71, 65). */
+.rowAction[data-selected] :is(.rowLabel, .rowDetail, .rowIcon, .rowValue) {
   color: inherit;
 }
 

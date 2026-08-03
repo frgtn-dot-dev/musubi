@@ -6188,6 +6188,11 @@ test("ui catalogue", async ({ page }) => {
 
   // Publishing an event, from the preview it belongs to. Back to the calendar
   // first: the full editor above is a route, and it left the grid behind.
+  // The share state has to answer, or the dialog stays disabled and the shot is
+  // of a loading state at half opacity rather than of the choice on offer.
+  await page.route("**/api/v1/events/*/share", (route) =>
+    route.request().method() === "GET" ? respond(route, null) : route.fallback(),
+  );
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
   await page.waitForLoadState("networkidle");
   try {
@@ -6198,6 +6203,11 @@ test("ui catalogue", async ({ page }) => {
     await page
       .getByRole("button", { name: "Share event" })
       .click({ timeout: 5_000 });
+    // Settled, not loading: without this the shot was of three disabled rows at
+    // half opacity, because the share state had nothing to resolve against.
+    await expect(
+      page.getByRole("radio", { name: /Private/ }),
+    ).toBeEnabled({ timeout: 5_000 });
     const share = page.getByRole("dialog", { name: "Share event" });
     await share.waitFor({ state: "visible", timeout: 5_000 });
     await shot("app-dialog-share-event", share);
