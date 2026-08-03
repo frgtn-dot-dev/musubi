@@ -3,7 +3,13 @@ import { isUnreachableError, useOnlineStatus } from "~/api/online-status";
 import { readSessionMarker } from "~/offline/session-marker";
 import { authClient } from "./auth-client";
 
-export type SessionUser = { email: string; id: string; name: string };
+export type SessionUser = {
+  email: string;
+  id: string;
+  /** The profile photo. Absent from the offline marker, which holds no URLs. */
+  image?: null | string;
+  name: string;
+};
 
 /**
  * Who the app is for right now.
@@ -28,8 +34,8 @@ export function useSessionUser(): {
   const unreachable = !online || isUnreachableError(session.error);
 
   if (session.data?.user) {
-    const { email, id, name } = session.data.user;
-    return { fromSnapshot: false, user: { email, id, name } };
+    const { email, id, image, name } = session.data.user;
+    return { fromSnapshot: false, user: { email, id, image, name } };
   }
 
   return unreachable && marker
