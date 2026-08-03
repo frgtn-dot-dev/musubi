@@ -6039,7 +6039,7 @@ test("ui catalogue", async ({ page }) => {
   );
 
   // A date the fixtures have events on, so every view has something in it.
-  for (const view of ["month", "week", "day", "schedule"]) {
+  for (const view of ["month", "week", "day", "agenda"]) {
     await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=2026-07-23`);
     await page.waitForLoadState("networkidle");
     await expect(

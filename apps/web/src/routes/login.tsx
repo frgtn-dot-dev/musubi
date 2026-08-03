@@ -20,6 +20,7 @@ import { Button } from "~/ui/Button";
 import { ProviderGlyph } from "~/ui/ProviderGlyph";
 import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
+import styles from "~/ui/primitives.module.css";
 
 const loginSearchSchema = z.object({
   // Better Auth sends the browser back here when a provider round trip fails —
@@ -93,6 +94,7 @@ function LoginRoute() {
     error ? "That sign-in did not come back. Try again, or use your passphrase." : "",
   );
   const [submitting, setSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   // The address a confirmation link went to, which is also the sign that the
   // form has nothing left to do: there is no password to retry, only an inbox.
   const [awaitingConfirmation, setAwaitingConfirmation] = useState("");
@@ -103,6 +105,37 @@ function LoginRoute() {
       window.location.replace(safeRedirect(redirect));
     }
   }, [redirect, session.data]);
+
+  /**
+   * A way back in for somebody who has forgotten their passphrase.
+   *
+   * There was none: resetting lived inside the account dialog, which is behind the
+   * sign-in this person cannot get through. The server holds the reset page, so
+   * this only has to ask for the mail.
+   */
+  async function requestReset() {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setMessage("Type your email address first, then ask for a new passphrase.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await authClient.requestPasswordReset({
+        email: normalizedEmail,
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      // Said the same way whether or not the address has an account: a sign-in
+      // page that reveals which addresses are registered is a list of them.
+      setResetSent(true);
+      setMessage("");
+    } catch {
+      setMessage("That could not be sent. Try again in a moment.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -326,6 +359,23 @@ function LoginRoute() {
             onChange={(event) => setPassword(event.target.value)}
           />
         </Field>
+        {signingUp ? null : resetSent ? (
+          <p className={styles.authHint}>
+            If that address has an account, a link to set a new passphrase is on
+            its way.
+          </p>
+        ) : (
+          <p className={styles.authHint}>
+            <Button
+              disabled={submitting}
+              size="compact"
+              variant="ghost"
+              onClick={() => void requestReset()}
+            >
+              Forgotten your passphrase?
+            </Button>
+          </p>
+        )}
         {signingUp ? (
           <Field label="Confirm passphrase" variant="plain">
             <input

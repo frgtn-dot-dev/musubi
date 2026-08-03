@@ -101,7 +101,10 @@ function calendarDetail(calendar: Calendar, external: boolean) {
     calendar.role === "owner"
       ? "You own this calendar"
       : calendar.role === "editor"
-        ? "You can edit this calendar"
+        // Not "edit this calendar": an editor can add and change events but not
+        // rename or recolour the calendar itself (`packages/types/permissions`),
+        // and the row shows no rename button to match.
+        ? "You can add and change events"
         : "View only";
   return calendar.isDefault ? `Personal calendar · ${access}` : access;
 }

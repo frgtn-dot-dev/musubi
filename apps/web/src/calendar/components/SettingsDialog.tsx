@@ -347,14 +347,14 @@ export function SettingsDialog({
             />
             <RowAction
               detail="Includes browser and server details"
-              label="Report a Problem"
+              label="Report a problem"
               showChevron={false}
               trailing={<LifeBuoy aria-hidden="true" size={16} />}
               onClick={openProblemReport}
             />
             <RowAction
               detail="Buy us a coffee on Ko-fi"
-              label="Support Us"
+              label="Support us"
               showChevron={false}
               trailing={<ExternalLink aria-hidden="true" size={15} />}
               onClick={() => openExternal(KOFI_URL)}

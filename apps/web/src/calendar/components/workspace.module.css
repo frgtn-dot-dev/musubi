@@ -773,9 +773,13 @@
   width: 100%;
   min-width: 0;
   min-height: 43px;
+  /* The title takes the slack; the calendar name is as wide as the name. It used
+     to be the other way round, so on a 1150px row the thing you scan for was
+     capped at 180px and truncated while the word "Personal" was given 500px to
+     sit in. The narrow layout below already gets this right. */
   grid-template-columns:
-    120px 3px minmax(140px, 180px) auto
-    minmax(90px, 1fr) 28px;
+    120px 3px minmax(0, 1fr) auto
+    minmax(90px, max-content) 28px;
   align-items: center;
   gap: 15px;
   padding: 0 18px 0 0;

@@ -262,6 +262,33 @@ export function PollGrid({
   );
 }
 
+/**
+ * The field that names the reader's own row.
+ *
+ * It lives here rather than at the call site because the class that styles it is
+ * this module's — `pollStyles.nameInput` on the poll page resolved to `undefined`
+ * and the field rendered as a bare browser input, which is why it looked like it
+ * belonged to a different product.
+ */
+export function PollNameField({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <input
+      aria-label="Your name"
+      autoComplete="name"
+      className={styles.nameInput}
+      placeholder="Your name…"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
 /** What the marks mean, said once under the grid. */
 export function PollLegend() {
   return (

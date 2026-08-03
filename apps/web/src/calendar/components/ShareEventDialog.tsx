@@ -199,8 +199,9 @@ export function ShareEventDialog({
                 key={option.value}
                 label={option.label}
                 role="radio"
+                selected={mode === option.value}
                 showChevron={false}
-                value={mode === option.value ? "On" : undefined}
+                value={mode === option.value ? "Current" : undefined}
                 onClick={() => {
                   if (option.value === mode) return;
                   if (option.value === "private") {
@@ -266,9 +267,12 @@ export function ShareEventDialog({
                   key={option.value}
                   label={option.label}
                   role="radio"
+                  selected={current.attendeeVisibility === option.value}
                   showChevron={false}
                   value={
-                    current.attendeeVisibility === option.value ? "On" : undefined
+                    current.attendeeVisibility === option.value
+                      ? "Current"
+                      : undefined
                   }
                   onClick={() =>
                     publish.mutate({

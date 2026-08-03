@@ -7,7 +7,12 @@ import { getPoll, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
-import { formatSlot, PollGrid, PollLegend } from "~/components/PollGrid";
+import {
+  formatSlot,
+  PollGrid,
+  PollLegend,
+  PollNameField,
+} from "~/components/PollGrid";
 import { Button } from "~/ui/Button";
 import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
@@ -207,14 +212,7 @@ function PollRoute() {
               // Typed in the row it names, so it is obvious whose row it is.
               // Confirming the address still happens below — this only says who
               // to call you.
-              <input
-                aria-label="Your name"
-                autoComplete="name"
-                className={pollStyles.nameInput}
-                placeholder="Your name…"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
+              <PollNameField onChange={setName} value={name} />
             )
           }
           onAnswer={data.closed ? undefined : pick}

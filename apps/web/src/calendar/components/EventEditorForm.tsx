@@ -544,11 +544,14 @@ export function EventEditorForm({
             />
             <span className={styles.calendarSummaryCopy}>
               <strong>{selectedCalendar?.name ?? "Choose a calendar"}</strong>
+              {/* The "home" idea only means something once an event is in more
+                  than one calendar. On its own it read as a place, next to
+                  "Only calendar", which read as a restriction — beside a button
+                  that says Change. */}
               <span>
-                Home
                 {calendarCount > 1
-                  ? ` · Appears in ${calendarCount} calendars`
-                  : " · Only calendar"}
+                  ? `Home calendar · in ${calendarCount} calendars altogether`
+                  : "Appears in this calendar only"}
               </span>
             </span>
             <span className={styles.calendarSummaryAction}>

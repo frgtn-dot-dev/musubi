@@ -479,6 +479,25 @@
   margin-top: var(--space-5);
 }
 
+/* A quiet line under a field: the way out for somebody who cannot get in, said
+   without competing with the button that signs them in. */
+.authHint {
+  display: flex;
+  justify-content: flex-end;
+  margin: calc(var(--space-2) * -1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.authHint button {
+  min-height: 28px;
+  padding-inline: 0;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .authSwitch {
   display: flex;
   align-items: center;

@@ -189,6 +189,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.linkCaption {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
 .minutesOr,
 .minutesUnit {
   color: var(--text-secondary);

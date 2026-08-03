@@ -259,6 +259,14 @@ function PollResults({
 
       <PollLegend />
 
+      {/* Still worth sending once a time is picked — it is where everyone reads
+          the answer — but a link labelled nothing on a closed poll looks like an
+          invitation to answer a poll that no longer takes answers. */}
+      <p className={styles.linkCaption}>
+        {chosen
+          ? "The same link now shows everyone the time you picked."
+          : "Send this link to the people you need."}
+      </p>
       <div className={styles.linkRow}>
         <input
           aria-label="Poll link"
