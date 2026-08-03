@@ -2184,11 +2184,15 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
   expect(fileControlBox).not.toBeNull();
   expect(exportButtonBox).not.toBeNull();
   expect(importButtonBox).not.toBeNull();
+  // Export and Import are a matched pair. They used to sit side by side, which
+  // made the test a row alignment; in the side column of the wide dialog they are
+  // stacked, so the alignment that matters is the left edge and the width — two
+  // cards of different widths read as two unrelated things.
   expect(
-    Math.abs(exportSelectBox!.y - fileControlBox!.y),
+    Math.abs(exportSelectBox!.x - fileControlBox!.x),
   ).toBeLessThanOrEqual(1);
   expect(
-    Math.abs(exportButtonBox!.y - importButtonBox!.y),
+    Math.abs(exportSelectBox!.width - fileControlBox!.width),
   ).toBeLessThanOrEqual(1);
   expect(
     Math.abs(exportButtonBox!.height - importButtonBox!.height),
@@ -5810,7 +5814,11 @@ test("ui catalogue", async ({ page }) => {
   test.skip(!UI_SHOTS, "Set UI_SHOTS=<directory> to write the catalogue.");
   test.setTimeout(240_000);
 
+  await page.setViewportSize({ height: 900, width: 1440 });
+
   let index = 0;
+  // Reported alongside each shot: on a laptop the page itself should not scroll.
+  const overflow: string[] = [];
   const shot = async (name: string, target?: Locator) => {
     index += 1;
     const file = `${UI_SHOTS}/${UI_SHOTS_THEME}/${String(index).padStart(2, "0")}-${name}.png`;
@@ -5820,6 +5828,13 @@ test("ui catalogue", async ({ page }) => {
       path: file,
       ...(target ? {} : { fullPage: true }),
     });
+    const size = await page.evaluate(() => ({
+      client: window.document.documentElement.clientHeight,
+      scroll: window.document.documentElement.scrollHeight,
+    }));
+    if (size.scroll > size.client + 2) {
+      overflow.push(`${name}: ${size.scroll}px in ${size.client}px`);
+    }
   };
   // The theme is a stored preference, so it has to be there before first paint.
   await page.addInitScript(
@@ -5978,6 +5993,7 @@ test("ui catalogue", async ({ page }) => {
 
   await layer("quick-create", "Event");
   await layer("dialog-settings", "Settings");
+
   await layer("dialog-calendars", "Calendars");
   await layer("dialog-connections", "Connections");
   await layer("dialog-scheduling", "Find a time");
@@ -6047,6 +6063,9 @@ test("ui catalogue", async ({ page }) => {
   // Said out loud, so a gap in the catalogue is never mistaken for a screen that
   // does not exist.
   if (missed.length > 0) console.log(`Not captured: ${missed.join(", ")}`);
+  if (overflow.length > 0) {
+    console.log(`Taller than the window:\n  ${overflow.join("\n  ")}`);
+  }
   console.log(`${index} screenshots in ${UI_SHOTS}/${UI_SHOTS_THEME}`);
 });
 

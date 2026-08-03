@@ -39,11 +39,15 @@ export function AuthShell({
       </header>
 
       <section className={styles.authCard} aria-labelledby="login-title">
-        <p className={styles.pageEyebrow}>{eyebrow}</p>
-        <h1 id="login-title">{title}</h1>
-        <p className={styles.authIntroduction}>{introduction}</p>
-        {children}
-        {footer ? <div className={styles.authFooter}>{footer}</div> : null}
+        <div className={styles.authCopy}>
+          <p className={styles.pageEyebrow}>{eyebrow}</p>
+          <h1 id="login-title">{title}</h1>
+          <p className={styles.authIntroduction}>{introduction}</p>
+        </div>
+        <div className={styles.authContent}>
+          {children}
+          {footer ? <div className={styles.authFooter}>{footer}</div> : null}
+        </div>
       </section>
     </main>
   );

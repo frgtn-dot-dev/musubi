@@ -4,6 +4,34 @@
   padding: var(--space-4);
 }
 
+/* The poll being written on one side, the polls already out on the other — and
+   only the list scrolls, so the form never moves under the cursor. Stacked, the
+   list was below the fold of the dialog's own scroller, which is a strange place
+   to keep the thing you came back to check. */
+@media (min-width: 900px) {
+  .content {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+    min-height: 0;
+    height: 100%;
+    padding: var(--space-4) 0 0;
+  }
+
+  .content > * {
+    min-width: 0;
+    padding: 0 var(--space-4) var(--space-4);
+  }
+
+  .content > :last-child {
+    align-content: start;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-left: 1px solid var(--border-subtle);
+  }
+}
+
 .section {
   display: grid;
   gap: var(--space-2);
@@ -136,6 +164,12 @@
 
 .timeInput {
   width: 8rem;
+}
+
+.minutesField {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .minutes {

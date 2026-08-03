@@ -369,9 +369,15 @@
   height: 29px;
 }
 
+/* Two columns on a laptop, one on a phone: the words on the left, the thing you
+   came to do on the right. Stacked, this is a column tall enough to scroll for
+   the sake of four fields. */
 .authCard {
   position: relative;
   z-index: 1;
+  display: grid;
+  grid-template-areas: "copy" "form";
+  gap: clamp(var(--space-4), 3vw, var(--space-6));
   width: min(100%, 430px);
   padding: clamp(var(--space-7), 5vw, 46px);
   border: 1px solid var(--border-medium);
@@ -379,6 +385,32 @@
   background: color-mix(in srgb, var(--surface-panel) 76%, transparent);
   box-shadow: var(--shadow-overlay);
   backdrop-filter: blur(22px);
+}
+
+.authCopy {
+  grid-area: copy;
+}
+
+.authContent {
+  grid-area: form;
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+@media (min-width: 860px) and (min-height: 560px) {
+  .authCard {
+    grid-template-areas: "copy form";
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: center;
+    width: min(100%, 900px);
+  }
+
+  /* The rule above centres the two columns against each other; the copy still
+     reads from the top when the form is the taller of the two. */
+  .authCopy {
+    align-self: center;
+  }
 }
 
 .authCard h1 {
@@ -390,7 +422,7 @@
 }
 
 .authIntroduction {
-  margin: var(--space-3) 0 var(--space-7);
+  margin: var(--space-3) 0 0;
   color: var(--text-secondary);
   font-family: var(--font-serif);
   font-size: var(--text-15);
@@ -1129,6 +1161,22 @@
   );
 }
 
+/* For the two that are a list beside its controls, and for settings, which reads
+   as two columns rather than one scroll. */
+.dialog_spacious {
+  width: min(
+    1020px,
+    calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+  );
+  /* Taller than the default cap as well as wider: these are the dialogs with
+     enough in them to be worth showing all at once, and a desktop window has the
+     room. The viewport still wins on a laptop. */
+  max-height: min(
+    900px,
+    calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+  );
+}
+
 .dialogHeader {
   display: flex;
   flex: none;
@@ -1183,6 +1231,15 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* The body of a dialog whose own children scroll: a list on one side, controls on
+   the other. Only once there is room for the columns — stacked, the body is the
+   scroller again. */
+@media (min-width: 900px) {
+  .dialogBody_panels {
+    overflow: hidden;
+  }
 }
 
 .dialogBody_padded {
@@ -1844,6 +1901,7 @@
 
   .dialog,
   .dialog_compact,
+  .dialog_spacious,
   .dialog_wide {
     top: auto;
     bottom: 0;

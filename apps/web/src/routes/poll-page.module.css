@@ -4,6 +4,7 @@
    `--page-*` variables those shared rules read are therefore mapped here onto
    the app's tokens, which is what makes the whole page switch with the theme. */
 .page {
+  position: relative;
   display: grid;
   align-content: center;
   justify-items: center;
@@ -54,10 +55,11 @@
   text-decoration: underline;
 }
 
+/* Out of the flow: a row of its own for one icon costs the grid its fold. */
 .themeRow {
-  display: flex;
-  justify-content: flex-end;
-  width: min(64rem, 100%);
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }
 
 /* The poll page shares the published-event shell; only the answer grid is its

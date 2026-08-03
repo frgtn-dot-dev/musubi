@@ -53,11 +53,13 @@ export function SchedulingDialog({
   return (
     <Dialog
       bodyLayout="flush"
+      bodyScroll="panels"
       closeLabel="Close scheduling"
       description="Offer a few times, send the link, and see what suits everyone."
       onOpenChange={onOpenChange}
       open
       returnFocus={returnFocus}
+      size="spacious"
       title={openPoll ? openPoll.title : "Find a time"}
     >
       {openPoll ? (

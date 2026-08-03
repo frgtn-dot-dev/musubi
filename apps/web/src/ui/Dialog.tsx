@@ -8,12 +8,18 @@ import { IconButton } from "./Button";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
 
-export type DialogSize = "compact" | "default" | "wide";
+export type DialogSize = "compact" | "default" | "spacious" | "wide";
 export type DialogBodyLayout = "flush" | "padded";
 
 export type DialogProps = {
   bodyClassName?: string;
   bodyLayout?: DialogBodyLayout;
+  /**
+   * `panels` when the body's own children scroll — a list beside its controls.
+   * The body then stops being the scroller on a wide screen, so the controls
+   * stay put while the list moves.
+   */
+  bodyScroll?: "auto" | "panels";
   children: ReactNode;
   className?: string;
   closeLabel: string;
@@ -43,6 +49,7 @@ export type DialogProps = {
 export function Dialog({
   bodyClassName,
   bodyLayout = "padded",
+  bodyScroll = "auto",
   children,
   className,
   closeLabel,
@@ -117,6 +124,7 @@ export function Dialog({
             className={classNames(
               styles.dialogBody,
               styles[`dialogBody_${bodyLayout}`],
+              bodyScroll === "panels" && styles.dialogBody_panels,
               bodyClassName,
             )}
           >

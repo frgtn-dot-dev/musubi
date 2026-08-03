@@ -2,6 +2,7 @@
    page rather than like the app. It follows the reader's own light/dark setting —
    nobody themes a form. */
 .page {
+  position: relative;
   display: grid;
   align-content: start;
   justify-items: center;
@@ -12,14 +13,28 @@
   color: var(--text-primary);
 }
 
-.themeRow {
-  display: flex;
-  justify-content: flex-end;
-  width: min(42rem, 100%);
+/* Wide enough for two columns is also wide enough to stop spending height on
+   padding: the card is what people came for. */
+@media (min-width: 900px) {
+  .page {
+    align-content: center;
+    padding: var(--space-4);
+  }
 }
 
+/* Out of the flow: a whole row for one icon was costing the page its fold. */
+.themeRow {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+
+/* Two columns on a laptop: what it is on the left, when it is on the right. As
+   one column this ran past the fold, and a form you have to scroll to reach the
+   button of is a form people abandon. */
 .card {
   display: grid;
+  grid-template-areas: "intro" "body";
   gap: var(--space-5);
   width: min(42rem, 100%);
   padding: var(--space-6);
@@ -29,7 +44,27 @@
 }
 
 .header {
+  grid-area: intro;
+}
+
+.card > :not(.header) {
+  grid-area: body;
+}
+
+@media (min-width: 900px) {
+  .card {
+    grid-template-areas: "intro body";
+    grid-template-columns: minmax(0, 4fr) minmax(0, 5fr);
+    gap: var(--space-6);
+    align-items: start;
+    width: min(64rem, 100%);
+    padding: var(--space-5);
+  }
+}
+
+.header {
   display: grid;
+  align-content: start;
   gap: var(--space-2);
 }
 

@@ -304,11 +304,12 @@ export function CalendarTransferDialog({
       <Dialog
         bodyClassName={styles.body}
         bodyLayout="flush"
+        bodyScroll="panels"
         closeLabel="Close calendars"
         description="Create and organize calendars from Musubi and your connected accounts."
         onOpenChange={handleOpenChange}
         open={open}
-        size="wide"
+        size="spacious"
         title="Calendars"
       >
         <section className={styles.calendarSection}>

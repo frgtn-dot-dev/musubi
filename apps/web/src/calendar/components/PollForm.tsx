@@ -156,17 +156,20 @@ export function PollForm({
             {minutes} min
           </Button>
         ))}
-        <input
-          aria-label="Minutes"
-          className={styles.minutes}
-          inputMode="numeric"
-          max={MAX_DURATION}
-          min={MIN_DURATION}
-          type="number"
-          value={duration}
-          onChange={(event) => setDuration(event.target.value)}
-        />
-        <span className={styles.minutesUnit}>min</span>
+        {/* One control, so the unit never wraps onto a line of its own. */}
+        <span className={styles.minutesField}>
+          <input
+            aria-label="Minutes"
+            className={styles.minutes}
+            inputMode="numeric"
+            max={MAX_DURATION}
+            min={MIN_DURATION}
+            type="number"
+            value={duration}
+            onChange={(event) => setDuration(event.target.value)}
+          />
+          <span className={styles.minutesUnit}>min</span>
+        </span>
       </fieldset>
 
       {duration !== "" && !durationValid ? (

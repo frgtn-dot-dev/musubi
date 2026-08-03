@@ -4,6 +4,29 @@
   padding-bottom: var(--space-4);
 }
 
+/* Two columns once there is room for them. Settings is a list of unrelated
+   switches, not a sequence — reading it top to bottom buys nothing, and as one
+   column half of it was below the fold of its own scroller. */
+@media (min-width: 900px) {
+  .settingsContent {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  /* Appearance is most of this dialog, so it takes a column of its own and the
+     three short sections stack beside it. Balanced that way the whole of settings
+     fits a laptop window, which is the point: there is no order to read these in,
+     so scrolling past half of them buys nothing. */
+  .settingsContent > section:first-of-type {
+    grid-area: 1 / 1 / span 3 / auto;
+  }
+
+  .settingsContent > section:not(:first-of-type) {
+    grid-column: 2;
+    border-left: 1px solid var(--border-subtle);
+  }
+}
+
 .loading {
   display: grid;
   min-height: 180px;

@@ -267,6 +267,7 @@ export function ConnectionsDialog({
     <Dialog
       bodyClassName={styles.body}
       bodyLayout="flush"
+      bodyScroll="panels"
       closeLabel="Close connections"
       description="Keep outside calendars in sync or join one shared through Musubi."
       footer={
@@ -278,10 +279,10 @@ export function ConnectionsDialog({
       }
       onOpenChange={handleOpenChange}
       open={open}
-      size="wide"
+      size="spacious"
       title="Connections"
     >
-      <div aria-busy={busy || undefined}>
+      <div aria-busy={busy || undefined} className={styles.layout}>
         <section
           aria-labelledby="connections-accounts-title"
           className={styles.section}

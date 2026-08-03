@@ -8,6 +8,47 @@
   display: grid;
 }
 
+/* Side by side once there is room: the list of calendars scrolls on its own and
+   the controls beside it stay where they were put. Stacked, the dialog's single
+   scroller carried both, so reaching Import meant scrolling past every calendar.
+   The columns are the dialog's own rows, so `contents` hands them straight to
+   its grid rather than nesting another one. */
+@media (min-width: 900px) {
+  .body {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: stretch;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .calendarSection {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .groups {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: var(--space-5);
+  }
+
+  .transferSection {
+    min-height: 0;
+    overflow-y: auto;
+    border-top: 0;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  /* One under the other in the side column: two cards there squeeze the file
+     name and the export select into ellipses. Written with the section in front
+     of it so it wins against the base rule further down the file. */
+  .transferSection .transferGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .calendarSection {
   padding-bottom: var(--space-5);
 }

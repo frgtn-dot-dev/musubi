@@ -12,6 +12,59 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Accounts on the left, the two ways to add one on the right — and only the list
+   scrolls, so "Open invite" and the provider buttons never move. Sections are
+   placed by the heading they are labelled with rather than by order, because the
+   servers block is only there for somebody who has one. */
+@media (min-width: 900px) {
+  .body {
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .layout > .section {
+    padding-bottom: var(--space-4);
+  }
+
+  .layout > .section + .section {
+    border-top: 0;
+  }
+
+  .layout > [aria-labelledby="connections-accounts-title"] {
+    grid-area: 1 / 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .layout > [aria-labelledby="connections-servers-title"] {
+    grid-area: 2 / 1;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .layout > [aria-labelledby="connections-invite-title"] {
+    grid-area: 1 / 2;
+    align-content: start;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .layout > [aria-labelledby="connections-add-title"] {
+    grid-area: 2 / 2;
+    min-height: 0;
+    overflow-y: auto;
+    border-top: 1px solid var(--border-subtle);
+    border-left: 1px solid var(--border-subtle);
+  }
+}
+
 .sectionHeading {
   display: grid;
   gap: var(--space-1);

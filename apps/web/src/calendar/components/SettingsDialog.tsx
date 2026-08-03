@@ -236,7 +236,7 @@ export function SettingsDialog({
       description="Preferences sync across your Musubi devices."
       onOpenChange={handleOpenChange}
       open={open}
-      size="wide"
+      size="spacious"
       title="Settings"
     >
       {!settings && !error ? (
