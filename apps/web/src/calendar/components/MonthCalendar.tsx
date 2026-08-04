@@ -1,4 +1,5 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
+import { getReadableEventTextColor } from "../event-color";
 import {
   eventDayKeys,
   getMonthGrid,
@@ -368,9 +369,6 @@ export function MonthCalendar({
         }
       >
         {weeks.map((week, weekIndex) => {
-          // One line for the whole draft, chosen from the busiest day it
-          // covers in this week — so it stays straight and no all-day block
-          // above it has to move.
           // The line the moved pill takes, one for the whole week so the pill
           // stays straight: only all-day blocks that last longer sit above it.
           const moveRow = moveRange
@@ -385,18 +383,6 @@ export function MonthCalendar({
                       segment.event.isAllDay &&
                       segment.event.id !== drag!.event.id &&
                       eventDayKeys(segment.event).length >= moved,
-                  ).length;
-                }),
-              )
-            : 0;
-          const draftRow = draftRange
-            ? Math.max(
-                0,
-                ...week.map((day) => {
-                  const key = toDateKey(day);
-                  if (key < draftRange.from || key > draftRange.to) return 0;
-                  return (eventsByDay.get(key) ?? []).filter(
-                    (segment) => segment.event.isAllDay,
                   ).length;
                 }),
               )
@@ -528,12 +514,11 @@ export function MonthCalendar({
                         // the cell under it owns that gesture.
                         data-live={draftRange.live ? "" : undefined}
                         style={
-                          {
-                            gridRow: draftRow + 1,
-                            ...(pendingCreate?.color
-                              ? { "--draft-accent": pendingCreate.color }
-                              : {}),
-                          } as CSSProperties
+                          pendingCreate?.color
+                            ? ({
+                                "--draft-accent": pendingCreate.color,
+                              } as CSSProperties)
+                            : undefined
                         }
                         onPointerDown={
                           draftRange.live
@@ -621,8 +606,10 @@ export function MonthCalendar({
                         data-live=""
                         style={
                           {
-                            gridRow: moveRow + 1,
-                            "--draft-accent": dragPreviewColor,
+                            "--drag-row": moveRow,
+                            "--event-color": dragPreviewColor,
+                            "--event-foreground":
+                              getReadableEventTextColor(dragPreviewColor),
                           } as CSSProperties
                         }
                       >
