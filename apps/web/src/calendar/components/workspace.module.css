@@ -1431,6 +1431,9 @@
   --month-day-fixed-space: 38px;
   --month-event-height: 21px;
   --month-event-gap: 3px;
+  /* What a cell takes out of its own width: both paddings and the divider. A
+     preview standing in for a multi-day event adds it back per further cell. */
+  --month-cell-gutter: 15px;
   display: grid;
   min-height: 0;
   /* Row count is set by the grid it draws — six for a month, one to twenty for
@@ -1466,7 +1469,8 @@
    the divider — so the 1px border stays uncovered and draws a line through it. On
    a solid chip that seam is invisible; through the draft's translucent fill it is
    not, so the cell holding a draft drops the clip while it is on screen. */
-.dayCell:has(.dayDraft) {
+.dayCell:has(.dayDraft),
+.dayCell:has([data-drag-preview]) {
   overflow: visible;
 }
 

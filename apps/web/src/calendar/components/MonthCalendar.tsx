@@ -1,5 +1,6 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
+  eventDayKeys,
   getMonthGrid,
   segmentEventsByDay as bucketEventsByDay,
 } from "@musubi/calendar/layout";
@@ -349,12 +350,32 @@ export function MonthCalendar({
           } as CSSProperties
         }
       >
-        {weeks.map((week, weekIndex) => (
+        {weeks.map((week, weekIndex) => {
+          // One line for the whole draft, chosen from the busiest day it
+          // covers in this week — so it stays straight and no all-day block
+          // above it has to move.
+          const draftRow = draftRange
+            ? Math.max(
+                0,
+                ...week.map((day) => {
+                  const key = toDateKey(day);
+                  if (key < draftRange.from || key > draftRange.to) return 0;
+                  return (eventsByDay.get(key) ?? []).filter(
+                    (segment) => segment.event.isAllDay,
+                  ).length;
+                }),
+              )
+            : 0;
+
+          return (
           <div
             className={styles.monthWeek}
             role="row"
             key={toDateKey(week[0]!)}
           >
+            {/* The draft sits under the all-day blocks, on one line for the
+                whole range it covers: taking the top line in the one cell it
+                started in would break every bar crossing that week. */}
             {week.map((day, dayIndex) => {
               const index = weekIndex * 7 + dayIndex;
               const dateKey = toDateKey(day);
@@ -365,6 +386,25 @@ export function MonthCalendar({
               // A hidden adjacent day keeps its cell (so the month keeps its
               // height) but shows nothing and takes no clicks.
               const muted = !inMonth && !showAdjacentDays;
+              const draggedDays =
+                drag?.event.isAllDay && drag.dayKey === dateKey
+                  ? eventDayKeys(drag.event).length
+                  : 0;
+              // How wide the preview of a dragged all-day event is here.
+              const dragPreviewColumns = draggedDays
+                ? Math.min(7 - dayIndex, draggedDays)
+                : 1;
+              // And which line it takes: an all-day event being moved rides at
+              // the top of the day, under nothing but the ones that outlast it.
+              // The day's own blocks make room around it.
+              const dragPreviewRow = draggedDays
+                ? daySegments.filter(
+                    (segment) =>
+                      segment.event.isAllDay &&
+                      segment.event.id !== drag!.event.id &&
+                      eventDayKeys(segment.event).length >= draggedDays,
+                  ).length
+                : undefined;
               // If not every event fits, one measured slot belongs to the
               // "+N more" control. This mirrors the calendar pattern where the
               // month grid stays fixed and density yields to explicit overflow.
@@ -472,11 +512,12 @@ export function MonthCalendar({
                         // the cell under it owns that gesture.
                         data-live={draftRange.live ? "" : undefined}
                         style={
-                          pendingCreate?.color
-                            ? ({
-                                "--draft-accent": pendingCreate.color,
-                              } as CSSProperties)
-                            : undefined
+                          {
+                            gridRow: draftRow + 1,
+                            ...(pendingCreate?.color
+                              ? { "--draft-accent": pendingCreate.color }
+                              : {}),
+                          } as CSSProperties
                         }
                         onPointerDown={
                           draftRange.live
@@ -555,6 +596,19 @@ export function MonthCalendar({
                             "--event-color": dragPreviewColor,
                             "--event-foreground":
                               getReadableEventTextColor(dragPreviewColor),
+                            /* A multi-day event keeps its length while it is
+                               being moved: a preview shrunk to one cell says
+                               the drop would shorten it, which it would not.
+                               Cut off at the end of the week, like the blocks
+                               it is standing in for. */
+                            ...(dragPreviewRow === undefined
+                              ? {}
+                              : { gridRow: dragPreviewRow + 1 }),
+                            ...(dragPreviewColumns > 1
+                              ? {
+                                  width: `calc(${dragPreviewColumns} * 100% + ${dragPreviewColumns} * var(--month-cell-gutter))`,
+                                }
+                              : {}),
                           } as CSSProperties
                         }
                       >
@@ -623,7 +677,8 @@ export function MonthCalendar({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

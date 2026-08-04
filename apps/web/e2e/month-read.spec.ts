@@ -5937,6 +5937,74 @@ test("a press that closes a dialog does not also create an event", async ({
   await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 });
 
+test("keeps a dragged all-day event whole and on top", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const chip = page.getByRole("button", { name: /Studio retreat/ }).first();
+  await expect(chip).toBeVisible();
+  const from = (await chip.boundingBox())!;
+  // Friday of a week that already holds the longer Family holiday.
+  const target = page.locator('[data-day-key="2026-07-17"]');
+  const to = (await target.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 12,
+  });
+
+  const preview = target.locator("[data-drag-preview]");
+  await expect(preview).toHaveCount(1);
+  const previewBox = (await preview.boundingBox())!;
+  // Three days of it fit before the week runs out, and it is not cut down to
+  // the single cell under the pointer.
+  expect(Math.abs(previewBox.width - to.width * 3)).toBeLessThan(2);
+  // Under the holiday, which lasts longer, and above everything else.
+  const holiday = (await target
+    .getByRole("button", { name: /Family holiday/ })
+    .boundingBox())!;
+  expect(previewBox.y).toBeGreaterThan(holiday.y);
+
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+});
+
+test("draws a new draft under the all-day blocks", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const start = (await page
+    .locator('[data-day-key="2026-07-07"]')
+    .boundingBox())!;
+  const end = (await page.locator('[data-day-key="2026-07-09"]').boundingBox())!;
+  await page.mouse.move(start.x + 20, start.y + start.height - 10);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height - 10, {
+    steps: 10,
+  });
+  await page.mouse.up();
+  await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+
+  // The retreat keeps one line across the week; the draft takes the next one
+  // in every cell it covers rather than shouldering the bar aside in one.
+  const rows = await page.evaluate(() =>
+    ["2026-07-07", "2026-07-08", "2026-07-09"].map((key) => {
+      const cell = document.querySelector(`[data-day-key="${key}"]`)!;
+      const bar = cell.querySelector('[data-event-id^="studio-retreat"]');
+      const draft = cell.querySelector("[data-draft], [data-live]");
+      const top = (node: Element | null) =>
+        node ? Math.round(node.getBoundingClientRect().y) : null;
+      return { bar: top(bar), draft: top(draft) };
+    }),
+  );
+  for (const row of rows) {
+    expect(row.bar).toBe(rows[0]!.bar);
+    expect(row.draft).toBe(rows[0]!.draft);
+    expect(row.draft!).toBeGreaterThan(row.bar!);
+  }
+});
+
 test("stays inside its box with twenty calendars", async ({ page }) => {
   await mockAuthenticatedReads(page, events, manyCalendars);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
@@ -7418,3 +7486,4 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectNoAccessibilityViolations(page);
 });
+
