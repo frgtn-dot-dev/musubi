@@ -15,7 +15,6 @@ import {
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
-import { getReadableEventTextColor } from "../event-color";
 import {
   canEditEvent,
   eventHomeCalendarId,
@@ -232,6 +231,24 @@ export function MonthCalendar({
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars],
   );
+  /**
+   * Where a dragged event would land, as a day range.
+   *
+   * The same shape the create gesture draws, for the same reason: an event that
+   * covers five days must be five days wide while it is being moved, and one
+   * pill across the range says that where a chip in the cell under the pointer
+   * says the drop would shorten it.
+   */
+  const moveRange = useMemo(() => {
+    if (!drag) return undefined;
+    const shift = dayDelta(drag.originDayKey, drag.dayKey);
+    const keys = eventDayKeys(drag.event);
+
+    return {
+      from: shiftDayKey(keys[0]!, shift),
+      to: shiftDayKey(keys[keys.length - 1]!, shift),
+    };
+  }, [drag]);
   const dragPreviewColor = drag
     ? (calendarsById.get(eventHomeCalendarId(drag.event) ?? "")?.color ??
       drag.event.color)
@@ -354,6 +371,24 @@ export function MonthCalendar({
           // One line for the whole draft, chosen from the busiest day it
           // covers in this week — so it stays straight and no all-day block
           // above it has to move.
+          // The line the moved pill takes, one for the whole week so the pill
+          // stays straight: only all-day blocks that last longer sit above it.
+          const moveRow = moveRange
+            ? Math.max(
+                0,
+                ...week.map((day) => {
+                  const key = toDateKey(day);
+                  if (key < moveRange.from || key > moveRange.to) return 0;
+                  const moved = eventDayKeys(drag!.event).length;
+                  return (eventsByDay.get(key) ?? []).filter(
+                    (segment) =>
+                      segment.event.isAllDay &&
+                      segment.event.id !== drag!.event.id &&
+                      eventDayKeys(segment.event).length >= moved,
+                  ).length;
+                }),
+              )
+            : 0;
           const draftRow = draftRange
             ? Math.max(
                 0,
@@ -386,25 +421,6 @@ export function MonthCalendar({
               // A hidden adjacent day keeps its cell (so the month keeps its
               // height) but shows nothing and takes no clicks.
               const muted = !inMonth && !showAdjacentDays;
-              const draggedDays =
-                drag?.event.isAllDay && drag.dayKey === dateKey
-                  ? eventDayKeys(drag.event).length
-                  : 0;
-              // How wide the preview of a dragged all-day event is here.
-              const dragPreviewColumns = draggedDays
-                ? Math.min(7 - dayIndex, draggedDays)
-                : 1;
-              // And which line it takes: an all-day event being moved rides at
-              // the top of the day, under nothing but the ones that outlast it.
-              // The day's own blocks make room around it.
-              const dragPreviewRow = draggedDays
-                ? daySegments.filter(
-                    (segment) =>
-                      segment.event.isAllDay &&
-                      segment.event.id !== drag!.event.id &&
-                      eventDayKeys(segment.event).length >= draggedDays,
-                  ).length
-                : undefined;
               // If not every event fits, one measured slot belongs to the
               // "+N more" control. This mirrors the calendar pattern where the
               // month grid stays fixed and density yields to explicit overflow.
@@ -582,37 +598,37 @@ export function MonthCalendar({
                         {...eventActions}
                       />
                     ))}
-                    {/* The dragged event, in the cell it would land in: a month
-                        cell has no time axis, so "where" is the whole answer and
-                        the chip has to be visible to give it. Last in the cell,
-                        so multi-day bars already drawn keep their row. */}
-                    {drag && drag.dayKey === dateKey ? (
+                    {/* The dragged event, across the days it would land on:
+                        the same pill the create gesture draws, because the
+                        answer to "where would this go" has the same shape. */}
+                    {moveRange &&
+                    dateKey >= moveRange.from &&
+                    dateKey <= moveRange.to ? (
                       <div
                         aria-hidden="true"
-                        className={styles.dragPreviewChip}
+                        className={styles.dayDraft}
+                        data-continues-after={
+                          dateKey < moveRange.to && dayIndex < 6
+                            ? ""
+                            : undefined
+                        }
+                        data-continues-before={
+                          dateKey > moveRange.from && dayIndex > 0
+                            ? ""
+                            : undefined
+                        }
                         data-drag-preview=""
+                        data-live=""
                         style={
                           {
-                            "--event-color": dragPreviewColor,
-                            "--event-foreground":
-                              getReadableEventTextColor(dragPreviewColor),
-                            /* A multi-day event keeps its length while it is
-                               being moved: a preview shrunk to one cell says
-                               the drop would shorten it, which it would not.
-                               Cut off at the end of the week, like the blocks
-                               it is standing in for. */
-                            ...(dragPreviewRow === undefined
-                              ? {}
-                              : { gridRow: dragPreviewRow + 1 }),
-                            ...(dragPreviewColumns > 1
-                              ? {
-                                  width: `calc(${dragPreviewColumns} * 100% + ${dragPreviewColumns} * var(--month-cell-gutter))`,
-                                }
-                              : {}),
+                            gridRow: moveRow + 1,
+                            "--draft-accent": dragPreviewColor,
                           } as CSSProperties
                         }
                       >
-                        {drag.event.title}
+                        {dateKey === moveRange.from || dayIndex === 0
+                          ? drag!.event.title
+                          : ""}
                       </div>
                     ) : null}
                     {overflow > 0 ? (
