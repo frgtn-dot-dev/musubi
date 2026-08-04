@@ -388,6 +388,19 @@ export function MonthCalendar({
               )
             : 0;
 
+          // Whichever gesture is running, it claims one line for the whole
+          // week: the range it covers draws the pill, the rest of the week
+          // holds the line open so nothing crossing the boundary breaks.
+          const running = draftRange ?? moveRange;
+          // Only the weeks the gesture actually reaches give up a line.
+          const gestureRange =
+            running &&
+            running.from <= toDateKey(week[6]!) &&
+            running.to >= toDateKey(week[0]!)
+              ? running
+              : undefined;
+          const gestureRow = draftRange ? 0 : moveRow;
+
           return (
           <div
             className={styles.monthWeek}
@@ -514,11 +527,12 @@ export function MonthCalendar({
                         // the cell under it owns that gesture.
                         data-live={draftRange.live ? "" : undefined}
                         style={
-                          pendingCreate?.color
-                            ? ({
-                                "--draft-accent": pendingCreate.color,
-                              } as CSSProperties)
-                            : undefined
+                          {
+                            gridRow: gestureRow + 1,
+                            ...(pendingCreate?.color
+                              ? { "--draft-accent": pendingCreate.color }
+                              : {}),
+                          } as CSSProperties
                         }
                         onPointerDown={
                           draftRange.live
@@ -543,7 +557,7 @@ export function MonthCalendar({
                           : ""}
                       </div>
                     ) : null}
-                    {visibleSegments.map((segment) => (
+                    {visibleSegments.map((segment, index) => (
                       <EventPopover
                         calendar={calendarsById.get(
                           eventHomeCalendarId(segment.event) ?? "",
@@ -559,6 +573,20 @@ export function MonthCalendar({
                             segment.event.id.startsWith(`${busyEventId}_`))
                         }
                         key={segment.event.id}
+                        /* Everything from the gesture's line down moves one
+                           line, in every cell of the week so nothing crossing
+                           a cell edge comes apart. The block being dragged is
+                           the exception: it holds the place it came from and
+                           the pill simply passes over it. */
+                        row={
+                          gestureRange
+                            ? index +
+                              (index >= gestureRow &&
+                              drag?.event.id !== segment.event.id
+                                ? 1
+                                : 0)
+                            : undefined
+                        }
                         onBeginDrag={
                           onMoveEventToDate &&
                           canEditEvent(
@@ -606,7 +634,7 @@ export function MonthCalendar({
                         data-live=""
                         style={
                           {
-                            "--drag-row": moveRow,
+                            gridRow: gestureRow + 1,
                             "--event-color": dragPreviewColor,
                             "--event-foreground":
                               getReadableEventTextColor(dragPreviewColor),

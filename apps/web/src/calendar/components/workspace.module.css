@@ -1634,15 +1634,20 @@
 
 /* The month draft pill: an all-day bar in the accent colour, flat where it
    continues into the next cell so a range reads as one thing. */
-/* Out of the flow and on the top line: a range being drawn out is the answer to
-   the gesture in hand, so it lies over the day's blocks — all-day ones included
-   — rather than taking a line from them and moving everything down. */
+/* A range being drawn or dragged claims a line, and the day's other blocks move
+   down to give it — across the whole week, not only the cells it covers, or a
+   bar crossing out of the range would sit a line higher in the next cell and
+   come apart. The empty cells hold the line with a spacer.
+   Positioned, so it paints above the cell borders that follow it in the grid —
+   static content would go under them and the translucent fill would show the
+   mesh running through the block. */
 .dayDraft {
   position: absolute;
   z-index: 4;
+  /* The padding box starts above the inset, and the grid's first line starts
+     below it — so only the lines above this one count. */
   top: calc(
-    var(--month-events-inset) + var(--drag-row, 0) *
-      (var(--month-event-height) + var(--month-event-gap))
+    var(--drag-row, 0) * (var(--month-event-height) + var(--month-event-gap))
   );
   left: 0;
   width: 100%;
@@ -1665,6 +1670,7 @@
    the greyed-out original, which it lies across rather than pushing down. */
 .dayDraft[data-drag-preview] {
   z-index: 5;
+  min-height: var(--month-event-height);
   border-color: transparent;
   background: var(--event-color);
   color: var(--event-foreground, #000);
