@@ -1431,8 +1431,6 @@
   --month-day-fixed-space: 38px;
   --month-event-height: 21px;
   --month-event-gap: 3px;
-  /* The step between the day's header and its first block. */
-  --month-events-inset: 3px;
   /* What a cell takes out of its own width: both paddings and the divider. A
      preview standing in for a multi-day event adds it back per further cell. */
   --month-cell-gutter: 15px;
@@ -1525,10 +1523,9 @@
 
 .dayEvents {
   --event-bleed: 8px;
-  position: relative;
   display: grid;
-  gap: var(--month-event-gap);
-  padding-top: var(--month-events-inset);
+  gap: 3px;
+  padding-top: 3px;
 }
 
 .eventChip {
@@ -1634,18 +1631,12 @@
 
 /* The month draft pill: an all-day bar in the accent colour, flat where it
    continues into the next cell so a range reads as one thing. */
-/* Out of the flow and on the top line: a range being drawn out is the answer to
-   the gesture in hand, so it lies over the day's blocks — all-day ones included
-   — rather than taking a line from them and moving everything down. */
 .dayDraft {
-  position: absolute;
+  /* Positioned, so it paints above the cell borders that follow it in the grid —
+     the same reason the ghost chip is. Static content would go under them and the
+     translucent fill would show the mesh running through the block. */
+  position: relative;
   z-index: 4;
-  top: calc(
-    var(--month-events-inset) + var(--drag-row, 0) *
-      (var(--month-event-height) + var(--month-event-gap))
-  );
-  left: 0;
-  width: 100%;
   min-height: 21px;
   display: flex;
   align-items: center;
@@ -1657,18 +1648,6 @@
   color: var(--text-primary);
   font-size: 0.65rem;
   white-space: nowrap;
-}
-
-/* Moving an event, not sketching a new one: the pill wears the event's own
-   colour, so what follows the pointer is recognisably the thing being moved.
-   Out of the flow, so the blocks it passes over stay where they are — including
-   the greyed-out original, which it lies across rather than pushing down. */
-.dayDraft[data-drag-preview] {
-  z-index: 5;
-  border-color: transparent;
-  background: var(--event-color);
-  color: var(--event-foreground, #000);
-  box-shadow: var(--shadow-overlay);
 }
 
 /* A grabbable surface must not also be selectable text: dragging a selection

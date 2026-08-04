@@ -5984,17 +5984,9 @@ test("keeps a dragged all-day event whole and on top", async ({ page }) => {
   await page.mouse.up();
 });
 
-test("draws a new draft over the all-day blocks", async ({ page }) => {
+test("draws a new draft under the all-day blocks", async ({ page }) => {
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-
-  const barTop = async () =>
-    Math.round(
-      (await page
-        .locator('[data-day-key="2026-07-08"] [data-event-id^="studio-retreat"]')
-        .boundingBox())!.y,
-    );
-  const before = await barTop();
 
   const start = (await page
     .locator('[data-day-key="2026-07-07"]')
@@ -6008,14 +6000,23 @@ test("draws a new draft over the all-day blocks", async ({ page }) => {
   await page.mouse.up();
   await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 
-  // The range being drawn lies on the top line, over the all-day bar, and the
-  // bar has not moved to make room for it.
-  expect(await barTop()).toBe(before);
-  const draft = (await page
-    .locator('[data-day-key="2026-07-08"] .dayDraft, [data-day-key="2026-07-08"] [class*="dayDraft"]')
-    .first()
-    .boundingBox())!;
-  expect(Math.round(draft.y)).toBe(before);
+  // The retreat keeps one line across the week; the draft takes the next one
+  // in every cell it covers rather than shouldering the bar aside in one.
+  const rows = await page.evaluate(() =>
+    ["2026-07-07", "2026-07-08", "2026-07-09"].map((key) => {
+      const cell = document.querySelector(`[data-day-key="${key}"]`)!;
+      const bar = cell.querySelector('[data-event-id^="studio-retreat"]');
+      const draft = cell.querySelector("[data-draft], [data-live]");
+      const top = (node: Element | null) =>
+        node ? Math.round(node.getBoundingClientRect().y) : null;
+      return { bar: top(bar), draft: top(draft) };
+    }),
+  );
+  for (const row of rows) {
+    expect(row.bar).toBe(rows[0]!.bar);
+    expect(row.draft).toBe(rows[0]!.draft);
+    expect(row.draft!).toBeGreaterThan(row.bar!);
+  }
 });
 
 test("stays inside its box with twenty calendars", async ({ page }) => {
@@ -7499,7 +7500,5 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectNoAccessibilityViolations(page);
 });
-
-
 
 
