@@ -1065,24 +1065,6 @@
   cursor: grab;
 }
 
-/* What a dragged chip leaves behind on its own day. */
-/* The chip in the cell it is being dragged to. */
-.dragPreviewChip {
-  min-height: 21px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--event-color);
-  box-shadow: var(--shadow-overlay);
-  color: var(--event-foreground, #000);
-  font-size: 0.65rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
 /* The interval a drag has chosen, before quick create opens. */
 .timeGridSelection {
   container: timeGridSelection / size;
@@ -1610,6 +1592,22 @@
 .eventChipLabelVisible .eventTitle {
   overflow: visible;
   text-overflow: clip;
+}
+
+/* The event on its way somewhere: its own block, lifted off the page. It wears
+   .eventChip, so a bar being dragged previews in the shape it will land in —
+   one block per cell, flat where it continues into the next. */
+.dragPreviewChip {
+  z-index: 3;
+  box-shadow: var(--shadow-overlay);
+  pointer-events: none;
+}
+
+/* The line a draft or a move preview reserves in a cell it does not cover, so
+   every cell in the week row steps aside by the same amount and a bar crossing
+   out of the range stays on one line. */
+.daySlot {
+  min-height: var(--month-event-height, 21px);
 }
 
 .eventTime {

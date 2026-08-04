@@ -4588,7 +4588,161 @@ test("shows a dragged chip in the month cell it would land in", async ({
   await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
 });
 
+test("previews a dragged all-day event across the days it would land on", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
+  // Family holiday runs Friday 17 to Wednesday 22, so a day forward lands it on
+  // 18 to 23 and crosses the week edge on the way.
+  const bar = page.getByRole("button", { name: /Family holiday/ }).first();
+  await expect(bar).toBeVisible();
+  const from = (await bar.boundingBox())!;
+  const nextDay = page.locator('[data-day-key="2026-07-18"]');
+  const to = (await nextDay.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 10,
+  });
+
+  // Six days previewed, one block per cell — not a single chip under the pointer
+  // that would read as the event shrinking to a day.
+  await expect(page.locator("[data-drag-preview]")).toHaveCount(6);
+  for (const day of [18, 19, 20, 21, 22, 23]) {
+    await expect(
+      page.locator(`[data-day-key="2026-07-${day}"] [data-drag-preview]`),
+    ).toHaveCount(1);
+  }
+  await expect(
+    page.locator('[data-day-key="2026-07-17"] [data-drag-preview]'),
+  ).toHaveCount(0);
+
+  // Its own colour and its own shape: the family calendar's blue, titled where
+  // the range starts and blank where it is continuing.
+  await expect(nextDay.locator("[data-drag-preview]")).toContainText(
+    "Family holiday",
+  );
+  await expect(
+    page.locator('[data-day-key="2026-07-19"] [data-drag-preview]'),
+  ).toHaveText("");
+  expect(
+    await nextDay
+      .locator("[data-drag-preview]")
+      .evaluate((element) => getComputedStyle(element).backgroundColor),
+  ).toBe("rgb(54, 90, 146)");
+
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+});
+
+test("moves a bar grabbed by its middle to where the preview drew it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await mockAuthenticatedReads(page);
+  const writes: Array<{ end: string; start: string }> = [];
+  await page.route("**/api/v1/events", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as {
+        end: string;
+        start: string;
+      };
+      writes.push({ end: body.end, start: body.start });
+    }
+    return route.fallback();
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  // Family holiday runs 17 to 22. Grab it on the 19th and drop on the 21st:
+  // two days, so it lands on 19 to 24 — the drop day does not become the start.
+  const middle = page
+    .locator('[data-day-key="2026-07-19"]')
+    .getByRole("button", { name: /Family holiday/ });
+  await expect(middle).toBeVisible();
+  const from = (await middle.boundingBox())!;
+  const target = page.locator('[data-day-key="2026-07-21"]');
+  const to = (await target.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 10,
+  });
+
+  await expect(page.locator("[data-drag-preview]")).toHaveCount(6);
+  await expect(
+    page.locator('[data-day-key="2026-07-19"] [data-drag-preview]'),
+  ).toHaveCount(1);
+  await expect(
+    page.locator('[data-day-key="2026-07-24"] [data-drag-preview]'),
+  ).toHaveCount(1);
+  await expect(
+    page.locator('[data-day-key="2026-07-18"] [data-drag-preview]'),
+  ).toHaveCount(0);
+
+  await page.mouse.up();
+
+  // What was previewed is what was written: no jump on release.
+  await expect(page.locator('[class*="toastRegion"]')).toContainText(
+    "Event moved.",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes[0]!.start).toContain("2026-07-19");
+  expect(writes[0]!.end).toContain("2026-07-24");
+});
+
+test("steps a whole week aside for a dragged bar and leaves its ghost in line", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+  const bar = page.getByRole("button", { name: /Family holiday/ }).first();
+  await expect(bar).toBeVisible();
+  const from = (await bar.boundingBox())!;
+  const nextDay = page.locator('[data-day-key="2026-07-18"]');
+  const to = (await nextDay.boundingBox())!;
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 10,
+  });
+
+  // The bar it left behind keeps the line the preview carries on, so the two
+  // read as one thing rather than a step.
+  const ghost = page.locator('[data-day-key="2026-07-17"] [data-ghost]');
+  await expect(ghost).toHaveCount(1);
+  const ghostBox = (await ghost.boundingBox())!;
+  const previewBox = (await nextDay
+    .locator("[data-drag-preview]")
+    .boundingBox())!;
+  expect(Math.abs(ghostBox.y - previewBox.y)).toBeLessThanOrEqual(1);
+
+  // The week below is covered from Monday to Thursday only, yet every cell in it
+  // steps aside by the same line — otherwise a chip a day past the range would
+  // sit higher than its neighbours.
+  const covered = (await page
+    .locator('[data-day-key="2026-07-20"]')
+    .getByRole("button", { name: /Weekly review/ })
+    .boundingBox())!;
+  const beyond = (await page
+    .locator('[data-day-key="2026-07-24"]')
+    .getByRole("button", { name: /Client presentation/ })
+    .boundingBox())!;
+  expect(Math.abs(covered.y - beyond.y)).toBeLessThanOrEqual(1);
+
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+  await expect(page.locator("[data-ghost]")).toHaveCount(0);
+});
 
 test("parks a stuck agenda day below the year band, not under it", async ({
   page,
@@ -7418,3 +7572,4 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectNoAccessibilityViolations(page);
 });
+

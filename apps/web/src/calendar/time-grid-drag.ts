@@ -1,3 +1,4 @@
+import { shiftDayKey } from "./date-key";
 import type { TimeGeometry } from "./time-geometry";
 
 // The maths behind dragging and resizing an event, kept out of the DOM so the
@@ -121,6 +122,38 @@ export const DRAG_THRESHOLD_PX = 4;
  * line at 280 ms, so the muscle memory carries over.
  */
 export const TOUCH_HOLD_MS = 280;
+
+export type MovePreviewRange = {
+  /** First day the event would land on. */
+  from: string;
+  /** The run being left behind, where the ghost stays. Kept apart from the run
+      being landed on: a week row between the two holds neither, so testing the
+      hull would make half the month step aside for nothing. */
+  originFrom: string;
+  originTo: string;
+  /** Last day the event would land on. */
+  to: string;
+};
+
+/**
+ * Where a dragged event would land, as a day range, alongside the run it comes
+ * from. A month cell draws an all-day event as one block per cell, so the
+ * preview needs the whole run rather than the day under the pointer.
+ */
+export function movePreviewRange(
+  dayKeys: string[],
+  shift: number,
+): MovePreviewRange {
+  const originFrom = dayKeys[0]!;
+  const originTo = dayKeys[dayKeys.length - 1]!;
+
+  return {
+    from: shiftDayKey(originFrom, shift),
+    originFrom,
+    originTo,
+    to: shiftDayKey(originTo, shift),
+  };
+}
 
 export function exceedsDragThreshold(
   from: { x: number; y: number },

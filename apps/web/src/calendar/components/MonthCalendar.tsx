@@ -1,5 +1,6 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
+  eventDayKeys,
   getMonthGrid,
   segmentEventsByDay as bucketEventsByDay,
 } from "@musubi/calendar/layout";
@@ -11,7 +12,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
+import {
+  getEventRangeLabel,
+  getLongDateLabel,
+  getWeekdayLabels,
+} from "../calendar-math";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
@@ -20,6 +25,7 @@ import {
   eventHomeCalendarId,
 } from "../event-permissions";
 import { useLayerDismissGuard } from "../layer-focus";
+import { movePreviewRange } from "../time-grid-drag";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
@@ -92,12 +98,16 @@ type MonthCalendarProps = EventActionHandlers & {
   onMoveDraft?: (input: { date: string; endDate: string }) => void;
   onMonthChange: (offset: number) => void;
   /**
-   * Move an event to another day, keeping its time. Absent leaves the month
+   * Move an event by the days dragged, keeping its time. The origin is the day
+   * the block was grabbed on, not the event's first day: a multi-day bar
+   * grabbed in the middle keeps that offset instead of restarting on the drop
+   * day, which is also what the preview draws. Absent leaves the month
    * read-only for direct manipulation.
    */
   onMoveEventToDate?: (input: {
     dayKey: string;
     event: Event;
+    originDayKey: string;
   }) => Promise<unknown>;
   /**
    * Page presentation. When false, cells belonging to the neighbouring months
@@ -196,11 +206,32 @@ export function MonthCalendar({
   }, [draftDrag, pendingCreate, range]);
 
   const { begin: beginMonthDrag, drag } = useMonthDrag({
-    onCommit: async ({ dayKey: targetKey, event }) => {
-      await onMoveEventToDate?.({ dayKey: targetKey, event });
+    onCommit: async ({ dayKey: targetKey, event, originDayKey }) => {
+      await onMoveEventToDate?.({ dayKey: targetKey, event, originDayKey });
     },
     onError: eventActions.onNotice,
   });
+  /**
+   * Where the dragged event would land, as a day range — derived the way
+   * draftRange derives the pill's, so a move previews across the days it takes
+   * instead of collapsing into the cell under the pointer.
+   *
+   * A timed event lives on its start day whatever hours it spans, because that
+   * is the only cell segmentEventsByDay gives it, so it is the only cell to
+   * preview.
+   */
+  const previewRange = useMemo(
+    () =>
+      drag
+        ? movePreviewRange(
+            drag.event.isAllDay
+              ? eventDayKeys(drag.event)
+              : [drag.originDayKey],
+            dayDelta(drag.originDayKey, drag.dayKey),
+          )
+        : undefined,
+    [drag],
+  );
   const days = useMemo(
     () => providedDays ?? getMonthGrid(anchor, weekStartsOn),
     [anchor, providedDays, weekStartsOn],
@@ -349,12 +380,32 @@ export function MonthCalendar({
           } as CSSProperties
         }
       >
-        {weeks.map((week, weekIndex) => (
-          <div
-            className={styles.monthWeek}
-            role="row"
-            key={toDateKey(week[0]!)}
-          >
+        {weeks.map((week, weekIndex) => {
+          const weekFrom = toDateKey(week[0]!);
+          const weekTo = toDateKey(week[week.length - 1]!);
+          // A range in play reserves a line in every cell of the rows it
+          // touches, not only the ones it covers: an all-day event is one block
+          // per cell, so a cell that did not step aside would break the bar it
+          // carries a day short of the range.
+          // ponytail: the reserved line is not charged against eventCapacity —
+          // a full cell shows a sliver past its clip for the length of the
+          // gesture. Charging it would fold a chip into "+N more" mid-drag and
+          // put a hole in the very bar this is here to keep whole.
+          const rowHits = (from: string, to: string) =>
+            from <= weekTo && to >= weekFrom;
+          const draftRow = Boolean(
+            draftRange && rowHits(draftRange.from, draftRange.to),
+          );
+          // The two runs, not the span between them: a row that holds neither
+          // the preview nor the ghost has nothing to step aside for.
+          const previewRow = Boolean(
+            previewRange &&
+              (rowHits(previewRange.from, previewRange.to) ||
+                rowHits(previewRange.originFrom, previewRange.originTo)),
+          );
+
+          return (
+          <div className={styles.monthWeek} role="row" key={weekFrom}>
             {week.map((day, dayIndex) => {
               const index = weekIndex * 7 + dayIndex;
               const dateKey = toDateKey(day);
@@ -365,19 +416,45 @@ export function MonthCalendar({
               // A hidden adjacent day keeps its cell (so the month keeps its
               // height) but shows nothing and takes no clicks.
               const muted = !inMonth && !showAdjacentDays;
+              const inDraft = Boolean(
+                draftRange &&
+                  dateKey >= draftRange.from &&
+                  dateKey <= draftRange.to,
+              );
+              const inPreview = Boolean(
+                previewRange &&
+                  dateKey >= previewRange.from &&
+                  dateKey <= previewRange.to,
+              );
+              // The block being dragged is the exception to stepping aside: it
+              // moves into the line the row reserved and so keeps the height it
+              // had, which is what makes the ghost and the preview read as one
+              // bar. Where the preview covers it, the preview is that line.
+              const dragged =
+                previewRow && drag
+                  ? daySegments.find(
+                      (segment) => segment.event.id === drag.event.id,
+                    )
+                  : undefined;
+              const ordered = dragged
+                ? [
+                    ...(inPreview ? [] : [dragged]),
+                    ...daySegments.filter((segment) => segment !== dragged),
+                  ]
+                : daySegments;
               // If not every event fits, one measured slot belongs to the
               // "+N more" control. This mirrors the calendar pattern where the
               // month grid stays fixed and density yields to explicit overflow.
               const visibleCount =
-                daySegments.length > eventCapacity
+                ordered.length > eventCapacity
                   ? Math.max(0, eventCapacity - 1)
                   : eventCapacity;
               const visibleSegments = muted
                 ? []
-                : daySegments.slice(0, visibleCount);
+                : ordered.slice(0, visibleCount);
               const overflow = muted
                 ? 0
-                : daySegments.length - visibleSegments.length;
+                : ordered.length - visibleSegments.length;
 
               return (
                 <div
@@ -448,9 +525,7 @@ export function MonthCalendar({
                         all-day event it will become. Grabbing it moves the whole
                         range. It stays aria-hidden — the popover's own date
                         fields are the keyboard path to the same change. */}
-                    {draftRange &&
-                    dateKey >= draftRange.from &&
-                    dateKey <= draftRange.to ? (
+                    {inDraft && draftRange ? (
                       <div
                         aria-hidden="true"
                         className={styles.dayDraft}
@@ -500,6 +575,62 @@ export function MonthCalendar({
                           ? "New event"
                           : ""}
                       </div>
+                    ) : draftRow && !muted ? (
+                      <div aria-hidden="true" className={styles.daySlot} />
+                    ) : null}
+                    {/* The dragged event across the days it would land on, drawn
+                        the way the draft draws a range — one block per cell,
+                        broken only at the week edge — but in the event's own
+                        colour and shape, because this is a move and not a new
+                        event. It sits on the line the whole row reserved, over
+                        the ghost it is passing rather than pushing it down. */}
+                    {inPreview && !muted && drag && previewRange ? (
+                      <div
+                        aria-hidden="true"
+                        className={`${styles.eventChip} ${
+                          drag.event.isAllDay ? styles.eventChipAllDay : ""
+                        } ${
+                          dateKey > previewRange.from && dayIndex > 0
+                            ? styles.eventChipContinuesBefore
+                            : ""
+                        } ${
+                          dateKey < previewRange.to && dayIndex < 6
+                            ? styles.eventChipContinuesAfter
+                            : ""
+                        } ${
+                          dateKey > previewRange.from &&
+                          dayIndex > 0 &&
+                          dateKey < previewRange.to &&
+                          dayIndex < 6
+                            ? styles.eventChipContinuesBoth
+                            : ""
+                        } ${styles.dragPreviewChip}`}
+                        data-drag-preview=""
+                        style={
+                          {
+                            "--event-color": dragPreviewColor,
+                            "--event-foreground":
+                              getReadableEventTextColor(dragPreviewColor),
+                          } as CSSProperties
+                        }
+                      >
+                        {!drag.event.isAllDay ? (
+                          <span className={styles.eventTime}>
+                            {
+                              getEventRangeLabel(drag.event, timeFormat).split(
+                                " ",
+                              )[0]
+                            }
+                          </span>
+                        ) : null}
+                        <span className={styles.eventTitle}>
+                          {dateKey > previewRange.from && dayIndex > 0
+                            ? ""
+                            : drag.event.title}
+                        </span>
+                      </div>
+                    ) : dragged || muted ? null : previewRow ? (
+                      <div aria-hidden="true" className={styles.daySlot} />
                     ) : null}
                     {visibleSegments.map((segment) => (
                       <EventPopover
@@ -541,26 +672,6 @@ export function MonthCalendar({
                         {...eventActions}
                       />
                     ))}
-                    {/* The dragged event, in the cell it would land in: a month
-                        cell has no time axis, so "where" is the whole answer and
-                        the chip has to be visible to give it. Last in the cell,
-                        so multi-day bars already drawn keep their row. */}
-                    {drag && drag.dayKey === dateKey ? (
-                      <div
-                        aria-hidden="true"
-                        className={styles.dragPreviewChip}
-                        data-drag-preview=""
-                        style={
-                          {
-                            "--event-color": dragPreviewColor,
-                            "--event-foreground":
-                              getReadableEventTextColor(dragPreviewColor),
-                          } as CSSProperties
-                        }
-                      >
-                        {drag.event.title}
-                      </div>
-                    ) : null}
                     {overflow > 0 ? (
                       <Popover>
                         <PopoverTrigger asChild>
@@ -623,7 +734,8 @@ export function MonthCalendar({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

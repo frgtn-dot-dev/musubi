@@ -940,16 +940,14 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               showAdjacentDays={showAdjacentDays}
-              onMoveEventToDate={async ({ dayKey, event }) => {
+              onMoveEventToDate={async ({ dayKey, event, originDayKey }) => {
                 // Only the date changes; the time of day and length are kept.
-                const target = parseDateKey(dayKey);
+                // The shift is from the day grabbed, so a multi-day bar taken by
+                // its middle moves rather than restarting on the drop day —
+                // which is the move the preview drew.
                 const shift =
-                  target.getTime() -
-                  new Date(
-                    event.start.getFullYear(),
-                    event.start.getMonth(),
-                    event.start.getDate(),
-                  ).getTime();
+                  parseDateKey(dayKey).getTime() -
+                  parseDateKey(originDayKey).getTime();
                 await commitEventTimes({
                   end: new Date(event.end.getTime() + shift),
                   event,

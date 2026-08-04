@@ -4,6 +4,7 @@ import {
   autoScrollStep,
   dayIndexFromX,
   exceedsDragThreshold,
+  movePreviewRange,
   nextDragTimes,
 } from "./time-grid-drag";
 
@@ -123,5 +124,44 @@ describe("exceedsDragThreshold", () => {
   it("becomes a drag once the pointer travels", () => {
     expect(exceedsDragThreshold({ x: 10, y: 10 }, { x: 10, y: 20 })).toBe(true);
     expect(exceedsDragThreshold({ x: 10, y: 10 }, { x: 20, y: 10 })).toBe(true);
+  });
+});
+
+describe("movePreviewRange", () => {
+  it("carries the whole run to where it would land", () => {
+    expect(movePreviewRange(["2026-07-17", "2026-07-22"], 1)).toMatchObject({
+      from: "2026-07-18",
+      to: "2026-07-23",
+    });
+  });
+
+  it("reports the run it leaves apart from the run it takes", () => {
+    // Far apart on purpose: the rows in between hold neither, and only two
+    // separate runs can say so.
+    const away = movePreviewRange(["2026-07-02", "2026-07-03"], 21);
+    expect(away).toEqual({
+      from: "2026-07-23",
+      originFrom: "2026-07-02",
+      originTo: "2026-07-03",
+      to: "2026-07-24",
+    });
+  });
+
+  it("moves a single day across a month boundary", () => {
+    expect(movePreviewRange(["2026-07-31"], 1)).toEqual({
+      from: "2026-08-01",
+      originFrom: "2026-07-31",
+      originTo: "2026-07-31",
+      to: "2026-08-01",
+    });
+  });
+
+  it("leaves a range that has not moved where it is", () => {
+    expect(movePreviewRange(["2026-07-17", "2026-07-22"], 0)).toEqual({
+      from: "2026-07-17",
+      originFrom: "2026-07-17",
+      originTo: "2026-07-22",
+      to: "2026-07-22",
+    });
   });
 });
