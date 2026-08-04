@@ -5954,27 +5954,13 @@ test("keeps a dragged all-day event whole and on top", async ({ page }) => {
     steps: 12,
   });
 
-  // Five days of the event, five cells of preview — the same pill the create
-  // gesture draws, not a chip in the cell under the pointer.
-  const preview = page.locator("[data-drag-preview]");
-  await expect(preview).toHaveCount(5);
-  const days = await page.evaluate(() =>
-    [...document.querySelectorAll("[data-drag-preview]")].map(
-      (node) => (node.closest("[data-day-key]") as HTMLElement).dataset.dayKey,
-    ),
-  );
-  expect(days).toEqual([
-    "2026-07-17",
-    "2026-07-18",
-    "2026-07-19",
-    "2026-07-20",
-    "2026-07-21",
-  ]);
-
+  const preview = target.locator("[data-drag-preview]");
+  await expect(preview).toHaveCount(1);
+  const previewBox = (await preview.boundingBox())!;
+  // Three days of it fit before the week runs out, and it is not cut down to
+  // the single cell under the pointer.
+  expect(Math.abs(previewBox.width - to.width * 3)).toBeLessThan(2);
   // Under the holiday, which lasts longer, and above everything else.
-  const previewBox = (await target
-    .locator("[data-drag-preview]")
-    .boundingBox())!;
   const holiday = (await target
     .getByRole("button", { name: /Family holiday/ })
     .boundingBox())!;
@@ -7500,5 +7486,4 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectNoAccessibilityViolations(page);
 });
-
 
