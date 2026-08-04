@@ -5984,24 +5984,17 @@ test("keeps a dragged all-day event whole and on top", async ({ page }) => {
   await page.mouse.up();
 });
 
-test("makes room for a new draft across the whole week", async ({ page }) => {
+test("draws a new draft over the all-day blocks", async ({ page }) => {
   await mockAuthenticatedReads(page);
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-  /** Where the retreat bar sits in each cell of its week. */
-  const barTops = async () =>
-    page.evaluate(() =>
-      ["2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09"].map((key) => {
-        const node = document.querySelector(
-          `[data-day-key="${key}"] [data-event-id^="studio-retreat"]`,
-        );
-        return node ? Math.round(node.getBoundingClientRect().y) : null;
-      }),
+  const barTop = async () =>
+    Math.round(
+      (await page
+        .locator('[data-day-key="2026-07-08"] [data-event-id^="studio-retreat"]')
+        .boundingBox())!.y,
     );
-  await expect(
-    page.getByRole("button", { name: /Studio retreat/ }).first(),
-  ).toBeVisible();
-  const before = await barTops();
+  const before = await barTop();
 
   const start = (await page
     .locator('[data-day-key="2026-07-07"]')
@@ -6015,19 +6008,14 @@ test("makes room for a new draft across the whole week", async ({ page }) => {
   await page.mouse.up();
   await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 
-  // The bar moved down for the draft — in every cell of the week, including the
-  // ones the draft does not reach, so it stays one straight line.
-  const after = await barTops();
-  expect(after.filter((top) => top !== null)).toHaveLength(4);
-  expect(new Set(after).size).toBe(1);
-  expect(after[0]!).toBeGreaterThan(before[0]!);
-
-  // And the draft is the line it gave up.
+  // The range being drawn lies on the top line, over the all-day bar, and the
+  // bar has not moved to make room for it.
+  expect(await barTop()).toBe(before);
   const draft = (await page
-    .locator('[data-day-key="2026-07-08"] [class*="dayDraft"]')
+    .locator('[data-day-key="2026-07-08"] .dayDraft, [data-day-key="2026-07-08"] [class*="dayDraft"]')
     .first()
     .boundingBox())!;
-  expect(Math.round(draft.y)).toBe(before[0]!);
+  expect(Math.round(draft.y)).toBe(before);
 });
 
 test("stays inside its box with twenty calendars", async ({ page }) => {
@@ -7511,8 +7499,6 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectNoAccessibilityViolations(page);
 });
-
-
 
 
 

@@ -26,11 +26,6 @@ type EventPopoverProps = EventActionHandlers & {
   onBeginDrag?: (pointerEvent: React.PointerEvent<HTMLElement>) => void;
   /** A write for this event is in flight. */
   pending?: boolean;
-  /**
-   * Which line of the cell this block takes, counted from zero. Set while a
-   * drag is running, so the day's blocks step aside for it together.
-   */
-  row?: number;
   showLabel?: boolean;
   timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
@@ -45,7 +40,6 @@ export function EventPopover({
   ghost = false,
   onBeginDrag,
   pending = false,
-  row,
   showLabel = true,
   timeFormat,
   weekStartsOn,
@@ -86,7 +80,6 @@ export function EventPopover({
         onPointerDown={onBeginDrag}
         style={
           {
-            gridRow: row === undefined ? undefined : row + 1,
             "--event-color": eventColor,
             // A ghost is drawn as an outline over the page, not as a filled
             // block, so the event's own foreground would be white on a 18%
