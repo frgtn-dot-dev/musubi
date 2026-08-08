@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import {
   federatedStreamStats,
   startFederatedStreams,
@@ -9,13 +9,20 @@ import {
 // A Set per user — one user can stream from several devices at once, and a
 // single-Response map would let a new connection silently evict the old one.
 const clients = new Map<string, Set<Response>>();
+const HEARTBEAT_MS = 25_000;
 
 
 export async function handlerStream(req: Request, res: Response) {
+  // Authentication is asynchronous; the socket may already be gone by the time
+  // Express reaches this handler.
+  if (req.aborted || res.destroyed || res.writableEnded) return;
+
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
+  res.write("retry: 3000\n\n");
 
   const userID = req.user!.id;
   let connections = clients.get(userID);
@@ -33,13 +40,24 @@ export async function handlerStream(req: Request, res: Response) {
     void startFederatedStreams(userID, emitToUser);
   }
 
-  req.on('close', () => {
+  const heartbeat = setInterval(() => {
+    if (!res.destroyed && !res.writableEnded) res.write(": ping\n\n");
+  }, HEARTBEAT_MS);
+
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
     connections.delete(res);
     if (connections.size === 0) {
       clients.delete(userID);
       stopFederatedStreams(userID);
     }
-  });
+    if (!res.writableEnded) res.end();
+  };
+  req.on("aborted", close);
+  res.on("close", close);
 }
 
 // Adapter: the fan-in emits to a single user, the hub takes a member list.

@@ -124,22 +124,22 @@ export async function startFederatedStreams(
   if (subscriptions.has(userID)) return;
   // Claim the slot before awaiting so two near-simultaneous connections from the
   // same user can't both start a set of streams.
-  subscriptions.set(userID, []);
+  const running: Subscription[] = [];
+  subscriptions.set(userID, running);
 
   let connections: Awaited<ReturnType<typeof getMusubiAccounts>>;
   try {
     connections = await getMusubiAccounts(userID);
   } catch (error) {
-    subscriptions.delete(userID);
+    if (subscriptions.get(userID) === running) subscriptions.delete(userID);
     logger.warn("federation.stream.lookup_failed", {
       error: error instanceof Error ? error.message : String(error),
     });
     return;
   }
 
-  const running = subscriptions.get(userID);
-  // The user disconnected while we were loading.
-  if (!running) return;
+  // The user disconnected or started a newer generation while we were loading.
+  if (subscriptions.get(userID) !== running) return;
 
   for (const connection of connections) {
     const abort = new AbortController();
