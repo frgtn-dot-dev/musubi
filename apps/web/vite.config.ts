@@ -21,6 +21,9 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  ssr: {
+    noExternal: ["rrule"],
+  },
   server: {
     allowedHosts: ["3000.f-tuma.dev"],
     port: 3000,

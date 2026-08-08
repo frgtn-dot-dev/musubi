@@ -16,7 +16,13 @@ import {
   Repeat2,
   UsersRound,
 } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, useId, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  type RefCallback,
+  useId,
+  useState,
+} from "react";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
@@ -107,6 +113,7 @@ type EventEditorFormProps = {
   onError: (error: unknown, values: EventFormValues) => FormError;
   onSubmit: (values: EventFormValues) => Promise<void>;
   submitLabel: string;
+  submitRef?: RefCallback<HTMLButtonElement>;
   timeFormat: Settings["timeFormat"];
   weekStartsOn: Settings["weekStartsOn"];
 };
@@ -123,6 +130,7 @@ export function EventEditorForm({
   onError,
   onSubmit,
   submitLabel,
+  submitRef,
   timeFormat,
   weekStartsOn,
   when,
@@ -728,6 +736,7 @@ export function EventEditorForm({
         <Button
           disabled={offline}
           loading={saving}
+          ref={submitRef}
           title={
             offline ? "The server cannot be reached — nothing can be saved yet" : undefined
           }

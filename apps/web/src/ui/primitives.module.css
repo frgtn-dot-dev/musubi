@@ -1663,11 +1663,7 @@
 
 .timePickerOption[aria-selected="true"]:hover,
 .timePickerOption[aria-selected="true"][data-active] {
-  background: color-mix(
-    in srgb,
-    var(--control-fill) 88%,
-    var(--control-on-fill)
-  );
+  background: var(--control-fill);
 }
 
 .timePickerHint {

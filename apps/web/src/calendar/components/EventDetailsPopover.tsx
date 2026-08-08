@@ -165,6 +165,8 @@ export function EventDetailsPopover({
   const [pendingTargetId, setPendingTargetId] = useState<string>();
   const linkActionRef = useRef<HTMLButtonElement>(null);
   const shareActionRef = useRef<HTMLButtonElement>(null);
+  const [editSubmitElement, setEditSubmitElement] =
+    useState<HTMLButtonElement | null>(null);
   const forkActionRef = useRef<HTMLButtonElement>(null);
   const targetListRef = useRef<HTMLDivElement>(null);
   const [actionError, setActionError] = useState<{
@@ -237,7 +239,10 @@ export function EventDetailsPopover({
     });
   }, [targetAction]);
 
-  function handleOpenChange(nextOpen: boolean) {
+  function handleOpenChange(nextOpen: boolean, force = false) {
+    // Firefox and WebKit treat the nested recurrence dialog as an outside
+    // interaction. Keep the editor mounted until that dialog resolves.
+    if (!nextOpen && pendingEdit && !force) return;
     setOpen(nextOpen);
 
     if (!nextOpen) {
@@ -306,7 +311,7 @@ export function EventDetailsPopover({
         },
       );
       setPendingEdit(undefined);
-      handleOpenChange(false);
+      handleOpenChange(false, true);
     } catch (error) {
       setActionError(getEventMutationError(error, "update", homeCalendar));
     } finally {
@@ -538,6 +543,7 @@ export function EventDetailsPopover({
                   }
                   onSubmit={handleUpdate}
                   submitLabel="Save"
+                  submitRef={setEditSubmitElement}
                   timeFormat={timeFormat}
                   weekStartsOn={weekStartsOn}
                 />
@@ -659,16 +665,7 @@ export function EventDetailsPopover({
                         <DetailRow
                           icon={<Link2 size={18} strokeWidth={1.5} />}
                           label="Link"
-                          value={
-                            <a
-                              aria-label={`Open event link, ${getUrlLabel(event.url)}`}
-                              href={event.url}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              {getUrlLabel(event.url)}
-                            </a>
-                          }
+                          value={<ExternalEventLink url={event.url} />}
                         />
                       ) : null}
                     </dl>
@@ -990,7 +987,7 @@ export function EventDetailsPopover({
               setPendingEdit(undefined);
             }
           }}
-          returnFocus={triggerElement}
+          returnFocus={editSubmitElement}
           /* Only when the edit actually moved it: otherwise the dialog would
              announce a time change that never happened. */
           timeLabel={
@@ -1055,6 +1052,19 @@ export function EventDetailsPopover({
         ) : null}
       </ConfirmationDialog>
     </>
+  );
+}
+
+function ExternalEventLink({ url }: { url: string }) {
+  return (
+    <a
+      aria-label={`Open event link, ${getUrlLabel(url)}`}
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {getUrlLabel(url)}
+    </a>
   );
 }
 

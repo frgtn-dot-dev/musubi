@@ -622,6 +622,8 @@
   min-height: 0;
   overflow: auto;
   background: var(--surface-canvas);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .calendarAreaMonth {

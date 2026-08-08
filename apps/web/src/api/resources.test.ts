@@ -15,7 +15,10 @@ function response() {
 }
 
 it("requests only the active event range", async () => {
-  const fetch = vi.fn(async (_input: RequestInfo | URL) => response());
+  const fetch = vi.fn(async (input: RequestInfo | URL) => {
+    void input;
+    return response();
+  });
   vi.stubGlobal("fetch", fetch);
 
   await getEvents({
@@ -29,7 +32,10 @@ it("requests only the active event range", async () => {
 });
 
 it("keeps the compatibility full event read available", async () => {
-  const fetch = vi.fn(async (_input: RequestInfo | URL) => response());
+  const fetch = vi.fn(async (input: RequestInfo | URL) => {
+    void input;
+    return response();
+  });
   vi.stubGlobal("fetch", fetch);
 
   await getEvents();
