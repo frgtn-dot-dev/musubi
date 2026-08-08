@@ -29,6 +29,15 @@ function toRow(e: Event) {
   };
 }
 
+function parseArray<T>(value: string): T[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function fromRow(r: typeof eventsTable.$inferSelect): Event {
   return {
     id: r.id,
@@ -45,7 +54,7 @@ function fromRow(r: typeof eventsTable.$inferSelect): Event {
     organizer: r.organizer,
     recurrence: r.recurrence,
     url: r.url,
-    calendars: JSON.parse(r.calendars),
+    calendars: parseArray<string>(r.calendars),
     originCalendarID: r.originCalendarID,
   } as Event;
 }
@@ -56,7 +65,7 @@ export async function cacheGetAllEvents(): Promise<Event[]> {
 }
 
 function hasValidDates(e: Event): boolean {
-  return !isNaN(new Date(e.start).getTime()) && !isNaN(new Date(e.end).getTime());
+  return !Number.isNaN(new Date(e.start).getTime()) && !Number.isNaN(new Date(e.end).getTime());
 }
 
 export async function cacheUpsertEvents(events: Event[]) {
@@ -85,12 +94,13 @@ export async function cacheDeleteEvents(ids: string[]) {
 // Full sync is authoritative: replace the whole cache so any local drift
 // (e.g. stale ids accumulated from past resets) is dropped.
 export async function cacheReplaceAllEvents(events: Event[]) {
-  await db.delete(eventsTable);
-  const valid = events.filter((e) => e.id && hasValidDates(e));
-  const rows = valid.map(toRow);
-  for (let i = 0; i < rows.length; i += 200) {
-    await db.insert(eventsTable).values(rows.slice(i, i + 200));
-  }
+  const rows = events.filter((e) => e.id && hasValidDates(e)).map(toRow);
+  await db.transaction(async (tx) => {
+    await tx.delete(eventsTable);
+    for (let i = 0; i < rows.length; i += 200) {
+      await tx.insert(eventsTable).values(rows.slice(i, i + 200));
+    }
+  });
 }
 
 // Upsert one sync_meta row. drizzle's onConflictDoUpdate emits a bind that
@@ -110,7 +120,7 @@ export async function cacheSetCalendars(calendars: Calendar[]) {
 
 export async function cacheGetCalendars(): Promise<Calendar[]> {
   const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "calendars"));
-  return row ? JSON.parse(row.value) : [];
+  return row ? parseArray<Calendar>(row.value) : [];
 }
 
 export async function getLastSync(): Promise<string | null> {

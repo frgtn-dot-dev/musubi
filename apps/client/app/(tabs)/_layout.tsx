@@ -54,7 +54,8 @@ export default function TabLayout() {
         loadCalendars(cachedCals);
         loadEvents(cachedEvents);
         setDataReady(true);
-        await refresh();
+        // ponytail: authoritative launch snapshot; add link tombstones if a full home read becomes costly.
+        await refresh({ full: true });
       } catch (e: any) {
         console.error("Could not fetch initial data:", e?.message, e?.status, e);
       } finally {

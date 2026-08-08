@@ -7,13 +7,13 @@ import { cacheDeleteEvents, cacheUpsertEvents } from "@/services/eventsCache";
 type EventsStore = {
   events: Event[],
   addEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
-  localAddEvent: (event: Event) => void;
+  localAddEvent: (event: Event) => Promise<void>;
   loadEvents: (events: Event[]) => void;
   removeEvent: (event: Event, api: ReturnType<typeof useApi>, unlinkCalendarID?: string) => Promise<void>;
-  localRemoveEvent: (event: Event) => void;
+  localRemoveEvent: (event: Event) => Promise<void>;
   updateEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
-  localUpdateEvent: (event: Event) => void;
-  localRemoveCalendarEvents: (calendarID: string) => void;
+  localUpdateEvent: (event: Event) => Promise<void>;
+  localRemoveCalendarEvents: (calendarID: string) => Promise<void>;
   linkEvent: (event: Event, calendarID: string, api: ReturnType<typeof useApi>) => Promise<void>;
   forkEvent: (event: Event, calendarID: string, api: ReturnType<typeof useApi>) => Promise<void>;
 }
@@ -27,14 +27,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     }));
     cacheUpsertEvents([result]);
   },
-  localAddEvent: (event: Event) => {
-    if (get().events.some(e => e.id === event.id)) {
-      return;
-    }
-    set((state) => ({
-      events: [...state.events, event],
-    }));
-    cacheUpsertEvents([event]);
+  localAddEvent: async (event: Event) => {
+    if (get().events.some(e => e.id === event.id)) return;
+    set((state) => ({ events: [...state.events, event] }));
+    await cacheUpsertEvents([event]).catch((e) => console.warn("Event cache write failed:", e));
   },
   linkEvent: async (event, calendarID, api) => {
     const result = await api.linkEvent(event.id, calendarID);
@@ -68,12 +64,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     }));
     cacheDeleteEvents([event.id]);
   },
-  localRemoveEvent: (event) => {
+  localRemoveEvent: async (event) => {
     set((state) => ({
       events: [...state.events.filter(e => e.id !== event.id)],
     }));
-    cacheDeleteEvents([event.id]);
-    cancelEventNotification(event.id).catch(() => { });
+    await cacheDeleteEvents([event.id]).catch((e) => console.warn("Event cache delete failed:", e));
+    void cancelEventNotification(event.id).catch(() => { });
   },
   updateEvent: async (event, api) => {
     const result = await api.updateEvent(event);
@@ -82,17 +78,17 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     }));
     cacheUpsertEvents([result]);
   },
-  localUpdateEvent: (event) => {
+  localUpdateEvent: async (event) => {
     set((state) => ({
       events: [...state.events.filter(e => e.id !== event.id), event],
     }));
-    cacheUpsertEvents([event]);
-    syncEventNotification(event).catch(() => { }); // reschedule if a reminder exists
+    await cacheUpsertEvents([event]).catch((e) => console.warn("Event cache write failed:", e));
+    void syncEventNotification(event).catch(() => { }); // reschedule if a reminder exists
   },
   // Lost access to a calendar (kicked / calendar deleted): strip its link from
   // every event, drop events that lived only there — memory AND cache, so they
   // don't linger until sign-out.
-  localRemoveCalendarEvents: (calendarID) => {
+  localRemoveCalendarEvents: async (calendarID) => {
     const kept: Event[] = [], dropped: string[] = [], changed: Event[] = [];
     for (const e of get().events) {
       if (!e.calendars?.includes(calendarID)) { kept.push(e); continue; }
@@ -102,8 +98,8 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       kept.push(updated); changed.push(updated);
     }
     set({ events: kept });
-    cacheDeleteEvents(dropped);
-    cacheUpsertEvents(changed);
-    dropped.forEach(id => cancelEventNotification(id).catch(() => { }));
+    await cacheDeleteEvents(dropped).catch((e) => console.warn("Event cache delete failed:", e));
+    await cacheUpsertEvents(changed).catch((e) => console.warn("Event cache write failed:", e));
+    dropped.forEach(id => { void cancelEventNotification(id).catch(() => { }); });
   },
 }));
