@@ -1,6 +1,6 @@
 // Runnable self-check (no framework): `npx tsx lib/rrule.test.ts`.
 import assert from "node:assert";
-import { buildRRule, parseRRule, parseAdvanced, describeAdvanced, AdvancedRRuleConfig } from "./rrule";
+import { buildRRule, parseRRule, parseAdvanced, describeAdvanced, rawUnsupportedRecurrence, AdvancedRRuleConfig } from "./rrule";
 
 const wed = new Date(2026, 6, 8); // Wednesday
 
@@ -33,5 +33,15 @@ assert.equal(rt.count, 5);
 // describeAdvanced
 assert.equal(describeAdvanced(custom), 'Every 2 weeks on Mon, Wed, 5 times');
 assert.equal(describeAdvanced(parseAdvanced(null)), 'Every week on Mon');
+
+const unsupported =
+  'RRULE:FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1\nEXDATE:20260706T090000Z';
+assert.equal(rawUnsupportedRecurrence(unsupported), unsupported);
+assert.equal(
+  rawUnsupportedRecurrence(
+    'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO\nEXDATE:20260706T090000Z',
+  ),
+  null,
+);
 
 console.log("rrule.test.ts: all assertions passed");

@@ -1,5 +1,8 @@
 import { rrulestr } from 'rrule'
 import type { ICalendarEventBase } from './interfaces'
+import { joinRecurrence, splitRecurrence } from './rrule-editor'
+
+export { joinRecurrence, splitRecurrence } from './rrule-editor'
 
 // Parsing an RRULE string is the expensive part of expansion, and expansion
 // re-runs on every calendar swipe. Cache parsed rules so each unique
@@ -45,24 +48,6 @@ function getRule(recurrence: string, dtstart: Date): ParsedRule {
 
 const toICalUTC = (d: Date) =>
   d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
-
-/** Split stored recurrence into the bare RRULE and any extra lines (EXDATE, …). */
-export function splitRecurrence(recurrence: string | null | undefined): { rrule: string; extras: string[] } {
-  if (!recurrence) return { rrule: '', extras: [] }
-  const lines = recurrence.split('\n').map((l) => l.trim()).filter(Boolean)
-  const rruleLine = lines.find((l) => /^(RRULE:)?FREQ=/.test(l)) ?? ''
-  return {
-    rrule: rruleLine.replace(/^RRULE:/, ''),
-    extras: lines.filter((l) => l !== rruleLine),
-  }
-}
-
-/** Rebuild the stored string; multi-line output gets explicit prefixes. */
-export function joinRecurrence(rrule: string | null, extras: string[]): string | null {
-  if (!rrule) return null
-  if (extras.length === 0) return rrule
-  return [`RRULE:${rrule}`, ...extras].join('\n')
-}
 
 /** "Delete this event": exclude one occurrence via EXDATE. */
 export function excludeOccurrence(recurrence: string, occurrenceStart: Date): string {

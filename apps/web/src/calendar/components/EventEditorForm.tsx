@@ -22,7 +22,6 @@ import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { Select } from "~/ui/Select";
 import {
   minutesToTime,
   TimePicker,
@@ -40,6 +39,7 @@ import {
 } from "../federation-routing";
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { createTimeGeometry } from "../time-geometry";
+import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./styles/event-editor.module.css";
 
 type FormError = {
@@ -153,13 +153,6 @@ export function EventEditorForm({
   const homeServer = calendarServer(selectedCalendar);
   const calendarCount = values.calendarIds.length;
   const showCalendarList = expanded || calendarPickerOpen;
-  const customRecurrence = ![
-    "",
-    "FREQ=DAILY",
-    "FREQ=WEEKLY",
-    "FREQ=MONTHLY",
-    "FREQ=YEARLY",
-  ].includes(values.recurrence);
 
   function patch(next: Partial<EventFormValues>) {
     const merged = { ...values, ...next };
@@ -403,24 +396,9 @@ export function EventEditorForm({
             layout="inline"
             variant="section"
           >
-            <Select
+            <RecurrenceEditor
+              date={values.date}
               disabled={saving}
-              label="Repeat"
-              options={[
-                { label: "Does not repeat", value: "" },
-                { label: "Every day", value: "FREQ=DAILY" },
-                { label: "Every week", value: "FREQ=WEEKLY" },
-                { label: "Every month", value: "FREQ=MONTHLY" },
-                { label: "Every year", value: "FREQ=YEARLY" },
-                ...(customRecurrence
-                  ? [
-                      {
-                        label: "Custom recurrence",
-                        value: values.recurrence,
-                      },
-                    ]
-                  : []),
-              ]}
               value={values.recurrence}
               onChange={(recurrence) => patch({ recurrence })}
             />

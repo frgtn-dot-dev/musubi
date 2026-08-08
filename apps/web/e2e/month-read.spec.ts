@@ -918,6 +918,39 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
   ).toBeVisible();
 });
 
+test("creates an event with an exact custom recurrence rule", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(
+    "/app/p/my-calendar/event/new?date=2026-07-08&returnDate=2026-07-08&view=month",
+  );
+
+  await page.getByRole("textbox", { name: "Event title" }).fill("Rotation");
+  await page.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: "Custom recurrence" }).click();
+  await page
+    .getByRole("spinbutton", { name: "Recurrence interval" })
+    .fill("2");
+  await page.getByRole("button", { name: "Monday" }).click();
+  await page.getByRole("radio", { name: "After" }).click();
+  await page
+    .getByRole("spinbutton", { name: "Occurrence count" })
+    .fill("5");
+  await expectNoAccessibilityViolations(page);
+
+  const createRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/events",
+  );
+  await page.getByRole("button", { name: "Create" }).click();
+
+  expect((await createRequest).postDataJSON().recurrence).toBe(
+    "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5",
+  );
+});
+
 test("chooses an event date from the calendar picker", async ({ page }) => {
   await mockAuthenticatedReads(page);
   const writes: Array<{ start: string }> = [];
@@ -4944,7 +4977,14 @@ test("asks which occurrences an edited series applies to", async ({ page }) => {
 test("edits a whole series without moving it onto one date", async ({
   page,
 }) => {
-  await mockAuthenticatedReads(page);
+  const recurrence =
+    "RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;UNTIL=20261231T225959Z\nEXDATE:20260803T090000Z\nRDATE:20260804T090000Z";
+  await mockAuthenticatedReads(page, {
+    ...events,
+    events: events.events.map((item) =>
+      item.id === "weekly-review" ? { ...item, recurrence } : item,
+    ),
+  });
   const writes: Array<Record<string, unknown>> = [];
   await page.route("**/api/v1/events", async (route) => {
     if (route.request().method() === "PUT") {
@@ -4970,6 +5010,7 @@ test("edits a whole series without moving it onto one date", async ({
   );
   expect(writes).toHaveLength(1);
   expect(writes[0]!.title).toBe("Weekly retro");
+  expect(writes[0]!.recurrence).toBe(recurrence);
   // The master keeps its own first occurrence rather than jumping to the one
   // that was edited.
   expect(new Date(writes[0]!.start as string).toISOString()).toContain(

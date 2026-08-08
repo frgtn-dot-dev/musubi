@@ -79,6 +79,135 @@
   gap: var(--space-2);
 }
 
+.recurrenceEditor {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.customRecurrence,
+.unsupportedRecurrence {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-raised) 48%, transparent);
+}
+
+.recurrenceEvery {
+  display: grid;
+  grid-template-columns: auto 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.recurrenceEvery input,
+.recurrenceCount input {
+  width: 100%;
+  min-width: 0;
+  height: var(--compact-control-height);
+  box-sizing: border-box;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: center;
+}
+
+.recurrenceDays {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.recurrenceDays legend,
+.recurrenceEnds > span {
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.recurrenceDays > div {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(7, minmax(28px, 1fr));
+}
+
+.recurrenceDays button {
+  min-height: 30px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.recurrenceDays button[aria-pressed="true"] {
+  border-color: var(--control-fill);
+  background: var(--control-fill);
+  color: var(--control-on-fill);
+}
+
+.recurrenceDays button:focus-visible,
+.recurrenceEvery input:focus-visible,
+.recurrenceCount input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.recurrenceDays button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.recurrenceEnds {
+  display: grid;
+  grid-template-columns: auto minmax(130px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.recurrenceCount {
+  display: flex;
+  width: 88px;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+}
+
+.recurrenceCount input {
+  width: 52px;
+}
+
+.recurrenceSummary,
+.recurrenceUntil,
+.recurrenceHint,
+.unsupportedRecurrence p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-11);
+  line-height: 1.4;
+}
+
+.recurrenceSummary {
+  font-style: italic;
+}
+
+.recurrenceUntil,
+.unsupportedRecurrence {
+  border-left: 2px solid var(--accent-primary);
+}
+
+.unsupportedRecurrence > :last-child {
+  justify-self: start;
+}
+
 .calendarDot {
   width: 9px;
   height: 9px;
