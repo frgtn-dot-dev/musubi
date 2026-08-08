@@ -1,6 +1,6 @@
-import { and, eq, gt, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { db } from "..";
-import { NewEvent, calendarEvents, calendarMembers, eventUsers, events } from "../schema";
+import { type NewEvent, calendarEvents, calendarMembers, eventUsers, events } from "../schema";
 
 
 export async function createEvent(event: NewEvent, calendars: string[]) {
@@ -67,21 +67,30 @@ export async function updateEvent(event: Partial<NewEvent> & { id: string }) {
   return result;
 }
 
-export async function getUsersEvents(userID: string, since?: Date) {
-  // Flat join (drizzle can't filter a to-one nested relation).
-  //  - no `since`  → full active set (deletedAt IS NULL)
-  //  - with `since` → delta: everything changed since, INCLUDING soft-deleted
-  //    (so the client can drop them from its local cache)
-  const changeFilter = since !== undefined
+export async function getUsersEvents(
+  userID: string,
+  { since, start, end }: { since?: Date; start?: Date; end?: Date } = {},
+) {
+  // Delta reads include tombstones. Range reads keep every recurring master so
+  // occurrence expansion remains client-side, plus one-offs overlapping the window.
+  const eventFilter = since
     ? gt(events.updatedAt, since)
-    : isNull(events.deletedAt);
+    : and(
+        isNull(events.deletedAt),
+        start && end
+          ? or(
+              isNotNull(events.recurrence),
+              and(lt(events.start, end), gt(events.end, start)),
+            )
+          : undefined,
+      );
 
   return db
     .select({ event: events, calendarID: calendarEvents.calendarID })
     .from(calendarMembers)
     .innerJoin(calendarEvents, eq(calendarEvents.calendarID, calendarMembers.calendarID))
     .innerJoin(events, eq(events.id, calendarEvents.eventID))
-    .where(and(eq(calendarMembers.userID, userID), changeFilter));
+    .where(and(eq(calendarMembers.userID, userID), eventFilter));
 }
 
 // Attendees: name + avatar only — no emails (an event can span calendars whose

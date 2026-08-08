@@ -63,8 +63,17 @@ export function getCalendars(signal?: AbortSignal) {
   });
 }
 
-export function getEvents(signal?: AbortSignal) {
-  return apiRequest("/api/v1/events", {
+export function getEvents(
+  range?: { end: Date; start: Date },
+  signal?: AbortSignal,
+) {
+  const search = range
+    ? `?${new URLSearchParams({
+        start: range.start.toISOString(),
+        end: range.end.toISOString(),
+      })}`
+    : "";
+  return apiRequest(`/api/v1/events${search}`, {
     responseSchema: EventsResponseSchema,
     signal,
   });

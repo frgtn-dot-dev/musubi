@@ -1,11 +1,13 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
-import { NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
-import { BadRequestError, Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
+import { type NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
+import { BadRequestError, type Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
 import { assertCan, assertCanEditEvent, assertCanViewEvent, canDo } from "../permissions";
-import { optionalDateQuery, requireUUID } from "../request_validation";
+import { optionalDateQuery, optionalDateRangeQuery, requireUUID } from "../request_validation";
+
+const MAX_EVENT_RANGE_MS = 3 * 366 * 24 * 60 * 60 * 1000;
 
 function parseEvent(body: unknown, message: string): Event {
   let event: Event;
@@ -276,10 +278,23 @@ export async function handlerSetAttendance(req: Request, res: Response) {
   res.status(200).json(attendees);
 }
 
+export function parseEventReadQuery(query: Request["query"]) {
+  const since = optionalDateQuery(query.since, "since");
+  const range = optionalDateRangeQuery(
+    query.start,
+    query.end,
+    MAX_EVENT_RANGE_MS,
+  );
+  if (since && range) {
+    throw new BadRequestError("since cannot be combined with start and end.");
+  }
+  return { since, ...range };
+}
+
 export async function handlerGetEvents(req: Request, res: Response) {
-  const since = optionalDateQuery(req.query.since, "since");
+  const eventQuery = parseEventReadQuery(req.query);
   const serverTime = new Date().toISOString(); // client stores this as its next `since`
-  const rows = await getUsersEvents(req.user!.id!, since);
+  const rows = await getUsersEvents(req.user!.id!, eventQuery);
   const seen = new Map<string, Event>();
   const deletedIds = new Set<string>();
   for (const { event: dbEvent, calendarID } of rows) {

@@ -72,7 +72,8 @@ export function useWorkspaceQueries(
     // through the year. The stale range stays on screen, marked as refreshing,
     // until the new one arrives.
     placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => getEvents(signal),
+    queryFn: ({ signal }) =>
+      getEvents(view === "agenda" ? undefined : range, signal),
     queryKey: queryKeys.eventRange({
       // The current endpoint is user-scoped rather than calendar-filtered.
       // This sentinel is replaced by exact IDs when the range endpoint lands.

@@ -191,19 +191,24 @@ export function expandRecurringEvents<T extends ICalendarEventBase>(
         floating ? floatingRecurrence(event.recurrence) : event.recurrence,
         anchor,
       )
+      // Search back by one occurrence duration so an event that starts before
+      // the window but overlaps its leading edge is not lost.
+      const searchStart = new Date(rangeStart.getTime() - Math.max(0, duration))
       const occurrences = rule.between(
-        floating ? toFloating(rangeStart) : rangeStart,
+        floating ? toFloating(searchStart) : searchStart,
         floating ? toFloating(rangeEnd) : rangeEnd,
         true /* inclusive */,
       )
 
       for (const occurrence of occurrences) {
         const start = floating ? fromFloating(occurrence) : occurrence
+        const end = new Date(start.getTime() + duration)
+        if (end < rangeStart) continue
         result.push({
           ...event,
           id: `${event.id ?? 'r'}_${start.getTime()}`,
           start,
-          end: new Date(start.getTime() + duration),
+          end,
         })
       }
     } catch {

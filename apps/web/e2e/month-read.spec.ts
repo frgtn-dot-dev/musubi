@@ -353,11 +353,25 @@ async function mockAuthenticatedReads(
     calendarState = [...calendarState, imported];
     return respond(route, imported, 201);
   });
-  await page.route("**/api/v1/events", async (route) => {
+  await page.route(/\/api\/v1\/events(?:\?.*)?$/, async (route) => {
     const method = route.request().method();
 
     if (method === "GET") {
-      return respond(route, eventState);
+      const url = new URL(route.request().url());
+      const start = url.searchParams.get("start");
+      const end = url.searchParams.get("end");
+      if (!start || !end) return respond(route, eventState);
+      const startTime = new Date(start).getTime();
+      const endTime = new Date(end).getTime();
+      return respond(route, {
+        ...eventState,
+        events: eventState.events.filter(
+          (event) =>
+            event.recurrence ||
+            (new Date(event.start).getTime() < endTime &&
+              new Date(event.end).getTime() > startTime),
+        ),
+      });
     }
 
     const body = route.request().postDataJSON() as (typeof events.events)[number];
@@ -5089,7 +5103,7 @@ test("brings the calendar forward when the live stream comes back", async ({
 }) => {
   await mockAuthenticatedReads(page);
   let eventReads = 0;
-  await page.route("**/api/v1/events", (route) => {
+  await page.route(/\/api\/v1\/events(?:\?.*)?$/, (route) => {
     if (route.request().method() === "GET") eventReads += 1;
     return route.fallback();
   });

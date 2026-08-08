@@ -103,6 +103,17 @@ assert.deepEqual(
   ['2026-03-27 09:00', '2026-03-28 09:00', '2026-03-29 09:00', '2026-03-30 09:00'],
 )
 
+// An occurrence starting before the window still belongs when its end overlaps it.
+assert.deepEqual(
+  clocksIn(
+    'UTC',
+    { end: '2026-03-25T11:00:00', start: '2026-03-25T09:00:00' },
+    '2026-03-27T10:00:00',
+    '2026-03-27T10:30:00',
+  ),
+  ['2026-03-27 09:00'],
+)
+
 // A half-hour offset, because an hour of slack hides bugs an odd offset exposes.
 assert.deepEqual(
   clocksIn(
