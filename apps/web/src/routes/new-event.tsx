@@ -1,6 +1,6 @@
 import type { Event } from "@musubi/types";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Copy, Info } from "lucide-react";
 import { useState } from "react";
 import { createEvent, getCalendars, publishEvent } from "~/api/resources";
@@ -240,12 +240,14 @@ function NewEventRoute() {
                 this page is read by people who have never seen the app. */}
             <div className={styles.field}>
               <span className={styles.fieldLabel}>Date</span>
-              <DatePicker
-                label="Date"
-                value={draft.date}
-                weekStartsOn="monday"
-                onChange={(date) => setDraft({ ...draft, date })}
-              />
+              <ClientOnly>
+                <DatePicker
+                  label="Date"
+                  value={draft.date}
+                  weekStartsOn="monday"
+                  onChange={(date) => setDraft({ ...draft, date })}
+                />
+              </ClientOnly>
             </div>
 
             <div className={styles.times}>
@@ -330,8 +332,8 @@ function NewEventRoute() {
       </article>
 
       <p className={styles.footer}>
-        <a href="/">Open your calendar</a> ·{" "}
-        <a href="/find-a-time">Find a time that suits everyone</a>
+        <Link to="/">Open your calendar</Link> ·{" "}
+        <Link to="/find-a-time">Find a time that suits everyone</Link>
       </p>
     </main>
   );

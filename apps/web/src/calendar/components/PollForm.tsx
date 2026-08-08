@@ -1,6 +1,7 @@
 import type { Settings } from "@musubi/types";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
+import { ClientOnly } from "@tanstack/react-router";
 import { toDateKey } from "../date-key";
 import { PollDayPicker } from "./PollDayPicker";
 import { Button } from "~/ui/Button";
@@ -92,11 +93,13 @@ export function PollForm({
 
       <div className={styles.field}>
         <span className={styles.fieldLabel}>Which days</span>
-        <PollDayPicker
-          onChange={setDays}
-          selected={days}
-          weekStartsOn={weekStartsOn}
-        />
+        <ClientOnly>
+          <PollDayPicker
+            onChange={setDays}
+            selected={days}
+            weekStartsOn={weekStartsOn}
+          />
+        </ClientOnly>
         {days.length > 0 ? (
           <button
             className={styles.clear}

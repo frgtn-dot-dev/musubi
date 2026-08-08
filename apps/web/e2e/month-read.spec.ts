@@ -270,6 +270,19 @@ async function expectNoAccessibilityViolations(page: Page) {
   expect(results.violations).toEqual([]);
 }
 
+function recordHydrationErrors(page: Page) {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /Hydration failed|hydrated but/.test(message.text())
+    ) {
+      errors.push(message.text());
+    }
+  });
+  return errors;
+}
+
 function pragueTime(value: string) {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -7283,6 +7296,7 @@ test("picks poll days by dragging a run and by taking a weekday column", async (
 test("makes an event page from the public page with no account", async ({
   page,
 }) => {
+  const hydrationErrors = recordHydrationErrors(page);
   let signedIn = false;
   let created: { calendars: string[]; start: string; title: string } | undefined;
   let published: { mode: string; name?: string } | undefined;
@@ -7366,11 +7380,13 @@ test("makes an event page from the public page with no account", async ({
     title: "Studio opening",
   });
   expect(published).toMatchObject({ mode: "link", name: "Zoe" });
+  expect(hydrationErrors).toEqual([]);
 
   await expectNoAccessibilityViolations(page);
 });
 
 test("makes a poll from the public page with no account", async ({ page }) => {
+  const hydrationErrors = recordHydrationErrors(page);
   let signedIn = false;
   let created: { name?: string; slots: Array<{ start: string }> } | undefined;
   await page.route("**/api/auth/get-session", (route) =>
@@ -7444,6 +7460,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
   // to was made a second ago and has none.
   expect(created).toMatchObject({ durationMinutes: 45, name: "Zoe" });
   expect(created!.slots).toHaveLength(2);
+  expect(hydrationErrors).toEqual([]);
 
   await expectNoAccessibilityViolations(page);
 });
