@@ -50,7 +50,13 @@ export function useConnectToEventStream() {
 
     const handleMessage = (event: { data?: string | null }) => {
       if (!event.data) return;
-      const data = JSON.parse(event.data);
+      let data: any;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        console.warn("Ignoring malformed SSE message.");
+        return;
+      }
 
       const toEvent = (p: any) => ({ ...p, start: new Date(p.start), end: new Date(p.end) });
 
@@ -76,6 +82,10 @@ export function useConnectToEventStream() {
           break;
         case "external_sync":
           silentRefresh();
+          break;
+        case "settings_updated":
+          refreshRef.current({ settingsOnly: true }).catch((e) =>
+            console.warn("Settings refresh failed:", e));
           break;
         // A connected Musubi server changed something; the home server relays it
         // (ADR-005). Remote rows are pulled per server, so refresh rather than

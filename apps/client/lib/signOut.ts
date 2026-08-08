@@ -6,12 +6,14 @@ import { cacheClearAll } from "@/services/eventsCache";
 import { clearAllEventNotifications } from "@/services/notifications";
 import { resetOnboardingRoute } from "@/lib/onboardingState";
 import { clearAgendaWidget } from "@/services/agendaWidget";
+import { resetSettingsSync } from "@/services/settingsSync";
 
 // THE sign-out sequence — Settings (user action), account delete and session
 // expiry recovery all route through here so no path forgets a cleanup step:
 // stores → launcher widget → SQLite mirror → scheduled notifications → native
 // Google session → Better Auth session → welcome screen.
 export async function signOutAndReset(authClient: { signOut: () => Promise<unknown> }) {
+  resetSettingsSync();
   useCalendarsStore.getState().loadCalendars([]);
   useEventsStore.getState().loadEvents([]);
   resetOnboardingRoute(); // next account starts onboarding at step 1, not mid-flow

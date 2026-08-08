@@ -1,16 +1,15 @@
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useSettingsStore } from "@/store/useSettingsStore";
 import { reconcileEventNotifications } from "@/services/notifications";
 import { syncFederatedAccounts } from "@/services/federation";
 import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
+import { refreshSettingsDocument } from "@/services/settingsSync";
 
 export function useRefreshData() {
   const api = useApi();
   const { loadCalendars } = useCalendarsStore();
   const { loadEvents } = useEventsStore();
-  const { loadSettings } = useSettingsStore();
 
   // providerSync=false: skip triggering the server-side provider sync — used by
   // the SSE "external_sync" handler, where the server JUST synced (re-triggering
@@ -18,16 +17,17 @@ export function useRefreshData() {
   // full=true forces a full (non-delta) event sync — needed after JOINING a
   // calendar (invite accept): its existing events predate `lastSync`, so a delta
   // would never pull them (you'd only see them after a cache-clearing reinstall).
-  return async (opts?: { providerSync?: boolean; full?: boolean }) => {
+  return async (opts?: { providerSync?: boolean; full?: boolean; settingsOnly?: boolean }) => {
     // Load settings FIRST and independently: the onboarding gate (and theme)
     // depend on `onboarded` arriving. It must not be held hostage to the
     // events/calendar pipeline below — a throw there used to leave `onboarded`
     // at its default (true), silently skipping onboarding for new users.
     try {
-      loadSettings(await api.getSettings());
+      await refreshSettingsDocument(api);
     } catch (e) {
       console.error("Settings load failed:", e);
     }
+    if (opts?.settingsOnly) return;
 
     if (opts?.providerSync !== false) {
       // trigger server-side provider sync first, so its imported/changed events

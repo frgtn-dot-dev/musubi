@@ -1,7 +1,7 @@
 import { SettingRowAction, SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
-import { CalendarView, Settings } from "@musubi/types";
+import { CalendarView, SettingsPatch } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -18,6 +18,7 @@ import { signOutAndReset } from "@/lib/signOut";
 import { showToast } from "@/components/ui/Toast";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import Constants from "expo-constants";
+import { queueSettingsPatch } from "@/services/settingsSync";
 
 const SUPPORT_EMAIL = "hello@frgtn.dev";
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -38,7 +39,6 @@ export default function SettingsTab() {
     dateFormat, setDateFormat,
     theme, setTheme,
     tabBarLabels, setTabBarLabels,
-    onboarded,
   } = useSettingsStore();
 
   const [confrimDeleteVisible, setConfirmDeleteVisible] = useState(false);
@@ -162,11 +162,8 @@ export default function SettingsTab() {
 
   // Autosave: settings persist the moment they change — no Save button to forget.
   // `patch` carries the just-changed value (store reads here would be stale).
-  const save = (patch: Partial<Settings>) => {
-    api.saveSettings({
-      showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn, timeFormat, dateFormat, theme, onboarded, tabBarLabels,
-      ...patch,
-    }).catch((e) => {
+  const save = (patch: SettingsPatch) => {
+    queueSettingsPatch(api, patch).catch((e) => {
       warn();
       console.error("Settings save failed:", e);
       showToast({ message: userFacingError(e, "This setting could not be saved.") });

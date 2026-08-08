@@ -1,4 +1,4 @@
-import { Calendar, CalendarInvitePreview, Event, Invite, Settings, GoogleCheck } from "@musubi/types";
+import { Calendar, CalendarInvitePreview, Event, Invite, GoogleCheck, PatchSettingsRequest, SettingsDocument } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
@@ -13,6 +13,13 @@ const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[
 
 // Names + avatars only — the API deliberately sends no attendee emails.
 export type Attendee = { id: string; name: string; image?: string | null };
+
+export class SettingsConflictError extends Error {
+  constructor() {
+    super("Settings changed on another device.");
+    this.name = "SettingsConflictError";
+  }
+}
 
 // Every endpoint below did the same check inline; keep it in one place.
 // `asserts error is null` preserves the narrowing the inline `if (error) throw`
@@ -473,8 +480,8 @@ export function useApi() {
       return true;
     },
 
-    async getSettings() {
-      const { data, error } = await authClient.$fetch<Settings>(`${apiUrl}/api/${apiVersion}/users/settings`, {
+    async getSettingsDocument() {
+      const { data, error } = await authClient.$fetch<SettingsDocument>(`${apiUrl}/api/${apiVersion}/users/settings/document`, {
         method: "GET",
       });
 
@@ -483,18 +490,19 @@ export function useApi() {
       return data;
     },
 
-    async saveSettings(settings: Settings) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/settings`, {
-        method: "PUT",
+    async patchSettings(request: PatchSettingsRequest) {
+      const { data, error } = await authClient.$fetch<SettingsDocument>(`${apiUrl}/api/${apiVersion}/users/me/settings`, {
+        method: "PATCH",
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(request),
       });
 
+      if (Number(error?.status) === 409) throw new SettingsConflictError();
       throwOnError(error);
 
-      return true;
+      return data;
     },
 
     async deleteUser() {

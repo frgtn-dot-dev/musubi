@@ -18,6 +18,7 @@ import { confirm } from "@/lib/confirm";
 import { warn } from "@/lib/haptics";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
+import { queueSettingsPatch } from "@/services/settingsSync";
 
 
 export default function CalendarsTab() {
@@ -103,19 +104,9 @@ export default function CalendarsTab() {
   // Persist a new drag order: local store first (instant), then the server.
   const persistOrder = (ids: string[]) => {
     setCalendarOrder(ids);
-    api.saveSettings({
-      showKanji: settings.showKanji,
-      notificationsOnByDefault: settings.notificationsOnByDefault,
-      defaultCalendarView: settings.defaultCalendarView,
-      weekStartsOn: settings.weekStartsOn,
-      timeFormat: settings.timeFormat,
-      dateFormat: settings.dateFormat,
-      theme: settings.theme,
-      onboarded: settings.onboarded,
-      calendarOrder: ids,
-    }).catch((e) => {
+    queueSettingsPatch(api, { calendarOrder: ids }).catch((e) => {
       console.error("Order save failed:", e);
-      showToast({ message: userFacingError(e, "Calendar order will sync later.") });
+      showToast({ message: userFacingError(e, "Calendar order could not be saved.") });
     });
   };
 
