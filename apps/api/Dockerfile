@@ -31,6 +31,9 @@ ENV NODE_ENV=production
 
 ARG API_SERVER_PORT=7531
 EXPOSE ${API_SERVER_PORT} 9464
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.API_SERVER_PORT||7531)+'/api/v1/server/ok').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+USER node
 
 # Invoke tsx directly (no pnpm/Corepack or network access at boot).
 CMD ["sh", "-c", "node_modules/.bin/tsx node_modules/@musubi/db/src/migrate.ts && node_modules/.bin/tsx src/index.ts"]

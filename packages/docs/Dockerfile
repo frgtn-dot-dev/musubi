@@ -20,4 +20,7 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=4321
 EXPOSE 4321
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4321)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+USER node
 CMD ["node", "./dist/server/entry.mjs"]

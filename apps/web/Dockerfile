@@ -25,6 +25,9 @@ ENV NODE_ENV=production
 ARG PORT=3000
 ENV PORT=${PORT}
 EXPOSE ${PORT}
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.NITRO_PORT||process.env.PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+USER node
 
 # No API_URL: the browser calls /api/* on the same public origin, which the
 # reverse proxy routes to the API. This container never talks to the API itself.
