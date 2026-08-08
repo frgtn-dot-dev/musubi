@@ -23,7 +23,11 @@ import {
   useCallback,
   useRef,
   useState,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
+import { Button } from "~/ui/Button";
+import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { StaleBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
@@ -51,6 +55,9 @@ import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
   newPageConfig,
+  pageConfigEquals,
+  toggleCalendarVisibility,
+  viewConfigFor,
   type SavePageResult,
 } from "../page-editor";
 import type { CalendarViewId } from "../view-registry";
@@ -101,7 +108,7 @@ type WorkspaceProps = {
     calendarId: string;
     eventId: string;
   }) => Promise<Event>;
-  onPageChange: (pageId: string) => void;
+  onPageChange: (pageId: string, view: CalendarViewId) => void;
   onCreatePage?: (request: CreatePageRequest) => Promise<PageDocument>;
   onDeletePage?: (id: string) => Promise<unknown>;
   onReorderPages?: (pageIds: string[]) => Promise<unknown>;
@@ -112,6 +119,9 @@ type WorkspaceProps = {
     id: string;
     name: string;
   }) => Promise<SavePageResult>;
+  /** Production owns drafts above route loading/redirect gates. */
+  pageDrafts?: Map<string, PageWorkingDraft>;
+  onPageDraftsChange?: Dispatch<SetStateAction<Map<string, PageWorkingDraft>>>;
   onExportCalendar?: (
     calendarId: string,
     connectionId?: string,
@@ -161,6 +171,12 @@ type WorkspaceProps = {
   pages: PageDocument[];
   settings: Settings;
   user: Pick<User, "email" | "id" | "image" | "name">;
+};
+
+export type PageWorkingDraft = {
+  config: PageConfigV1;
+  conflict: boolean;
+  persisted: PageDocument;
 };
 
 type CreateIntent = {
@@ -255,6 +271,8 @@ export function Workspace({
   onSetDefaultPage = unavailablePageDefault,
   onPatchSettings = unavailableSettings,
   onSavePage = unavailablePageSave,
+  pageDrafts: controlledPageDrafts,
+  onPageDraftsChange,
   onRemoveEvent,
   onOpenFullEditor,
   onSetAttendance = unavailableAttendance,
@@ -275,10 +293,16 @@ export function Workspace({
   // there — as a sideways-scrolling strip, like the native client's filter bar.
   const compact = useCompactViewport();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Sidebar calendar toggles are a temporary local filter: a set of ids flipped
-  // from what the Page config resolves to. Never saved — the Page's own
-  // visibility is edited explicitly in its settings dialog.
-  const [tempToggles, setTempToggles] = useState<Set<string>>(() => new Set());
+  // Direct renders (tests/stories) can own drafts locally. The route passes the
+  // production state so data gates and canonical redirects cannot erase it.
+  const [localPageDrafts, setLocalPageDrafts] = useState<
+    Map<string, PageWorkingDraft>
+  >(() => new Map());
+  const pageDrafts = controlledPageDrafts ?? localPageDrafts;
+  const setPageDrafts = onPageDraftsChange ?? setLocalPageDrafts;
+  const [savingPageId, setSavingPageId] = useState<string>();
+  const [discardPageDraftOpen, setDiscardPageDraftOpen] = useState(false);
+  const discardPageDraftButtonRef = useRef<HTMLButtonElement>(null);
   // The page whose settings dialog is open. Any page in the sidebar, not just
   // the active one.
   const [settingsPage, setSettingsPage] = useState<PageDocument>();
@@ -455,36 +479,39 @@ export function Workspace({
     [eventMasters],
   );
 
+  useEffect(() => {
+    const pageIds = new Set(pages.map((page) => page.id));
+    setPageDrafts((current) => {
+      if ([...current.keys()].every((id) => pageIds.has(id))) return current;
+      return new Map([...current].filter(([id]) => pageIds.has(id)));
+    });
+  }, [pages, setPageDrafts]);
+
   const activePage = useMemo(
     () => pages.find((page) => page.id === pageId) ?? pages[0],
     [pages, pageId],
   );
+  const activeDraft = pageDrafts.get(activePage.id);
+  const workingConfig = activeDraft?.config ?? activePage.config;
+  const activeDraftConflict = Boolean(
+    activeDraft &&
+      (activeDraft.conflict ||
+        activePage.revision !== activeDraft.persisted.revision),
+  );
 
-  // The saved Page visibility with the session's temporary toggles on top.
-  const visibleCalendarIds = useMemo(() => {
-    const visible = new Set(
-      calendarIdsForVisibility(activePage.config.calendarVisibility, calendars),
+  const visibleCalendarIds = useMemo(
+    () => calendarIdsForVisibility(workingConfig.calendarVisibility, calendars),
+    [calendars, workingConfig.calendarVisibility],
     );
-    for (const calendarId of tempToggles) {
-      if (visible.has(calendarId)) {
-        visible.delete(calendarId);
-      } else {
-        visible.add(calendarId);
-      }
-    }
-    return calendars
-      .map((calendar) => calendar.id)
-      .filter((calendarId) => visible.has(calendarId));
-  }, [activePage, calendars, tempToggles]);
 
   // Density lives in the Page config, so "this page shows time grids compactly"
   // is saved with the page rather than being a device preference.
   const geometry = useMemo(
-    () => createTimeGeometry(densityFromPageConfig(activePage.config)),
-    [activePage.config],
+    () => createTimeGeometry(densityFromPageConfig(workingConfig)),
+    [workingConfig],
   );
 
-  const presentationView = activePage.config.view;
+  const presentationView = workingConfig.view;
   const showWeekend =
     "weekend" in presentationView ? presentationView.weekend : true;
   const showAdjacentDays =
@@ -509,9 +536,6 @@ export function Workspace({
   }, [anchor, multiWeek, settings.weekStartsOn, weeks]);
 
   const pageTitle = activePage.name;
-
-  // The route remounts this component per page (key={pageId}), so switching
-  // pages resets the temporary read filter for free.
 
   const visibleEvents = useMemo(() => {
     const normalizedQuery = deferredSearchQuery.trim().toLocaleLowerCase();
@@ -549,6 +573,146 @@ export function Workspace({
 
   function changePeriod(offset: number) {
     onDateChange(toDateKey(view.step(anchor, offset, { weeks })));
+  }
+
+  function updatePageDraft(
+    page: PageDocument,
+    update: (config: PageConfigV1) => PageConfigV1,
+  ) {
+    if (savingPageId === page.id) return;
+    setPageDrafts((current) => {
+      const existing = current.get(page.id);
+      const persisted = existing?.persisted ?? page;
+      const config = update(existing?.config ?? page.config);
+      const next = new Map(current);
+
+      if (pageConfigEquals(config, persisted.config)) {
+        next.delete(page.id);
+      } else {
+        next.set(page.id, {
+          config,
+          conflict: existing?.conflict ?? false,
+          persisted,
+        });
+      }
+      return next;
+    });
+  }
+
+  function removePageDraft(id: string, expected?: PageWorkingDraft) {
+    setPageDrafts((current) => {
+      if (!current.has(id) || (expected && current.get(id) !== expected)) {
+        return current;
+      }
+      const next = new Map(current);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleViewChange(nextView: CalendarViewId) {
+    if (savingPageId === activePage.id) return;
+    updatePageDraft(activePage, (config) => ({
+      ...config,
+      view: viewConfigFor(config, nextView),
+    }));
+    onViewChange(nextView);
+  }
+
+  function handlePageChange(nextPageId: string, createdView?: CalendarViewId) {
+    const page = pages.find((candidate) => candidate.id === nextPageId);
+    const view =
+      createdView ??
+      pageDrafts.get(nextPageId)?.config.view.id ??
+      page?.config.view.id;
+    if (view) onPageChange(nextPageId, view);
+  }
+
+  function discardActivePageDraft() {
+    if (!activeDraft) return;
+    setDiscardPageDraftOpen(false);
+    removePageDraft(activePage.id);
+    if (activeView !== activePage.config.view.id) {
+      onViewChange(activePage.config.view.id);
+    }
+    notify("Page changes discarded.");
+  }
+
+  async function saveActivePageDraft() {
+    if (!activeDraft || activeDraftConflict || savingPageId || offline) return;
+    setSavingPageId(activePage.id);
+    try {
+      const result = await onSavePage({
+        baseRevision: activeDraft.persisted.revision,
+        config: activeDraft.config,
+        id: activePage.id,
+        name: activeDraft.persisted.name,
+      });
+      if (result.status === "conflict") {
+        setPageDrafts((current) => {
+          const draft = current.get(activePage.id);
+          if (!draft) return current;
+          return new Map(current).set(activePage.id, {
+            ...draft,
+            conflict: true,
+          });
+        });
+        notify("This Page changed elsewhere. Your draft is still here.", {
+          tone: "error",
+        });
+        return;
+      }
+
+      setPageDrafts((current) => {
+        const latest = current.get(activePage.id);
+        if (!latest) return current;
+        const next = new Map(current);
+        if (
+          latest === activeDraft ||
+          pageConfigEquals(latest.config, result.page.config)
+        ) {
+          next.delete(activePage.id);
+        } else {
+          next.set(activePage.id, {
+            config: latest.config,
+            conflict: false,
+            persisted: result.page,
+          });
+        }
+        return next;
+      });
+      notify("Page saved.");
+    } catch {
+      notify(
+        "This Page could not be saved. Your draft is still here — try again.",
+        {
+          tone: "error",
+        },
+      );
+    } finally {
+      setSavingPageId(undefined);
+    }
+  }
+
+  async function saveActiveDraftAsCopy() {
+    if (!activeDraft || savingPageId) return;
+    const submittedDraft = activeDraft;
+    setSavingPageId(activePage.id);
+    try {
+      const created = await onCreatePage({
+        config: submittedDraft.config,
+        name: `${submittedDraft.persisted.name} copy`,
+      });
+      removePageDraft(activePage.id, submittedDraft);
+      notify("Saved as a new page.");
+      onPageChange(created.id, created.config.view.id);
+    } catch {
+      notify("The new Page could not be created. Your draft is still here.", {
+        tone: "error",
+      });
+    } finally {
+      setSavingPageId(undefined);
+    }
   }
 
   function openCreateAtDate(
@@ -648,9 +812,10 @@ export function Workspace({
         event.preventDefault();
         changePeriod(-1);
         return;
-      // Saving belongs to the page settings dialog, which owns the draft and
-      // traps focus while it is open.
       case "save":
+        if (!activeDraft) return;
+        event.preventDefault();
+        void saveActivePageDraft();
         return;
       case "search":
         event.preventDefault();
@@ -662,7 +827,7 @@ export function Workspace({
         return;
       case "view":
         event.preventDefault();
-        onViewChange(command.view);
+        handleViewChange(command.view);
         return;
     }
   }
@@ -681,16 +846,25 @@ export function Workspace({
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
+  useEffect(() => {
+    if (pageDrafts.size === 0) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [pageDrafts.size]);
+
   function handleToggleCalendar(calendarId: string) {
-    setTempToggles((current) => {
-      const next = new Set(current);
-      if (next.has(calendarId)) {
-        next.delete(calendarId);
-      } else {
-        next.add(calendarId);
-      }
-      return next;
-    });
+    updatePageDraft(activePage, (config) => ({
+      ...config,
+      calendarVisibility: toggleCalendarVisibility(
+        config.calendarVisibility,
+        calendarId,
+        calendars,
+      ),
+    }));
   }
 
   /**
@@ -701,16 +875,12 @@ export function Workspace({
   async function createNewPage(input: { icon: PageIcon; name: string }) {
     const created = await onCreatePage({
       config: {
-        ...newPageConfig(
-          activeView,
-          activePage.config.view,
-          visibleCalendarIds,
-        ),
+        ...newPageConfig(activeView, workingConfig.view, visibleCalendarIds),
         icon: input.icon,
       },
       name: input.name,
     });
-    onPageChange(created.id);
+    onPageChange(created.id, created.config.view.id);
   }
 
   return (
@@ -744,14 +914,18 @@ export function Workspace({
         }}
         onEditPage={(page) => {
           setSidebarOpen(false);
-          setSettingsPage(page);
+          if (savingPageId === page.id) return;
+          const draft = pageDrafts.get(page.id);
+          setSettingsPage(
+            draft ? { ...draft.persisted, config: draft.config } : page,
+          );
         }}
         onModalStateChange={setSidebarModal}
         onOpenSettings={() => {
           setSidebarOpen(false);
           setSettingsOpen(true);
         }}
-        onPageChange={onPageChange}
+        onPageChange={handlePageChange}
         onReorderPages={(pageIds) =>
           // Rethrown so the sidebar knows to stop showing the order it asked for.
           onReorderPages(pageIds).catch((error: unknown) => {
@@ -800,7 +974,7 @@ export function Workspace({
           onSearch={setSearchQuery}
           onToday={() => onDateChange(toDateKey(new Date()))}
           onToggleFilters={() => setFiltersOpen((open) => !open)}
-          onViewChange={onViewChange}
+          onViewChange={handleViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
           periodNavigation={activeView !== "agenda"}
@@ -811,6 +985,49 @@ export function Workspace({
           searchQuery={searchQuery}
           searchRef={searchRef}
         />
+
+        {activeDraft ? (
+          <section
+            aria-label="Unsaved Page changes"
+            className={styles.pageDraftBar}
+            data-conflict={activeDraftConflict ? "" : undefined}
+          >
+            <p>
+              {activeDraftConflict
+                ? "This Page changed elsewhere. Save your draft as a copy or discard it."
+                : "Unsaved Page changes"}
+            </p>
+            <div className={styles.pageDraftActions}>
+              <Button
+                disabled={savingPageId === activePage.id}
+                ref={discardPageDraftButtonRef}
+                size="compact"
+                variant="secondary"
+                onClick={() => setDiscardPageDraftOpen(true)}
+              >
+                Discard
+              </Button>
+              {activeDraftConflict ? (
+                <Button
+                  loading={savingPageId === activePage.id}
+                  size="compact"
+                  onClick={() => void saveActiveDraftAsCopy()}
+                >
+                  Save as a copy
+                </Button>
+              ) : (
+                <Button
+                  disabled={offline}
+                  loading={savingPageId === activePage.id}
+                  size="compact"
+                  onClick={() => void saveActivePageDraft()}
+                >
+                  Save
+                </Button>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         {filtersOpen || compact ? (
           <section
@@ -1127,6 +1344,18 @@ export function Workspace({
           }}
         />
       ) : null}
+      <ConfirmationDialog
+        closeLabel="Close discard Page changes confirmation"
+        confirmLabel="Discard changes"
+        description="The unsaved view and calendar visibility changes will be lost."
+        onConfirm={discardActivePageDraft}
+        onOpenChange={setDiscardPageDraftOpen}
+        open={discardPageDraftOpen}
+        returnFocus={discardPageDraftButtonRef}
+        title="Discard Page changes?"
+      >
+        <p>This cannot be undone.</p>
+      </ConfirmationDialog>
       {settingsPage ? (
         <PageSettingsDialog
           calendars={calendars}
@@ -1135,17 +1364,20 @@ export function Workspace({
           canDelete={pages.length > 1}
           key={settingsPage.id}
           onCreatePage={onCreatePage}
-          onDeletePage={onDeletePage}
+          onDeletePage={async (id) => {
+            const result = await onDeletePage(id);
+            removePageDraft(id);
+            return result;
+          }}
           onNotice={notify}
           onOpenChange={(open) => {
             if (!open) setSettingsPage(undefined);
           }}
-          onOpenPage={onPageChange}
+          onResolveConflictDraft={() => removePageDraft(settingsPage.id)}
+          onOpenPage={handlePageChange}
           onSavePage={async (input) => {
             const result = await onSavePage(input);
-            // The page now says what it shows, so a stale temporary toggle would
-            // silently invert the choice just saved.
-            if (result.status === "saved") setTempToggles(new Set());
+            if (result.status === "saved") removePageDraft(input.id);
             return result;
           }}
           onSetDefaultPage={onSetDefaultPage}

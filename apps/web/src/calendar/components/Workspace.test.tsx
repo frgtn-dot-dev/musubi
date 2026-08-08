@@ -1,8 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import type { PageConfigV1 } from "@musubi/types";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "~/api/http";
 import { fixtureCalendars, fixtureEvents } from "../fixtures";
+import type { SavePageResult } from "../page-editor";
 import { Workspace } from "./Workspace";
 
 const commonProps = {
@@ -64,25 +66,348 @@ const commonProps = {
 };
 
 describe("Workspace", () => {
-  it("keeps calendar visibility changes as a temporary read filter", async () => {
+  it("drafts calendar visibility and only persists it explicitly", async () => {
     const user = userEvent.setup();
+    const onSavePage = vi.fn(async (input) => ({
+      page: {
+        ...commonProps.pages[0]!,
+        config: input.config,
+        revision: 2,
+      },
+      status: "saved" as const,
+    }));
 
-    render(<Workspace {...commonProps} />);
+    render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    // Visibility is a filter, so it lives on the filter shelf — the sidebar no
-    // longer carries a second copy of the same switches.
     await user.click(screen.getByRole("button", { name: "Filters" }));
-    // Scoped: event blocks in the grid answer to the calendar's name too.
     const shelf = within(
       screen.getByRole("region", { name: "Visible calendars" }),
     );
     const studio = shelf.getByRole("button", { name: "Studio" });
-    expect(studio.getAttribute("aria-pressed")).toBe("true");
 
     await user.click(studio);
 
     expect(studio.getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByRole("button", { name: /Quarterly planning/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Quarterly planning/ }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Unsaved Page changes" }),
+    ).not.toBeNull();
+    expect(onSavePage).not.toHaveBeenCalled();
+
+    const discard = screen.getByRole("button", { name: "Discard" });
+    await user.click(discard);
+    const confirmation = within(
+      screen.getByRole("dialog", { name: "Discard Page changes?" }),
+    );
+    await user.click(confirmation.getByRole("button", { name: "Cancel" }));
+
+    expect(studio.getAttribute("aria-pressed")).toBe("false");
+    expect(
+      screen.getByRole("region", { name: "Unsaved Page changes" }),
+    ).not.toBeNull();
+    expect(document.activeElement).toBe(discard);
+
+    await user.click(discard);
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(studio.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen.queryByRole("region", { name: "Unsaved Page changes" }),
+    ).toBeNull();
+
+    await user.click(studio);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSavePage).toHaveBeenCalledWith({
+      baseRevision: 1,
+      config: {
+        ...commonProps.pages[0]!.config,
+        calendarVisibility: {
+          hiddenCalendarIds: ["studio"],
+          mode: "all",
+        },
+      },
+      id: "my-calendar",
+      name: "My calendar",
+    });
+    expect(
+      screen.queryByRole("region", { name: "Unsaved Page changes" }),
+    ).toBeNull();
+  });
+
+  it("drafts a view and saves it with Ctrl/Cmd+S", async () => {
+    const user = userEvent.setup();
+    const onSavePage = vi.fn(async (input) => ({
+      page: {
+        ...commonProps.pages[0]!,
+        config: input.config,
+        revision: 2,
+      },
+      status: "saved" as const,
+    }));
+    const onViewChange = vi.fn();
+
+    render(
+      <Workspace
+        {...commonProps}
+        onSavePage={onSavePage}
+        onViewChange={onViewChange}
+      />,
+    );
+
+    await user.keyboard("a");
+    expect(onViewChange).toHaveBeenCalledWith("agenda");
+    expect(
+      screen.getByRole("region", { name: "Unsaved Page changes" }),
+    ).not.toBeNull();
+
+    await user.keyboard("{Control>}s{/Control}");
+
+    expect(onSavePage).toHaveBeenCalledWith({
+      baseRevision: 1,
+      config: {
+        ...commonProps.pages[0]!.config,
+        view: { configVersion: 1, groupBy: "day", id: "agenda" },
+      },
+      id: "my-calendar",
+      name: "My calendar",
+    });
+    expect(
+      screen.queryByRole("region", { name: "Unsaved Page changes" }),
+    ).toBeNull();
+  });
+
+  it("does not accept newer draft edits while that Page is saving", async () => {
+    const user = userEvent.setup();
+    let resolveSave!: (result: SavePageResult) => void;
+    const pendingSave = new Promise<SavePageResult>((resolve) => {
+      resolveSave = resolve;
+    });
+    const onSavePage = vi.fn<
+      (input: {
+        baseRevision: number;
+        config: PageConfigV1;
+        id: string;
+        name: string;
+      }) => Promise<SavePageResult>
+    >(() => pendingSave);
+    const onViewChange = vi.fn();
+
+    render(
+      <Workspace
+        {...commonProps}
+        onSavePage={onSavePage}
+        onViewChange={onViewChange}
+      />,
+    );
+
+    await user.keyboard("a");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.keyboard("w");
+
+    expect(onViewChange).toHaveBeenCalledTimes(1);
+    expect(onViewChange).toHaveBeenCalledWith("agenda");
+
+    const submitted = onSavePage.mock.calls[0]![0];
+    resolveSave({
+      page: {
+        ...commonProps.pages[0]!,
+        config: submitted.config,
+        revision: 2,
+      },
+      status: "saved",
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("region", { name: "Unsaved Page changes" }),
+      ).toBeNull();
+    });
+  });
+
+  it("keeps each Page draft while switching and opens the target view", async () => {
+    const user = userEvent.setup();
+    const onDateChange = vi.fn();
+    const onPageChange = vi.fn();
+    const workPage = {
+      ...commonProps.pages[0]!,
+      config: {
+        ...commonProps.pages[0]!.config,
+        view: {
+          configVersion: 1 as const,
+          density: "comfortable" as const,
+          id: "week" as const,
+          weekend: true,
+        },
+      },
+      id: "work",
+      isDefault: false,
+      name: "Work",
+      position: 1,
+    };
+    const props = {
+      ...commonProps,
+      onDateChange,
+      onPageChange,
+      pages: [...commonProps.pages, workPage],
+    };
+    const rendered = render(<Workspace {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.click(
+      within(
+        screen.getByRole("region", { name: "Visible calendars" }),
+      ).getByRole("button", { name: "Studio" }),
+    );
+    await user.click(screen.getByRole("radio", { name: "Agenda" }));
+    await user.click(screen.getByRole("button", { name: "Work" }));
+
+    expect(onPageChange).toHaveBeenLastCalledWith("work", "week");
+    expect(onDateChange).not.toHaveBeenCalled();
+
+    rendered.rerender(<Workspace {...props} activeView="week" pageId="work" />);
+    await user.click(screen.getByRole("button", { name: "My calendar" }));
+    expect(onPageChange).toHaveBeenLastCalledWith("my-calendar", "agenda");
+
+    rendered.rerender(
+      <Workspace {...props} activeView="agenda" pageId="my-calendar" />,
+    );
+    expect(
+      within(screen.getByRole("region", { name: "Visible calendars" }))
+        .getByRole("button", { name: "Studio" })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(
+      screen.getByRole("region", { name: "Unsaved Page changes" }),
+    ).not.toBeNull();
+  });
+
+  it("retains a conflicting draft and can save it as a copy", async () => {
+    const user = userEvent.setup();
+    const onSavePage = vi.fn(async () => ({ status: "conflict" as const }));
+    const onCreatePage = vi.fn(async (request) => ({
+      ...commonProps.pages[0]!,
+      config: request.config,
+      id: "my-calendar-copy",
+      isDefault: false,
+      name: request.name,
+      revision: 1,
+    }));
+    const onPageChange = vi.fn();
+
+    render(
+      <Workspace
+        {...commonProps}
+        onCreatePage={onCreatePage}
+        onPageChange={onPageChange}
+        onSavePage={onSavePage}
+      />,
+    );
+
+    await user.click(screen.getByRole("radio", { name: "Agenda" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "changed elsewhere",
+    );
+    expect(
+      screen.getByRole("button", { name: "Save as a copy" }),
+    ).not.toBeNull();
+
+    await user.keyboard("{Control>}s{/Control}");
+    expect(onSavePage).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Save as a copy" }));
+
+    expect(onCreatePage).toHaveBeenCalledWith({
+      config: {
+        ...commonProps.pages[0]!.config,
+        view: { configVersion: 1, groupBy: "day", id: "agenda" },
+      },
+      name: "My calendar copy",
+    });
+    expect(onPageChange).toHaveBeenCalledWith("my-calendar-copy", "agenda");
+  });
+
+  it("seeds Page settings from the working draft and clears it after save", async () => {
+    const user = userEvent.setup();
+    const onSavePage = vi.fn(async (input) => ({
+      page: {
+        ...commonProps.pages[0]!,
+        config: input.config,
+        name: input.name,
+        revision: 2,
+      },
+      status: "saved" as const,
+    }));
+
+    render(<Workspace {...commonProps} onSavePage={onSavePage} />);
+
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.click(
+      within(
+        screen.getByRole("region", { name: "Visible calendars" }),
+      ).getByRole("button", { name: "Studio" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
+
+    expect(
+      dialog
+        .getByRole("button", { name: "Studio" })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+    await user.clear(dialog.getByLabelText("Page name"));
+    await user.type(dialog.getByLabelText("Page name"), "Focused");
+    await user.click(dialog.getByRole("button", { name: "Save" }));
+
+    expect(onSavePage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseRevision: 1,
+        config: expect.objectContaining({
+          calendarVisibility: {
+            hiddenCalendarIds: ["studio"],
+            mode: "all",
+          },
+        }),
+        id: "my-calendar",
+        name: "Focused",
+      }),
+    );
+    expect(
+      screen.queryByRole("region", { name: "Unsaved Page changes" }),
+    ).toBeNull();
+  });
+
+  it("clears the shared draft when Page settings conflict edits are discarded", async () => {
+    const user = userEvent.setup();
+    const onSavePage = vi.fn(async () => ({ status: "conflict" as const }));
+
+    render(<Workspace {...commonProps} onSavePage={onSavePage} />);
+
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.click(
+      within(
+        screen.getByRole("region", { name: "Visible calendars" }),
+      ).getByRole("button", { name: "Studio" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
+    await user.clear(dialog.getByLabelText("Page name"));
+    await user.type(dialog.getByLabelText("Page name"), "Conflicting");
+    await user.click(dialog.getByRole("button", { name: "Save" }));
+    await user.click(
+      dialog.getByRole("button", { name: "Discard my changes" }),
+    );
+
+    expect(screen.queryByRole("dialog", { name: "Page settings" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Unsaved Page changes" }),
+    ).toBeNull();
   });
 
   it("saves name, icon and visibility from the page settings dialog", async () => {
@@ -186,7 +511,7 @@ describe("Workspace", () => {
       },
       name: "Work",
     });
-    expect(onPageChange).toHaveBeenCalledWith("work");
+    expect(onPageChange).toHaveBeenCalledWith("work", "month");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 

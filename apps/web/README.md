@@ -55,12 +55,13 @@ either joins it here or, for another server, has the home server run the
 federation handshake (pasting is the entry point because the origin server's
 `/invite/:token` page hands off to the mobile app and cannot know which Musubi
 server the visitor belongs to);
-fixture data remains test-only. Pages have an explicit editor: entering edit
-mode drafts the page name and calendar visibility locally, a sticky save bar
-persists them through `PATCH /api/v1/pages/:id` (compare-and-swap), and a
-revision conflict offers "save as a copy" instead of a silent overwrite.
-Switching pages or reloading with unsaved edits warns first; `Ctrl/Cmd+S`
-saves. View and filter editing is not wired into the draft yet.
+fixture data remains test-only. Pages have an explicit settings editor, while
+toolbar view changes and calendar visibility changes become per-Page working
+drafts with an explicit sticky Save/Discard bar. Saving uses
+`PATCH /api/v1/pages/:id` (compare-and-swap), and a revision conflict offers
+"save as a copy" instead of a silent overwrite. Switching Pages preserves each
+Page's draft and the selected date; leaving or reloading warns before drafts are
+lost, and `Ctrl/Cmd+S` saves. Filters are not wired into Page drafts yet.
 
 A same-origin `EventSource` on `/api/stream` keeps sessions in sync: `page_*`
 events upsert or remove pages in the query cache (deduped by revision), and the

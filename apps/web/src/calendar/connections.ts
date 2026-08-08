@@ -65,9 +65,8 @@ function takePendingProviderLink() {
  * account id. Without this the person sees exactly nothing until the background
  * sync happens to run, which is minutes later and looks like a failure.
  *
- * Belongs to the ROUTE, not the workspace: `<Workspace key={pageId}>` remounts
- * when the default-page sentinel resolves to a real id, and an import owned by
- * the discarded instance finishes into nothing.
+ * Belongs to the route, not the workspace: it has to keep running while the
+ * workspace is behind its data gate and through canonical Page redirects.
  */
 export function useProviderLinkReturn(userId: string) {
   const queryClient = useQueryClient();

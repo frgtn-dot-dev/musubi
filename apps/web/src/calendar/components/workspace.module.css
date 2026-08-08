@@ -503,6 +503,34 @@
   font-variant-numeric: tabular-nums;
 }
 
+.pageDraftBar {
+  z-index: 10;
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 7px 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.pageDraftBar[data-conflict] {
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--surface-panel));
+}
+
+.pageDraftBar p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.pageDraftActions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+}
+
 .filterBar {
   display: grid;
   min-height: 51px;
@@ -1987,6 +2015,7 @@
     padding: 0;
   }
 
+  .pageDraftBar,
   .filterBar {
     padding-inline: 14px;
   }
@@ -2073,6 +2102,15 @@
   /* A phone has no width to spend on a title over a wrapped block of pills. The
      shelf becomes one sideways-scrolling strip; the label stays for the region's
      accessible name but leaves the layout. */
+  .pageDraftBar {
+    align-items: flex-start;
+    padding-block: 8px;
+  }
+
+  .pageDraftBar p {
+    padding-top: 7px;
+  }
+
   .filterBar {
     min-height: 0;
     grid-template-columns: minmax(0, 1fr);

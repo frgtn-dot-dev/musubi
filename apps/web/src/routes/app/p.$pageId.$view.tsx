@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useServerStream } from "~/api/realtime";
@@ -9,7 +9,10 @@ import { useSessionUser } from "~/auth/use-session-user";
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { signOutAndReset } from "~/offline/sign-out";
 import { toDateKey } from "~/calendar/date-key";
-import { Workspace } from "~/calendar/components/Workspace";
+import {
+  Workspace,
+  type PageWorkingDraft,
+} from "~/calendar/components/Workspace";
 import { useEventMutations } from "~/calendar/event-mutations";
 import { usePageMutations } from "~/calendar/page-editor";
 import { useCalendarTransfers } from "~/calendar/calendar-transfers";
@@ -45,9 +48,13 @@ function WorkspaceRoute() {
   const { user } = useSessionUser();
   const userId = user?.id ?? "anonymous";
   const snapshot = useSnapshot();
+  // Owned above every loading/error/redirect return so a transient Workspace
+  // unmount cannot discard edits belonging to another Page.
+  const [pageDrafts, setPageDrafts] = useState<Map<string, PageWorkingDraft>>(
+    () => new Map(),
+  );
   useServerStream(userId);
-  // Above <Workspace key={pageId}>: that remounts when the default-page sentinel
-  // resolves, and an import owned by the discarded instance finishes into nothing.
+  // Above Workspace: provider return state must survive canonical Page redirects.
   const providerLink = useProviderLinkReturn(userId);
   const activeView: CalendarViewId =
     isCalendarView(view) ? view : "month";
@@ -185,7 +192,6 @@ function WorkspaceRoute() {
 
   return (
     <Workspace
-      key={pageId}
       activeView={activeView}
       baseEvents={workspace.mergedEvents?.baseEvents}
       calendars={workspace.mergedCalendars}
@@ -214,6 +220,8 @@ function WorkspaceRoute() {
       onReorderPages={pageMutations.reorderPages}
       onSavePage={pageMutations.savePage}
       onSetDefaultPage={pageMutations.setDefaultPage}
+      pageDrafts={pageDrafts}
+      onPageDraftsChange={setPageDrafts}
       pageId={pageId}
       onRemoveEvent={eventMutations.removeEvent}
       onPatchSettings={settingsMutations.patchSettings}
@@ -225,9 +233,9 @@ function WorkspaceRoute() {
           search: { date: nextDate },
         })
       }
-      onPageChange={(nextPageId) =>
+      onPageChange={(nextPageId, nextView) =>
         void navigate({
-          params: { pageId: nextPageId, view: activeView },
+          params: { pageId: nextPageId, view: nextView },
           search: { date },
           to: "/app/p/$pageId/$view",
         })

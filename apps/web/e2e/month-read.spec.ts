@@ -1417,12 +1417,12 @@ test("resolves the default page and switches between pages", async ({
   );
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 
-  // Both pages are listed; selecting one navigates without losing the date.
+  // Both pages are listed; selecting one uses its saved view without losing date.
   await expect(
     page.getByRole("button", { exact: true, name: "My calendar" }),
   ).toBeVisible();
   await page.getByRole("button", { exact: true, name: "Work" }).click();
-  await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/month`));
+  await expect(page).toHaveURL(new RegExp(`/app/p/${workPageId}/week`));
   await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 });
 
@@ -2021,6 +2021,83 @@ test("changes time grid density from the page editor", async ({ page }) => {
   await expect(async () => {
     expect(await canvasHeight()).toBeLessThan(comfortable);
   }).toPass();
+});
+
+test("keeps Page drafts across switches and saves view plus visibility explicitly", async ({
+  page,
+}) => {
+  await mockAuthenticatedReads(page);
+  let saved:
+    | { config?: { calendarVisibility?: unknown; view?: unknown } }
+    | undefined;
+  const workPageId = "22222222-2222-4222-8222-222222222222";
+  const workPage = {
+    ...defaultPage,
+    config: {
+      ...defaultPage.config,
+      icon: "briefcase" as const,
+      view: {
+        configVersion: 1 as const,
+        density: "comfortable" as const,
+        id: "week" as const,
+        weekend: true,
+      },
+    },
+    id: workPageId,
+    isDefault: false,
+    name: "Work",
+    position: 1,
+  };
+  await page.route("**/api/v1/pages", (route) =>
+    respond(route, [defaultPage, workPage]),
+  );
+  await page.route(`**/api/v1/pages/${DEFAULT_PAGE_ID}`, async (route) => {
+    saved = route.request().postDataJSON() as typeof saved;
+    return respond(route, {
+      ...defaultPage,
+      config: saved?.config,
+      revision: 2,
+    });
+  });
+
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const shelf = await openFilterShelf(page);
+  await shelf.getByRole("button", { name: "Studio" }).click();
+  await page.getByRole("radio", { name: "Agenda" }).click();
+
+  await page.getByRole("button", { exact: true, name: "Work" }).click();
+  await expect(page).toHaveURL(
+    `/app/p/${workPageId}/week?date=2026-07-26`,
+  );
+  await page
+    .getByRole("button", { exact: true, name: "My calendar" })
+    .click();
+  await expect(page).toHaveURL(
+    `/app/p/${DEFAULT_PAGE_ID}/agenda?date=2026-07-26`,
+  );
+  await expect(
+    page
+      .getByRole("region", { name: "Visible calendars" })
+      .getByRole("button", { name: "Studio" }),
+  ).toHaveAttribute("aria-pressed", "false");
+
+  await page
+    .getByRole("region", { name: "Unsaved Page changes" })
+    .getByRole("button", { name: "Save" })
+    .click();
+
+  expect(saved?.config?.calendarVisibility).toEqual({
+    hiddenCalendarIds: ["studio"],
+    mode: "all",
+  });
+  expect(saved?.config?.view).toEqual({
+    configVersion: 1,
+    groupBy: "day",
+    id: "agenda",
+  });
+  await expect(
+    page.getByRole("region", { name: "Unsaved Page changes" }),
+  ).toHaveCount(0);
 });
 
 test("edits and saves a page's calendar visibility", async ({ page }) => {

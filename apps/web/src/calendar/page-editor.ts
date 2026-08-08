@@ -76,6 +76,26 @@ export function visibilityEquals(
   return [...leftIds].sort().every((id, index) => id === sortedRight[index]);
 }
 
+export function pageConfigEquals(
+  left: PageConfigV1,
+  right: PageConfigV1,
+): boolean {
+  return (
+    left.schemaVersion === right.schemaVersion &&
+    left.icon === right.icon &&
+    JSON.stringify(left.filters) === JSON.stringify(right.filters) &&
+    JSON.stringify(left.view) === JSON.stringify(right.view) &&
+    visibilityEquals(left.calendarVisibility, right.calendarVisibility)
+  );
+}
+
+export function viewConfigFor(
+  config: PageConfigV1,
+  view: PageViewId,
+): PageConfigV1["view"] {
+  return view === config.view.id ? config.view : defaultPageConfig(view).view;
+}
+
 /**
  * The config a brand-new Page starts from: whatever the user is looking at.
  *

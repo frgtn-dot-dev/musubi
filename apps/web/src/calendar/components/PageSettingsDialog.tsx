@@ -56,6 +56,8 @@ export type PageSettingsDialogProps = {
   onDeletePage: (id: string) => Promise<unknown>;
   onNotice: Notify;
   onOpenChange: (open: boolean) => void;
+  /** Clear a shared Workspace draft after an explicit conflict resolution. */
+  onResolveConflictDraft?: () => void;
   onSavePage: (input: {
     baseRevision: number;
     config: PageConfigV1;
@@ -64,7 +66,7 @@ export type PageSettingsDialogProps = {
   }) => Promise<SavePageResult>;
   onSetDefaultPage: (id: string) => Promise<unknown>;
   /** Follow a page created from a conflicting draft. */
-  onOpenPage: (pageId: string) => void;
+  onOpenPage: (pageId: string, view: PageConfigV1["view"]["id"]) => void;
   page: PageDocument;
 };
 
@@ -85,6 +87,7 @@ export function PageSettingsDialog({
   onNotice,
   onOpenChange,
   onOpenPage,
+  onResolveConflictDraft,
   onSavePage,
   onSetDefaultPage,
   page,
@@ -188,9 +191,10 @@ export function PageSettingsDialog({
         config: draftConfig(),
         name: `${trimmedName || page.name} copy`,
       });
+      onResolveConflictDraft?.();
       onNotice("Saved as a new page.");
       onOpenChange(false);
-      onOpenPage(created.id);
+      onOpenPage(created.id, created.config.view.id);
     } catch {
       setError("The new page could not be created. Nothing was added — try again.");
     } finally {
@@ -249,7 +253,10 @@ export function PageSettingsDialog({
             <Button
               disabled={busy}
               variant="secondary"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                onResolveConflictDraft?.();
+                onOpenChange(false);
+              }}
             >
               Discard my changes
             </Button>
