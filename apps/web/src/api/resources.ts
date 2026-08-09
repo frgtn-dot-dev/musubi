@@ -424,6 +424,8 @@ export function getPolls(signal?: AbortSignal) {
 }
 
 export function createPoll(input: {
+  /** Informational wall-clock hint; decided events remain all-day. */
+  approximateStartTime?: string;
   /** When answers stop being taken, if the organizer set a date. */
   deadline?: string;
   description?: string;

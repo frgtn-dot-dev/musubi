@@ -248,7 +248,11 @@ function PollResults({
         <div className={styles.decidedPanel}>
           <p className={styles.decidedWhen}>
             <Check aria-hidden="true" size={16} strokeWidth={2} />
-            {formatSlot(chosen)}
+            {formatSlot(
+              chosen,
+              data?.approximateStartTime,
+              Boolean(data && data.durationMinutes < 24 * 60),
+            )}
           </p>
           <p className={styles.decidedWho}>
             {chosen.yes.length > 0
@@ -281,7 +285,7 @@ function PollResults({
               ? "Nobody has answered yet. The link is below."
               : `${data.respondents} ${
                   data.respondents === 1 ? "person has" : "people have"
-                } answered. Pick a time when you have enough of them.`
+                } answered. Pick a day when you have enough of them.`
             : "Loading answers…"}
           {data?.deadline && !data.closed
             ? ` Answers close on ${formatDay(data.deadline)}.`
@@ -299,7 +303,11 @@ function PollResults({
                     disabled={!calendarId}
                     loading={decide.isPending && decide.variables === slot.id}
                     size="compact"
-                    title={`Pick ${formatSlot(slot)}`}
+                    title={`Pick ${formatSlot(
+                      slot,
+                      data.approximateStartTime,
+                      data.durationMinutes < 24 * 60,
+                    )}`}
                     variant={
                       leading.includes(slot.id) ? "primary" : "secondary"
                     }
@@ -309,13 +317,15 @@ function PollResults({
                   </Button>
                 )
           }
+          approximateStartTime={data.approximateStartTime}
           caption={
             data.closed
               ? "How everyone answered."
-              : "Who can make which time. The most yeses are marked."
+              : "Who can make which day. The most yeses are marked."
           }
           chosenSlotID={data.chosenSlotID}
           leadingSlotIDs={leading}
+          showSlotTimes={data.durationMinutes < 24 * 60}
           people={data.people}
           slots={data.slots}
         />

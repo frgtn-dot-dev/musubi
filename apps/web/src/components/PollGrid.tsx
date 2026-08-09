@@ -16,7 +16,7 @@ const LABELS: Record<VoteValue, string> = {
 };
 
 /**
- * Who can make which time: people down, times across.
+ * Who can make which day: people down, candidate days across.
  *
  * One grid for both sides of a poll. The participant page hands it their own
  * answers and gets an editable last row; the organizer's dialog hands it an
@@ -27,12 +27,14 @@ const LABELS: Record<VoteValue, string> = {
 export function PollGrid({
   action,
   answers,
+  approximateStartTime,
   caption,
   chosenSlotID,
   leadingSlotIDs,
   mineID,
   onAnswer,
   people,
+  showSlotTimes = false,
   slots,
   yourRow,
 }: {
@@ -40,6 +42,8 @@ export function PollGrid({
   action?: (slot: PollSlot) => ReactNode;
   /** The reader's own answers, for the editable row. */
   answers?: Record<string, VoteValue | null>;
+  /** One wall-clock hint for every candidate day; informational only. */
+  approximateStartTime?: null | string;
   caption: string;
   chosenSlotID?: null | string;
   /** Columns worth a second look — the most yeses, marked, never auto-picked. */
@@ -48,6 +52,8 @@ export function PollGrid({
   /** Participant mode: absent means the row is read-only. */
   onAnswer?: (slotID: string, value: null | VoteValue) => void;
   people: Poll["people"];
+  /** Keeps old, timed polls readable after new polls switched to day choices. */
+  showSlotTimes?: boolean;
   slots: PollSlot[];
   /** The label of the reader's own row: a name, or a field to type one in. */
   yourRow?: ReactNode;
@@ -69,6 +75,7 @@ export function PollGrid({
 
   const leading = new Set(leadingSlotIDs ?? []);
   const mine = answers ?? {};
+  const showTimeRow = Boolean(approximateStartTime || showSlotTimes);
 
   function pick(slotID: string, value: null | VoteValue) {
     onAnswer?.(slotID, value);
@@ -86,7 +93,7 @@ export function PollGrid({
         <table aria-describedby="poll-grid-caption" className={styles.grid}>
           <thead>
             <tr>
-              <th className={styles.corner} rowSpan={2} scope="col">
+              <th className={styles.corner} rowSpan={showTimeRow ? 2 : 1} scope="col">
                 Participants
               </th>
               {groupByDay(slots).map(([day, ofDay]) => (
@@ -100,19 +107,21 @@ export function PollGrid({
                 </th>
               ))}
             </tr>
-            <tr>
-              {slots.map((slot) => (
-                <th
-                  className={styles.timeHead}
-                  data-chosen={slot.id === chosenSlotID ? "" : undefined}
-                  data-leading={leading.has(slot.id) ? "" : undefined}
-                  key={slot.id}
-                  scope="col"
-                >
-                  {formatStart(slot.start)}
-                </th>
-              ))}
-            </tr>
+            {showTimeRow ? (
+              <tr>
+                {slots.map((slot) => (
+                  <th
+                    className={styles.timeHead}
+                    data-chosen={slot.id === chosenSlotID ? "" : undefined}
+                    data-leading={leading.has(slot.id) ? "" : undefined}
+                    key={slot.id}
+                    scope="col"
+                  >
+                    {formatStart(slot.start, approximateStartTime, showSlotTimes)}
+                  </th>
+                ))}
+              </tr>
+            ) : null}
           </thead>
 
           <tbody>
@@ -184,7 +193,7 @@ export function PollGrid({
                       >
                         <PopoverTrigger asChild>
                           <button
-                            aria-label={`${formatSlot(slot)} — ${
+                            aria-label={`${formatSlot(slot, approximateStartTime, showSlotTimes)} — ${
                               mine[slot.id]
                                 ? `you answered ${LABELS[mine[slot.id]!]}`
                                 : "you have not answered"
@@ -197,7 +206,7 @@ export function PollGrid({
                         </PopoverTrigger>
                         <PopoverContent
                           align="center"
-                          aria-label={`Your answer for ${formatSlot(slot)}`}
+                          aria-label={`Your answer for ${formatSlot(slot, approximateStartTime, showSlotTimes)}`}
                           className={styles.picker}
                           mobileSurface="anchored"
                           onCloseAutoFocus={(event) => {
@@ -309,7 +318,7 @@ export function PollLegend() {
  * Shape as well as colour — a grid read only by hue is unreadable to anyone who
  * cannot separate red from green, and this is the whole content of the page.
  */
-export function Mark({
+function Mark({
   silent,
   value,
 }: {
@@ -363,8 +372,13 @@ export function formatDay(date: Date): string {
   }).format(date);
 }
 
-/** Just the start: one poll is one length of meeting, and the header says it. */
-function formatStart(date: Date): string {
+function formatStart(
+  date: Date,
+  approximateStartTime?: null | string,
+  showSlotTime = false,
+): string {
+  if (approximateStartTime) return `Around ${approximateStartTime}`;
+  if (!showSlotTime) return "";
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
@@ -372,7 +386,7 @@ function formatStart(date: Date): string {
 }
 
 /** In the reader's own timezone, which for a poll across places is the point. */
-export function formatTime(
+function formatTime(
   slot: Pick<PollSlot, "end" | "start">,
 ): string {
   const time = new Intl.DateTimeFormat(undefined, {
@@ -383,6 +397,12 @@ export function formatTime(
   return `${time.format(slot.start)} – ${time.format(slot.end)}`;
 }
 
-export function formatSlot(slot: Pick<PollSlot, "end" | "start">): string {
-  return `${formatDay(slot.start)}, ${formatTime(slot)}`;
+export function formatSlot(
+  slot: Pick<PollSlot, "end" | "start">,
+  approximateStartTime?: null | string,
+  showSlotTime = false,
+): string {
+  const day = formatDay(slot.start);
+  if (approximateStartTime) return `${day}, around ${approximateStartTime}`;
+  return showSlotTime ? `${day}, ${formatTime(slot)}` : day;
 }

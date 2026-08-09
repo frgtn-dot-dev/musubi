@@ -35,16 +35,26 @@ function pollUrl(token: string) {
   return `${config.api.url}/s/${token}`;
 }
 
+export function parseApproximateStartTime(value: unknown) {
+  const time = String(value ?? "").trim();
+  if (!time) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new BadRequestError("approximateStartTime must be HH:mm...");
+  }
+  return time;
+}
+
 export async function handlerCreatePoll(req: Request, res: Response) {
   const title = String(req.body?.title ?? "").trim().slice(0, MAX_TITLE);
   const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
+  const approximateStartTime = parseApproximateStartTime(req.body?.approximateStartTime);
 
   if (!title) throw new BadRequestError("A poll needs a title...");
   if (slots.length === 0) {
-    throw new BadRequestError("A poll needs at least one time to choose from...");
+    throw new BadRequestError("A poll needs at least one day to choose from...");
   }
   if (slots.length > MAX_SLOTS) {
-    throw new BadRequestError(`A poll can offer at most ${MAX_SLOTS} times...`);
+    throw new BadRequestError(`A poll can offer at most ${MAX_SLOTS} days...`);
   }
 
   const parsed = slots.map((slot: { start?: string }) => {
@@ -66,6 +76,7 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 
   const poll = await createPoll(
     {
+      approximateStartTime,
       deadline: req.body?.deadline ? new Date(String(req.body.deadline)) : null,
       description: String(req.body?.description ?? "").trim() || null,
       // Kept in storage and projections for older clients; new polls become
@@ -125,6 +136,7 @@ export async function handlerGetPoll(req: Request, res: Response) {
 }
 
 export type PollRow = {
+  approximateStartTime?: null | string;
   chosenSlotID: null | string;
   closedAt: Date | null;
   deadline: Date | null;
@@ -152,7 +164,7 @@ export function pollProjection(
   viewerID?: string,
 ) {
   // One row per person who has answered, because the grid participants read is
-  // people down and times across. Identified by a number local to this poll and
+  // people down and days across. Identified by a number local to this poll and
   // not by the user id: two people called Jan must stay two rows, and a stranger
   // holding the link has no business learning account ids. Sorted by user id so
   // the numbering is the same on every request — a row that renumbered between
@@ -173,6 +185,7 @@ export function pollProjection(
   const viewerIndex = viewerID ? userIDs.indexOf(viewerID) : -1;
 
   return {
+    approximateStartTime: poll.approximateStartTime ?? null,
     chosenSlotID: poll.chosenSlotID,
     /**
      * Shut to new answers, for either reason. A passed deadline counts, worked out

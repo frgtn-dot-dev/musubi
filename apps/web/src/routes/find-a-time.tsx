@@ -77,8 +77,8 @@ function FindATimeRoute() {
           </span>
           <h1>Find a time everyone can make</h1>
           <p className={styles.lead}>
-            Offer a few days and times, send one link, and watch the answers land
-            in a grid. The people you ask need no account and never hand over
+            Offer a few days, send one link, and watch the answers land in a
+            grid. The people you ask need no account and never hand over
             their calendar — only the answers they type.
           </p>
         </header>
@@ -114,7 +114,7 @@ function FindATimeRoute() {
               type="button"
               onClick={() => setDraft(undefined)}
             >
-              Change the times
+              Change the days
             </button>
           </section>
         ) : (
@@ -145,7 +145,6 @@ function FindATimeRoute() {
 function DraftSummary({ draft }: { draft: PollDraft }) {
   const starts = draft.slots.map((slot) => new Date(slot.start));
   const days = [...new Set(starts.map((start) => dayLabel(start)))];
-  const times = [...new Set(starts.map((start) => timeLabel(start)))];
 
   return (
     <dl className={styles.summary}>
@@ -153,8 +152,12 @@ function DraftSummary({ draft }: { draft: PollDraft }) {
       <dd>{draft.title}</dd>
       <dt>{days.length === 1 ? "Day" : "Days"}</dt>
       <dd>{days.join(", ")}</dd>
-      <dt>{times.length === 1 ? "Time" : "Times"}</dt>
-      <dd>{times.join(", ")}</dd>
+      {draft.approximateStartTime ? (
+        <>
+          <dt>Approximate start</dt>
+          <dd>{draft.approximateStartTime}</dd>
+        </>
+      ) : null}
     </dl>
   );
 }
@@ -167,13 +170,6 @@ function dayLabel(date: Date) {
   }).format(date);
 }
 
-function timeLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    hour12: false,
-    minute: "2-digit",
-  }).format(date);
-}
 
 /** The link, which is the whole product of this page. */
 function Created({

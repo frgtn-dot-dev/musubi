@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import { calendarEvents, pages, userSettings } from "./schema";
+import { calendarEvents, pages, schedulingPolls, userSettings } from "./schema";
 
 assert.equal(
   userSettings.id.primary,
@@ -34,6 +34,11 @@ assert.equal(
   pages.config.notNull,
   true,
   "pages.config must always hold a versioned document",
+);
+assert.equal(
+  schedulingPolls.approximateStartTime.notNull,
+  false,
+  "a poll's approximate start must stay optional",
 );
 const pagesPositionIndex = getTableConfig(pages).indexes.find(
   (index) => index.config.name === "pages_user_position_idx",

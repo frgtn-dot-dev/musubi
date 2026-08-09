@@ -304,6 +304,8 @@ export const schedulingPolls = pgTable("scheduling_polls", {
     .notNull(),
   title: text("title").notNull(),
   description: text("description"),
+  /** Optional wall-clock hint only; decided events remain all-day. */
+  approximateStartTime: text("approximate_start_time"),
   durationMinutes: integer("duration_minutes").notNull(),
   // The link is the invitation, same as a published event page: unguessable,
   // and revocable by closing the poll rather than by renaming anything.

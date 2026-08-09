@@ -175,6 +175,7 @@ export const PollPersonSchema = z.object({
 });
 
 export const PollSchema = z.object({
+  approximateStartTime: z.string().nullish(),
   chosenSlotID: z.string().nullish(),
   /** Shut to new answers, whether by hand or by a deadline that has gone by. */
   closed: z.boolean().default(false),
@@ -199,6 +200,7 @@ export type VoteValue = "if-needed" | "no" | "yes";
 
 /** A poll in the organizer's own list. */
 export const PollSummarySchema = z.object({
+  approximateStartTime: z.string().nullish(),
   /** Set when a time was picked; a poll can be closed without one. */
   chosenSlotID: z.string().nullish(),
   /** Shut to answers, decided by the server: a deadline is a clock comparison. */

@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
-import { bestSlots, pollProjection, pollSlotEventTiming } from "./scheduling";
+import {
+  bestSlots,
+  parseApproximateStartTime,
+  pollProjection,
+  pollSlotEventTiming,
+} from "./scheduling";
+
+assert.equal(parseApproximateStartTime(undefined), null);
+assert.equal(parseApproximateStartTime(" 18:30 "), "18:30");
+assert.throws(() => parseApproximateStartTime("25:00"));
 
 const POLL = {
+  approximateStartTime: "18:30",
   chosenSlotID: null,
   closedAt: null,
   deadline: null,
@@ -62,6 +72,7 @@ assert.deepEqual(
   const projection = pollProjection(POLL, SLOTS, votes);
 
   assert.deepEqual(Object.keys(projection).sort(), [
+    "approximateStartTime",
     "chosenSlotID",
     "closed",
     "deadline",
@@ -74,6 +85,8 @@ assert.deepEqual(
     "slots",
     "title",
   ]);
+
+  assert.equal(projection.approximateStartTime, "18:30");
 
   const [tuesday, wednesday] = projection.slots;
   assert.deepEqual(tuesday!.yes, ["Zoe"]);

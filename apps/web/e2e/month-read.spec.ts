@@ -7264,9 +7264,10 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	let created: unknown;
 	let decided: unknown;
 	const poll = {
+		approximateStartTime: "15:00",
 		closedAt: null,
 		createdAt: "2026-07-26T09:00:00.000Z",
-		durationMinutes: 60,
+		durationMinutes: 24 * 60,
 		id: "poll-1",
 		title: "Studio planning",
 		token: POLL_TOKEN,
@@ -7281,10 +7282,11 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	});
 	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
 		respond(route, {
+			approximateStartTime: "15:00",
 			chosenSlotID: null,
 			closed: false,
 			description: null,
-			durationMinutes: 60,
+			durationMinutes: 24 * 60,
 			mine: {},
 			mineID: null,
 			people: [
@@ -7335,14 +7337,11 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	const dialog = page.getByRole("dialog", { name: "Find a time" });
 
 	await dialog.getByLabel("What is it about").fill("Studio planning");
-	// Days and times are asked separately, so one time covers every day picked —
-	// that is the whole point of the grid, and what makes a long horizon bearable.
-	await dialog.getByRole("button", { name: "Remove 18:00" }).click();
-	await dialog.getByLabel("Add a time").fill("15:00");
-	await dialog.getByRole("button", { name: "Add", exact: true }).click();
+	await dialog.getByLabel("Approximate start time").fill("15:00");
+	await dialog.getByLabel("Approximate start time").press("Tab");
 	await dialog.getByRole("button", { exact: true, name: "18" }).click();
 	await dialog.getByRole("button", { exact: true, name: "19" }).click();
-	await expect(dialog.getByText("2 days × 1 time = 2 options")).toBeVisible();
+	await expect(dialog.getByText("2 days", { exact: true })).toBeVisible();
 	await dialog.getByRole("button", { name: "Create the poll" }).click();
 
 	// The organizer types a wall clock where they are; the wire carries instants.
@@ -7352,18 +7351,22 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	await expect(
 		results.getByRole("textbox", { name: "Poll link" }),
 	).toBeVisible();
-	expect(created).toMatchObject({ title: "Studio planning" });
+	expect(created).toMatchObject({
+		approximateStartTime: "15:00",
+		title: "Studio planning",
+	});
 	expect(created).not.toHaveProperty("durationMinutes");
 	const sent = (created as { slots: Array<{ start: string }> }).slots;
 	expect(sent).toHaveLength(2);
-	// The organizer typed a wall clock in Europe/Prague; both days carry it.
+	// Slots carry only candidate days; the optional time is separate metadata.
 	expect(sent.map((slot) => slot.start)).toEqual([
-		"2026-08-18T13:00:00.000Z",
-		"2026-08-19T13:00:00.000Z",
+		"2026-08-18T10:00:00.000Z",
+		"2026-08-19T10:00:00.000Z",
 	]);
 
 	// The same grid the participants answered on, so the person deciding reads the
 	// picture they filled in — Mika's row, and the count under each column.
+	await expect(results.getByText("Around 15:00").first()).toBeVisible();
 	await expect(results.getByRole("row", { name: /^Mika/ })).toContainText("✓");
 	await expect(
 		results.getByRole("row", { name: /^Can make it/ }),
@@ -7525,7 +7528,13 @@ test("makes an event page from the public page with no account", async ({
 test("makes a poll from the public page with no account", async ({ page }) => {
 	const hydrationErrors = recordHydrationErrors(page);
 	let signedIn = false;
-	let created: { name?: string; slots: Array<{ start: string }> } | undefined;
+	let created:
+		| {
+				approximateStartTime?: string;
+				name?: string;
+				slots: Array<{ start: string }>;
+			}
+		| undefined;
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(
 			route,
@@ -7605,6 +7614,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	// The name rides along, so the poll is not from "Guest" — the account it went
 	// to was made a second ago and has none.
 	expect(created).toMatchObject({ name: "Zoe" });
+	expect(created).not.toHaveProperty("approximateStartTime");
 	expect(created!.slots).toHaveLength(2);
 	expect(hydrationErrors).toEqual([]);
 

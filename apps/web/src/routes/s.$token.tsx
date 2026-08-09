@@ -20,11 +20,6 @@ import { RouteState } from "~/ui/RouteState";
 import styles from "./event-page.module.css";
 import pollStyles from "./poll-page.module.css";
 
-/** The reader's own timezone, which is the one every slot above is written in. */
-function localZone() {
-  return new Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
-
 export const Route = createFileRoute("/s/$token")({
   component: PollRoute,
   head: () => ({
@@ -182,7 +177,12 @@ function PollRoute() {
         {chosen ? (
           <p className={pollStyles.decided}>
             <Check aria-hidden="true" size={15} strokeWidth={2} />
-            Decided: {formatSlot(chosen)}
+            Decided:{" "}
+            {formatSlot(
+              chosen,
+              data.approximateStartTime,
+              data.durationMinutes < 24 * 60,
+            )}
           </p>
         ) : data.closed ? (
           // Shut with nothing picked. Without this the grid is simply read-only
@@ -198,24 +198,22 @@ function PollRoute() {
           </p>
         ) : null}
 
-        {/* People down, times across — the same grid the organizer reads, so the
+        {/* People down, days across — the same grid the organizer reads, so the
             person deciding and the people answering see one picture. */}
         <PollGrid
           answers={answers}
-          /* Before anyone has answered, the grid needs to say what to do with it;
-             after that it only needs to say what it shows. Both name the timezone,
-             because the same slot is Friday night in one place and Friday
-             afternoon in another and these times are the reader's own. */
+          approximateStartTime={data.approximateStartTime}
           caption={
             data.closed
-              ? `How everyone answered. Times in ${localZone()}.`
+              ? "How everyone answered."
               : Object.keys(answers).length > 0
-                ? `Who can make which time. Times in ${localZone()}.`
-                : `Fill in your own row — the last one — then send. Times in ${localZone()}.`
+                ? "Who can make which day."
+                : "Fill in your own row — the last one — then send."
           }
           chosenSlotID={data.chosenSlotID}
           mineID={data.mineID}
           people={data.people}
+          showSlotTimes={data.durationMinutes < 24 * 60}
           slots={data.slots}
           yourRow={
             myName ? (

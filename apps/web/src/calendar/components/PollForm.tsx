@@ -1,5 +1,4 @@
 import type { Settings } from "@musubi/types";
-import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
 import { toDateKey } from "../date-key";
@@ -17,6 +16,8 @@ import styles from "./styles/scheduling.module.css";
 const MAX_POLL_SLOTS = 60;
 
 export type PollDraft = {
+	/** Informational wall-clock hint only; the resulting event stays all-day. */
+	approximateStartTime?: string;
 	/** End of the chosen day, in the organizer's own zone. Absent means no limit. */
 	deadline?: string;
 	slots: Array<{ start: string }>;
@@ -24,10 +25,8 @@ export type PollDraft = {
 };
 
 /**
- * What a poll asks: which days and at what times.
- *
- * Days and times are separate on purpose — one time covers every day picked, so
- * three weeks of evenings is a drag and a time rather than twenty-one rows.
+ * What a poll asks: which days work. One optional wall-clock time is shown as
+ * context only and does not turn the resulting all-day event into a timed one.
  *
  * It reports a draft and nothing else. Inside the app that draft goes straight to
  * the server; on the public page it waits for an address to be confirmed first,
@@ -50,18 +49,16 @@ export function PollForm({
 }) {
 	const [title, setTitle] = useState("");
 	const [days, setDays] = useState<string[]>([]);
-	const [times, setTimes] = useState<string[]>(["18:00"]);
-	const [newTime, setNewTime] = useState("19:00");
+	const [approximateStartTime, setApproximateStartTime] = useState("");
 	// Empty by default: most polls are answered in a day or two and a deadline
 	// nobody asked for is one more decision at the point of writing the question.
 	const [deadline, setDeadline] = useState("");
 
-	// Days × times. Written out because it is what the poll actually asks, and
-	// because seeing "6 days × 2 times = 12 options" is what stops somebody
-	// producing sixty by accident.
-	const slots = days.flatMap((day) =>
-		times.map((time) => ({ start: new Date(`${day}T${time}`).toISOString() })),
-	);
+	// One option per day. Noon is only a stable internal date carrier; the optional
+	// approximate time is stored separately and never controls the all-day event.
+	const slots = days.map((day) => ({
+		start: new Date(`${day}T12:00`).toISOString(),
+	}));
 	const tooMany = slots.length > MAX_POLL_SLOTS;
 	const ready = title.trim().length > 0 && slots.length > 0 && !tooMany;
 
@@ -96,45 +93,17 @@ export function PollForm({
 			</div>
 
 			<div className={styles.field}>
-				<span className={styles.fieldLabel}>At what time</span>
-				{/* One set of times for every chosen day. That is the whole trick for a
-            long horizon: three weeks of evenings is three weeks and one time,
-            not twenty-one rows. */}
-				<div className={styles.times}>
-					{times.map((time) => (
-						<Button
-							aria-label={`Remove ${time}`}
-							icon={<X size={13} strokeWidth={1.8} />}
-							key={time}
-							size="compact"
-							variant="secondary"
-							onClick={() =>
-								setTimes((current) => current.filter((item) => item !== time))
-							}
-						>
-							{time}
-						</Button>
-					))}
-					<TimePicker
-						className={styles.timeInput}
-						label="Add a time"
-						timeFormat={timeFormat}
-						value={newTime}
-						onChange={setNewTime}
-					/>
-					<Button
-						disabled={!newTime || times.includes(newTime)}
-						icon={<Plus size={14} strokeWidth={1.8} />}
-						size="compact"
-						variant="secondary"
-						onClick={() => {
-							setTimes((current) => [...current, newTime].sort());
-							setNewTime("");
-						}}
-					>
-						Add
-					</Button>
-				</div>
+				<span className={styles.fieldLabel}>Approximate start (optional)</span>
+				<TimePicker
+					className={styles.timeInput}
+					label="Approximate start time"
+					timeFormat={timeFormat}
+					value={approximateStartTime}
+					onChange={setApproximateStartTime}
+				/>
+				<p className={styles.fieldHint}>
+					Shown for context only. The calendar event stays all-day.
+				</p>
 			</div>
 
 			{/* Optional, and last: a poll works without one, and the server refuses a
@@ -171,12 +140,8 @@ export function PollForm({
 
 			<p className={tooMany ? styles.error : styles.summary}>
 				{slots.length === 0
-					? "Pick at least one day and one time."
-					: `${days.length} ${days.length === 1 ? "day" : "days"} × ${
-							times.length
-						} ${
-							times.length === 1 ? "time" : "times"
-						} = ${slots.length} options${
+					? "Pick at least one day."
+					: `${slots.length} ${slots.length === 1 ? "day" : "days"}${
 							tooMany
 								? ` — ${MAX_POLL_SLOTS} is the most a poll can ask about`
 								: ""
@@ -194,6 +159,7 @@ export function PollForm({
 				loading={busy}
 				onClick={() =>
 					onSubmit({
+						...(approximateStartTime ? { approximateStartTime } : {}),
 						slots,
 						title: title.trim(),
 						// The end of that day where the organizer is, not midnight UTC: a
