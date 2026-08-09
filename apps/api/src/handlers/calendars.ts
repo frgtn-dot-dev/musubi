@@ -1,12 +1,12 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
-import { addCalendarMember, consumeInvite, createCalendar, createEvent, getCalendar, getCalendarEvents, getCalendarIDFromToken, getCalendarMembers, getExternalLinkForCalendar, getUserRoleForCalendar, getUsersCalendars, importExternalCalendar, NewCalendar, removeCalendar, removeCalendarMember, setCalendarMemberRole, transferCalendarOwnership, updateCalendar } from '@musubi/db';
+import { addCalendarMember, consumeInvite, createCalendar, createEvent, getCalendar, getCalendarEvents, getCalendarIDFromToken, getCalendarMembers, getExternalLinkForCalendar, getUserRoleForCalendar, getUsersCalendars, importExternalCalendar, type NewCalendar, removeCalendar, removeCalendarMember, setCalendarMemberRole, transferCalendarOwnership, updateCalendar } from '@musubi/db';
 import { toVevent, veventToFields } from "../sync/adapters/caldav";
-import { BadRequestError, Calendar, CalendarSchema, ForbiddenError, NotFoundError, User } from "@musubi/types";
+import { BadRequestError, type Calendar, CalendarSchema, ForbiddenError, NotFoundError, type User } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { assertCan } from "../permissions";
-import { getAdapter } from "../sync/engine";
+import { getAdapter, pushEventToProviders } from "../sync/engine";
 import { buildInvitePreview } from "../invite_preview";
 
 // External mirror? Then only the person whose provider account backs it may
@@ -31,6 +31,56 @@ async function pushExternal(
   }
 }
 
+async function createCalendarAtDestination(
+  user: User,
+  input: { accountId?: string; color: string; name: string; provider?: string },
+) {
+  if (Boolean(input.provider) !== Boolean(input.accountId)) {
+    throw new BadRequestError("Calendar destination requires both provider and accountId.");
+  }
+
+  if (input.provider && input.accountId) {
+    const adapter = getAdapter(input.provider);
+    if (!adapter) throw new BadRequestError(`Unknown provider "${input.provider}".`);
+    const accounts = await adapter.listAccounts(user.id);
+    const account = accounts.find(a => a.id === input.accountId);
+    if (!account) throw new ForbiddenError("That account isn't connected to your user.");
+
+    let externalId: string;
+    try {
+      ({ externalId } = await adapter.createCalendar(user.id, account.id, { name: input.name, color: input.color }));
+    } catch (error: unknown) {
+      throw new BadRequestError(error instanceof Error ? error.message : "The provider rejected the new calendar.");
+    }
+    const created = await importExternalCalendar(
+      input.provider, user.id, account.id, account.label,
+      { externalId, name: input.name, color: input.color },
+    );
+    const link = await getExternalLinkForCalendar(created.id);
+    return {
+      ...created,
+      role: "owner",
+      members: [{ id: user.id, name: user.name, email: user.email }],
+      provider: link?.provider ?? input.provider,
+      accountId: link?.accountID ?? account.id,
+      accountLabel: link?.accountLabel ?? account.label,
+      serverUrl: link?.serverUrl ?? null,
+    };
+  }
+
+  const newCalendar: NewCalendar = {
+    name: input.name,
+    color: input.color,
+    creatorID: user.id,
+  };
+  const result = await createCalendar(newCalendar);
+  return {
+    ...result,
+    role: "owner",
+    members: [{ id: user.id, name: user.name, email: user.email }],
+  };
+}
+
 export async function handlerCreateCalendar(req: Request, res: Response) {
   let calendar: Calendar;
   try {
@@ -39,43 +89,13 @@ export async function handlerCreateCalendar(req: Request, res: Response) {
     throw new BadRequestError("Request is missing valid calendar data...");
   }
 
-  // Create INTO a connected provider account: make it on the provider first,
-  // then import the mirror exactly like the sync engine would.
-  if (calendar.provider && calendar.accountId) {
-    const adapter = getAdapter(calendar.provider);
-    if (!adapter) throw new BadRequestError(`Unknown provider "${calendar.provider}".`);
-    const account = (await adapter.listAccounts(req.user!.id)).find(a => a.id === calendar.accountId);
-    if (!account) throw new ForbiddenError("That account isn't connected to your user.");
-
-    let externalId: string;
-    try {
-      ({ externalId } = await adapter.createCalendar(req.user!.id, account.id, { name: calendar.name, color: calendar.color }));
-    } catch (e: any) {
-      throw new BadRequestError(e?.message ?? "The provider rejected the new calendar.");
-    }
-    const created = await importExternalCalendar(
-      calendar.provider, req.user!.id, account.id, account.label,
-      { externalId, name: calendar.name, color: calendar.color },
-    );
-    const link = await getExternalLinkForCalendar(created.id);
-    return res.status(201).json({
-      ...created,
-      role: "owner",
-      members: [{ id: req.user!.id, name: req.user!.name, email: req.user!.email }],
-      provider: link?.provider ?? calendar.provider,
-      accountId: link?.accountID ?? account.id,
-      accountLabel: link?.accountLabel ?? account.label,
-      serverUrl: link?.serverUrl ?? null,
-    });
-  }
-
-  const newCalendar: NewCalendar = {
-    name: calendar.name,
+  const result = await createCalendarAtDestination(req.user!, {
+    accountId: calendar.accountId ?? undefined,
     color: calendar.color,
-    creatorID: req.user!.id,
-  }
-  const result = await createCalendar(newCalendar);
-  res.status(201).json({ ...result, role: "owner", members: [{ id: req.user!.id, name: req.user!.name, email: req.user!.email }] });
+    name: calendar.name,
+    provider: calendar.provider ?? undefined,
+  });
+  res.status(201).json(result);
 }
 
 export async function handlerRemoveCalendar(req: Request, res: Response) {
@@ -242,9 +262,10 @@ export async function handlerGetCalendar(req: Request, res: Response) {
   res.status(200).json(result);
 }
 
-// Import a whole .ics file as a NEW native calendar. Body is raw iCalendar text
+// Import a whole .ics file as a new calendar. Body is raw iCalendar text
 // (route-level express.text — the global JSON parser's 512 KB cap doesn't fit
-// real calendars); name/color ride in the query string.
+// real calendars); calendar details and optional account destination ride in
+// the query string.
 export async function handlerImportCalendar(req: Request, res: Response) {
   const ics = req.body;
   if (typeof ics !== "string" || !ics.trim()) throw new BadRequestError("Request body must be an iCalendar file...");
@@ -260,8 +281,15 @@ export async function handlerImportCalendar(req: Request, res: Response) {
     || (vcal.getFirstPropertyValue("x-wr-calname") as string | null)
     || "Imported calendar";
   const color = (req.query.color as string) || "#7a9e7e";
+  const provider = typeof req.query.provider === "string" ? req.query.provider : undefined;
+  const accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
-  const created = await createCalendar({ name, color, creatorID: req.user!.id });
+  const created = await createCalendarAtDestination(req.user!, {
+    accountId,
+    color,
+    name,
+    provider,
+  });
 
   // ponytail: RECURRENCE-ID overrides (edited single occurrences) are skipped —
   // the master VEVENT carries the series; per-occurrence edits need detached
@@ -272,7 +300,7 @@ export async function handlerImportCalendar(req: Request, res: Response) {
     if (vevent.getFirstPropertyValue("recurrence-id")) continue;
     const fields = veventToFields(vevent);
     if (!fields) continue;
-    await createEvent({
+    const event = await createEvent({
       id: randomUUID(),
       creatorID: req.user!.id,
       organizer: req.user!.id,
@@ -286,15 +314,11 @@ export async function handlerImportCalendar(req: Request, res: Response) {
       recurrence: fields.recurrence,
       originCalendarID: created.id,
     }, [created.id]);
+    await pushEventToProviders({ ...event, calendars: [created.id] }, "create");
     imported++;
   }
 
-  res.status(201).json({
-    ...created,
-    role: "owner",
-    members: [{ id: req.user!.id, name: req.user!.name, email: req.user!.email }],
-    imported,
-  });
+  res.status(201).json({ ...created, imported });
 }
 
 // One-shot .ics snapshot of a whole calendar. Any member may export — they can

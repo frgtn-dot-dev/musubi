@@ -30,7 +30,7 @@ const CALENDARS: Calendar[] = [
 	},
 ];
 
-const meta = {
+const meta: Meta<typeof CalendarTransferDialog> = {
 	args: {
 		calendars: CALENDARS,
 		onCreate: async ({ color, name }) => ({
@@ -63,7 +63,7 @@ const meta = {
 		layout: "fullscreen",
 	},
 	title: "Calendar/Calendar management",
-} satisfies Meta<typeof CalendarTransferDialog>;
+};
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -83,6 +83,20 @@ export const Overview: Story = {
 				screen.getByRole("option", { name: /work@example\.com/ }),
 			).toBeVisible(),
 		);
+	},
+};
+
+export const ImportIntoConnectedAccount: Story = {
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Calendars" });
+		const destination = within(dialog).getByRole("combobox", {
+			name: "Import into account",
+		});
+		await userEvent.click(destination);
+		await userEvent.click(
+			await screen.findByRole("option", { name: /work@example\.com/ }),
+		);
+		expect(destination).toHaveTextContent("work@example.com");
 	},
 };
 

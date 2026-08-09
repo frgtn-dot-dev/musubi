@@ -167,8 +167,14 @@ export function importCalendar(
   ics: string,
   name: string,
   color: string,
+  provider?: string,
+  accountId?: string,
 ) {
   const query = new URLSearchParams({ color, name });
+  if (provider && accountId) {
+    query.set("provider", provider);
+    query.set("accountId", accountId);
+  }
   return apiRawJsonRequest(
     `/api/v1/calendars/import?${query.toString()}`,
     {

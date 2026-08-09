@@ -45,9 +45,11 @@ import { AccountMark } from "./ProviderIcon";
 import styles from "./styles/calendars.module.css";
 
 type ImportInput = {
+	accountId?: string;
 	color: string;
 	ics: string;
 	name: string;
+	provider?: string;
 };
 
 export type CalendarTransferDialogProps = {
@@ -131,6 +133,7 @@ export function CalendarTransferDialog({
 		DEFAULT_CALENDAR_COLOR,
 	);
 	const [importFileName, setImportFileName] = useState("");
+	const [importDestinationKey, setImportDestinationKey] = useState("");
 	const [ics, setIcs] = useState("");
 	const [newName, setNewName] = useState("");
 	const [newColor, setNewColor] = useState<string>(DEFAULT_CALENDAR_COLOR);
@@ -181,8 +184,26 @@ export function CalendarTransferDialog({
 
 		return [...seen.values()];
 	}, [calendars]);
+	const destinationOptions = [
+		{
+			description: "This Musubi server",
+			icon: <AccountMark flavor={null} />,
+			label: "Musubi",
+			value: "",
+		},
+		...accounts.map((account) => ({
+			description: providerDisplayName({ provider: account.provider }),
+			icon: <AccountMark flavor={account.flavor} />,
+			label: account.label,
+			value: `${account.provider}:${account.accountId}`,
+		})),
+	];
 	const destination = accounts.find(
 		(account) => `${account.provider}:${account.accountId}` === destinationKey,
+	);
+	const importDestination = accounts.find(
+		(account) =>
+			`${account.provider}:${account.accountId}` === importDestinationKey,
 	);
 	const selectedExportId = calendars.some(
 		(calendar) => calendar.id === exportCalendarId,
@@ -309,9 +330,11 @@ export function CalendarTransferDialog({
 		setError(undefined);
 		try {
 			const calendar = await onImport({
+				accountId: importDestination?.accountId,
 				color: importColor,
 				ics,
 				name: importName.trim(),
+				provider: importDestination?.provider,
 			});
 			onNotice(
 				`Imported ${calendar.imported} event${
@@ -391,22 +414,7 @@ export function CalendarTransferDialog({
 							className={styles.destination}
 							disabled={busy === "create"}
 							label="Account"
-							options={[
-								{
-									description: "This Musubi server",
-									icon: <AccountMark flavor={null} />,
-									label: "Musubi",
-									value: "",
-								},
-								...accounts.map((account) => ({
-									description: providerDisplayName({
-										provider: account.provider,
-									}),
-									icon: <AccountMark flavor={account.flavor} />,
-									label: account.label,
-									value: `${account.provider}:${account.accountId}`,
-								})),
-							]}
+							options={destinationOptions}
 							value={destinationKey}
 							onChange={setDestinationKey}
 						/>
@@ -515,7 +523,7 @@ export function CalendarTransferDialog({
 								<FileUp aria-hidden="true" size={18} strokeWidth={1.7} />
 								<div>
 									<h3>Import</h3>
-									<p>Create a Musubi calendar from an .ics file.</p>
+									<p>Create a calendar from an .ics file.</p>
 								</div>
 							</div>
 							<div className={styles.cardFieldGroup}>
@@ -538,6 +546,15 @@ export function CalendarTransferDialog({
 									/>
 								</label>
 							</div>
+							<Field className={styles.cardField} label="Import into">
+								<Select
+									disabled={Boolean(busy)}
+									label="Import into account"
+									options={destinationOptions}
+									value={importDestinationKey}
+									onChange={setImportDestinationKey}
+								/>
+							</Field>
 							<div className={styles.importControls}>
 								<Field
 									className={styles.cardField}
@@ -556,6 +573,7 @@ export function CalendarTransferDialog({
 									className={styles.formColorPicker}
 									disabled={Boolean(busy)}
 									label="Imported calendar color"
+									provider={importDestination?.provider ?? null}
 									value={importColor}
 									onChange={setImportColor}
 								/>

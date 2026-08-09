@@ -8,13 +8,14 @@ import { useCalendarTransfers } from "./calendar-transfers";
 
 const api = vi.hoisted(() => ({
   disconnectExternalCalendar: vi.fn(),
+  importCalendar: vi.fn(),
 }));
 
 vi.mock("~/api/resources", () => ({
   createCalendar: vi.fn(),
   disconnectExternalCalendar: api.disconnectExternalCalendar,
   exportCalendar: vi.fn(),
-  importCalendar: vi.fn(),
+  importCalendar: api.importCalendar,
   removeCalendar: vi.fn(),
   updateCalendar: vi.fn(),
 }));
@@ -69,5 +70,37 @@ describe("external calendar disconnect", () => {
       queryClient.getQueryData<Calendar[]>(calendarsKey)?.map(({ id }) => id),
     ).toEqual(["personal"]);
     expect(api.disconnectExternalCalendar).toHaveBeenCalledWith("studio");
+  });
+});
+
+describe("calendar import destination", () => {
+  beforeEach(() => api.importCalendar.mockReset());
+
+  it("passes the selected connected account to the import endpoint", async () => {
+    api.importCalendar.mockResolvedValue({
+      ...externalCalendar,
+      id: "imported",
+      imported: 1,
+      name: "Imported",
+    });
+    const { hook } = setup();
+
+    await act(async () => {
+      await hook.result.current.importCalendar({
+        accountId: "google-work",
+        color: "#7A8BA3",
+        ics: "BEGIN:VCALENDAR\nEND:VCALENDAR",
+        name: "Imported",
+        provider: "google",
+      });
+    });
+
+    expect(api.importCalendar).toHaveBeenCalledWith(
+      "BEGIN:VCALENDAR\nEND:VCALENDAR",
+      "Imported",
+      "#7A8BA3",
+      "google",
+      "google-work",
+    );
   });
 });

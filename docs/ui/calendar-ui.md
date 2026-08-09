@@ -983,6 +983,17 @@ create churn without reducing another implementation.
   suppressed by `AGENDA_FREE_DAYS_MIN`, and event metadata and filter behavior
   are unchanged.
 
+### Phase Q — Import into connected accounts — **COMPLETE** (2026-08-09)
+
+- Calendar import uses the same Musubi / connected-account choices, provider
+  marks, account labels, and provider-aware colour picker as calendar creation.
+- The API verifies that the selected account belongs to the current user,
+  creates the destination calendar at the provider first, imports its local
+  mirror, and pushes every accepted VEVENT into that provider calendar.
+- A native Musubi import remains the default. Missing or mismatched
+  `provider` / `accountId` pairs are rejected rather than silently importing to
+  the wrong destination.
+
 ### Vědomě odloženo
 
 Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,

@@ -12,9 +12,11 @@ import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { connectionOfCalendar } from "./federation-routing";
 
 type ImportInput = {
+  accountId?: string;
   color: string;
   ics: string;
   name: string;
+  provider?: string;
 };
 
 export function useCalendarTransfers(userId: string) {
@@ -31,8 +33,8 @@ export function useCalendarTransfers(userId: string) {
   };
 
   const importMutation = useMutation({
-    mutationFn: ({ color, ics, name }: ImportInput) =>
-      importCalendar(ics, name, color),
+    mutationFn: ({ accountId, color, ics, name, provider }: ImportInput) =>
+      importCalendar(ics, name, color, provider, accountId),
     onSuccess: (calendar) => {
       setCalendars((current) => [
         ...current.filter((item) => item.id !== calendar.id),
