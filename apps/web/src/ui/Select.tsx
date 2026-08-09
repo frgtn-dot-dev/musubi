@@ -251,7 +251,10 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
             </h2>
             <div
               aria-label={`${label} options`}
-              className={styles.selectList}
+              className={classNames(
+                styles.selectList,
+                options.length > 8 && styles.selectListScrollable,
+              )}
               id={listboxId}
               role="listbox"
             >

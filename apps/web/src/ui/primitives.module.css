@@ -924,7 +924,10 @@
 		var(--radix-popover-trigger-width),
 		min(280px, calc(100vw - var(--space-6)))
 	);
-	max-height: min(360px, var(--radix-popover-content-available-height));
+	max-height: min(
+		360px,
+		var(--radix-popover-content-available-height, calc(100dvh - var(--space-6)))
+	);
 	overflow: hidden;
 }
 
@@ -941,11 +944,23 @@
 }
 
 .selectList {
-	max-height: min(360px, calc(100dvh - var(--space-6)));
+	max-height: min(
+		360px,
+		var(--radix-popover-content-available-height, calc(100dvh - var(--space-6)))
+	);
 	overflow-y: auto;
 	padding: var(--space-1);
 	scrollbar-width: thin;
+	touch-action: pan-y;
 	overscroll-behavior: contain;
+}
+
+.selectListScrollable {
+	height: min(
+		360px,
+		var(--radix-popover-content-available-height, calc(100dvh - var(--space-6)))
+	);
+	overflow-y: scroll;
 }
 
 .selectOption {
@@ -2043,6 +2058,10 @@
 		max-height: calc(100dvh - 8rem);
 		padding: var(--space-2);
 		padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+	}
+
+	.selectListScrollable {
+		height: calc(100dvh - 8rem);
 	}
 
 	.selectOption {

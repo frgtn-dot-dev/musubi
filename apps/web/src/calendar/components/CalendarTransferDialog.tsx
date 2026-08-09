@@ -478,9 +478,7 @@ export function CalendarTransferDialog({
 								<Select
 									disabled={Boolean(busy)}
 									label="Calendar to export"
-									options={[
-										{ label: "Choose a calendar", value: "" },
-										...calendars.map((calendar) => ({
+									options={calendars.map((calendar) => ({
 											icon: (
 												<span
 													className={styles.calendarDot}
@@ -489,8 +487,7 @@ export function CalendarTransferDialog({
 											),
 											label: calendar.name,
 											value: calendar.id,
-										})),
-									]}
+										}))}
 									value={selectedExportId}
 									onChange={setExportCalendarId}
 								/>
