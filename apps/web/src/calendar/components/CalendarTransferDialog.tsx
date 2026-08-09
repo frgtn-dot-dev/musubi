@@ -380,22 +380,20 @@ export function CalendarTransferDialog({
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
             />
-            {accounts.length > 0 ? (
-              <Select
-                className={styles.destination}
-                disabled={busy === "create"}
-                label="Where"
-                options={[
-                  { label: "On this server", value: "" },
-                  ...accounts.map((account) => ({
-                    label: account.label,
-                    value: `${account.provider}:${account.accountId}`,
-                  })),
-                ]}
-                value={destinationKey}
-                onChange={setDestinationKey}
-              />
-            ) : null}
+            <Select
+              className={styles.destination}
+              disabled={busy === "create"}
+              label="Account"
+              options={[
+                { label: "Musubi", value: "" },
+                ...accounts.map((account) => ({
+                  label: account.label,
+                  value: `${account.provider}:${account.accountId}`,
+                })),
+              ]}
+              value={destinationKey}
+              onChange={setDestinationKey}
+            />
             <ColorPicker
               className={styles.formColorPicker}
               disabled={busy === "create"}

@@ -75,6 +75,9 @@ export const Overview: Story = {
     expect(
       within(dialog).getByRole("button", { name: "Stop syncing Studio" }),
     ).toBeVisible();
+    expect(
+      within(dialog).getByRole("combobox", { name: "Account" }),
+    ).toBeVisible();
   },
 };
 
