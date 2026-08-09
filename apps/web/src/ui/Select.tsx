@@ -259,6 +259,10 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 							)}
 							id={listboxId}
 							role="listbox"
+							onWheel={(event) => {
+								event.currentTarget.scrollTop += event.deltaY;
+								event.preventDefault();
+							}}
 						>
 							{options.map((option) => {
 								const selected = option.value === value;

@@ -3,6 +3,7 @@ import { BriefcaseBusiness, House, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { DESKTOP_MODES } from "../../.storybook/modes";
+import { Dialog } from "./Dialog";
 import { Select, type SelectOption } from "./Select";
 
 const CALENDAR_OPTIONS: readonly SelectOption[] = [
@@ -105,6 +106,37 @@ export const LongList: Story = {
       options={LONG_OPTIONS}
       value="calendar-1"
     />
+  ),
+};
+
+export const InsideDialog: Story = {
+  play: async () => {
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "Calendar" }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: "Calendar options",
+    });
+    listbox.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 200 }),
+    );
+    await waitFor(() => expect(listbox.scrollTop).toBeGreaterThan(0));
+  },
+  render: () => (
+    <Dialog
+      closeLabel="Close calendars"
+      description="Select wheel regression"
+      onOpenChange={() => undefined}
+      open
+      title="Calendar export"
+    >
+      <Select
+        label="Calendar"
+        onChange={() => undefined}
+        options={LONG_OPTIONS}
+        value="calendar-1"
+      />
+    </Dialog>
   ),
 };
 
