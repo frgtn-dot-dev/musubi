@@ -928,7 +928,7 @@
 		360px,
 		var(--radix-popover-content-available-height, calc(100dvh - var(--space-6)))
 	);
-	overflow: hidden;
+	overflow-y: auto;
 }
 
 .selectSheetTitle {

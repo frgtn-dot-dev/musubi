@@ -159,7 +159,12 @@ export function CalendarTransferDialog({
 	const accounts = useMemo(() => {
 		const seen = new Map<
 			string,
-			{ accountId: string; flavor: string | null; label: string; provider: string }
+			{
+				accountId: string;
+				flavor: string | null;
+				label: string;
+				provider: string;
+			}
 		>();
 		for (const calendar of calendars) {
 			if (!calendar.provider || !calendar.accountId) continue;
@@ -394,7 +399,9 @@ export function CalendarTransferDialog({
 									value: "",
 								},
 								...accounts.map((account) => ({
-									description: providerDisplayName({ provider: account.provider }),
+									description: providerDisplayName({
+										provider: account.provider,
+									}),
 									icon: <AccountMark flavor={account.flavor} />,
 									label: account.label,
 									value: `${account.provider}:${account.accountId}`,
@@ -479,15 +486,15 @@ export function CalendarTransferDialog({
 									disabled={Boolean(busy)}
 									label="Calendar to export"
 									options={calendars.map((calendar) => ({
-											icon: (
-												<span
-													className={styles.calendarDot}
-													style={{ backgroundColor: calendar.color }}
-												/>
-											),
-											label: calendar.name,
-											value: calendar.id,
-										}))}
+										icon: (
+											<span
+												className={styles.calendarDot}
+												style={{ backgroundColor: calendar.color }}
+											/>
+										),
+										label: calendar.name,
+										value: calendar.id,
+									}))}
 									value={selectedExportId}
 									onChange={setExportCalendarId}
 								/>
