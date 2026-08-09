@@ -925,6 +925,7 @@
 		min(280px, calc(100vw - var(--space-6)))
 	);
 	max-height: min(360px, var(--radix-popover-content-available-height));
+	overflow: hidden;
 }
 
 .selectSheetTitle {
@@ -940,9 +941,10 @@
 }
 
 .selectList {
-	max-height: inherit;
+	max-height: min(360px, calc(100dvh - var(--space-6)));
 	overflow-y: auto;
 	padding: var(--space-1);
+	scrollbar-width: thin;
 	overscroll-behavior: contain;
 }
 
@@ -2038,6 +2040,7 @@
 	}
 
 	.selectList {
+		max-height: calc(100dvh - 8rem);
 		padding: var(--space-2);
 		padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
 	}

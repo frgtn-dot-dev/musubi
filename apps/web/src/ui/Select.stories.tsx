@@ -41,6 +41,14 @@ function CalendarSelect({ compact = false }: { compact?: boolean }) {
   );
 }
 
+const LONG_OPTIONS: readonly SelectOption[] = Array.from(
+  { length: 20 },
+  (_, index) => ({
+    label: `Calendar ${index + 1}`,
+    value: `calendar-${index + 1}`,
+  }),
+);
+
 const meta = {
   args: {
     label: "Calendar",
@@ -77,6 +85,27 @@ export const Overview: Story = {
 
 export const Compact: Story = {
   render: () => <CalendarSelect compact />,
+};
+
+export const LongList: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("combobox", { name: "Calendar" }));
+    const listbox = await screen.findByRole("listbox", {
+      name: "Calendar options",
+    });
+    await waitFor(() => {
+      expect(listbox.scrollHeight).toBeGreaterThan(listbox.clientHeight);
+    });
+  },
+  render: () => (
+    <Select
+      label="Calendar"
+      onChange={() => undefined}
+      options={LONG_OPTIONS}
+      value="calendar-1"
+    />
+  ),
 };
 
 export const States: Story = {
