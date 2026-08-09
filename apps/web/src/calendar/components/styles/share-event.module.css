@@ -1,7 +1,7 @@
 .content {
   display: grid;
   gap: var(--space-4);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--layer-inline);
 }
 
 .modes {
@@ -54,7 +54,7 @@
 .footer {
   display: flex;
   justify-content: flex-end;
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-3) var(--layer-inline) var(--space-4);
 }
 
 .visibilityRow {

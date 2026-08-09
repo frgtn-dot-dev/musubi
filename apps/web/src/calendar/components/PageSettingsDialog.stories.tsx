@@ -119,6 +119,34 @@ type Story = StoryObj<typeof meta>;
 const expectPageSettings: NonNullable<Story["play"]> = async () => {
   const dialog = await screen.findByRole("dialog", { name: "Page settings" });
   await waitFor(() => expect(dialog).toBeVisible());
+  const pageName = within(dialog).getByLabelText("Page name");
+  const firstIcon = within(dialog)
+    .getByRole("radio", { name: "House" })
+    .closest("label");
+  const lastIcon = within(dialog)
+    .getByRole("radio", { name: "Briefcase" })
+    .closest("label");
+  const defaultPage = within(dialog).getByText("Default page", { exact: true });
+  expect(firstIcon).not.toBeNull();
+  expect(lastIcon).not.toBeNull();
+  expect(
+    Math.abs(
+      firstIcon!.getBoundingClientRect().left -
+        pageName.getBoundingClientRect().left,
+    ),
+  ).toBeLessThan(2);
+  expect(
+    Math.abs(
+      lastIcon!.getBoundingClientRect().right -
+        pageName.getBoundingClientRect().right,
+    ),
+  ).toBeLessThan(2);
+  expect(
+    Math.abs(
+      defaultPage.getBoundingClientRect().left -
+        pageName.getBoundingClientRect().left,
+    ),
+  ).toBeLessThan(2);
 };
 
 export const Overview: Story = {

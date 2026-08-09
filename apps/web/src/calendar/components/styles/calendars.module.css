@@ -65,7 +65,7 @@
 	align-items: end;
 	justify-content: space-between;
 	gap: var(--space-4);
-	padding: var(--space-5) var(--space-5) var(--space-3);
+	padding: var(--space-5) var(--layer-inline) var(--space-3);
 }
 
 .sectionHeading p {
@@ -82,7 +82,7 @@
 	grid-template-columns: minmax(0, 1fr) auto auto auto;
 	align-items: center;
 	gap: var(--space-2);
-	margin: 0 var(--space-5) var(--space-5);
+	margin: 0 var(--layer-inline) var(--space-5);
 	padding: var(--space-2);
 	border: 1px solid var(--border-medium);
 	border-radius: var(--radius-lg);
@@ -130,7 +130,7 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-3);
-	padding: 0 var(--space-5) var(--space-2);
+	padding: 0 var(--layer-inline) var(--space-2);
 }
 
 .groupHeader h3,
@@ -226,7 +226,7 @@
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	align-content: start;
 	gap: var(--space-3);
-	padding: 0 var(--space-5);
+	padding: 0 var(--layer-inline);
 }
 
 .transferCard {
@@ -375,7 +375,7 @@
 }
 
 .error {
-	margin: 0 var(--space-5);
+	margin: 0 var(--layer-inline);
 	padding: var(--space-3);
 }
 
@@ -403,12 +403,12 @@
 @media (max-width: 599px) {
 	.sectionHeading,
 	.groupHeader {
-		padding-inline: var(--space-4);
+		padding-inline: var(--layer-inline);
 	}
 
 	.createBar {
 		grid-template-columns: minmax(0, 1fr) auto;
-		margin-inline: var(--space-4);
+		margin-inline: var(--layer-inline);
 	}
 
 	.createBar > button:last-child {
@@ -421,10 +421,10 @@
 
 	.transferGrid {
 		grid-template-columns: minmax(0, 1fr);
-		padding-inline: var(--space-4);
+		padding-inline: var(--layer-inline);
 	}
 
 	.error {
-		margin-inline: var(--space-4);
+		margin-inline: var(--layer-inline);
 	}
 }

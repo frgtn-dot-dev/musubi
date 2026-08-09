@@ -8,7 +8,7 @@
 }
 
 .sectionHeading {
-  padding: var(--space-5) var(--space-4) var(--space-2);
+  padding: var(--space-5) var(--layer-inline) var(--space-2);
 }
 
 .sectionRows {
@@ -34,13 +34,13 @@
   border-top: 1px solid var(--border-subtle);
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-1);
+  padding: var(--space-3) var(--layer-inline) var(--space-1);
 }
 
 .icons {
   display: grid;
   margin: 0;
-  padding: 0 var(--space-4) var(--space-2);
+  padding: 0 var(--layer-inline) var(--space-2);
   border: 0;
   gap: var(--space-2);
 }
@@ -55,13 +55,11 @@
   text-transform: uppercase;
 }
 
-/* Six across, so twelve icons are always two even rows. `auto-fit` gave the
-   narrow dialog seven and the wide one all twelve, and a row of seven above a row
-   of five reads as a grid that ran out rather than a set of choices. */
+/* Six across, so twelve icons stay in two even rows while each choice shares
+   the available width instead of bunching up at the start of the field. */
 .iconGrid {
   display: grid;
-  grid-template-columns: repeat(6, 44px);
-  justify-content: start;
+  grid-template-columns: repeat(6, minmax(44px, 1fr));
   gap: var(--space-2);
 }
 
@@ -69,7 +67,7 @@
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -111,7 +109,7 @@
 .conflict {
   display: flex;
   align-items: flex-start;
-  margin: var(--space-4) var(--space-4) 0;
+  margin: var(--space-4) var(--layer-inline) 0;
   padding: var(--space-3);
   border: 1px solid
     color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
@@ -141,11 +139,11 @@
 .danger {
   display: flex;
   justify-content: flex-start;
-  padding: var(--space-5) var(--space-4) 0;
+  padding: var(--space-5) var(--layer-inline) 0;
 }
 
 .error {
-  margin: var(--space-4) var(--space-4) 0;
+  margin: var(--space-4) var(--layer-inline) 0;
   color: var(--accent-primary);
   font-size: var(--text-12);
   line-height: 1.45;

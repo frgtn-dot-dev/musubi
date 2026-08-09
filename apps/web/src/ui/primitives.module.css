@@ -1344,6 +1344,12 @@
 	padding-inline: var(--layer-inline);
 }
 
+/* Flush dialog sections own their separators; shared rows still align their
+   content with the header, fields, and footer on the layer axis. */
+.dialogBody_flush .row:not(.row_compact) {
+	padding-inline: var(--layer-inline);
+}
+
 .dialogFooter {
 	display: flex;
 	flex: none;

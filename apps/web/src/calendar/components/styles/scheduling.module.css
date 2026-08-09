@@ -1,7 +1,7 @@
 .content {
   display: grid;
   gap: var(--space-5);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--layer-inline);
 }
 
 /* The poll being written on one side, the polls already out on the other — and
@@ -22,7 +22,7 @@
 
   .content > * {
     min-width: 0;
-    padding: 0 var(--space-4) var(--space-4);
+    padding: 0 var(--layer-inline) var(--space-4);
   }
 
   .content > :last-child {
