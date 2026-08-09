@@ -749,26 +749,20 @@ describe("Workspace", () => {
       expect.objectContaining({ id: "board-game", title: "Board games" }),
     );
 
-    // A plain event deletes on the first click: Undo, not a confirm step, is
-    // what makes it safe.
+    // Deletion has no faithful restore operation, so it confirms before the
+    // write and never promises Undo afterwards.
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onRemoveEvent).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(onRemoveEvent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "board-game" }),
     );
-
-    // Undo puts it back, and the reversal is announced.
-    await user.click(screen.getByRole("button", { name: "Undo" }));
-    expect(commonProps.onCreateEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "board-game" }),
-    );
-    expect(screen.getByRole("status").textContent).toContain(
-      "Change undone.",
-    );
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
-  it("still confirms a delete that Undo cannot cover", async () => {
+  it("also confirms provider-backed event deletion", async () => {
     const user = userEvent.setup();
     const onRemoveEvent = vi.fn(async (event) => ({
       calendars: [],

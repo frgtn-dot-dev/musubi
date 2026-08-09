@@ -79,10 +79,7 @@ export type EventActionHandlers = {
 	onNotice: Notify;
 	onOpenFullEditor?: (values: EventFormValues, event: Event) => void;
 	onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
-	/**
-	 * Puts a deleted event back. Absent means a delete cannot be offered as
-	 * undoable, so it has to be confirmed up front instead.
-	 */
+	/** Creates detached occurrences and split series for scoped recurrence edits. */
 	onRestoreEvent?: (event: Event) => Promise<unknown>;
 	onSetAttendance: (input: {
 		attending: boolean;
@@ -175,11 +172,6 @@ export function EventDetailsPopover({
 		getEditableCalendars(calendars).find((item) =>
 			master.calendars.includes(item.id),
 		) ?? homeCalendar;
-	// Provider-backed deletes cannot be faithfully undone: restoring there makes
-	// a new remote event rather than bringing the original one back.
-	const undoableDelete = Boolean(
-		onRestoreEvent && !master.recurrence && !removeCalendar?.provider,
-	);
 	const editable = canEditEvent(master, calendars);
 	const removable = canRemoveEvent(master, calendars);
 	const targetCalendars = getEditableCalendars(calendars).filter(
@@ -338,10 +330,7 @@ export function EventDetailsPopover({
 				);
 			} else {
 				const result = await onRemoveEvent(master);
-				onNotice(
-					result.removed ? "Event deleted." : "Event removed.",
-					undoableDelete ? { undo: () => onRestoreEvent!(master) } : undefined,
-				);
+				onNotice(result.removed ? "Event deleted." : "Event removed.");
 			}
 			setDeletePrompt(undefined);
 			handleOpenChange(false);
@@ -362,8 +351,6 @@ export function EventDetailsPopover({
 	function beginDelete() {
 		if (master.recurrence) {
 			setDeletePrompt("scope");
-		} else if (undoableDelete) {
-			void handleDelete();
 		} else {
 			setDeletePrompt("confirm");
 		}

@@ -274,7 +274,7 @@ export function PageSettingsDialog({
                   <Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />
                 }
                 ref={deleteButtonRef}
-                variant="secondary"
+                variant="destructive"
                 onClick={() => {
                   setDeleteError("");
                   setConfirmation("delete");
