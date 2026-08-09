@@ -611,13 +611,15 @@ export function EventEditorForm({
 
 												{calendarLocked ? (
 													isHome ? (
-														<span className={styles.homeBadge}>
+														<span
+															aria-label="Home calendar"
+															className={styles.homeBadge}
+														>
 															<House
 																aria-hidden="true"
-																size={13}
+																size={14}
 																strokeWidth={1.7}
 															/>
-															Home
 														</span>
 													) : (
 														<span aria-hidden="true" />
