@@ -41,7 +41,7 @@ scroll ani aktivní objekt.
 **R3 — Vrstva odpovídá závaznosti.** Lehká akce nesmí otevřít těžkou vrstvu:
 
 | Vrstva | Otázka | Závaznost | V Musubi |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Slot / buňka | Kdy? | velmi nízká | selection v gridu |
 | Quick create | Co a kdy? | nízká | `QuickCreate` popover |
 | Preview | Co to je, co teď můžu? | nízká–střední | `EventDetailsPopover` |
@@ -147,7 +147,7 @@ Nové komponenty nesmí zakládat paralelní paletu ani vlastní škálu control
 Aktuální systém obsahuje:
 
 | Rodina | Tokeny / kontrakt |
-|---|---|
+| --- | --- |
 | plochy a text | `--surface-*`, `--border-*`, `--text-*`, světlé i tmavé téma |
 | typografie | `--font-*` a škála `--text-10..--text-26` |
 | spacing | `--space-1..--space-8` (`4 / 8 / 12 / 16 / 20 / 24 / 28 / 32`) |
@@ -173,7 +173,7 @@ obsah a jeho doménové uspořádání, ne novou skořápku dialogu nebo šestn�
 vzhled tlačítka.
 
 | Potřeba | Použít |
-|---|---|
+| --- | --- |
 | akce a ikonová akce | `Button` / `IconButton`; navigace zůstává odkazem s `buttonClassName` |
 | zrušení akce | vždy `variant="secondary"` — stejná role musí mít stejnou váhu; `variant="text"` je pro terciární věci v toku („More options", „Back to calendar") |
 | modal / confirm | `Dialog` / `DialogClose` — jedna hlavička, focus trap, návrat focusu, mobilní sheet |
@@ -246,7 +246,7 @@ míchat — to je zdroj náhodných popoverů a ztraceného focusu.
 **Mezery proti referenci (ověřené greppem, ne dojmem):**
 
 | # | Mezera | Dopad |
-|---|---|---|
+| --- | --- | --- |
 | G1 | **Žádná přímá manipulace** — chybí drag-to-move, resize, drag-to-create | největší; produkt působí jako prohlížeč s formuláři (porušuje R1) |
 | G2 | **Žádné Undo** — mazání jde přes `window.confirm` | R6; každá vratná akce platí cenu dialogu |
 | G3 | `HOUR_HEIGHT = 64` hardcoded v komponentě → **žádná density/zoom** | R7; a Page config `density` **nikdo nečte** |
@@ -780,13 +780,10 @@ kosmetika nativní navigace.
 
 ### Fáze J — Filtry, překryv a ghost jako objekt — **HOTOVO** (2026-07-30)
 
-- **Viditelnost kalendářů je všude na pilulkách** (`CalendarVisibilityPill`), jak
-  to bylo před `f2cfac4` a jak to má nativní klient: stav nese sama pilulka
-  (`aria-pressed`), ne přepínač vedle labelu. Platí pro filter shelf (dočasný
-  filtr) **i pro Page settings** (uložená viditelnost) — je to tatáž otázka, takže
-  jeden control, který se nemůže rozejít. `CalendarVisibilityRow` tím zmizel.
-  **A přepínání ze sidebaru taky** — byl to sloupec chromu pro filtr a druhá kopie
-  téže volby.
+- **Viditelnost kalendářů se nastavuje v Page settings** pomocí pilulek
+  (`CalendarVisibilityPill`): stav nese sama pilulka (`aria-pressed`), ne
+  přepínač vedle labelu. Samostatný filter shelf i přepínání ze sidebaru zmizely;
+  filtr je uloženou vlastností Page a patří k jejím ostatním pokročilým volbám.
 - **Eventy drží odstup od pravé hrany sloupce** (`COLUMN_RIGHT_INSET_PX = 10`).
   Blok nalepený na mřížku se čte jako její součást, a ten pruh je zároveň místo,
   kde se dá stisknout nový event vedle plného. Odstup platí jen pro poslední lane
@@ -1014,7 +1011,6 @@ Po dokončení dolož: co je hotové, jaké invarianty zůstaly zachované, jak 
 klávesnice a screen reader, jak se řeší loading/pending/error/undo, jaké testy, a
 **každou odchylku od těchto pravidel i s důvodem**.
 
-
 ## Multi-week (M8.1)
 
 První post-parity view a zároveň test, jestli view registry drží. Co z toho
@@ -1110,7 +1106,6 @@ vzešlo a nedá se vyčíst z kódu:
   `.ics` subscription feed. `.ics` soubor se skládá v prohlížeči z dat, která
   stránka už má.
 
-
 ## Scheduler — group poll (M8.4)
 
 - Je to **group poll, ne booking page**. Poll hledá termín, který vyhovuje všem;
@@ -1134,7 +1129,6 @@ vzešlo a nedá se vyčíst z kódu:
 - Zatím není: deadline v UI (schéma i API ho mají), předvyplnění dostupnosti
   z vlastního kalendáře, upozornění účastníkům po rozhodnutí, výběr kalendáře
   při zakládání eventu (bere první zapisovatelný).
-
 
 ## 8. Anti-patterny (červené vlajky v review)
 

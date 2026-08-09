@@ -4,7 +4,6 @@ import {
   Menu,
   Plus,
   Search,
-  SlidersHorizontal,
 } from "lucide-react";
 import type { RefObject } from "react";
 import { Button, IconButton } from "~/ui/Button";
@@ -17,14 +16,12 @@ import styles from "./workspace.module.css";
 type ToolbarProps = {
   activeView: CalendarViewId;
   canCreateEvents: boolean;
-  filtersOpen: boolean;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
   onSearch: (query: string) => void;
   onToday: () => void;
-  onToggleFilters: () => void;
   onViewChange: (view: CalendarViewId) => void;
   pageTitle: string;
   periodLabel: string;
@@ -40,14 +37,12 @@ type ToolbarProps = {
 export function Toolbar({
   activeView,
   canCreateEvents,
-  filtersOpen,
   navigationTriggerRef,
   onCreateEvent,
   onOpenSidebar,
   onPeriodChange,
   onSearch,
   onToday,
-  onToggleFilters,
   onViewChange,
   pageTitle,
   periodLabel,
@@ -162,26 +157,6 @@ export function Toolbar({
               </output>
             ) : null}
           </label>
-          <Button
-            aria-expanded={filtersOpen}
-            /* The label is dropped by CSS on a narrower toolbar, and a hidden
-               label is a missing name — the icon alone says nothing to a screen
-               reader. */
-            aria-label="Filters"
-            className={styles.filterButton}
-            icon={
-              <SlidersHorizontal
-                aria-hidden="true"
-                size={17}
-                strokeWidth={1.6}
-              />
-            }
-            size="compact"
-            variant="secondary"
-            onClick={onToggleFilters}
-          >
-            Filters
-          </Button>
           {canCreateEvents ? (
             <Button
               aria-label="Event"

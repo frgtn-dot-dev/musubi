@@ -60,8 +60,8 @@ const calendars = [
 
 /**
  * A crowded account. Twenty calendars is where lists stop being short enough to
- * lay out however they like: the sidebar, the filter bar and every calendar
- * picker have to stay inside their box.
+ * lay out however they like: Page settings and every calendar picker have to
+ * stay inside their box.
  */
 const manyCalendars = [
 	...calendars,
@@ -236,17 +236,40 @@ function respond(route: Route, body: unknown, status = 200) {
 	});
 }
 
-/**
- * The calendar filter pills. Visibility lives on the shelf behind Filters — the
- * sidebar no longer carries a second copy of the same choice.
- */
-async function openFilterShelf(page: Page) {
-	const shelf = page.getByRole("region", { name: "Visible calendars" });
-	if (!(await shelf.isVisible())) {
-		await page.getByRole("button", { name: "Filters" }).click();
+/** Page visibility is edited with the Page's other saved settings. */
+async function openPageFilters(page: Page) {
+	await page.getByRole("button", { name: "Edit My calendar" }).click();
+	const dialog = page.getByRole("dialog", { name: "Page settings" });
+	await expect(dialog).toBeVisible();
+	const filters = dialog.getByRole("heading", { name: "Filters" }).locator("..");
+	return { dialog, filters };
+}
+
+async function setCalendarVisibility(
+	page: Page,
+	calendar: string,
+	visible: boolean,
+) {
+	const { dialog, filters } = await openPageFilters(page);
+	const button = filters.getByRole("button", { name: calendar });
+	if ((await button.getAttribute("aria-pressed")) !== String(visible)) {
+		await button.click();
 	}
-	await expect(shelf).toBeVisible();
-	return shelf;
+	await dialog.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(dialog).toBeHidden();
+}
+
+async function expectCalendarVisibility(
+	page: Page,
+	calendar: string,
+	visible: boolean,
+) {
+	const { dialog, filters } = await openPageFilters(page);
+	await expect(filters.getByRole("button", { name: calendar })).toHaveAttribute(
+		"aria-pressed",
+		String(visible),
+	);
+	await dialog.getByRole("button", { name: "Cancel" }).click();
 }
 
 async function expectNoAccessibilityViolations(page: Page) {
@@ -350,6 +373,18 @@ async function mockAuthenticatedReads(
 		return respond(route, calendarState);
 	});
 	await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
+	await page.route("**/api/v1/pages/*", (route) => {
+		const body = route.request().postDataJSON() as {
+			config: typeof defaultPage.config;
+			name: string;
+		};
+		return respond(route, {
+			...defaultPage,
+			config: body.config,
+			name: body.name,
+			revision: defaultPage.revision + 1,
+		});
+	});
 	// No federated servers by default; the federation test overrides this.
 	await page.route("**/api/v1/federation/connections", (route) =>
 		respond(route, []),
@@ -632,9 +667,7 @@ test("reads, filters and signs out of the authenticated Month", async ({
 	).toBeVisible();
 	await page.keyboard.press("Escape");
 
-	await (await openFilterShelf(page))
-		.getByRole("button", { name: "Studio" })
-		.click();
+	await setCalendarVisibility(page, "Studio", false);
 	await expect(
 		page.getByRole("button", { name: /Studio retreat/ }),
 	).toHaveCount(0);
@@ -787,9 +820,7 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
 	).toHaveCount(0);
 	await expect(page).toHaveURL(/[?&]date=2026-07-26/);
 
-	await (await openFilterShelf(page))
-		.getByRole("button", { name: "Family" })
-		.click();
+	await setCalendarVisibility(page, "Family", false);
 	await expect(page.getByRole("button", { name: /Design review/ })).toHaveCount(
 		0,
 	);
@@ -1311,11 +1342,7 @@ test("exports and imports iCalendar files from calendar management", async ({
 	await expect(page.locator('[class*="toastRegion"]')).toContainText(
 		"Imported 1 event into Roadmap.",
 	);
-	const importedCalendar = (await openFilterShelf(page)).getByRole("button", {
-		name: "Roadmap",
-	});
-	await expect(importedCalendar).toHaveAttribute("aria-pressed", "true");
-	await expect(importedCalendar).toContainText("Roadmap");
+	await expectCalendarVisibility(page, "Roadmap", true);
 	expect(runtimeErrors).toEqual([]);
 });
 
@@ -2125,8 +2152,7 @@ test("keeps Page drafts across switches and saves view plus visibility explicitl
 	});
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	const shelf = await openFilterShelf(page);
-	await shelf.getByRole("button", { name: "Studio" }).click();
+	await setCalendarVisibility(page, "Studio", false);
 	await page.getByRole("radio", { name: "Agenda" }).click();
 
 	await page.getByRole("button", { exact: true, name: "Work" }).click();
@@ -2135,12 +2161,6 @@ test("keeps Page drafts across switches and saves view plus visibility explicitl
 	await expect(page).toHaveURL(
 		`/app/p/${DEFAULT_PAGE_ID}/agenda?date=2026-07-26`,
 	);
-	await expect(
-		page
-			.getByRole("region", { name: "Visible calendars" })
-			.getByRole("button", { name: "Studio" }),
-	).toHaveAttribute("aria-pressed", "false");
-
 	await page
 		.getByRole("region", { name: "Unsaved Page changes" })
 		.getByRole("button", { name: "Save" })
@@ -2178,9 +2198,7 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
 	});
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await expect(
-		(await openFilterShelf(page)).getByRole("button", { name: "Studio" }),
-	).toHaveAttribute("aria-pressed", "true");
+	await expect(page.getByRole("button", { name: "Filters" })).toHaveCount(0);
 
 	await page.getByRole("button", { name: "Edit My calendar" }).click();
 	const settings = page.getByRole("dialog");
@@ -2196,12 +2214,8 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
 		hiddenCalendarIds: ["studio"],
 		mode: "all",
 	});
-	// Read mode now reflects the saved visibility.
-	// Saved visibility shows on the shelf: the pill is off without the page having
-	// to be reopened.
-	await expect(
-		(await openFilterShelf(page)).getByRole("button", { name: "Studio" }),
-	).toHaveAttribute("aria-pressed", "false");
+	// Reopening Page settings reflects the saved visibility.
+	await expectCalendarVisibility(page, "Studio", false);
 });
 
 test("surfaces a page save conflict without overwriting", async ({ page }) => {
@@ -3007,9 +3021,7 @@ test("shows federated calendars and reports an unreachable server", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
 	// The remote calendar and its event render like any other.
-	await expect(
-		(await openFilterShelf(page)).getByRole("button", { name: "Book club" }),
-	).toHaveAttribute("aria-pressed", "true");
+	await expectCalendarVisibility(page, "Book club", true);
 	await page
 		.locator('[data-day-key="2026-07-23"]')
 		.getByRole("button", { name: /\+\d+ more/ })
@@ -3239,9 +3251,7 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
 	);
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await expect(
-		(await openFilterShelf(page)).getByRole("button", { name: "Book club" }),
-	).toHaveAttribute("aria-pressed", "true");
+	await expectCalendarVisibility(page, "Book club", true);
 
 	// The remote calendar is renamed on its own server; our server relays the
 	// change as federated_sync and the snapshot refetches.
@@ -3260,11 +3270,7 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
 		});
 	});
 
-	await expect(
-		(await openFilterShelf(page)).getByRole("button", {
-			name: "Book club (Thursdays)",
-		}),
-	).toHaveAttribute("aria-pressed", "true");
+	await expectCalendarVisibility(page, "Book club (Thursdays)", true);
 });
 
 test("joins a calendar from a pasted cross-server invite link", async ({
@@ -4068,19 +4074,10 @@ test("keeps calendar chrome consistent and keyboard operable", async ({
 	const navigation = page.getByRole("complementary", {
 		name: "Workspace navigation",
 	});
-	const filters = page.getByRole("button", { name: "Filters" });
-	await filters.click();
-
-	// Visibility lives on the shelf only: the sidebar used to carry a second copy
-	// of the same switches, which was a column of chrome for a filter.
-	const shelf = page.getByRole("region", { name: "Visible calendars" });
-	await expect(shelf).toBeVisible();
+	// Page filters are settings, not permanent calendar chrome.
+	await expect(page.getByRole("button", { name: "Filters" })).toHaveCount(0);
 	await expect(navigation.getByRole("switch")).toHaveCount(0);
-
-	const shelfStudio = shelf.getByRole("button", { name: "Studio" });
-	await expect(shelfStudio).toHaveAttribute("aria-pressed", "true");
-	await shelfStudio.click();
-	await expect(shelfStudio).toHaveAttribute("aria-pressed", "false");
+	await setCalendarVisibility(page, "Studio", false);
 	await expect(
 		page.getByRole("button", { name: /Studio retreat/ }),
 	).toHaveCount(0);
@@ -4117,8 +4114,8 @@ test("moves focus through the mobile navigation drawer", async ({ page }) => {
 	await navigation.evaluate((element) =>
 		Promise.all(element.getAnimations().map((animation) => animation.finished)),
 	);
-	// Touch targets in the drawer: the page rows are what it carries now that the
-	// calendar switches moved to the filter shelf.
+	// Touch targets in the drawer: filters live in each Page's settings, so the
+	// drawer only carries the Page rows.
 	const pageRow = navigation.getByRole("button", {
 		exact: true,
 		name: "My calendar",
@@ -6370,14 +6367,12 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 	await expect(page.getByRole("grid").first()).toBeVisible();
 	await expectNoSidewaysScroll("month grid");
 
-	// The filter shelf: twenty pills scroll sideways, they do not stack up rows
-	// until the calendar is off the screen.
-	const shelf = await openFilterShelf(page);
-	await expect(shelf.getByRole("button")).toHaveCount(manyCalendars.length);
-	await expectNoSidewaysScroll("filter shelf");
-	const shelfBox = (await shelf.boundingBox())!;
-	expect(shelfBox.height).toBeLessThan(page.viewportSize()!.height / 4);
+	// Page filters hold every calendar without introducing page-level overflow.
+	const { dialog: pageSettings, filters: pageFilters } = await openPageFilters(page);
+	await expect(pageFilters.getByRole("button")).toHaveCount(manyCalendars.length);
+	await expectNoSidewaysScroll("Page filters");
 	await expectNoAccessibilityViolations(page);
+	await pageSettings.getByRole("button", { name: "Cancel" }).click();
 
 	// The manage dialog holds the same twenty rows and scrolls its own body.
 	await page.getByRole("button", { name: "Calendars" }).click();
@@ -6696,12 +6691,6 @@ test("ui catalogue", async ({ page }) => {
 	await layer("dialog-new-page", "New page");
 	// The page each sidebar row edits, which is a hover action rather than a row.
 	await layer("dialog-page-settings", "Edit My calendar");
-
-	// Not layers: the filter bar and the search field live in the toolbar, so they
-	// are states of the page rather than things on top of it.
-	await page.getByRole("button", { exact: true, name: "Filters" }).click();
-	await shot("app-filters-open");
-	await page.getByRole("button", { exact: true, name: "Filters" }).click();
 
 	// The search field is always in the toolbar; nothing opens it.
 	await page.getByRole("searchbox", { name: "Search events" }).fill("review");

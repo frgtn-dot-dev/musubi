@@ -28,7 +28,6 @@ import {
 } from "react";
 import { Button } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
-import { SectionLabel } from "~/ui/SectionLabel";
 import { StaleBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
 import {
@@ -47,23 +46,18 @@ import type { Notify } from "../notice";
 
 import { shortcutFor } from "../shortcuts";
 import { useSwipePeriod } from "../use-swipe-period";
-import {
-  useCompactViewport,
-  useNarrowViewport,
-} from "~/design/use-narrow-viewport";
+import { useNarrowViewport } from "~/design/use-narrow-viewport";
 import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
 import {
   calendarIdsForVisibility,
   newPageConfig,
   pageConfigEquals,
-  toggleCalendarVisibility,
   viewConfigFor,
   type SavePageResult,
 } from "../page-editor";
 import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
-import { CalendarVisibilityPill } from "./CalendarVisibilityPill";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { SchedulingDialog } from "./SchedulingDialog";
@@ -289,10 +283,6 @@ export function Workspace({
   const swipePeriod = useSwipePeriod((offset) => changePeriod(offset));
   // Phone chrome has less room for a date label than it has date to spell out.
   const narrow = useNarrowViewport();
-  // No Filters toggle fits in a compact toolbar, so the shelf is simply always
-  // there — as a sideways-scrolling strip, like the native client's filter bar.
-  const compact = useCompactViewport();
-  const [filtersOpen, setFiltersOpen] = useState(false);
   // Direct renders (tests/stories) can own drafts locally. The route passes the
   // production state so data gates and canonical redirects cannot erase it.
   const [localPageDrafts, setLocalPageDrafts] = useState<
@@ -856,17 +846,6 @@ export function Workspace({
     return () => window.removeEventListener("beforeunload", warn);
   }, [pageDrafts.size]);
 
-  function handleToggleCalendar(calendarId: string) {
-    updatePageDraft(activePage, (config) => ({
-      ...config,
-      calendarVisibility: toggleCalendarVisibility(
-        config.calendarVisibility,
-        calendarId,
-        calendars,
-      ),
-    }));
-  }
-
   /**
    * A new Page takes its name and icon from the dialog and everything else from
    * the state it was created in; its settings dialog owns the rest afterwards.
@@ -966,14 +945,12 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
-          filtersOpen={filtersOpen}
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
           onPeriodChange={changePeriod}
           onOpenSidebar={() => setSidebarOpen(true)}
           onSearch={setSearchQuery}
           onToday={() => onDateChange(toDateKey(new Date()))}
-          onToggleFilters={() => setFiltersOpen((open) => !open)}
           onViewChange={handleViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
@@ -1025,30 +1002,6 @@ export function Workspace({
                   Save
                 </Button>
               )}
-            </div>
-          </section>
-        ) : null}
-
-        {filtersOpen || compact ? (
-          <section
-            className={styles.filterBar}
-            aria-labelledby="calendar-filter-label"
-          >
-            <SectionLabel
-              className={styles.filterBarLabel}
-              id="calendar-filter-label"
-            >
-              Visible calendars
-            </SectionLabel>
-            <div className={styles.filterCalendarList}>
-              {calendars.map((calendar) => (
-                <CalendarVisibilityPill
-                  calendar={calendar}
-                  key={calendar.id}
-                  visible={visibleCalendarIds.includes(calendar.id)}
-                  onVisibleChange={() => handleToggleCalendar(calendar.id)}
-                />
-              ))}
             </div>
           </section>
         ) : null}

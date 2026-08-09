@@ -535,40 +535,6 @@
 	gap: var(--space-2);
 }
 
-.filterBar {
-	display: grid;
-	min-height: 51px;
-	grid-template-columns: auto minmax(0, 1fr);
-	align-items: center;
-	gap: var(--space-3);
-	padding: 7px 28px;
-	border-bottom: 1px solid var(--border-subtle);
-}
-
-.filterBarLabel {
-	margin: 0;
-	white-space: nowrap;
-}
-
-/* One row, always. Wrapping let twenty calendars fill four rows and push the
-   grid down the screen; the shelf scrolls sideways instead, which is what it
-   already did on a phone. */
-.filterCalendarList {
-	--filter-pill-height: 32px;
-
-	display: flex;
-	min-width: 0;
-	flex-wrap: nowrap;
-	gap: var(--space-2);
-	overflow-x: auto;
-	overscroll-behavior-x: contain;
-	scrollbar-width: none;
-}
-
-.filterCalendarList::-webkit-scrollbar {
-	display: none;
-}
-
 /* On/off by how it looks, not by a control beside a label: the shelf is a strip
    of choices, so the pill itself carries the state. */
 .filterPill {
@@ -1926,10 +1892,6 @@
 		min-width: 0;
 	}
 
-	.toolbar .filterButton > span:last-child {
-		display: none;
-	}
-
 	.agendaList {
 		--agenda-date-column: 178px;
 		--agenda-inline: 22px;
@@ -2007,8 +1969,7 @@
 		font-size: 0.74rem;
 	}
 
-	.toolbarActions .searchField,
-	.toolbar .filterButton {
+	.toolbarActions .searchField {
 		display: none;
 	}
 
@@ -2024,8 +1985,7 @@
 		padding: 0;
 	}
 
-	.pageDraftBar,
-	.filterBar {
+	.pageDraftBar {
 		padding-inline: 14px;
 	}
 
@@ -2118,27 +2078,6 @@
 
 	.pageDraftBar p {
 		padding-top: 7px;
-	}
-
-	.filterBar {
-		min-height: 0;
-		grid-template-columns: minmax(0, 1fr);
-		gap: 0;
-		padding: 7px 0;
-	}
-
-	.filterBarLabel {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-	}
-
-	/* The rest of this recipe is the shelf's default now; only the gutter, which
-     replaces the label's column, is narrow-only. */
-	.filterCalendarList {
-		padding-inline: 14px;
 	}
 
 	.monthView {

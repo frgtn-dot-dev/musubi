@@ -11,11 +11,8 @@ type CalendarVisibilityPillProps = {
 /**
  * One calendar, shown or hidden, as a pill you tap.
  *
- * Used both for the temporary filter shelf and for a Page's saved visibility: it
- * is the same question in both places, and one control means the two cannot drift
- * apart. A pill answers "is this on" by how it looks rather than by a switch
- * beside a label, which is what the native client's filter bar does — and a strip
- * of them reads as a set of choices rather than a settings list.
+ * A Page's saved visibility control. A pill answers "is this on" by how it looks
+ * rather than by placing a separate switch beside every calendar.
  */
 export function CalendarVisibilityPill({
   calendar,

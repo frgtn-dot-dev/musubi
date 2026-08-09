@@ -452,11 +452,11 @@ export function PageSettingsDialog({
 
         <section className={styles.section}>
           <SectionLabel className={styles.sectionHeading} level={3}>
-            Visible calendars
+            Filters
           </SectionLabel>
-          {/* Same pills as the filter shelf: the choice is identical, so the
-              control should be too — a column of switches also made the dialog
-              as tall as the calendar list. */}
+          {/* Calendar visibility belongs to the Page, so it is configured here
+              with its other saved presentation choices instead of in the
+              calendar toolbar. */}
           <div className={styles.pillGrid}>
             {calendars.map((calendar) => (
               <CalendarVisibilityPill

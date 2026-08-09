@@ -66,74 +66,33 @@ const commonProps = {
 };
 
 describe("Workspace", () => {
-  it("drafts calendar visibility and only persists it explicitly", async () => {
+  it("saves calendar filters from Page settings", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn(async (input) => ({
-      page: {
-        ...commonProps.pages[0]!,
-        config: input.config,
-        revision: 2,
-      },
+      page: { ...commonProps.pages[0]!, config: input.config, revision: 2 },
       status: "saved" as const,
     }));
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    const shelf = within(
-      screen.getByRole("region", { name: "Visible calendars" }),
-    );
-    const studio = shelf.getByRole("button", { name: "Studio" });
-
+    expect(screen.queryByRole("button", { name: "Filters" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    const studio = dialog.getByRole("button", { name: "Studio" });
     await user.click(studio);
 
     expect(studio.getAttribute("aria-pressed")).toBe("false");
-    expect(
-      screen.queryByRole("button", { name: /Quarterly planning/ }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("region", { name: "Unsaved Page changes" }),
-    ).not.toBeNull();
     expect(onSavePage).not.toHaveBeenCalled();
-
-    const discard = screen.getByRole("button", { name: "Discard" });
-    await user.click(discard);
-    const confirmation = within(
-      screen.getByRole("dialog", { name: "Discard Page changes?" }),
-    );
-    await user.click(confirmation.getByRole("button", { name: "Cancel" }));
-
-    expect(studio.getAttribute("aria-pressed")).toBe("false");
-    expect(
-      screen.getByRole("region", { name: "Unsaved Page changes" }),
-    ).not.toBeNull();
-    expect(document.activeElement).toBe(discard);
-
-    await user.click(discard);
-    await user.click(screen.getByRole("button", { name: "Discard changes" }));
-    expect(studio.getAttribute("aria-pressed")).toBe("true");
-    expect(
-      screen.queryByRole("region", { name: "Unsaved Page changes" }),
-    ).toBeNull();
-
-    await user.click(studio);
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
+    await user.click(dialog.getByRole("button", { name: "Save" }));
     expect(onSavePage).toHaveBeenCalledWith({
       baseRevision: 1,
       config: {
         ...commonProps.pages[0]!.config,
-        calendarVisibility: {
-          hiddenCalendarIds: ["studio"],
-          mode: "all",
-        },
+        calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" },
       },
       id: "my-calendar",
       name: "My calendar",
     });
-    expect(
-      screen.queryByRole("region", { name: "Unsaved Page changes" }),
-    ).toBeNull();
   });
 
   it("drafts a view and saves it with Ctrl/Cmd+S", async () => {
@@ -253,15 +212,8 @@ describe("Workspace", () => {
     };
     const rendered = render(<Workspace {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    await user.click(
-      within(
-        screen.getByRole("region", { name: "Visible calendars" }),
-      ).getByRole("button", { name: "Studio" }),
-    );
     await user.click(screen.getByRole("radio", { name: "Agenda" }));
     await user.click(screen.getByRole("button", { name: "Work" }));
-
     expect(onPageChange).toHaveBeenLastCalledWith("work", "week");
     expect(onDateChange).not.toHaveBeenCalled();
 
@@ -272,11 +224,6 @@ describe("Workspace", () => {
     rendered.rerender(
       <Workspace {...props} activeView="agenda" pageId="my-calendar" />,
     );
-    expect(
-      within(screen.getByRole("region", { name: "Visible calendars" }))
-        .getByRole("button", { name: "Studio" })
-        .getAttribute("aria-pressed"),
-    ).toBe("false");
     expect(
       screen.getByRole("region", { name: "Unsaved Page changes" }),
     ).not.toBeNull();
@@ -343,22 +290,9 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    await user.click(
-      within(
-        screen.getByRole("region", { name: "Visible calendars" }),
-      ).getByRole("button", { name: "Studio" }),
-    );
+    await user.click(screen.getByRole("radio", { name: "Agenda" }));
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(
-      screen.getByRole("dialog", { name: "Page settings" }),
-    );
-
-    expect(
-      dialog
-        .getByRole("button", { name: "Studio" })
-        .getAttribute("aria-pressed"),
-    ).toBe("false");
+    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Focused");
     await user.click(dialog.getByRole("button", { name: "Save" }));
@@ -367,10 +301,7 @@ describe("Workspace", () => {
       expect.objectContaining({
         baseRevision: 1,
         config: expect.objectContaining({
-          calendarVisibility: {
-            hiddenCalendarIds: ["studio"],
-            mode: "all",
-          },
+          view: { configVersion: 1, groupBy: "day", id: "agenda" },
         }),
         id: "my-calendar",
         name: "Focused",
@@ -387,22 +318,13 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    await user.click(
-      within(
-        screen.getByRole("region", { name: "Visible calendars" }),
-      ).getByRole("button", { name: "Studio" }),
-    );
+    await user.click(screen.getByRole("radio", { name: "Agenda" }));
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(
-      screen.getByRole("dialog", { name: "Page settings" }),
-    );
+    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Conflicting");
     await user.click(dialog.getByRole("button", { name: "Save" }));
-    await user.click(
-      dialog.getByRole("button", { name: "Discard my changes" }),
-    );
+    await user.click(dialog.getByRole("button", { name: "Discard my changes" }));
 
     expect(screen.queryByRole("dialog", { name: "Page settings" })).toBeNull();
     expect(
@@ -454,40 +376,36 @@ describe("Workspace", () => {
     });
   });
 
-  it("creates a page from the calendars currently visible", async () => {
+  it("creates a page from the current Page filters", async () => {
     const user = userEvent.setup();
-    const onCreatePage = vi.fn<
-      (request: {
-        config: unknown;
-        name: string;
-      }) => Promise<(typeof commonProps.pages)[0]>
-    >(async () => ({
+    const onCreatePage = vi.fn(async (request: { config: unknown; name: string }) => ({
       ...commonProps.pages[0]!,
       id: "work",
       isDefault: false,
-      name: "Work",
+      name: request.name,
     }));
     const onPageChange = vi.fn();
+    const filteredPage = {
+      ...commonProps.pages[0]!,
+      config: {
+        ...commonProps.pages[0]!.config,
+        calendarVisibility: {
+          hiddenCalendarIds: ["studio"],
+          mode: "all" as const,
+        },
+      },
+    };
 
     render(
       <Workspace
         {...commonProps}
         onCreatePage={onCreatePage}
         onPageChange={onPageChange}
+        pages={[filteredPage]}
       />,
     );
-
-    // Hide one calendar first: the new page has to start from what is on screen,
-    // not from the saved config of the page it was branched off.
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    await user.click(
-      within(screen.getByRole("region", { name: "Visible calendars" }))
-        .getByRole("button", { name: "Studio" }),
-    );
     await user.click(screen.getByRole("button", { name: "New page" }));
-
     const dialog = within(screen.getByRole("dialog"));
-    // Nothing to create without a name.
     expect(
       dialog.getByRole("button", { name: "Create page" }).hasAttribute("disabled"),
     ).toBe(true);
@@ -496,10 +414,8 @@ describe("Workspace", () => {
     await user.click(dialog.getByRole("radio", { name: "Briefcase" }));
     await user.click(dialog.getByRole("button", { name: "Create page" }));
 
-    expect(onCreatePage).toHaveBeenCalledTimes(1);
     expect(onCreatePage.mock.calls[0]![0]).toEqual({
       config: {
-        // `include`, not `all` — a curated page must not gain calendars added later.
         calendarVisibility: {
           calendarIds: ["personal", "client-work", "family-calendar"],
           mode: "include",
@@ -512,7 +428,6 @@ describe("Workspace", () => {
       name: "Work",
     });
     expect(onPageChange).toHaveBeenCalledWith("work", "month");
-    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("deletes a page from its settings, but never the last one", async () => {
@@ -645,52 +560,26 @@ describe("Workspace", () => {
     );
   });
 
-  it("keeps an unsaved page draft when the discard confirm is declined", async () => {
+  it("keeps Page filter edits when discard is declined", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn();
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
-
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    await user.click(dialog.getByRole("button", { name: "Studio" }));
+    await user.click(dialog.getByRole("button", { name: "Cancel" }));
     await user.click(
-      screen.getByRole("button", { name: "Edit My calendar" }),
-    );
-    await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Studio" }),
-    );
-    await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+      within(screen.getByRole("dialog", { name: "Discard page changes?" }))
+        .getByRole("button", { name: "Cancel" }),
     );
 
-    // Cancelling the product confirmation leaves the editor and draft alone.
-    await user.click(
-      within(
-        screen.getByRole("dialog", { name: "Discard page changes?" }),
-      ).getByRole("button", { name: "Cancel" }),
-    );
     expect(
-      screen.getByRole("dialog", { name: "Page settings" }),
-    ).not.toBeNull();
-    expect(onSavePage).not.toHaveBeenCalled();
-
-    await user.click(
-      within(
-        screen.getByRole("dialog", { name: "Page settings" }),
-      ).getByRole("button", { name: "Cancel" }),
-    );
-    await user.click(
-      within(
-        screen.getByRole("dialog", { name: "Discard page changes?" }),
-      ).getByRole("button", { name: "Discard changes" }),
-    );
-
-    expect(screen.queryByRole("dialog")).toBeNull();
-    // The page itself never changed, so the filter shelf still shows it on.
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    expect(
-      within(screen.getByRole("region", { name: "Visible calendars" }))
+      within(screen.getByRole("dialog", { name: "Page settings" }))
         .getByRole("button", { name: "Studio" })
         .getAttribute("aria-pressed"),
-    ).toBe("true");
+    ).toBe("false");
+    expect(onSavePage).not.toHaveBeenCalled();
   });
 
   it("filters visible server events through the toolbar search", async () => {

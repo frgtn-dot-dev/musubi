@@ -7,13 +7,6 @@ import { useSyncExternalStore } from "react";
  */
 const NARROW_QUERY = "(max-width: 599px)";
 
-/**
- * The width at which the toolbar drops search and the Filters toggle for want of
- * room. Below it the calendar filters have to be shown some other way, or there
- * is no way to reach them at all.
- */
-const COMPACT_QUERY = "(max-width: 1023px)";
-
 function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (onChange) => {
@@ -37,9 +30,4 @@ function useMediaQuery(query: string): boolean {
  */
 export function useNarrowViewport(): boolean {
   return useMediaQuery(NARROW_QUERY);
-}
-
-/** Whether the toolbar is too tight to carry search and the Filters toggle. */
-export function useCompactViewport(): boolean {
-  return useMediaQuery(COMPACT_QUERY);
 }
