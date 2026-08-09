@@ -1190,6 +1190,13 @@
 	animation: dialog-overlay-in var(--motion-standard) ease both;
 }
 
+/* Portaled dialogs are body siblings. Keep only the newest backdrop active so
+   opening a child dialog does not multiply the dimming and blur. */
+.dialogOverlay:has(~ .dialogOverlay[data-state="open"]) {
+	background: transparent;
+	backdrop-filter: none;
+}
+
 .dialog {
 	position: fixed;
 	z-index: 121;
