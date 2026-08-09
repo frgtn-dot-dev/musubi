@@ -45,24 +45,6 @@
   gap: var(--space-3);
 }
 
-.durations {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.durations legend {
-  padding: 0 var(--space-2) 0 0;
-  color: var(--text-muted);
-  font-size: var(--text-11);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .field {
   display: grid;
   gap: var(--space-2);
@@ -172,23 +154,6 @@
   width: 8rem;
 }
 
-.minutesField {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.minutes {
-  width: 4.5rem;
-  padding: 5px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  font-size: var(--text-12);
-  font-variant-numeric: tabular-nums;
-}
-
 .deadlineRow {
   display: flex;
   align-items: center;
@@ -211,16 +176,6 @@
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-12);
-}
-
-.minutesOr,
-.minutesUnit {
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-}
-
-.minutesOr {
-  padding-right: 2px;
 }
 
 .clear {

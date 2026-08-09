@@ -169,7 +169,6 @@ function PollRoute() {
           </span>
           <h1>{data.title}</h1>
           <p className={styles.organizer}>
-            {data.durationMinutes} minutes ·{" "}
             {data.respondents === 1
               ? "1 person has answered"
               : `${data.respondents} people have answered`}

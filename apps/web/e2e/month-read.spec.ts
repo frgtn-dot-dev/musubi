@@ -7335,16 +7335,11 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	const dialog = page.getByRole("dialog", { name: "Find a time" });
 
 	await dialog.getByLabel("What is it about").fill("Studio planning");
-	// Exact: the poll row below reads "60 minutes · waiting for answers", which a
-	// substring match happily grabs too.
-	await dialog.getByRole("button", { exact: true, name: "60 min" }).click();
 	// Days and times are asked separately, so one time covers every day picked —
 	// that is the whole point of the grid, and what makes a long horizon bearable.
 	await dialog.getByRole("button", { name: "Remove 18:00" }).click();
 	await dialog.getByLabel("Add a time").fill("15:00");
 	await dialog.getByRole("button", { name: "Add", exact: true }).click();
-	// Not one of the five presets, which is the point of the field beside them.
-	await dialog.getByLabel("Minutes").fill("25");
 	await dialog.getByRole("button", { exact: true, name: "18" }).click();
 	await dialog.getByRole("button", { exact: true, name: "19" }).click();
 	await expect(dialog.getByText("2 days × 1 time = 2 options")).toBeVisible();
@@ -7357,10 +7352,8 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	await expect(
 		results.getByRole("textbox", { name: "Poll link" }),
 	).toBeVisible();
-	expect(created).toMatchObject({
-		durationMinutes: 25,
-		title: "Studio planning",
-	});
+	expect(created).toMatchObject({ title: "Studio planning" });
+	expect(created).not.toHaveProperty("durationMinutes");
 	const sent = (created as { slots: Array<{ start: string }> }).slots;
 	expect(sent).toHaveLength(2);
 	// The organizer typed a wall clock in Europe/Prague; both days carry it.
@@ -7588,7 +7581,6 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	await page.waitForLoadState("networkidle");
 
 	await page.getByLabel("What is it about").fill("Studio planning");
-	await page.getByRole("button", { exact: true, name: "45 min" }).click();
 	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await page.getByRole("button", { exact: true, name: "11" }).click();
 	await page.getByRole("button", { name: "Continue" }).click();
@@ -7612,7 +7604,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	);
 	// The name rides along, so the poll is not from "Guest" — the account it went
 	// to was made a second ago and has none.
-	expect(created).toMatchObject({ durationMinutes: 45, name: "Zoe" });
+	expect(created).toMatchObject({ name: "Zoe" });
 	expect(created!.slots).toHaveLength(2);
 	expect(hydrationErrors).toEqual([]);
 

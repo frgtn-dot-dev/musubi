@@ -427,7 +427,6 @@ export function createPoll(input: {
   /** When answers stop being taken, if the organizer set a date. */
   deadline?: string;
   description?: string;
-  durationMinutes: number;
   /** Names an account that has none yet — a poll made from the public page. */
   name?: string;
   slots: Array<{ start: string }>;

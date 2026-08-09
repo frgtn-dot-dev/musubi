@@ -154,9 +154,7 @@ function DraftSummary({ draft }: { draft: PollDraft }) {
       <dt>{days.length === 1 ? "Day" : "Days"}</dt>
       <dd>{days.join(", ")}</dd>
       <dt>{times.length === 1 ? "Time" : "Times"}</dt>
-      <dd>
-        {times.join(", ")} · {draft.durationMinutes} minutes each
-      </dd>
+      <dd>{times.join(", ")}</dd>
     </dl>
   );
 }

@@ -1122,9 +1122,9 @@ vzešlo a nedá se vyčíst z kódu:
 - Je to **group poll, ne booking page**. Poll hledá termín, který vyhovuje všem;
   booking page rozdává sloty z organizátorova volna. PRD §19.2 to výslovně
   odděluje a míchat je do jedné obrazovky je ta chyba, před kterou varuje.
-- **Konec slotu počítá server z délky ankety**, ne z klienta: jedna anketa se ptá
-  na jednu délku schůzky a sloty, které se o ní neshodnou, dělají z překryvu
-  nesmysl.
+- Scheduler se už na délku neptá. Rozhodnutý termín vytvoří server jako
+  **celodenní event** na zvoleném dni; staré `durationMinutes` zůstává pouze v
+  uloženém kontraktu kvůli existujícím anketám a klientům.
 - „Pokud bude nutné" je **plnohodnotná odpověď, ne chybějící ano** — a v pořadí
   slotů slouží jako tiebreak, ne jako polovina hlasu. Slot, kde dva řekli ano,
   bije slot, kde čtyři řekli „když to jinak nejde".

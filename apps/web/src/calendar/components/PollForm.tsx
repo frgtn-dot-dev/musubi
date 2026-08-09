@@ -10,11 +10,6 @@ import { Field } from "~/ui/Field";
 import { TimePicker } from "~/ui/TimePicker";
 import styles from "./styles/scheduling.module.css";
 
-/** Quick presets. The field beside them takes anything from 5 minutes to a day. */
-const DURATIONS = [15, 30, 45, 60, 90];
-const MIN_DURATION = 5; // The API's floor.
-const MAX_DURATION = 24 * 60;
-
 /**
  * Matches the API's cap. Beyond this a poll stops being a question and becomes a
  * survey — and the grid people have to answer stops fitting on a phone.
@@ -24,13 +19,12 @@ const MAX_POLL_SLOTS = 60;
 export type PollDraft = {
 	/** End of the chosen day, in the organizer's own zone. Absent means no limit. */
 	deadline?: string;
-	durationMinutes: number;
 	slots: Array<{ start: string }>;
 	title: string;
 };
 
 /**
- * What a poll asks: which days, at what times, for how long.
+ * What a poll asks: which days and at what times.
  *
  * Days and times are separate on purpose — one time covers every day picked, so
  * three weeks of evenings is a drag and a time rather than twenty-one rows.
@@ -55,21 +49,12 @@ export function PollForm({
 	weekStartsOn: Settings["weekStartsOn"];
 }) {
 	const [title, setTitle] = useState("");
-	// Held as text so the field can be empty while it is being retyped; five
-	// presets do not cover everybody's meeting.
-	const [duration, setDuration] = useState("60");
 	const [days, setDays] = useState<string[]>([]);
 	const [times, setTimes] = useState<string[]>(["18:00"]);
 	const [newTime, setNewTime] = useState("19:00");
 	// Empty by default: most polls are answered in a day or two and a deadline
 	// nobody asked for is one more decision at the point of writing the question.
 	const [deadline, setDeadline] = useState("");
-
-	const durationMinutes = Number(duration);
-	const durationValid =
-		Number.isInteger(durationMinutes) &&
-		durationMinutes >= MIN_DURATION &&
-		durationMinutes <= MAX_DURATION;
 
 	// Days × times. Written out because it is what the poll actually asks, and
 	// because seeing "6 days × 2 times = 12 options" is what stops somebody
@@ -78,8 +63,7 @@ export function PollForm({
 		times.map((time) => ({ start: new Date(`${day}T${time}`).toISOString() })),
 	);
 	const tooMany = slots.length > MAX_POLL_SLOTS;
-	const ready =
-		title.trim().length > 0 && slots.length > 0 && !tooMany && durationValid;
+	const ready = title.trim().length > 0 && slots.length > 0 && !tooMany;
 
 	return (
 		<div className={styles.form}>
@@ -153,44 +137,6 @@ export function PollForm({
 				</div>
 			</div>
 
-			<fieldset className={styles.durations}>
-				<legend>How long</legend>
-				{DURATIONS.map((minutes) => (
-					<Button
-						aria-pressed={durationMinutes === minutes}
-						key={minutes}
-						size="compact"
-						variant={durationMinutes === minutes ? "primary" : "secondary"}
-						onClick={() => setDuration(String(minutes))}
-					>
-						{minutes} min
-					</Button>
-				))}
-				{/* "or" earns its word: the field carries the same value as the chips, so
-            without it the number beside a lit-up "60 min" reads as a second,
-            contradictory setting instead of the way to type a sixth one. */}
-				<span className={styles.minutesField}>
-					<span className={styles.minutesOr}>or</span>
-					<input
-						aria-label="Minutes"
-						className={styles.minutes}
-						inputMode="numeric"
-						max={MAX_DURATION}
-						min={MIN_DURATION}
-						type="number"
-						value={duration}
-						onChange={(event) => setDuration(event.target.value)}
-					/>
-					<span className={styles.minutesUnit}>min</span>
-				</span>
-			</fieldset>
-
-			{duration !== "" && !durationValid ? (
-				<p className={styles.error} role="alert">
-					A slot lasts between {MIN_DURATION} minutes and a whole day.
-				</p>
-			) : null}
-
 			{/* Optional, and last: a poll works without one, and the server refuses a
           vote after it rather than anything having to run on a schedule. */}
 			<div className={styles.deadlineRow}>
@@ -248,7 +194,6 @@ export function PollForm({
 				loading={busy}
 				onClick={() =>
 					onSubmit({
-						durationMinutes,
 						slots,
 						title: title.trim(),
 						// The end of that day where the organizer is, not midnight UTC: a

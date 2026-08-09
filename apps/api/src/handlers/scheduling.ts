@@ -14,7 +14,7 @@ import {
 } from "@musubi/db";
 import { BadRequestError, ForbiddenError, NotFoundError } from "@musubi/types";
 import { config } from "@musubi/config";
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { assertCan } from "../permissions";
 
 const VOTE_VALUES = new Set(["if-needed", "no", "yes"]);
@@ -25,6 +25,7 @@ const VOTE_VALUES = new Set(["if-needed", "no", "yes"]);
  */
 const MAX_SLOTS = 60;
 const MAX_TITLE = 120;
+const ALL_DAY_DURATION_MINUTES = 24 * 60;
 
 function pollToken() {
   return randomBytes(16).toString("hex");
@@ -36,13 +37,9 @@ function pollUrl(token: string) {
 
 export async function handlerCreatePoll(req: Request, res: Response) {
   const title = String(req.body?.title ?? "").trim().slice(0, MAX_TITLE);
-  const durationMinutes = Number(req.body?.durationMinutes);
   const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
 
   if (!title) throw new BadRequestError("A poll needs a title...");
-  if (!Number.isInteger(durationMinutes) || durationMinutes < 5) {
-    throw new BadRequestError("durationMinutes must be at least 5...");
-  }
   if (slots.length === 0) {
     throw new BadRequestError("A poll needs at least one time to choose from...");
   }
@@ -55,10 +52,10 @@ export async function handlerCreatePoll(req: Request, res: Response) {
     if (Number.isNaN(start.getTime())) {
       throw new BadRequestError("Every slot needs a valid start...");
     }
-    // The end comes from the poll's duration, never from the client: one poll
-    // asks about one length of meeting, and letting slots disagree about that
-    // would make the overlap meaningless.
-    return { end: new Date(start.getTime() + durationMinutes * 60_000), start };
+    return {
+      end: new Date(start.getTime() + ALL_DAY_DURATION_MINUTES * 60_000),
+      start,
+    };
   });
 
   // A poll made from the public page belongs to an account created seconds ago,
@@ -71,7 +68,9 @@ export async function handlerCreatePoll(req: Request, res: Response) {
     {
       deadline: req.body?.deadline ? new Date(String(req.body.deadline)) : null,
       description: String(req.body?.description ?? "").trim() || null,
-      durationMinutes,
+      // Kept in storage and projections for older clients; new polls become
+      // all-day events and no longer ask the organizer for a duration.
+      durationMinutes: ALL_DAY_DURATION_MINUTES,
       ownerID: req.user!.id,
       title,
       token: pollToken(),
@@ -298,6 +297,15 @@ export async function handlerVotePoll(req: Request, res: Response) {
  * cannot disagree about what was decided, and so everyone who answered can be
  * told by looking at the poll again.
  */
+export function pollSlotEventTiming(slotStart: Date) {
+  const date = new Date(Date.UTC(
+    slotStart.getUTCFullYear(),
+    slotStart.getUTCMonth(),
+    slotStart.getUTCDate(),
+  ));
+  return { end: date, isAllDay: true, start: date };
+}
+
 export async function handlerDecidePoll(req: Request, res: Response) {
   const poll = await getPollById(String(req.params.pollId));
   if (!poll) throw new NotFoundError("Poll not found...");
@@ -312,18 +320,17 @@ export async function handlerDecidePoll(req: Request, res: Response) {
   if (!slot) throw new BadRequestError("That time is not on this poll...");
 
   await assertCan(req.user!.id, calendarID, "editEvents");
+  const eventTiming = pollSlotEventTiming(slot.start);
 
   const event = await createEvent(
     {
       color: "#c8553d",
       creatorID: req.user!.id,
-      end: slot.end,
+      ...eventTiming,
       id: crypto.randomUUID(),
-      isAllDay: false,
       isCanceled: false,
       organizer: req.user!.id,
       originCalendarID: calendarID,
-      start: slot.start,
       title: poll.title,
       ...(poll.description ? { description: poll.description } : {}),
     },

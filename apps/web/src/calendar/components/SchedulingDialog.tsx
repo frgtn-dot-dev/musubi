@@ -177,10 +177,9 @@ function pollDetail(poll: PollSummary) {
   // Closed without the organizer closing it: the deadline ran out.
   if (poll.closed) return "Answers have closed";
 
-  const waiting = `${poll.durationMinutes} minutes · waiting for answers`;
   return poll.deadline
-    ? `${waiting} until ${formatDay(poll.deadline)}`
-    : waiting;
+    ? `Waiting for answers until ${formatDay(poll.deadline)}`
+    : "Waiting for answers";
 }
 
 function PollResults({

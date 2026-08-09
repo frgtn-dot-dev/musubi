@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { bestSlots, pollProjection } from "./scheduling";
+import { bestSlots, pollProjection, pollSlotEventTiming } from "./scheduling";
 
 const POLL = {
   chosenSlotID: null,
@@ -22,6 +22,17 @@ const SLOTS = [
     start: new Date("2026-08-19T13:00:00.000Z"),
   },
 ];
+
+// A decided slot becomes one inclusive all-day date; its meeting time and old
+// duration never leak into the event.
+assert.deepEqual(
+  pollSlotEventTiming(new Date("2026-08-18T13:00:00.000Z")),
+  {
+    end: new Date("2026-08-18T00:00:00.000Z"),
+    isAllDay: true,
+    start: new Date("2026-08-18T00:00:00.000Z"),
+  },
+);
 
 // ── A deadline shuts the poll without anything having to run ────────────────
 {
