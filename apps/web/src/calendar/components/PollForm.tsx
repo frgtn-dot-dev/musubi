@@ -6,6 +6,8 @@ import { PollDayPicker } from "./PollDayPicker";
 import { Button } from "~/ui/Button";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
+import { Row } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { TimePicker } from "~/ui/TimePicker";
 import styles from "./styles/scheduling.module.css";
 
@@ -92,53 +94,59 @@ export function PollForm({
 				) : null}
 			</div>
 
-			<div className={styles.field}>
-				<span className={styles.fieldLabel}>Approximate start (optional)</span>
-				<TimePicker
-					className={styles.timeInput}
-					label="Approximate start time"
-					timeFormat={timeFormat}
-					value={approximateStartTime}
-					onChange={setApproximateStartTime}
-				/>
-				<p className={styles.fieldHint}>
-					Shown for context only. The calendar event stays all-day.
-				</p>
-			</div>
+			<section className={styles.optionalSection}>
+				<SectionLabel level={3}>Optional details</SectionLabel>
+				<div className={styles.optionRows}>
+					<Row
+						detail="Shown as context; the calendar event remains all-day."
+						label="Approximate start"
+						trailing={
+							<TimePicker
+								className={styles.timeInput}
+								label="Approximate start time"
+								timeFormat={timeFormat}
+								value={approximateStartTime}
+								onChange={setApproximateStartTime}
+							/>
+						}
+					/>
+					<Row
+						detail="Stops new answers at the end of the selected day."
+						label="Answers close"
+						trailing={
+							deadline ? (
+								<div className={styles.deadlineControls}>
+									<DatePicker
+										label="Answers close"
+										min={toDateKey(new Date())}
+										value={deadline}
+										weekStartsOn={weekStartsOn}
+										onChange={setDeadline}
+									/>
+									<Button
+										size="compact"
+										variant="ghost"
+										onClick={() => setDeadline("")}
+									>
+										Clear
+									</Button>
+								</div>
+							) : (
+								<Button
+									size="compact"
+									variant="secondary"
+									onClick={() => setDeadline(toDateKey(new Date()))}
+								>
+									Set date
+								</Button>
+							)
+						}
+					/>
+				</div>
+			</section>
 
-			{/* Optional, and last: a poll works without one, and the server refuses a
-          vote after it rather than anything having to run on a schedule. */}
-			<div className={styles.deadlineRow}>
-				<span className={styles.deadlineLabel}>Answers close</span>
-				{deadline ? (
-					<>
-						<DatePicker
-							label="Answers close"
-							min={toDateKey(new Date())}
-							value={deadline}
-							weekStartsOn={weekStartsOn}
-							onChange={setDeadline}
-						/>
-						<button
-							className={styles.clear}
-							type="button"
-							onClick={() => setDeadline("")}
-						>
-							No deadline
-						</button>
-					</>
-				) : (
-					<button
-						className={styles.clear}
-						type="button"
-						onClick={() => setDeadline(toDateKey(new Date()))}
-					>
-						Set a date
-					</button>
-				)}
-			</div>
-
-			<p className={tooMany ? styles.error : styles.summary}>
+			<div className={styles.formActions}>
+				<p className={tooMany ? styles.error : styles.summary}>
 				{slots.length === 0
 					? "Pick at least one day."
 					: `${slots.length} ${slots.length === 1 ? "day" : "days"}${
@@ -146,32 +154,32 @@ export function PollForm({
 								? ` — ${MAX_POLL_SLOTS} is the most a poll can ask about`
 								: ""
 						}`}
-			</p>
+				</p>
+				<Button
+					disabled={!ready}
+					loading={busy}
+					onClick={() =>
+						onSubmit({
+							...(approximateStartTime ? { approximateStartTime } : {}),
+							slots,
+							title: title.trim(),
+							// The end of that day where the organizer is, not midnight UTC: a
+							// deadline of "Friday" that expires at 2am Friday would be a trap.
+							...(deadline
+								? { deadline: new Date(`${deadline}T23:59:59`).toISOString() }
+								: {}),
+						})
+					}
+				>
+					{submitLabel}
+				</Button>
+			</div>
 
 			{error ? (
 				<p className={styles.error} role="alert">
 					{error}
 				</p>
 			) : null}
-
-			<Button
-				disabled={!ready}
-				loading={busy}
-				onClick={() =>
-					onSubmit({
-						...(approximateStartTime ? { approximateStartTime } : {}),
-						slots,
-						title: title.trim(),
-						// The end of that day where the organizer is, not midnight UTC: a
-						// deadline of "Friday" that expires at 2am Friday would be a trap.
-						...(deadline
-							? { deadline: new Date(`${deadline}T23:59:59`).toISOString() }
-							: {}),
-					})
-				}
-			>
-				{submitLabel}
-			</Button>
 		</div>
 	);
 }

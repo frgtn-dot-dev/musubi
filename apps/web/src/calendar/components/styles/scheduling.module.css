@@ -143,31 +143,43 @@
   color: var(--accent-on-primary, #fff);
 }
 
-.timeInput {
-  width: 8rem;
-}
-
-.fieldHint {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-}
-
-.deadlineRow {
-  display: flex;
-  align-items: center;
+.optionalSection {
+  display: grid;
   gap: var(--space-2);
 }
 
-.deadlineLabel {
-  color: var(--text-muted);
-  font-size: var(--text-11);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.optionRows {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
 }
 
-/* The picker sizes to its own date here rather than stretching the row. */
-.deadlineRow > :global(button):first-of-type {
+.optionRows > :last-child {
+  border-bottom: 0;
+}
+
+.timeInput {
+  width: 9rem;
+}
+
+.deadlineControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.formActions {
+  display: flex;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-1);
+}
+
+.formActions > :global(button) {
+  min-width: 9.5rem;
   flex: none;
 }
 
