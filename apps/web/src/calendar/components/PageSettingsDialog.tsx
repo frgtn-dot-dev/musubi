@@ -266,6 +266,23 @@ export function PageSettingsDialog({
           </>
         ) : (
           <>
+            {canDelete ? (
+              <Button
+                className={styles.footerDelete}
+                disabled={busy}
+                icon={
+                  <Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />
+                }
+                ref={deleteButtonRef}
+                variant="secondary"
+                onClick={() => {
+                  setDeleteError("");
+                  setConfirmation("delete");
+                }}
+              >
+                Delete page
+              </Button>
+            ) : null}
             <DialogClose>
               <Button disabled={busy} variant="secondary">
                 Cancel
@@ -473,23 +490,6 @@ export function PageSettingsDialog({
           </div>
         </section>
 
-        {canDelete ? (
-          <div className={styles.danger}>
-            <Button
-              disabled={busy}
-              icon={<Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />}
-              ref={deleteButtonRef}
-              size="compact"
-              variant="secondary"
-              onClick={() => {
-                setDeleteError("");
-                setConfirmation("delete");
-              }}
-            >
-              Delete page
-            </Button>
-          </div>
-        ) : null}
 
         {error ? (
           <p className={styles.error} role="alert">

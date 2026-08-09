@@ -127,6 +127,8 @@ const expectPageSettings: NonNullable<Story["play"]> = async () => {
     .getByRole("radio", { name: "Briefcase" })
     .closest("label");
   const defaultPage = within(dialog).getByText("Default page", { exact: true });
+  const deletePage = within(dialog).getByRole("button", { name: "Delete page" });
+  expect(deletePage.closest("footer")).not.toBeNull();
   expect(firstIcon).not.toBeNull();
   expect(lastIcon).not.toBeNull();
   expect(

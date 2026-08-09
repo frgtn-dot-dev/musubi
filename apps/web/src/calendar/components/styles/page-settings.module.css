@@ -60,7 +60,8 @@
 .iconGrid {
   display: grid;
   grid-template-columns: repeat(6, minmax(44px, 1fr));
-  gap: var(--space-2);
+  column-gap: var(--space-2);
+  row-gap: var(--space-3);
 }
 
 .iconChoice {
@@ -136,10 +137,8 @@
   line-height: 1.45;
 }
 
-.danger {
-  display: flex;
-  justify-content: flex-start;
-  padding: var(--space-5) var(--layer-inline) 0;
+.footerDelete {
+  margin-right: auto;
 }
 
 .error {
