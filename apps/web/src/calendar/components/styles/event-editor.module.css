@@ -344,6 +344,7 @@
   grid-template-columns: minmax(0, 1fr) 54px;
   align-items: stretch;
   box-sizing: border-box;
+  padding-right: var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 
