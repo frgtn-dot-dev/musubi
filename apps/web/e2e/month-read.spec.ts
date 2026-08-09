@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { Calendar } from "@musubi/types";
 import {
 	expect,
 	test,
@@ -30,7 +31,7 @@ const session = {
 	},
 };
 
-const calendars = [
+const calendars: Calendar[] = [
 	{
 		color: "#b3492f",
 		creatorID: "user-web-qa",
@@ -103,6 +104,7 @@ function event(
 		start,
 		title,
 		...extra,
+		recurrence: (extra.recurrence as string | undefined) ?? null,
 	};
 }
 
@@ -2181,7 +2183,7 @@ test("edits and saves a page's calendar visibility", async ({ page }) => {
 	let saved: { config?: { calendarVisibility?: unknown } } | undefined;
 	await page.route(`**/api/v1/pages/${DEFAULT_PAGE_ID}`, async (route) => {
 		const body = route.request().postDataJSON() as {
-			config: unknown;
+			config?: { calendarVisibility?: unknown };
 			name: string;
 		};
 		saved = body;
@@ -2795,7 +2797,7 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 	});
 	page.on("pageerror", (error) => runtimeErrors.push(error.message));
 
-	const withExternal = [
+	const withExternal: Calendar[] = [
 		...calendars,
 		{
 			accountId: "acc-1",
@@ -6489,7 +6491,7 @@ test("ui catalogue", async ({ page }) => {
 	await page.waitForLoadState("networkidle");
 	await shot("public-event-page");
 
-	const pollSlots = [];
+	const pollSlots: MockPollSlot[] = [];
 	for (const day of [10, 11, 12]) {
 		for (const hour of [13, 17]) {
 			pollSlots.push({
@@ -7256,6 +7258,14 @@ test("walks a new account through onboarding once", async ({ page }) => {
 });
 
 const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2";
+type MockPollSlot = {
+	end: string;
+	id: string;
+	ifNeeded: string[];
+	no: string[];
+	start: string;
+	yes: string[];
+};
 
 test("creates a poll, collects answers and turns one into an event", async ({
 	page,
@@ -7337,8 +7347,19 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	const dialog = page.getByRole("dialog", { name: "Find a time" });
 
 	await dialog.getByLabel("What is it about").fill("Studio planning");
-	await dialog.getByLabel("Approximate start time").fill("15:00");
-	await dialog.getByLabel("Approximate start time").press("Tab");
+	const approximateStart = dialog.getByLabel("Approximate start time");
+	await expect(approximateStart).toHaveAttribute("placeholder", "Select time");
+	await approximateStart.click();
+	const timeOptions = page.getByRole("listbox", {
+		name: "Approximate start time options",
+	});
+	await timeOptions.hover();
+	await page.mouse.wheel(0, 240);
+	await expect
+		.poll(() => timeOptions.evaluate((element) => element.scrollTop))
+		.toBeGreaterThan(0);
+	await approximateStart.fill("15:00");
+	await approximateStart.press("Tab");
 	await dialog.getByRole("button", { exact: true, name: "18" }).click();
 	await dialog.getByRole("button", { exact: true, name: "19" }).click();
 	await expect(dialog.getByText("2 days", { exact: true })).toBeVisible();
@@ -7623,7 +7644,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 
 test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	await page.route("**/api/auth/get-session", (route) => respond(route, null));
-	const slots = [];
+	const slots: MockPollSlot[] = [];
 	for (let day = 3; day <= 24; day += 1) {
 		for (const hour of [13, 17]) {
 			slots.push({

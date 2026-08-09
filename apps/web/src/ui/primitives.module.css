@@ -1616,6 +1616,11 @@
 	font-size: var(--text-12);
 }
 
+.timePickerInput::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
 .timePickerInput:focus-visible {
 	border-radius: var(--radius-sm);
 	outline: var(--focus-ring);

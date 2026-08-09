@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -51,6 +51,19 @@ function renderPicker(
 }
 
 describe("TimePicker", () => {
+  it("labels an empty optional value and scrolls its list directly", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), { value: "" });
+
+    const input = screen.getByRole("combobox", { name: "Start time" });
+    expect(input.getAttribute("placeholder")).toBe("Select time");
+    await user.click(input);
+
+    const listbox = screen.getByRole("listbox");
+    fireEvent.wheel(listbox, { deltaY: 120 });
+    expect(listbox.scrollTop).toBe(120);
+  });
+
   it("opens on the value and chooses the next step by keyboard", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();

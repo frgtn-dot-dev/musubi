@@ -22,6 +22,7 @@ export type TimePickerProps = {
   max?: string;
   min?: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   relativeTo?: string;
   timeFormat: Settings["timeFormat"];
   value: string;
@@ -130,6 +131,7 @@ export function TimePicker({
   max,
   min,
   onChange,
+  placeholder = "Select time",
   relativeTo,
   timeFormat,
   value,
@@ -265,6 +267,7 @@ export function TimePicker({
             className={styles.timePickerInput}
             disabled={disabled}
             inputMode="numeric"
+            placeholder={placeholder}
             ref={inputRef}
             role="combobox"
             value={open ? draft : formatTimeValue(value, timeFormat)}
@@ -376,6 +379,10 @@ export function TimePicker({
             className={styles.timePickerList}
             id={`${id}-listbox`}
             role="listbox"
+            onWheel={(event) => {
+              event.currentTarget.scrollTop += event.deltaY;
+              event.preventDefault();
+            }}
           >
             {options.map((time) => {
               const minutes = timeToMinutes(time);
