@@ -21,12 +21,14 @@ async function main() {
   process.env.SMTP_USER = "";
   process.env.SMTP_PASS = "";
 
-  const { canSendEmail } = await import("./index");
-  assert.equal(await canSendEmail(), true);
+  const { canSendEmail, initializeEmailCapability } = await import("./index");
+  assert.equal(canSendEmail(), false);
+  assert.equal(await initializeEmailCapability(), true);
   await new Promise<void>((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
-  console.log("SMTP capability self-check: OK");
+  assert.equal(canSendEmail(), true);
+  console.log("SMTP startup capability self-check: OK");
 }
 
 void main();

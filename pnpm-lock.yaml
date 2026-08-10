@@ -81,6 +81,9 @@ importers:
       '@musubi/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@musubi/emails':
+        specifier: workspace:*
+        version: link:../../packages/emails
       '@musubi/types':
         specifier: workspace:*
         version: link:../../packages/types

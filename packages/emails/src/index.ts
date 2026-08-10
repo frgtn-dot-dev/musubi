@@ -21,30 +21,24 @@ const transporter = config.smtp.host
     })
   : null;
 
-let emailHealth: { until: number; value: boolean } | undefined;
-let healthCheck: Promise<boolean> | undefined;
+let emailAvailable = false;
 
-/** A configured SMTP host is not a capability until it accepts a connection. */
-export async function canSendEmail() {
+/** Check SMTP once before the API starts serving requests. */
+export async function initializeEmailCapability() {
   if (!transporter) return false;
-  if (emailHealth && emailHealth.until > Date.now()) return emailHealth.value;
-  if (healthCheck) return healthCheck;
+  try {
+    await transporter.verify();
+    emailAvailable = true;
+    logger.info("email.smtp_available");
+  } catch (error) {
+    logger.warn("email.smtp_unavailable", { error });
+  }
+  return emailAvailable;
+}
 
-  healthCheck = transporter
-    .verify()
-    .then(() => true)
-    .catch((error) => {
-      logger.warn("email.smtp_unavailable", { error });
-      return false;
-    })
-    .then((value) => {
-      emailHealth = { until: Date.now() + 30_000, value };
-      return value;
-    })
-    .finally(() => {
-      healthCheck = undefined;
-    });
-  return healthCheck;
+/** Instant startup snapshot for public capability responses. */
+export function canSendEmail() {
+  return emailAvailable;
 }
 
 export async function sendEmail(to: string, subject: string, html: string) {
@@ -56,10 +50,8 @@ export async function sendEmail(to: string, subject: string, html: string) {
       subject,
       html,
     });
-    emailHealth = { until: Date.now() + 30_000, value: true };
     logger.info("email.sent", { messageId: info.messageId });
   } catch (error) {
-    emailHealth = { until: Date.now() + 30_000, value: false };
     logger.error("email.send_failed", { error });
     throw error;
   }

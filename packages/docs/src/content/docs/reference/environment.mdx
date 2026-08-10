@@ -202,7 +202,7 @@ self-hosted server:
 
 - `socials` depends on runtime sign-in configuration.
 - `syncProviders` requires the full credential/key pair for each adapter.
-- `email` is true only when the configured SMTP server accepts a connection and authentication handshake. The check is cached for 30 seconds.
+- `email` is true only when the SMTP connection and authentication handshake succeeds during API startup. Restart the API after changing SMTP settings.
 
 Use this endpoint during setup before debugging the client UI.
 

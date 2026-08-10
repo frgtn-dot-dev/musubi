@@ -1,5 +1,6 @@
 import { config, logger } from "@musubi/config";
 import { auth } from "@musubi/auth";
+import { initializeEmailCapability } from "@musubi/emails";
 import { deleteExpiredInvites, deleteExpiredMemberTokens, deleteExpiredSessions, purgeDeletedEvents } from "@musubi/db";
 import { toNodeHandler } from "better-auth/node";
 import express from "express";
@@ -332,6 +333,7 @@ async function start() {
   // boundary fail-safe: a second API process sharing this DB does not serve
   // traffic with split SSE/rate-limit/scheduler state.
   await acquireApiSingletonLock();
+  await initializeEmailCapability();
 
   app.listen(port, "0.0.0.0", () => {
     logger.info("server.started", {

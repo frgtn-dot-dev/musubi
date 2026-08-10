@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { config } from "@musubi/config";
-import { appleWebSignInEnabled, canSendEmail } from "@musubi/auth";
+import { appleWebSignInEnabled } from "@musubi/auth";
+import { canSendEmail } from "@musubi/emails";
 
 // Which social logins this server can actually perform — a provider counts only
 // when its credentials are configured. Lets self-hosted clients render just the
@@ -50,15 +51,15 @@ export function handlerServerStatus(_: Request, res: Response) {
   res.status(200).json({ ok: true });
 }
 
-export async function handlerServer(_: Request, res: Response) {
+export function handlerServer(_: Request, res: Response) {
   res.status(200).json({
     minClientVersion: "0.1.2",
     socials: enabledSocials(),
     socialsWeb: enabledWebSocials(),
     syncProviders: enabledSyncProviders(),
-    // A real SMTP handshake, cached briefly. A hostname alone does not mean a
-    // verification code can leave this server.
-    email: await canSendEmail(),
+    // Snapshot established during startup, so capability discovery never waits
+    // for an external SMTP server.
+    email: canSendEmail(),
     // Whether a new account has to confirm its address before it can sign in.
     // The client cannot infer this from a refused sign-in — "wrong password" and
     // "not confirmed yet" look the same from outside — so it is said here.
