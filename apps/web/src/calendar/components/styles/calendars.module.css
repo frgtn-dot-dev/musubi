@@ -169,11 +169,11 @@
 	border: 1px solid rgb(0 0 0 / 12%);
 	border-radius: var(--radius-pill);
 	box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+	transform: translateX(var(--space-1));
 }
 
 .calendarRow {
-	/* The source icon starts at 20px and is 30px wide. A 24px row inset puts
-     the 22px Row icon lane on that same 35px optical axis. */
+	/* The row inset leaves its icon lane on the group mark's optical axis. */
 	padding-left: var(--space-6);
 }
 

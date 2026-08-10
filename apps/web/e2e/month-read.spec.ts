@@ -2309,6 +2309,7 @@ test("applies a realtime page created in another session", async ({ page }) => {
 
 test("creates, renames and deletes a calendar", async ({ page }) => {
 	await mockAuthenticatedReads(page);
+	await page.emulateMedia({ reducedMotion: "reduce" });
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
 	await page.getByRole("button", { name: "Calendars" }).click();
@@ -2334,7 +2335,9 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	expect(Math.abs(nameBox!.height - colorBox!.height)).toBeLessThanOrEqual(1);
 	expect(Math.abs(colorBox!.height - addBox!.height)).toBeLessThanOrEqual(1);
 
-	const sourceIcon = calendarDialog.locator('[data-provider="musubi"]').first();
+	const sourceIcon = calendarDialog
+		.locator('[class*="groupHeader"] [data-provider="musubi"]')
+		.first();
 	const calendarSwatch = calendarDialog
 		.locator("[data-calendar-swatch]")
 		.first();
@@ -2503,7 +2506,9 @@ test("creates a calendar inside a connected account", async ({ page }) => {
 	await dialog.getByPlaceholder("New calendar").fill("Studio hours");
 	// The destination is offered because an account is connected; with none, the
 	// control is not there at all.
-	await dialog.getByRole("combobox", { name: "Where" }).click();
+	await dialog
+		.getByRole("combobox", { name: "Account", exact: true })
+		.click();
 	await page.getByRole("option", { name: "work@example.com" }).click();
 	await dialog.getByRole("button", { name: "Add", exact: true }).click();
 
@@ -7838,9 +7843,7 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await page.getByLabel("Code from your email").fill("123456");
 	await page.getByRole("button", { name: "Confirm and edit" }).click();
 
-	await page
-		.getByRole("button", { name: /18 Aug.*have not answered/ })
-		.click();
+	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
 	await page.getByRole("button", { name: "No", exact: true }).click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	await expect(

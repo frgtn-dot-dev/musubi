@@ -614,6 +614,7 @@ export function EventEditorForm({
 														<span
 															aria-label="Home calendar"
 															className={styles.homeBadge}
+															role="img"
 														>
 															<House
 																aria-hidden="true"
