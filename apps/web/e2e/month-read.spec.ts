@@ -321,7 +321,14 @@ async function mockAuthenticatedReads(
 	eventResponse: typeof events = events,
 	calendarResponse: typeof calendars = calendars,
 	failWritesForCalendarId?: string,
+	showMobileNotice = false,
 ) {
+	if (!showMobileNotice) {
+		await page.addInitScript(() =>
+			sessionStorage.setItem("musubi-mobile-web-notice-dismissed", "true"),
+		);
+	}
+
 	let authenticated = true;
 	let settingsState = { ...settings };
 	let settingsRevision = 1;
@@ -3791,6 +3798,27 @@ test("says an event is unsettled while its write is in flight", async ({
 
 	release();
 	await expect(block).not.toHaveAttribute("data-pending", "");
+});
+
+test("offers the mobile app before opening the phone web app", async ({
+	page,
+}) => {
+	await page.setViewportSize({ height: 720, width: 390 });
+	await mockAuthenticatedReads(page, events, calendars, undefined, true);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+	const notice = page.getByRole("dialog", { name: "Musubi on mobile" });
+	await expect(notice).toContainText(
+		"The web app is not fully optimized for phones yet.",
+	);
+	await expect(
+		notice.getByRole("button", { name: "Get the Android app" }),
+	).toBeVisible();
+
+	await notice.getByRole("button", { name: "Continue on the web" }).click();
+	await expect(notice).toHaveCount(0);
+	await page.reload();
+	await expect(notice).toHaveCount(0);
 });
 
 test("turns anchored surfaces into sheets on a narrow viewport", async ({
