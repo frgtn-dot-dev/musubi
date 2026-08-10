@@ -3361,10 +3361,21 @@ test("joins a calendar from a pasted cross-server invite link", async ({
 		page.getByRole("heading", { name: "Join a shared calendar" }),
 	).toBeVisible();
 
-	await page
-		.getByRole("textbox", { name: "Invite link" })
-		.fill(`https://friends.example/invite/${token}`);
-	await page.getByRole("button", { name: "Open invite" }).click();
+	const inviteInput = page.getByRole("textbox", { name: "Invite link" });
+	const openInvite = page.getByRole("button", { name: "Open invite" });
+	const [inputBox, buttonBox] = await Promise.all([
+		inviteInput.boundingBox(),
+		openInvite.boundingBox(),
+	]);
+	expect(
+		Math.abs(
+			inputBox!.y + inputBox!.height / 2 -
+				(buttonBox!.y + buttonBox!.height / 2),
+		),
+	).toBeLessThanOrEqual(1);
+
+	await inviteInput.fill(`https://friends.example/invite/${token}`);
+	await openInvite.click();
 
 	// Preview is fetched through the home server, and shows what we're joining.
 	await expect(page.getByText("1 member · 1 event")).toBeVisible();
