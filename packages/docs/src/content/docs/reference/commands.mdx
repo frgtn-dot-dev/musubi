@@ -12,7 +12,7 @@ copy-pasted commands then work from the same location in local shells and CI.
 ## Daily development
 
 | Goal | Command |
-|---|---|
+| --- | --- |
 | Activate the repository's exact pnpm version | `corepack enable` |
 | Install exactly the workspace declared by the lockfile | `pnpm install --frozen-lockfile` |
 | Start API, client Metro, and docs in the Turbo TUI | `pnpm dev` |
@@ -46,7 +46,7 @@ pnpm check
 Run an individual layer while iterating:
 
 | Check | Command |
-|---|---|
+| --- | --- |
 | Client TypeScript | `pnpm --filter @musubi/client exec tsc --noEmit` |
 | API TypeScript | `pnpm exec tsc -p apps/api/tsconfig.json --noEmit --skipLibCheck` |
 | All existing self-checks | `pnpm test` |
@@ -69,8 +69,7 @@ Compiler/hook diagnostics. Most are Reanimated shared-value, gesture live-ref,
 and legacy effect-dependency findings. The three compiler rules that previously
 made lint unusable remain visible as warnings, while `--max-warnings 108`
 prevents the baseline from growing. Fixing a warning lowers the budget in
-`apps/client/package.json`; never raise it to land a change. See the
-[codebase audit](/docs/contributing/codebase-audit/#p1--restore-an-enforceable-quality-gate).
+`apps/client/package.json`; never raise it to land a change.
 </Aside>
 
 ## Continuous integration
@@ -92,7 +91,7 @@ and container-build checks.
 These are plain Node assertions executed with `tsx`, not a test-runner suite:
 
 | File | Covers |
-|---|---|
+| --- | --- |
 | `apps/client/lib/eventForm.test.ts` | Event-form validation |
 | `apps/client/lib/rrule.test.ts` | RRULE building and parsing |
 | `apps/client/lib/ics.test.ts` | Lightweight client `.ics` import |
@@ -140,7 +139,7 @@ live Google/Microsoft credentials.
 ## Database
 
 | Goal | Command |
-|---|---|
+| --- | --- |
 | Generate SQL from `schema.ts` | `pnpm db:generate` |
 | Apply pending PostgreSQL migrations | `pnpm db:migrate` |
 | Start only the bundled database | `docker compose up -d db` |

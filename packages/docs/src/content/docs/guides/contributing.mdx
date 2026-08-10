@@ -12,9 +12,6 @@ Musubi is open source under the MIT licence and welcomes contributions — bug f
 - Check the [GitHub issues](https://github.com/frgtn-dot-dev/musubi/issues) — someone may already be on it.
 - For larger changes, open an issue first to agree on the approach.
 - Keep PRs focused: one thing per pull request.
-- Review the [current codebase audit](/docs/contributing/codebase-audit/) before
-  working near a recorded risk; avoid folding unrelated audit cleanup into a
-  focused change.
 
 ## Development setup
 
@@ -39,7 +36,7 @@ Otherwise: read the [Architecture Overview](/docs/architecture/overview/) — it
 pnpm workspaces + Turborepo:
 
 | Workspace | What lives there |
-|---|---|
+| --- | --- |
 | `apps/api` | Express API — routes, permissions, sync engine |
 | `apps/client` | Expo app (Expo Router) |
 | `packages/db` | Drizzle schema, queries, PostgreSQL migrations |
@@ -61,10 +58,8 @@ It performs client/API typechecking, all twelve assertion-based self-checks, and
 client lint before the production docs build. Lint has zero errors and a locked
 budget for 108 existing React Compiler/hook warnings; a new warning fails the
 command when it increases the total. Fix warnings when practical and lower the
-budget with them—never raise it to make a PR pass. The exact rationale and
-remaining migration are tracked in the
-[audit](/docs/contributing/codebase-audit/#p1--restore-an-enforceable-quality-gate).
-For the individual commands and self-check inventory, see
+budget with them—never raise it to make a PR pass. For the individual commands
+and self-check inventory, see
 [Command reference](/docs/reference/commands/).
 
 Pull requests also run a clean frozen install, verify that generating Drizzle

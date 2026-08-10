@@ -12,7 +12,7 @@ you can run only the layer you are changing.
 ## Prerequisites
 
 | Tool | Version / notes |
-|---|---|
+| --- | --- |
 | Node.js | **22.12 or newer**. Astro 7 requires it. |
 | pnpm | Use Corepack; the root manifest activates exactly `pnpm@11.8.0`. |
 | PostgreSQL | 15+ locally, or Docker. The bundled Compose stack uses PostgreSQL 17. |
@@ -174,7 +174,7 @@ SQLite. Use a **development build** (`expo run:*` or EAS), not Expo Go.
 `localhost` means different things depending on where the client runs:
 
 | Client | API URL to enter on the welcome screen |
-|---|---|
+| --- | --- |
 | iOS simulator | `http://localhost:7531` |
 | Android emulator | `http://10.0.2.2:7531` |
 | Physical phone | `http://<your-computer-LAN-IP>:7531` |
@@ -218,9 +218,7 @@ pnpm check
 This first validates release/toolchain metadata and peer dependencies, then
 runs client + API typechecks, the twelve existing assertion-based self-checks,
 client lint, and the docs build. Lint has zero errors and a locked budget for
-108 known React Compiler/hook warnings; a net increase fails the command. The
-remaining migration is recorded in the
-[codebase audit](/docs/contributing/codebase-audit/#p1--restore-an-enforceable-quality-gate).
+108 known React Compiler/hook warnings; a net increase fails the command.
 
 ## What to do in the app
 

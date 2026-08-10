@@ -107,9 +107,7 @@ a distributed security boundary.
 <Aside type="caution">
 `GET /api/v1/calendars/:id` now checks membership before reading either the
 calendar detail or its member emails. A non-member receives `403`; the
-regression self-check also verifies that neither protected read runs. This
-closes the original P0 finding recorded in the
-[codebase audit](/docs/contributing/codebase-audit/#p0--authorize-calendar-detail-reads).
+regression self-check also verifies that neither protected read runs.
 </Aside>
 
 ## Server and realtime

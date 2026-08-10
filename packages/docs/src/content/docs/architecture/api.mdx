@@ -84,7 +84,7 @@ Conventions baked into that snippet:
 Handlers throw the typed error classes from `@musubi/types` (`errors.ts`). `middlewareErrorHandler` maps them:
 
 | Thrown | Status |
-|---|---|
+| --- | --- |
 | `BadRequestError` | 400 |
 | `UnauthorizedError` | 401 |
 | `ForbiddenError` | 403 |
@@ -127,7 +127,7 @@ listener. `GET /metrics` contains the standard `prom-client` Node.js/process
 metrics (prefixed `musubi_`) and these application metrics:
 
 | Metric | Meaning |
-|---|---|
+| --- | --- |
 | `musubi_http_requests_total` | Completed requests by method, registered route pattern, and status |
 | `musubi_http_request_duration_seconds` | Request-duration histogram using the same bounded labels |
 | `musubi_http_requests_in_flight` | Requests currently being processed by method |
@@ -155,11 +155,9 @@ Client-side checks (the composer's validation, the same-server guard, federation
 `requireAuth` proves identity but grants no resource access by itself. The
 calendar-detail route now enforces this through
 `getCalendarDetailsForUser()`: it loads the caller's role first and returns
-`Forbidden` before reading calendar/member data for a non-member. This closes
-the original P0 finding in the
-[codebase audit](/docs/contributing/codebase-audit/#p0--authorize-calendar-detail-reads).
-Every new resource route still needs an explicit authorization gate and a
-non-member regression test.
+`Forbidden` before reading calendar/member data for a non-member. Every new
+resource route still needs an explicit authorization gate and a non-member
+regression test.
 </Aside>
 
 ## Permissions
@@ -170,7 +168,7 @@ Two files, two responsibilities:
 - **`apps/api/src/permissions.ts`** — the *server gates* that call it against the DB.
 
 | Role | Allowed actions |
-|---|---|
+| --- | --- |
 | `owner` | editCalendar, deleteCalendar, manageMembers, editEvents, invite |
 | `editor` | editEvents, invite |
 | `viewer` | *(read-only)* |
@@ -217,7 +215,7 @@ For payloads, status codes, authentication, and response shapes, use the
 map.
 
 | Group | Routes |
-|---|---|
+| --- | --- |
 | Health | `GET /api/v1/server`, `/server/ok` *(public)* |
 | Events | `GET/POST/PUT/DELETE /api/v1/events`, `POST /api/v1/events/:id/link`, `/fork`, `GET /events/:id/attendees`, `PUT /events/:id/attendance` |
 | Calendars | `GET/POST/PUT/DELETE /api/v1/calendars`, `GET /calendars/:id`, `/calendars/google`, `/calendars/tokens/:token`, `GET /calendars/:id/export` (.ics snapshot, any member), `POST /calendars/import` (raw .ics body → new native calendar; own 10 MB text parser) |
@@ -253,9 +251,11 @@ membership revokes token hashes transactionally.
 2. **Add a query function** in `packages/db/src/queries/*.ts` if you need new DB access — never inline `db.select` in a handler.
 
 3. **Register the route** in `index.ts`, before `middlewareErrorHandler`, wrapped and (usually) authed:
+
    ```ts
    app.put("/api/v1/events/:eventId/reschedule", requireAuth, wrap(handlerRescheduleEvent));
    ```
+
    Watch route order if the path could collide with a `:param` route.
 
 4. **Add the client method** in `apps/client/services/api.ts` (see the [client guide](/docs/architecture/client/#the-useapi-hook)) and call `throwOnError(error)` after the fetch.

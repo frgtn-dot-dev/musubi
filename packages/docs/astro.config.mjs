@@ -93,11 +93,6 @@ export default defineConfig({
           items: [
             { label: 'Contributing Guide', slug: 'guides/contributing' },
             { label: 'Documentation Guide', slug: 'contributing/documentation' },
-            {
-              label: 'Codebase Audit',
-              slug: 'contributing/codebase-audit',
-              badge: { text: '2026-07', variant: 'note' },
-            },
           ],
         },
       ],
