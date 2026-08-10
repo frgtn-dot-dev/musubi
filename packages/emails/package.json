@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx src/index.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",
@@ -17,6 +17,7 @@
     "nodemailer": "^9.0.1"
   },
   "devDependencies": {
-    "@types/nodemailer": "^8.0.1"
+    "@types/nodemailer": "^8.0.1",
+    "tsx": "^4.22.4"
   }
 }

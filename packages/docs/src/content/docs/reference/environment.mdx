@@ -85,7 +85,7 @@ All email settings are optional at boot, but the feature needs the complete set:
 
 | Variable | Purpose |
 |---|---|
-| `SMTP_HOST` | SMTP hostname; also drives `/api/v1/server` → `email` capability |
+| `SMTP_HOST` | SMTP hostname; `/api/v1/server` reports `email: true` only after the configured server accepts an SMTP handshake |
 | `SMTP_PORT` | Commonly `587` (STARTTLS) or `465` (implicit TLS) |
 | `SMTP_USER` | SMTP username |
 | `SMTP_PASS` | SMTP password/token |
@@ -202,7 +202,7 @@ self-hosted server:
 
 - `socials` depends on runtime sign-in configuration.
 - `syncProviders` requires the full credential/key pair for each adapter.
-- `email` is true when `SMTP_HOST` is non-empty.
+- `email` is true only when the configured SMTP server accepts a connection and authentication handshake. The check is cached for 30 seconds.
 
 Use this endpoint during setup before debugging the client UI.
 
