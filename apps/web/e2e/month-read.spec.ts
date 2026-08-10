@@ -243,7 +243,9 @@ async function openPageFilters(page: Page) {
 	await page.getByRole("button", { name: "Edit My calendar" }).click();
 	const dialog = page.getByRole("dialog", { name: "Page settings" });
 	await expect(dialog).toBeVisible();
-	const filters = dialog.getByRole("heading", { name: "Filters" }).locator("..");
+	const filters = dialog
+		.getByRole("heading", { name: "Filters" })
+		.locator("..");
 	return { dialog, filters };
 }
 
@@ -3816,9 +3818,9 @@ test("blocks the phone web app with a full-screen app download", async ({
 	).toBeVisible();
 	const box = (await blocker.locator("..").boundingBox())!;
 	expect(box).toMatchObject({ height: 720, width: 390, x: 0, y: 0 });
-	await expect(page.getByRole("button", { name: "Event", exact: true })).toHaveCount(
-		0,
-	);
+	await expect(
+		page.getByRole("button", { name: "Event", exact: true }),
+	).toHaveCount(0);
 
 	await page.keyboard.press("Escape");
 	await expect(blocker).toBeVisible();
@@ -6399,8 +6401,11 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 	await expectNoSidewaysScroll("month grid");
 
 	// Page filters hold every calendar without introducing page-level overflow.
-	const { dialog: pageSettings, filters: pageFilters } = await openPageFilters(page);
-	await expect(pageFilters.getByRole("button")).toHaveCount(manyCalendars.length);
+	const { dialog: pageSettings, filters: pageFilters } =
+		await openPageFilters(page);
+	await expect(pageFilters.getByRole("button")).toHaveCount(
+		manyCalendars.length,
+	);
 	await expectNoSidewaysScroll("Page filters");
 	await expectNoAccessibilityViolations(page);
 	await pageSettings.getByRole("button", { name: "Cancel" }).click();
@@ -7397,7 +7402,9 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	const firstDay = dialog.getByRole("button", { exact: true, name: "18" });
 	const dayY = (await firstDay.boundingBox())?.y;
 	await firstDay.click();
-	await expect(dialog.getByRole("button", { name: "Clear 1 day" })).toBeVisible();
+	await expect(
+		dialog.getByRole("button", { name: "Clear 1 day" }),
+	).toBeVisible();
 	expect((await firstDay.boundingBox())?.y).toBe(dayY);
 	await dialog.getByRole("button", { exact: true, name: "19" }).click();
 	await expect(dialog.getByText("2 days", { exact: true })).toBeVisible();
@@ -7592,7 +7599,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 				email?: string;
 				name?: string;
 				slots: Array<{ start: string }>;
-			}
+		  }
 		| undefined;
 	await page.route("**/api/auth/get-session", (route) => respond(route, null));
 	await page.route("**/api/v1/scheduling/polls", (route) => {
@@ -7814,37 +7821,32 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 		votes: [{ slotID: "slot-tue", value: "yes" }],
 	});
 
-	// The same email cannot overwrite its answer until the inbox is proved.
-	const attemptEdit = async () => {
-		await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
-		await page.getByRole("button", { name: "No", exact: true }).click();
-		await page.getByLabel("Your name").fill("Zoe");
-		await page.getByLabel("Email").fill("z@example.com");
-		await page.getByRole("button", { name: "Send my answers" }).click();
-	};
-
-	// Missing SMTP blocks only the later edit, never the first answer.
+	// The quiet action beside a saved name starts verification before somebody
+	// spends time changing answers they cannot yet overwrite.
 	emailEnabled = false;
 	await page.reload();
-	await attemptEdit();
+	await page.getByRole("button", { name: "Edit answers for Zoe" }).click();
 	await expect(
 		page.getByRole("alert").filter({ hasText: "SMTP is not configured" }),
 	).toBeVisible();
 
 	emailEnabled = true;
 	await page.reload();
-	await attemptEdit();
+	await page.getByRole("button", { name: "Edit answers for Zoe" }).click();
+	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
-	await page.getByRole("button", { name: "Confirm and send" }).click();
+	await page.getByRole("button", { name: "Confirm and edit" }).click();
 
-	// Wait for the answer to land before reading what was sent — the click
-	// resolves when it is dispatched, not when the request comes back.
+	await page
+		.getByRole("button", { name: /18 Aug.*have not answered/ })
+		.click();
+	await page.getByRole("button", { name: "No", exact: true }).click();
+	await page.getByRole("button", { name: "Send my answers" }).click();
 	await expect(
 		page.getByRole("button", { name: "Answers saved" }),
 	).toBeDisabled();
-	// Two refused overwrites sit between the initial answer and verified edit.
-	expect(voteAttempts).toHaveLength(4);
+	expect(voteAttempts).toHaveLength(2);
 	await expect(page.getByRole("row", { name: /^Zoe/ })).toBeVisible();
 
 	// A table of coloured marks is exactly where contrast and headers go wrong.

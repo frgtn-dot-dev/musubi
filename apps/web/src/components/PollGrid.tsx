@@ -34,6 +34,7 @@ export function PollGrid({
   mineID,
   onAnswer,
   people,
+  personAction,
   showSlotTimes = false,
   slots,
   yourRow,
@@ -52,6 +53,8 @@ export function PollGrid({
   /** Participant mode: absent means the row is read-only. */
   onAnswer?: (slotID: string, value: null | VoteValue) => void;
   people: Poll["people"];
+  /** Optional quiet action beside each participant name. */
+  personAction?: (person: Poll["people"][number]) => ReactNode;
   /** Keeps old, timed polls readable after new polls switched to day choices. */
   showSlotTimes?: boolean;
   slots: PollSlot[];
@@ -155,7 +158,10 @@ export function PollGrid({
               .map((person) => (
                 <tr key={person.id}>
                   <th className={styles.rowHead} scope="row">
-                    {person.name}
+                    <span className={styles.personRow}>
+                      <span className={styles.personName}>{person.name}</span>
+                      {personAction?.(person)}
+                    </span>
                   </th>
                   {slots.map((slot) => (
                     <td className={styles.cell} key={slot.id}>

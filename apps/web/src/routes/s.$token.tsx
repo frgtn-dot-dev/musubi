@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Info } from "lucide-react";
+import { Check, Ellipsis, Info } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { VoteValue } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
@@ -53,6 +53,7 @@ function PollRoute() {
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState("");
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [editingName, setEditingName] = useState("");
 
   const poll = useQuery({
     queryFn: ({ signal }) => getPoll(token, signal),
@@ -147,6 +148,13 @@ function PollRoute() {
       setMessage(result.error.message ?? "That code did not work.");
       return;
     }
+    if (editingName) {
+      queryClient.setQueryData(pollKey, await getPoll(token));
+      setEditingName("");
+      setNeedsVerification(false);
+      setSent(false);
+      return;
+    }
     send();
   }
 
@@ -230,6 +238,25 @@ function PollRoute() {
           chosenSlotID={data.chosenSlotID}
           mineID={data.mineID}
           people={data.people}
+          personAction={
+            session.data
+              ? undefined
+              : (person) => (
+                <button
+                  aria-label={`Edit answers for ${person.name}`}
+                  className={pollStyles.editAnswers}
+                  title="Edit your answers"
+                  type="button"
+                  onClick={() => {
+                    setEditingName(person.name);
+                    setNeedsVerification(true);
+                    setMessage("");
+                  }}
+                >
+                  <Ellipsis aria-hidden="true" size={17} />
+                </button>
+              )
+          }
           showSlotTimes={data.durationMinutes < 24 * 60}
           slots={data.slots}
           yourRow={
@@ -249,11 +276,7 @@ function PollRoute() {
 
         {data.closed ? null : session.data ? (
           <div className={pollStyles.send}>
-            <Button
-              disabled={!unsaved}
-              loading={vote.isPending}
-              onClick={send}
-            >
+            <Button disabled={!unsaved} loading={vote.isPending} onClick={send}>
               {unsaved ? "Send my answers" : "Answers saved"}
             </Button>
             {vote.error ? (
@@ -262,7 +285,7 @@ function PollRoute() {
               </p>
             ) : null}
           </div>
-        ) : unsaved ? (
+        ) : unsaved || editingName ? (
           <form
             className={styles.rsvpForm}
             onSubmit={(event) => {
@@ -274,13 +297,17 @@ function PollRoute() {
             {/* What leaves this browser, said before it does (PRD §19.1). */}
             <p className={pollStyles.disclosure}>
               <Info aria-hidden="true" size={14} strokeWidth={1.7} />
-              {needsVerification
+              {editingName
+                ? `Verify the email you used when answering as ${editingName}.`
+                : needsVerification
                 ? "This email already has answers. Verify the inbox before changing them."
                 : "You are sending your answers, name and email. Your email stays private and your calendar is never read."}
             </p>
 
             {needsVerification && capabilities.isPending ? (
-              <p className={pollStyles.disclosure}>Checking email availability…</p>
+              <p className={pollStyles.disclosure}>
+                Checking email availability…
+              </p>
             ) : needsVerification && !capabilities.data?.email ? (
               <p className={pollStyles.error} role="alert">
                 These answers already belong to this email. This server cannot
@@ -303,6 +330,7 @@ function PollRoute() {
                   <input
                     autoCapitalize="none"
                     autoComplete="email"
+                  autoFocus={Boolean(editingName)}
                     inputMode="email"
                     name="email"
                     placeholder="you@example.com"
@@ -323,7 +351,9 @@ function PollRoute() {
               <Button loading={vote.isPending} type="submit">
                 {needsVerification
                   ? sent
-                    ? "Confirm and send"
+                    ? editingName
+                      ? "Confirm and edit"
+                      : "Confirm and send"
                     : "Send me a code"
                   : "Send my answers"}
               </Button>
@@ -338,9 +368,3 @@ function PollRoute() {
     </main>
   );
 }
-
-
-
-
-
-

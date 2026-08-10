@@ -21,7 +21,7 @@ export async function optionalAuth(
   next();
 }
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const session = await auth.api.getSession({ headers: new Headers(req.headers as Record<string, string>) });
   if (session) {
     req.user = session.user;

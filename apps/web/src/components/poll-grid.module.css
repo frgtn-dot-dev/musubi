@@ -98,6 +98,18 @@
   text-overflow: ellipsis;
 }
 
+.personRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+
+.personName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .corner {
   color: var(--text-secondary);
   font-size: var(--text-11);

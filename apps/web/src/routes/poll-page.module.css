@@ -59,6 +59,26 @@
   font-size: var(--text-12);
 }
 
+.editAnswers {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.editAnswers:hover,
+.editAnswers:focus-visible {
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
 .send {
   display: grid;
   gap: var(--space-2);
