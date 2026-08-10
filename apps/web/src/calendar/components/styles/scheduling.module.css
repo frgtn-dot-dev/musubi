@@ -287,14 +287,7 @@
 .footer {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-2);
-}
-
-/* Back, and stopping the poll — the two that leave things where they are. */
-.footerActions {
-	display: flex;
-	align-items: center;
+	justify-content: flex-end;
 	gap: var(--space-2);
 }
 

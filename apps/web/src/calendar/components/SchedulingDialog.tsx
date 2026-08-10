@@ -377,9 +377,8 @@ function PollResults({
         </p>
       ) : null}
 
-      {/* Managing the poll, not navigating: deleting sits on its own side of the
-          row, because it is the one press here that cannot be taken back. "Done"
-          used to sit beside "Back" doing the same job the header's close does. */}
+      {/* One action block: splitting delete onto the far edge made this footer
+          read as two unrelated menus even though all three manage this poll. */}
       <div className={styles.footer}>
         <Button
           className={styles.deletePoll}
@@ -389,21 +388,19 @@ function PollResults({
         >
           Delete poll
         </Button>
-        <span className={styles.footerActions}>
-          {data && !data.closed ? (
-            <Button
-              loading={close.isPending}
-              title="Stop taking answers without picking a time"
-              variant="secondary"
-              onClick={() => close.mutate()}
-            >
-              Stop taking answers
-            </Button>
-          ) : null}
-          <Button variant="secondary" onClick={onBack}>
-            Back
+        {data && !data.closed ? (
+          <Button
+            loading={close.isPending}
+            title="Stop taking answers without picking a time"
+            variant="secondary"
+            onClick={() => close.mutate()}
+          >
+            Stop taking answers
           </Button>
-        </span>
+        ) : null}
+        <Button variant="secondary" onClick={onBack}>
+          Back
+        </Button>
       </div>
 
       <ConfirmationDialog

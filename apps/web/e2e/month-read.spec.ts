@@ -7126,6 +7126,18 @@ test("closes and deletes a poll", async ({ page }) => {
 	await page.getByRole("button", { exact: true, name: "Find a time" }).click();
 	await page.getByRole("button", { name: /Studio planning/ }).click();
 
+	const pollActions = await Promise.all(
+		["Delete poll", "Stop taking answers", "Back"].map(async (name) =>
+			page.getByRole("button", { name }).boundingBox(),
+		),
+	);
+	expect(new Set(pollActions.map((box) => Math.round(box!.y))).size).toBe(1);
+	for (let index = 1; index < pollActions.length; index += 1) {
+		const previous = pollActions[index - 1]!;
+		const current = pollActions[index]!;
+		expect(current.x - (previous.x + previous.width)).toBeLessThanOrEqual(12);
+	}
+
 	// Deciding used to be the only way to shut a poll, so an organizer who sorted
 	// the meeting out elsewhere had to invent an event or leave the link open.
 	await page.getByRole("button", { name: "Stop taking answers" }).click();
