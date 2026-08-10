@@ -35,6 +35,10 @@ const dayFormatter = new Intl.DateTimeFormat("en", {
   month: "short",
   weekday: "long",
 });
+const relativeDateFormatter = new Intl.DateTimeFormat("en", {
+  day: "numeric",
+  month: "short",
+});
 
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long" });
 
@@ -171,7 +175,7 @@ export function AgendaView({
                   {relative ? (
                     <>
                       <strong>{relative}</strong>
-                      <span>{dayFormatter.format(group.date)}</span>
+                      <span>{relativeDateFormatter.format(group.date)}</span>
                     </>
                   ) : (
                     dayFormatter.format(group.date)

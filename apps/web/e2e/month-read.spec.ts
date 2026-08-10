@@ -806,6 +806,16 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
 		page.getByRole("button", { name: /Studio open day/ }),
 	).toHaveCount(1);
 
+	const todayRow = page.locator("[data-agenda-date]").filter({
+		has: page.getByText("Today", { exact: true }),
+	});
+	await expect(todayRow).toBeVisible();
+	const todayHeights = await todayRow.evaluate((row) => ({
+		events: row.children[1]!.getBoundingClientRect().height,
+		row: row.getBoundingClientRect().height,
+	}));
+	expect(todayHeights.row - todayHeights.events).toBeLessThanOrEqual(1);
+
 	await page.getByRole("button", { name: /Design review/ }).click();
 	// Scoped to the preview: the agenda row shows the location too.
 	const agendaPreview = page.getByRole("dialog", { name: "Design review" });

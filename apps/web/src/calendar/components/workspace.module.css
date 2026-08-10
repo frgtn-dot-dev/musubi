@@ -731,11 +731,10 @@
 	color: var(--accent-primary);
 }
 
-/* "Today" over its date: the name is what the eye is looking for, the date is
-   what confirms it. */
+/* Relative name and date share the event's line: stacking them made Today and
+   Tomorrow rows taller than their only event and left a false empty strip. */
 .agendaDate strong {
-	display: block;
-	margin-bottom: 3px;
+	margin-right: 6px;
 	color: var(--text-primary);
 	font-size: 0.7rem;
 	font-weight: 600;
