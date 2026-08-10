@@ -7713,6 +7713,7 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {
+	let emailEnabled = false;
 	let signedIn = false;
 	let sentVotes: unknown;
 	await page.route("**/api/auth/get-session", (route) =>
@@ -7725,6 +7726,9 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 					}
 				: null,
 		),
+	);
+	await page.route("**/api/v1/server", (route) =>
+		respond(route, { email: emailEnabled, socials: [], syncProviders: [] }),
 	);
 	await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
 		respond(route, { success: true }),
@@ -7800,10 +7804,22 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	// A cell opens a menu; the menu sets the answer.
 	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
 	await page.getByRole("button", { name: "Yes", exact: true }).click();
+	await expect(
+		page.getByRole("alert").filter({ hasText: "email is not configured" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Send me a code" })).toHaveCount(
+		0,
+	);
+	expect(sentVotes).toBeUndefined();
+
+	// Once SMTP exists, the same answers can be verified and sent.
+	emailEnabled = true;
+	await page.reload();
+	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
+	await page.getByRole("button", { name: "Yes", exact: true }).click();
 	// Said before the button is pressed, not after: what leaves the browser is the
 	// answers and a name — never the reader's own calendar.
 	await expect(page.getByText(/Your own calendar is never sent/)).toBeVisible();
-	expect(sentVotes).toBeUndefined();
 
 	// The name belongs in the row it names, which is where the grid asks for it.
 	await page.getByLabel("Your name").fill("Zoe");

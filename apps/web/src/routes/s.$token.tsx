@@ -3,7 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Info } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { VoteValue } from "~/api/contracts";
-import { getPoll, votePoll } from "~/api/resources";
+import { getServerOrigin } from "~/api/query-keys";
+import { getPoll, getServerCapabilities, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
@@ -55,6 +56,12 @@ function PollRoute() {
     queryFn: ({ signal }) => getPoll(token, signal),
     queryKey: pollKey,
     retry: false,
+  });
+  const capabilities = useQuery({
+    enabled: !session.data,
+    queryFn: ({ signal }) => getServerCapabilities(signal),
+    queryKey: ["server-capabilities", getServerOrigin()],
+    staleTime: 5 * 60_000,
   });
 
   const vote = useMutation({
@@ -245,6 +252,14 @@ function PollRoute() {
               </p>
             ) : null}
           </div>
+        ) : unsaved && capabilities.isPending ? (
+          <p className={pollStyles.disclosure}>Checking email availability…</p>
+        ) : unsaved && !capabilities.data?.email ? (
+          <p className={pollStyles.error} role="alert">
+            This server cannot send verification codes because email is not
+            configured. Ask the server administrator to configure SMTP before
+            submitting your answers.
+          </p>
         ) : unsaved ? (
           <form
             className={styles.rsvpForm}
@@ -297,7 +312,7 @@ function PollRoute() {
       </article>
 
       <p className={styles.footer}>
-        Published with <a href="https://musubi.pro">Musubi</a>
+        Published with <Link to="/">Musubi</Link>
       </p>
     </main>
   );
