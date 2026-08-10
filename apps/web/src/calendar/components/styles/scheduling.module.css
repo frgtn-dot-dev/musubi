@@ -51,6 +51,15 @@
   justify-items: start;
 }
 
+.fieldHeader {
+  display: flex;
+  width: 100%;
+  min-height: 18px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .fieldLabel {
   color: var(--text-muted);
   font-size: var(--text-11);

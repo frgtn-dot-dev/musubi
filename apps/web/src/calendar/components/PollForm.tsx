@@ -75,7 +75,18 @@ export function PollForm({
 			</Field>
 
 			<div className={styles.field}>
-				<span className={styles.fieldLabel}>Which days</span>
+				<div className={styles.fieldHeader}>
+					<span className={styles.fieldLabel}>Which days</span>
+					{days.length > 0 ? (
+						<button
+							className={styles.clear}
+							type="button"
+							onClick={() => setDays([])}
+						>
+							Clear {days.length} {days.length === 1 ? "day" : "days"}
+						</button>
+					) : null}
+				</div>
 				<ClientOnly>
 					<PollDayPicker
 						onChange={setDays}
@@ -83,15 +94,6 @@ export function PollForm({
 						weekStartsOn={weekStartsOn}
 					/>
 				</ClientOnly>
-				{days.length > 0 ? (
-					<button
-						className={styles.clear}
-						type="button"
-						onClick={() => setDays([])}
-					>
-						Clear {days.length} {days.length === 1 ? "day" : "days"}
-					</button>
-				) : null}
 			</div>
 
 			<section className={styles.optionalSection}>

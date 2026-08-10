@@ -7360,7 +7360,11 @@ test("creates a poll, collects answers and turns one into an event", async ({
 		.toBeGreaterThan(0);
 	await approximateStart.fill("15:00");
 	await approximateStart.press("Tab");
-	await dialog.getByRole("button", { exact: true, name: "18" }).click();
+	const firstDay = dialog.getByRole("button", { exact: true, name: "18" });
+	const dayY = (await firstDay.boundingBox())?.y;
+	await firstDay.click();
+	await expect(dialog.getByRole("button", { name: "Clear 1 day" })).toBeVisible();
+	expect((await firstDay.boundingBox())?.y).toBe(dayY);
 	await dialog.getByRole("button", { exact: true, name: "19" }).click();
 	await expect(dialog.getByText("2 days", { exact: true })).toBeVisible();
 	await dialog.getByRole("button", { name: "Create the poll" }).click();
