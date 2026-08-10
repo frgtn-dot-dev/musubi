@@ -199,6 +199,7 @@
 }
 
 .clear {
+  padding: 0;
   border: 0;
   background: none;
   color: var(--text-secondary);
