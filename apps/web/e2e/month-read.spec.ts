@@ -321,11 +321,11 @@ async function mockAuthenticatedReads(
 	eventResponse: typeof events = events,
 	calendarResponse: typeof calendars = calendars,
 	failWritesForCalendarId?: string,
-	showMobileNotice = false,
+	bypassMobileBlocker = true,
 ) {
-	if (!showMobileNotice) {
+	if (bypassMobileBlocker) {
 		await page.addInitScript(() =>
-			sessionStorage.setItem("musubi-mobile-web-notice-dismissed", "true"),
+			sessionStorage.setItem("musubi-mobile-web-test-bypass", "true"),
 		);
 	}
 
@@ -3800,25 +3800,30 @@ test("says an event is unsettled while its write is in flight", async ({
 	await expect(block).not.toHaveAttribute("data-pending", "");
 });
 
-test("offers the mobile app before opening the phone web app", async ({
+test("blocks the phone web app with a full-screen app download", async ({
 	page,
 }) => {
 	await page.setViewportSize({ height: 720, width: 390 });
-	await mockAuthenticatedReads(page, events, calendars, undefined, true);
+	await mockAuthenticatedReads(page, events, calendars, undefined, false);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-	const notice = page.getByRole("dialog", { name: "Musubi on mobile" });
-	await expect(notice).toContainText(
+	const blocker = page.getByRole("dialog", { name: "Musubi on mobile" });
+	await expect(blocker).toContainText(
 		"The web app is not fully optimized for phones yet.",
 	);
 	await expect(
-		notice.getByRole("button", { name: "Get the Android app" }),
+		blocker.getByRole("button", { name: "Get the Android app" }),
 	).toBeVisible();
+	const box = (await blocker.locator("..").boundingBox())!;
+	expect(box).toMatchObject({ height: 720, width: 390, x: 0, y: 0 });
+	await expect(page.getByRole("button", { name: "Event", exact: true })).toHaveCount(
+		0,
+	);
 
-	await notice.getByRole("button", { name: "Continue on the web" }).click();
-	await expect(notice).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(blocker).toBeVisible();
 	await page.reload();
-	await expect(notice).toHaveCount(0);
+	await expect(blocker).toBeVisible();
 });
 
 test("turns anchored surfaces into sheets on a narrow viewport", async ({
