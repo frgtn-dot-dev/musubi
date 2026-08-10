@@ -38,6 +38,7 @@ import {
 } from "~/ui/ConfirmationDialog";
 import {
 	Popover,
+	PopoverAnchor,
 	PopoverClose,
 	PopoverContent,
 	PopoverTrigger,
@@ -104,6 +105,8 @@ type EventDetailsPopoverProps = EventActionHandlers & {
 	 * alignment rather than letting collision detection flip the card leftwards.
 	 */
 	align?: "center" | "end" | "start";
+	anchorInsideTrigger?: boolean;
+	collisionBoundary?: Element | null;
 	side?: "bottom" | "left" | "right" | "top";
 	calendar: Calendar | undefined;
 	calendars: Calendar[];
@@ -115,6 +118,8 @@ type EventDetailsPopoverProps = EventActionHandlers & {
 
 export function EventDetailsPopover({
 	align = "start",
+	anchorInsideTrigger = false,
+	collisionBoundary,
 	side = "right",
 	calendar,
 	calendars,
@@ -150,6 +155,7 @@ export function EventDetailsPopover({
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(
 		null,
 	);
+	const [anchorPoint, setAnchorPoint] = useState<{ x: number; y: number }>();
 	const [busyAction, setBusyAction] = useState<string>();
 	const [targetAction, setTargetAction] = useState<TargetAction>();
 	const [pendingTargetId, setPendingTargetId] = useState<string>();
@@ -436,13 +442,32 @@ export function EventDetailsPopover({
 			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger
 					asChild
-					onClick={(clickEvent) => setTriggerElement(clickEvent.currentTarget)}
+					onClick={(clickEvent) => {
+						setTriggerElement(clickEvent.currentTarget);
+						if (anchorInsideTrigger) {
+							const bounds = clickEvent.currentTarget.getBoundingClientRect();
+							setAnchorPoint({ x: bounds.left, y: bounds.top });
+						}
+					}}
 				>
 					{children}
 				</PopoverTrigger>
+				{anchorInsideTrigger && anchorPoint ? (
+					<PopoverAnchor asChild>
+						<span
+							aria-hidden="true"
+							style={{
+								position: "fixed",
+								left: anchorPoint.x,
+								top: anchorPoint.y,
+							}}
+						/>
+					</PopoverAnchor>
+				) : null}
 				<PopoverContent
 					aria-labelledby={titleId}
 					className={styles.detailPopover}
+					collisionBoundary={collisionBoundary}
 					collisionPadding={14}
 					align={align}
 					/* This surface scrolls its own overflow, which makes it a scroll

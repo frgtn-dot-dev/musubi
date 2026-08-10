@@ -962,6 +962,44 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
+test("keeps Day event details beside the event inside the calendar workspace", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await mockAuthenticatedReads(page);
+	await page.goto("/app/p/my-calendar/day?date=2026-07-23");
+
+	const calendarArea = page.locator("[data-calendar-area]");
+	const trigger = page.getByRole("button", { name: /Project check-in/ });
+	const areaBox = (await calendarArea.boundingBox())!;
+	const triggerBox = (await trigger.boundingBox())!;
+	await trigger.click();
+
+	const details = page.getByRole("dialog", { name: "Project check-in" });
+	await details.evaluate((element) =>
+		Promise.all(
+			element
+				.getAnimations({ subtree: true })
+				.map((animation) => animation.finished),
+		),
+	);
+	const detailsBox = (await details.boundingBox())!;
+
+	await expect(details).toHaveAttribute("data-side", /left|right/);
+	expect(detailsBox.x).toBeGreaterThanOrEqual(areaBox.x);
+	expect(detailsBox.y).toBeGreaterThanOrEqual(areaBox.y);
+	expect(detailsBox.x + detailsBox.width).toBeLessThanOrEqual(
+		areaBox.x + areaBox.width,
+	);
+	expect(detailsBox.y + detailsBox.height).toBeLessThanOrEqual(
+		areaBox.y + areaBox.height,
+	);
+	// Day events use the whole column, so the side placement intentionally sits
+	// over the event layer instead of escaping above or below the trigger.
+	expect(detailsBox.x).toBeGreaterThanOrEqual(triggerBox.x);
+	expect(detailsBox.x).toBeLessThan(triggerBox.x + triggerBox.width);
+});
+
 test("creates across chosen calendars, then edits and deletes through confirmed API writes", async ({
 	page,
 }) => {

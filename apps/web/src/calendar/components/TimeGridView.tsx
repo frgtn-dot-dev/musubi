@@ -129,8 +129,8 @@ type TimelineEventProps = EventActionHandlers & {
   calendars: Calendar[];
   dayIndex: number;
   daySegment: ReturnType<typeof getDaySegments<Event>>[number];
-  /** Where the preview opens; Day has no room beside a full-width block. */
-  detailSide: "bottom" | "right";
+  detailBoundary: HTMLElement | null;
+  detailInsideTrigger: boolean;
   /** Live times while this event is being dragged, else undefined. */
   dragTimes?: DragTimes;
   /**
@@ -200,7 +200,8 @@ const TimelineEvent = memo(function TimelineEvent({
   calendars,
   dayIndex,
   daySegment,
-  detailSide,
+  detailBoundary,
+  detailInsideTrigger,
   dragTimes,
   draggable,
   geometry,
@@ -278,10 +279,11 @@ const TimelineEvent = memo(function TimelineEvent({
 
   return (
     <EventDetailsPopover
+      anchorInsideTrigger={detailInsideTrigger}
       calendar={calendar}
       calendars={calendars}
+      collisionBoundary={detailBoundary}
       event={event}
-      side={detailSide}
       timeFormat={timeFormat}
       weekStartsOn={weekStartsOn}
       {...eventActions}
@@ -420,16 +422,14 @@ export function TimeGridView({
   );
   const [now, setNow] = useState(() => new Date());
   const hasToday = days.some((day) => isSameDay(day, now));
-  /**
-   * Beside the block in Week, under it in Day.
-   *
-   * A day column is as wide as the grid, so there is nothing to the right of a
-   * block to open into: Radix flipped the preview to the left instead, where it
-   * covered the sidebar and ran off the screen.
-   */
-  const detailSide = days.length === 1 ? "bottom" : "right";
+  const dayMode = view === "day";
+  const [detailBoundary, setDetailBoundary] = useState<HTMLElement | null>(null);
   const dismissGuard = useLayerDismissGuard();
   const rootRef = useRef<HTMLElement>(null);
+  const setRoot = useCallback((element: HTMLElement | null) => {
+    rootRef.current = element;
+    setDetailBoundary(element?.parentElement ?? null);
+  }, []);
   const canvasRef = useRef<HTMLDivElement>(null);
   // Last applied geometry, so a density change can rescale scroll instead of
   // resetting it.
@@ -569,7 +569,6 @@ export function TimeGridView({
       scrollRoot: () => rootRef.current?.parentElement,
     },
   );
-  const dayMode = view === "day";
   const dragPreviewColor = drag
     ? (calendarsById.get(eventHomeCalendarId(drag.event) ?? "")?.color ??
       drag.event.color)
@@ -693,7 +692,7 @@ export function TimeGridView({
       }`}
       aria-label={`${view === "day" ? "Day" : "Week"} time grid`}
       onKeyDown={handleKeyDown}
-      ref={rootRef}
+      ref={setRoot}
       style={layoutStyle}
       tabIndex={0}
     >
@@ -737,11 +736,13 @@ export function TimeGridView({
 
               return (
                 <EventDetailsPopover
+                  anchorInsideTrigger={dayMode}
                   calendar={calendar}
                   calendars={calendars}
+                  collisionBoundary={detailBoundary}
                   event={span.event}
                   key={span.event.id}
-                  side="bottom"
+                  side={dayMode ? "right" : "bottom"}
                   timeFormat={timeFormat}
                   weekStartsOn={weekStartsOn}
                   {...eventActions}
@@ -957,7 +958,8 @@ export function TimeGridView({
                 ) : null}
                 {segmentsByDay[dayIndex]?.map((segment) => (
                   <TimelineEvent
-                    detailSide={detailSide}
+                    detailBoundary={detailBoundary}
+                    detailInsideTrigger={dayMode}
                     pending={
                       busyEventId !== undefined &&
                       (segment.event.id === busyEventId ||
