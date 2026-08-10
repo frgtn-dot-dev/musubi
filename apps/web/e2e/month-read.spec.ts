@@ -7843,7 +7843,7 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await page.getByLabel("Code from your email").fill("123456");
 	await page.getByRole("button", { name: "Confirm and edit" }).click();
 
-	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
+	await page.getByRole("button", { name: /18 Aug.*you answered yes/ }).click();
 	await page.getByRole("button", { name: "No", exact: true }).click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	await expect(
