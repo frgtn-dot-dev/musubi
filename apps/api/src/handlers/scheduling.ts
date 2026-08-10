@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+  claimPollOwnership,
   closePoll,
   createEvent,
   createPoll,
@@ -9,8 +10,9 @@ import {
   listPollSlots,
   listPollVotes,
   listPolls,
-  nameAnonymousUser,
+  PollIdentityExistsError,
   setPollVotes,
+  type SchedulingPollRow,
 } from "@musubi/db";
 import { BadRequestError, ForbiddenError, NotFoundError } from "@musubi/types";
 import { config } from "@musubi/config";
@@ -35,6 +37,48 @@ function pollUrl(token: string) {
   return `${config.api.url}/s/${token}`;
 }
 
+function emailIdentity(value: unknown) {
+  const email = String(value ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new BadRequestError("Enter a valid email address...");
+  }
+  return email;
+}
+
+function identityName(value: unknown) {
+  const name = String(value ?? "").trim().slice(0, 120);
+  if (!name) throw new BadRequestError("Enter your name...");
+  return name;
+}
+
+function pollSummary(poll: SchedulingPollRow) {
+  return {
+    approximateStartTime: poll.approximateStartTime,
+    chosenSlotID: poll.chosenSlotID,
+    closed: pollIsClosed(poll),
+    closedAt: poll.closedAt,
+    createdAt: poll.createdAt,
+    deadline: poll.deadline,
+    durationMinutes: poll.durationMinutes,
+    id: poll.id,
+    title: poll.title,
+    token: poll.token,
+    url: pollUrl(poll.token),
+  };
+}
+
+async function assertPollOwner(poll: SchedulingPollRow, req: Request) {
+  if (poll.ownerID === req.user!.id) return;
+  if (
+    req.user!.emailVerified &&
+    poll.ownerEmail === String(req.user!.email).trim().toLowerCase()
+  ) {
+    await claimPollOwnership(poll.id, req.user!.id);
+    return;
+  }
+  throw new ForbiddenError("Only the organizer can change this poll...");
+}
+
 export function parseApproximateStartTime(value: unknown) {
   const time = String(value ?? "").trim();
   if (!time) return null;
@@ -48,6 +92,8 @@ export async function handlerCreatePoll(req: Request, res: Response) {
   const title = String(req.body?.title ?? "").trim().slice(0, MAX_TITLE);
   const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
   const approximateStartTime = parseApproximateStartTime(req.body?.approximateStartTime);
+  const ownerEmail = emailIdentity(req.body?.email ?? req.user?.email);
+  const ownerName = identityName(req.body?.name ?? req.user?.name);
 
   if (!title) throw new BadRequestError("A poll needs a title...");
   if (slots.length === 0) {
@@ -68,12 +114,6 @@ export async function handlerCreatePoll(req: Request, res: Response) {
     };
   });
 
-  // A poll made from the public page belongs to an account created seconds ago,
-  // which has no name on it. Only fills an empty one — creating a poll never
-  // renames an existing account.
-  const organizer = String(req.body?.name ?? "").trim();
-  if (organizer) await nameAnonymousUser(req.user!.id, organizer);
-
   const poll = await createPoll(
     {
       approximateStartTime,
@@ -82,29 +122,27 @@ export async function handlerCreatePoll(req: Request, res: Response) {
       // Kept in storage and projections for older clients; new polls become
       // all-day events and no longer ask the organizer for a duration.
       durationMinutes: ALL_DAY_DURATION_MINUTES,
-      ownerID: req.user!.id,
+      ownerEmail,
+      ownerID: req.user?.id,
+      ownerName,
       title,
       token: pollToken(),
     },
     parsed,
   );
 
-  res.status(201).json({ ...poll, url: pollUrl(poll.token) });
+  res.status(201).json(pollSummary(poll));
 }
 
 export async function handlerListPolls(req: Request, res: Response) {
-  const polls = await listPolls(req.user!.id);
-
-  res.status(200).json(
-    polls.map((poll) => ({
-      ...poll,
-      // Whether it still takes answers, worked out here rather than in the
-      // browser: the deadline is a wall-clock comparison and the server's clock
-      // is the one that refuses a vote, so it is the one that gets to say.
-      closed: pollIsClosed(poll),
-      url: pollUrl(poll.token),
-    })),
+  const polls = await listPolls(
+    req.user!.id,
+    req.user!.emailVerified
+      ? String(req.user!.email).trim().toLowerCase()
+      : undefined,
   );
+
+  res.status(200).json(polls.map(pollSummary));
 }
 
 /** Shut to answers, for either reason. */
@@ -120,8 +158,8 @@ function pollIsClosed(poll: { closedAt: Date | null; deadline: Date | null }) {
  * answered so far.
  *
  * Open by token, like an invite or a published event — the link is the
- * invitation. Voting needs a session; reading does not, so somebody can see what
- * they are being asked before they identify themselves.
+ * invitation. A first vote needs a private email identity but no session; only
+ * replacing that identity's answers requires an authenticated matching inbox.
  */
 export async function handlerGetPoll(req: Request, res: Response) {
   const poll = await getPollByToken(String(req.params.token));
@@ -132,7 +170,14 @@ export async function handlerGetPoll(req: Request, res: Response) {
     listPollVotes(poll.id),
   ]);
 
-  res.status(200).json(pollProjection(poll, slots, votes, req.user?.id));
+  res.status(200).json(
+    pollProjection(
+      poll,
+      slots,
+      votes,
+      req.user ? String(req.user.email).trim().toLowerCase() : undefined,
+    ),
+  );
 }
 
 export type PollRow = {
@@ -146,7 +191,13 @@ export type PollRow = {
 };
 
 export type SlotRow = { end: Date; id: string; start: Date };
-export type VoteRow = { name: string; slotID: string; userID: string; value: string };
+export type VoteRow = {
+  email: string;
+  name: string;
+  participantID: string;
+  slotID: string;
+  value: string;
+};
 
 /**
  * What every participant of a poll is allowed to see.
@@ -160,18 +211,17 @@ export function pollProjection(
   poll: PollRow,
   slots: SlotRow[],
   votes: VoteRow[],
-  /** Who is asking, when anybody is: their own row is the one they can edit. */
-  viewerID?: string,
+  /** The authenticated email asking, when anybody is: their row is editable. */
+  viewerEmail?: string,
 ) {
-  // One row per person who has answered, because the grid participants read is
-  // people down and days across. Identified by a number local to this poll and
-  // not by the user id: two people called Jan must stay two rows, and a stranger
-  // holding the link has no business learning account ids. Sorted by user id so
-  // the numbering is the same on every request — a row that renumbered between
-  // polls would move under the reader's cursor.
-  const userIDs = [...new Set(votes.map((vote) => vote.userID))].sort();
-  const people = userIDs.map((userID, index) => {
-    const theirs = votes.filter((vote) => vote.userID === userID);
+  // Poll-local ids keep emails private while names and answers remain visible.
+  const participantIDs = [
+    ...new Set(votes.map((vote) => vote.participantID)),
+  ].sort();
+  const people = participantIDs.map((participantID, index) => {
+    const theirs = votes.filter(
+      (vote) => vote.participantID === participantID,
+    );
 
     return {
       answers: Object.fromEntries(
@@ -182,7 +232,12 @@ export function pollProjection(
     };
   });
 
-  const viewerIndex = viewerID ? userIDs.indexOf(viewerID) : -1;
+  const viewerParticipantID = viewerEmail
+    ? votes.find((vote) => vote.email === viewerEmail)?.participantID
+    : undefined;
+  const viewerIndex = viewerParticipantID
+    ? participantIDs.indexOf(viewerParticipantID)
+    : -1;
 
   return {
     approximateStartTime: poll.approximateStartTime ?? null,
@@ -202,7 +257,7 @@ export function pollProjection(
     /** Which row is theirs, so the grid does not show them twice. */
     mineID: viewerIndex >= 0 ? people[viewerIndex]!.id : null,
     people,
-    respondents: userIDs.length,
+    respondents: participantIDs.length,
     slots: slots.map((slot) => {
       const forSlot = votes.filter((vote) => vote.slotID === slot.id);
       const named = (value: string) =>
@@ -280,27 +335,39 @@ export async function handlerVotePoll(req: Request, res: Response) {
     }
   }
 
-  // Somebody who arrived by link has an account with no name on it, and a grid
-  // row reading "Guest" is useless to everyone else. Only fills an empty name —
-  // a poll never renames an existing account.
-  const name = String(req.body?.name ?? "").trim();
-  if (name) await nameAnonymousUser(req.user!.id, name);
+  const email = emailIdentity(req.body?.email ?? req.user?.email);
+  const name = identityName(req.body?.name ?? req.user?.name);
+  const authenticatedEmail = req.user
+    ? String(req.user.email).trim().toLowerCase()
+    : undefined;
 
-  await setPollVotes(
-    poll.id,
-    req.user!.id,
-    votes.map((vote: { slotID: string; value: string }) => ({
-      slotID: String(vote.slotID),
-      value: String(vote.value),
-    })),
-  );
+  try {
+    await setPollVotes({
+      allowExisting: authenticatedEmail === email,
+      email,
+      name,
+      pollID: poll.id,
+      userID: authenticatedEmail === email ? req.user?.id : undefined,
+      votes: votes.map((vote: { slotID: string; value: string }) => ({
+        slotID: String(vote.slotID),
+        value: String(vote.value),
+      })),
+    });
+  } catch (error) {
+    if (error instanceof PollIdentityExistsError) {
+      throw new ForbiddenError(
+        "Sign in with the code sent to this email before changing its answers...",
+      );
+    }
+    throw error;
+  }
 
   const [slots, saved] = await Promise.all([
     listPollSlots(poll.id),
     listPollVotes(poll.id),
   ]);
 
-  res.status(200).json(pollProjection(poll, slots, saved, req.user!.id));
+  res.status(200).json(pollProjection(poll, slots, saved, email));
 }
 
 /**
@@ -322,9 +389,7 @@ export function pollSlotEventTiming(slotStart: Date) {
 export async function handlerDecidePoll(req: Request, res: Response) {
   const poll = await getPollById(String(req.params.pollId));
   if (!poll) throw new NotFoundError("Poll not found...");
-  if (poll.ownerID !== req.user!.id) {
-    throw new ForbiddenError("Only the organizer can decide a poll...");
-  }
+  await assertPollOwner(poll, req);
   if (poll.closedAt) throw new BadRequestError("This poll is already decided...");
 
   const slotID = String(req.body?.slotId ?? "");
@@ -365,9 +430,7 @@ export async function handlerDecidePoll(req: Request, res: Response) {
 export async function handlerClosePoll(req: Request, res: Response) {
   const poll = await getPollById(String(req.params.pollId));
   if (!poll) throw new NotFoundError("Poll not found...");
-  if (poll.ownerID !== req.user!.id) {
-    throw new ForbiddenError("Only the organizer can close a poll...");
-  }
+  await assertPollOwner(poll, req);
   if (poll.closedAt) throw new BadRequestError("This poll is already closed...");
 
   await closePoll({ pollID: poll.id });
@@ -386,9 +449,7 @@ export async function handlerClosePoll(req: Request, res: Response) {
 export async function handlerDeletePoll(req: Request, res: Response) {
   const poll = await getPollById(String(req.params.pollId));
   if (!poll) throw new NotFoundError("Poll not found...");
-  if (poll.ownerID !== req.user!.id) {
-    throw new ForbiddenError("Only the organizer can delete a poll...");
-  }
+  await assertPollOwner(poll, req);
 
   await deletePoll(poll.id);
 

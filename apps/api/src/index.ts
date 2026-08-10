@@ -8,7 +8,7 @@ import { middlewareErrorHandler } from "./middleware/error_handler";
 import { handlerCreateCalendar, handlerGetCalendars, handlerGetCalendar, handlerRemoveCalendar, handlerUpdateCalendar, handlerJoinCalendar, handlerLeaveCalendar, handlerExportCalendar, handlerImportCalendar, handlerGetCalendarFromToken, handlerGetCalendarMembers, handlerSetMemberRole, handlerKickMember } from "./handlers/calendars";
 import { handlerConfirmDeleteUser, handlerDeleteUser, handlerGetAvatar, handlerResetUsers, handlerUploadAvatar } from "./handlers/users";
 import { handlerCreateEvent, handlerForkEvent, handlerGetAttendees, handlerGetEvents, handlerLinkEvent, handlerRemoveEvent, handlerSetAttendance, handlerUpdateEvent } from "./handlers/events";
-import { requireAuth } from "./middleware/require_auth";
+import { optionalAuth, requireAuth } from "./middleware/require_auth";
 import {
   handlerCreatePoll,
   handlerClosePoll,
@@ -201,15 +201,15 @@ app.get("/api/v1/calendars/google", requireAuth, wrap(handlerGetGoogleCalendars)
 // credential — cross-server invitees have no session here yet.
 app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(handlerGetCalendarFromToken));
 // Scheduling (group poll, PRD §19.1). Creating and deciding belong to the
-// organizer; reading is open by token so somebody can see what they are being
-// asked before identifying themselves, and voting needs a session.
+// organizer; reading is open by token. A first answer needs only name + email;
+// replacing an existing email's answer requires an authenticated matching inbox.
 app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
-app.post("/api/v1/scheduling/polls", requireAuth, rateLimit(30, 15 * 60_000), wrap(handlerCreatePoll));
+app.post("/api/v1/scheduling/polls", optionalAuth, rateLimit(30, 15 * 60_000), wrap(handlerCreatePoll));
 app.post("/api/v1/scheduling/polls/:pollId/decide", requireAuth, wrap(handlerDecidePoll));
 app.post("/api/v1/scheduling/polls/:pollId/close", requireAuth, wrap(handlerClosePoll));
 app.delete("/api/v1/scheduling/polls/:pollId", requireAuth, wrap(handlerDeletePoll));
-app.get("/api/v1/public/polls/:token", rateLimit(60, 15 * 60_000), wrap(handlerGetPoll));
-app.put("/api/v1/public/polls/:token/votes", requireAuth, rateLimit(60, 15 * 60_000), wrap(handlerVotePoll));
+app.get("/api/v1/public/polls/:token", optionalAuth, rateLimit(60, 15 * 60_000), wrap(handlerGetPoll));
+app.put("/api/v1/public/polls/:token/votes", optionalAuth, rateLimit(60, 15 * 60_000), wrap(handlerVotePoll));
 
 // Public: the token IS the credential, same as an invite. Rate-limited per IP so
 // the space cannot be walked, and the projection is narrow by construction.

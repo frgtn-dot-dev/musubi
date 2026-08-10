@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import type { VoteValue } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
 import { getPoll, getServerCapabilities, votePoll } from "~/api/resources";
+import { ApiError } from "~/api/http";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
@@ -51,6 +52,7 @@ function PollRoute() {
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState("");
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   const poll = useQuery({
     queryFn: ({ signal }) => getPoll(token, signal),
@@ -58,7 +60,7 @@ function PollRoute() {
     retry: false,
   });
   const capabilities = useQuery({
-    enabled: !session.data,
+    enabled: needsVerification && !session.data,
     queryFn: ({ signal }) => getServerCapabilities(signal),
     queryKey: ["server-capabilities", getServerOrigin()],
     staleTime: 5 * 60_000,
@@ -66,12 +68,19 @@ function PollRoute() {
 
   const vote = useMutation({
     mutationFn: (input: {
+      email?: string;
       name?: string;
       votes: Array<{ slotID: string; value: VoteValue }>;
     }) => votePoll({ ...input, token }),
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 403 && !session.data) {
+        setNeedsVerification(true);
+      }
+    },
     onSuccess: (result) => {
       queryClient.setQueryData(pollKey, result);
       setDraft({});
+      setNeedsVerification(false);
     },
   });
 
@@ -147,9 +156,10 @@ function PollRoute() {
 
   function send() {
     vote.mutate({
+      email: email.trim().toLowerCase() || undefined,
       // Sent with the answers so a link-only participant stops being "Guest" to
       // everyone else in the grid. A signed-in account keeps the name it has.
-      name: name.trim() || undefined,
+      name: name.trim() || myName || undefined,
       votes: Object.entries(answers)
         .filter(([, value]) => value !== null)
         .map(([slotID, value]) => ({ slotID, value: value! })),
@@ -252,29 +262,32 @@ function PollRoute() {
               </p>
             ) : null}
           </div>
-        ) : unsaved && capabilities.isPending ? (
-          <p className={pollStyles.disclosure}>Checking email availability…</p>
-        ) : unsaved && !capabilities.data?.email ? (
-          <p className={pollStyles.error} role="alert">
-            This server cannot send verification codes because email is not
-            configured. Ask the server administrator to configure SMTP before
-            submitting your answers.
-          </p>
         ) : unsaved ? (
           <form
             className={styles.rsvpForm}
-            onSubmit={(event) =>
-              void (sent ? confirmCode(event) : requestCode(event))
-            }
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!needsVerification) send();
+              else void (sent ? confirmCode(event) : requestCode(event));
+            }}
           >
             {/* What leaves this browser, said before it does (PRD §19.1). */}
             <p className={pollStyles.disclosure}>
               <Info aria-hidden="true" size={14} strokeWidth={1.7} />
-              You are sending your answers and the name you type here. Your own
-              calendar is never sent — nothing on this page has read it.
+              {needsVerification
+                ? "This email already has answers. Verify the inbox before changing them."
+                : "You are sending your answers, name and email. Your email stays private and your calendar is never read."}
             </p>
 
-            {sent ? (
+            {needsVerification && capabilities.isPending ? (
+              <p className={pollStyles.disclosure}>Checking email availability…</p>
+            ) : needsVerification && !capabilities.data?.email ? (
+              <p className={pollStyles.error} role="alert">
+                These answers already belong to this email. This server cannot
+                send the verification code needed to edit them because SMTP is
+                not configured.
+              </p>
+            ) : sent ? (
               <Field label="Code from your email">
                 <input
                   autoComplete="one-time-code"
@@ -306,7 +319,15 @@ function PollRoute() {
               </p>
             ) : null}
 
-            <Button type="submit">{sent ? "Confirm and send" : "Send me a code"}</Button>
+            {needsVerification && !capabilities.data?.email ? null : (
+              <Button loading={vote.isPending} type="submit">
+                {needsVerification
+                  ? sent
+                    ? "Confirm and send"
+                    : "Send me a code"
+                  : "Send my answers"}
+              </Button>
+            )}
           </form>
         ) : null}
       </article>

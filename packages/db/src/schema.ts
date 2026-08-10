@@ -300,9 +300,9 @@ export const schedulingPolls = pgTable("scheduling_polls", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-  ownerID: text("owner_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
+  ownerID: text("owner_id").references(() => user.id, { onDelete: "cascade" }),
+  ownerEmail: text("owner_email").notNull(),
+  ownerName: text("owner_name").notNull(),
   title: text("title").notNull(),
   description: text("description"),
   /** Optional wall-clock hint only; decided events remain all-day. */
@@ -332,29 +332,60 @@ export const schedulingSlots = pgTable("scheduling_slots", {
 
 export type NewSchedulingSlot = typeof schedulingSlots.$inferInsert;
 
+export const schedulingParticipants = pgTable(
+  "scheduling_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pollID: uuid("poll_id")
+      .references(() => schedulingPolls.id, { onDelete: "cascade" })
+      .notNull(),
+    userID: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+  },
+  (table) => [
+    unique("scheduling_participants_poll_email_unique").on(
+      table.pollID,
+      table.email,
+    ),
+  ],
+);
+
 // One row per person per slot. `yes` / `if-needed` / `no` — the middle one is
 // what makes a poll converge, so it is a first-class answer rather than an
 // absence.
-export const schedulingVotes = pgTable("scheduling_votes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  slotID: uuid("slot_id")
-    .references(() => schedulingSlots.id, { onDelete: "cascade" })
-    .notNull(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  value: text("value").notNull(),
-});
+export const schedulingVotes = pgTable(
+  "scheduling_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    slotID: uuid("slot_id")
+      .references(() => schedulingSlots.id, { onDelete: "cascade" })
+      .notNull(),
+    participantID: uuid("participant_id")
+      .references(() => schedulingParticipants.id, { onDelete: "cascade" })
+      .notNull(),
+    // Kept through the transition for rollback; new writes use participantID.
+    userID: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+  },
+  (table) => [
+    unique("scheduling_votes_slot_participant_unique").on(
+      table.slotID,
+      table.participantID,
+    ),
+  ],
+);
 
 export type NewSchedulingVote = typeof schedulingVotes.$inferInsert;
 
 export const schedulingPollsRelations = relations(schedulingPolls, ({ many, one }) => ({
   owner: one(user, { fields: [schedulingPolls.ownerID], references: [user.id] }),
+  participants: many(schedulingParticipants),
   slots: many(schedulingSlots),
 }));
 

@@ -22,6 +22,8 @@ export type PollDraft = {
 	approximateStartTime?: string;
 	/** End of the chosen day, in the organizer's own zone. Absent means no limit. */
 	deadline?: string;
+	email?: string;
+	name?: string;
 	slots: Array<{ start: string }>;
 	title: string;
 };
@@ -36,6 +38,7 @@ export type PollDraft = {
  */
 export function PollForm({
 	busy = false,
+	collectIdentity = false,
 	error,
 	onSubmit,
 	submitLabel = "Create the poll",
@@ -43,6 +46,7 @@ export function PollForm({
 	weekStartsOn,
 }: {
 	busy?: boolean;
+	collectIdentity?: boolean;
 	error?: string;
 	onSubmit: (draft: PollDraft) => void;
 	submitLabel?: string;
@@ -50,6 +54,8 @@ export function PollForm({
 	weekStartsOn: Settings["weekStartsOn"];
 }) {
 	const [title, setTitle] = useState("");
+	const [email, setEmail] = useState("");
+	const [name, setName] = useState("");
 	const [days, setDays] = useState<string[]>([]);
 	const [approximateStartTime, setApproximateStartTime] = useState("");
 	// Empty by default: most polls are answered in a day or two and a deadline
@@ -62,7 +68,10 @@ export function PollForm({
 		start: new Date(`${day}T12:00`).toISOString(),
 	}));
 	const tooMany = slots.length > MAX_POLL_SLOTS;
-	const ready = title.trim().length > 0 && slots.length > 0 && !tooMany;
+	const identityReady =
+		!collectIdentity || (name.trim().length > 0 && email.trim().length > 0);
+	const ready =
+		title.trim().length > 0 && slots.length > 0 && !tooMany && identityReady;
 
 	return (
 		<div className={styles.form}>
@@ -73,6 +82,30 @@ export function PollForm({
 					onChange={(event) => setTitle(event.target.value)}
 				/>
 			</Field>
+
+			{collectIdentity ? (
+				<>
+					<Field label="Your name">
+						<input
+							autoComplete="name"
+							placeholder="How participants know you"
+							value={name}
+							onChange={(event) => setName(event.target.value)}
+						/>
+					</Field>
+					<Field label="Email">
+						<input
+							autoCapitalize="none"
+							autoComplete="email"
+							inputMode="email"
+							placeholder="you@example.com"
+							type="email"
+							value={email}
+							onChange={(event) => setEmail(event.target.value)}
+						/>
+					</Field>
+				</>
+			) : null}
 
 			<div className={styles.field}>
 				<div className={styles.fieldHeader}>
@@ -163,6 +196,9 @@ export function PollForm({
 					onClick={() =>
 						onSubmit({
 							...(approximateStartTime ? { approximateStartTime } : {}),
+							...(collectIdentity
+								? { email: email.trim().toLowerCase(), name: name.trim() }
+								: {}),
 							slots,
 							title: title.trim(),
 							// The end of that day where the organizer is, not midnight UTC: a

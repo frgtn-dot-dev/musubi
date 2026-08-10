@@ -6484,9 +6484,10 @@ test("ui catalogue", async ({ page }) => {
 	await page.waitForLoadState("networkidle");
 	await shot("public-find-a-time");
 	await page.getByLabel("What is it about").fill("Studio planning");
+	await page.getByLabel("Your name").fill("Zoe");
+	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { exact: true, name: "10" }).click();
-	await page.getByRole("button", { name: "Continue" }).click();
-	await shot("public-find-a-time-identity");
+	await shot("public-find-a-time-ready");
 
 	await page.goto("/new-event");
 	await page.waitForLoadState("networkidle");
@@ -7460,7 +7461,7 @@ test("picks poll days by dragging a run and by taking a weekday column", async (
 	await page.mouse.down();
 	for (const date of ["11", "12", "13", "14"]) await day(date).hover();
 	await page.mouse.up();
-	await expect(dialog.getByText("5 days × 1 time = 5 options")).toBeVisible();
+	await expect(dialog.getByText("5 days", { exact: true })).toBeVisible();
 
 	await dialog.getByRole("button", { name: "Clear 5 days" }).click();
 	await expect(dialog.getByText("Pick at least one day")).toBeVisible();
@@ -7468,7 +7469,7 @@ test("picks poll days by dragging a run and by taking a weekday column", async (
 	// A weekday header takes every one of that weekday in view, and takes it back.
 	const column = dialog.getByTitle(/^Select every/).first();
 	await column.click();
-	await expect(dialog.getByText(/^\d+ days × 1 time/)).toBeVisible();
+	await expect(dialog.getByText(/^\d+ days$/)).toBeVisible();
 	await dialog
 		.getByTitle(/^Clear every/)
 		.first()
@@ -7585,31 +7586,15 @@ test("makes an event page from the public page with no account", async ({
 
 test("makes a poll from the public page with no account", async ({ page }) => {
 	const hydrationErrors = recordHydrationErrors(page);
-	let signedIn = false;
 	let created:
 		| {
 				approximateStartTime?: string;
+				email?: string;
+				name?: string;
 				slots: Array<{ start: string }>;
 			}
 		| undefined;
-	await page.route("**/api/auth/get-session", (route) =>
-		respond(
-			route,
-			signedIn
-				? {
-						session: { id: "s" },
-						user: { email: "z@example.com", id: "guest", name: "" },
-					}
-				: null,
-		),
-	);
-	await page.route("**/api/auth/sign-in/anonymous", (route) => {
-		signedIn = true;
-		return respond(route, {
-			token: "t",
-			user: { id: "guest", isAnonymous: true },
-		});
-	});
+	await page.route("**/api/auth/get-session", (route) => respond(route, null));
 	await page.route("**/api/v1/scheduling/polls", (route) => {
 		if (route.request().method() !== "POST") return respond(route, []);
 		created = route.request().postDataJSON();
@@ -7647,6 +7632,8 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	await page.waitForLoadState("networkidle");
 
 	await page.getByLabel("What is it about").fill("Studio planning");
+	await page.getByLabel("Your name").fill("Zoe");
+	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await page.getByRole("button", { exact: true, name: "11" }).click();
 	await page.getByRole("button", { name: "Create the poll" }).click();
@@ -7654,9 +7641,9 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	await expect(page.getByRole("textbox", { name: "Poll link" })).toHaveValue(
 		`http://127.0.0.1:3000/s/${POLL_TOKEN}`,
 	);
-	// Poll creation uses a temporary session and never asks an SMTP server for a
-	// code. Registration can link that temporary owner later.
-	expect(created).not.toHaveProperty("name");
+	// The email identifies the organizer but no code or account is required for
+	// the first creation.
+	expect(created).toMatchObject({ email: "z@example.com", name: "Zoe" });
 	expect(created).not.toHaveProperty("approximateStartTime");
 	expect(created!.slots).toHaveLength(2);
 	expect(hydrationErrors).toEqual([]);
@@ -7713,9 +7700,10 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {
-	let emailEnabled = false;
+	let emailEnabled = true;
+	let saved = false;
 	let signedIn = false;
-	let sentVotes: unknown;
+	const voteAttempts: unknown[] = [];
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(
 			route,
@@ -7772,21 +7760,30 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 		],
 		title: "Studio planning",
 	};
+	const answered = (mine: boolean) => ({
+		...body,
+		mine: mine ? { "slot-tue": "yes" } : {},
+		mineID: mine ? "2" : null,
+		people: [
+			...body.people,
+			{ answers: { "slot-tue": "yes" }, id: "2", name: "Zoe" },
+		],
+		respondents: 2,
+	});
 	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
-		respond(route, body),
+		respond(route, saved ? answered(signedIn) : body),
 	);
 	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}/votes`, (route) => {
-		sentVotes = route.request().postDataJSON();
-		return respond(route, {
-			...body,
-			mine: { "slot-tue": "yes" },
-			mineID: "2",
-			people: [
-				...body.people,
-				{ answers: { "slot-tue": "yes" }, id: "2", name: "Zoe" },
-			],
-			respondents: 2,
-		});
+		voteAttempts.push(route.request().postDataJSON());
+		if (saved && !signedIn) {
+			return respond(
+				route,
+				{ message: "Sign in before changing these answers." },
+				403,
+			);
+		}
+		saved = true;
+		return respond(route, answered(true));
 	});
 
 	await page.goto(`/s/${POLL_TOKEN}`);
@@ -7804,26 +7801,39 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	// A cell opens a menu; the menu sets the answer.
 	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
 	await page.getByRole("button", { name: "Yes", exact: true }).click();
-	await expect(
-		page.getByRole("alert").filter({ hasText: "email is not configured" }),
-	).toBeVisible();
-	await expect(page.getByRole("button", { name: "Send me a code" })).toHaveCount(
-		0,
-	);
-	expect(sentVotes).toBeUndefined();
-
-	// Once SMTP exists, the same answers can be verified and sent.
-	emailEnabled = true;
-	await page.reload();
-	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
-	await page.getByRole("button", { name: "Yes", exact: true }).click();
 	// Said before the button is pressed, not after: what leaves the browser is the
-	// answers and a name — never the reader's own calendar.
-	await expect(page.getByText(/Your own calendar is never sent/)).toBeVisible();
-
-	// The name belongs in the row it names, which is where the grid asks for it.
+	// answers, name and private identity email — never the reader's calendar.
+	await expect(page.getByText(/calendar is never read/)).toBeVisible();
 	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
+	await page.getByRole("button", { name: "Send my answers" }).click();
+	await expect(page.getByRole("row", { name: /^Zoe/ })).toBeVisible();
+	expect(voteAttempts[0]).toEqual({
+		email: "z@example.com",
+		name: "Zoe",
+		votes: [{ slotID: "slot-tue", value: "yes" }],
+	});
+
+	// The same email cannot overwrite its answer until the inbox is proved.
+	const attemptEdit = async () => {
+		await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
+		await page.getByRole("button", { name: "No", exact: true }).click();
+		await page.getByLabel("Your name").fill("Zoe");
+		await page.getByLabel("Email").fill("z@example.com");
+		await page.getByRole("button", { name: "Send my answers" }).click();
+	};
+
+	// Missing SMTP blocks only the later edit, never the first answer.
+	emailEnabled = false;
+	await page.reload();
+	await attemptEdit();
+	await expect(
+		page.getByRole("alert").filter({ hasText: "SMTP is not configured" }),
+	).toBeVisible();
+
+	emailEnabled = true;
+	await page.reload();
+	await attemptEdit();
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
 	await page.getByRole("button", { name: "Confirm and send" }).click();
@@ -7833,13 +7843,9 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await expect(
 		page.getByRole("button", { name: "Answers saved" }),
 	).toBeDisabled();
-	// The name rides along, so a link-only participant is not "Guest" to everyone
-	// else in the grid.
-	expect(sentVotes).toEqual({
-		name: "Zoe",
-		votes: [{ slotID: "slot-tue", value: "yes" }],
-	});
-	await expect(page.getByRole("row", { name: /^Zoe/ })).toContainText("✓");
+	// Two refused overwrites sit between the initial answer and verified edit.
+	expect(voteAttempts).toHaveLength(4);
+	await expect(page.getByRole("row", { name: /^Zoe/ })).toBeVisible();
 
 	// A table of coloured marks is exactly where contrast and headers go wrong.
 	await expectNoAccessibilityViolations(page);

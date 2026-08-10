@@ -1,10 +1,10 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import {
   db,
+  schedulingParticipants,
   schedulingPolls,
   schedulingSlots,
   schedulingVotes,
-  user,
 } from "..";
 
 export type SchedulingPollRow = typeof schedulingPolls.$inferSelect;
@@ -24,12 +24,26 @@ export async function createPoll(
   });
 }
 
-export async function listPolls(ownerID: string) {
+export async function listPolls(ownerID: string, ownerEmail?: string) {
   return db
     .select()
     .from(schedulingPolls)
-    .where(eq(schedulingPolls.ownerID, ownerID))
+    .where(
+      ownerEmail
+        ? or(
+            eq(schedulingPolls.ownerID, ownerID),
+            eq(schedulingPolls.ownerEmail, ownerEmail),
+          )
+        : eq(schedulingPolls.ownerID, ownerID),
+    )
     .orderBy(desc(schedulingPolls.createdAt));
+}
+
+export async function claimPollOwnership(pollID: string, ownerID: string) {
+  await db
+    .update(schedulingPolls)
+    .set({ ownerID })
+    .where(eq(schedulingPolls.id, pollID));
 }
 
 export async function getPollByToken(token: string) {
@@ -65,39 +79,74 @@ export async function listPollSlots(pollID: string) {
 export async function listPollVotes(pollID: string) {
   return db
     .select({
-      name: user.name,
+      email: schedulingParticipants.email,
+      name: schedulingParticipants.name,
+      participantID: schedulingParticipants.id,
       slotID: schedulingVotes.slotID,
-      userID: schedulingVotes.userID,
       value: schedulingVotes.value,
     })
     .from(schedulingVotes)
     .innerJoin(
-      schedulingSlots,
-      eq(schedulingSlots.id, schedulingVotes.slotID),
+      schedulingParticipants,
+      eq(schedulingParticipants.id, schedulingVotes.participantID),
     )
-    .innerJoin(user, eq(user.id, schedulingVotes.userID))
-    .where(eq(schedulingSlots.pollID, pollID));
+    .where(eq(schedulingParticipants.pollID, pollID));
 }
 
-/** Replace one person's answers in one write, so a vote is never half-saved. */
-export async function setPollVotes(
-  pollID: string,
-  userID: string,
-  votes: Array<{ slotID: string; value: string }>,
-) {
-  const slots = await listPollSlots(pollID);
-  const owned = new Set(slots.map((slot) => slot.id));
-  // Slots are named by the client, so they are checked against the poll before
-  // anything is written — a vote must not be able to reach another poll's slot.
-  const accepted = votes.filter((vote) => owned.has(vote.slotID));
+export class PollIdentityExistsError extends Error {}
 
-  await db.transaction(async (tx) => {
+/** Replace one person's answers in one write, so a vote is never half-saved. */
+export async function setPollVotes(input: {
+  allowExisting: boolean;
+  email: string;
+  name: string;
+  pollID: string;
+  userID?: string;
+  votes: Array<{ slotID: string; value: string }>;
+}) {
+  const slots = await listPollSlots(input.pollID);
+  const owned = new Set(slots.map((slot) => slot.id));
+  const accepted = input.votes.filter((vote) => owned.has(vote.slotID));
+
+  return db.transaction(async (tx) => {
+    let [participant] = await tx
+      .select()
+      .from(schedulingParticipants)
+      .where(
+        and(
+          eq(schedulingParticipants.pollID, input.pollID),
+          eq(schedulingParticipants.email, input.email),
+        ),
+      );
+
+    if (participant && !input.allowExisting) {
+      throw new PollIdentityExistsError();
+    }
+    if (!participant) {
+      [participant] = await tx
+        .insert(schedulingParticipants)
+        .values({
+          email: input.email,
+          name: input.name,
+          pollID: input.pollID,
+          userID: input.userID,
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (!participant) throw new PollIdentityExistsError();
+    } else {
+      await tx
+        .update(schedulingParticipants)
+        .set({ name: input.name, userID: input.userID ?? participant.userID })
+        .where(eq(schedulingParticipants.id, participant.id));
+    }
+
     if (slots.length > 0) {
       await tx
         .delete(schedulingVotes)
         .where(
           and(
-            eq(schedulingVotes.userID, userID),
+            eq(schedulingVotes.participantID, participant.id),
             inArray(
               schedulingVotes.slotID,
               slots.map((slot) => slot.id),
@@ -106,10 +155,14 @@ export async function setPollVotes(
         );
     }
     if (accepted.length > 0) {
-      await tx
-        .insert(schedulingVotes)
-        .values(accepted.map((vote) => ({ ...vote, userID })));
+      await tx.insert(schedulingVotes).values(
+        accepted.map((vote) => ({
+          ...vote,
+          participantID: participant.id,
+        })),
+      );
     }
+    return participant.id;
   });
 }
 

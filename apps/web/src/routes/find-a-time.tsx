@@ -6,7 +6,6 @@ import type { PollSummary } from "~/api/contracts";
 import { createPoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
-import type { PollDraft } from "~/calendar/components/PollForm";
 import { PollForm } from "~/calendar/components/PollForm";
 import { BrandMark } from "~/components/BrandMark";
 import { Button } from "~/ui/Button";
@@ -39,15 +38,7 @@ function FindATimeRoute() {
   const [copied, setCopied] = useState(false);
 
   const create = useMutation({
-    mutationFn: async (draft: PollDraft) => {
-      if (!session.data) {
-        const result = await authClient.signIn.anonymous();
-        if (result.error) {
-          throw new Error(result.error.message ?? "The poll could not be created.");
-        }
-      }
-      return createPoll(draft);
-    },
+    mutationFn: createPoll,
     onSuccess: setPoll,
   });
 
@@ -75,6 +66,7 @@ function FindATimeRoute() {
         ) : (
           <PollForm
             busy={create.isPending}
+            collectIdentity={!session.data}
             error={create.error?.message}
             submitLabel="Create the poll"
             /* A stranger has no settings yet, so this page states its own

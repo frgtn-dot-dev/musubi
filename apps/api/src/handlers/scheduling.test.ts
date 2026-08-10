@@ -63,11 +63,11 @@ assert.deepEqual(
 // participant's own browser and only the answers are ever sent.
 {
   const votes = [
-    { name: "Zoe", slotID: "slot-tue", userID: "u1", value: "yes" },
-    { name: "Adam", slotID: "slot-tue", userID: "u2", value: "if-needed" },
-    { name: "", slotID: "slot-tue", userID: "u3", value: "no" },
-    { name: "Zoe", slotID: "slot-wed", userID: "u1", value: "yes" },
-    { name: "Adam", slotID: "slot-wed", userID: "u2", value: "yes" },
+    { email: "zoe@example.com", name: "Zoe", participantID: "p1", slotID: "slot-tue", value: "yes" },
+    { email: "adam@example.com", name: "Adam", participantID: "p2", slotID: "slot-tue", value: "if-needed" },
+    { email: "guest@example.com", name: "", participantID: "p3", slotID: "slot-tue", value: "no" },
+    { email: "zoe@example.com", name: "Zoe", participantID: "p1", slotID: "slot-wed", value: "yes" },
+    { email: "adam@example.com", name: "Adam", participantID: "p2", slotID: "slot-wed", value: "yes" },
   ];
   const projection = pollProjection(POLL, SLOTS, votes);
 
@@ -109,8 +109,8 @@ assert.deepEqual(
     { answers: { "slot-tue": "no" }, id: "3", name: "Guest" },
   ]);
   assert.ok(
-    !JSON.stringify(projection).includes("u1"),
-    "a projection must not carry account ids to strangers holding the link",
+    !JSON.stringify(projection).includes("zoe@example.com"),
+    "a projection must not carry emails to strangers holding the link",
   );
 
   // Nobody signed in: no row is theirs, and no answers are theirs.
@@ -119,18 +119,18 @@ assert.deepEqual(
 
   // Signed in: their own row is named, so the grid can show it once and let them
   // edit it rather than printing them twice.
-  const asAdam = pollProjection(POLL, SLOTS, votes, "u2");
+  const asAdam = pollProjection(POLL, SLOTS, votes, "adam@example.com");
   assert.equal(asAdam.mineID, "2");
   assert.deepEqual(asAdam.mine, { "slot-tue": "if-needed", "slot-wed": "yes" });
 
   // Somebody who has not answered yet is nobody's row.
-  assert.equal(pollProjection(POLL, SLOTS, votes, "u9").mineID, null);
+  assert.equal(pollProjection(POLL, SLOTS, votes, "new@example.com").mineID, null);
 
   // Two people with one name stay two rows — a poll of Jans is still a poll of
   // people, and merging them would lose an answer.
   const jans = pollProjection(POLL, SLOTS, [
-    { name: "Jan", slotID: "slot-tue", userID: "a", value: "yes" },
-    { name: "Jan", slotID: "slot-tue", userID: "b", value: "no" },
+    { email: "a@example.com", name: "Jan", participantID: "a", slotID: "slot-tue", value: "yes" },
+    { email: "b@example.com", name: "Jan", participantID: "b", slotID: "slot-tue", value: "no" },
   ]);
   assert.equal(jans.people.length, 2);
   assert.deepEqual(

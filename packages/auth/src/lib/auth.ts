@@ -1,6 +1,5 @@
 import { betterAuth } from 'better-auth';
-import { anonymous, bearer, emailOTP } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
@@ -215,16 +214,6 @@ export const auth = betterAuth({
   plugins: [
     bearer(),
     expo(),
-    anonymous({
-      // Anonymous poll organizers become ordinary users only when they choose to
-      // register. Move their polls before Better Auth removes the temporary user.
-      onLinkAccount: async ({ anonymousUser, newUser }) => {
-        await db
-          .update(schema.schedulingPolls)
-          .set({ ownerID: newUser.user.id })
-          .where(eq(schema.schedulingPolls.ownerID, anonymousUser.user.id));
-      },
-    }),
     // Passwordless sign-in by emailed code. This is what turns "I want to RSVP"
     // into an identity without asking a stranger to invent a password for a
     // calendar app they may never open again (PRD §18.1) — and the code proves

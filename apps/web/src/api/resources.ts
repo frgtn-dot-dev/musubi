@@ -429,7 +429,9 @@ export function createPoll(input: {
   /** When answers stop being taken, if the organizer set a date. */
   deadline?: string;
   description?: string;
-  /** Names an account that has none yet — a poll made from the public page. */
+  /** Private organizer identity for account-free creation. */
+  email?: string;
+  /** Public organizer label for account-free creation. */
   name?: string;
   slots: Array<{ start: string }>;
   title: string;
@@ -450,13 +452,15 @@ export function getPoll(token: string, signal?: AbortSignal) {
 }
 
 export function votePoll(input: {
-  /** Only for somebody who arrived by link: it names their empty account. */
+  /** Private identity; first answers do not require proving the inbox. */
+  email?: string;
+  /** Public label shown in the poll grid. */
   name?: string;
   token: string;
   votes: Array<{ slotID: string; value: VoteValue }>;
 }) {
   return apiRequest(`/api/v1/public/polls/${input.token}/votes`, {
-    body: { name: input.name, votes: input.votes },
+    body: { email: input.email, name: input.name, votes: input.votes },
     method: "PUT",
     responseSchema: PollSchema,
   });

@@ -1137,6 +1137,10 @@ vzešlo a nedá se vyčíst z kódu:
   prázdným polem, které to říká.
 - Dostupnost z vlastního kalendáře se **nikdy neposílá na server**: stránka to
   napíše nad formulář ještě předtím, než host zmáčkne tlačítko (PRD §19.1).
+- E-mail je **privátní identifikátor, ne vstupenka**. Organizátor i účastník při
+  prvním zápisu uvedou jméno a e-mail bez kódu; kód se vyžádá až při přepsání
+  existující odpovědi nebo správě pollu. Veřejná projekce e-mail ani stabilní id
+  účastníka nikdy neposílá.
 - Event zakládá **server** při rozhodnutí, ne klient — jinak by se anketa a
   kalendář mohly rozejít v tom, co bylo domluveno.
 - Zatím není: deadline v UI (schéma i API ho mají), předvyplnění dostupnosti

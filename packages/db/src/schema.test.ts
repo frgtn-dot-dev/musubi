@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import { calendarEvents, pages, schedulingPolls, user, userSettings } from "./schema";
+import {
+  calendarEvents,
+  pages,
+  schedulingParticipants,
+  schedulingPolls,
+  schedulingVotes,
+  user,
+  userSettings,
+} from "./schema";
 
 assert.equal(
   user.isAnonymous.default,
@@ -45,6 +53,23 @@ assert.equal(
   schedulingPolls.approximateStartTime.notNull,
   false,
   "a poll's approximate start must stay optional",
+);
+assert.equal(schedulingPolls.ownerEmail.notNull, true);
+assert.equal(schedulingPolls.ownerName.notNull, true);
+assert.equal(schedulingPolls.ownerID.notNull, false);
+assert.ok(
+  getTableConfig(schedulingParticipants).uniqueConstraints.some(
+    (constraint) =>
+      constraint.name === "scheduling_participants_poll_email_unique",
+  ),
+  "one email must identify at most one participant in a poll",
+);
+assert.ok(
+  getTableConfig(schedulingVotes).uniqueConstraints.some(
+    (constraint) =>
+      constraint.name === "scheduling_votes_slot_participant_unique",
+  ),
+  "a participant must have at most one answer per slot",
 );
 const pagesPositionIndex = getTableConfig(pages).indexes.find(
   (index) => index.config.name === "pages_user_position_idx",
