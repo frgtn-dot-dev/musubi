@@ -2506,9 +2506,7 @@ test("creates a calendar inside a connected account", async ({ page }) => {
 	await dialog.getByPlaceholder("New calendar").fill("Studio hours");
 	// The destination is offered because an account is connected; with none, the
 	// control is not there at all.
-	await dialog
-		.getByRole("combobox", { name: "Account", exact: true })
-		.click();
+	await dialog.getByRole("combobox", { name: "Account", exact: true }).click();
 	await page.getByRole("option", { name: "work@example.com" }).click();
 	await dialog.getByRole("button", { name: "Add", exact: true }).click();
 

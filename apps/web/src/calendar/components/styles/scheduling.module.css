@@ -1,7 +1,7 @@
 .content {
-  display: grid;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--layer-inline);
+	display: grid;
+	gap: var(--space-5);
+	padding: var(--space-4) var(--layer-inline);
 }
 
 /* The poll being written on one side, the polls already out on the other — and
@@ -9,308 +9,300 @@
    list was below the fold of the dialog's own scroller, which is a strange place
    to keep the thing you came back to check. */
 @media (min-width: 900px) {
-  .content {
-    /* A rail, not a half. The list holds one row per poll, and at 2fr it took
+	.content {
+		/* A rail, not a half. The list holds one row per poll, and at 2fr it took
        400px of a 1020px dialog to show it — space the day picker beside it can
        actually use. */
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
-    align-items: start;
-    min-height: 0;
-    height: 100%;
-    padding: var(--space-4) 0 0;
-  }
+		grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+		align-items: start;
+		min-height: 0;
+		height: 100%;
+		padding: var(--space-4) 0 0;
+	}
 
-  .content > * {
-    min-width: 0;
-    padding: 0 var(--layer-inline) var(--space-4);
-  }
+	.content > * {
+		min-width: 0;
+		padding: 0 var(--layer-inline) var(--space-4);
+	}
 
-  .content > :last-child {
-    align-content: start;
-    min-height: 0;
-    height: 100%;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    border-left: 1px solid var(--border-subtle);
-  }
+	.content > :last-child {
+		align-content: start;
+		min-height: 0;
+		height: 100%;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		border-left: 1px solid var(--border-subtle);
+	}
 }
 
 .section {
-  display: grid;
-  gap: var(--space-2);
+	display: grid;
+	gap: var(--space-2);
 }
 
 .form {
-  display: grid;
-  gap: var(--space-3);
+	display: grid;
+	gap: var(--space-3);
 }
 
 .field {
-  display: grid;
-  gap: var(--space-2);
-  justify-items: start;
+	display: grid;
+	gap: var(--space-2);
+	justify-items: start;
 }
 
 .fieldHeader {
-  display: flex;
-  width: 100%;
-  min-height: 18px;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+	display: flex;
+	width: 100%;
+	min-height: 18px;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
 }
 
 .fieldLabel {
-  color: var(--text-muted);
-  font-size: var(--text-11);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+	color: var(--text-muted);
+	font-size: var(--text-11);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 }
 
 .picker {
-  width: 100%;
-  padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-panel);
-  /* A drag across days must not turn into a text selection of the numbers. */
-  user-select: none;
-  touch-action: none;
+	width: 100%;
+	padding: var(--space-2);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--surface-panel);
+	/* A drag across days must not turn into a text selection of the numbers. */
+	user-select: none;
+	touch-action: none;
 }
 
 .pickerHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-bottom: var(--space-2);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	padding-bottom: var(--space-2);
 }
 
 .pickerMonth {
-  color: var(--text-primary);
-  font-size: var(--text-13);
-  font-weight: 600;
+	color: var(--text-primary);
+	font-size: var(--text-13);
+	font-weight: 600;
 }
 
 .pickerWeekdays,
 .pickerGrid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
 }
 
 .pickerWeekday {
-  padding: 4px 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-muted);
-  font-size: var(--text-11);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
+	padding: 4px 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--text-muted);
+	font-size: var(--text-11);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: pointer;
 }
 
 .pickerWeekday:hover {
-  background: var(--surface-raised);
-  color: var(--text-secondary);
+	background: var(--surface-raised);
+	color: var(--text-secondary);
 }
 
 .pickerDay {
-  display: grid;
-  place-items: center;
-  /* Deliberately not square: a square month grid is 400px tall and pushes the
+	display: grid;
+	place-items: center;
+	/* Deliberately not square: a square month grid is 400px tall and pushes the
      times and the button off screen, which is what people came here for. */
-  min-height: 34px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-primary);
-  font-size: var(--text-12);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
+	min-height: 34px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--text-primary);
+	font-size: var(--text-12);
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
 }
 
 .pickerDay[data-outside] {
-  color: var(--text-muted);
+	color: var(--text-muted);
 }
 
 /* Today is the accent, the same as in the sidebar's calendar and on the month
    grid. A ring here read as "chosen" in the one grid whose whole job is choosing
    days, which is the wrong thing for it to look like. */
 .pickerDay[data-today] {
-  color: var(--accent-primary);
-  font-weight: 700;
+	color: var(--accent-primary);
+	font-weight: 700;
 }
 
 .pickerDay:hover {
-  background: var(--surface-raised);
+	background: var(--surface-raised);
 }
 
 .pickerDay[aria-pressed="true"] {
-  background: var(--accent-primary);
-  color: var(--accent-on-primary, #fff);
+	background: var(--accent-primary);
+	color: var(--accent-on-primary, #fff);
 }
 
 .optionalSection {
-  display: grid;
-  gap: var(--space-2);
+	display: grid;
+	gap: var(--space-2);
 }
 
 .optionRows {
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-panel);
+	overflow: hidden;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--surface-panel);
 }
 
 .optionRows > :last-child {
-  border-bottom: 0;
+	border-bottom: 0;
 }
 
 .timeInput {
-  width: 9rem;
+	width: 9rem;
 }
 
 .deadlineControls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
 }
 
 .formActions {
-  display: flex;
-  min-height: var(--control-height);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-top: var(--space-1);
+	display: flex;
+	min-height: var(--control-height);
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	padding-top: var(--space-1);
 }
 
 .formActions > :global(button) {
-  min-width: 9.5rem;
-  flex: none;
+	min-width: 9.5rem;
+	flex: none;
 }
 
 .linkCaption {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--text-12);
 }
 
 .clear {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-  text-decoration: underline;
-  cursor: pointer;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--text-secondary);
+	font-size: var(--text-12);
+	text-decoration: underline;
+	cursor: pointer;
 }
 
 .summary {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-  font-variant-numeric: tabular-nums;
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--text-12);
+	font-variant-numeric: tabular-nums;
 }
 
 .results {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-4);
+	display: grid;
+	gap: var(--space-4);
+	padding: var(--space-4);
 }
-
 
 /* What was decided, said in words before the grid that proves it. */
 .decidedPanel {
-  display: grid;
-  gap: 4px;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
+	display: grid;
+	gap: 4px;
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
 }
 
 .decidedWhen {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-serif);
-  font-size: var(--text-16, var(--text-15));
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin: 0;
+	color: var(--text-primary);
+	font-family: var(--font-serif);
+	font-size: var(--text-16, var(--text-15));
 }
 
 .decidedWho {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--text-13);
+	margin: 0;
+	color: var(--text-primary);
+	font-size: var(--text-13);
 }
 
 .decidedNote {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--text-12);
 }
 
 .list {
-  display: grid;
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-panel);
+	display: grid;
+	overflow: hidden;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--surface-panel);
 }
 
-
-
-
-
-
 .linkRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
 }
 
 .linkField {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: var(--text-12);
+	flex: 1;
+	min-width: 0;
+	padding: 9px 11px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: var(--text-12);
 }
 
 .error {
-  margin: 0;
-  font-size: var(--text-12);
+	margin: 0;
+	font-size: var(--text-12);
 }
 
-
-
 .footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
 }
 
 /* Back, and stopping the poll — the two that leave things where they are. */
 .footerActions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
 }
 
 .deletePoll {
-  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
+	color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
 .deletePoll:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  color: var(--accent-primary);
+	background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+	color: var(--accent-primary);
 }
