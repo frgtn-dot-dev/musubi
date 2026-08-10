@@ -204,7 +204,7 @@ app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(hand
 // organizer; reading is open by token so somebody can see what they are being
 // asked before identifying themselves, and voting needs a session.
 app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
-app.post("/api/v1/scheduling/polls", requireAuth, wrap(handlerCreatePoll));
+app.post("/api/v1/scheduling/polls", requireAuth, rateLimit(30, 15 * 60_000), wrap(handlerCreatePoll));
 app.post("/api/v1/scheduling/polls/:pollId/decide", requireAuth, wrap(handlerDecidePoll));
 app.post("/api/v1/scheduling/polls/:pollId/close", requireAuth, wrap(handlerClosePoll));
 app.delete("/api/v1/scheduling/polls/:pollId", requireAuth, wrap(handlerDeletePoll));

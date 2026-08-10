@@ -7589,7 +7589,6 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	let created:
 		| {
 				approximateStartTime?: string;
-				name?: string;
 				slots: Array<{ start: string }>;
 			}
 		| undefined;
@@ -7604,12 +7603,12 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 				: null,
 		),
 	);
-	await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
-		respond(route, { success: true }),
-	);
-	await page.route("**/api/auth/sign-in/email-otp", (route) => {
+	await page.route("**/api/auth/sign-in/anonymous", (route) => {
 		signedIn = true;
-		return respond(route, { token: "t", user: { id: "guest" } });
+		return respond(route, {
+			token: "t",
+			user: { id: "guest", isAnonymous: true },
+		});
 	});
 	await page.route("**/api/v1/scheduling/polls", (route) => {
 		if (route.request().method() !== "POST") return respond(route, []);
@@ -7650,28 +7649,14 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	await page.getByLabel("What is it about").fill("Studio planning");
 	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await page.getByRole("button", { exact: true, name: "11" }).click();
-	await page.getByRole("button", { name: "Continue" }).click();
-
-	// Nothing exists yet: the question is built first, the address second.
-	expect(created).toBeUndefined();
-	await expect(
-		page.getByText(/makes you a Musubi account with no password/),
-	).toBeVisible();
-
-	await page.getByLabel("Your name").fill("Zoe");
-	await page.getByLabel("Email").fill("z@example.com");
-	await page.getByRole("button", { name: "Send me a code" }).click();
-	await page.getByLabel("Code from your email").fill("123456");
-	await page
-		.getByRole("button", { name: "Confirm and create the poll" })
-		.click();
+	await page.getByRole("button", { name: "Create the poll" }).click();
 
 	await expect(page.getByRole("textbox", { name: "Poll link" })).toHaveValue(
 		`http://127.0.0.1:3000/s/${POLL_TOKEN}`,
 	);
-	// The name rides along, so the poll is not from "Guest" — the account it went
-	// to was made a second ago and has none.
-	expect(created).toMatchObject({ name: "Zoe" });
+	// Poll creation uses a temporary session and never asks an SMTP server for a
+	// code. Registration can link that temporary owner later.
+	expect(created).not.toHaveProperty("name");
 	expect(created).not.toHaveProperty("approximateStartTime");
 	expect(created!.slots).toHaveLength(2);
 	expect(hydrationErrors).toEqual([]);

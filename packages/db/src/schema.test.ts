@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import { calendarEvents, pages, schedulingPolls, userSettings } from "./schema";
+import { calendarEvents, pages, schedulingPolls, user, userSettings } from "./schema";
+
+assert.equal(
+  user.isAnonymous.default,
+  false,
+  "users must be ordinary accounts unless explicitly created anonymously",
+);
 
 assert.equal(
   userSettings.id.primary,

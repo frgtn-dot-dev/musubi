@@ -15,6 +15,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  isAnonymous: boolean("is_anonymous").default(false).notNull(),
   // Federation: a "shadow account" for a member whose real account lives on
   // another Musubi server. isExternal users have no password/session — they
   // authenticate with a member token (member_tokens) issued on invite accept.
