@@ -28,7 +28,7 @@ Generate the auth secret with `openssl rand -base64 32`.
 ## Boot and runtime
 
 | Variable | Required | Default | Used by |
-|---|---:|---:|---|
+| --- | ---: | ---: | --- |
 | `DATABASE_URL` | Yes | — | API, Drizzle, migrations |
 | `ENVIRONMENT` | Yes | — | API feature gates and dev origins |
 | `BETTER_AUTH_URL` | Yes | — | Better Auth base URL, emails, invites, avatar URLs |
@@ -59,7 +59,7 @@ These values configure the bundled PostgreSQL service rather than the API
 directly:
 
 | Variable | Required for Compose | Default / notes |
-|---|---:|---|
+| --- | ---: | --- |
 | `POSTGRES_USER` | Yes | Example uses `musubi` |
 | `POSTGRES_DB` | Yes | Example uses `musubi` |
 | `POSTGRES_PASSWORD` | Yes | Compose refuses to start when missing |
@@ -84,7 +84,7 @@ both services over `dokploy-network`, where the API also keeps the stable
 All email settings are optional at boot, but the feature needs the complete set:
 
 | Variable | Purpose |
-|---|---|
+| --- | --- |
 | `SMTP_HOST` | SMTP hostname; `/api/v1/server` reports `email: true` only after the configured server accepts an SMTP handshake |
 | `SMTP_PORT` | Commonly `587` (STARTTLS) or `465` (implicit TLS) |
 | `SMTP_USER` | SMTP username |
@@ -100,7 +100,7 @@ recovery and email-confirmed account deletion cannot send. The client adapts to
 ### Server runtime
 
 | Variable | Purpose |
-|---|---|
+| --- | --- |
 | `GOOGLE_WEB_CLIENT_ID` | Better Auth web OAuth client and Google id-token audience |
 | `GOOGLE_CLIENT_SECRET` | Server-side OAuth code exchange and token refresh |
 | `GOOGLE_IOS_CLIENT_ID` | Reserved in config; the current server path does not consume it |
@@ -109,10 +109,16 @@ Both web id and secret are required for Google Calendar sync to appear in the
 server's `syncProviders`. A web id alone enables the Google entry in `socials`,
 but a native build also needs the public values below.
 
+Register this exact authorized **Web** redirect URI in Google Cloud:
+
+```text
+{BETTER_AUTH_URL}/api/auth/callback/google
+```
+
 ### Mobile build time
 
 | Variable | Purpose |
-|---|---|
+| --- | --- |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Native Google sign-in id-token audience on both platforms |
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | iOS native client id and derived URL scheme |
 | `EXPO_PUBLIC_IOS_APP_STORE_URL` | Direct App Store listing for the forced-update screen |
@@ -130,7 +136,7 @@ See [Authentication](/docs/architecture/authentication/) and the
 ## Microsoft / Outlook
 
 | Variable | Required for Outlook sync | Purpose |
-|---|---:|---|
+| --- | ---: | --- |
 | `MICROSOFT_CLIENT_ID` | Yes | Entra application id |
 | `MICROSOFT_CLIENT_SECRET` | Yes | Server-side code exchange and refresh |
 | `MICROSOFT_TENANT_ID` | No | Defaults to `common`; set a tenant id to restrict accounts |
@@ -146,7 +152,7 @@ See [Microsoft / Outlook](/docs/providers/microsoft/).
 ## Apple
 
 | Variable | Purpose |
-|---|---|
+| --- | --- |
 | `APPLE_CLIENT_ID` | Enables native Sign in with Apple; use bundle id `dev.frgtn.musubi` |
 | `APPLE_TEAM_ID` | Enables the root `apple-app-site-association` response for iOS invite universal links |
 
@@ -156,7 +162,7 @@ The HTML hand-off page and `musubi://` deep link still work.
 ## CalDAV and federation secret storage
 
 | Variable | Required when | Format |
-|---|---|---|
+| --- | --- | --- |
 | `CALDAV_ENC_KEY` | Connecting CalDAV accounts or storing federated Musubi connections | 32 random bytes as 64 hexadecimal characters |
 | `FEDERATION_ALLOW_PRIVATE_HOSTS` | Only to federate with a Musubi server on a private address | `true` to allow; anything else refuses. Defaults to allowed outside `ENVIRONMENT=prod` |
 

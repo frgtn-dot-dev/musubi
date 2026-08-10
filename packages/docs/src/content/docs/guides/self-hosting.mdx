@@ -15,7 +15,7 @@ Musubi is designed to be self-hosted. If you want your calendar data on your own
 ## Which stack do you need?
 
 | | `docker-compose.yml` | `docker-compose.api.yml` | `docker-compose.dokploy.yml` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Contains | Gateway + web client + API + PostgreSQL | API + PostgreSQL | Web client + API + PostgreSQL |
 | Use it when | You want the browser client — the default | Your users are on the mobile app only, or you bring your own front end | You deploy with [Dokploy](https://dokploy.com) |
 | Public surface | One origin, HTTPS handled for you | The API port, behind your own proxy | One origin, terminated by Dokploy's Traefik |
@@ -23,7 +23,8 @@ Musubi is designed to be self-hosted. If you want your calendar data on your own
 The full stack is the default file, so `docker compose up -d` with no `-f` gives
 you the whole thing. API-only is supported and not deprecated — a server whose
 users are all on the mobile app has nothing to gain from shipping a browser
-bundle.
+bundle. The web client currently supports desktop and tablet widths; phone
+browsers show a download gate for the native app.
 
 <Aside type="caution" title="The web client needs one origin">
 The web client and the API **must** share a single public origin. That is what
@@ -63,7 +64,7 @@ Prefer to build from source? Clone the repo instead, then in `docker-compose.yml
 Edit the `.env` you just downloaded and set your production values. Key variables:
 
 | Variable | Description |
-|---|---|
+| --- | --- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Database credentials — Compose starts Postgres with these and builds `DATABASE_URL` from them |
 | `DATABASE_URL` | PostgreSQL connection string (Compose overrides this to point at the `db` service) |
 | `BETTER_AUTH_SECRET` | Long random secret — generate with `openssl rand -base64 32` |
@@ -71,12 +72,12 @@ Edit the `.env` you just downloaded and set your production values. Key variable
 | `ENVIRONMENT` | Set to anything other than `dev` for production |
 | `LOG_LEVEL` | Server verbosity: `debug`, `info`, `warn`, `error`, or `silent`; defaults to `info` |
 | `METRICS_PORT` | Internal Prometheus listener; defaults to `9464`, set `0` to disable |
-| `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in (the browser redirect flow needs the secret; the phone's native flow needs only the client id) and Google Calendar sync |
+| `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in (the browser redirect flow needs the secret; the phone's native flow needs only the client id) and Google Calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/google` as an authorized Web redirect URI |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Microsoft Entra ID app credentials — needed for Microsoft sign-in on the web and for Outlook calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/microsoft` as a Web redirect URI on the app registration; `MICROSOFT_TENANT_ID` defaults to `common` |
 | `APPLE_CLIENT_ID` | Enables Sign in with Apple in the phone app — set it to the app's bundle id — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |
 | `APPLE_SERVICES_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Sign in with Apple in a browser, which is a separate registration from the app's: a Services ID whose return URL is `{BETTER_AUTH_URL}/api/auth/callback/apple`, plus a "Sign in with Apple" key. The server signs Apple's short-lived client secret from the `.p8` itself, so nothing expires behind your back. All three (and `APPLE_TEAM_ID`) must be set before the web login offers the button |
 | `APPLE_TEAM_ID` | Apple Developer Team ID — serves the apple-app-site-association file so iOS invite links open the app directly (universal links). Optional; unset → the Safari hand-off still works |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails. The API verifies SMTP once before listening; restart it after changing these values |
 | `REQUIRE_EMAIL_VERIFICATION` | `true` refuses sign-in until the address is confirmed. Needs SMTP; the API refuses to boot without it. See [Requiring confirmed email addresses](#requiring-confirmed-email-addresses) |
 | `CALDAV_ENC_KEY` | Encrypts stored CalDAV passwords and federated Musubi member tokens — required before anyone connects a CalDAV account or a federated calendar |
 | `PUBLIC_HOST` | The hostname the gateway serves (e.g. `musubi.example.com` for automatic HTTPS, or `:80` for plain HTTP behind another proxy). Also the hostname the Dokploy routers match. Not used by the API-only file |
@@ -128,7 +129,7 @@ domain or host port for the metrics listener. Set `METRICS_PORT=0` if metrics
 are not needed.
 
 <Aside type="caution">
-Required to boot: the `POSTGRES_*` credentials, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `ENVIRONMENT`. The Google, Microsoft, SMTP, and `CALDAV_ENC_KEY` variables are optional — the API starts without them and the matching feature just stays off until you set it.
+Required to boot: the `POSTGRES_*` credentials, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `ENVIRONMENT`. The Google, Microsoft, SMTP, and `CALDAV_ENC_KEY` variables are optional — the API starts without them and the matching feature stays off. SMTP capability is checked once before the API listens, so restart it after changing mail settings.
 </Aside>
 
 <Aside type="caution">
@@ -178,7 +179,7 @@ Password reset and account-deletion confirmation are fully self-contained: your 
 </Aside>
 
 <Aside type="caution">
-Both of those flows send an email, so **without `SMTP_*` configured they don't work**: email/password users can't reset a forgotten password, and in-app account deletion can't be confirmed. The client adapts — the API reports whether it can send email (`GET /api/v1/server` → `email`), so the app hides "Forgotten password?" and, for deletion, tells the user to contact the administrator. As the operator you can still reset a password or delete an account directly in Postgres. If you offer email/password sign-in to real users, configure SMTP. (Social-login users are unaffected by the reset gap — they have no password.)
+Both of those flows send an email, so **without `SMTP_*` configured they don't work**: email/password users can't reset a forgotten password, and in-app account deletion can't be confirmed. The client adapts — the API reports whether it can send email (`GET /api/v1/server` → `email`), so the app hides "Forgotten password?" and, for deletion, tells the user to contact the administrator. As the operator you can still reset a password or delete an account directly in Postgres. If you offer email/password sign-in to real users, configure SMTP. The advertised capability is the result of the startup handshake, not a per-request probe; restart the API after changing SMTP. (Social-login users are unaffected by the reset gap — they have no password.)
 </Aside>
 
 ## Requiring confirmed email addresses
@@ -227,7 +228,7 @@ HTTP when something else already terminates TLS.
 Wherever the proxy lives, it has to make the same split:
 
 | Path | Goes to | Why |
-|---|---|---|
+| --- | --- | --- |
 | `/api/stream` | API, unbuffered | Server-sent events. Caddy needs `flush_interval -1`, or it buffers the response and live updates arrive in clumps, or never |
 | `/api/*` | API | Better Auth, the REST surface, the federation gateway |
 | `/reset-password`, `/delete-account`, `/email-verified`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email. They predate the web client and are shared with mobile, so they stay on the API |

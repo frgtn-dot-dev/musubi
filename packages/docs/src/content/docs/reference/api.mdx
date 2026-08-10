@@ -56,7 +56,7 @@ side-effect-only routes return an empty `200`.
 Typed application errors map to:
 
 | Error kind | HTTP |
-|---|---:|
+| --- | ---: |
 | `BadRequest` | 400 |
 | `Unauthorized` | 401 |
 | `Forbidden` | 403 |
@@ -82,7 +82,7 @@ The same value is returned in `x-request-id` and attached to structured logs.
 ## Public routes
 
 | Method and path | Purpose | Rate limit |
-|---|---|---|
+| --- | --- | --- |
 | `GET /api/v1/server` | Minimum client version and configured capabilities | — |
 | `GET /api/v1/server/ok` | Liveness response `{ "ok": true }` | — |
 | `GET /api/v1/calendars/tokens/:token` | Invite preview; token is the capability | 30 / 15 min / IP |
@@ -90,6 +90,11 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `POST /api/v1/users/delete/confirm` | Complete email-token account deletion | 10 / 15 min / IP |
 | `POST /api/v1/users/reset` | **Development-only full user reset**; 403 outside `dev` | — |
 | `GET /api/v1/users/:userId/avatar` | Public immutable avatar bytes | — |
+| `GET /api/v1/public/events/:token` | Read the narrow published-event projection; token is the capability | 60 / 15 min / IP |
+| `GET /api/v1/public/events/:token/rsvp` | Read the authenticated guest's answer | 60 / 15 min / IP |
+| `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated guest's answer | 30 / 15 min / IP |
+| `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
+| `PUT /api/v1/public/polls/:token/votes` | Write a participant's complete answer set; auth is optional for the first answer | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |
 | `GET /reset-password` | Self-hosted password reset HTML | — |
 | `GET /delete-account` | Self-hosted account-deletion HTML | — |
@@ -110,7 +115,7 @@ closes the original P0 finding recorded in the
 ## Server and realtime
 
 | Method and path | Auth | Response |
-|---|---:|---|
+| --- | ---: | --- |
 | `GET /api/v1/server` | Public | `{ minClientVersion, socials, syncProviders, email }` |
 | `GET /api/v1/server/ok` | Public | `{ ok: true }` |
 | `GET /api/stream` | Required | Long-lived `text/event-stream` |
@@ -124,7 +129,7 @@ data: {"type":"event_updated","payload":{...}}
 Current event types:
 
 | Type | Client reaction |
-|---|---|
+| --- | --- |
 | `event_created` | `localAddEvent` |
 | `event_updated` | `localUpdateEvent` |
 | `event_removed` | `localRemoveEvent` |
@@ -144,10 +149,32 @@ including the originating one, which discards the duplicate by revision.
 SSE is best-effort and has no replay buffer. The durable recovery path is event
 delta sync.
 
+## Scheduling polls
+
+| Method and path | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/v1/scheduling/polls` | Required | List polls owned by the signed-in email identity |
+| `POST /api/v1/scheduling/polls` | Optional | Create a poll from `title`, day `slots`, `name`, `email`, and optional `description`, `deadline`, `approximateStartTime` |
+| `GET /api/v1/public/polls/:token` | Optional | Read the public poll projection and the caller's own answer when identifiable |
+| `PUT /api/v1/public/polls/:token/votes` | Optional | Replace one participant's complete `yes` / `if-needed` / `no` answer set |
+| `POST /api/v1/scheduling/polls/:pollId/decide` | Required owner | Pick `slotId` and `calendarId`, create the all-day event, and close the poll |
+| `POST /api/v1/scheduling/polls/:pollId/close` | Required owner | Stop answers without creating an event |
+| `DELETE /api/v1/scheduling/polls/:pollId` | Required owner | Delete the poll and its answers; an already-created event remains |
+
+Poll choices are calendar days. `approximateStartTime` is optional `HH:mm`
+context only; deciding a current poll creates an all-day event. Older timed polls
+retain their stored duration for compatibility.
+
+Creation and a participant's first answer require a public name and private
+email, but no OTP. Replacing answers already stored for that email, listing or
+managing an anonymously created poll, and deciding it require authentication as
+the matching email identity. The public projection contains participant names
+and answers, never email addresses or private participant identifiers.
+
 ## Events
 
 | Method and path | Request | Response / notes |
-|---|---|---|
+| --- | --- | --- |
 | `GET /api/v1/events?since=<ISO>` | Optional delta cursor | `{ events, deletedIds, serverTime }` |
 | `POST /api/v1/events` | `Event` | Created `Event`; validates every linked calendar |
 | `PUT /api/v1/events` | Complete `Event` | Updated `Event`; home calendar controls editing |
@@ -156,6 +183,14 @@ delta sync.
 | `POST /api/v1/events/:eventId/fork` | `{ calendarID }` | Independent new `Event` |
 | `GET /api/v1/events/:eventId/attendees` | — | `[{ id, name, image }]`; no emails |
 | `PUT /api/v1/events/:eventId/attendance` | `{ attending: boolean }` | Fresh attendee list |
+| `GET /api/v1/events/:eventId/share` | — | Current published-page settings or `null` |
+| `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility }` | Create or update the published page and token URL |
+| `DELETE /api/v1/events/:eventId/share` | — | Revoke the public token |
+| `GET /api/v1/events/:eventId/rsvps` | — | Organizer view of answer counts and names |
+
+Published event reads are open to possession of the token. RSVP reads and writes
+require a session; the public page authenticates guests with an emailed code
+before accepting an answer.
 
 Event/calendar identifiers on this surface must use canonical hyphenated UUID
 form. Invalid body references, route parameters, `unlinkCalendarID`, and
@@ -191,7 +226,7 @@ does not allow `creatorID` or `originCalendarID` to change. The home
 ## Calendars, members, and invites
 
 | Method and path | Request / response |
-|---|---|
+| --- | --- |
 | `GET /api/v1/calendars` | All calendars the user belongs to, enriched with role/provider metadata |
 | `GET /api/v1/calendars/:id` | One calendar + members; membership required |
 | `POST /api/v1/calendars` | `Calendar`; optional provider/account creates remotely first |
@@ -216,7 +251,7 @@ new membership.
 ## Settings, user, and profile
 
 | Method and path | Request / response |
-|---|---|
+| --- | --- |
 | `GET /api/v1/users/settings` | Materializes defaults when missing |
 | `PUT /api/v1/users/settings` | Complete `Settings`; updates or inserts |
 | `GET /api/v1/users/settings/document` | `{ value, revision, updatedAt }` for compare-and-swap clients |
@@ -236,7 +271,7 @@ calendars, and simple filters. Pages are never shared with calendar members —
 two members of the same calendar keep independent Pages.
 
 | Method and path | Request / response |
-|---|---|
+| --- | --- |
 | `GET /api/v1/pages` | Active Pages ordered by position; lazily creates or repairs the default Page |
 | `POST /api/v1/pages` | `{ name, config }`; server assigns id, position, and `revision` |
 | `PUT /api/v1/pages/reorder` | `{ pageIds, defaultPageId? }`; atomically renumbers positions and moves the default |
@@ -262,7 +297,7 @@ can apply them.
 ## Provider connections
 
 | Method and path | Purpose |
-|---|---|
+| --- | --- |
 | `GET /api/v1/calendars/google` | Trigger `syncUser` (all configured providers despite the legacy path name) |
 | `GET /api/v1/users/connections/google` | Google connection check |
 | `POST /api/v1/users/connections/google/revoke` | Legacy Google disconnect |
@@ -288,7 +323,7 @@ Provider behavior and limitations:
 ## Federation
 
 | Method and path | Auth | Body / response |
-|---|---:|---|
+| --- | ---: | --- |
 | `POST /api/v1/federation/accept` | Invite token; optional current member bearer proves an existing shadow | `{ token, profile: { name, email, homeServer, image? } }` → `{ memberToken, memberTokenExpiresAt, userID, calendar }` |
 | `POST /api/v1/federation/token/rotate` | Member token | Compare-and-swap exchange → `{ memberToken, memberTokenExpiresAt }` |
 | `DELETE /api/v1/users/connections/musubi` | Session | `{ server }` — drop a federated connection |

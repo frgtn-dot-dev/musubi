@@ -44,7 +44,7 @@ Nobody else is building exactly this: **an open calendar designed as social infr
 ## What it does today
 
 | | Feature | Details |
-|---|---|---|
+| --- | --- | --- |
 | 結 | **Shared calendars** | Invite via link, roles (owner / editor / viewer), ownership transfer, live membership |
 | 空 | **Events beyond calendars** | One event in many calendars — link it, fork it, or keep it yours; the origin calendar governs editing |
 | 繋 | **Two-way external sync** | Google Calendar, Outlook / Microsoft 365, Apple / iCloud, and any CalDAV server — including recurring events *with exceptions*, read-only detection, multiple accounts |
@@ -53,12 +53,15 @@ Nobody else is building exactly this: **an open calendar designed as social infr
 | 侘 | **Zen aesthetic** | Sumi ink on night / ink on washi paper, spring physics, deliberate haptics, kanji accents |
 | 鈴 | **Notifications** | Local reminders that survive edits, moves, and recurrence — even for synced events |
 | 卓 | **Android home-screen widgets** | Scrollable Agenda + adaptive month Calendar; recurring occurrences, deep-linked event/day detail, per-widget calendar filters, and light/dark themes |
+| 網 | **Desktop web client** | Month, week and agenda planning; event, calendar, account and page administration; the phone-sized web UI hands off to the native app |
+| 問 | **Find a time** | Share day-based availability polls without requiring an account; names are public, participant emails stay private |
+| 開 | **Published events & RSVP** | Share a public event page, collect going / maybe / declined answers, and control whether guests see attendee names or counts |
 | 家 | **Self-hosting** | `docker-compose.yml` for the whole stack — web client and API on one origin behind a gateway, HTTPS included — or `docker-compose.api.yml` for the API alone |
 
 ### Sync providers
 
 | Provider | Status |
-|---|---|
+| --- | --- |
 | Google Calendar | Two-way |
 | Apple / iCloud | Two-way (CalDAV) |
 | Any CalDAV server (Nextcloud, Radicale, Fastmail…) | Two-way |
@@ -66,13 +69,10 @@ Nobody else is building exactly this: **an open calendar designed as social infr
 
 ## Where it's going
 
-The mobile app + self-hostable server are the foundation. The bigger picture:
+The mobile app, desktop web client, and self-hostable server are the foundation. The bigger picture:
 
-- **Web client** — a first-class web app, not a mobile afterthought. Power features live here: rich planning views, bulk editing, calendar administration.
-- **Open events & RSVP** — create an event, share a link. People join as attendees with **just a name and an email**. No account, no app install, no social network. You see who's coming; they get email reminders. *This is our shot at everything Facebook Events used to be — without Facebook.*
-- **Meetup planning** — find the time that works across everyone's calendars before the event exists.
 - **Realtime provider push** — webhook-driven sync from Google/Outlook instead of polling (design done, see docs).
-- **Further out** — email notifications, attendance tracking, public event pages.
+- **Further out** — email notifications and reminders.
 
 Full backlog on the public [feedback and roadmap board](https://feedback.musubi.pro).
 
@@ -108,7 +108,7 @@ The client uses custom native modules, so it needs a development build rather th
 ## How it's built
 
 | Layer | Tech |
-|---|---|
+| --- | --- |
 | Mobile client | React Native 0.85 · Expo SDK 56 · Expo Router · Zustand · Reanimated · custom calendar engine (`apps/client/components/cal`) · native Android `RemoteViews` widgets bridged through a local Expo module |
 | Server | Express 5 · [Better Auth](https://www.better-auth.com/) · Zod · Server-Sent Events |
 | Data | Postgres · [Drizzle ORM](https://orm.drizzle.team/) · SQLite on-device cache with delta sync |

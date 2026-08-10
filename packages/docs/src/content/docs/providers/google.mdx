@@ -19,8 +19,14 @@ changing adapter code. This page focuses on Google-specific behavior.
 
 1. **Create Google OAuth clients.**
 
-   The API needs a Web client. Native sign-in also needs platform-facing client
-   identifiers compiled into the app.
+   The API needs a Web client. Register this exact authorized redirect URI:
+
+   ```text
+   {BETTER_AUTH_URL}/api/auth/callback/google
+   ```
+
+   Native sign-in also needs platform-facing client identifiers compiled into
+   the app.
 
 2. **Set the server variables.**
 
@@ -82,7 +88,7 @@ sequence must never advance it.
 ## Event mapping
 
 | Google shape | Musubi behavior |
-|---|---|
+| --- | --- |
 | `start.date` | All-day event at UTC midnight |
 | Exclusive `end.date` | Subtract one day for Musubi's inclusive all-day end |
 | Recurrence array | Preserve RRULE/EXDATE text on the series master |
