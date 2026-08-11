@@ -29,7 +29,7 @@ import {
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
 import { Button, IconButton } from "~/ui/Button";
-import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
@@ -272,13 +272,6 @@ export function ConnectionsDialog({
       bodyScroll="panels"
       closeLabel="Close connections"
       description="Keep outside calendars in sync or join one shared through Musubi."
-      footer={
-        <DialogClose>
-          <Button disabled={busy} variant="secondary">
-            Done
-          </Button>
-        </DialogClose>
-      }
       onOpenChange={handleOpenChange}
       open={open}
       size="spacious"

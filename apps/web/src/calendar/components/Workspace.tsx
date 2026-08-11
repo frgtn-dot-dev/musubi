@@ -503,7 +503,7 @@ export function Workspace({
     [workingConfig],
   );
 
-  const presentationView = workingConfig.view;
+  const presentationView = viewConfigFor(workingConfig, activeView);
   const showWeekend =
     "weekend" in presentationView ? presentationView.weekend : true;
   const showAdjacentDays =
@@ -577,30 +577,6 @@ export function Workspace({
     onDateChange(toDateKey(view.step(anchor, offset, { weeks })));
   }
 
-  function updatePageDraft(
-    page: PageDocument,
-    update: (config: PageConfigV1) => PageConfigV1,
-  ) {
-    if (savingPageId === page.id) return;
-    setPageDrafts((current) => {
-      const existing = current.get(page.id);
-      const persisted = existing?.persisted ?? page;
-      const config = update(existing?.config ?? page.config);
-      const next = new Map(current);
-
-      if (pageConfigEquals(config, persisted.config)) {
-        next.delete(page.id);
-      } else {
-        next.set(page.id, {
-          config,
-          conflict: existing?.conflict ?? false,
-          persisted,
-        });
-      }
-      return next;
-    });
-  }
-
   function removePageDraft(id: string, expected?: PageWorkingDraft) {
     setPageDrafts((current) => {
       if (!current.has(id) || (expected && current.get(id) !== expected)) {
@@ -613,11 +589,6 @@ export function Workspace({
   }
 
   function handleViewChange(nextView: CalendarViewId) {
-    if (savingPageId === activePage.id) return;
-    updatePageDraft(activePage, (config) => ({
-      ...config,
-      view: viewConfigFor(config, nextView),
-    }));
     onViewChange(nextView);
   }
 
@@ -634,9 +605,6 @@ export function Workspace({
     if (!activeDraft) return;
     setDiscardPageDraftOpen(false);
     removePageDraft(activePage.id);
-    if (activeView !== activePage.config.view.id) {
-      onViewChange(activePage.config.view.id);
-    }
     notify("Page changes discarded.");
   }
 

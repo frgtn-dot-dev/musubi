@@ -46,6 +46,11 @@
     minmax(0, 1fr);
 }
 
+.pickerRow .pickerValue {
+  justify-content: flex-end;
+  text-align: right;
+}
+
 .pickerLabel,
 .timeSeparator {
   color: var(--text-secondary);

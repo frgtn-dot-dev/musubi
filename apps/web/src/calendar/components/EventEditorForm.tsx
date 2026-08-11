@@ -299,6 +299,7 @@ export function EventEditorForm({
 						Date
 					</span>
 					<DatePicker
+						className={styles.pickerValue}
 						disabled={saving}
 						label="Date"
 						value={values.date}
@@ -352,6 +353,7 @@ export function EventEditorForm({
 							Ends
 						</span>
 						<DatePicker
+							className={styles.pickerValue}
 							disabled={saving}
 							label="Ends"
 							min={values.date}

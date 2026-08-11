@@ -46,6 +46,7 @@
 	}
 
 	.layout > [aria-labelledby="connections-accounts-title"] {
+		grid-template-rows: auto minmax(0, 1fr);
 		grid-area: 1 / 1;
 		min-height: 0;
 		overflow-y: auto;

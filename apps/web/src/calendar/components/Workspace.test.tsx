@@ -1,5 +1,5 @@
 import type { PageConfigV1 } from "@musubi/types";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "~/api/http";
@@ -95,16 +95,9 @@ describe("Workspace", () => {
     });
   });
 
-  it("drafts a view and saves it with Ctrl/Cmd+S", async () => {
+  it("switches views without drafting Page settings", async () => {
     const user = userEvent.setup();
-    const onSavePage = vi.fn(async (input) => ({
-      page: {
-        ...commonProps.pages[0]!,
-        config: input.config,
-        revision: 2,
-      },
-      status: "saved" as const,
-    }));
+    const onSavePage = vi.fn();
     const onViewChange = vi.fn();
 
     render(
@@ -118,26 +111,14 @@ describe("Workspace", () => {
     await user.keyboard("a");
     expect(onViewChange).toHaveBeenCalledWith("agenda");
     expect(
-      screen.getByRole("region", { name: "Unsaved Page changes" }),
-    ).not.toBeNull();
-
-    await user.keyboard("{Control>}s{/Control}");
-
-    expect(onSavePage).toHaveBeenCalledWith({
-      baseRevision: 1,
-      config: {
-        ...commonProps.pages[0]!.config,
-        view: { configVersion: 1, groupBy: "day", id: "agenda" },
-      },
-      id: "my-calendar",
-      name: "My calendar",
-    });
-    expect(
       screen.queryByRole("region", { name: "Unsaved Page changes" }),
     ).toBeNull();
+
+    await user.keyboard("{Control>}s{/Control}");
+    expect(onSavePage).not.toHaveBeenCalled();
   });
 
-  it("does not accept newer draft edits while that Page is saving", async () => {
+  it("allows view changes while Page settings are saving", async () => {
     const user = userEvent.setup();
     let resolveSave!: (result: SavePageResult) => void;
     const pendingSave = new Promise<SavePageResult>((resolve) => {
@@ -152,39 +133,41 @@ describe("Workspace", () => {
       }) => Promise<SavePageResult>
     >(() => pendingSave);
     const onViewChange = vi.fn();
+    const config = {
+      ...commonProps.pages[0]!.config,
+      calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" as const },
+    };
 
     render(
       <Workspace
         {...commonProps}
+        onPageDraftsChange={vi.fn()}
         onSavePage={onSavePage}
         onViewChange={onViewChange}
+        pageDrafts={new Map([
+          [
+            "my-calendar",
+            {
+              config,
+              conflict: false,
+              persisted: commonProps.pages[0]!,
+            },
+          ],
+        ])}
       />,
     );
 
-    await user.keyboard("a");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.keyboard("w");
+    expect(onViewChange).toHaveBeenCalledWith("week");
 
-    expect(onViewChange).toHaveBeenCalledTimes(1);
-    expect(onViewChange).toHaveBeenCalledWith("agenda");
-
-    const submitted = onSavePage.mock.calls[0]![0];
     resolveSave({
-      page: {
-        ...commonProps.pages[0]!,
-        config: submitted.config,
-        revision: 2,
-      },
+      page: { ...commonProps.pages[0]!, config, revision: 2 },
       status: "saved",
-    });
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("region", { name: "Unsaved Page changes" }),
-      ).toBeNull();
     });
   });
 
-  it("keeps each Page draft while switching and opens the target view", async () => {
+  it("opens each Page in its saved view without drafting transient views", async () => {
     const user = userEvent.setup();
     const onDateChange = vi.fn();
     const onPageChange = vi.fn();
@@ -219,14 +202,14 @@ describe("Workspace", () => {
 
     rendered.rerender(<Workspace {...props} activeView="week" pageId="work" />);
     await user.click(screen.getByRole("button", { name: "My calendar" }));
-    expect(onPageChange).toHaveBeenLastCalledWith("my-calendar", "agenda");
+    expect(onPageChange).toHaveBeenLastCalledWith("my-calendar", "month");
 
     rendered.rerender(
-      <Workspace {...props} activeView="agenda" pageId="my-calendar" />,
+      <Workspace {...props} activeView="month" pageId="my-calendar" />,
     );
     expect(
-      screen.getByRole("region", { name: "Unsaved Page changes" }),
-    ).not.toBeNull();
+      screen.queryByRole("region", { name: "Unsaved Page changes" }),
+    ).toBeNull();
   });
 
   it("retains a conflicting draft and can save it as a copy", async () => {
@@ -251,32 +234,31 @@ describe("Workspace", () => {
       />,
     );
 
-    await user.click(screen.getByRole("radio", { name: "Agenda" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    await user.click(dialog.getByRole("button", { name: "Studio" }));
+    await user.click(dialog.getByRole("button", { name: "Save" }));
 
     expect(screen.getByRole("alert").textContent).toContain(
-      "changed elsewhere",
+      "changed on another device",
     );
     expect(
       screen.getByRole("button", { name: "Save as a copy" }),
     ).not.toBeNull();
-
-    await user.keyboard("{Control>}s{/Control}");
-    expect(onSavePage).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole("button", { name: "Save as a copy" }));
 
     expect(onCreatePage).toHaveBeenCalledWith({
       config: {
         ...commonProps.pages[0]!.config,
-        view: { configVersion: 1, groupBy: "day", id: "agenda" },
+        calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" },
       },
       name: "My calendar copy",
     });
-    expect(onPageChange).toHaveBeenCalledWith("my-calendar-copy", "agenda");
+    expect(onPageChange).toHaveBeenCalledWith("my-calendar-copy", "month");
   });
 
-  it("seeds Page settings from the working draft and clears it after save", async () => {
+  it("keeps a transient view out of saved Page settings", async () => {
     const user = userEvent.setup();
     const onSavePage = vi.fn(async (input) => ({
       page: {
@@ -301,7 +283,7 @@ describe("Workspace", () => {
       expect.objectContaining({
         baseRevision: 1,
         config: expect.objectContaining({
-          view: { configVersion: 1, groupBy: "day", id: "agenda" },
+          view: commonProps.pages[0]!.config.view,
         }),
         id: "my-calendar",
         name: "Focused",

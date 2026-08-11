@@ -1214,7 +1214,22 @@ test("keeps the all-day toggle in one place when it is flipped", async ({
 
 	const timed = (await toggle.boundingBox())!.y;
 	await label.click();
-	await expect(page.getByRole("button", { name: /^Ends:/ })).toBeVisible();
+	const datePickers = [
+		page.getByRole("button", { name: /^Date:/ }),
+		page.getByRole("button", { name: /^Ends:/ }),
+	];
+	await expect(datePickers[1]).toBeVisible();
+	for (const picker of datePickers) {
+		const [pickerBox, chevronBox] = await Promise.all([
+			picker.boundingBox(),
+			picker.locator("svg").boundingBox(),
+		]);
+		expect(
+			Math.abs(
+				pickerBox!.x + pickerBox!.width - (chevronBox!.x + chevronBox!.width),
+			),
+		).toBeLessThanOrEqual(1);
+	}
 	// All-day swaps the time range for an end date in the same slot, so the toggle
 	// under it does not hop a row.
 	expect((await toggle.boundingBox())!.y).toBe(timed);
@@ -2169,9 +2184,7 @@ test("changes time grid density from the page editor", async ({ page }) => {
 	}).toPass();
 });
 
-test("keeps Page drafts across switches and saves view plus visibility explicitly", async ({
-	page,
-}) => {
+test("keeps transient views out of saved Page filters", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let saved:
 		| { config?: { calendarVisibility?: unknown; view?: unknown } }
@@ -2214,12 +2227,8 @@ test("keeps Page drafts across switches and saves view plus visibility explicitl
 	await expect(page).toHaveURL(`/app/p/${workPageId}/week?date=2026-07-26`);
 	await page.getByRole("button", { exact: true, name: "My calendar" }).click();
 	await expect(page).toHaveURL(
-		`/app/p/${DEFAULT_PAGE_ID}/agenda?date=2026-07-26`,
+		`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`,
 	);
-	await page
-		.getByRole("region", { name: "Unsaved Page changes" })
-		.getByRole("button", { name: "Save" })
-		.click();
 
 	expect(saved?.config?.calendarVisibility).toEqual({
 		hiddenCalendarIds: ["studio"],
@@ -2227,8 +2236,8 @@ test("keeps Page drafts across switches and saves view plus visibility explicitl
 	});
 	expect(saved?.config?.view).toEqual({
 		configVersion: 1,
-		groupBy: "day",
-		id: "agenda",
+		id: "month",
+		showAdjacentDays: true,
 	});
 	await expect(
 		page.getByRole("region", { name: "Unsaved Page changes" }),
@@ -2906,6 +2915,10 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 	await connectionsDialog.evaluate((element) =>
 		Promise.all(element.getAnimations().map((animation) => animation.finished)),
 	);
+	await expect(connectionsDialog.locator("footer")).toHaveCount(0);
+	await expect(
+		connectionsDialog.getByRole("button", { name: "Done" }),
+	).toHaveCount(0);
 	const accessibility = await new AxeBuilder({ page })
 		.include('[role="dialog"]')
 		.analyze();
@@ -2923,13 +2936,18 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 			"Use an invite from this or another Musubi server.",
 		],
 	] as const) {
-		const [titleBox, descriptionBox] = await Promise.all([
-			connectionsDialog.getByRole("heading", { name: title }).boundingBox(),
+		const titleElement = connectionsDialog.getByRole("heading", {
+			name: title,
+		});
+		const [titleBox, descriptionBox, containerBox] = await Promise.all([
+			titleElement.boundingBox(),
 			connectionsDialog.getByText(description, { exact: true }).boundingBox(),
+			titleElement.locator("..").boundingBox(),
 		]);
 		const gap = descriptionBox!.y - (titleBox!.y + titleBox!.height);
 		expect(gap).toBeGreaterThanOrEqual(3);
 		expect(gap).toBeLessThanOrEqual(5);
+		expect(containerBox!.height).toBeLessThanOrEqual(60);
 	}
 
 	// Capability-gated add buttons.
@@ -3790,9 +3808,9 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	const eventBox = await page
 		.getByRole("button", { name: "Event", exact: true })
 		.boundingBox();
-	expect(eventBox!.x - (switcherBox!.x + switcherBox!.width)).toBeLessThanOrEqual(
-		12,
-	);
+	expect(
+		eventBox!.x - (switcherBox!.x + switcherBox!.width),
+	).toBeLessThanOrEqual(12);
 	expect(
 		Math.abs(
 			eventBox!.y +
@@ -6854,9 +6872,7 @@ test("ui catalogue", async ({ page }) => {
 	// The page each sidebar row edits, which is a hover action rather than a row.
 	await layer("dialog-page-settings", "Edit My calendar");
 
-	await page
-		.getByRole("button", { name: "Search events and actions" })
-		.click();
+	await page.getByRole("button", { name: "Search events and actions" }).click();
 	const searchDialog = page.getByRole("dialog", { name: "Search Musubi" });
 	await searchDialog.getByRole("searchbox").fill("review");
 	await shot("app-search", searchDialog);
@@ -7247,17 +7263,19 @@ test("closes and deletes a poll", async ({ page }) => {
 	await expect(page.getByText("No polls yet")).toBeVisible();
 });
 
-test("finds events and actions without filtering the calendar", async ({ page }) => {
+test("finds events and actions without filtering the calendar", async ({
+	page,
+}) => {
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
 	const clientCall = page.getByRole("button", { name: /Client call/ });
 	await expect(clientCall).toBeVisible();
 
-	await page
-		.getByRole("button", { name: "Search events and actions" })
-		.click();
+	await page.getByRole("button", { name: "Search events and actions" }).click();
 	const search = page.getByRole("dialog", { name: "Search Musubi" });
-	await expect(search.getByRole("button", { name: "Go to today" })).toBeVisible();
+	await expect(
+		search.getByRole("button", { name: "Go to today" }),
+	).toBeVisible();
 	await expectNoAccessibilityViolations(page);
 	await search.getByRole("searchbox").fill("review");
 	const reviewResult = search
@@ -7845,8 +7863,12 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 						cardBox.width / 2 -
 						(titleBox.left + titleBox.width / 2),
 				),
-				pageCenterX: Math.abs(cardBox.left + cardBox.width / 2 - innerWidth / 2),
-				pageCenterY: Math.abs(cardBox.top + cardBox.height / 2 - innerHeight / 2),
+				pageCenterX: Math.abs(
+					cardBox.left + cardBox.width / 2 - innerWidth / 2,
+				),
+				pageCenterY: Math.abs(
+					cardBox.top + cardBox.height / 2 - innerHeight / 2,
+				),
 				textAlign: getComputedStyle(heading as HTMLElement).textAlign,
 			};
 		},
@@ -8029,9 +8051,11 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 		0.5,
 	);
 	for (const row of [mika, zoe]) {
-		expect(await row.locator("th").evaluate((cell) => getComputedStyle(cell).textAlign)).toBe(
-			"center",
-		);
+		expect(
+			await row
+				.locator("th")
+				.evaluate((cell) => getComputedStyle(cell).textAlign),
+		).toBe("center");
 	}
 
 	const legend = savedButton.locator("xpath=../preceding-sibling::p[1]");

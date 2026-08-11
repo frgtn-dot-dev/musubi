@@ -628,7 +628,7 @@ export function TimeGridView({
 
 		if (!scrollRoot) return;
 
-		scrollRoot.scrollTo({
+		scrollRoot.scrollTo?.({
 			top:
 				previousHourHeight === geometry.hourHeight
 					? minutesToY(openScrollMinutes(new Date(), hasToday), geometry) - 12
