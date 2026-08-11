@@ -83,7 +83,7 @@ export function PollCalendarChip({
         onOpen(item, event.currentTarget);
       }}
     >
-      <CalendarClock aria-hidden="true" size={13} strokeWidth={1.8} />
+      <CalendarClock aria-hidden="true" size={11} strokeWidth={1.8} />
       <span>{item.poll.title}</span>
     </button>
   );

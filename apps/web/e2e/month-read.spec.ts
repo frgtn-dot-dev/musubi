@@ -7188,7 +7188,7 @@ test("shows participant polls as striped all-day calendar items", async ({
 				"#b3492f",
 				"2026-08-17T00:00:00.000Z",
 				"2026-08-18T00:00:00.000Z",
-				{ isAllDay: true },
+				{ hasAttendees: true, isAllDay: true },
 			),
 			event(
 				"later-reference",
@@ -7318,15 +7318,21 @@ test("shows participant polls as striped all-day calendar items", async ({
 		const pollBox = poll.getBoundingClientRect();
 		const nextPollBox = nextPoll.getBoundingClientRect();
 		return {
+			eventFont: getComputedStyle(event.querySelector("[class*='eventTitle']")!).fontSize,
 			eventHeight: event.getBoundingClientRect().height,
+			eventIcon: event.querySelector("svg")!.getBoundingClientRect().width,
 			joinGap: nextPollBox.left - pollBox.right,
 			laterTop: later.getBoundingClientRect().top,
 			nextPollTop: nextPollBox.top,
+			pollFont: getComputedStyle(poll.querySelector("span")!).fontSize,
 			pollHeight: pollBox.height,
+			pollIcon: poll.querySelector("svg")!.getBoundingClientRect().width,
 			pollTop: pollBox.top,
 		};
 	});
 	expect(geometry.pollHeight).toBe(geometry.eventHeight);
+	expect(geometry.pollFont).toBe(geometry.eventFont);
+	expect(geometry.pollIcon).toBe(geometry.eventIcon);
 	expect(geometry.joinGap).toBeLessThanOrEqual(0);
 	expect(geometry.pollTop).toBe(geometry.nextPollTop);
 	expect(geometry.laterTop).toBeLessThan(geometry.nextPollTop);

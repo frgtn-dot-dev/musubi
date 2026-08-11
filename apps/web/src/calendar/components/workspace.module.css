@@ -1481,6 +1481,8 @@
 	--event-color: var(--accent-primary);
 	--event-foreground: #000;
 	--poll-chip-height: 21px;
+	--poll-font-size: 0.65rem;
+	--poll-icon-size: 11px;
 	--poll-join: var(--event-bleed);
 	position: relative;
 	z-index: 1;
@@ -2129,6 +2131,8 @@
      own under the name — a repeating event became a chip twice as tall as the
      one next to it. */
 	.eventChip {
+		--poll-font-size: 0.58rem;
+		--poll-icon-size: 0.58rem;
 		grid-template-columns: minmax(0, 1fr);
 		min-height: 20px;
 		gap: 0;

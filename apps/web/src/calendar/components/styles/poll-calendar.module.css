@@ -16,7 +16,9 @@
     color-mix(in srgb, var(--poll-foreground) 16%, transparent) 5px 8px
   );
   color: var(--poll-foreground);
-  font: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
   text-align: left;
 }
 
@@ -45,8 +47,15 @@
   filter: brightness(1.08);
 }
 
+.chip svg {
+  width: var(--poll-icon-size, 11px);
+  height: var(--poll-icon-size, 11px);
+  flex: none;
+}
+
 .chip span {
   min-width: 0;
+  font-size: var(--poll-font-size, inherit);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
