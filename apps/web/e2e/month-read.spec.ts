@@ -3379,7 +3379,8 @@ test("joins a calendar from a pasted cross-server invite link", async ({
 	]);
 	expect(
 		Math.abs(
-			inputBox!.y + inputBox!.height / 2 -
+			inputBox!.y +
+				inputBox!.height / 2 -
 				(buttonBox!.y + buttonBox!.height / 2),
 		),
 	).toBeLessThanOrEqual(1);
@@ -7765,16 +7766,21 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	const title = page.getByRole("heading", { name: "Studio planning" });
 	await expect(title).toBeVisible();
 	const pollCard = title.locator("xpath=ancestor::article");
-	const alignment = await pollCard.evaluate((card, heading) => {
-		const cardBox = card.getBoundingClientRect();
-		const titleBox = (heading as HTMLElement).getBoundingClientRect();
-		return {
-			centerDelta: Math.abs(
-				cardBox.left + cardBox.width / 2 - (titleBox.left + titleBox.width / 2),
-			),
-			textAlign: getComputedStyle(heading as HTMLElement).textAlign,
-		};
-	}, await title.elementHandle());
+	const alignment = await pollCard.evaluate(
+		(card, heading) => {
+			const cardBox = card.getBoundingClientRect();
+			const titleBox = (heading as HTMLElement).getBoundingClientRect();
+			return {
+				centerDelta: Math.abs(
+					cardBox.left +
+						cardBox.width / 2 -
+						(titleBox.left + titleBox.width / 2),
+				),
+				textAlign: getComputedStyle(heading as HTMLElement).textAlign,
+			};
+		},
+		await title.elementHandle(),
+	);
 	expect(alignment.centerDelta).toBeLessThanOrEqual(1);
 	expect(alignment.textAlign).toBe("center");
 
@@ -7792,7 +7798,9 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	expect(document.scroll).toBeLessThanOrEqual(document.client);
 
 	await page.setViewportSize({ height: 844, width: 390 });
-	const themeBox = await page.getByRole("button", { name: /theme/ }).boundingBox();
+	const themeBox = await page
+		.getByRole("button", { name: /theme/ })
+		.boundingBox();
 	const mobileCardBox = await pollCard.boundingBox();
 	expect(themeBox!.y + themeBox!.height).toBeLessThanOrEqual(mobileCardBox!.y);
 	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(

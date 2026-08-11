@@ -6,70 +6,70 @@
 /* Wider than a published event card: that one is a column of prose, this is a
    table, and squeezing a week of columns into reading width helps nobody. */
 .card {
-  width: min(68rem, 100%);
-  min-width: 0;
-  max-width: none;
-  gap: var(--space-6);
-  padding: clamp(var(--space-5), 4vw, var(--space-8));
+	width: min(68rem, 100%);
+	min-width: 0;
+	max-width: none;
+	gap: var(--space-6);
+	padding: clamp(var(--space-5), 4vw, var(--space-8));
 }
 
 .page {
-  position: relative;
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: var(--space-4);
-  min-height: 100dvh;
-  padding: clamp(var(--space-8), 8vh, 5rem) var(--space-4) var(--space-6);
-  background:
-    radial-gradient(
-      circle at 50% 0,
-      color-mix(in srgb, var(--accent-primary) 7%, transparent),
-      transparent 32rem
-    ),
-    var(--surface-canvas);
-  color: var(--text-primary);
+	position: relative;
+	display: grid;
+	align-content: start;
+	justify-items: center;
+	gap: var(--space-4);
+	min-height: 100dvh;
+	padding: clamp(var(--space-8), 8vh, 5rem) var(--space-4) var(--space-6);
+	background:
+		radial-gradient(
+			circle at 50% 0,
+			color-mix(in srgb, var(--accent-primary) 7%, transparent),
+			transparent 32rem
+		),
+		var(--surface-canvas);
+	color: var(--text-primary);
 
-  --page-accent: var(--accent-primary);
-  --page-accent-text: var(--accent-on-primary);
-  --page-background: var(--surface-canvas);
-  --page-border: var(--border-subtle);
-  --page-muted: var(--text-secondary);
-  --page-raised: var(--surface-raised);
-  --page-surface: var(--surface-panel);
-  --page-text: var(--text-primary);
+	--page-accent: var(--accent-primary);
+	--page-accent-text: var(--accent-on-primary);
+	--page-background: var(--surface-canvas);
+	--page-border: var(--border-subtle);
+	--page-muted: var(--text-secondary);
+	--page-raised: var(--surface-raised);
+	--page-surface: var(--surface-panel);
+	--page-text: var(--text-primary);
 }
 
 .hero {
-  max-width: 42rem;
-  justify-items: center;
-  justify-self: center;
-  text-align: center;
+	max-width: 42rem;
+	justify-items: center;
+	justify-self: center;
+	text-align: center;
 }
 
 .hero h1 {
-  font-size: clamp(1.9rem, 4vw, 2.6rem);
+	font-size: clamp(1.9rem, 4vw, 2.6rem);
 }
 
 .description {
-  max-width: 58ch;
-  justify-self: center;
-  text-align: center;
+	max-width: 58ch;
+	justify-self: center;
+	text-align: center;
 }
 
 .answers {
-  display: grid;
-  min-width: 0;
-  gap: var(--space-4);
+	display: grid;
+	min-width: 0;
+	gap: var(--space-4);
 }
 
 .answers > form {
-  width: min(32rem, 100%);
-  justify-self: center;
+	width: min(32rem, 100%);
+	justify-self: center;
 }
 
 .answers > p {
-  justify-content: center;
+	justify-content: center;
 }
 
 /* The shared footer link is 12px accent-coloured text. The accent token misses
@@ -77,15 +77,15 @@
    themes) — a brand colour is not mine to change on the way past, so the link
    carries its own weight here instead. */
 .page a {
-  color: inherit;
-  text-decoration: underline;
+	color: inherit;
+	text-decoration: underline;
 }
 
 /* Out of the flow: a row of its own for one icon costs the grid its fold. */
 .themeRow {
-  position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
+	position: absolute;
+	top: var(--space-4);
+	right: var(--space-4);
 }
 
 /* The poll page shares the published-event shell; only the answer grid is its
@@ -93,89 +93,89 @@
 /* Not the accent: the accent as 12px text misses AA on the darker surfaces. The
    variable comes from the grid's module, which this page always loads. */
 .error {
-  margin: 0;
-  color: var(--answer-no);
-  font-size: var(--text-12);
+	margin: 0;
+	color: var(--answer-no);
+	font-size: var(--text-12);
 }
 
 .editAnswers {
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
+	display: inline-grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--text-muted);
+	cursor: pointer;
 }
 
 .editAnswers:hover,
 .editAnswers:focus-visible {
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+	background: var(--surface-canvas);
+	color: var(--text-primary);
 }
 
 .send {
-  display: grid;
-  gap: var(--space-2);
-  justify-items: center;
+	display: grid;
+	gap: var(--space-2);
+	justify-items: center;
 }
 
 /* Why the grid will not take an answer, or when it will stop. Quieter than the
    decided line: this is a condition, not the result everyone came for. */
 .closedNote {
-  max-width: 42rem;
-  justify-self: center;
-  margin: 0;
-  color: var(--text-secondary);
-  text-align: center;
-  font-size: var(--text-12);
+	max-width: 42rem;
+	justify-self: center;
+	margin: 0;
+	color: var(--text-secondary);
+	text-align: center;
+	font-size: var(--text-12);
 }
 
 .decided {
-  display: flex;
-  align-items: center;
-  justify-self: center;
-  gap: 6px;
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  font-size: var(--text-13);
+	display: flex;
+	align-items: center;
+	justify-self: center;
+	gap: 6px;
+	margin: 0;
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+	color: var(--text-primary);
+	font-size: var(--text-13);
 }
 
 /* Sits above the identity form, because it describes what pressing the button
    will send. */
 .disclosure {
-  display: flex;
-  gap: 6px;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-  line-height: 1.5;
+	display: flex;
+	gap: 6px;
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--text-12);
+	line-height: 1.5;
 }
 
 @media (max-width: 599px) {
-  .page {
-    padding: calc(var(--space-8) + var(--space-8) + var(--space-2))
-      var(--space-3) var(--space-5);
-  }
+	.page {
+		padding: calc(var(--space-8) + var(--space-8) + var(--space-2))
+			var(--space-3) var(--space-5);
+	}
 
-  .card {
-    gap: var(--space-5);
-    padding: var(--space-5) var(--space-4);
-  }
+	.card {
+		gap: var(--space-5);
+		padding: var(--space-5) var(--space-4);
+	}
 
-  .hero h1 {
-    font-size: 1.8rem;
-  }
+	.hero h1 {
+		font-size: 1.8rem;
+	}
 
-  .themeRow {
-    top: var(--space-3);
-    right: var(--space-3);
-  }
+	.themeRow {
+		top: var(--space-3);
+		right: var(--space-3);
+	}
 }
