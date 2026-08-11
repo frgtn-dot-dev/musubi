@@ -16,6 +16,7 @@ import {
   handlerDecidePoll,
   handlerDeletePoll,
   handlerGetPoll,
+  handlerListPollCalendar,
   handlerListPolls,
   handlerVotePoll,
 } from "./handlers/scheduling";
@@ -204,6 +205,11 @@ app.get("/api/v1/calendars/tokens/:token", rateLimit(30, 15 * 60_000), wrap(hand
 // Scheduling (group poll, PRD §19.1). Creating and deciding belong to the
 // organizer; reading is open by token. A first answer needs only name + email;
 // replacing an existing email's answer requires an authenticated matching inbox.
+app.get(
+  "/api/v1/scheduling/polls/calendar",
+  requireAuth,
+  wrap(handlerListPollCalendar),
+);
 app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
 app.post("/api/v1/scheduling/polls", optionalAuth, rateLimit(30, 15 * 60_000), wrap(handlerCreatePoll));
 app.post("/api/v1/scheduling/polls/:pollId/decide", requireAuth, wrap(handlerDecidePoll));

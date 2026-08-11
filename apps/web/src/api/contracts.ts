@@ -218,6 +218,24 @@ export const PollSummarySchema = z.object({
 
 export type PollSummary = z.infer<typeof PollSummarySchema>;
 
+export const PollCalendarDaySchema = z.object({
+  end: z.coerce.date(),
+  id: z.string(),
+  ifNeeded: z.number().int().nonnegative(),
+  no: z.number().int().nonnegative(),
+  start: z.coerce.date(),
+  yes: z.number().int().nonnegative(),
+});
+
+export const PollCalendarSchema = PollSummarySchema.extend({
+  days: z.array(PollCalendarDaySchema),
+  respondents: z.number().int().nonnegative(),
+  role: z.enum(["organizer", "participant"]),
+});
+
+export type PollCalendar = z.infer<typeof PollCalendarSchema>;
+export type PollCalendarDay = z.infer<typeof PollCalendarDaySchema>;
+
 export const ServerCapabilitiesSchema = z
   .object({
     email: z.boolean().default(false),

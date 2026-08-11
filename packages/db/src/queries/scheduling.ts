@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNull,
+  or,
+} from "drizzle-orm";
 import {
   db,
   schedulingParticipants,
@@ -37,6 +47,73 @@ export async function listPolls(ownerID: string, ownerEmail?: string) {
         : eq(schedulingPolls.ownerID, ownerID),
     )
     .orderBy(desc(schedulingPolls.createdAt));
+}
+
+export function listActivePollsForCalendar(
+  ownerID: string,
+  verifiedEmail?: string,
+) {
+  const participantAccess = verifiedEmail
+    ? exists(
+        db
+          .select({ id: schedulingParticipants.id })
+          .from(schedulingParticipants)
+          .where(
+            and(
+              eq(schedulingParticipants.pollID, schedulingPolls.id),
+              eq(schedulingParticipants.email, verifiedEmail),
+            ),
+          ),
+      )
+    : undefined;
+  const access = verifiedEmail
+    ? or(
+        eq(schedulingPolls.ownerID, ownerID),
+        eq(schedulingPolls.ownerEmail, verifiedEmail),
+        participantAccess,
+      )
+    : eq(schedulingPolls.ownerID, ownerID);
+
+  return db
+    .select()
+    .from(schedulingPolls)
+    .where(
+      and(
+        access,
+        isNull(schedulingPolls.closedAt),
+        or(
+          isNull(schedulingPolls.deadline),
+          gte(schedulingPolls.deadline, new Date()),
+        ),
+      ),
+    )
+    .orderBy(desc(schedulingPolls.createdAt));
+}
+
+export function listPollCalendarSlots(pollIDs: string[]) {
+  if (pollIDs.length === 0) return [];
+  return db
+    .select()
+    .from(schedulingSlots)
+    .where(inArray(schedulingSlots.pollID, pollIDs))
+    .orderBy(asc(schedulingSlots.start));
+}
+
+export function listPollCalendarVotes(pollIDs: string[]) {
+  if (pollIDs.length === 0) return [];
+  return db
+    .select({
+      participantID: schedulingParticipants.id,
+      pollID: schedulingParticipants.pollID,
+      slotID: schedulingVotes.slotID,
+      value: schedulingVotes.value,
+    })
+    .from(schedulingVotes)
+    .innerJoin(
+      schedulingParticipants,
+      eq(schedulingParticipants.id, schedulingVotes.participantID),
+    )
+    .where(inArray(schedulingParticipants.pollID, pollIDs));
 }
 
 export async function claimPollOwnership(pollID: string, ownerID: string) {

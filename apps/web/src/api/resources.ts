@@ -11,6 +11,7 @@ import {
   InvitesResponseSchema,
   PageResponseSchema,
   PagesResponseSchema,
+  PollCalendarSchema,
   PollSchema,
   PollSummarySchema,
   PublicEventSchema,
@@ -419,6 +420,13 @@ export function answerEvent(input: {
 export function getPolls(signal?: AbortSignal) {
   return apiRequest("/api/v1/scheduling/polls", {
     responseSchema: z.array(PollSummarySchema),
+    signal,
+  });
+}
+
+export function getPollCalendar(signal?: AbortSignal) {
+  return apiRequest("/api/v1/scheduling/polls/calendar", {
+    responseSchema: z.array(PollCalendarSchema),
     signal,
   });
 }

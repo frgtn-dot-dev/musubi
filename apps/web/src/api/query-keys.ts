@@ -23,6 +23,9 @@ export const queryKeys = {
   pages: (serverOrigin: string, userId: string) =>
     ["pages", serverOrigin, userId] as const,
 
+  pollCalendar: (serverOrigin: string, userId: string) =>
+    ["poll-calendar", serverOrigin, userId] as const,
+
   federated: (serverOrigin: string, userId: string) =>
     ["federated", serverOrigin, userId] as const,
 

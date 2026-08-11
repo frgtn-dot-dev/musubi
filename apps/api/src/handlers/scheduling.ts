@@ -7,6 +7,9 @@ import {
   deletePoll,
   getPollById,
   getPollByToken,
+  listActivePollsForCalendar,
+  listPollCalendarSlots,
+  listPollCalendarVotes,
   listPollSlots,
   listPollVotes,
   listPolls,
@@ -143,6 +146,73 @@ export async function handlerListPolls(req: Request, res: Response) {
   );
 
   res.status(200).json(polls.map(pollSummary));
+}
+
+type PollCalendarSlotRow = {
+  end: Date;
+  id: string;
+  pollID: string;
+  start: Date;
+};
+
+type PollCalendarVoteRow = {
+  participantID: string;
+  pollID: string;
+  slotID: string;
+  value: string;
+};
+
+export function pollCalendarProjection(
+  polls: SchedulingPollRow[],
+  slots: PollCalendarSlotRow[],
+  votes: PollCalendarVoteRow[],
+  viewer: { email?: string; id: string },
+) {
+  return polls.map((poll) => {
+    const pollVotes = votes.filter((vote) => vote.pollID === poll.id);
+    const respondents = new Set(
+      pollVotes.map((vote) => vote.participantID),
+    ).size;
+    return {
+      ...pollSummary(poll),
+      days: slots
+        .filter((slot) => slot.pollID === poll.id)
+        .map((slot) => {
+          const slotVotes = pollVotes.filter((vote) => vote.slotID === slot.id);
+          return {
+            end: slot.end,
+            id: slot.id,
+            ifNeeded: slotVotes.filter((vote) => vote.value === "if-needed")
+              .length,
+            no: slotVotes.filter((vote) => vote.value === "no").length,
+            start: slot.start,
+            yes: slotVotes.filter((vote) => vote.value === "yes").length,
+          };
+        }),
+      respondents,
+      role:
+        poll.ownerID === viewer.id ||
+        (viewer.email && poll.ownerEmail === viewer.email)
+          ? "organizer"
+          : "participant",
+    };
+  });
+}
+
+export async function handlerListPollCalendar(req: Request, res: Response) {
+  const email = req.user!.emailVerified
+    ? String(req.user!.email).trim().toLowerCase()
+    : undefined;
+  const polls = await listActivePollsForCalendar(req.user!.id, email);
+  const pollIDs = polls.map((poll) => poll.id);
+  const [slots, votes] = await Promise.all([
+    listPollCalendarSlots(pollIDs),
+    listPollCalendarVotes(pollIDs),
+  ]);
+
+  res
+    .status(200)
+    .json(pollCalendarProjection(polls, slots, votes, { email, id: req.user!.id }));
 }
 
 /** Shut to answers, for either reason. */

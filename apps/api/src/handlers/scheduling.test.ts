@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   bestSlots,
   parseApproximateStartTime,
+  pollCalendarProjection,
   pollProjection,
   pollSlotEventTiming,
 } from "./scheduling";
@@ -136,6 +137,52 @@ assert.deepEqual(
   assert.deepEqual(
     jans.people.map((person) => person.answers["slot-tue"]),
     ["yes", "no"],
+  );
+}
+
+// ── Calendar projection ──────────────────────────────────────────────────────
+{
+  const createdAt = new Date("2026-08-01T09:00:00.000Z");
+  const poll = {
+    ...POLL,
+    createdAt,
+    eventID: null,
+    id: "poll-1",
+    ownerEmail: "owner@example.com",
+    ownerID: "owner-1",
+    ownerName: "Owner",
+    token: "poll-token",
+    updatedAt: createdAt,
+  } as Parameters<typeof pollCalendarProjection>[0][number];
+  const slots = SLOTS.map((slot) => ({ ...slot, pollID: poll.id }));
+  const votes = [
+    { participantID: "p1", pollID: poll.id, slotID: "slot-tue", value: "yes" },
+    { participantID: "p2", pollID: poll.id, slotID: "slot-tue", value: "no" },
+    { participantID: "p1", pollID: poll.id, slotID: "slot-wed", value: "yes" },
+    { participantID: "p2", pollID: poll.id, slotID: "slot-wed", value: "if-needed" },
+  ];
+
+  const [projection] = pollCalendarProjection([poll], slots, votes, {
+    email: "guest@example.com",
+    id: "guest-1",
+  });
+  assert.equal(projection!.role, "participant");
+  assert.equal(projection!.respondents, 2);
+  assert.deepEqual(projection!.days[0], {
+    end: SLOTS[0]!.end,
+    id: "slot-tue",
+    ifNeeded: 0,
+    no: 1,
+    start: SLOTS[0]!.start,
+    yes: 1,
+  });
+  assert.ok(!JSON.stringify(projection).includes("participantID"));
+  assert.equal(
+    pollCalendarProjection([poll], slots, votes, {
+      email: "owner@example.com",
+      id: "some-session",
+    })[0]!.role,
+    "organizer",
   );
 }
 
