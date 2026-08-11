@@ -87,12 +87,8 @@ function RootDocument({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
-        <script
-          // Theme is applied before the body is painted to avoid a light flash.
-          dangerouslySetInnerHTML={{
-            __html: THEME_BOOTSTRAP_SCRIPT,
-          }}
-        />
+        {/* Theme is applied before the body is painted to avoid a light flash. */}
+        <script>{THEME_BOOTSTRAP_SCRIPT}</script>
       </head>
       <body>
         <ThemeSynchronizer />

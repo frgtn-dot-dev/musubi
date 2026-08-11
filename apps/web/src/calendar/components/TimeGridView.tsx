@@ -628,10 +628,12 @@ export function TimeGridView({
 
 		if (!scrollRoot) return;
 
-		scrollRoot.scrollTop =
-			previousHourHeight === geometry.hourHeight
-				? minutesToY(openScrollMinutes(new Date(), hasToday), geometry) - 12
-				: scrollRoot.scrollTop * (geometry.hourHeight / previousHourHeight);
+		scrollRoot.scrollTo({
+			top:
+				previousHourHeight === geometry.hourHeight
+					? minutesToY(openScrollMinutes(new Date(), hasToday), geometry) - 12
+					: scrollRoot.scrollTop * (geometry.hourHeight / previousHourHeight),
+		});
 	}, [anchor, geometry, hasToday, view, weekStartsOn]);
 
 	useEffect(() => {
