@@ -83,6 +83,7 @@ export function pageConfigEquals(
   return (
     left.schemaVersion === right.schemaVersion &&
     left.icon === right.icon &&
+    (left.showPolls ?? false) === (right.showPolls ?? false) &&
     JSON.stringify(left.filters) === JSON.stringify(right.filters) &&
     JSON.stringify(left.view) === JSON.stringify(right.view) &&
     visibilityEquals(left.calendarVisibility, right.calendarVisibility)

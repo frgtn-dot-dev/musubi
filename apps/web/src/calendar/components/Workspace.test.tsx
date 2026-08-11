@@ -80,6 +80,7 @@ describe("Workspace", () => {
     const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
     const studio = dialog.getByRole("button", { name: "Studio" });
     await user.click(studio);
+    await user.click(dialog.getByRole("checkbox", { name: "Scheduling polls" }));
 
     expect(studio.getAttribute("aria-pressed")).toBe("false");
     expect(onSavePage).not.toHaveBeenCalled();
@@ -89,6 +90,7 @@ describe("Workspace", () => {
       config: {
         ...commonProps.pages[0]!.config,
         calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" },
+        showPolls: true,
       },
       id: "my-calendar",
       name: "My calendar",
@@ -252,6 +254,7 @@ describe("Workspace", () => {
       config: {
         ...commonProps.pages[0]!.config,
         calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" },
+        showPolls: false,
       },
       name: "My calendar copy",
     });
@@ -405,6 +408,7 @@ describe("Workspace", () => {
         filters: [],
         icon: "briefcase",
         schemaVersion: 1,
+        showPolls: false,
         view: { configVersion: 1, id: "month", showAdjacentDays: true },
       },
       name: "Work",

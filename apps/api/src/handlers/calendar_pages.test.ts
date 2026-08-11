@@ -18,6 +18,7 @@ const calendarId = randomUUID();
     filters: [],
   });
   assert.equal(parsed.view.id, "week");
+  assert.equal(parsed.showPolls, undefined, "legacy Pages keep polls hidden");
   assert.equal(
     parsed.view.id === "week" && parsed.view.weekend,
     true,
@@ -107,6 +108,11 @@ assert.equal(
   const config = defaultPageConfig("agenda");
   assert.equal(config.view.id, "agenda");
   assert.equal(config.calendarVisibility.mode, "all");
+  assert.equal(config.showPolls, false);
+  assert.equal(
+    PageConfigV1Schema.parse({ ...config, showPolls: true }).showPolls,
+    true,
+  );
 }
 
 console.log("calendar pages contract self-check: OK");

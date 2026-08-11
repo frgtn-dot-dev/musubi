@@ -46,6 +46,12 @@ describe("Page draft helpers", () => {
     expect(pageConfigEquals(left, right)).toBe(false);
   });
 
+  it("treats an omitted poll layer as hidden", () => {
+    const legacy = page("home", true).config;
+    expect(pageConfigEquals(legacy, { ...legacy, showPolls: false })).toBe(true);
+    expect(pageConfigEquals(legacy, { ...legacy, showPolls: true })).toBe(false);
+  });
+
   it("keeps same-view options and uses defaults for a different view", () => {
     const config = page("home", true).config;
 

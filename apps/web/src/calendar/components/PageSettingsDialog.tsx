@@ -98,6 +98,7 @@ export function PageSettingsDialog({
   );
   const [view, setView] = useState<PageConfigV1["view"]>(page.config.view);
   const [visibility, setVisibility] = useState(page.config.calendarVisibility);
+  const [showPolls, setShowPolls] = useState(page.config.showPolls ?? false);
   const [busy, setBusy] = useState(false);
   const [isDefault, setIsDefault] = useState(page.isDefault);
   const [settingDefault, setSettingDefault] = useState(false);
@@ -113,6 +114,7 @@ export function PageSettingsDialog({
     trimmedName !== page.name ||
     icon !== resolvePageIcon(page.config.icon, page.isDefault) ||
     JSON.stringify(view) !== JSON.stringify(page.config.view) ||
+    showPolls !== (page.config.showPolls ?? false) ||
     !visibilityEquals(visibility, page.config.calendarVisibility);
   const canSave = Boolean(trimmedName) && dirty && !busy;
   const visibleCalendarIds = calendarIdsForVisibility(visibility, calendars);
@@ -121,6 +123,7 @@ export function PageSettingsDialog({
     ...page.config,
     calendarVisibility: visibility,
     icon,
+    showPolls,
     view,
   });
 
@@ -474,6 +477,21 @@ export function PageSettingsDialog({
           {/* Calendar visibility belongs to the Page, so it is configured here
               with its other saved presentation choices instead of in the
               calendar toolbar. */}
+          <div className={styles.sectionRows}>
+            <Row
+              detail="Show active scheduling polls you organize or answered"
+              label="Scheduling polls"
+              trailing={
+                <Checkbox
+                  checked={showPolls}
+                  disabled={busy}
+                  label="Scheduling polls"
+                  labelHidden
+                  onChange={(event) => setShowPolls(event.target.checked)}
+                />
+              }
+            />
+          </div>
           <div className={styles.pillGrid}>
             {calendars.map((calendar) => (
               <CalendarVisibilityPill
