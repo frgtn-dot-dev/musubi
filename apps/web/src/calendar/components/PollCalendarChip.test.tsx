@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { PollCalendar } from "~/api/contracts";
-import { pollAvailability, pollCalendarItems } from "./PollCalendarChip";
+import {
+  pollAvailability,
+  pollCalendarItems,
+  pollDayContinues,
+} from "./PollCalendarChip";
 
 function poll(overrides: Partial<PollCalendar> = {}): PollCalendar {
   return {
@@ -37,6 +41,18 @@ describe("poll calendar items", () => {
     const items = pollCalendarItems([poll({ days: [day] })]);
     expect(items).toHaveLength(1);
     expect(items[0]!.date).toBe("2026-08-18");
+  });
+
+  it("connects only consecutive days from the same poll", () => {
+    const nextDay = {
+      ...day,
+      date: "2026-08-19",
+      id: "day-2",
+    };
+    const items = pollCalendarItems([poll({ days: [day, nextDay] })]);
+    expect(pollDayContinues(items[0]!, 1)).toBe(true);
+    expect(pollDayContinues(items[0]!, -1)).toBe(false);
+    expect(pollDayContinues(items[1]!, -1)).toBe(true);
   });
 
   it("uses consensus, mixed, unavailable and unanswered tones", () => {

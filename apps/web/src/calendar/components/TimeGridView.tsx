@@ -54,6 +54,7 @@ import {
 import {
 	PollCalendarChip,
 	type PollCalendarItem,
+	pollDayContinues,
 } from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
@@ -792,6 +793,18 @@ export function TimeGridView({
 									items.map((item, lane) => (
 										<PollCalendarChip
 											className={styles.timeGridAllDayEvent}
+											continuesAfter={
+												dayIndex < days.length - 1 &&
+												pollDayContinues(item, 1) &&
+												pollsByDay[dayIndex + 1]?.[lane]?.poll.id ===
+													item.poll.id
+											}
+											continuesBefore={
+												dayIndex > 0 &&
+												pollDayContinues(item, -1) &&
+												pollsByDay[dayIndex - 1]?.[lane]?.poll.id ===
+													item.poll.id
+											}
 											item={item}
 											key={`${item.poll.id}:${item.day.id}`}
 											onOpen={onOpenPoll}

@@ -10,6 +10,7 @@ import { EventDetailsPopover } from "./EventDetailsPopover";
 import {
   PollCalendarChip,
   type PollCalendarItem,
+  pollDayContinues,
 } from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
@@ -140,6 +141,33 @@ function WeekBlock({
 }) {
   const first = days[0]!;
 
+  function pollSharesLane(
+    item: PollCalendarItem,
+    itemIndex: number,
+    dayIndex: number,
+    offset: -1 | 1,
+  ) {
+    const adjacentDay = days[dayIndex + offset];
+    if (!adjacentDay || !pollDayContinues(item, offset)) return false;
+    const adjacentKey = toDateKey(adjacentDay);
+    const adjacentPolls = pollItems.filter(
+      (candidate) => candidate.date === adjacentKey,
+    );
+    const adjacentIndex = adjacentPolls.findIndex(
+      (candidate) => candidate.poll.id === item.poll.id,
+    );
+    if (adjacentIndex < 0) return false;
+    const currentAllDayCount = (
+      eventsByDay.get(item.date) ?? []
+    ).filter((event) => event.isAllDay).length;
+    const adjacentAllDayCount = (
+      eventsByDay.get(adjacentKey) ?? []
+    ).filter((event) => event.isAllDay).length;
+    return (
+      currentAllDayCount + itemIndex === adjacentAllDayCount + adjacentIndex
+    );
+  }
+
   return (
     <section
       aria-label={`Week of ${first.toLocaleDateString("en", {
@@ -180,7 +208,7 @@ function WeekBlock({
       </header>
 
       <div className={styles.weekBlockGrid} role="presentation">
-        {days.map((day) => {
+        {days.map((day, dayIndex) => {
           const dayKey = toDateKey(day);
           // Same segmentation and overlap columns as the real week grid, so a
           // busy Tuesday looks busy in both.
@@ -213,6 +241,8 @@ function WeekBlock({
                 ? dayPolls.map((item, index) => (
                     <PollCalendarChip
                       className={styles.weekBlockAllDay}
+                      continuesAfter={pollSharesLane(item, index, dayIndex, 1)}
+                      continuesBefore={pollSharesLane(item, index, dayIndex, -1)}
                       item={item}
                       key={`${item.poll.id}:${item.day.id}`}
                       onOpen={onOpenPoll}

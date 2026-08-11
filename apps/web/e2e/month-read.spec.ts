@@ -7178,7 +7178,21 @@ test("keeps the time on a chip while the cell can hold one", async ({
 test("shows participant polls as striped all-day calendar items", async ({
 	page,
 }) => {
-	await mockAuthenticatedReads(page);
+	await mockAuthenticatedReads(page, {
+		deletedIds: [],
+		events: [
+			event(
+				"all-day-reference",
+				"Reference event",
+				"personal",
+				"#b3492f",
+				"2026-08-18T00:00:00.000Z",
+				"2026-08-19T00:00:00.000Z",
+				{ isAllDay: true },
+			),
+		],
+		serverTime: "2026-08-11T12:00:00.000Z",
+	});
 	const pollPage = {
 		...defaultPage,
 		config: { ...defaultPage.config, showPolls: true },
@@ -7277,6 +7291,27 @@ test("shows participant polls as striped all-day calendar items", async ({
 	);
 	expect(paints[0]!.image).toContain("repeating-linear-gradient");
 	expect(paints[0]!.color).not.toBe(paints[1]!.color);
+	expect(await chips.first().getAttribute("data-continues-after")).not.toBeNull();
+	expect(await chips.last().getAttribute("data-continues-before")).not.toBeNull();
+	const geometry = await page.evaluate(() => {
+		const poll = document.querySelector<HTMLElement>(
+			'[data-poll-calendar="poll-calendar-1"]',
+		)!;
+		const event = document.querySelector<HTMLElement>(
+			'[data-event-id="all-day-reference"]',
+		)!;
+		const nextPoll = document.querySelectorAll<HTMLElement>(
+			'[data-poll-calendar="poll-calendar-1"]',
+		)[1]!;
+		const pollBox = poll.getBoundingClientRect();
+		return {
+			eventHeight: event.getBoundingClientRect().height,
+			joinGap: nextPoll.getBoundingClientRect().left - pollBox.right,
+			pollHeight: pollBox.height,
+		};
+	});
+	expect(geometry.pollHeight).toBe(geometry.eventHeight);
+	expect(geometry.joinGap).toBeLessThanOrEqual(0);
 
 	await chips.first().click();
 	const dialog = page.getByRole("dialog", { name: "Studio planning" });

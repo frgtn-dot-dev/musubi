@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { CalendarClock } from "lucide-react";
 import type { PollCalendar, PollCalendarDay } from "~/api/contracts";
 import { getLongDateLabel, parseDateKey } from "../calendar-math";
+import { shiftDayKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
 import styles from "./styles/poll-calendar.module.css";
 
@@ -15,6 +16,14 @@ export function pollCalendarItems(polls: PollCalendar[]): PollCalendarItem[] {
   return polls.flatMap((poll) =>
     poll.days.map((day) => ({ date: day.date, day, poll })),
   );
+}
+
+export function pollDayContinues(
+  item: PollCalendarItem,
+  offset: -1 | 1,
+) {
+  const adjacentDate = shiftDayKey(item.date, offset);
+  return item.poll.days.some((day) => day.date === adjacentDate);
 }
 
 export function pollAvailability(item: PollCalendarItem) {
@@ -36,11 +45,15 @@ export function pollAvailability(item: PollCalendarItem) {
 
 export function PollCalendarChip({
   className,
+  continuesAfter = false,
+  continuesBefore = false,
   item,
   onOpen,
   style,
 }: {
   className?: string;
+  continuesAfter?: boolean;
+  continuesBefore?: boolean;
   item: PollCalendarItem;
   onOpen: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   style?: CSSProperties;
@@ -52,6 +65,8 @@ export function PollCalendarChip({
         parseDateKey(item.date),
       )}, ${availability.label}`}
       className={`${styles.chip} ${className ?? ""}`}
+      data-continues-after={continuesAfter ? "" : undefined}
+      data-continues-before={continuesBefore ? "" : undefined}
       data-decided={item.poll.chosenSlotID ? "" : undefined}
       data-poll-calendar={item.poll.id}
       style={

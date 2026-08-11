@@ -32,6 +32,7 @@ import type { EventActionHandlers } from "./EventDetailsPopover";
 import {
   PollCalendarChip,
   type PollCalendarItem,
+  pollDayContinues,
 } from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
@@ -305,6 +306,21 @@ export function MonthCalendar({
     // Row count changes the height each row gets, and with it how many chips
     // fit before "+N more" — a multi-week page re-measures when it grows.
   }, [rows]);
+
+  function pollIsVisibleOnDate(item: PollCalendarItem, dateKey: string) {
+    const day = days.find((candidate) => toDateKey(candidate) === dateKey);
+    if (!day) return false;
+    const inMonth = !dimOutsideMonth || day.getMonth() === anchor.getMonth();
+    if (!inMonth && !showAdjacentDays) return false;
+
+    const dayPolls = pollItems.filter((candidate) => candidate.date === dateKey);
+    const itemCount = (eventsByDay.get(dateKey)?.length ?? 0) + dayPolls.length;
+    const visibleCount =
+      itemCount > eventCapacity ? Math.max(0, eventCapacity - 1) : eventCapacity;
+    return dayPolls
+      .slice(0, visibleCount)
+      .some((candidate) => candidate.poll.id === item.poll.id);
+  }
 
   function focusCell(index: number) {
     const bounded = Math.min(days.length - 1, Math.max(0, index));
@@ -650,6 +666,16 @@ export function MonthCalendar({
                       ? visiblePolls.map((item) => (
                           <PollCalendarChip
                             className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+                            continuesAfter={
+                              dayIndex < 6 &&
+                              pollDayContinues(item, 1) &&
+                              pollIsVisibleOnDate(item, shiftDayKey(dateKey, 1))
+                            }
+                            continuesBefore={
+                              dayIndex > 0 &&
+                              pollDayContinues(item, -1) &&
+                              pollIsVisibleOnDate(item, shiftDayKey(dateKey, -1))
+                            }
                             item={item}
                             key={`${item.poll.id}:${item.day.id}`}
                             onOpen={onOpenPoll}

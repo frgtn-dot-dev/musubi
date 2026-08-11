@@ -700,8 +700,9 @@
 }
 
 .agendaPoll {
+	--poll-chip-height: 43px;
 	width: 100%;
-	min-height: 36px;
+	min-height: 43px;
 	padding: 0 14px;
 	border-radius: var(--radius-sm);
 	font-size: var(--text-12);
@@ -916,6 +917,8 @@
 
 .timeGridAllDayEvent {
 	--event-color: var(--accent-primary);
+	--poll-chip-height: 20px;
+	--poll-join: 0px;
 	--event-foreground: #000;
 	position: absolute;
 	display: block;
@@ -1474,6 +1477,8 @@
 .eventChip {
 	--event-color: var(--accent-primary);
 	--event-foreground: #000;
+	--poll-chip-height: 21px;
+	--poll-join: var(--event-bleed);
 	position: relative;
 	z-index: 1;
 	display: grid;
@@ -2302,6 +2307,8 @@
 /* All-day sits at the top of its column, above the timed blocks, the way the
    real week grid stacks them. */
 .weekBlockAllDay {
+	--poll-chip-height: 11px;
+	--poll-join: 1px;
 	top: 1px;
 	height: 11px;
 }
