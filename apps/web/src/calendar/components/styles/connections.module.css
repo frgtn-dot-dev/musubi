@@ -183,7 +183,7 @@
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: end;
 	gap: var(--space-2);
-	padding: 0 var(--layer-inline);
+	padding: var(--space-2) var(--layer-inline) var(--space-4);
 }
 
 .inviteField {
@@ -286,6 +286,7 @@
 }
 
 .caldavForm > div:not(.formActions) {
+	padding-block: var(--space-5);
 	background: var(--surface-canvas);
 }
 
