@@ -652,28 +652,6 @@ export function MonthCalendar({
                           />
                         );
                       }
-                      if (span.kind === "poll") {
-                        const item = span.items.find(
-                          (candidate) => candidate.date === dateKey,
-                        );
-                        return item && onOpenPoll ? (
-                          <PollCalendarChip
-                            className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-                            continuesAfter={dayIndex < span.endCol}
-                            continuesBefore={dayIndex > span.startCol}
-                            item={item}
-                            key={span.id}
-                            onOpen={onOpenPoll}
-                          />
-                        ) : (
-                          <div
-                            aria-hidden="true"
-                            className={styles.daySlot}
-                            key={`lane:${lane}`}
-                          />
-                        );
-                      }
-                      const event = span.event;
                       const labelColumn = Array.from(
                         { length: span.endCol - span.startCol + 1 },
                         (_, offset) => span.startCol + offset,
@@ -686,6 +664,31 @@ export function MonthCalendar({
                               labelDay.getMonth() === anchor.getMonth()),
                         );
                       });
+                      if (span.kind === "poll") {
+                        const item = span.items.find(
+                          (candidate) => candidate.date === dateKey,
+                        );
+                        return item && onOpenPoll ? (
+                          <PollCalendarChip
+                            className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+                            continuesAfter={dayIndex < span.endCol}
+                            continuesBefore={dayIndex > span.startCol}
+                            item={item}
+                            key={span.id}
+                            onOpen={onOpenPoll}
+                            showLabel={
+                              dayIndex === (labelColumn ?? span.startCol)
+                            }
+                          />
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            className={styles.daySlot}
+                            key={`lane:${lane}`}
+                          />
+                        );
+                      }
+                      const event = span.event;
                       return (
                         <EventPopover
                           calendar={calendarsById.get(

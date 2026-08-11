@@ -1,6 +1,8 @@
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { PollCalendar } from "~/api/contracts";
 import {
+  PollCalendarChip,
   pollAvailability,
   pollCalendarItems,
   pollDayContinues,
@@ -53,6 +55,18 @@ describe("poll calendar items", () => {
     expect(pollDayContinues(items[0]!, 1)).toBe(true);
     expect(pollDayContinues(items[0]!, -1)).toBe(false);
     expect(pollDayContinues(items[1]!, -1)).toBe(true);
+  });
+
+  it("keeps continuation pills visually blank but fully named", () => {
+    const item = pollCalendarItems([poll({ days: [day] })])[0]!;
+    const { container } = render(
+      <PollCalendarChip item={item} onOpen={() => undefined} showLabel={false} />,
+    );
+    expect(screen.queryByText("Studio planning")).toBeNull();
+    expect(container.querySelector("svg")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Studio planning, scheduling poll/ }),
+    ).not.toBeNull();
   });
 
   it("uses consensus, mixed, unavailable and unanswered tones", () => {

@@ -49,6 +49,7 @@ export function PollCalendarChip({
   continuesBefore = false,
   item,
   onOpen,
+  showLabel = true,
   style,
 }: {
   className?: string;
@@ -56,6 +57,7 @@ export function PollCalendarChip({
   continuesBefore?: boolean;
   item: PollCalendarItem;
   onOpen: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
+  showLabel?: boolean;
   style?: CSSProperties;
 }) {
   const availability = pollAvailability(item);
@@ -83,8 +85,10 @@ export function PollCalendarChip({
         onOpen(item, event.currentTarget);
       }}
     >
-      <CalendarClock aria-hidden="true" size={11} strokeWidth={1.8} />
-      <span>{item.poll.title}</span>
+      {showLabel ? (
+        <CalendarClock aria-hidden="true" size={11} strokeWidth={1.8} />
+      ) : null}
+      {showLabel ? <span>{item.poll.title}</span> : null}
     </button>
   );
 }

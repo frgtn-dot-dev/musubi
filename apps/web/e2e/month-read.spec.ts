@@ -7292,6 +7292,8 @@ test("shows participant polls as striped all-day calendar items", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-18`);
 	const chips = page.locator('[data-poll-calendar="poll-calendar-1"]');
 	await expect(chips).toHaveCount(2);
+	await expect(chips.locator("span")).toHaveCount(1);
+	await expect(chips.locator("svg")).toHaveCount(1);
 	const paints = await chips.evaluateAll((elements) =>
 		elements.map((element) => {
 			const style = getComputedStyle(element);

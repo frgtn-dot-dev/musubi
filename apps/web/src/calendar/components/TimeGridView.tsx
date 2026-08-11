@@ -769,6 +769,7 @@ export function TimeGridView({
 											item={item}
 											key={`${span.id}:${item.day.id}`}
 											onOpen={onOpenPoll}
+											showLabel={dayIndex === span.startCol}
 											style={{
 												left: `${(dayIndex / days.length) * 100}%`,
 												top: `${span.lane * 24 + 4}px`,

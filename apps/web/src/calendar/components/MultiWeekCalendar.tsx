@@ -247,6 +247,7 @@ function WeekBlock({
                         item={item}
                         key={`${span.id}:${item.day.id}`}
                         onOpen={onOpenPoll}
+                        showLabel={dayIndex === span.startCol}
                         style={{ top }}
                       />,
                     ]
