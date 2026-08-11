@@ -3744,6 +3744,16 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	await expect(clientResult).toBeFocused();
 	await page.keyboard.press("Escape");
 
+	// Radix returns focus to the toolbar trigger. Slash must remain global there;
+	// treating every focused button as text entry made every second opening fail.
+	const searchTrigger = page.getByRole("button", {
+		name: "Search events and actions",
+	});
+	await expect(searchTrigger).toBeFocused();
+	await page.keyboard.press("/");
+	await expect(search.getByRole("searchbox")).toBeFocused();
+	await page.keyboard.press("Escape");
+
 	const switcherBox = await page
 		.getByRole("radiogroup", { name: "Calendar view" })
 		.boundingBox();
@@ -3762,9 +3772,7 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	).toBeLessThanOrEqual(1);
 
 	// "?" opens the overlay listing the same shortcuts.
-	await page
-		.getByRole("button", { name: "Search events and actions" })
-		.blur();
+	await searchTrigger.blur();
 	await page.keyboard.press("?");
 	const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
 	await expect(dialog).toBeVisible();

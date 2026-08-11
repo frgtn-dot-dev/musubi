@@ -764,13 +764,14 @@ export function Workspace({
     }
 
     const command = shortcutFor(event, {
-      // A button is not typing, but Space and Enter are its own, and a letter
-      // pressed on it is not aimed at the calendar either.
+      // A button is not typing, but Space, Enter and letter shortcuts are its
+      // own. Slash is the exception: closing search returns focus to its toolbar
+      // button, and the global search shortcut must still reopen it from there.
       typing:
         target instanceof HTMLInputElement ||
         target instanceof HTMLSelectElement ||
         target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLButtonElement,
+        (target instanceof HTMLButtonElement && event.key !== "/"),
     });
     if (!command) {
       return;
