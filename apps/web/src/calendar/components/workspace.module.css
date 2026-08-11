@@ -450,6 +450,14 @@
 	min-width: 66px;
 }
 
+.pollLayerError {
+	padding: 7px 28px;
+	border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 28%, transparent);
+	background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-panel));
+	color: var(--text-secondary);
+	font-size: var(--text-11);
+}
+
 .pageDraftBar {
 	z-index: 10;
 	display: flex;
@@ -691,6 +699,14 @@
 	color: var(--accent-primary);
 }
 
+.agendaPoll {
+	width: 100%;
+	min-height: 36px;
+	padding: 0 14px;
+	border-radius: var(--radius-sm);
+	font-size: var(--text-12);
+}
+
 .agendaEventCopy {
 	display: grid;
 	min-width: 0;
@@ -929,7 +945,7 @@
 .timeGridAllDayMore {
 	position: absolute;
 	right: 5px;
-	bottom: 3px;
+	bottom: auto;
 	color: var(--text-muted);
 	font-size: 0.61rem;
 }

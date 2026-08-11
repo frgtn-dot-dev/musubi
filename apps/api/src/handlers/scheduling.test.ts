@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   bestSlots,
   parseApproximateStartTime,
+  parsePollSlot,
   pollCalendarProjection,
   pollProjection,
   pollSlotEventTiming,
@@ -10,6 +11,11 @@ import {
 assert.equal(parseApproximateStartTime(undefined), null);
 assert.equal(parseApproximateStartTime(" 18:30 "), "18:30");
 assert.throws(() => parseApproximateStartTime("25:00"));
+assert.deepEqual(parsePollSlot({ date: "2026-08-18" }), {
+  end: new Date("2026-08-19T12:00:00.000Z"),
+  start: new Date("2026-08-18T12:00:00.000Z"),
+});
+assert.throws(() => parsePollSlot({ date: "2026-02-31" }));
 
 const POLL = {
   approximateStartTime: "18:30",
@@ -169,6 +175,7 @@ assert.deepEqual(
   assert.equal(projection!.role, "participant");
   assert.equal(projection!.respondents, 2);
   assert.deepEqual(projection!.days[0], {
+    date: "2026-08-18",
     end: SLOTS[0]!.end,
     id: "slot-tue",
     ifNeeded: 0,
@@ -183,6 +190,26 @@ assert.deepEqual(
       id: "some-session",
     })[0]!.role,
     "organizer",
+  );
+
+  const decided = {
+    ...poll,
+    chosenSlotID: "slot-tue",
+    closedAt: new Date("2026-08-02T00:00:00.000Z"),
+  };
+  assert.deepEqual(
+    pollCalendarProjection([decided], slots, votes, {
+      email: "guest@example.com",
+      id: "guest-1",
+    })[0]!.days.map((day) => day.id),
+    ["slot-tue"],
+  );
+  assert.equal(
+    pollCalendarProjection([decided], slots, votes, {
+      email: "owner@example.com",
+      id: "some-session",
+    }).length,
+    0,
   );
 }
 

@@ -51,6 +51,10 @@ import {
 	EventDetailsPopover,
 	type EventActionHandlers,
 } from "./EventDetailsPopover";
+import {
+	PollCalendarChip,
+	type PollCalendarItem,
+} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 const ALL_DAY_LANES = 3;
@@ -75,6 +79,8 @@ type TimeGridViewProps = EventActionHandlers & {
 	calendars: Calendar[];
 	events: Event[];
 	geometry: TimeGeometry;
+	pollItems?: PollCalendarItem[];
+	onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
 	/**
 	 * Commit a drag or resize. Absent (or returning without moving) leaves the
 	 * grid read-only for direct manipulation.
@@ -374,6 +380,8 @@ export function TimeGridView({
 	calendars,
 	events,
 	geometry,
+	pollItems = [],
+	onOpenPoll,
 	onCancelDraft,
 	onCreateAtTime,
 	onMoveEvent,
@@ -413,10 +421,15 @@ export function TimeGridView({
 		(span) => span.lane < ALL_DAY_LANES,
 	);
 	const hiddenAllDayCount = allDaySpans.length - visibleAllDaySpans.length;
-	const allDayLaneCount = Math.min(
-		Math.max(...allDaySpans.map((span) => span.lane + 1), 1),
+	const eventLaneCount = Math.min(
+		Math.max(...allDaySpans.map((span) => span.lane + 1), 0),
 		ALL_DAY_LANES,
 	);
+	const pollsByDay = days.map((day) =>
+		pollItems.filter((item) => item.date === dayKey(day)),
+	);
+	const pollLaneCount = Math.max(0, ...pollsByDay.map((items) => items.length));
+	const allDayLaneCount = Math.max(1, eventLaneCount + pollLaneCount);
 	const [now, setNow] = useState(() => new Date());
 	const hasToday = days.some((day) => isSameDay(day, now));
 	const dayMode = view === "day";
@@ -774,8 +787,28 @@ export function TimeGridView({
 								</EventDetailsPopover>
 							);
 						})}
+						{onOpenPoll
+							? pollsByDay.flatMap((items, dayIndex) =>
+									items.map((item, lane) => (
+										<PollCalendarChip
+											className={styles.timeGridAllDayEvent}
+											item={item}
+											key={`${item.poll.id}:${item.day.id}`}
+											onOpen={onOpenPoll}
+											style={{
+												left: `${(dayIndex / days.length) * 100}%`,
+												top: `${(eventLaneCount + lane) * 24 + 4}px`,
+												width: `${100 / days.length}%`,
+											}}
+										/>
+									)),
+								)
+							: null}
 						{hiddenAllDayCount > 0 ? (
-							<span className={styles.timeGridAllDayMore}>
+							<span
+								className={styles.timeGridAllDayMore}
+								style={{ top: `${Math.max(0, eventLaneCount - 1) * 24 + 8}px` }}
+							>
 								+{hiddenAllDayCount}
 							</span>
 						) : null}

@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
+import { getServerOrigin, queryKeys } from "~/api/query-keys";
+import { getPollCalendar } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
 import { useProviderLinkReturn } from "~/calendar/connections";
 import { useSessionUser } from "~/auth/use-session-user";
@@ -59,6 +61,19 @@ function WorkspaceRoute() {
   const activeView: CalendarViewId =
     isCalendarView(view) ? view : "month";
   const workspace = useWorkspaceQueries(date, userId, activeView);
+  const pages = workspace.pages.data;
+  const activePage = pages?.find((page) => page.id === pageId);
+  const pollEnabled =
+    !snapshot.offline &&
+    Boolean(
+      pageDrafts.get(pageId)?.config.showPolls ?? activePage?.config.showPolls,
+    );
+  const pollCalendar = useQuery({
+    enabled: pollEnabled,
+    queryFn: ({ signal }) => getPollCalendar(signal),
+    queryKey: queryKeys.pollCalendar(getServerOrigin(), userId),
+    refetchInterval: 30_000,
+  });
   const eventMutations = useEventMutations(userId);
   const calendarTransfers = useCalendarTransfers(userId);
   const settingsMutations = useSettingsMutations(userId);
@@ -89,8 +104,6 @@ function WorkspaceRoute() {
   // Resolve the URL page id against the loaded pages. Unknown ids (a stale
   // bookmark or the "default" sentinel from the initial redirect) fall back to
   // the canonical default Page — real ids are server UUIDs.
-  const pages = workspace.pages.data;
-  const activePage = pages?.find((page) => page.id === pageId);
   const fallbackPageId =
     pages && !activePage
       ? (pages.find((page) => page.isDefault) ?? pages[0])?.id
@@ -196,9 +209,14 @@ function WorkspaceRoute() {
       baseEvents={workspace.mergedEvents?.baseEvents}
       calendars={workspace.mergedCalendars}
       pages={workspace.pages.data}
+      polls={pollCalendar.data ?? []}
+      pollsError={pollEnabled && Boolean(pollCalendar.error)}
       date={date}
       events={workspace.mergedEvents?.events ?? []}
-      isRefreshing={queries.some((query) => query.isFetching)}
+      isRefreshing={
+        queries.some((query) => query.isFetching) ||
+        (pollEnabled && pollCalendar.isFetching)
+      }
       offline={offline}
       snapshotAt={snapshot.savedAt}
       stale={stale}

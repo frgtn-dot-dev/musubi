@@ -24,7 +24,7 @@ export type PollDraft = {
 	deadline?: string;
 	email?: string;
 	name?: string;
-	slots: Array<{ start: string }>;
+	slots: Array<{ date: string; start: string }>;
 	title: string;
 };
 
@@ -65,7 +65,8 @@ export function PollForm({
 	// One option per day. Noon is only a stable internal date carrier; the optional
 	// approximate time is stored separately and never controls the all-day event.
 	const slots = days.map((day) => ({
-		start: new Date(`${day}T12:00`).toISOString(),
+		date: day,
+		start: new Date(`${day}T12:00:00.000Z`).toISOString(),
 	}));
 	const tooMany = slots.length > MAX_POLL_SLOTS;
 	const identityReady =

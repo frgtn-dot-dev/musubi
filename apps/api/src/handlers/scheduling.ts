@@ -91,6 +91,24 @@ export function parseApproximateStartTime(value: unknown) {
   return time;
 }
 
+export function parsePollSlot(slot: { date?: string; start?: string }) {
+  const date = String(slot?.date ?? "");
+  const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const start = new Date(
+    hasDate ? `${date}T12:00:00.000Z` : String(slot?.start),
+  );
+  if (
+    Number.isNaN(start.getTime()) ||
+    (hasDate && start.toISOString().slice(0, 10) !== date)
+  ) {
+    throw new BadRequestError("Every slot needs a valid start...");
+  }
+  return {
+    end: new Date(start.getTime() + ALL_DAY_DURATION_MINUTES * 60_000),
+    start,
+  };
+}
+
 export async function handlerCreatePoll(req: Request, res: Response) {
   const title = String(req.body?.title ?? "").trim().slice(0, MAX_TITLE);
   const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
@@ -106,16 +124,7 @@ export async function handlerCreatePoll(req: Request, res: Response) {
     throw new BadRequestError(`A poll can offer at most ${MAX_SLOTS} days...`);
   }
 
-  const parsed = slots.map((slot: { start?: string }) => {
-    const start = new Date(String(slot?.start));
-    if (Number.isNaN(start.getTime())) {
-      throw new BadRequestError("Every slot needs a valid start...");
-    }
-    return {
-      end: new Date(start.getTime() + ALL_DAY_DURATION_MINUTES * 60_000),
-      start,
-    };
-  });
+  const parsed = slots.map(parsePollSlot);
 
   const poll = await createPoll(
     {
@@ -168,18 +177,32 @@ export function pollCalendarProjection(
   votes: PollCalendarVoteRow[],
   viewer: { email?: string; id: string },
 ) {
-  return polls.map((poll) => {
+  return polls.flatMap((poll) => {
+    const role =
+      poll.ownerID === viewer.id ||
+      (viewer.email && poll.ownerEmail === viewer.email)
+        ? "organizer"
+        : "participant";
+    // The organizer already has the real event in its calendar. Participants do
+    // not share that calendar, so their poll layer keeps one solid result item.
+    if (poll.chosenSlotID && role === "organizer") return [];
+
     const pollVotes = votes.filter((vote) => vote.pollID === poll.id);
     const respondents = new Set(
       pollVotes.map((vote) => vote.participantID),
     ).size;
-    return {
+    return [{
       ...pollSummary(poll),
       days: slots
-        .filter((slot) => slot.pollID === poll.id)
+        .filter(
+          (slot) =>
+            slot.pollID === poll.id &&
+            (!poll.chosenSlotID || slot.id === poll.chosenSlotID),
+        )
         .map((slot) => {
           const slotVotes = pollVotes.filter((vote) => vote.slotID === slot.id);
           return {
+            date: slot.start.toISOString().slice(0, 10),
             end: slot.end,
             id: slot.id,
             ifNeeded: slotVotes.filter((vote) => vote.value === "if-needed")
@@ -190,12 +213,8 @@ export function pollCalendarProjection(
           };
         }),
       respondents,
-      role:
-        poll.ownerID === viewer.id ||
-        (viewer.email && poll.ownerEmail === viewer.email)
-          ? "organizer"
-          : "participant",
-    };
+      role,
+    }];
   });
 }
 
@@ -407,7 +426,7 @@ export async function handlerVotePoll(req: Request, res: Response) {
 
   const email = emailIdentity(req.body?.email ?? req.user?.email);
   const name = identityName(req.body?.name ?? req.user?.name);
-  const authenticatedEmail = req.user
+  const authenticatedEmail = req.user?.emailVerified
     ? String(req.user.email).trim().toLowerCase()
     : undefined;
 

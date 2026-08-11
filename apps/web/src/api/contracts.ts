@@ -219,6 +219,7 @@ export const PollSummarySchema = z.object({
 export type PollSummary = z.infer<typeof PollSummarySchema>;
 
 export const PollCalendarDaySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end: z.coerce.date(),
   id: z.string(),
   ifNeeded: z.number().int().nonnegative(),

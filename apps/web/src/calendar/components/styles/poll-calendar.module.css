@@ -1,0 +1,33 @@
+.chip {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
+  border: 0;
+  background-color: var(--poll-color);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    color-mix(in srgb, var(--poll-foreground) 16%, transparent) 5px 8px
+  );
+  color: var(--poll-foreground);
+  font: inherit;
+  text-align: left;
+}
+
+.chip[data-decided] {
+  background-image: none;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  filter: brightness(1.08);
+}
+
+.chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -384,6 +384,9 @@ async function mockAuthenticatedReads(
 		return respond(route, calendarState);
 	});
 	await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
+	await page.route("**/api/v1/scheduling/polls/calendar", (route) =>
+		respond(route, []),
+	);
 	await page.route("**/api/v1/pages/*", (route) => {
 		const body = route.request().postDataJSON() as {
 			config: typeof defaultPage.config;
@@ -7172,6 +7175,124 @@ test("keeps the time on a chip while the cell can hold one", async ({
 	}
 });
 
+test("shows participant polls as striped all-day calendar items", async ({
+	page,
+}) => {
+	await mockAuthenticatedReads(page);
+	const pollPage = {
+		...defaultPage,
+		config: { ...defaultPage.config, showPolls: true },
+	};
+	await page.route("**/api/v1/pages", (route) => respond(route, [pollPage]));
+	await page.route("**/api/v1/scheduling/polls/calendar", (route) =>
+		respond(route, [
+			{
+				approximateStartTime: null,
+				chosenSlotID: null,
+				closed: false,
+				closedAt: null,
+				createdAt: "2026-08-01T09:00:00.000Z",
+				deadline: null,
+				durationMinutes: 1440,
+				id: "poll-calendar-1",
+				respondents: 2,
+				role: "participant",
+				title: "Studio planning",
+				token: POLL_TOKEN,
+				url: `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+				days: [
+					{
+						date: "2026-08-18",
+						end: "2026-08-19T00:00:00.000Z",
+						id: "s1",
+						ifNeeded: 0,
+						no: 0,
+						start: "2026-08-18T00:00:00.000Z",
+						yes: 2,
+					},
+					{
+						date: "2026-08-19",
+						end: "2026-08-20T00:00:00.000Z",
+						id: "s2",
+						ifNeeded: 0,
+						no: 1,
+						start: "2026-08-19T00:00:00.000Z",
+						yes: 1,
+					},
+				],
+			},
+		]),
+	);
+	const detail = {
+		approximateStartTime: null,
+		chosenSlotID: null,
+		closed: false,
+		deadline: null,
+		description: "Choose a studio day.",
+		durationMinutes: 1440,
+		mine: { s1: "yes" },
+		mineID: "1",
+		people: [
+			{ answers: { s1: "yes" }, id: "1", name: "Web QA" },
+			{ answers: { s1: "yes", s2: "no" }, id: "2", name: "Adam" },
+		],
+		respondents: 2,
+		slots: [
+			{
+				end: "2026-08-19T00:00:00.000Z",
+				id: "s1",
+				ifNeeded: [],
+				no: [],
+				start: "2026-08-18T00:00:00.000Z",
+				yes: ["Web QA", "Adam"],
+			},
+			{
+				end: "2026-08-20T00:00:00.000Z",
+				id: "s2",
+				ifNeeded: [],
+				no: ["Adam"],
+				start: "2026-08-19T00:00:00.000Z",
+				yes: ["Web QA"],
+			},
+		],
+		title: "Studio planning",
+	};
+	let savedVotes: unknown;
+	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}/votes`, (route) => {
+		savedVotes = route.request().postDataJSON();
+		return respond(route, detail);
+	});
+	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+		respond(route, detail),
+	);
+
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-18`);
+	const chips = page.locator('[data-poll-calendar="poll-calendar-1"]');
+	await expect(chips).toHaveCount(2);
+	const paints = await chips.evaluateAll((elements) =>
+		elements.map((element) => {
+			const style = getComputedStyle(element);
+			return { color: style.backgroundColor, image: style.backgroundImage };
+		}),
+	);
+	expect(paints[0]!.image).toContain("repeating-linear-gradient");
+	expect(paints[0]!.color).not.toBe(paints[1]!.color);
+
+	await chips.first().click();
+	const dialog = page.getByRole("dialog", { name: "Studio planning" });
+	await expect(dialog).toContainText("verified account");
+	const ownAnswer = dialog.getByRole("button", { name: /Change your answer/ }).first();
+	await ownAnswer.click();
+	await page
+		.getByRole("dialog", { name: /Your answer for/ })
+		.getByRole("button", { name: "If needed" })
+		.click();
+	await dialog.getByRole("button", { name: "Save answers" }).click();
+	await expect.poll(() => savedVotes).toEqual({
+		votes: [{ slotID: "s1", value: "if-needed" }],
+	});
+});
+
 test("closes and deletes a poll", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let closed = false;
@@ -7584,12 +7705,14 @@ test("creates a poll, collects answers and turns one into an event", async ({
 		title: "Studio planning",
 	});
 	expect(created).not.toHaveProperty("durationMinutes");
-	const sent = (created as { slots: Array<{ start: string }> }).slots;
+	const sent = (created as {
+		slots: Array<{ date: string; start: string }>;
+	}).slots;
 	expect(sent).toHaveLength(2);
-	// Slots carry only candidate days; the optional time is separate metadata.
-	expect(sent.map((slot) => slot.start)).toEqual([
-		"2026-08-18T10:00:00.000Z",
-		"2026-08-19T10:00:00.000Z",
+	// Date is the semantic value; UTC noon is only a timezone-stable carrier.
+	expect(sent).toEqual([
+		{ date: "2026-08-18", start: "2026-08-18T12:00:00.000Z" },
+		{ date: "2026-08-19", start: "2026-08-19T12:00:00.000Z" },
 	]);
 
 	// The same grid the participants answered on, so the person deciding reads the

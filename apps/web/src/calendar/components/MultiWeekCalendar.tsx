@@ -7,6 +7,10 @@ import { toDateKey } from "../date-key";
 import { overlapPlacement } from "../time-grid-math";
 import type { EventActionHandlers } from "./EventDetailsPopover";
 import { EventDetailsPopover } from "./EventDetailsPopover";
+import {
+  PollCalendarChip,
+  type PollCalendarItem,
+} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 // ── Matrix tuning ────────────────────────────────────────────────────────────
@@ -30,6 +34,8 @@ type MultiWeekCalendarProps = EventActionHandlers & {
   busyEventId?: string;
   calendars: Calendar[];
   events: Event[];
+  pollItems?: PollCalendarItem[];
+  onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   /** Whole weeks, in order. Each block is one of them. */
   weeks: Date[][];
   timeFormat: Settings["timeFormat"];
@@ -50,6 +56,8 @@ export function MultiWeekCalendar({
   busyEventId,
   calendars,
   events,
+  pollItems = [],
+  onOpenPoll,
   timeFormat,
   weeks,
   weekStartsOn,
@@ -95,6 +103,8 @@ export function MultiWeekCalendar({
           calendars={calendars}
           days={week}
           eventsByDay={byDay}
+          pollItems={pollItems}
+          onOpenPoll={onOpenPoll}
           key={toDateKey(week[0]!)}
           timeFormat={timeFormat}
           todayKey={todayKey}
@@ -111,6 +121,8 @@ function WeekBlock({
   calendars,
   days,
   eventsByDay,
+  pollItems,
+  onOpenPoll,
   timeFormat,
   todayKey,
   weekStartsOn,
@@ -120,6 +132,8 @@ function WeekBlock({
   calendars: Calendar[];
   days: Date[];
   eventsByDay: Map<string, Event[]>;
+  pollItems: PollCalendarItem[];
+  onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   timeFormat: Settings["timeFormat"];
   todayKey: string;
   weekStartsOn: Settings["weekStartsOn"];
@@ -174,6 +188,7 @@ function WeekBlock({
           const allDay = (eventsByDay.get(dayKey) ?? []).filter(
             (event) => event.isAllDay,
           );
+          const dayPolls = pollItems.filter((item) => item.date === dayKey);
 
           return (
             <div
@@ -194,6 +209,17 @@ function WeekBlock({
                   {...eventActions}
                 />
               ))}
+              {onOpenPoll
+                ? dayPolls.map((item, index) => (
+                    <PollCalendarChip
+                      className={styles.weekBlockAllDay}
+                      item={item}
+                      key={`${item.poll.id}:${item.day.id}`}
+                      onOpen={onOpenPoll}
+                      style={{ top: `${1 + (allDay.length + index) * 12}px` }}
+                    />
+                  ))
+                : null}
               {segments.map((segment) => {
                 // Clipped to the visible window rather than dropped: an event
                 // that starts at 06:00 still has to be visible at the top edge,

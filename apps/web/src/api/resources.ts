@@ -441,7 +441,7 @@ export function createPoll(input: {
   email?: string;
   /** Public organizer label for account-free creation. */
   name?: string;
-  slots: Array<{ start: string }>;
+  slots: Array<{ date?: string; start: string }>;
   title: string;
 }) {
   return apiRequest("/api/v1/scheduling/polls", {

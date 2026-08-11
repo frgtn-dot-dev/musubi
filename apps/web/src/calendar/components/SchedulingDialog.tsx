@@ -77,6 +77,7 @@ export function SchedulingDialog({
 					onBack={() => setOpenPoll(undefined)}
 					onChanged={(message) => {
 						void queryClient.invalidateQueries({ queryKey: pollsKey });
+						void queryClient.invalidateQueries({ queryKey: ["poll-calendar"] });
 						// And the poll's own answers: closing it changes what the detail view
 						// may offer, and this query outlives the trip back to the list — so
 						// reopening it showed Pick buttons for a poll that no longer takes
@@ -89,6 +90,7 @@ export function SchedulingDialog({
 					}}
 					onDecided={() => {
 						void queryClient.invalidateQueries({ queryKey: pollsKey });
+						void queryClient.invalidateQueries({ queryKey: ["poll-calendar"] });
 						setOpenPoll(undefined);
 						onNotice("Time picked. The event is in your calendar.");
 					}}
@@ -100,6 +102,7 @@ export function SchedulingDialog({
 					<NewPoll
 						onCreated={(poll) => {
 							void queryClient.invalidateQueries({ queryKey: pollsKey });
+							void queryClient.invalidateQueries({ queryKey: ["poll-calendar"] });
 							onNotice("Poll created. Send the link to the people you need.");
 							setOpenPoll(poll);
 						}}
@@ -182,7 +185,7 @@ function pollDetail(poll: PollSummary) {
 		: "Waiting for answers";
 }
 
-function PollResults({
+export function PollResults({
 	calendars,
 	onBack,
 	onChanged,

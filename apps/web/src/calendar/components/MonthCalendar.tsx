@@ -29,6 +29,10 @@ import { movePreviewRange } from "../time-grid-drag";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
+import {
+  PollCalendarChip,
+  type PollCalendarItem,
+} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 const DEFAULT_EVENT_CAPACITY = 3;
@@ -81,6 +85,8 @@ type MonthCalendarProps = EventActionHandlers & {
   busyEventId?: string;
   calendars: Calendar[];
   events: Event[];
+  pollItems?: PollCalendarItem[];
+  onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   onCreateAtDate?: (
     date: string,
     target: HTMLElement,
@@ -126,6 +132,8 @@ export function MonthCalendar({
   dimOutsideMonth = true,
   events,
   gridLabel,
+  pollItems = [],
+  onOpenPoll,
   rowMinHeight,
   onCreateAtDate,
   onMonthChange,
@@ -442,19 +450,23 @@ export function MonthCalendar({
                     ...daySegments.filter((segment) => segment !== dragged),
                   ]
                 : daySegments;
-              // If not every event fits, one measured slot belongs to the
-              // "+N more" control. This mirrors the calendar pattern where the
-              // month grid stays fixed and density yields to explicit overflow.
+              const dayPolls = pollItems.filter((item) => item.date === dateKey);
+              // Polls share the measured chip capacity with events. When either
+              // kind overflows, one line stays available for the explicit list.
+              const itemCount = ordered.length + dayPolls.length;
               const visibleCount =
-                ordered.length > eventCapacity
+                itemCount > eventCapacity
                   ? Math.max(0, eventCapacity - 1)
                   : eventCapacity;
+              const visiblePolls = muted
+                ? []
+                : dayPolls.slice(0, visibleCount);
               const visibleSegments = muted
                 ? []
-                : ordered.slice(0, visibleCount);
+                : ordered.slice(0, visibleCount - visiblePolls.length);
               const overflow = muted
                 ? 0
-                : ordered.length - visibleSegments.length;
+                : itemCount - visiblePolls.length - visibleSegments.length;
 
               return (
                 <div
@@ -496,8 +508,10 @@ export function MonthCalendar({
                   aria-label={
                     muted
                       ? getLongDateLabel(day)
-                      : `${getLongDateLabel(day)}, ${daySegments.length} ${
-                          daySegments.length === 1 ? "event" : "events"
+                      : `${getLongDateLabel(day)}, ${daySegments.length + dayPolls.length} ${
+                          daySegments.length + dayPolls.length === 1
+                            ? "calendar item"
+                            : "calendar items"
                         }`
                   }
                   tabIndex={focusedIndex === index ? 0 : -1}
@@ -632,6 +646,16 @@ export function MonthCalendar({
                     ) : dragged || muted ? null : previewRow ? (
                       <div aria-hidden="true" className={styles.daySlot} />
                     ) : null}
+                    {onOpenPoll
+                      ? visiblePolls.map((item) => (
+                          <PollCalendarChip
+                            className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+                            item={item}
+                            key={`${item.poll.id}:${item.day.id}`}
+                            onOpen={onOpenPoll}
+                          />
+                        ))
+                      : null}
                     {visibleSegments.map((segment) => (
                       <EventPopover
                         calendar={calendarsById.get(
@@ -697,13 +721,23 @@ export function MonthCalendar({
                             <div className={styles.monthOverflowHeader}>
                               <h2>{getLongDateLabel(day)}</h2>
                               <p>
-                                {daySegments.length}{" "}
-                                {daySegments.length === 1
-                                  ? "event"
-                                  : "events"}
+                                {daySegments.length + dayPolls.length}{" "}
+                                {daySegments.length + dayPolls.length === 1
+                                  ? "calendar item"
+                                  : "calendar items"}
                               </p>
                             </div>
                             <div className={styles.monthOverflowList}>
+                              {onOpenPoll
+                                ? dayPolls.map((item) => (
+                                    <PollCalendarChip
+                                      className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+                                      item={item}
+                                      key={`${item.poll.id}:${item.day.id}`}
+                                      onOpen={onOpenPoll}
+                                    />
+                                  ))
+                                : null}
                               {daySegments.map((segment) => (
                                 <EventPopover
                                   calendar={calendarsById.get(

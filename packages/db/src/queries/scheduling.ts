@@ -6,6 +6,7 @@ import {
   exists,
   gte,
   inArray,
+  isNotNull,
   isNull,
   or,
 } from "drizzle-orm";
@@ -80,10 +81,15 @@ export function listActivePollsForCalendar(
     .where(
       and(
         access,
-        isNull(schedulingPolls.closedAt),
         or(
-          isNull(schedulingPolls.deadline),
-          gte(schedulingPolls.deadline, new Date()),
+          isNotNull(schedulingPolls.chosenSlotID),
+          and(
+            isNull(schedulingPolls.closedAt),
+            or(
+              isNull(schedulingPolls.deadline),
+              gte(schedulingPolls.deadline, new Date()),
+            ),
+          ),
         ),
       ),
     )

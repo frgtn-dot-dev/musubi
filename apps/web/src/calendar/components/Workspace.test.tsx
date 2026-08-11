@@ -1,4 +1,5 @@
 import type { PageConfigV1 } from "@musubi/types";
+import type { PollCalendar } from "~/api/contracts";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -618,6 +619,58 @@ describe("Workspace", () => {
     expect(
       screen.queryByRole("button", { name: "Next agenda start" }),
     ).toBeNull();
+  });
+
+  it("renders enabled poll days in every calendar view", () => {
+    const poll: PollCalendar = {
+      approximateStartTime: null,
+      chosenSlotID: null,
+      closed: false,
+      closedAt: null,
+      createdAt: new Date("2026-08-01T00:00:00.000Z"),
+      days: [
+        {
+          date: "2026-08-18",
+          end: new Date("2026-08-19T00:00:00.000Z"),
+          id: "slot-1",
+          ifNeeded: 0,
+          no: 0,
+          start: new Date("2026-08-18T00:00:00.000Z"),
+          yes: 2,
+        },
+      ],
+      deadline: null,
+      durationMinutes: 1440,
+      id: "poll-1",
+      respondents: 2,
+      role: "participant",
+      title: "Studio planning",
+      token: "token",
+      url: "https://musubi.test/s/token",
+    };
+    const page = {
+      ...commonProps.pages[0]!,
+      config: { ...commonProps.pages[0]!.config, showPolls: true },
+    };
+    const props = {
+      ...commonProps,
+      date: "2026-08-18",
+      pages: [page],
+      polls: [poll],
+    };
+    const rendered = render(<Workspace {...props} activeView="month" />);
+
+    expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(1);
+    for (const activeView of ["day", "week", "agenda", "multi-week"] as const) {
+      rendered.rerender(<Workspace {...props} activeView={activeView} />);
+      expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(1);
+    }
+    rendered.rerender(
+      <Workspace {...props} activeView="month" pollsError />,
+    );
+    expect(screen.getByRole("status").textContent).toContain(
+      "Scheduling polls could not be loaded",
+    );
   });
 
   it("exposes Agenda as an enabled view", async () => {

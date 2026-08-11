@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+import type { PollCalendar } from "~/api/contracts";
+import { pollAvailability, pollCalendarItems } from "./PollCalendarChip";
+
+function poll(overrides: Partial<PollCalendar> = {}): PollCalendar {
+  return {
+    approximateStartTime: null,
+    chosenSlotID: null,
+    closed: false,
+    closedAt: null,
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
+    days: [],
+    deadline: null,
+    durationMinutes: 1440,
+    id: "poll-1",
+    respondents: 2,
+    role: "participant",
+    title: "Studio planning",
+    token: "token",
+    url: "https://musubi.test/s/token",
+    ...overrides,
+  };
+}
+
+const day = {
+  date: "2026-08-18",
+  end: new Date("2026-08-19T00:00:00.000Z"),
+  id: "day-1",
+  ifNeeded: 0,
+  no: 0,
+  start: new Date("2026-08-18T00:00:00.000Z"),
+  yes: 2,
+};
+
+describe("poll calendar items", () => {
+  it("makes one all-day item per proposed day", () => {
+    const items = pollCalendarItems([poll({ days: [day] })]);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.date).toBe("2026-08-18");
+  });
+
+  it("uses consensus, mixed, unavailable and unanswered tones", () => {
+    const item = pollCalendarItems([poll({ days: [day] })])[0]!;
+    expect(pollAvailability(item).label).toBe("Everyone is available");
+    expect(
+      pollAvailability({ ...item, poll: poll({ chosenSlotID: "day-1" }) }).label,
+    ).toBe("Time picked");
+    expect(
+      pollAvailability({ ...item, day: { ...day, ifNeeded: 1, yes: 1 } }).label,
+    ).toBe("Availability is mixed");
+    expect(
+      pollAvailability({ ...item, day: { ...day, no: 1, yes: 1 } }).label,
+    ).toBe("1 unavailable");
+    expect(
+      pollAvailability({
+        ...item,
+        day: { ...day, yes: 0 },
+        poll: poll({ respondents: 0 }),
+      }).label,
+    ).toBe("No answers yet");
+  });
+});
