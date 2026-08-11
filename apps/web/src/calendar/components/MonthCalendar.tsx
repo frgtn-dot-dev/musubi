@@ -1,9 +1,5 @@
 import type { Calendar, Event, Settings } from "@musubi/types";
-import {
-  eventDayKeys,
-  getMonthGrid,
-  segmentEventsByDay as bucketEventsByDay,
-} from "@musubi/calendar/layout";
+import { eventDayKeys, getMonthGrid } from "@musubi/calendar/layout";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -17,6 +13,7 @@ import {
   getLongDateLabel,
   getWeekdayLabels,
 } from "../calendar-math";
+import { calendarLaneSpans, visibleLaneLimit } from "../all-day-lanes";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
@@ -32,7 +29,6 @@ import type { EventActionHandlers } from "./EventDetailsPopover";
 import {
   PollCalendarChip,
   type PollCalendarItem,
-  pollDayContinues,
 } from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
@@ -254,19 +250,6 @@ export function MonthCalendar({
       ),
     [days, rows],
   );
-  const eventsByDay = useMemo(
-    () =>
-      bucketEventsByDay(
-        events,
-        days[0],
-        new Date(
-          days[days.length - 1]!.getFullYear(),
-          days[days.length - 1]!.getMonth(),
-          days[days.length - 1]!.getDate() + 1,
-        ),
-      ),
-    [days, events],
-  );
   const calendarsById = useMemo(
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars],
@@ -306,21 +289,6 @@ export function MonthCalendar({
     // Row count changes the height each row gets, and with it how many chips
     // fit before "+N more" — a multi-week page re-measures when it grows.
   }, [rows]);
-
-  function pollIsVisibleOnDate(item: PollCalendarItem, dateKey: string) {
-    const day = days.find((candidate) => toDateKey(candidate) === dateKey);
-    if (!day) return false;
-    const inMonth = !dimOutsideMonth || day.getMonth() === anchor.getMonth();
-    if (!inMonth && !showAdjacentDays) return false;
-
-    const dayPolls = pollItems.filter((candidate) => candidate.date === dateKey);
-    const itemCount = (eventsByDay.get(dateKey)?.length ?? 0) + dayPolls.length;
-    const visibleCount =
-      itemCount > eventCapacity ? Math.max(0, eventCapacity - 1) : eventCapacity;
-    return dayPolls
-      .slice(0, visibleCount)
-      .some((candidate) => candidate.poll.id === item.poll.id);
-  }
 
   function focusCell(index: number) {
     const bounded = Math.min(days.length - 1, Math.max(0, index));
@@ -427,13 +395,21 @@ export function MonthCalendar({
               (rowHits(previewRange.from, previewRange.to) ||
                 rowHits(previewRange.originFrom, previewRange.originTo)),
           );
+          const laneSpans = calendarLaneSpans(events, pollItems, week, true);
+          const laneCount = Math.max(
+            0,
+            ...laneSpans.map((span) => span.lane + 1),
+          );
+          const visibleLaneCount = visibleLaneLimit(laneCount, eventCapacity);
 
           return (
           <div className={styles.monthWeek} role="row" key={weekFrom}>
             {week.map((day, dayIndex) => {
               const index = weekIndex * 7 + dayIndex;
               const dateKey = toDateKey(day);
-              const daySegments = eventsByDay.get(dateKey) ?? [];
+              const dayLaneSpans = laneSpans.filter(
+                (span) => span.startCol <= dayIndex && span.endCol >= dayIndex,
+              );
               const inMonth =
                 !dimOutsideMonth || day.getMonth() === anchor.getMonth();
               const isToday = dateKey === todayKey;
@@ -450,39 +426,43 @@ export function MonthCalendar({
                   dateKey >= previewRange.from &&
                   dateKey <= previewRange.to,
               );
-              // The block being dragged is the exception to stepping aside: it
-              // moves into the line the row reserved and so keeps the height it
-              // had, which is what makes the ghost and the preview read as one
-              // bar. Where the preview covers it, the preview is that line.
               const dragged =
                 previewRow && drag
-                  ? daySegments.find(
-                      (segment) => segment.event.id === drag.event.id,
+                  ? dayLaneSpans.find(
+                      (span) =>
+                        span.kind === "event" && span.event.id === drag.event.id,
                     )
                   : undefined;
-              const ordered = dragged
-                ? [
-                    ...(inPreview ? [] : [dragged]),
-                    ...daySegments.filter((segment) => segment !== dragged),
-                  ]
-                : daySegments;
-              const dayPolls = pollItems.filter((item) => item.date === dateKey);
-              // Polls share the measured chip capacity with events. When either
-              // kind overflows, one line stays available for the explicit list.
-              const itemCount = ordered.length + dayPolls.length;
-              const visibleCount =
-                itemCount > eventCapacity
-                  ? Math.max(0, eventCapacity - 1)
-                  : eventCapacity;
-              const visiblePolls = muted
+              const renderedSpans =
+                inPreview && dragged
+                  ? dayLaneSpans.filter((span) => span !== dragged)
+                  : dayLaneSpans;
+              const lastActiveLane = Math.max(
+                -1,
+                ...dayLaneSpans.map((span) => span.lane),
+              );
+              const visibleSlots = muted
                 ? []
-                : dayPolls.slice(0, visibleCount);
-              const visibleSegments = muted
-                ? []
-                : ordered.slice(0, visibleCount - visiblePolls.length);
+                : dragged
+                  ? (inPreview
+                      ? renderedSpans
+                      : [
+                          dragged,
+                          ...renderedSpans.filter((span) => span !== dragged),
+                        ]
+                    ).slice(0, visibleLaneCount)
+                  : Array.from(
+                      {
+                        length: Math.min(visibleLaneCount, lastActiveLane + 1),
+                      },
+                      (_, lane) =>
+                        renderedSpans.find((span) => span.lane === lane) ?? null,
+                    );
+              const itemCount = dayLaneSpans.length;
               const overflow = muted
                 ? 0
-                : itemCount - visiblePolls.length - visibleSegments.length;
+                : dayLaneSpans.filter((span) => span.lane >= visibleLaneCount)
+                    .length;
 
               return (
                 <div
@@ -524,8 +504,8 @@ export function MonthCalendar({
                   aria-label={
                     muted
                       ? getLongDateLabel(day)
-                      : `${getLongDateLabel(day)}, ${daySegments.length + dayPolls.length} ${
-                          daySegments.length + dayPolls.length === 1
+                      : `${getLongDateLabel(day)}, ${itemCount} ${
+                          itemCount === 1
                             ? "calendar item"
                             : "calendar items"
                         }`
@@ -662,66 +642,91 @@ export function MonthCalendar({
                     ) : dragged || muted ? null : previewRow ? (
                       <div aria-hidden="true" className={styles.daySlot} />
                     ) : null}
-                    {onOpenPoll
-                      ? visiblePolls.map((item) => (
+                    {visibleSlots.map((span, lane) => {
+                      if (!span) {
+                        return (
+                          <div
+                            aria-hidden="true"
+                            className={styles.daySlot}
+                            key={`lane:${lane}`}
+                          />
+                        );
+                      }
+                      if (span.kind === "poll") {
+                        const item = span.items.find(
+                          (candidate) => candidate.date === dateKey,
+                        );
+                        return item && onOpenPoll ? (
                           <PollCalendarChip
                             className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-                            continuesAfter={
-                              dayIndex < 6 &&
-                              pollDayContinues(item, 1) &&
-                              pollIsVisibleOnDate(item, shiftDayKey(dateKey, 1))
-                            }
-                            continuesBefore={
-                              dayIndex > 0 &&
-                              pollDayContinues(item, -1) &&
-                              pollIsVisibleOnDate(item, shiftDayKey(dateKey, -1))
-                            }
+                            continuesAfter={dayIndex < span.endCol}
+                            continuesBefore={dayIndex > span.startCol}
                             item={item}
-                            key={`${item.poll.id}:${item.day.id}`}
+                            key={span.id}
                             onOpen={onOpenPoll}
                           />
-                        ))
-                      : null}
-                    {visibleSegments.map((segment) => (
-                      <EventPopover
-                        calendar={calendarsById.get(
-                          eventHomeCalendarId(segment.event) ?? "",
-                        )}
-                        calendars={calendars}
-                        continuesAfter={segment.continuesAfter}
-                        continuesBefore={segment.continuesBefore}
-                        ghost={drag?.event.id === segment.event.id}
-                        event={segment.event}
-                        pending={
-                          busyEventId !== undefined &&
-                          (segment.event.id === busyEventId ||
-                            segment.event.id.startsWith(`${busyEventId}_`))
-                        }
-                        key={segment.event.id}
-                        onBeginDrag={
-                          onMoveEventToDate &&
-                          canEditEvent(
-                            eventActions.getEventMaster(segment.event),
-                            calendars,
-                          )
-                            ? (pointerEvent) => {
-                                if (pointerEvent.button !== 0) return;
-                                beginMonthDrag({
-                                  event: segment.event,
-                                  originDayKey: dateKey,
-                                  pointerId: pointerEvent.pointerId,
-                                  x: pointerEvent.clientX,
-                                  y: pointerEvent.clientY,
-                                });
-                              }
-                            : undefined
-                        }
-                        showLabel={!segment.continuesBefore || dayIndex === 0}
-                        timeFormat={timeFormat}
-                        weekStartsOn={weekStartsOn}
-                        {...eventActions}
-                      />
-                    ))}
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            className={styles.daySlot}
+                            key={`lane:${lane}`}
+                          />
+                        );
+                      }
+                      const event = span.event;
+                      const labelColumn = Array.from(
+                        { length: span.endCol - span.startCol + 1 },
+                        (_, offset) => span.startCol + offset,
+                      ).find((column) => {
+                        const labelDay = week[column];
+                        return Boolean(
+                          labelDay &&
+                            (showAdjacentDays ||
+                              !dimOutsideMonth ||
+                              labelDay.getMonth() === anchor.getMonth()),
+                        );
+                      });
+                      return (
+                        <EventPopover
+                          calendar={calendarsById.get(
+                            eventHomeCalendarId(event) ?? "",
+                          )}
+                          calendars={calendars}
+                          continuesAfter={event.isAllDay && dayIndex < span.endCol}
+                          continuesBefore={event.isAllDay && dayIndex > span.startCol}
+                          ghost={drag?.event.id === event.id}
+                          event={event}
+                          pending={
+                            busyEventId !== undefined &&
+                            (event.id === busyEventId ||
+                              event.id.startsWith(`${busyEventId}_`))
+                          }
+                          key={span.id}
+                          onBeginDrag={
+                            onMoveEventToDate &&
+                            canEditEvent(
+                              eventActions.getEventMaster(event),
+                              calendars,
+                            )
+                              ? (pointerEvent) => {
+                                  if (pointerEvent.button !== 0) return;
+                                  beginMonthDrag({
+                                    event,
+                                    originDayKey: dateKey,
+                                    pointerId: pointerEvent.pointerId,
+                                    x: pointerEvent.clientX,
+                                    y: pointerEvent.clientY,
+                                  });
+                                }
+                              : undefined
+                          }
+                          showLabel={dayIndex === (labelColumn ?? span.startCol)}
+                          timeFormat={timeFormat}
+                          weekStartsOn={weekStartsOn}
+                          {...eventActions}
+                        />
+                      );
+                    })}
                     {overflow > 0 ? (
                       <Popover>
                         <PopoverTrigger asChild>
@@ -747,44 +752,51 @@ export function MonthCalendar({
                             <div className={styles.monthOverflowHeader}>
                               <h2>{getLongDateLabel(day)}</h2>
                               <p>
-                                {daySegments.length + dayPolls.length}{" "}
-                                {daySegments.length + dayPolls.length === 1
+                                {itemCount}{" "}
+                                {itemCount === 1
                                   ? "calendar item"
                                   : "calendar items"}
                               </p>
                             </div>
                             <div className={styles.monthOverflowList}>
-                              {onOpenPoll
-                                ? dayPolls.map((item) => (
-                                    <PollCalendarChip
-                                      className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-                                      item={item}
-                                      key={`${item.poll.id}:${item.day.id}`}
-                                      onOpen={onOpenPoll}
-                                    />
-                                  ))
-                                : null}
-                              {daySegments.map((segment) => (
-                                <EventPopover
-                                  calendar={calendarsById.get(
-                                    eventHomeCalendarId(segment.event) ?? "",
-                                  )}
-                                  calendars={calendars}
-                                  event={segment.event}
-                                  key={segment.event.id}
-                                  pending={
-                                    busyEventId !== undefined &&
-                                    (segment.event.id === busyEventId ||
-                                      segment.event.id.startsWith(
-                                        `${busyEventId}_`,
-                                      ))
-                                  }
-                                  showLabel
-                                  timeFormat={timeFormat}
-                                  weekStartsOn={weekStartsOn}
-                                  {...eventActions}
-                                />
-                              ))}
+                              {dayLaneSpans.flatMap((span) => {
+                                if (span.kind === "poll") {
+                                  const item = span.items.find(
+                                    (candidate) => candidate.date === dateKey,
+                                  );
+                                  return item && onOpenPoll
+                                    ? [
+                                        <PollCalendarChip
+                                          className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+                                          item={item}
+                                          key={span.id}
+                                          onOpen={onOpenPoll}
+                                        />,
+                                      ]
+                                    : [];
+                                }
+                                return [
+                                  <EventPopover
+                                    calendar={calendarsById.get(
+                                      eventHomeCalendarId(span.event) ?? "",
+                                    )}
+                                    calendars={calendars}
+                                    event={span.event}
+                                    key={span.id}
+                                    pending={
+                                      busyEventId !== undefined &&
+                                      (span.event.id === busyEventId ||
+                                        span.event.id.startsWith(
+                                          `${busyEventId}_`,
+                                        ))
+                                    }
+                                    showLabel
+                                    timeFormat={timeFormat}
+                                    weekStartsOn={weekStartsOn}
+                                    {...eventActions}
+                                  />,
+                                ];
+                              })}
                             </div>
                           </PopoverContent>
                       </Popover>

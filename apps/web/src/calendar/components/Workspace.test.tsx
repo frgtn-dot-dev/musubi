@@ -621,7 +621,8 @@ describe("Workspace", () => {
     ).toBeNull();
   });
 
-  it("renders enabled poll days in every calendar view", () => {
+  it("renders enabled poll days in every calendar view", async () => {
+    const user = userEvent.setup();
     const poll: PollCalendar = {
       approximateStartTime: null,
       chosenSlotID: null,
@@ -671,6 +672,41 @@ describe("Workspace", () => {
     expect(screen.getByRole("status").textContent).toContain(
       "Scheduling polls could not be loaded",
     );
+
+    const crowdedPolls = Array.from({ length: 4 }, (_, index) => ({
+      ...poll,
+      days: [{ ...poll.days[0]!, id: `slot-${index}` }],
+      id: `poll-${index}`,
+      title: `Poll ${index}`,
+      token: `token-${index}`,
+    }));
+    rendered.rerender(
+      <Workspace
+        {...props}
+        activeView="week"
+        polls={crowdedPolls}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "2 more all-day items" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Hidden all-day items" }),
+    ).not.toBeNull();
+    await user.keyboard("{Escape}");
+    rendered.rerender(
+      <Workspace
+        {...props}
+        activeView="multi-week"
+        polls={crowdedPolls}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /2 more all-day items on/ }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: /hidden all-day items/ }),
+    ).not.toBeNull();
   });
 
   it("exposes Agenda as an enabled view", async () => {

@@ -3,7 +3,6 @@ import {
 	addDays,
 	bucketEventsByDay,
 	dayKey,
-	getAllDaySpans,
 	getDaySegments,
 	isSameDay,
 	startOfDay,
@@ -20,7 +19,9 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { calendarLaneSpans, visibleLaneLimit } from "../all-day-lanes";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { useLayerDismissGuard } from "../layer-focus";
 import { getReadableEventTextColor } from "../event-color";
 import {
@@ -51,10 +52,10 @@ import {
 	EventDetailsPopover,
 	type EventActionHandlers,
 } from "./EventDetailsPopover";
+import { EventPopover } from "./EventPopover";
 import {
 	PollCalendarChip,
 	type PollCalendarItem,
-	pollDayContinues,
 } from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
@@ -415,22 +416,31 @@ export function TimeGridView({
 		[calendars],
 	);
 	const allDaySpans = useMemo(
-		() => getAllDaySpans(events, days),
-		[days, events],
+		() => calendarLaneSpans(events, pollItems, days),
+		[days, events, pollItems],
 	);
-	const visibleAllDaySpans = allDaySpans.filter(
-		(span) => span.lane < ALL_DAY_LANES,
+	const allDayLaneTotal = Math.max(
+		0,
+		...allDaySpans.map((span) => span.lane + 1),
 	);
-	const hiddenAllDayCount = allDaySpans.length - visibleAllDaySpans.length;
-	const eventLaneCount = Math.min(
-		Math.max(...allDaySpans.map((span) => span.lane + 1), 0),
+	const visibleAllDayLaneCount = visibleLaneLimit(
+		allDayLaneTotal,
 		ALL_DAY_LANES,
 	);
-	const pollsByDay = days.map((day) =>
-		pollItems.filter((item) => item.date === dayKey(day)),
+	const visibleAllDaySpans = allDaySpans.filter(
+		(span) => span.lane < visibleAllDayLaneCount,
 	);
-	const pollLaneCount = Math.max(0, ...pollsByDay.map((items) => items.length));
-	const allDayLaneCount = Math.max(1, eventLaneCount + pollLaneCount);
+	const hiddenAllDaySpans = allDaySpans.filter(
+		(span) => span.lane >= visibleAllDayLaneCount,
+	);
+	const hiddenAllDayCount = hiddenAllDaySpans.length;
+	const allDayLaneCount = Math.max(
+		1,
+		Math.min(
+			allDayLaneTotal,
+			ALL_DAY_LANES,
+		),
+	);
 	const [now, setNow] = useState(() => new Date());
 	const hasToday = days.some((day) => isSameDay(day, now));
 	const dayMode = view === "day";
@@ -743,20 +753,44 @@ export function TimeGridView({
 				<div className={styles.timeGridAllDay}>
 					<span className={styles.timeGridAllDayLabel}>All day</span>
 					<div className={styles.timeGridAllDayTrack}>
-						{visibleAllDaySpans.map((span) => {
+						{visibleAllDaySpans.flatMap((span) => {
+							if (span.kind === "poll") {
+								if (!onOpenPoll) return [];
+								return span.items.flatMap((item) => {
+									const dayIndex = days.findIndex(
+										(day) => dayKey(day) === item.date,
+									);
+									if (dayIndex < 0) return [];
+									return [
+										<PollCalendarChip
+											className={styles.timeGridAllDayEvent}
+											continuesAfter={dayIndex < span.endCol}
+											continuesBefore={dayIndex > span.startCol}
+											item={item}
+											key={`${span.id}:${item.day.id}`}
+											onOpen={onOpenPoll}
+											style={{
+												left: `${(dayIndex / days.length) * 100}%`,
+												top: `${span.lane * 24 + 4}px`,
+												width: `${100 / days.length}%`,
+											}}
+										/>,
+									];
+								});
+							}
+
 							const calendar = calendarsById.get(
 								eventHomeCalendarId(span.event) ?? "",
 							);
 							const eventColor = calendar?.color ?? span.event.color;
-
-							return (
+							return [
 								<EventDetailsPopover
 									anchorInsideTrigger={dayMode}
 									calendar={calendar}
 									calendars={calendars}
 									collisionBoundary={detailBoundary}
 									event={span.event}
-									key={span.event.id}
+									key={span.id}
 									side={dayMode ? "right" : "bottom"}
 									timeFormat={timeFormat}
 									weekStartsOn={weekStartsOn}
@@ -785,45 +819,71 @@ export function TimeGridView({
 									>
 										{span.event.title}
 									</button>
-								</EventDetailsPopover>
-							);
+								</EventDetailsPopover>,
+							];
 						})}
-						{onOpenPoll
-							? pollsByDay.flatMap((items, dayIndex) =>
-									items.map((item, lane) => (
-										<PollCalendarChip
-											className={styles.timeGridAllDayEvent}
-											continuesAfter={
-												dayIndex < days.length - 1 &&
-												pollDayContinues(item, 1) &&
-												pollsByDay[dayIndex + 1]?.[lane]?.poll.id ===
-													item.poll.id
-											}
-											continuesBefore={
-												dayIndex > 0 &&
-												pollDayContinues(item, -1) &&
-												pollsByDay[dayIndex - 1]?.[lane]?.poll.id ===
-													item.poll.id
-											}
-											item={item}
-											key={`${item.poll.id}:${item.day.id}`}
-											onOpen={onOpenPoll}
-											style={{
-												left: `${(dayIndex / days.length) * 100}%`,
-												top: `${(eventLaneCount + lane) * 24 + 4}px`,
-												width: `${100 / days.length}%`,
-											}}
-										/>
-									)),
-								)
-							: null}
 						{hiddenAllDayCount > 0 ? (
-							<span
-								className={styles.timeGridAllDayMore}
-								style={{ top: `${Math.max(0, eventLaneCount - 1) * 24 + 8}px` }}
-							>
-								+{hiddenAllDayCount}
-							</span>
+							<Popover>
+								<PopoverTrigger asChild>
+									<button
+										aria-label={`${hiddenAllDayCount} more all-day ${
+											hiddenAllDayCount === 1 ? "item" : "items"
+										}`}
+										className={styles.timeGridAllDayMore}
+										style={{
+											top: `${Math.max(0, allDayLaneCount - 1) * 24 + 8}px`,
+										}}
+										type="button"
+									>
+										+{hiddenAllDayCount}
+									</button>
+								</PopoverTrigger>
+								<PopoverContent
+									align="end"
+									aria-label="Hidden all-day items"
+									className={styles.monthOverflowPopover}
+									collisionPadding={12}
+									role="dialog"
+									side="bottom"
+									sideOffset={8}
+								>
+									<div className={styles.monthOverflowList}>
+										{hiddenAllDaySpans.flatMap((span) => {
+											if (span.kind === "poll") {
+												const item = span.items.find((candidate) =>
+													days.some(
+														(day) => dayKey(day) === candidate.date,
+													),
+												);
+												return item && onOpenPoll
+													? [
+															<PollCalendarChip
+																className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+																item={item}
+																key={span.id}
+																onOpen={onOpenPoll}
+															/>,
+														]
+													: [];
+											}
+											return [
+												<EventPopover
+													calendar={calendarsById.get(
+														eventHomeCalendarId(span.event) ?? "",
+													)}
+													calendars={calendars}
+													event={span.event}
+													key={span.id}
+													showLabel
+													timeFormat={timeFormat}
+													weekStartsOn={weekStartsOn}
+													{...eventActions}
+												/>,
+											];
+										})}
+									</div>
+								</PopoverContent>
+							</Popover>
 						) : null}
 					</div>
 				</div>

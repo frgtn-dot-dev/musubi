@@ -9,6 +9,29 @@ export type AllDaySpan<T extends ICalendarEventBase> = {
   startCol: number;
 };
 
+export function assignSpanLanes<T extends { endCol: number; lane: number; startCol: number }>(
+  spans: T[],
+  orderAfterStart: (left: T, right: T) => number = (left, right) =>
+    right.endCol - right.startCol - (left.endCol - left.startCol),
+): T[] {
+  spans.sort(
+    (left, right) =>
+      left.startCol - right.startCol || orderAfterStart(left, right),
+  );
+
+  const laneEnds: number[] = [];
+  for (const span of spans) {
+    let lane = laneEnds.findIndex((end) => end < span.startCol);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(-1);
+    }
+    laneEnds[lane] = span.endCol;
+    span.lane = lane;
+  }
+  return spans;
+}
+
 // Continuous all-day bars within one visible row. Events that cross a row edge
 // are clipped to that row and receive a lane independently in the next row.
 export function getAllDaySpans<T extends ICalendarEventBase>(
@@ -51,24 +74,10 @@ export function getAllDaySpans<T extends ICalendarEventBase>(
     });
   }
 
-  spans.sort(
+  return assignSpanLanes(
+    spans,
     (left, right) =>
-      left.startCol - right.startCol || right.endCol - left.endCol,
+      right.endCol - right.startCol - (left.endCol - left.startCol) ||
+      String(left.event.id).localeCompare(String(right.event.id)),
   );
-
-  const laneEnds: number[] = [];
-
-  for (const span of spans) {
-    let lane = laneEnds.findIndex((end) => end < span.startCol);
-
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(-1);
-    }
-
-    laneEnds[lane] = span.endCol;
-    span.lane = lane;
-  }
-
-  return spans;
 }

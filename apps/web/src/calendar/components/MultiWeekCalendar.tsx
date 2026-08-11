@@ -1,16 +1,18 @@
 import { bucketEventsByDay, getDaySegments } from "@musubi/calendar/layout";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { calendarLaneSpans, visibleLaneLimit } from "../all-day-lanes";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
 import { toDateKey } from "../date-key";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 
 import { overlapPlacement } from "../time-grid-math";
 import type { EventActionHandlers } from "./EventDetailsPopover";
 import { EventDetailsPopover } from "./EventDetailsPopover";
+import { EventPopover } from "./EventPopover";
 import {
   PollCalendarChip,
   type PollCalendarItem,
-  pollDayContinues,
 } from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
@@ -21,6 +23,7 @@ import styles from "./workspace.module.css";
  * into rows — which is what "automatic matrix by viewport" means in practice.
  */
 const MIN_BLOCK_WIDTH_PX = 260;
+const MULTI_WEEK_EVENT_CAPACITY = 3;
 /**
  * The hours a block shows. Its minimum height lives in CSS (`.weekBlock`). A full day squeezed into 190px is a smear; a working
  * window is what makes twenty weeks comparable at a glance. Page-configurable
@@ -140,33 +143,19 @@ function WeekBlock({
   weekStartsOn: Settings["weekStartsOn"];
 }) {
   const first = days[0]!;
-
-  function pollSharesLane(
-    item: PollCalendarItem,
-    itemIndex: number,
-    dayIndex: number,
-    offset: -1 | 1,
-  ) {
-    const adjacentDay = days[dayIndex + offset];
-    if (!adjacentDay || !pollDayContinues(item, offset)) return false;
-    const adjacentKey = toDateKey(adjacentDay);
-    const adjacentPolls = pollItems.filter(
-      (candidate) => candidate.date === adjacentKey,
-    );
-    const adjacentIndex = adjacentPolls.findIndex(
-      (candidate) => candidate.poll.id === item.poll.id,
-    );
-    if (adjacentIndex < 0) return false;
-    const currentAllDayCount = (
-      eventsByDay.get(item.date) ?? []
-    ).filter((event) => event.isAllDay).length;
-    const adjacentAllDayCount = (
-      eventsByDay.get(adjacentKey) ?? []
-    ).filter((event) => event.isAllDay).length;
-    return (
-      currentAllDayCount + itemIndex === adjacentAllDayCount + adjacentIndex
-    );
-  }
+  const weekEvents = [
+    ...new Map(
+      days.flatMap((day) =>
+        (eventsByDay.get(toDateKey(day)) ?? []).map((event) => [event.id, event]),
+      ),
+    ).values(),
+  ];
+  const laneSpans = calendarLaneSpans(weekEvents, pollItems, days);
+  const laneCount = Math.max(0, ...laneSpans.map((span) => span.lane + 1));
+  const visibleLaneCount = visibleLaneLimit(
+    laneCount,
+    MULTI_WEEK_EVENT_CAPACITY,
+  );
 
   return (
     <section
@@ -213,10 +202,15 @@ function WeekBlock({
           // Same segmentation and overlap columns as the real week grid, so a
           // busy Tuesday looks busy in both.
           const segments = getDaySegments(eventsByDay.get(dayKey) ?? [], day);
-          const allDay = (eventsByDay.get(dayKey) ?? []).filter(
-            (event) => event.isAllDay,
+          const dayLaneSpans = laneSpans.filter(
+            (span) => span.startCol <= dayIndex && span.endCol >= dayIndex,
           );
-          const dayPolls = pollItems.filter((item) => item.date === dayKey);
+          const visibleLaneSpans = dayLaneSpans.filter(
+            (span) => span.lane < visibleLaneCount,
+          );
+          const hiddenLaneSpans = dayLaneSpans.filter(
+            (span) => span.lane >= visibleLaneCount,
+          );
 
           return (
             <div
@@ -224,32 +218,105 @@ function WeekBlock({
               data-today={dayKey === todayKey ? "" : undefined}
               key={dayKey}
             >
-              {allDay.map((event) => (
-                <BlockEvent
-                  allDay
-                  busyEventId={busyEventId}
-                  calendars={calendars}
-                  event={event}
-                  key={`all-${event.id}`}
-                  placement={{ left: "0%", width: "calc(100% - 2px)" }}
-                  timeFormat={timeFormat}
-                  weekStartsOn={weekStartsOn}
-                  {...eventActions}
-                />
-              ))}
-              {onOpenPoll
-                ? dayPolls.map((item, index) => (
-                    <PollCalendarChip
-                      className={styles.weekBlockAllDay}
-                      continuesAfter={pollSharesLane(item, index, dayIndex, 1)}
-                      continuesBefore={pollSharesLane(item, index, dayIndex, -1)}
-                      item={item}
-                      key={`${item.poll.id}:${item.day.id}`}
-                      onOpen={onOpenPoll}
-                      style={{ top: `${1 + (allDay.length + index) * 12}px` }}
-                    />
-                  ))
-                : null}
+              {visibleLaneSpans.flatMap((span) => {
+                const top = `${1 + span.lane * 12}px`;
+                if (span.kind === "event") {
+                  return [
+                    <BlockEvent
+                      allDay
+                      busyEventId={busyEventId}
+                      calendars={calendars}
+                      event={span.event}
+                      key={`${span.id}:${dayKey}`}
+                      placement={{ left: "0%", width: "calc(100% - 2px)" }}
+                      style={{ top }}
+                      timeFormat={timeFormat}
+                      weekStartsOn={weekStartsOn}
+                      {...eventActions}
+                    />,
+                  ];
+                }
+                if (!onOpenPoll) return [];
+                const item = span.items.find((candidate) => candidate.date === dayKey);
+                return item
+                  ? [
+                      <PollCalendarChip
+                        className={styles.weekBlockAllDay}
+                        continuesAfter={dayIndex < span.endCol}
+                        continuesBefore={dayIndex > span.startCol}
+                        item={item}
+                        key={`${span.id}:${item.day.id}`}
+                        onOpen={onOpenPoll}
+                        style={{ top }}
+                      />,
+                    ]
+                  : [];
+              })}
+              {hiddenLaneSpans.length > 0 ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      aria-label={`${hiddenLaneSpans.length} more all-day ${
+                        hiddenLaneSpans.length === 1 ? "item" : "items"
+                      } on ${day.toLocaleDateString("en", {
+                        day: "numeric",
+                        month: "long",
+                      })}`}
+                      className={styles.weekBlockMore}
+                      style={{ top: `${1 + visibleLaneCount * 12}px` }}
+                      type="button"
+                    >
+                      +{hiddenLaneSpans.length}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="center"
+                    aria-label={`${day.toLocaleDateString("en", {
+                      day: "numeric",
+                      month: "long",
+                    })} hidden all-day items`}
+                    className={styles.monthOverflowPopover}
+                    collisionPadding={12}
+                    role="dialog"
+                    side="bottom"
+                    sideOffset={8}
+                  >
+                    <div className={styles.monthOverflowList}>
+                      {hiddenLaneSpans.flatMap((span) => {
+                        if (span.kind === "poll") {
+                          const item = span.items.find(
+                            (candidate) => candidate.date === dayKey,
+                          );
+                          return item && onOpenPoll
+                            ? [
+                                <PollCalendarChip
+                                  className={`${styles.eventChip} ${styles.eventChipAllDay}`}
+                                  item={item}
+                                  key={span.id}
+                                  onOpen={onOpenPoll}
+                                />,
+                              ]
+                            : [];
+                        }
+                        return [
+                          <EventPopover
+                            calendar={calendars.find((calendar) =>
+                              span.event.calendars.includes(calendar.id),
+                            )}
+                            calendars={calendars}
+                            event={span.event}
+                            key={span.id}
+                            showLabel
+                            timeFormat={timeFormat}
+                            weekStartsOn={weekStartsOn}
+                            {...eventActions}
+                          />,
+                        ];
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
               {segments.map((segment) => {
                 // Clipped to the visible window rather than dropped: an event
                 // that starts at 06:00 still has to be visible at the top edge,

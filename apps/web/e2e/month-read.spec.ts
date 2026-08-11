@@ -7186,7 +7186,16 @@ test("shows participant polls as striped all-day calendar items", async ({
 				"Reference event",
 				"personal",
 				"#b3492f",
+				"2026-08-17T00:00:00.000Z",
 				"2026-08-18T00:00:00.000Z",
+				{ isAllDay: true },
+			),
+			event(
+				"later-reference",
+				"Later reference",
+				"personal",
+				"#b3492f",
+				"2026-08-19T00:00:00.000Z",
 				"2026-08-19T00:00:00.000Z",
 				{ isAllDay: true },
 			),
@@ -7303,15 +7312,24 @@ test("shows participant polls as striped all-day calendar items", async ({
 		const nextPoll = document.querySelectorAll<HTMLElement>(
 			'[data-poll-calendar="poll-calendar-1"]',
 		)[1]!;
+		const later = document.querySelector<HTMLElement>(
+			'[data-event-id="later-reference"]',
+		)!;
 		const pollBox = poll.getBoundingClientRect();
+		const nextPollBox = nextPoll.getBoundingClientRect();
 		return {
 			eventHeight: event.getBoundingClientRect().height,
-			joinGap: nextPoll.getBoundingClientRect().left - pollBox.right,
+			joinGap: nextPollBox.left - pollBox.right,
+			laterTop: later.getBoundingClientRect().top,
+			nextPollTop: nextPollBox.top,
 			pollHeight: pollBox.height,
+			pollTop: pollBox.top,
 		};
 	});
 	expect(geometry.pollHeight).toBe(geometry.eventHeight);
 	expect(geometry.joinGap).toBeLessThanOrEqual(0);
+	expect(geometry.pollTop).toBe(geometry.nextPollTop);
+	expect(geometry.laterTop).toBeLessThan(geometry.nextPollTop);
 
 	await chips.first().click();
 	const dialog = page.getByRole("dialog", { name: "Studio planning" });

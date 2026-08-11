@@ -949,6 +949,9 @@
 	position: absolute;
 	right: 5px;
 	bottom: auto;
+	padding: 0 2px;
+	border: 0;
+	background: var(--surface-panel);
 	color: var(--text-muted);
 	font-size: 0.61rem;
 }
@@ -2311,6 +2314,20 @@
 	--poll-join: 1px;
 	top: 1px;
 	height: 11px;
+}
+
+.weekBlockMore {
+	position: absolute;
+	z-index: 2;
+	right: 2px;
+	height: 11px;
+	padding: 0 2px;
+	border: 0;
+	border-radius: 2px;
+	background: var(--surface-panel);
+	color: var(--text-secondary);
+	font-size: 9px;
+	line-height: 1;
 }
 
 @media (max-width: 599px) {
