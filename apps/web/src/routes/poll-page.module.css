@@ -16,7 +16,7 @@
 .page {
 	position: relative;
 	display: grid;
-	align-content: start;
+	align-content: center;
 	justify-items: center;
 	gap: var(--space-4);
 	min-height: 100dvh;
@@ -60,7 +60,13 @@
 .answers {
 	display: grid;
 	min-width: 0;
+	grid-template-columns: minmax(0, 1fr) auto;
 	gap: var(--space-4);
+}
+
+.answers > :first-child,
+.answers > form {
+	grid-column: 1 / -1;
 }
 
 .answers > form {
@@ -69,7 +75,8 @@
 }
 
 .answers > p {
-	justify-content: center;
+	align-self: center;
+	justify-content: flex-start;
 }
 
 /* The shared footer link is 12px accent-coloured text. The accent token misses
@@ -120,8 +127,9 @@
 
 .send {
 	display: grid;
+	align-self: center;
 	gap: var(--space-2);
-	justify-items: center;
+	justify-items: end;
 }
 
 /* Why the grid will not take an answer, or when it will stop. Quieter than the
@@ -161,6 +169,7 @@
 
 @media (max-width: 599px) {
 	.page {
+		align-content: start;
 		padding: calc(var(--space-8) + var(--space-8) + var(--space-2))
 			var(--space-3) var(--space-5);
 	}

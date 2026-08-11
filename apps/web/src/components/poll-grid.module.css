@@ -82,6 +82,10 @@
   border-bottom: 0;
 }
 
+.grid tbody tr {
+  height: 44px;
+}
+
 .corner,
 .rowHead {
   position: sticky;
@@ -94,20 +98,25 @@
   background: var(--surface-raised);
   color: var(--text-primary);
   font-weight: 500;
-  text-align: left;
+  text-align: center;
   text-overflow: ellipsis;
 }
 
 .personRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-1);
 }
 
 .personName {
+  grid-column: 2;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.personRow > :last-child:not(.personName) {
+  justify-self: end;
 }
 
 .corner {
@@ -147,7 +156,7 @@
   font-weight: 400;
 }
 
-.cell {
+.grid .cell {
   padding: 0;
 }
 
@@ -266,6 +275,7 @@
 .nameInput {
   width: 100%;
   min-width: 0;
+  height: 30px;
   padding: 4px 6px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);

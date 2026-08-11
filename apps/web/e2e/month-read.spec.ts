@@ -7776,12 +7776,16 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 						cardBox.width / 2 -
 						(titleBox.left + titleBox.width / 2),
 				),
+				pageCenterX: Math.abs(cardBox.left + cardBox.width / 2 - innerWidth / 2),
+				pageCenterY: Math.abs(cardBox.top + cardBox.height / 2 - innerHeight / 2),
 				textAlign: getComputedStyle(heading as HTMLElement).textAlign,
 			};
 		},
 		await title.elementHandle(),
 	);
 	expect(alignment.centerDelta).toBeLessThanOrEqual(1);
+	expect(alignment.pageCenterX).toBeLessThanOrEqual(1);
+	expect(alignment.pageCenterY).toBeLessThanOrEqual(32);
 	expect(alignment.textAlign).toBe("center");
 
 	// Forty-four columns: the table has to scroll inside its box and take nothing
@@ -7791,11 +7795,11 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	expect(
 		await scroller.evaluate((node) => node.scrollWidth > node.clientWidth),
 	).toBe(true);
-	const document = await page.evaluate(() => ({
+	const documentWidth = await page.evaluate(() => ({
 		client: window.document.documentElement.clientWidth,
 		scroll: window.document.documentElement.scrollWidth,
 	}));
-	expect(document.scroll).toBeLessThanOrEqual(document.client);
+	expect(documentWidth.scroll).toBeLessThanOrEqual(documentWidth.client);
 
 	await page.setViewportSize({ height: 844, width: 390 });
 	const themeBox = await page
@@ -7943,11 +7947,35 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await page.getByRole("button", { name: /18 Aug.*you answered yes/ }).click();
 	await page.getByRole("button", { name: "No", exact: true }).click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
-	await expect(
-		page.getByRole("button", { name: "Answers saved" }),
-	).toBeDisabled();
+	const savedButton = page.getByRole("button", { name: "Answers saved" });
+	await expect(savedButton).toBeDisabled();
 	expect(voteAttempts).toHaveLength(2);
-	await expect(page.getByRole("row", { name: /^Zoe/ })).toBeVisible();
+	const zoe = page.getByRole("row", { name: /^Zoe/ });
+	await expect(zoe).toBeVisible();
+
+	const rowHeights = await Promise.all(
+		[mika, zoe].map(async (row) => (await row.boundingBox())!.height),
+	);
+	expect(Math.max(...rowHeights) - Math.min(...rowHeights)).toBeLessThanOrEqual(
+		0.5,
+	);
+	for (const row of [mika, zoe]) {
+		expect(await row.locator("th").evaluate((cell) => getComputedStyle(cell).textAlign)).toBe(
+			"center",
+		);
+	}
+
+	const legend = savedButton.locator("xpath=../preceding-sibling::p[1]");
+	const legendBox = await legend.boundingBox();
+	const buttonBox = await savedButton.boundingBox();
+	expect(
+		Math.abs(
+			legendBox!.y +
+				legendBox!.height / 2 -
+				(buttonBox!.y + buttonBox!.height / 2),
+		),
+	).toBeLessThanOrEqual(1);
+	expect(legendBox!.x).toBeLessThan(buttonBox!.x);
 
 	// A table of coloured marks is exactly where contrast and headers go wrong.
 	await expectNoAccessibilityViolations(page);
