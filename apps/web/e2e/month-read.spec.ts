@@ -7395,6 +7395,7 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 			},
 		],
 		title: "Team day",
+		viewerRole: "organizer",
 	});
 	await page.route("**/api/v1/scheduling/polls", (route) =>
 		respond(route, [poll]),
@@ -7428,6 +7429,7 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 
 	// The same authenticated identity owns the row on the public link too.
 	await page.goto(`/s/${POLL_TOKEN}`);
+	await expect(page.getByText("You created this poll.")).toBeVisible();
 	const ownAnswer = page.getByRole("button", { name: /10 Aug.*you answered yes/ });
 	await ownAnswer.click();
 	await page

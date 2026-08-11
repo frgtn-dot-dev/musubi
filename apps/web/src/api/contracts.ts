@@ -191,6 +191,8 @@ export const PollSchema = z.object({
   respondents: z.number().default(0),
   slots: z.array(PollSlotSchema).default([]),
   title: z.string(),
+  /** Server-authenticated identity for this link; ownership is never inferred in the browser. */
+  viewerRole: z.enum(["organizer", "participant"]).nullish(),
 });
 
 export type Poll = z.infer<typeof PollSchema>;

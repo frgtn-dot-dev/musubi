@@ -6,6 +6,7 @@ import {
   pollCalendarProjection,
   pollProjection,
   pollSlotEventTiming,
+  pollViewerRole,
 } from "./scheduling";
 
 assert.equal(parseApproximateStartTime(undefined), null);
@@ -26,6 +27,48 @@ const POLL = {
   durationMinutes: 60,
   title: "Studio planning",
 };
+
+const OWNER = { ownerEmail: "owner@example.com", ownerID: "owner-1" };
+assert.equal(
+  pollViewerRole(OWNER, {
+    email: "somebody@example.com",
+    emailVerified: true,
+    id: "owner-1",
+  }),
+  "organizer",
+);
+assert.equal(
+  pollViewerRole(OWNER, {
+    email: " OWNER@EXAMPLE.COM ",
+    emailVerified: true,
+    id: "another-id",
+  }),
+  "organizer",
+);
+assert.equal(
+  pollViewerRole(OWNER, {
+    email: "participant@example.com",
+    emailVerified: true,
+    id: "participant-1",
+  }),
+  "participant",
+);
+assert.equal(
+  pollViewerRole(OWNER, {
+    email: "owner@example.com",
+    emailVerified: false,
+    id: "owner-1",
+  }),
+  "organizer",
+);
+assert.equal(
+  pollViewerRole(OWNER, {
+    email: "participant@example.com",
+    emailVerified: false,
+    id: "participant-1",
+  }),
+  undefined,
+);
 
 const SLOTS = [
   {
@@ -91,6 +134,7 @@ assert.deepEqual(
     "respondents",
     "slots",
     "title",
+    "viewerRole",
   ]);
 
   assert.equal(projection.approximateStartTime, "18:30");
@@ -126,7 +170,14 @@ assert.deepEqual(
 
   // Signed in: their own row is named, so the grid can show it once and let them
   // edit it rather than printing them twice.
-  const asAdam = pollProjection(POLL, SLOTS, votes, "adam@example.com");
+  const asAdam = pollProjection(
+    POLL,
+    SLOTS,
+    votes,
+    "adam@example.com",
+    "participant",
+  );
+  assert.equal(asAdam.viewerRole, "participant");
   assert.equal(asAdam.mineID, "2");
   assert.deepEqual(asAdam.mine, { "slot-tue": "if-needed", "slot-wed": "yes" });
 
@@ -147,6 +198,7 @@ assert.deepEqual(
     ],
     "new@example.com",
   );
+  assert.equal(withNewVisitor.viewerRole, null);
   assert.equal(withNewVisitor.mineID, "4");
   assert.deepEqual(withNewVisitor.mine, {});
   assert.deepEqual(withNewVisitor.people[3], {

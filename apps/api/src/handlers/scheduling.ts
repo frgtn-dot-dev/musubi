@@ -83,6 +83,30 @@ async function assertPollOwner(poll: SchedulingPollRow, req: Request) {
   throw new ForbiddenError("Only the organizer can change this poll...");
 }
 
+export function pollViewerRole(
+  poll: Pick<SchedulingPollRow, "ownerEmail" | "ownerID">,
+  viewer: { email: string; emailVerified: boolean; id: string },
+) {
+  if (poll.ownerID === viewer.id) return "organizer" as const;
+  if (!viewer.emailVerified) return undefined;
+  const email = viewer.email.trim().toLowerCase();
+  return poll.ownerEmail === email
+    ? ("organizer" as const)
+    : ("participant" as const);
+}
+
+function authenticatedPollViewer(poll: SchedulingPollRow, req: Request) {
+  if (!req.user) return undefined;
+  const role = pollViewerRole(poll, req.user);
+  if (!role) return undefined;
+  return {
+    email: String(req.user.email).trim().toLowerCase(),
+    name: String(req.user.name ?? "").trim() || undefined,
+    role,
+    userID: req.user.id,
+  };
+}
+
 export function parseApproximateStartTime(value: unknown) {
   const time = String(value ?? "").trim();
   if (!time) return null;
@@ -255,12 +279,13 @@ export async function handlerGetPoll(req: Request, res: Response) {
   const poll = await getPollByToken(String(req.params.token));
   if (!poll) throw new NotFoundError("This poll is not available...");
 
-  if (req.user?.emailVerified && !pollIsClosed(poll)) {
+  const viewer = authenticatedPollViewer(poll, req);
+  if (viewer && !pollIsClosed(poll)) {
     await ensurePollParticipant({
-      email: String(req.user.email).trim().toLowerCase(),
-      name: String(req.user.name ?? "").trim() || undefined,
+      email: viewer.email,
+      name: viewer.name,
       pollID: poll.id,
-      userID: req.user.id,
+      userID: viewer.userID,
     });
   }
 
@@ -274,7 +299,8 @@ export async function handlerGetPoll(req: Request, res: Response) {
       poll,
       slots,
       votes,
-      req.user ? String(req.user.email).trim().toLowerCase() : undefined,
+      viewer?.email,
+      viewer?.role,
     ),
   );
 }
@@ -312,6 +338,7 @@ export function pollProjection(
   votes: VoteRow[],
   /** The authenticated email asking, when anybody is: their row is editable. */
   viewerEmail?: string,
+  viewerRole?: "organizer" | "participant",
 ) {
   // Poll-local ids keep emails private while names and answers remain visible.
   const participantIDs = [
@@ -379,6 +406,7 @@ export function pollProjection(
       };
     }),
     title: poll.title,
+    viewerRole: viewerRole ?? null,
   };
 }
 
@@ -440,9 +468,8 @@ export async function handlerVotePoll(req: Request, res: Response) {
 
   const email = emailIdentity(req.body?.email ?? req.user?.email);
   const name = identityName(req.body?.name ?? req.user?.name);
-  const authenticatedEmail = req.user?.emailVerified
-    ? String(req.user.email).trim().toLowerCase()
-    : undefined;
+  const viewer = authenticatedPollViewer(poll, req);
+  const authenticatedEmail = viewer?.email;
 
   try {
     await setPollVotes({
@@ -470,7 +497,9 @@ export async function handlerVotePoll(req: Request, res: Response) {
     listPollVotes(poll.id),
   ]);
 
-  res.status(200).json(pollProjection(poll, slots, saved, email));
+  res
+    .status(200)
+    .json(pollProjection(poll, slots, saved, email, viewer?.role));
 }
 
 /**

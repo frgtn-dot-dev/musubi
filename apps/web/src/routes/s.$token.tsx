@@ -61,7 +61,7 @@ function PollRoute() {
 		retry: false,
 	});
 	const capabilities = useQuery({
-		enabled: needsVerification && !session.data,
+		enabled: needsVerification && !poll.data?.viewerRole,
 		queryFn: ({ signal }) => getServerCapabilities(signal),
 		queryKey: ["server-capabilities", getServerOrigin()],
 		staleTime: 5 * 60_000,
@@ -74,7 +74,7 @@ function PollRoute() {
 			votes: Array<{ slotID: string; value: VoteValue }>;
 		}) => votePoll({ ...input, token }),
 		onError: (error) => {
-			if (error instanceof ApiError && error.status === 403 && !session.data) {
+			if (error instanceof ApiError && error.status === 403 && !poll.data?.viewerRole) {
 				setNeedsVerification(true);
 			}
 		},
@@ -108,6 +108,10 @@ function PollRoute() {
 	}
 
 	const data = poll.data;
+	const authenticatedViewer =
+		data.viewerRole === undefined
+			? Boolean(session.data)
+			: data.viewerRole !== null;
 	const chosen = data.slots.find((slot) => slot.id === data.chosenSlotID);
 	// What is on screen: their saved answers, with anything they have just clicked
 	// laid over the top.
@@ -193,6 +197,9 @@ function PollRoute() {
 							? "1 person has answered"
 							: `${data.respondents} people have answered`}
 					</p>
+					{data.viewerRole === "organizer" ? (
+						<p className={styles.organizer}>You created this poll.</p>
+					) : null}
 				</header>
 
 				{data.description ? (
@@ -242,7 +249,7 @@ function PollRoute() {
 						mineID={data.mineID}
 						people={data.people}
 						personAction={
-							session.data
+							authenticatedViewer
 								? undefined
 								: (person) => (
 										<button
@@ -277,7 +284,7 @@ function PollRoute() {
 
 					<PollLegend />
 
-					{data.closed ? null : session.data ? (
+					{data.closed ? null : authenticatedViewer ? (
 						<div className={pollStyles.send}>
 							<Button
 								disabled={!unsaved}
