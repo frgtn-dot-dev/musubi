@@ -2911,6 +2911,27 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 		.analyze();
 	expect(accessibility.violations).toEqual([]);
 
+	// A taller grid column must not stretch the two heading rows apart, while
+	// the naturally sized column still needs a deliberate readable gap.
+	for (const [title, description] of [
+		[
+			"Connected accounts",
+			"Calendars from these accounts stay in sync both ways.",
+		],
+		[
+			"Join a shared calendar",
+			"Use an invite from this or another Musubi server.",
+		],
+	] as const) {
+		const [titleBox, descriptionBox] = await Promise.all([
+			connectionsDialog.getByRole("heading", { name: title }).boundingBox(),
+			connectionsDialog.getByText(description, { exact: true }).boundingBox(),
+		]);
+		const gap = descriptionBox!.y - (titleBox!.y + titleBox!.height);
+		expect(gap).toBeGreaterThanOrEqual(3);
+		expect(gap).toBeLessThanOrEqual(5);
+	}
+
 	// Capability-gated add buttons.
 	await expect(
 		page.getByRole("button", { exact: true, name: "Google Calendar" }),
