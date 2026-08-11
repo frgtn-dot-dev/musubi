@@ -7762,9 +7762,21 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	);
 
 	await page.goto(`/s/${POLL_TOKEN}`);
-	await expect(
-		page.getByRole("heading", { name: "Studio planning" }),
-	).toBeVisible();
+	const title = page.getByRole("heading", { name: "Studio planning" });
+	await expect(title).toBeVisible();
+	const pollCard = title.locator("xpath=ancestor::article");
+	const alignment = await pollCard.evaluate((card, heading) => {
+		const cardBox = card.getBoundingClientRect();
+		const titleBox = (heading as HTMLElement).getBoundingClientRect();
+		return {
+			centerDelta: Math.abs(
+				cardBox.left + cardBox.width / 2 - (titleBox.left + titleBox.width / 2),
+			),
+			textAlign: getComputedStyle(heading as HTMLElement).textAlign,
+		};
+	}, await title.elementHandle());
+	expect(alignment.centerDelta).toBeLessThanOrEqual(1);
+	expect(alignment.textAlign).toBe("center");
 
 	// Forty-four columns: the table has to scroll inside its box and take nothing
 	// else with it. A grid item's `min-width: auto` is what lets wide content push
@@ -7778,6 +7790,14 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 		scroll: window.document.documentElement.scrollWidth,
 	}));
 	expect(document.scroll).toBeLessThanOrEqual(document.client);
+
+	await page.setViewportSize({ height: 844, width: 390 });
+	const themeBox = await page.getByRole("button", { name: /theme/ }).boundingBox();
+	const mobileCardBox = await pollCard.boundingBox();
+	expect(themeBox!.y + themeBox!.height).toBeLessThanOrEqual(mobileCardBox!.y);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+		390,
+	);
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {

@@ -183,7 +183,7 @@ function PollRoute() {
       </div>
 
       <article className={`${styles.card} ${pollStyles.card}`}>
-        <header className={styles.header}>
+        <header className={`${styles.header} ${pollStyles.hero}`}>
           <span aria-hidden="true" className={styles.brand}>
             <BrandMark focusable="false" />
           </span>
@@ -196,7 +196,9 @@ function PollRoute() {
         </header>
 
         {data.description ? (
-          <p className={styles.description}>{data.description}</p>
+          <p className={`${styles.description} ${pollStyles.description}`}>
+            {data.description}
+          </p>
         ) : null}
 
         {chosen ? (
@@ -225,112 +227,117 @@ function PollRoute() {
 
         {/* People down, days across — the same grid the organizer reads, so the
             person deciding and the people answering see one picture. */}
-        <PollGrid
-          answers={answers}
-          approximateStartTime={data.approximateStartTime}
-          caption={
-            data.closed
-              ? "How everyone answered."
-              : Object.keys(answers).length > 0
-                ? "Who can make which day."
-                : "Fill in your own row — the last one — then send."
-          }
-          chosenSlotID={data.chosenSlotID}
-          mineID={data.mineID}
-          people={data.people}
-          personAction={
-            session.data
-              ? undefined
-              : (person) => (
-                <button
-                  aria-label={`Edit answers for ${person.name}`}
-                  className={pollStyles.editAnswers}
-                  title="Edit your answers"
-                  type="button"
-                  onClick={() => {
-                    setEditingName(person.name);
-                    setNeedsVerification(true);
-                    setMessage("");
-                  }}
-                >
-                  <Ellipsis aria-hidden="true" size={17} />
-                </button>
+        <div className={pollStyles.answers}>
+          <PollGrid
+            answers={answers}
+            approximateStartTime={data.approximateStartTime}
+            caption={
+              data.closed
+                ? "How everyone answered."
+                : Object.keys(answers).length > 0
+                  ? "Who can make which day."
+                  : "Fill in your own row — the last one — then send."
+            }
+            chosenSlotID={data.chosenSlotID}
+            mineID={data.mineID}
+            people={data.people}
+            personAction={
+              session.data
+                ? undefined
+                : (person) => (
+                    <button
+                      aria-label={`Edit answers for ${person.name}`}
+                      className={pollStyles.editAnswers}
+                      title="Edit your answers"
+                      type="button"
+                      onClick={() => {
+                        setEditingName(person.name);
+                        setNeedsVerification(true);
+                        setMessage("");
+                      }}
+                    >
+                      <Ellipsis aria-hidden="true" size={17} />
+                    </button>
+                  )
+            }
+            showSlotTimes={data.durationMinutes < 24 * 60}
+            slots={data.slots}
+            yourRow={
+              myName ? (
+                myName
+              ) : (
+                // Typed in the row it names, so it is obvious whose row it is.
+                // Confirming the address still happens below — this only says who
+                // to call you.
+                <PollNameField onChange={setName} value={name} />
               )
-          }
-          showSlotTimes={data.durationMinutes < 24 * 60}
-          slots={data.slots}
-          yourRow={
-            myName ? (
-              myName
-            ) : (
-              // Typed in the row it names, so it is obvious whose row it is.
-              // Confirming the address still happens below — this only says who
-              // to call you.
-              <PollNameField onChange={setName} value={name} />
-            )
-          }
-          onAnswer={data.closed ? undefined : pick}
-        />
+            }
+            onAnswer={data.closed ? undefined : pick}
+          />
 
-        <PollLegend />
+          <PollLegend />
 
-        {data.closed ? null : session.data ? (
-          <div className={pollStyles.send}>
-            <Button disabled={!unsaved} loading={vote.isPending} onClick={send}>
-              {unsaved ? "Send my answers" : "Answers saved"}
-            </Button>
-            {vote.error ? (
-              <p className={pollStyles.error} role="alert">
-                {vote.error.message}
-              </p>
-            ) : null}
-          </div>
-        ) : unsaved || editingName ? (
-          <form
-            className={styles.rsvpForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!needsVerification) send();
-              else void (sent ? confirmCode(event) : requestCode(event));
-            }}
-          >
-            {/* What leaves this browser, said before it does (PRD §19.1). */}
-            <p className={pollStyles.disclosure}>
-              <Info aria-hidden="true" size={14} strokeWidth={1.7} />
-              {editingName
-                ? `Verify the email you used when answering as ${editingName}.`
-                : needsVerification
-                ? "This email already has answers. Verify the inbox before changing them."
-                : "You are sending your answers, name and email. Your email stays private and your calendar is never read."}
-            </p>
-
-            {needsVerification && capabilities.isPending ? (
+          {data.closed ? null : session.data ? (
+            <div className={pollStyles.send}>
+              <Button
+                disabled={!unsaved}
+                loading={vote.isPending}
+                onClick={send}
+              >
+                {unsaved ? "Send my answers" : "Answers saved"}
+              </Button>
+              {vote.error ? (
+                <p className={pollStyles.error} role="alert">
+                  {vote.error.message}
+                </p>
+              ) : null}
+            </div>
+          ) : unsaved || editingName ? (
+            <form
+              className={styles.rsvpForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!needsVerification) send();
+                else void (sent ? confirmCode(event) : requestCode(event));
+              }}
+            >
+              {/* What leaves this browser, said before it does (PRD §19.1). */}
               <p className={pollStyles.disclosure}>
-                Checking email availability…
+                <Info aria-hidden="true" size={14} strokeWidth={1.7} />
+                {editingName
+                  ? `Verify the email you used when answering as ${editingName}.`
+                  : needsVerification
+                    ? "This email already has answers. Verify the inbox before changing them."
+                    : "You are sending your answers, name and email. Your email stays private and your calendar is never read."}
               </p>
-            ) : needsVerification && !capabilities.data?.email ? (
-              <p className={pollStyles.error} role="alert">
-                These answers already belong to this email. This server cannot
-                send the verification code needed to edit them because SMTP is
-                not configured.
-              </p>
-            ) : sent ? (
-              <Field label="Code from your email">
-                <input
-                  autoComplete="one-time-code"
-                  inputMode="numeric"
-                  name="code"
-                  placeholder="123456"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                />
-              </Field>
-            ) : (
-              <Field label="Email">
+
+              {needsVerification && capabilities.isPending ? (
+                <p className={pollStyles.disclosure}>
+                  Checking email availability…
+                </p>
+              ) : needsVerification && !capabilities.data?.email ? (
+                <p className={pollStyles.error} role="alert">
+                  These answers already belong to this email. This server cannot
+                  send the verification code needed to edit them because SMTP is
+                  not configured.
+                </p>
+              ) : sent ? (
+                <Field label="Code from your email">
+                  <input
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    name="code"
+                    placeholder="123456"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                  />
+                </Field>
+              ) : (
+                <Field label="Email">
                   <input
                     autoCapitalize="none"
                     autoComplete="email"
-                  autoFocus={Boolean(editingName)}
+                    autoFocus={Boolean(editingName)}
                     inputMode="email"
                     name="email"
                     placeholder="you@example.com"
@@ -339,27 +346,28 @@ function PollRoute() {
                     onChange={(event) => setEmail(event.target.value)}
                   />
                 </Field>
-            )}
+              )}
 
-            {message ? (
-              <p className={pollStyles.error} role="alert">
-                {message}
-              </p>
-            ) : null}
+              {message ? (
+                <p className={pollStyles.error} role="alert">
+                  {message}
+                </p>
+              ) : null}
 
-            {needsVerification && !capabilities.data?.email ? null : (
-              <Button loading={vote.isPending} type="submit">
-                {needsVerification
-                  ? sent
-                    ? editingName
-                      ? "Confirm and edit"
-                      : "Confirm and send"
-                    : "Send me a code"
-                  : "Send my answers"}
-              </Button>
-            )}
-          </form>
-        ) : null}
+              {needsVerification && !capabilities.data?.email ? null : (
+                <Button loading={vote.isPending} type="submit">
+                  {needsVerification
+                    ? sent
+                      ? editingName
+                        ? "Confirm and edit"
+                        : "Confirm and send"
+                      : "Send me a code"
+                    : "Send my answers"}
+                </Button>
+              )}
+            </form>
+          ) : null}
+        </div>
       </article>
 
       <p className={styles.footer}>

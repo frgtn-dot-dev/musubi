@@ -6,20 +6,28 @@
 /* Wider than a published event card: that one is a column of prose, this is a
    table, and squeezing a week of columns into reading width helps nobody. */
 .card {
-  width: min(64rem, 100%);
+  width: min(68rem, 100%);
   min-width: 0;
   max-width: none;
+  gap: var(--space-6);
+  padding: clamp(var(--space-5), 4vw, var(--space-8));
 }
 
 .page {
   position: relative;
   display: grid;
-  align-content: center;
+  align-content: start;
   justify-items: center;
   gap: var(--space-4);
   min-height: 100dvh;
-  padding: var(--space-6) var(--space-4);
-  background: var(--surface-canvas);
+  padding: clamp(var(--space-8), 8vh, 5rem) var(--space-4) var(--space-6);
+  background:
+    radial-gradient(
+      circle at 50% 0,
+      color-mix(in srgb, var(--accent-primary) 7%, transparent),
+      transparent 32rem
+    ),
+    var(--surface-canvas);
   color: var(--text-primary);
 
   --page-accent: var(--accent-primary);
@@ -30,7 +38,38 @@
   --page-raised: var(--surface-raised);
   --page-surface: var(--surface-panel);
   --page-text: var(--text-primary);
+}
 
+.hero {
+  max-width: 42rem;
+  justify-items: center;
+  justify-self: center;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+}
+
+.description {
+  max-width: 58ch;
+  justify-self: center;
+  text-align: center;
+}
+
+.answers {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+}
+
+.answers > form {
+  width: min(32rem, 100%);
+  justify-self: center;
+}
+
+.answers > p {
+  justify-content: center;
 }
 
 /* The shared footer link is 12px accent-coloured text. The accent token misses
@@ -82,20 +121,24 @@
 .send {
   display: grid;
   gap: var(--space-2);
-  justify-items: start;
+  justify-items: center;
 }
 
 /* Why the grid will not take an answer, or when it will stop. Quieter than the
    decided line: this is a condition, not the result everyone came for. */
 .closedNote {
+  max-width: 42rem;
+  justify-self: center;
   margin: 0;
   color: var(--text-secondary);
+  text-align: center;
   font-size: var(--text-12);
 }
 
 .decided {
   display: flex;
   align-items: center;
+  justify-self: center;
   gap: 6px;
   margin: 0;
   padding: var(--space-2) var(--space-3);
@@ -114,4 +157,25 @@
   color: var(--text-secondary);
   font-size: var(--text-12);
   line-height: 1.5;
+}
+
+@media (max-width: 599px) {
+  .page {
+    padding: calc(var(--space-8) + var(--space-8) + var(--space-2))
+      var(--space-3) var(--space-5);
+  }
+
+  .card {
+    gap: var(--space-5);
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .hero h1 {
+    font-size: 1.8rem;
+  }
+
+  .themeRow {
+    top: var(--space-3);
+    right: var(--space-3);
+  }
 }
