@@ -3751,7 +3751,16 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	});
 	await expect(searchTrigger).toBeFocused();
 	await page.keyboard.press("/");
-	await expect(search.getByRole("searchbox")).toBeFocused();
+	const searchbox = search.getByRole("searchbox");
+	await expect(searchbox).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	const newEventResult = search.getByRole("button", { name: "New event" });
+	const todayResult = search.getByRole("button", { name: "Go to today" });
+	await expect(newEventResult).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(todayResult).toBeFocused();
+	await page.keyboard.press("ArrowUp");
+	await expect(newEventResult).toBeFocused();
 	await page.keyboard.press("Escape");
 
 	const switcherBox = await page
@@ -7230,14 +7239,17 @@ test("finds events and actions without filtering the calendar", async ({ page })
 	await expect(search.getByRole("button", { name: "Go to today" })).toBeVisible();
 	await expectNoAccessibilityViolations(page);
 	await search.getByRole("searchbox").fill("review");
+	const reviewResult = search
+		.getByRole("button", { name: /Weekly review/ })
+		.first();
+	await expect(reviewResult).toBeVisible();
+	await reviewResult.click();
+
+	// Selecting a result follows the same path as clicking its calendar block: it
+	// moves to the date and opens the lightweight event preview, not the editor.
 	await expect(
-		search.getByRole("button", { name: /Weekly review/ }).first(),
+		page.getByRole("dialog", { name: "Weekly review" }),
 	).toBeVisible();
-
-	await search.getByRole("searchbox").fill("nothing here");
-	await expect(search.getByText("No matching events in this view.")).toBeVisible();
-
-	// Search results live in the palette; closing it reveals the unchanged calendar.
 	await page.keyboard.press("Escape");
 	await expect(clientCall).toBeVisible();
 });

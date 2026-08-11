@@ -299,6 +299,7 @@ export function Workspace({
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchEventIdRef = useRef<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarModal, setSidebarModal] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -537,6 +538,19 @@ export function Workspace({
       ),
     [events, visibleCalendarIds],
   );
+
+  useEffect(() => {
+    const searchEventId = searchEventIdRef.current;
+    if (searchOpen || !searchEventId) return;
+    const trigger = Array.from(
+      mainRef.current?.querySelectorAll<HTMLElement>(
+        "[data-event-id],[data-time-event],[data-all-day-event],[data-agenda-event]",
+      ) ?? [],
+    ).find((element) => Object.values(element.dataset).includes(searchEventId));
+    if (!trigger) return;
+    searchEventIdRef.current = undefined;
+    requestAnimationFrame(() => trigger.click());
+  }, [activeView, date, searchOpen, visibleEvents]);
 
   useEffect(() => {
     if (!notice) {
@@ -1165,7 +1179,10 @@ export function Workspace({
             if (!target) return;
             requestAnimationFrame(() => openCreateAtDate(date, target));
           }}
-          onDateChange={(nextDate) => onDateChange(toDateKey(nextDate))}
+          onEventSelect={(event) => {
+            searchEventIdRef.current = event.id;
+            onDateChange(toDateKey(event.start));
+          }}
           onOpenChange={(nextOpen) => {
             setSearchOpen(nextOpen);
             if (!nextOpen) setSearchQuery("");

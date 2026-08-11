@@ -1,6 +1,6 @@
 import type { Event } from "@musubi/types";
 import { ArrowRight, CalendarDays, Search } from "lucide-react";
-import type { RefObject } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 import { Dialog } from "~/ui/Dialog";
 import { offeredViews, type CalendarViewId } from "../view-registry";
 import styles from "./styles/search-dialog.module.css";
@@ -17,7 +17,7 @@ type SearchDialogProps = {
 	events: Event[];
 	inputRef: RefObject<HTMLInputElement | null>;
 	onCreateEvent: () => void;
-	onDateChange: (date: Date) => void;
+	onEventSelect: (event: Event) => void;
 	onOpenChange: (open: boolean) => void;
 	onToday: () => void;
 	onViewChange: (view: CalendarViewId) => void;
@@ -34,7 +34,7 @@ export function SearchDialog({
 	events,
 	inputRef,
 	onCreateEvent,
-	onDateChange,
+	onEventSelect,
 	onOpenChange,
 	onToday,
 	onViewChange,
@@ -71,6 +71,21 @@ export function SearchDialog({
 		action();
 	}
 
+	function moveResultFocus(event: KeyboardEvent<HTMLDivElement>) {
+		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		const results = Array.from(
+			event.currentTarget.querySelectorAll<HTMLButtonElement>(
+				"[data-search-result]",
+			),
+		);
+		if (results.length === 0) return;
+		const current = results.indexOf(document.activeElement as HTMLButtonElement);
+		const offset = event.key === "ArrowDown" ? 1 : -1;
+		const next = (current + offset + results.length) % results.length;
+		event.preventDefault();
+		results[next]?.focus();
+	}
+
 	return (
 		<Dialog
 			bodyClassName={styles.body}
@@ -93,18 +108,21 @@ export function SearchDialog({
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
 					onKeyDown={(event) => {
-						if (event.key !== "ArrowDown") return;
-						event.preventDefault();
-						event.currentTarget
+						if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+						const results = event.currentTarget
 							.closest('[role="dialog"]')
-							?.querySelector<HTMLButtonElement>("[data-search-result]")
-							?.focus();
+							?.querySelectorAll<HTMLButtonElement>("[data-search-result]");
+						const target =
+							event.key === "ArrowDown" ? results?.[0] : results?.[results.length - 1];
+						if (!target) return;
+						event.preventDefault();
+						target.focus();
 					}}
 				/>
 				<kbd>/</kbd>
 			</label>
 
-			<div className={styles.results}>
+			<div className={styles.results} onKeyDown={moveResultFocus}>
 				{actions.length > 0 ? (
 					<section aria-labelledby="search-actions-title">
 						<h2 id="search-actions-title">Actions</h2>
@@ -139,7 +157,7 @@ export function SearchDialog({
 										data-search-result
 										key={event.id}
 										type="button"
-										onClick={() => run(() => onDateChange(event.start))}
+										onClick={() => run(() => onEventSelect(event))}
 									>
 										<CalendarDays aria-hidden="true" size={16} />
 										<span>{event.title}</span>
