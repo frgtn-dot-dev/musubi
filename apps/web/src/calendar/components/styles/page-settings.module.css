@@ -40,7 +40,7 @@
 .icons {
   display: grid;
   margin: 0;
-  padding: var(--space-4) var(--layer-inline) var(--space-2);
+  padding: var(--space-5) var(--layer-inline) var(--space-2);
   border: 0;
   gap: var(--space-3);
 }
