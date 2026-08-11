@@ -77,7 +77,7 @@
 
 .sectionHeading {
 	display: grid;
-	gap: var(--space-1);
+	gap: 2px;
 	padding: var(--space-5) var(--layer-inline) var(--space-3);
 }
 
