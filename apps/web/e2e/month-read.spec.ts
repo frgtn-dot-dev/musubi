@@ -7354,6 +7354,53 @@ test("shows participant polls as striped all-day calendar items", async ({
 	});
 });
 
+test("refreshes an SSR-anonymous poll after the browser session resolves", async ({
+	page,
+}) => {
+	await page.addInitScript(() =>
+		sessionStorage.setItem("musubi-mobile-web-test-bypass", "true"),
+	);
+	await page.route("**/api/auth/get-session", async (route) => {
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		return respond(route, session);
+	});
+	let pollReads = 0;
+	const detail = (authenticated: boolean) => ({
+		chosenSlotID: null,
+		closed: false,
+		deadline: null,
+		description: null,
+		durationMinutes: 24 * 60,
+		mine: {},
+		mineID: authenticated ? "1" : null,
+		people: authenticated
+			? [{ answers: {}, id: "1", name: "Web QA" }]
+			: [],
+		respondents: 0,
+		slots: [
+			{
+				end: "2026-08-11T00:00:00.000Z",
+				id: "owner-slot",
+				ifNeeded: [],
+				no: [],
+				start: "2026-08-10T00:00:00.000Z",
+				yes: [],
+			},
+		],
+		title: "Team day",
+		viewerRole: authenticated ? "organizer" : null,
+	});
+	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) => {
+		pollReads += 1;
+		return respond(route, detail(pollReads > 1));
+	});
+
+	await page.goto(`/s/${POLL_TOKEN}`);
+	await expect(page.getByText("You created this poll.")).toBeVisible();
+	await expect(page.getByRole("row", { name: /^Web QA/ })).toBeVisible();
+	expect(pollReads).toBeGreaterThanOrEqual(2);
+});
+
 test("lets the poll organizer answer from the calendar", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	const poll = {

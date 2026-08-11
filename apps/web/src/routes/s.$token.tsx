@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Ellipsis, Info } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { VoteValue } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
 import { getPoll, getServerCapabilities, votePoll } from "~/api/resources";
@@ -60,6 +60,15 @@ function PollRoute() {
 		queryKey: pollKey,
 		retry: false,
 	});
+	const sessionUserID = session.data?.user.id;
+	const refetchPoll = poll.refetch;
+	useEffect(() => {
+		// SSR cannot forward the browser's session cookie through the generic API
+		// client. Refresh once the browser has resolved its session so the server can
+		// return the viewer's row and organizer role instead of the anonymous view.
+		if (sessionUserID) void refetchPoll();
+	}, [refetchPoll, sessionUserID]);
+
 	const capabilities = useQuery({
 		enabled: needsVerification && !poll.data?.viewerRole,
 		queryFn: ({ signal }) => getServerCapabilities(signal),
