@@ -118,18 +118,7 @@ export function Toolbar({
             value={activeView}
             onChange={(value) => onViewChange(value as CalendarViewId)}
           />
-        ) : (
-          <Segmented<CalendarViewId>
-            className={styles.viewSwitcher}
-            label="Calendar view"
-            options={offeredViews().map((view) => ({
-              label: view.label,
-              value: view.id as CalendarViewId,
-            }))}
-            value={activeView}
-            onChange={onViewChange}
-          />
-        )}
+        ) : null}
 
         <div className={styles.toolbarActions}>
           <label className={styles.searchField}>
@@ -157,6 +146,18 @@ export function Toolbar({
               </output>
             ) : null}
           </label>
+          {narrow ? null : (
+            <Segmented<CalendarViewId>
+              className={styles.viewSwitcher}
+              label="Calendar view"
+              options={offeredViews().map((view) => ({
+                label: view.label,
+                value: view.id as CalendarViewId,
+              }))}
+              value={activeView}
+              onChange={onViewChange}
+            />
+          )}
           {canCreateEvents ? (
             <Button
               aria-label="Event"
