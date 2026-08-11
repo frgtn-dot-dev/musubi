@@ -3732,15 +3732,39 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	await page.keyboard.press("m");
 	await expect(page).toHaveURL(/\/month\?/);
 
-	// "/" puts the caret in search rather than typing a shortcut.
+	// "/" opens the same search palette as the toolbar button and puts the caret
+	// straight in its query.
 	await page.keyboard.press("/");
-	await expect(page.getByRole("searchbox")).toBeFocused();
+	const search = page.getByRole("dialog", { name: "Search Musubi" });
+	await expect(search.getByRole("searchbox")).toBeFocused();
 	await page.keyboard.type("client");
-	await expect(page.getByRole("searchbox")).toHaveValue("client");
+	const clientResult = search.getByRole("button", { name: /Client call/ });
+	await expect(clientResult).toBeVisible();
+	await page.keyboard.press("ArrowDown");
+	await expect(clientResult).toBeFocused();
 	await page.keyboard.press("Escape");
 
+	const switcherBox = await page
+		.getByRole("radiogroup", { name: "Calendar view" })
+		.boundingBox();
+	const eventBox = await page
+		.getByRole("button", { name: "Event", exact: true })
+		.boundingBox();
+	expect(eventBox!.x - (switcherBox!.x + switcherBox!.width)).toBeLessThanOrEqual(
+		12,
+	);
+	expect(
+		Math.abs(
+			eventBox!.y +
+				eventBox!.height / 2 -
+				(switcherBox!.y + switcherBox!.height / 2),
+		),
+	).toBeLessThanOrEqual(1);
+
 	// "?" opens the overlay listing the same shortcuts.
-	await page.getByRole("searchbox").blur();
+	await page
+		.getByRole("button", { name: "Search events and actions" })
+		.blur();
 	await page.keyboard.press("?");
 	const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
 	await expect(dialog).toBeVisible();
@@ -6792,9 +6816,12 @@ test("ui catalogue", async ({ page }) => {
 	// The page each sidebar row edits, which is a hover action rather than a row.
 	await layer("dialog-page-settings", "Edit My calendar");
 
-	// The search field is always in the toolbar; nothing opens it.
-	await page.getByRole("searchbox", { name: "Search events" }).fill("review");
-	await shot("app-search");
+	await page
+		.getByRole("button", { name: "Search events and actions" })
+		.click();
+	const searchDialog = page.getByRole("dialog", { name: "Search Musubi" });
+	await searchDialog.getByRole("searchbox").fill("review");
+	await shot("app-search", searchDialog);
 
 	// Keyboard shortcuts. A fresh page, because the handler is on the window and
 	// the key means something else inside a field.
@@ -7182,28 +7209,29 @@ test("closes and deletes a poll", async ({ page }) => {
 	await expect(page.getByText("No polls yet")).toBeVisible();
 });
 
-test("counts what a search matched", async ({ page }) => {
+test("finds events and actions without filtering the calendar", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
-	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
-
-	// A month grid keeps all forty-two cells while filtering, so the number is the
-	// only quick answer to "did that match anything".
-	await page.getByRole("searchbox", { name: "Search events" }).fill("review");
-	const count = page.getByRole("status").filter({ hasText: /events? in view/ });
-	await expect(count).toContainText(/[1-9]\d* events in view match/);
-	await expect(
-		page.getByRole("button", { name: /Weekly review/ }).first(),
-	).toBeVisible();
+	const clientCall = page.getByRole("button", { name: /Client call/ });
+	await expect(clientCall).toBeVisible();
 
 	await page
-		.getByRole("searchbox", { name: "Search events" })
-		.fill("nothing here");
-	await expect(count).toContainText("0 events in view match");
+		.getByRole("button", { name: "Search events and actions" })
+		.click();
+	const search = page.getByRole("dialog", { name: "Search Musubi" });
+	await expect(search.getByRole("button", { name: "Go to today" })).toBeVisible();
+	await expectNoAccessibilityViolations(page);
+	await search.getByRole("searchbox").fill("review");
+	await expect(
+		search.getByRole("button", { name: /Weekly review/ }).first(),
+	).toBeVisible();
 
-	// Cleared, the badge goes: a count of everything is not a search result.
-	await page.getByRole("searchbox", { name: "Search events" }).fill("");
-	await expect(count).toHaveCount(0);
+	await search.getByRole("searchbox").fill("nothing here");
+	await expect(search.getByText("No matching events in this view.")).toBeVisible();
+
+	// Search results live in the palette; closing it reveals the unchanged calendar.
+	await page.keyboard.press("Escape");
+	await expect(clientCall).toBeVisible();
 });
 
 test("draws the plus on the narrow create button", async ({ page }) => {

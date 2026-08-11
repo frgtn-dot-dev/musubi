@@ -17,7 +17,6 @@ import type {
   RemoveEventResponse,
 } from "~/api/contracts";
 import {
-  useDeferredValue,
   useEffect,
   useMemo,
   useCallback,
@@ -66,6 +65,7 @@ import { MultiWeekCalendar } from "./MultiWeekCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
+import { SearchDialog } from "./SearchDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
@@ -297,8 +297,8 @@ export function Workspace({
   // the active one.
   const [settingsPage, setSettingsPage] = useState<PageDocument>();
   const [newPageOpen, setNewPageOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarModal, setSidebarModal] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -441,6 +441,7 @@ export function Workspace({
   // The event a time write is in flight for. One gesture at a time, so one id.
   const [busyEventId, setBusyEventId] = useState<string>();
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const editableCalendars = useMemo(
@@ -527,18 +528,15 @@ export function Workspace({
 
   const pageTitle = activePage.name;
 
-  const visibleEvents = useMemo(() => {
-    const normalizedQuery = deferredSearchQuery.trim().toLocaleLowerCase();
-
-    return events.filter(
-      (event) =>
+  const visibleEvents = useMemo(
+    () =>
+      events.filter((event) =>
         event.calendars.some((calendarId) =>
           visibleCalendarIds.includes(calendarId),
-        ) &&
-        (normalizedQuery.length === 0 ||
-          event.title.toLocaleLowerCase().includes(normalizedQuery)),
-    );
-  }, [deferredSearchQuery, events, visibleCalendarIds]);
+        ),
+      ),
+    [events, visibleCalendarIds],
+  );
 
   useEffect(() => {
     if (!notice) {
@@ -809,7 +807,7 @@ export function Workspace({
         return;
       case "search":
         event.preventDefault();
-        searchRef.current?.focus();
+        setSearchOpen(true);
         return;
       case "today":
         event.preventDefault();
@@ -947,20 +945,16 @@ export function Workspace({
           canCreateEvents={editableCalendars.length > 0}
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
+          onOpenSearch={() => setSearchOpen(true)}
           onPeriodChange={changePeriod}
           onOpenSidebar={() => setSidebarOpen(true)}
-          onSearch={setSearchQuery}
           onToday={() => onDateChange(toDateKey(new Date()))}
           onViewChange={handleViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
           periodNavigation={activeView !== "agenda"}
           periodName={activeView === "agenda" ? "agenda start" : activeView}
-          /* Exactly the list the views below are handed, so the number and the
-             grid can never disagree. */
-          searchMatches={visibleEvents.length}
-          searchQuery={searchQuery}
-          searchRef={searchRef}
+          searchTriggerRef={searchTriggerRef}
         />
 
         {activeDraft ? (
@@ -1159,6 +1153,29 @@ export function Workspace({
             />
           )}
         </div>
+
+        <SearchDialog
+          activeView={activeView}
+          canCreateEvents={editableCalendars.length > 0}
+          events={visibleEvents}
+          inputRef={searchRef}
+          onCreateEvent={() => {
+            const target = searchTriggerRef.current;
+            if (!target) return;
+            requestAnimationFrame(() => openCreateAtDate(date, target));
+          }}
+          onDateChange={(nextDate) => onDateChange(toDateKey(nextDate))}
+          onOpenChange={(nextOpen) => {
+            setSearchOpen(nextOpen);
+            if (!nextOpen) setSearchQuery("");
+          }}
+          onToday={() => onDateChange(toDateKey(new Date()))}
+          onViewChange={handleViewChange}
+          open={searchOpen}
+          query={searchQuery}
+          returnFocus={searchTriggerRef}
+          setQuery={setSearchQuery}
+        />
 
         <ShortcutsDialog
           onOpenChange={setShortcutsOpen}

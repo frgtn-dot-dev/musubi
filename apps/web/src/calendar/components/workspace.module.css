@@ -15,7 +15,7 @@
 	user-select: none;
 }
 
-/* Fields are the exception, including the toolbar search. */
+/* Form fields are the exception. */
 .workspace :is(input, textarea) {
 	cursor: auto;
 	user-select: text;
@@ -448,59 +448,6 @@
 
 .viewSwitcher > button {
 	min-width: 66px;
-}
-
-.searchField {
-	display: flex;
-	width: min(154px, 13vw);
-	min-height: 38px;
-	align-items: center;
-	gap: 8px;
-	padding: 0 11px;
-	border: 1px solid var(--border-medium);
-	border-radius: var(--radius-md);
-	color: var(--text-muted);
-	transition: width var(--motion-standard) ease;
-}
-
-.searchField:focus-within {
-	width: min(210px, 17vw);
-	border-color: var(--border-strong);
-	color: var(--text-primary);
-}
-
-/* The icon must not be squeezed out by the input when the field collapses to
-   icon width on a narrower toolbar. */
-.searchField svg {
-	flex: none;
-}
-
-.searchField input {
-	width: 100%;
-	min-width: 0;
-	border: 0;
-	outline: 0;
-	background: transparent;
-	color: var(--text-primary);
-	font-size: 0.76rem;
-}
-
-.searchField input::placeholder {
-	/* A placeholder is text: it has to clear the same bar as the value it stands
-     in for. */
-	color: var(--text-muted);
-}
-
-/* Inside the field, so a live count costs no calendar rows: a band under the
-   toolbar would push the last week of the month off a laptop screen. */
-.searchCount {
-	flex: none;
-	padding: 1px 6px;
-	border-radius: var(--radius-pill);
-	background: var(--surface-raised);
-	color: var(--text-secondary);
-	font-size: 0.68rem;
-	font-variant-numeric: tabular-nums;
 }
 
 .pageDraftBar {
@@ -1849,21 +1796,6 @@
 		gap: 12px;
 	}
 
-	.searchField {
-		width: 38px;
-	}
-
-	.searchField input {
-		opacity: 0;
-	}
-
-	.searchField:focus-within {
-		width: 160px;
-	}
-
-	.searchField:focus-within input {
-		opacity: 1;
-	}
 
 	.viewSwitcher > button {
 		min-width: 58px;
@@ -1873,7 +1805,7 @@
 
 @media (max-width: 1023px) {
 	.toolbarControls {
-		grid-template-columns: minmax(260px, 1fr) auto;
+		grid-template-columns: minmax(220px, 1fr) auto;
 	}
 
 	.viewSwitcher {
@@ -1961,9 +1893,6 @@
 		font-size: 0.74rem;
 	}
 
-	.toolbarActions .searchField {
-		display: none;
-	}
 
 	/* The label goes, the plus stays. Two spans deep on purpose: the button's only
      direct child is the primitive's content wrapper, so `> span:last-child` hid

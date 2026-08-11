@@ -582,15 +582,31 @@ describe("Workspace", () => {
     expect(onSavePage).not.toHaveBeenCalled();
   });
 
-  it("filters visible server events through the toolbar search", async () => {
+  it("finds events and actions from the search palette", async () => {
     const user = userEvent.setup();
+    const onDateChange = vi.fn();
 
-    render(<Workspace {...commonProps} />);
+    render(<Workspace {...commonProps} onDateChange={onDateChange} />);
+    await user.click(
+      screen.getByRole("button", { name: "Search events and actions" }),
+    );
 
-    await user.type(screen.getByRole("searchbox", { name: "Search events" }), "quarterly");
+    const dialog = within(screen.getByRole("dialog", { name: "Search Musubi" }));
+    expect(dialog.getByRole("button", { name: "Go to today" })).not.toBeNull();
+    await user.type(
+      dialog.getByRole("searchbox", { name: "Search events and actions" }),
+      "quarterly",
+    );
 
-    expect(screen.getByRole("button", { name: /Quarterly planning/ })).not.toBeNull();
-    expect(screen.queryByRole("button", { name: /Design review/ })).toBeNull();
+    const quarterly = dialog.getByRole("button", { name: /Quarterly planning/ });
+    expect(quarterly).not.toBeNull();
+    expect(dialog.queryByRole("button", { name: /Design review/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Design review/, hidden: true }),
+    ).not.toBeNull();
+
+    await user.click(quarterly);
+    expect(onDateChange).toHaveBeenCalled();
   });
 
   it("renders future event days as one continuous Agenda", () => {

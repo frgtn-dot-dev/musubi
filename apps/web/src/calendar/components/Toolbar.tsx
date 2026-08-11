@@ -18,20 +18,16 @@ type ToolbarProps = {
   canCreateEvents: boolean;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
+  onOpenSearch: () => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
-  onSearch: (query: string) => void;
   onToday: () => void;
   onViewChange: (view: CalendarViewId) => void;
   pageTitle: string;
   periodLabel: string;
   periodNavigation?: boolean;
   periodName: string;
-  /** How many events the query matched in the period on screen. */
-  searchMatches?: number;
-  searchQuery: string;
-  /** So the "/" shortcut can put the caret in the field. */
-  searchRef?: RefObject<HTMLInputElement | null>;
+  searchTriggerRef?: RefObject<HTMLButtonElement | null>;
 };
 
 export function Toolbar({
@@ -39,18 +35,16 @@ export function Toolbar({
   canCreateEvents,
   navigationTriggerRef,
   onCreateEvent,
+  onOpenSearch,
   onOpenSidebar,
   onPeriodChange,
-  onSearch,
   onToday,
   onViewChange,
   pageTitle,
   periodLabel,
   periodNavigation = true,
   periodName,
-  searchMatches,
-  searchQuery,
-  searchRef,
+  searchTriggerRef,
 }: ToolbarProps) {
   // A flick moves the period on touch, so the arrows are desktop furniture.
   const narrow = useNarrowViewport();
@@ -121,31 +115,15 @@ export function Toolbar({
         ) : null}
 
         <div className={styles.toolbarActions}>
-          <label className={styles.searchField}>
+          <IconButton
+            className={styles.searchButton}
+            label="Search events and actions"
+            ref={searchTriggerRef}
+            size="compact"
+            onClick={onOpenSearch}
+          >
             <Search aria-hidden="true" size={17} strokeWidth={1.6} />
-            <span className={styles.srOnly}>Search events</span>
-            <input
-              placeholder="Search"
-              ref={searchRef}
-              type="search"
-              value={searchQuery}
-              onChange={(event) => onSearch(event.target.value)}
-            />
-            {/* The grid keeps every empty day while filtering, so without this a
-                query that matched six events looks the same as one that matched
-                none until you have read all forty-two cells. Scoped out loud:
-                only the period on screen has been searched. */}
-            {searchQuery.trim() ? (
-              <output aria-live="polite" className={styles.searchCount}>
-                <span className={styles.srOnly}>
-                  {searchMatches === 1
-                    ? "1 event in view matches"
-                    : `${searchMatches ?? 0} events in view match`}
-                </span>
-                <span aria-hidden="true">{searchMatches ?? 0}</span>
-              </output>
-            ) : null}
-          </label>
+          </IconButton>
           {narrow ? null : (
             <Segmented<CalendarViewId>
               className={styles.viewSwitcher}

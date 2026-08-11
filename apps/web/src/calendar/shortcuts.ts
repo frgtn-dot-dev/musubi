@@ -99,7 +99,7 @@ export const SHORTCUT_GROUPS: Array<{
   },
   {
     items: [
-      { action: "Search events", keys: "/" },
+      { action: "Search events and actions", keys: "/" },
       { action: "Shortcuts", keys: "?" },
       { action: "Close layer or cancel drag", keys: "Esc" },
     ],
