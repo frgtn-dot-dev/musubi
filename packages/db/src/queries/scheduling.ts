@@ -153,12 +153,7 @@ export async function listPollSlots(pollID: string) {
     .orderBy(asc(schedulingSlots.start));
 }
 
-/**
- * Every answer on a poll, with the name behind it.
- *
- * Names are the point here — a poll is people agreeing with each other, not an
- * anonymous tally, and the PRD's participant flow shows who is available.
- */
+/** Every participant and any answers they have given. */
 export async function listPollVotes(pollID: string) {
   return db
     .select({
@@ -168,12 +163,28 @@ export async function listPollVotes(pollID: string) {
       slotID: schedulingVotes.slotID,
       value: schedulingVotes.value,
     })
-    .from(schedulingVotes)
-    .innerJoin(
-      schedulingParticipants,
+    .from(schedulingParticipants)
+    .leftJoin(
+      schedulingVotes,
       eq(schedulingParticipants.id, schedulingVotes.participantID),
     )
     .where(eq(schedulingParticipants.pollID, pollID));
+}
+
+/** Add a signed-in visitor to the grid without touching any saved answers. */
+export async function ensurePollParticipant(input: {
+  email: string;
+  name?: string;
+  pollID: string;
+  userID: string;
+}) {
+  await db
+    .insert(schedulingParticipants)
+    .values({ ...input, name: input.name || "Guest" })
+    .onConflictDoUpdate({
+      set: { ...(input.name ? { name: input.name } : {}), userID: input.userID },
+      target: [schedulingParticipants.pollID, schedulingParticipants.email],
+    });
 }
 
 export class PollIdentityExistsError extends Error {}

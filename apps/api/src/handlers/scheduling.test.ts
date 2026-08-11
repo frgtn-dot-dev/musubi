@@ -130,8 +130,31 @@ assert.deepEqual(
   assert.equal(asAdam.mineID, "2");
   assert.deepEqual(asAdam.mine, { "slot-tue": "if-needed", "slot-wed": "yes" });
 
-  // Somebody who has not answered yet is nobody's row.
-  assert.equal(pollProjection(POLL, SLOTS, votes, "new@example.com").mineID, null);
+  // A signed-in visitor appears immediately, before choosing any answer, without
+  // being counted as somebody who has answered.
+  const withNewVisitor = pollProjection(
+    POLL,
+    SLOTS,
+    [
+      ...votes,
+      {
+        email: "new@example.com",
+        name: "New person",
+        participantID: "p4",
+        slotID: null,
+        value: null,
+      },
+    ],
+    "new@example.com",
+  );
+  assert.equal(withNewVisitor.mineID, "4");
+  assert.deepEqual(withNewVisitor.mine, {});
+  assert.deepEqual(withNewVisitor.people[3], {
+    answers: {},
+    id: "4",
+    name: "New person",
+  });
+  assert.equal(withNewVisitor.respondents, 3);
 
   // Two people with one name stay two rows — a poll of Jans is still a poll of
   // people, and merging them would lose an answer.

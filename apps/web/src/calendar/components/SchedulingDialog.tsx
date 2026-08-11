@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Check, Copy } from "lucide-react";
 import { useState, type RefObject } from "react";
 import type { Calendar, Settings } from "@musubi/types";
-import type { PollSummary } from "~/api/contracts";
+import type { PollSummary, VoteValue } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
 import {
 	closePoll,
@@ -11,6 +11,7 @@ import {
 	deletePoll,
 	getPoll,
 	getPolls,
+	votePoll,
 } from "~/api/resources";
 import { Button } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
@@ -201,7 +202,9 @@ export function PollResults({
 	onNotice: (message: string) => void;
 	poll: PollSummary;
 }) {
+	const queryClient = useQueryClient();
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
+	const [draft, setDraft] = useState<Record<string, VoteValue | null>>();
 	// The event lands in the first calendar the organizer can write to. Choosing
 	// which one is a question for the day this poll grows a "create in…" row; a
 	// select here would be a third thing to answer while picking a time.
@@ -229,7 +232,26 @@ export function PollResults({
 		onSuccess: () => onChanged("Poll deleted."),
 	});
 
+	const save = useMutation({
+		mutationFn: () =>
+			votePoll({
+				token: poll.token,
+				votes: Object.entries(draft ?? answers.data?.mine ?? {}).flatMap(
+					([slotID, value]) => (value ? [{ slotID, value }] : []),
+				),
+			}),
+		onSuccess: (result) => {
+			queryClient.setQueryData(["poll", poll.token], result);
+			void queryClient.invalidateQueries({ queryKey: ["poll-calendar"] });
+			setDraft(undefined);
+			onNotice("Answers saved.");
+		},
+	});
+
 	const data = answers.data;
+	const ownAnswers = draft ?? data?.mine ?? {};
+	const ownName =
+		data?.people.find((person) => person.id === data.mineID)?.name || "You";
 	// The leaders are marked, never auto-picked: two times can tie, and the choice
 	// is the organizer's to make.
 	const best = data
@@ -320,6 +342,7 @@ export function PollResults({
 									</Button>
 								)
 					}
+					answers={ownAnswers}
 					approximateStartTime={data.approximateStartTime}
 					caption={
 						data.closed
@@ -328,9 +351,20 @@ export function PollResults({
 					}
 					chosenSlotID={data.chosenSlotID}
 					leadingSlotIDs={leading}
+					mineID={data.mineID}
+					onAnswer={
+						data.closed || save.isPending
+							? undefined
+							: (slotID, value) =>
+									setDraft((current) => ({
+										...(current ?? data.mine),
+										[slotID]: value,
+									}))
+					}
 					showSlotTimes={data.durationMinutes < 24 * 60}
 					people={data.people}
 					slots={data.slots}
+					yourRow={<span>{ownName}</span>}
 				/>
 			) : null}
 
@@ -374,15 +408,24 @@ export function PollResults({
 				</p>
 			) : null}
 
-			{(close.error ?? remove.error) ? (
+			{(save.error ?? close.error ?? remove.error) ? (
 				<p className={styles.error} role="alert">
-					{(close.error ?? remove.error)!.message}
+					{(save.error ?? close.error ?? remove.error)!.message}
 				</p>
 			) : null}
 
 			{/* One action block: splitting delete onto the far edge made this footer
           read as two unrelated menus even though all three manage this poll. */}
 			<div className={styles.footer}>
+				{data && !data.closed ? (
+					<Button
+						disabled={!draft}
+						loading={save.isPending}
+						onClick={() => save.mutate()}
+					>
+						{draft ? "Save my answers" : "Answers saved"}
+					</Button>
+				) : null}
 				<Button
 					className={styles.deletePoll}
 					loading={remove.isPending}

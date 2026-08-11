@@ -7354,6 +7354,93 @@ test("shows participant polls as striped all-day calendar items", async ({
 	});
 });
 
+test("lets the poll organizer answer from the calendar", async ({ page }) => {
+	await mockAuthenticatedReads(page);
+	const poll = {
+		chosenSlotID: null,
+		closedAt: null,
+		createdAt: "2026-07-26T09:00:00.000Z",
+		deadline: null,
+		durationMinutes: 24 * 60,
+		id: "poll-owner-vote",
+		title: "Team day",
+		token: POLL_TOKEN,
+		url: `http://127.0.0.1:3000/s/${POLL_TOKEN}`,
+	};
+	const savedVotes: unknown[] = [];
+	const detail = (answered: boolean) => ({
+		chosenSlotID: null,
+		closed: false,
+		deadline: null,
+		description: null,
+		durationMinutes: 24 * 60,
+		mine: answered ? { "owner-slot": "yes" } : {},
+		mineID: "1",
+		people: [
+			{
+				answers: answered ? { "owner-slot": "yes" } : {},
+				id: "1",
+				name: "Web QA",
+			},
+		],
+		respondents: answered ? 1 : 0,
+		slots: [
+			{
+				end: "2026-08-11T00:00:00.000Z",
+				id: "owner-slot",
+				ifNeeded: [],
+				no: [],
+				start: "2026-08-10T00:00:00.000Z",
+				yes: answered ? ["Web QA"] : [],
+			},
+		],
+		title: "Team day",
+	});
+	await page.route("**/api/v1/scheduling/polls", (route) =>
+		respond(route, [poll]),
+	);
+	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}`, (route) =>
+		respond(route, detail(savedVotes.length > 0)),
+	);
+	await page.route(`**/api/v1/public/polls/${POLL_TOKEN}/votes`, (route) => {
+		savedVotes.push(route.request().postDataJSON());
+		return respond(route, detail(true));
+	});
+
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-10`);
+	await page.getByRole("button", { exact: true, name: "Find a time" }).click();
+	await page.getByRole("button", { name: /Team day/ }).click();
+	const dialog = page.getByRole("dialog", { name: "Team day" });
+	await expect(dialog.getByRole("row", { name: /^Web QA/ })).toBeVisible();
+	await dialog
+		.getByRole("button", { name: /10 Aug.*have not answered/ })
+		.click();
+	await page
+		.getByRole("dialog", { name: /Your answer for/ })
+		.getByRole("button", { exact: true, name: "Yes" })
+		.click();
+	await dialog.getByRole("button", { name: "Save my answers" }).click();
+
+	await expect(dialog.getByRole("button", { name: "Answers saved" })).toBeDisabled();
+	expect(savedVotes[0]).toEqual({
+		votes: [{ slotID: "owner-slot", value: "yes" }],
+	});
+
+	// The same authenticated identity owns the row on the public link too.
+	await page.goto(`/s/${POLL_TOKEN}`);
+	const ownAnswer = page.getByRole("button", { name: /10 Aug.*you answered yes/ });
+	await ownAnswer.click();
+	await page
+		.getByRole("dialog", { name: /Your answer for/ })
+		.getByRole("button", { exact: true, name: "No" })
+		.click();
+	await page.getByRole("button", { name: "Send my answers" }).click();
+	expect(savedVotes[1]).toEqual({
+		name: "Web QA",
+		votes: [{ slotID: "owner-slot", value: "no" }],
+	});
+});
+
 test("closes and deletes a poll", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let closed = false;

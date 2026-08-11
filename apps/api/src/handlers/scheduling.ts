@@ -5,6 +5,7 @@ import {
   createEvent,
   createPoll,
   deletePoll,
+  ensurePollParticipant,
   getPollById,
   getPollByToken,
   listActivePollsForCalendar,
@@ -254,6 +255,15 @@ export async function handlerGetPoll(req: Request, res: Response) {
   const poll = await getPollByToken(String(req.params.token));
   if (!poll) throw new NotFoundError("This poll is not available...");
 
+  if (req.user?.emailVerified && !pollIsClosed(poll)) {
+    await ensurePollParticipant({
+      email: String(req.user.email).trim().toLowerCase(),
+      name: String(req.user.name ?? "").trim() || undefined,
+      pollID: poll.id,
+      userID: req.user.id,
+    });
+  }
+
   const [slots, votes] = await Promise.all([
     listPollSlots(poll.id),
     listPollVotes(poll.id),
@@ -284,8 +294,8 @@ export type VoteRow = {
   email: string;
   name: string;
   participantID: string;
-  slotID: string;
-  value: string;
+  slotID: null | string;
+  value: null | string;
 };
 
 /**
@@ -314,7 +324,9 @@ export function pollProjection(
 
     return {
       answers: Object.fromEntries(
-        theirs.map((vote) => [vote.slotID, vote.value]),
+        theirs.flatMap((vote) =>
+          vote.slotID && vote.value ? [[vote.slotID, vote.value]] : [],
+        ),
       ),
       id: String(index + 1),
       name: theirs[0]?.name.trim() || "Guest",
@@ -346,7 +358,9 @@ export function pollProjection(
     /** Which row is theirs, so the grid does not show them twice. */
     mineID: viewerIndex >= 0 ? people[viewerIndex]!.id : null,
     people,
-    respondents: participantIDs.length,
+    respondents: new Set(
+      votes.flatMap((vote) => (vote.slotID ? [vote.participantID] : [])),
+    ).size,
     slots: slots.map((slot) => {
       const forSlot = votes.filter((vote) => vote.slotID === slot.id);
       const named = (value: string) =>
