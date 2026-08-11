@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 
 import type { QueryClient } from "@tanstack/react-query";
+import { Agentation } from "agentation";
 import {
+  ClientOnly,
   HeadContent,
   Outlet,
   Scripts,
@@ -72,6 +74,14 @@ function FocusMode() {
   return null;
 }
 
+function SkipLink() {
+  return (
+    <a className="skip-link" href="#main-content">
+      Skip to calendar
+    </a>
+  );
+}
+
 function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -87,10 +97,15 @@ function RootDocument({ children }: { children: ReactNode }) {
       <body>
         <ThemeSynchronizer />
         <FocusMode />
-        <a className="skip-link" href="#main-content">
-          Skip to calendar
-        </a>
+        <SkipLink />
         {children}
+        {import.meta.env.DEV ? (
+          <ClientOnly>
+            {typeof navigator !== "undefined" && !navigator.webdriver ? (
+              <Agentation />
+            ) : null}
+          </ClientOnly>
+        ) : null}
         <Scripts />
       </body>
     </html>

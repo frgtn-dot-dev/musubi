@@ -53,6 +53,7 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.4",
     "@vitest/browser-playwright": "4.1.10",
+    "agentation": "3.0.2",
     "eslint": "9.39.4",
     "eslint-plugin-react-hooks": "7.1.1",
     "jsdom": "29.1.1",
