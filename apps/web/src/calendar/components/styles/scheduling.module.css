@@ -218,7 +218,9 @@
 .results {
 	display: grid;
 	gap: var(--space-4);
-	padding: var(--space-4);
+	/* The dialog's own inline axis — at space-4 this block sat 8px inside the
+     header above it, which read as a narrower panel rather than a page. */
+	padding: var(--space-4) var(--layer-inline);
 }
 
 /* What was decided, said in words before the grid that proves it. */
