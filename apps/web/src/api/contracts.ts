@@ -18,6 +18,7 @@ export const AttendeeSchema = z.object({
   id: z.string(),
   image: z.string().nullish(),
   name: z.string(),
+  status: z.enum(["declined", "going", "maybe"]),
 });
 
 export const AttendeesResponseSchema = z.array(AttendeeSchema);

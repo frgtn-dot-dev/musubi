@@ -44,6 +44,7 @@ import type { EventFormValues } from "../event-form";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
 
+import type { AttendanceChoice } from "../attendance";
 import { shortcutFor } from "../shortcuts";
 import { useSwipePeriod } from "../use-swipe-period";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
@@ -146,11 +147,11 @@ type WorkspaceProps = {
   }) => Promise<SettingsDocument>;
   onRemoveEvent: (event: Event) => Promise<RemoveEventResponse>;
   onSetAttendance?: (input: {
-    attending: boolean;
     // Identifies the owning calendar so a federated event is routed to its
     // server instead of the home one.
     calendarId?: string;
     eventId: string;
+    status: AttendanceChoice;
   }) => Promise<Attendee[]>;
   /**
    * Open the full editor for a draft. An event identifies an update; without

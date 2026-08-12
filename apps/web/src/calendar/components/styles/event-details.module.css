@@ -227,6 +227,28 @@
   text-transform: inherit;
 }
 
+/* One answer out of three — a row, not three loose actions. */
+.answerRow {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.attendeeGroups {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attendeeGroupTitle {
+  margin: 0 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .facepile {
   display: flex;
   align-items: center;

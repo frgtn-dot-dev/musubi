@@ -28,6 +28,12 @@ import {
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Attendee, RemoveEventResponse } from "~/api/contracts";
+import {
+	ATTENDANCE_CHOICES,
+	groupAttendees,
+	nextChoice,
+	type AttendanceChoice,
+} from "../attendance";
 import { getEventAttendees } from "~/api/resources";
 import { Avatar } from "~/ui/Avatar";
 import { Button, IconButton } from "~/ui/Button";
@@ -83,9 +89,9 @@ export type EventActionHandlers = {
 	/** Creates detached occurrences and split series for scoped recurrence edits. */
 	onRestoreEvent?: (event: Event) => Promise<unknown>;
 	onSetAttendance: (input: {
-		attending: boolean;
 		calendarId?: string;
 		eventId: string;
+		status: AttendanceChoice;
 	}) => Promise<Attendee[]>;
 	onUpdateEvent: (event: Event) => Promise<Event>;
 	user: { id: string; name: string };
@@ -186,8 +192,10 @@ export function EventDetailsPopover({
 	const canAddToCalendar = targetCalendars.length > 0;
 	const [attendees, setAttendees] = useState<Attendee[]>();
 	const [attendeesOpen, setAttendeesOpen] = useState(false);
-	const isAttending =
-		attendees?.some((attendee) => attendee.id === user.id) ?? false;
+	const mine = attendees?.find((attendee) => attendee.id === user.id)?.status;
+	// The count and the facepile are about who is coming; a "can't go" belongs in
+	// the list, not in the row of faces.
+	const going = attendees?.filter((attendee) => attendee.status === "going") ?? [];
 	const eventCalendars = event.calendars
 		.map((calendarId) => calendars.find((item) => item.id === calendarId))
 		.filter((item): item is Calendar => Boolean(item));
@@ -414,18 +422,20 @@ export function EventDetailsPopover({
 		});
 	}
 
-	async function handleAttendance() {
+	async function handleAnswer(choice: Attendee["status"]) {
 		setBusyAction("attendance");
 		setActionError(undefined);
+		const next = nextChoice(mine, choice);
 
 		try {
-			const nextAttendees = await onSetAttendance({
-				attending: !isAttending,
-				calendarId: homeCalendar?.id,
-				eventId: master.id,
-			});
-			setAttendees(nextAttendees);
-			onNotice(isAttending ? "Attendance removed." : "Attendance confirmed.");
+			setAttendees(
+				await onSetAttendance({
+					calendarId: homeCalendar?.id,
+					eventId: master.id,
+					status: next,
+				}),
+			);
+			onNotice(next === "none" ? "Answer cleared." : "Answer saved.");
 		} catch (error) {
 			setActionError(getEventMutationError(error, "update", homeCalendar));
 		} finally {
@@ -707,7 +717,7 @@ export function EventDetailsPopover({
 													onClick={() => setAttendeesOpen((open) => !open)}
 												>
 													{attendees
-														? `Attendees · ${attendees.length}`
+														? `Attendees · ${going.length}`
 														: "Attendees"}
 													{attendeesOpen ? (
 														<ChevronUp aria-hidden="true" size={14} />
@@ -716,15 +726,29 @@ export function EventDetailsPopover({
 													)}
 												</Button>
 											</SectionLabel>
+											{/* One answer out of three, so a row — and clicking the
+                          one you already gave takes it back. */}
 											{attendees ? (
-												<Button
-													loading={busyAction === "attendance"}
-													size="compact"
-													variant={isAttending ? "secondary" : "primary"}
-													onClick={() => void handleAttendance()}
+												<div
+													aria-label="Your answer"
+													className={styles.answerRow}
+													role="group"
 												>
-													{isAttending ? "Leave" : "Attend"}
-												</Button>
+													{ATTENDANCE_CHOICES.map((choice) => (
+														<Button
+															aria-pressed={mine === choice.value}
+															key={choice.value}
+															loading={busyAction === "attendance"}
+															size="compact"
+															variant={
+																mine === choice.value ? "primary" : "secondary"
+															}
+															onClick={() => void handleAnswer(choice.value)}
+														>
+															{choice.label}
+														</Button>
+													))}
+												</div>
 											) : null}
 										</div>
 
@@ -733,28 +757,37 @@ export function EventDetailsPopover({
 										{!attendees ? (
 											<p>Loading guests…</p>
 										) : attendees.length === 0 ? (
-											<p>Be the first to attend.</p>
+											<p>Be the first to answer.</p>
 										) : attendeesOpen ? (
-											<ul className={styles.attendeeList}>
-												{attendees.map((item) => (
-													<li key={item.id}>
-														<Avatar
-															image={item.image}
-															name={item.name}
-															size={32}
-														/>
-														<span>{item.name}</span>
+											<ul className={styles.attendeeGroups}>
+												{groupAttendees(attendees).map((group) => (
+													<li key={group.status}>
+														<p className={styles.attendeeGroupTitle}>
+															{group.title}
+														</p>
+														<ul className={styles.attendeeList}>
+															{group.items.map((item) => (
+																<li key={item.id}>
+																	<Avatar
+																		image={item.image}
+																		name={item.name}
+																		size={32}
+																	/>
+																	<span>{item.name}</span>
+																</li>
+															))}
+														</ul>
 													</li>
 												))}
 											</ul>
 										) : (
 											<button
-												aria-label="Show every attendee"
+												aria-label="Show every answer"
 												className={styles.facepile}
 												type="button"
 												onClick={() => setAttendeesOpen(true)}
 											>
-												{attendees.slice(0, FACEPILE_LIMIT).map((item) => (
+												{going.slice(0, FACEPILE_LIMIT).map((item) => (
 													<Avatar
 														image={item.image}
 														key={item.id}
@@ -762,12 +795,12 @@ export function EventDetailsPopover({
 														size={32}
 													/>
 												))}
-												{attendees.length > FACEPILE_LIMIT ? (
+												{going.length > FACEPILE_LIMIT ? (
 													<span
 														aria-hidden="true"
 														className={styles.facepileMore}
 													>
-														+{attendees.length - FACEPILE_LIMIT}
+														+{going.length - FACEPILE_LIMIT}
 													</span>
 												) : null}
 											</button>

@@ -19,6 +19,7 @@ import {
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { useMemo } from "react";
+import type { AttendanceChoice } from "./attendance";
 import { useFederatedWorkspace } from "./federated-workspace";
 import {
   connectionForCalendar,
@@ -179,17 +180,17 @@ export function useEventMutations(userId: string) {
   });
   const attendance = useMutation({
     mutationFn: ({
-      attending,
       calendarId,
       eventId,
+      status,
     }: {
-      attending: boolean;
       calendarId?: string;
       eventId: string;
+      status: AttendanceChoice;
     }) =>
       setAttendance(
         eventId,
-        attending,
+        status,
         connectionForCalendar(connections, calendarId),
       ),
     onSuccess: (attendees, { eventId }) => {

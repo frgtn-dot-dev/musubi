@@ -33,6 +33,7 @@ import {
   type SavePageRequest,
 } from "@musubi/types";
 import type { EventPageTheme } from "@musubi/types";
+import type { AttendanceChoice } from "~/calendar/attendance";
 import type { RsvpStatus, VoteValue } from "./contracts";
 import { z } from "zod";
 import {
@@ -642,13 +643,13 @@ export function getEventAttendees(
 
 export function setAttendance(
   eventId: string,
-  attending: boolean,
+  status: AttendanceChoice,
   connectionId?: string,
 ) {
   return apiRequest(
     route(connectionId, `/api/v1/events/${eventId}/attendance`),
     {
-      body: { attending },
+      body: { status },
       method: "PUT",
       responseSchema: AttendeesResponseSchema,
     },
