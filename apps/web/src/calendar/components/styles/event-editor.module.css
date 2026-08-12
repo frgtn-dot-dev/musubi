@@ -558,6 +558,15 @@
   background: var(--surface-canvas);
 }
 
+.form[data-compact] .actions {
+  position: sticky;
+  z-index: 2;
+  bottom: 0;
+  padding-block: var(--space-3);
+  background: var(--surface-canvas);
+  box-shadow: 0 -1px var(--border-subtle);
+}
+
 @media (min-width: 900px) {
   .form[data-layout="page"] {
     height: 100%;

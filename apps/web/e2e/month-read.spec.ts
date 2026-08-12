@@ -1273,7 +1273,18 @@ test("scrolls a long calendar list inside quick create", async ({ page }) => {
 	await expect
 		.poll(() => calendarList.evaluate((element) => element.scrollTop))
 		.toBeGreaterThan(0);
-	await expect(page.getByRole("button", { name: "Create", exact: true })).toBeVisible();
+
+	const popoverBox = (await page
+		.locator('[class*="createPopover"]')
+		.boundingBox())!;
+	const actionsBox = (await page
+		.getByRole("button", { name: "More options" })
+		.locator("xpath=..")
+		.boundingBox())!;
+	expect(actionsBox.y).toBeGreaterThanOrEqual(popoverBox.y);
+	expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(
+		popoverBox.y + popoverBox.height,
+	);
 });
 
 test("keeps provider failures actionable without assuming a write succeeded", async ({
