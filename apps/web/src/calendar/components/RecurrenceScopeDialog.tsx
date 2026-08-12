@@ -69,15 +69,9 @@ export function RecurrenceScopeDialog({
               `“${title}” moves to ${timeLabel}. Which events should change?`
             : `Which events should take the changes to “${title}”?`
       }
-      footer={
-        <Button
-          disabled={Boolean(busyScope)}
-          variant="secondary"
-          onClick={() => onResolve(undefined)}
-        >
-          Cancel
-        </Button>
-      }
+      /* No Cancel row: the header's close button and Escape both resolve this the
+         same way, and a footer for one of them made backing out look like a
+         choice on par with the scopes. */
       onOpenChange={(open) => {
         if (!open && !busyScope) onResolve(undefined);
       }}
