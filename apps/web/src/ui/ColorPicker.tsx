@@ -309,14 +309,13 @@ export function ColorPicker({
             >
               Done
             </button>
-            <p
-              id={`${id}-custom-hint`}
-              role={customDirty && !validCustom ? "alert" : undefined}
-            >
-              {customDirty && !validCustom
-                ? "Enter six hexadecimal characters."
-                : "Changes preview as you type."}
-            </p>
+            {/* Only when it is wrong: the preview is the feedback while it is
+                right. */}
+            {customDirty && !validCustom ? (
+              <p id={`${id}-custom-hint`} role="alert">
+                Enter six hexadecimal characters.
+              </p>
+            ) : null}
           </div>
         ) : null}
       </PopoverContent>
