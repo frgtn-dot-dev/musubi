@@ -1,14 +1,16 @@
 import { randomBytes } from "node:crypto";
 import {
+  getEventCalendars,
   getEventShare,
   getSharedEvent,
   getSharedEventId,
-  listEventRsvps,
+  listEventAnswers,
   nameAnonymousUser,
   revokeEventShare,
-  setEventRsvp,
+  setAttendance,
+  setEventHasAttendees,
   upsertEventShare,
-  type RsvpStatus,
+  type AttendanceStatus,
 } from "@musubi/db";
 import {
   BadRequestError,
@@ -18,6 +20,7 @@ import {
 import { Request, Response } from "express";
 import { config } from "@musubi/config";
 import { assertCanEditEvent } from "../permissions";
+import { notifyAttendanceChanged } from "./events";
 
 // `link` — anyone holding the URL. `public` — the same, and the page may say a
 // crawler is welcome. Access and indexability are separate questions: a public
@@ -108,6 +111,10 @@ export async function handlerPutEventShare(req: Request, res: Response) {
     mode,
     token: shareToken(),
   });
+  // A published page collects answers, and those answers live in the event's
+  // attendee list — so the section that shows them has to be on. Asking the
+  // organizer to tick it as well would be asking the same question twice.
+  await setEventHasAttendees(eventID, true);
 
   res.status(200).json({
     attendeeVisibility: share.attendeeVisibility,
@@ -203,6 +210,9 @@ const RSVP_STATUSES = new Set(["declined", "going", "maybe"]);
  * emailed code first (`emailOTP`), so every row here is an address somebody
  * proved. That is what lets a count mean something — and it is why no
  * "unverified RSVP" state exists to be cleaned up later (PRD §18.3).
+ *
+ * The answer lands in the event's attendee list, not in a table of its own: the
+ * calendar has to be able to show what the page collected.
  */
 export async function handlerPutPublicRsvp(req: Request, res: Response) {
   const status = String(req.body?.status ?? "");
@@ -210,19 +220,25 @@ export async function handlerPutPublicRsvp(req: Request, res: Response) {
     throw new BadRequestError("status must be going, maybe or declined...");
   }
   // Somebody who arrived through an emailed code has an address and nothing
-  // else, and a list of blanks helps nobody. Only fills an empty name, so it
-  // can never rewrite the profile of a member who happens to answer.
+  // else, and an attendee list is a list of people, not of blanks. Only fills an
+  // empty name, so it can never rewrite the profile of a member who happens to
+  // answer.
   const name = String(req.body?.name ?? "").trim().slice(0, 80);
+  if (!name && !req.user!.name?.trim()) {
+    throw new BadRequestError("name is required the first time you answer...");
+  }
   if (name) await nameAnonymousUser(req.user!.id, name);
 
   const share = await getSharedEventId(String(req.params.token));
   if (!share) throw new NotFoundError("This event page is not available...");
 
-  await setEventRsvp({
-    eventID: share.eventID,
-    status: status as RsvpStatus,
-    userID: req.user!.id,
-  });
+  await setAttendance(share.eventID, req.user!.id, status as AttendanceStatus);
+  // The same frame attendance from the app sends: it is the same list, so an
+  // open detail in the app updates itself either way.
+  await notifyAttendanceChanged(
+    share.eventID,
+    await getEventCalendars(share.eventID),
+  );
 
   res.status(200).json(await rsvpSummary(share, req.user!.id));
 }
@@ -239,61 +255,50 @@ async function rsvpSummary(
   share: { attendeeVisibility: string; eventID: string },
   userID: string,
 ) {
-  const rsvps = await listEventRsvps(share.eventID);
-
-  return {
-    counts: rsvpCounts(rsvps),
-    mine: rsvps.find((rsvp) => rsvp.userID === userID)?.status ?? null,
-    // Names only when the organizer said so, and only of people who are coming:
-    // "maybe" and "no" are answers people give in confidence.
-    names:
-      share.attendeeVisibility === "names"
-        ? rsvps
-            .filter((rsvp) => rsvp.status === "going")
-            // Never a blank in the list: an account can still be nameless if the
-            // answer came from somewhere that did not ask.
-            .map((rsvp) => rsvp.name.trim() || "Guest")
-        : [],
+  return rsvpSummaryOf({
+    answers: await listEventAnswers(share.eventID),
+    userID,
     visibility: share.attendeeVisibility,
-  };
+  });
 }
 
 /**
- * Who answered, for the person running the event.
+ * What the page says about who is coming.
  *
- * Deliberately NOT filtered by `attendeeVisibility`: that setting decides what a
- * READER of the page learns. An organizer who set it to "show nothing" still has
- * to be able to see the answers — otherwise the feature collects replies nobody
- * can read, which is how it shipped an hour ago.
+ * `visibility` is the organizer's setting for READERS of the page. It never
+ * applies inside the app: the attendee list there is gated on seeing the event,
+ * and a "show nothing" page must not blind the people running it.
  */
-export async function handlerGetEventRsvps(req: Request, res: Response) {
-  const eventID = String(req.params.eventId);
-  await assertCanEditEvent(req.user!.id, eventID);
-
-  res.status(200).json(groupRsvps(await listEventRsvps(eventID)));
-}
-
-export function groupRsvps(rsvps: Array<{ name: string; status: string }>) {
-  const named = (status: string) =>
-    rsvps
-      .filter((rsvp) => rsvp.status === status)
-      // An account that arrived through a code and never gave a name still has
-      // to appear — a blank row would read as a bug.
-      .map((rsvp) => rsvp.name.trim() || "Guest")
-      .sort((left, right) => left.localeCompare(right));
+export function rsvpSummaryOf({
+  answers,
+  userID,
+  visibility,
+}: {
+  answers: Array<{ name: string; status: string; userID: string }>;
+  userID: string;
+  visibility: string;
+}) {
+  const count = (status: string) =>
+    answers.filter((answer) => answer.status === status).length;
 
   return {
-    counts: rsvpCounts(rsvps),
-    declined: named("declined"),
-    going: named("going"),
-    maybe: named("maybe"),
-  };
-}
-
-export function rsvpCounts(rsvps: Array<{ status: string }>) {
-  return {
-    declined: rsvps.filter((rsvp) => rsvp.status === "declined").length,
-    going: rsvps.filter((rsvp) => rsvp.status === "going").length,
-    maybe: rsvps.filter((rsvp) => rsvp.status === "maybe").length,
+    counts: {
+      declined: count("declined"),
+      going: count("going"),
+      maybe: count("maybe"),
+    },
+    mine: answers.find((answer) => answer.userID === userID)?.status ?? null,
+    // Names only when the organizer said so, and only of people who are coming:
+    // "maybe" and "no" are answers people give in confidence.
+    names:
+      visibility === "names"
+        ? answers
+            .filter((answer) => answer.status === "going")
+            // Never a blank in the list: an account can still be nameless if it
+            // answered before a name was required.
+            .map((answer) => answer.name.trim() || "Guest")
+            .sort((left, right) => left.localeCompare(right))
+        : [],
+    visibility,
   };
 }

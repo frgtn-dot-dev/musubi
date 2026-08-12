@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
-  groupRsvps,
   publicEventProjection,
+  rsvpSummaryOf,
   type SharedEventRow,
 } from "./event_shares";
 
@@ -109,30 +109,61 @@ assert.equal(publicEventProjection(BASE).recurrence, null);
   assert.equal(projection.title, "Studio open day");
 }
 
-// ── The organizer's list ─────────────────────────────────────────────────────
-// Grouped, named and sorted — and it exists at all because the reader-facing
-// visibility must not blind the person who owns the event.
-{
-  const grouped = groupRsvps([
-    { name: "Zoe", status: "going" },
-    { name: "  ", status: "going" },
-    { name: "Adam", status: "going" },
-    { name: "Bea", status: "maybe" },
-    { name: "Cyril", status: "declined" },
-  ]);
+// ── The summary a page reports ───────────────────────────────────────────────
+// One list, one count: attendance from the app and answers from the page are the
+// same rows, so a published event cannot report two different numbers.
+const ANSWERS = [
+  { name: "Zoe", status: "going", userID: "u-1" },
+  { name: "Bea", status: "maybe", userID: "u-2" },
+  { name: "Cyril", status: "declined", userID: "u-3" },
+  { name: "Adam", status: "going", userID: "u-4" },
+];
 
-  assert.deepEqual(grouped.counts, { declined: 1, going: 3, maybe: 1 });
-  // Alphabetical, and a nameless account still appears rather than vanishing.
-  assert.deepEqual(grouped.going, ["Adam", "Guest", "Zoe"]);
-  assert.deepEqual(grouped.maybe, ["Bea"]);
-  assert.deepEqual(grouped.declined, ["Cyril"]);
+{
+  const summary = rsvpSummaryOf({
+    answers: ANSWERS,
+    userID: "u-2",
+    visibility: "names",
+  });
+
+  assert.deepEqual(summary.counts, { declined: 1, going: 2, maybe: 1 });
+  assert.equal(summary.mine, "maybe");
+  // Alphabetical, and only the yeses: a maybe and a no are answers people give
+  // in confidence.
+  assert.deepEqual(summary.names, ["Adam", "Zoe"]);
 }
 
-// Nobody yet is an empty list, not a missing one — the dialog renders either.
+// Counts without names is the default, and a reader who never answered has no
+// answer of their own rather than a made-up one.
 {
-  const empty = groupRsvps([]);
+  const summary = rsvpSummaryOf({
+    answers: ANSWERS,
+    userID: "nobody",
+    visibility: "counts",
+  });
+
+  assert.equal(summary.mine, null);
+  assert.deepEqual(summary.names, []);
+  assert.deepEqual(summary.counts, { declined: 1, going: 2, maybe: 1 });
+}
+
+// Rows from before a name was required must still read as a person.
+{
+  const summary = rsvpSummaryOf({
+    answers: [{ name: "  ", status: "going", userID: "u-5" }],
+    userID: "u-5",
+    visibility: "names",
+  });
+
+  assert.deepEqual(summary.names, ["Guest"]);
+}
+
+// Nobody yet is an empty list, not a missing one — the page renders either.
+{
+  const empty = rsvpSummaryOf({ answers: [], userID: "u-1", visibility: "names" });
   assert.deepEqual(empty.counts, { declined: 0, going: 0, maybe: 0 });
-  assert.deepEqual(empty.going, []);
+  assert.deepEqual(empty.names, []);
+  assert.equal(empty.mine, null);
 }
 
 console.log("event share projection self-check: OK");
