@@ -12,6 +12,19 @@
   background: var(--surface-panel);
 }
 
+/* A chosen radio, not a chosen page: the shared row fill is a near-white slab
+   that shouted over the two options next to it. A tinted panel and the row's own
+   "Current" value say the same thing at reading volume. Beats the shared rule on
+   the element selector. */
+.modes button[data-selected] {
+  background: color-mix(in srgb, var(--control-fill) 12%, transparent);
+  color: var(--text-primary);
+}
+
+.modes button[data-selected]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--control-fill) 18%, transparent);
+}
+
 .linkRow {
   display: flex;
   align-items: center;
@@ -57,12 +70,6 @@
   padding: var(--space-3) var(--layer-inline) var(--space-4);
 }
 
-.visibilityRow {
-  display: grid;
-  gap: var(--space-2);
-  justify-items: start;
-}
-
 /* Who answered. Shown to whoever can edit the event, regardless of what the
    page is set to reveal to its readers. */
 .answers {
@@ -93,37 +100,4 @@
   flex: none;
   min-width: 4.5em;
   color: var(--text-muted);
-}
-
-.look {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.look h3 {
-  margin: 0;
-  font-size: var(--text-13);
-  font-weight: 500;
-}
-
-.choices {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.choicesLabel {
-  min-width: 4.5em;
-  color: var(--text-muted);
-  font-size: var(--text-11);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.swatch {
-  display: block;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
 }

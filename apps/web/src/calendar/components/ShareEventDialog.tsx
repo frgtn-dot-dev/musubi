@@ -8,16 +8,7 @@ import {
   publishEvent,
   unpublishEvent,
 } from "~/api/resources";
-import {
-  eventPageCovers,
-  eventPageFonts,
-  eventPageLayouts,
-  eventPagePalettes,
-} from "@musubi/design-system";
-import {
-  defaultEventPageTheme,
-  type EventPageTheme,
-} from "@musubi/types";
+import { defaultEventPageTheme } from "@musubi/types";
 import type { EventShare } from "~/api/contracts";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
@@ -121,7 +112,6 @@ export function ShareEventDialog({
       attendeeVisibility?: EventShare["attendeeVisibility"];
       indexable: boolean;
       mode: "link" | "public";
-      theme?: EventPageTheme;
     }) =>
       publishEvent({
         attendeeVisibility:
@@ -129,7 +119,9 @@ export function ShareEventDialog({
         eventId,
         indexable: input.indexable,
         mode: input.mode,
-        theme: input.theme ?? current?.theme ?? defaultEventPageTheme,
+        // One look for every page. Choosing it is a job for wherever that
+        // becomes a feature; a published page keeps whatever theme it has.
+        theme: current?.theme ?? defaultEventPageTheme,
       }),
     onSuccess: (result) => queryClient.setQueryData(shareKey, result),
   });
@@ -144,15 +136,6 @@ export function ShareEventDialog({
   });
 
   const current = share.data;
-  const theme = current?.theme ?? defaultEventPageTheme;
-  const publishTheme = (change: Partial<EventPageTheme>) => {
-    if (!current) return;
-    publish.mutate({
-      indexable: current.indexable,
-      mode: current.mode,
-      theme: { ...theme, ...change },
-    });
-  };
   const counts = rsvps.data?.counts ?? { declined: 0, going: 0, maybe: 0 };
   const answered = counts.going + counts.maybe + counts.declined > 0;
   const mode: Mode = current?.mode ?? "private";
@@ -224,113 +207,40 @@ export function ShareEventDialog({
         </div>
 
         {current ? (
-          <div className={styles.linkRow}>
-            <input
-              aria-label="Public link"
-              className={styles.linkField}
-              readOnly
-              value={current.url}
-            />
-            <Button
-              icon={
-                copied ? (
-                  <Check size={15} strokeWidth={1.8} />
-                ) : (
-                  <Copy size={15} strokeWidth={1.6} />
-                )
-              }
-              size="compact"
-              variant="secondary"
-              onClick={() => void copyLink(current.url)}
-            >
-              {copied ? "Copied" : "Copy"}
-            </Button>
+          /* Rows, not a select: this dialog opens from the event popover, and a
+             dropdown's own popover layers behind it — the same trap the layer
+             order in `docs/ui/calendar-ui.md` records. The pattern also matches
+             the modes above, width included. */
+          <div
+            aria-label="What readers see about who is coming"
+            className={styles.modes}
+            role="radiogroup"
+          >
+            {VISIBILITIES.map((option) => (
+              <RowAction
+                aria-checked={current.attendeeVisibility === option.value}
+                detail={option.detail}
+                disabled={busy}
+                key={option.value}
+                label={option.label}
+                role="radio"
+                selected={current.attendeeVisibility === option.value}
+                showChevron={false}
+                value={
+                  current.attendeeVisibility === option.value
+                    ? "Current"
+                    : undefined
+                }
+                onClick={() =>
+                  publish.mutate({
+                    attendeeVisibility: option.value,
+                    indexable: current.indexable,
+                    mode: current.mode,
+                  })
+                }
+              />
+            ))}
           </div>
-        ) : null}
-
-        {current ? (
-          <div className={styles.visibilityRow}>
-            {/* Rows, not a select: this dialog opens from the event popover, and
-                a dropdown's own popover layers behind it — the same trap the
-                layer order in `docs/ui/calendar-ui.md` records. The pattern also
-                matches the modes above. */}
-            <div
-              aria-label="What readers see about who is coming"
-              className={styles.modes}
-              role="radiogroup"
-            >
-              {VISIBILITIES.map((option) => (
-                <RowAction
-                  aria-checked={current.attendeeVisibility === option.value}
-                  detail={option.detail}
-                  disabled={busy}
-                  key={option.value}
-                  label={option.label}
-                  role="radio"
-                  selected={current.attendeeVisibility === option.value}
-                  showChevron={false}
-                  value={
-                    current.attendeeVisibility === option.value
-                      ? "Current"
-                      : undefined
-                  }
-                  onClick={() =>
-                    publish.mutate({
-                      attendeeVisibility: option.value,
-                      indexable: current.indexable,
-                      mode: current.mode,
-                    })
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {current ? (
-          <section aria-labelledby="page-look-title" className={styles.look}>
-            <h3 id="page-look-title">How the page looks</h3>
-            {/* Closed sets, no colour picker and no CSS box: the palettes are
-                the ones whose contrast is proven in the design system, which is
-                how "accessibility is not customisable" (PRD §17.3) stays true
-                rather than being a line in a document. */}
-            <Choices
-              label="Palette"
-              onChange={(palette) =>
-                publishTheme({ palette: palette as EventPageTheme["palette"] })
-              }
-              options={eventPagePalettes.map((palette) => ({
-                id: palette.id,
-                label: palette.label,
-                swatch: palette.accent,
-              }))}
-              value={theme.palette}
-            />
-            <Choices
-              label="Layout"
-              onChange={(layout) =>
-                publishTheme({ layout: layout as EventPageTheme["layout"] })
-              }
-              options={eventPageLayouts.map((item) => ({ ...item }))}
-              value={theme.layout}
-            />
-            <Choices
-              label="Cover"
-              onChange={(cover) =>
-                publishTheme({ cover: cover as EventPageTheme["cover"] })
-              }
-              options={eventPageCovers.map((item) => ({ ...item }))}
-              value={theme.cover}
-            />
-            <Choices
-              label="Type"
-              onChange={(font) =>
-                publishTheme({ font: font as EventPageTheme["font"] })
-              }
-              options={eventPageFonts.map((item) => ({ ...item }))}
-              value={theme.font}
-            />
-          </section>
         ) : null}
 
         {current?.mode === "public" ? (
@@ -370,6 +280,31 @@ export function ShareEventDialog({
           </p>
         ) : null}
 
+        {current ? (
+          <div className={styles.linkRow}>
+            <input
+              aria-label="Public link"
+              className={styles.linkField}
+              readOnly
+              value={current.url}
+            />
+            <Button
+              icon={
+                copied ? (
+                  <Check size={15} strokeWidth={1.8} />
+                ) : (
+                  <Copy size={15} strokeWidth={1.6} />
+                )
+              }
+              size="compact"
+              variant="secondary"
+              onClick={() => void copyLink(current.url)}
+            >
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+        ) : null}
+
         <p className={styles.note}>
           {/* Said before anyone asks: the page is a projection, not the event. */}
           A published page shows the title, description, when and where, and who
@@ -395,49 +330,5 @@ function AnswerList({ label, names }: { label: string; names: string[] }) {
       <span className={styles.answerLabel}>{label}</span>
       {names.join(", ")}
     </p>
-  );
-}
-
-/**
- * One row of mutually exclusive looks.
- *
- * Buttons rather than a select for the same reason the modes above are rows:
- * this dialog opens from a popover, and a dropdown's own layer lands behind it.
- */
-function Choices({
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  options: Array<{ id: string; label: string; swatch?: string }>;
-  value: string;
-}) {
-  return (
-    <div className={styles.choices} role="group" aria-label={label}>
-      <span className={styles.choicesLabel}>{label}</span>
-      {options.map((option) => (
-        <Button
-          aria-pressed={value === option.id}
-          icon={
-            option.swatch ? (
-              <span
-                aria-hidden="true"
-                className={styles.swatch}
-                style={{ background: option.swatch }}
-              />
-            ) : undefined
-          }
-          key={option.id}
-          size="compact"
-          variant={value === option.id ? "primary" : "secondary"}
-          onClick={() => onChange(option.id)}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
   );
 }
