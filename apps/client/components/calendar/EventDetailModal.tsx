@@ -10,13 +10,14 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useApi } from "@/services/api";
+import { useApi, type Attendee } from "@/services/api";
 import { useEffect, useState } from "react";
 import CalendarPickerModal from "./CalendarPickerModal";
 import { Tap } from "@/components/ui/Tap";
 import { Avatar } from "@/components/Avatar";
 import { useServer } from "@/contexts/ServerContext";
 import { useAttendeesStore } from "@/store/useAttendeesStore";
+import { ATTENDANCE_CHOICES, groupAttendees, nextChoice } from "@/lib/attendance";
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
 import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
@@ -66,19 +67,23 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
   const [attendeesOpen, setAttendeesOpen] = useState(false);
   useEffect(() => { setAttendeesOpen(false); }, [visible]);
 
-  const isAttending = !!userID && !!attendees?.some(a => a.id === userID);
-  const toggleAttendance = async () => {
+  const mine = userID ? attendees?.find(a => a.id === userID)?.status : undefined;
+  // The count and the facepile are about who is coming; a "can't go" belongs in
+  // the list, not in the row of faces.
+  const going = attendees?.filter(a => a.status === "going") ?? [];
+  const answer = async (tapped: Attendee["status"]) => {
     if (!event || !userID || !attendees || !session) return;
-    const next = !isAttending;
-    // Optimistic flip; the server's list (PUT response or SSE frame) replaces it.
-    setAttendees(event.id!, next
-      ? [...attendees, { id: userID, name: session.user.name, image: session.user.image }]
-      : attendees.filter(a => a.id !== userID));
+    const next = nextChoice(mine, tapped);
+    // Optimistic write; the server's list (PUT response or SSE frame) replaces it.
+    const without = attendees.filter(a => a.id !== userID);
+    setAttendees(event.id!, next === "none"
+      ? without
+      : [...without, { id: userID, name: session.user.name, image: session.user.image, status: next }]);
     try {
       setAttendees(event.id!, await api.setAttendance(event, next));
     } catch (error) {
       setAttendees(event.id!, attendees); // revert
-      showToast({ message: userFacingError(error, "Attendance could not be updated.") });
+      showToast({ message: userFacingError(error, "Your answer could not be saved.") });
     }
   };
 
@@ -262,43 +267,53 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <Tap scaleTo={1} hitSlop={10} onPress={() => setAttendeesOpen(o => !o)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                       <Text style={[styles.fieldLabel, { fontFamily: fonts.sans, marginBottom: 0 }]}>
-                        Attendees · {attendees.length}
+                        Attendees · {going.length}
                       </Text>
                       <Feather name={attendeesOpen ? "chevron-up" : "chevron-down"} size={14} color={colors.fg4} />
                     </Tap>
-                    <Tap
-                      onPress={toggleAttendance}
-                      haptic={isAttending ? "warn" : "success"}
-                      style={{
-                        borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
-                        backgroundColor: isAttending ? "transparent" : colors.fill,
-                      }}
-                    >
-                      <View style={{ paddingHorizontal: 12, paddingVertical: 5 }}>
-                        <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: isAttending ? colors.fg2 : colors.onFill }}>
-                          {isAttending ? "Leave" : "Attend"}
-                        </Text>
-                      </View>
-                    </Tap>
+                    {/* One answer out of three, and tapping the one you gave takes
+                        it back — the pill is the same one "Attend" used to be. */}
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {ATTENDANCE_CHOICES.map(choice => {
+                        const chosen = mine === choice.value;
+                        return (
+                          <Tap
+                            key={choice.value}
+                            onPress={() => answer(choice.value)}
+                            haptic={chosen ? "warn" : "success"}
+                            style={{
+                              borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
+                              backgroundColor: chosen ? colors.fill : "transparent",
+                            }}
+                          >
+                            <View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
+                              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: chosen ? colors.onFill : colors.fg2 }}>
+                                {choice.label}
+                              </Text>
+                            </View>
+                          </Tap>
+                        );
+                      })}
+                    </View>
                   </View>
                   {/* Facepile "falls apart" into the list on expand — one or the other, never both. */}
                   {!attendeesOpen ? (
                     <Tap scaleTo={1} onPress={() => setAttendeesOpen(true)}>
                       <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        {attendees.slice(0, 7).map((a, i) => (
+                        {going.slice(0, 7).map((a, i) => (
                           // bg1 ring separates the overlapping circles from each other
                           <View key={a.id} style={{ marginLeft: i === 0 ? 0 : -10, borderWidth: 2, borderColor: colors.bg1, borderRadius: 999 }}>
                             <Avatar name={a.name} image={a.image} size={32} />
                           </View>
                         ))}
-                        {attendees.length > 7 && (
+                        {going.length > 7 && (
                           <View style={{
                             marginLeft: -10, width: 36, height: 36, borderRadius: 18,
                             borderWidth: 2, borderColor: colors.bg1, backgroundColor: colors.bg3,
                             alignItems: "center", justifyContent: "center",
                           }}>
                             <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg2 }}>
-                              +{attendees.length - 7}
+                              +{going.length - 7}
                             </Text>
                           </View>
                         )}
@@ -307,12 +322,19 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                   ) : (
                     <ScrollView style={{ maxHeight: 216 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                       <View style={{ gap: 12 }}>
-                        {attendees.map(a => (
-                          <View key={a.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                            <Avatar name={a.name} image={a.image} size={32} />
-                            <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg, flex: 1 }} numberOfLines={1}>
-                              {a.name}
+                        {groupAttendees(attendees).map(group => (
+                          <View key={group.status} style={{ gap: 12 }}>
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 11, letterSpacing: 1, color: colors.fg4, textTransform: "uppercase" }}>
+                              {group.title}
                             </Text>
+                            {group.items.map(a => (
+                              <View key={a.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                                <Avatar name={a.name} image={a.image} size={32} />
+                                <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg, flex: 1 }} numberOfLines={1}>
+                                  {a.name}
+                                </Text>
+                              </View>
+                            ))}
                           </View>
                         ))}
                       </View>

@@ -4,6 +4,7 @@ import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
 import { notifySessionExpired } from "@/lib/signOut";
 import { fetchWithTimeout } from "@/lib/network";
+import type { AttendanceChoice } from "@/lib/attendance";
 
 // Federation: calendars shared from another Musubi server live at that server.
 // Calendar-scoped calls check the registry and, when the calendar is remote,
@@ -11,8 +12,14 @@ import { fetchWithTimeout } from "@/lib/network";
 const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
 const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
 
-// Names + avatars only — the API deliberately sends no attendee emails.
-export type Attendee = { id: string; name: string; image?: string | null };
+// Names + avatars only — the API deliberately sends no attendee emails. `status`
+// is the answer: public RSVPs land in this same list (spec 2026-08-12).
+export type Attendee = {
+  id: string;
+  name: string;
+  image?: string | null;
+  status: "declined" | "going" | "maybe";
+};
 
 export class SettingsConflictError extends Error {
   constructor() {
@@ -277,17 +284,17 @@ export function useApi() {
       return data ?? [];
     },
 
-    async setAttendance(event: Event, attending: boolean) {
+    async setAttendance(event: Event, status: AttendanceChoice) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
         return (await fedFetch<Attendee[]>(remote, `/api/${apiVersion}/events/${event.id}/attendance`, {
-          method: "PUT", body: JSON.stringify({ attending }),
+          method: "PUT", body: JSON.stringify({ status }),
         })) ?? [];
       }
       const { error, data } = await authClient.$fetch<Attendee[]>(`${apiUrl}/api/${apiVersion}/events/${event.id}/attendance`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ attending }),
+        body: JSON.stringify({ status }),
       });
 
       throwOnError(error);
