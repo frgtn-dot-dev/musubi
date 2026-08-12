@@ -238,6 +238,8 @@ export function Sidebar({
           <div className={styles.brand}>
             <BrandMark className={styles.brandMark} />
             <span>MUSUBI</span>
+            {/* Said once, quietly, where the product names itself. */}
+            <span className={styles.brandStage}>Alpha</span>
           </div>
           <IconButton
             className={styles.mobileClose}

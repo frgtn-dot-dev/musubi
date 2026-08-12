@@ -64,6 +64,17 @@
 	height: 29px;
 }
 
+/* Its own tracking: the wordmark's 0.38em would stretch this into a second logo.
+   A badge, not a banner — it sits next to the name and stops there. */
+.brandStage {
+	padding: 1px 5px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-pill);
+	color: var(--text-muted);
+	font-size: 0.58rem;
+	letter-spacing: 0.08em;
+}
+
 .sidebarScroll {
 	display: flex;
 	min-height: 0;
