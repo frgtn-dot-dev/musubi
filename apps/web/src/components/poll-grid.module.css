@@ -142,7 +142,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.countRow th,
+/* Header row without a header cell: the corner beside it spans down instead. */
 .countRow td {
   background: var(--surface-raised);
 }
