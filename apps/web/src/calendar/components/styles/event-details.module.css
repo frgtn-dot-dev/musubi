@@ -227,9 +227,21 @@
   text-transform: inherit;
 }
 
-/* One answer out of three — a row, not three loose actions. */
+/* The count and its chevron share the button's label span, where the heading's
+   uppercase tracking crams them together and the text baseline lifts the glyph
+   off centre. Reaching into Button's own span because the two live in one slot —
+   the alternative is a trailing-icon prop on Button for this one caller. */
+.attendeeToggle > span > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* One answer out of three — a row, not three loose actions. Wraps rather than
+   overflowing: the popover is narrower than the three labels on some locales. */
 .answerRow {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 

@@ -726,31 +726,33 @@ export function EventDetailsPopover({
 													)}
 												</Button>
 											</SectionLabel>
-											{/* One answer out of three, so a row — and clicking the
-                          one you already gave takes it back. */}
-											{attendees ? (
-												<div
-													aria-label="Your answer"
-													className={styles.answerRow}
-													role="group"
-												>
-													{ATTENDANCE_CHOICES.map((choice) => (
-														<Button
-															aria-pressed={mine === choice.value}
-															key={choice.value}
-															loading={busyAction === "attendance"}
-															size="compact"
-															variant={
-																mine === choice.value ? "primary" : "secondary"
-															}
-															onClick={() => void handleAnswer(choice.value)}
-														>
-															{choice.label}
-														</Button>
-													))}
-												</div>
-											) : null}
 										</div>
+
+										{/* Its own row: three answers plus the heading did not fit
+                        the popover's width, and what overflowed was the answer.
+                        One tap each, which a dropdown would have made two. */}
+										{attendees ? (
+											<div
+												aria-label="Your answer"
+												className={styles.answerRow}
+												role="group"
+											>
+												{ATTENDANCE_CHOICES.map((choice) => (
+													<Button
+														aria-pressed={mine === choice.value}
+														key={choice.value}
+														loading={busyAction === "attendance"}
+														size="compact"
+														variant={
+															mine === choice.value ? "primary" : "secondary"
+														}
+														onClick={() => void handleAnswer(choice.value)}
+													>
+														{choice.label}
+													</Button>
+												))}
+											</div>
+										) : null}
 
 										{/* The facepile falls apart into the list — one or the
                           other, never both. */}

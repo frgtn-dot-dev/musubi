@@ -271,30 +271,30 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                       </Text>
                       <Feather name={attendeesOpen ? "chevron-up" : "chevron-down"} size={14} color={colors.fg4} />
                     </Tap>
-                    {/* One answer out of three, and tapping the one you gave takes
-                        it back — the pill is the same one "Attend" used to be. */}
-                    <View style={{ flexDirection: "row", gap: 6 }}>
-                      {ATTENDANCE_CHOICES.map(choice => {
-                        const chosen = mine === choice.value;
-                        return (
-                          <Tap
-                            key={choice.value}
-                            onPress={() => answer(choice.value)}
-                            haptic={chosen ? "warn" : "success"}
-                            style={{
-                              borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
-                              backgroundColor: chosen ? colors.fill : "transparent",
-                            }}
-                          >
-                            <View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
-                              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: chosen ? colors.onFill : colors.fg2 }}>
-                                {choice.label}
-                              </Text>
-                            </View>
-                          </Tap>
-                        );
-                      })}
-                    </View>
+                  </View>
+                  {/* Its own row: three answers next to the label do not fit a phone,
+                      and what gets squeezed out is the answer. One tap each. */}
+                  <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
+                    {ATTENDANCE_CHOICES.map(choice => {
+                      const chosen = mine === choice.value;
+                      return (
+                        <Tap
+                          key={choice.value}
+                          onPress={() => answer(choice.value)}
+                          haptic={chosen ? "warn" : "success"}
+                          style={{
+                            borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
+                            backgroundColor: chosen ? colors.fill : "transparent",
+                          }}
+                        >
+                          <View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: chosen ? colors.onFill : colors.fg2 }}>
+                              {choice.label}
+                            </Text>
+                          </View>
+                        </Tap>
+                      );
+                    })}
                   </View>
                   {/* Facepile "falls apart" into the list on expand — one or the other, never both. */}
                   {!attendeesOpen ? (

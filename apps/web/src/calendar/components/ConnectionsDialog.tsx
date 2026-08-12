@@ -390,11 +390,7 @@ export function ConnectionsDialog({
                 className={styles.inviteForm}
                 onSubmit={(event) => void previewInvite(event)}
               >
-                <Field
-                  className={styles.inviteField}
-                  description="Paste the full link or just its invite token."
-                  label="Invite link"
-                >
+                <Field className={styles.inviteField} label="Invite link">
                   <input
                     disabled={busy}
                     placeholder="https://server/invite/…"
