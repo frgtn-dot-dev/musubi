@@ -75,7 +75,6 @@ export function SchedulingDialog({
 			{openPoll ? (
 				<PollResults
 					calendars={calendars}
-					onBack={() => setOpenPoll(undefined)}
 					onChanged={(message) => {
 						void queryClient.invalidateQueries({ queryKey: pollsKey });
 						void queryClient.invalidateQueries({ queryKey: ["poll-calendar"] });
@@ -188,14 +187,12 @@ function pollDetail(poll: PollSummary) {
 
 export function PollResults({
 	calendars,
-	onBack,
 	onChanged,
 	onDecided,
 	onNotice,
 	poll,
 }: {
 	calendars: Calendar[];
-	onBack: () => void;
 	/** A close or a delete: the list behind this view is now out of date. */
 	onChanged: (message: string) => void;
 	onDecided: () => void;
@@ -414,9 +411,29 @@ export function PollResults({
 				</p>
 			) : null}
 
-			{/* One action block: splitting delete onto the far edge made this footer
-          read as two unrelated menus even though all three manage this poll. */}
+			{/* Managing the poll on the left, answering it on the right. Closing the
+          dialog is the header's X — a Back button here was a third way out. */}
 			<div className={styles.footer}>
+				<div className={styles.footerGroup}>
+					<Button
+						className={styles.deletePoll}
+						loading={remove.isPending}
+						variant="ghost"
+						onClick={() => setConfirmingDelete(true)}
+					>
+						Delete poll
+					</Button>
+					{data && !data.closed ? (
+						<Button
+							loading={close.isPending}
+							title="Stop taking answers without picking a time"
+							variant="ghost"
+							onClick={() => close.mutate()}
+						>
+							Stop taking answers
+						</Button>
+					) : null}
+				</div>
 				{data && !data.closed ? (
 					<Button
 						disabled={!draft}
@@ -426,27 +443,6 @@ export function PollResults({
 						{draft ? "Save my answers" : "Answers saved"}
 					</Button>
 				) : null}
-				<Button
-					className={styles.deletePoll}
-					loading={remove.isPending}
-					variant="ghost"
-					onClick={() => setConfirmingDelete(true)}
-				>
-					Delete poll
-				</Button>
-				{data && !data.closed ? (
-					<Button
-						loading={close.isPending}
-						title="Stop taking answers without picking a time"
-						variant="secondary"
-						onClick={() => close.mutate()}
-					>
-						Stop taking answers
-					</Button>
-				) : null}
-				<Button variant="secondary" onClick={onBack}>
-					Back
-				</Button>
 			</div>
 
 			<ConfirmationDialog

@@ -50,7 +50,6 @@ export function PollCalendarDialog({
       {poll.role === "organizer" ? (
         <PollResults
           calendars={calendars}
-          onBack={onClose}
           onChanged={changed}
           onDecided={() => {
             void queryClient.invalidateQueries({ queryKey: pollCalendarKey });
