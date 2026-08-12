@@ -1,6 +1,6 @@
-import { and, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
-import { type NewEvent, calendarEvents, calendarMembers, eventUsers, events } from "../schema";
+import { type NewEvent, calendarEvents, calendarMembers, eventUsers, events, user } from "../schema";
 
 
 export async function createEvent(event: NewEvent, calendars: string[]) {
@@ -95,22 +95,59 @@ export async function getUsersEvents(
 
 // Attendees: name + avatar only — no emails (an event can span calendars whose
 // members aren't mutuals, so don't leak what the UI doesn't need).
+export type AttendanceStatus = "declined" | "going" | "maybe";
+
+// The database orders the list, so web and mobile cannot hold two versions of
+// what "first" means.
+const STATUS_RANK = sql`CASE ${eventUsers.status}
+  WHEN 'going' THEN 0 WHEN 'maybe' THEN 1 ELSE 2 END`;
+
 export async function getEventAttendees(eventID: string) {
-  const rows = await db.query.eventUsers.findMany({
-    where: eq(eventUsers.eventID, eventID),
-    with: { user: true },
-  });
-  rows.sort((a, b) => a.user.name.localeCompare(b.user.name));
-  return rows.map(r => ({ id: r.user.id, name: r.user.name, image: r.user.image }));
+  const rows = await db
+    .select({
+      id: user.id,
+      image: user.image,
+      name: user.name,
+      status: eventUsers.status,
+    })
+    .from(eventUsers)
+    .innerJoin(user, eq(user.id, eventUsers.userID))
+    .where(eq(eventUsers.eventID, eventID))
+    .orderBy(STATUS_RANK, user.name);
+
+  return rows as Array<{
+    id: string;
+    image: string | null;
+    name: string;
+    status: AttendanceStatus;
+  }>;
 }
 
-// Idempotent join/leave — the unique (event, user) constraint absorbs retries.
-export async function setAttendance(eventID: string, userID: string, attending: boolean) {
-  if (attending) {
-    await db.insert(eventUsers).values({ eventID, userID }).onConflictDoNothing();
-  } else {
+// Idempotent answer — the unique (event, user) constraint absorbs retries.
+// "none" is the answer withdrawn, which is the absence of a row.
+export async function setAttendance(
+  eventID: string,
+  userID: string,
+  status: AttendanceStatus | "none",
+) {
+  if (status === "none") {
     await db.delete(eventUsers).where(and(eq(eventUsers.eventID, eventID), eq(eventUsers.userID, userID)));
+    return;
   }
+
+  await db
+    .insert(eventUsers)
+    .values({ eventID, status, userID })
+    .onConflictDoUpdate({
+      set: { status, updatedAt: new Date() },
+      target: [eventUsers.eventID, eventUsers.userID],
+    });
+}
+
+// Publishing a page collects answers, so the event's attendee section has to be
+// on. Set by the share handler rather than asked of the organizer twice.
+export async function setEventHasAttendees(eventID: string, hasAttendees: boolean) {
+  await db.update(events).set({ hasAttendees }).where(eq(events.id, eventID));
 }
 
 // Hard-delete tombstones older than `before` (cascades their calendarEvents +

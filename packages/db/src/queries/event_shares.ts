@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db, eventRsvps, events, eventShares, user } from "..";
+import { db, events, eventShares, eventUsers, user } from "..";
+import type { AttendanceStatus } from "./events";
 
 // A share is the only thing that makes an event readable without a session, so
 // every read here filters on `revokedAt IS NULL` — a revoked token is a dead
@@ -114,51 +115,33 @@ export async function getSharedEvent(token: string) {
   return row;
 }
 
-// ── RSVPs ────────────────────────────────────────────────────────────────────
-
-export type RsvpStatus = "declined" | "going" | "maybe";
-
-/** Answer, or change an answer. One row per person per event. */
-export async function setEventRsvp(input: {
-  eventID: string;
-  status: RsvpStatus;
-  userID: string;
-}) {
-  await db
-    .insert(eventRsvps)
-    .values(input)
-    .onConflictDoUpdate({
-      set: { status: input.status, updatedAt: new Date() },
-      target: [eventRsvps.eventID, eventRsvps.userID],
-    });
-}
-
-export async function getEventRsvp(eventID: string, userID: string) {
-  const [row] = await db
-    .select({ status: eventRsvps.status })
-    .from(eventRsvps)
-    .where(and(eq(eventRsvps.eventID, eventID), eq(eventRsvps.userID, userID)));
-  return row?.status;
-}
+// ── Answers ──────────────────────────────────────────────────────────────────
 
 /**
- * Who answered what.
+ * Who answered what, for the public page's counts.
  *
+ * Reads the attendee list itself: answers from the page and attendance from the
+ * app are one list, so a published event reports one number rather than two.
  * Names come back too, but whether they leave the server is the caller's
  * decision — the share's `attendeeVisibility` is what the organizer set, and the
  * public handler applies it.
  */
-export async function listEventRsvps(eventID: string) {
-  return db
+export async function listEventAnswers(eventID: string) {
+  const rows = await db
     .select({
       name: user.name,
-      status: eventRsvps.status,
-      userID: eventRsvps.userID,
+      status: eventUsers.status,
+      userID: eventUsers.userID,
     })
-    .from(eventRsvps)
-    .innerJoin(user, eq(user.id, eventRsvps.userID))
-    .where(eq(eventRsvps.eventID, eventID))
-    .orderBy(eventRsvps.createdAt);
+    .from(eventUsers)
+    .innerJoin(user, eq(user.id, eventUsers.userID))
+    .where(eq(eventUsers.eventID, eventID));
+
+  return rows as Array<{
+    name: string;
+    status: AttendanceStatus;
+    userID: string;
+  }>;
 }
 
 /** The event a live share points at, for the RSVP endpoints. */
