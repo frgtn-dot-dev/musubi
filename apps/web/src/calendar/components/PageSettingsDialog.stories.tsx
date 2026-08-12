@@ -200,7 +200,9 @@ export const DiscardConfirmation: Story = {
     const name = pageDialog.getByRole("textbox", { name: "Page name" });
     await userEvent.clear(name);
     await userEvent.type(name, "Deep work");
-    await userEvent.click(pageDialog.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(
+      pageDialog.getByRole("button", { name: "Close page settings" }),
+    );
     const confirmation = await screen.findByRole("dialog", {
       name: "Discard page changes?",
     });

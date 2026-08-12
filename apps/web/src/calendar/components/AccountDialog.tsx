@@ -22,7 +22,7 @@ import {
   ConfirmationNotice,
   DialogError,
 } from "~/ui/ConfirmationDialog";
-import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { RowAction } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
@@ -314,11 +314,6 @@ function EditNameDialog({
       description="This is how other people will recognize you in shared calendars."
       footer={
         <>
-          <DialogClose>
-            <Button disabled={busy} variant="secondary">
-              Cancel
-            </Button>
-          </DialogClose>
           <Button
             disabled={!canSave}
             form="display-name-form"
@@ -489,11 +484,6 @@ function EditEmailDialog({
       }
       footer={
         <>
-          <DialogClose>
-            <Button disabled={busy} variant="secondary">
-              Cancel
-            </Button>
-          </DialogClose>
           <Button disabled={!canSave} form="email-form" loading={busy} type="submit">
             Send the link
           </Button>

@@ -76,7 +76,9 @@ export function PollForm({
 
 	return (
 		<div className={styles.form}>
-			<Field label="What is it about">
+			{/* The placeholder carries it — the label above an empty first field was
+          a second heading under the dialog's own. */}
+			<Field label="What is it about" labelHidden>
 				<input
 					placeholder="Studio planning"
 					value={title}

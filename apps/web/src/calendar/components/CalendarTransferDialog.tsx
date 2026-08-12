@@ -35,7 +35,7 @@ import {
 	ConfirmationNotice,
 	DialogError,
 } from "~/ui/ConfirmationDialog";
-import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
@@ -390,10 +390,7 @@ export function CalendarTransferDialog({
 			>
 				<section className={styles.calendarSection}>
 					<div className={styles.sectionHeading}>
-						<div>
-							<SectionLabel level={2}>Your calendars</SectionLabel>
-							<p>Musubi calendars come first, followed by each account.</p>
-						</div>
+						<SectionLabel level={2}>Your calendars</SectionLabel>
 					</div>
 
 					<form className={styles.createBar} onSubmit={handleCreate}>
@@ -829,11 +826,6 @@ function EditCalendarDialog({
 			description="Change how this calendar is named and identified across Musubi."
 			footer={
 				<>
-					<DialogClose>
-						<Button disabled={busy} variant="secondary">
-							Cancel
-						</Button>
-					</DialogClose>
 					<Button
 						disabled={!canSave}
 						form="edit-calendar-form"

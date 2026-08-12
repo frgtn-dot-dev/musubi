@@ -555,7 +555,7 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
     const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
     await user.click(dialog.getByRole("button", { name: "Studio" }));
-    await user.click(dialog.getByRole("button", { name: "Cancel" }));
+    await user.click(dialog.getByRole("button", { name: "Close page settings" }));
     await user.click(
       within(screen.getByRole("dialog", { name: "Discard page changes?" }))
         .getByRole("button", { name: "Cancel" }),

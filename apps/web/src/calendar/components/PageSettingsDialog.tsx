@@ -14,7 +14,7 @@ import {
   ConfirmationNotice,
   DialogError,
 } from "~/ui/ConfirmationDialog";
-import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
@@ -286,11 +286,6 @@ export function PageSettingsDialog({
                 Delete page
               </Button>
             ) : null}
-            <DialogClose>
-              <Button disabled={busy} variant="secondary">
-                Cancel
-              </Button>
-            </DialogClose>
             <Button
               disabled={!canSave}
               form="page-settings-form"
@@ -650,11 +645,6 @@ export function NewPageDialog({
       description="It starts from the calendars you can see right now."
       footer={
         <>
-          <DialogClose>
-            <Button disabled={busy} variant="secondary">
-              Cancel
-            </Button>
-          </DialogClose>
           <Button
             disabled={!trimmedName || busy}
             form="new-page-form"

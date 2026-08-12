@@ -154,7 +154,6 @@ function NewPoll({
 
 	return (
 		<section className={styles.section}>
-			<SectionLabel level={3}>New poll</SectionLabel>
 			<PollForm
 				busy={create.isPending}
 				error={create.error?.message}

@@ -165,10 +165,7 @@ export function ShareCalendarDialog({
             className={styles.section}
           >
             <div className={styles.sectionHeading}>
-              <div>
-                <SectionLabel id="sharing-members-title">Members</SectionLabel>
-                <p>People who already have access to this calendar.</p>
-              </div>
+              <SectionLabel id="sharing-members-title">Members</SectionLabel>
               {/* Nothing rather than "0 people" while the list is on its way:
                   a count is a fact about the calendar, and zero is the one
                   answer that changes what someone does next. */}
@@ -288,12 +285,9 @@ export function ShareCalendarDialog({
               className={styles.section}
             >
               <div className={styles.sectionHeading}>
-                <div>
-                  <SectionLabel id="sharing-invites-title">
-                    Invite links
-                  </SectionLabel>
-                  <p>Anyone with a link joins as a viewer.</p>
-                </div>
+                <SectionLabel id="sharing-invites-title">
+                  Invite links
+                </SectionLabel>
               </div>
 
               {/* Empty means no limit; positive whole numbers are sent as-is. */}

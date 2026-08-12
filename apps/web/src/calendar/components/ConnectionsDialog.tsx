@@ -283,7 +283,6 @@ export function ConnectionsDialog({
           className={styles.section}
         >
           <SectionHeading
-            description="Calendars from these accounts stay in sync both ways."
             id="connections-accounts-title"
             title="Connected accounts"
           />
@@ -372,7 +371,6 @@ export function ConnectionsDialog({
             className={styles.section}
           >
             <SectionHeading
-              description="Use an invite from this or another Musubi server."
               id="connections-invite-title"
               title="Join a shared calendar"
             />
@@ -421,7 +419,6 @@ export function ConnectionsDialog({
             className={styles.section}
           >
             <SectionHeading
-              description="Choose where your other calendars live."
               id="connections-add-title"
               title="Add a connection"
             />
@@ -530,7 +527,6 @@ export function ConnectionsDialog({
             className={styles.section}
           >
             <SectionHeading
-              description="Remote calendars stay connected through your home server."
               id="connections-servers-title"
               title="Musubi servers"
             />
@@ -617,19 +613,10 @@ export function ConnectionsDialog({
   );
 }
 
-function SectionHeading({
-  description,
-  id,
-  title,
-}: {
-  description: string;
-  id: string;
-  title: string;
-}) {
+function SectionHeading({ id, title }: { id: string; title: string }) {
   return (
     <div className={styles.sectionHeading}>
       <SectionLabel id={id}>{title}</SectionLabel>
-      <p>{description}</p>
     </div>
   );
 }
