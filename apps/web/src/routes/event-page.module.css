@@ -1,36 +1,36 @@
 /* A published page is not the app: no shell, no sidebar, one card and the two
    things a stranger actually wants — when it is, and how to keep it. */
-/* The page paints itself from the palette the organizer chose, which arrives as
-   custom properties on the root element. Everything below reads those rather
-   than the app's tokens: a published page is themeable, the app is not — and the
-   palettes are a closed, contrast-proven set (`@musubi/design-system`). */
+/* One look, and it is the reader's: the page follows their light/dark setting and
+   the toggle above it, the same way the poll page does. The `--page-*` variables
+   the rules below read are mapped onto the app's tokens here, which is what makes
+   the whole page switch with the theme. Chosen palettes come back when there is
+   somewhere to choose them. */
 .page {
+  position: relative;
   display: grid;
   align-content: center;
   justify-items: center;
   gap: var(--space-4);
   min-height: 100dvh;
   padding: var(--space-6) var(--space-4);
-  background: var(--page-background, var(--surface-canvas));
-  color: var(--page-text, var(--text-primary));
+  background: var(--surface-canvas);
+  color: var(--text-primary);
 
-  /* App components used on this page — buttons, fields — read the app's control
-     tokens, which are the light theme's. Remapped here so the RSVP flow stays
-     usable on every palette: `PRD §17.3` puts accessibility and the RSVP flow on
-     the fixed side, and a dark palette that swallowed the answer buttons would
-     break both. */
-  --control-fill: var(--page-accent);
-  --control-on-fill: var(--page-accent-text);
-  --accent-primary: var(--page-accent);
-  --accent-on-primary: var(--page-accent-text);
-  --text-primary: var(--page-text);
-  --text-secondary: var(--page-muted);
-  --text-muted: var(--page-muted);
-  --border-medium: var(--page-border);
-  --border-subtle: var(--page-border);
-  --border-strong: var(--page-accent);
-  --surface-raised: var(--page-raised);
-  --surface-canvas: var(--page-surface);
+  --page-accent: var(--accent-primary);
+  --page-accent-text: var(--accent-on-primary);
+  --page-background: var(--surface-canvas);
+  --page-border: var(--border-subtle);
+  --page-muted: var(--text-secondary);
+  --page-raised: var(--surface-raised);
+  --page-surface: var(--surface-panel);
+  --page-text: var(--text-primary);
+}
+
+/* Out of the flow: a row of its own for one icon costs the card its centring. */
+.themeRow {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }
 
 /* Covers are decoration drawn from the same palette — never an upload, which
@@ -82,10 +82,13 @@
 }
 
 /* Links style themselves here: this route has no app shell to inherit from, and
-   the browser's default blue ignores the palette entirely. */
+   the browser's default blue ignores the theme entirely. Weight rather than
+   colour, for the reason the poll page records: the accent as small text misses
+   AA against the dark canvas, and the brand colour is not ours to bend. */
 .card a,
 .footer a {
-  color: var(--page-accent, var(--accent-primary));
+  color: inherit;
+  text-decoration: underline;
   text-underline-offset: 3px;
 }
 

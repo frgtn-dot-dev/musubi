@@ -4,11 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarPlus, MapPin, Repeat2 } from "lucide-react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
-import {
-  eventPagePalette,
-  eventPagePaletteVariables,
-} from "@musubi/design-system";
-import type { CSSProperties } from "react";
+import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
 import { RsvpBlock } from "./-rsvp-block";
 import { Button } from "~/ui/Button";
@@ -74,8 +70,6 @@ function PublicEventRoute() {
   const event = page.data;
   const occurrence = nextOccurrence(event);
 
-  const palette = eventPagePalette(event.theme.palette);
-
   return (
     <main
       className={styles.page}
@@ -83,9 +77,14 @@ function PublicEventRoute() {
       data-font={event.theme.font}
       data-layout={event.theme.layout}
       id="main-content"
-      style={eventPagePaletteVariables(palette) as CSSProperties}
       tabIndex={-1}
     >
+      {/* The page follows the reader's system setting and lets them override it,
+          like the app and the poll page do. */}
+      <div className={styles.themeRow}>
+        <ThemeToggle />
+      </div>
+
       {/* The indexing decision travels with the data, not with the route: a page
           shared "anyone with the link" must stay out of search even though the
           markup is identical. */}
