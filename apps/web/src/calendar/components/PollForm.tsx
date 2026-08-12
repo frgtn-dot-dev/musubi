@@ -152,15 +152,20 @@ export function PollForm({
 						detail="Stops new answers at the end of the selected day."
 						label="Answers close"
 						trailing={
-							deadline ? (
-								<div className={styles.deadlineControls}>
-									<DatePicker
-										label="Answers close"
-										min={toDateKey(new Date())}
-										value={deadline}
-										weekStartsOn={weekStartsOn}
-										onChange={setDeadline}
-									/>
+							// Reads like the time above it: the picker itself asks, and only a
+							// chosen day turns into a deadline. Clearing stays available once
+							// there is something to clear.
+							<div className={styles.deadlineControls}>
+								<DatePicker
+									className={styles.dateInput}
+									label="Answers close"
+									min={toDateKey(new Date())}
+									placeholder="Set deadline"
+									value={deadline}
+									weekStartsOn={weekStartsOn}
+									onChange={setDeadline}
+								/>
+								{deadline ? (
 									<Button
 										size="compact"
 										variant="ghost"
@@ -168,16 +173,8 @@ export function PollForm({
 									>
 										Clear
 									</Button>
-								</div>
-							) : (
-								<Button
-									size="compact"
-									variant="secondary"
-									onClick={() => setDeadline(toDateKey(new Date()))}
-								>
-									Set date
-								</Button>
-							)
+								) : null}
+							</div>
 						}
 					/>
 				</div>

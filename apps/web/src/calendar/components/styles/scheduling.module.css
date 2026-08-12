@@ -168,8 +168,16 @@
 	border-bottom: 0;
 }
 
+/* Trailing controls read as one column: the value sits beside its own chevron at
+   the row's right edge instead of drifting to the far left of the control. */
 .timeInput {
 	width: 9rem;
+	text-align: right;
+}
+
+.dateInput {
+	flex: none;
+	justify-content: flex-end;
 }
 
 .deadlineControls {

@@ -16,6 +16,8 @@ export type DatePickerProps = {
   max?: string;
   min?: string;
   onChange: (value: string) => void;
+  /** What the trigger says while nothing is chosen. */
+  placeholder?: string;
   value: string;
   weekStartsOn: Settings["weekStartsOn"];
 };
@@ -44,6 +46,7 @@ export function DatePicker({
   max,
   min,
   onChange,
+  placeholder = "Choose date",
   value,
   weekStartsOn,
 }: DatePickerProps) {
@@ -74,14 +77,14 @@ export function DatePicker({
       <PopoverTrigger asChild>
         <button
           aria-label={`${label}: ${
-            validValue ? getLongDateLabel(anchor) : "Choose date"
+            validValue ? getLongDateLabel(anchor) : placeholder
           }`}
           className={classNames(styles.datePickerTrigger, className)}
           disabled={disabled}
           type="button"
         >
           <span>
-            {validValue ? getLongDateLabel(anchor) : "Choose date"}
+            {validValue ? getLongDateLabel(anchor) : placeholder}
           </span>
           <ChevronDown aria-hidden="true" size={16} strokeWidth={1.5} />
         </button>
