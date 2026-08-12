@@ -1244,6 +1244,38 @@ test("keeps the all-day toggle in one place when it is flipped", async ({
 	expect((await toggle.boundingBox())!.y).toBe(timed);
 });
 
+test("scrolls a long calendar list inside quick create", async ({ page }) => {
+	await page.setViewportSize({ width: 1890, height: 962 });
+	const manyCalendars = [
+		...calendars,
+		...Array.from({ length: 12 }, (_, index) => ({
+			...calendars[0]!,
+			color: index % 2 ? "#3f6f8f" : "#8b5f79",
+			id: `project-${index}`,
+			isDefault: false,
+			name: `Project calendar ${index + 1}`,
+		})),
+	];
+	await mockAuthenticatedReads(page, events, manyCalendars);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-11`);
+	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await page.getByRole("button", { name: /Choose calendars/ }).click();
+
+	const calendarList = page.getByRole("group", {
+		name: "Calendars for this event",
+	});
+	await expect(calendarList).toBeVisible();
+	expect(
+		await calendarList.evaluate((element) => element.scrollHeight > element.clientHeight),
+	).toBe(true);
+	await calendarList.hover();
+	await page.mouse.wheel(0, 420);
+	await expect
+		.poll(() => calendarList.evaluate((element) => element.scrollTop))
+		.toBeGreaterThan(0);
+	await expect(page.getByRole("button", { name: "Create", exact: true })).toBeVisible();
+});
+
 test("keeps provider failures actionable without assuming a write succeeded", async ({
 	page,
 }) => {
@@ -2743,6 +2775,9 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 		name: "How many people",
 	});
 	await expect(expiryInput).toHaveValue("7");
+	await expect(expiryInput.locator("xpath=..").getByText("days", { exact: true })).toBeVisible();
+	await expiryInput.fill("1");
+	await expect(expiryInput.locator("xpath=..").getByText("day", { exact: true })).toBeVisible();
 	await expiryInput.fill("10");
 	await peopleInput.fill("5");
 	const createInviteButton = sharingDialog.getByRole("button", {

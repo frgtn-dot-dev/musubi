@@ -300,17 +300,24 @@ export function ShareCalendarDialog({
               <div className={styles.inviteOptions}>
                 <label className={styles.inviteLimit}>
                   <span>Expires after</span>
-                  <input
-                    aria-label="Expires after days"
-                    disabled={busy}
-                    inputMode="numeric"
-                    min="1"
-                    placeholder="Never"
-                    step="1"
-                    type="number"
-                    value={expiresInDays}
-                    onChange={(event) => setExpiresInDays(event.target.value)}
-                  />
+                  <span className={styles.inviteNumber}>
+                    <input
+                      aria-label="Expires after days"
+                      disabled={busy}
+                      inputMode="numeric"
+                      min="1"
+                      placeholder="Never"
+                      step="1"
+                      type="number"
+                      value={expiresInDays}
+                      onChange={(event) => setExpiresInDays(event.target.value)}
+                    />
+                    {expiresInDays ? (
+                      <span aria-hidden="true">
+                        {expiresInDays === "1" ? "day" : "days"}
+                      </span>
+                    ) : null}
+                  </span>
                 </label>
                 <label className={styles.inviteLimit}>
                   <span>People limit</span>

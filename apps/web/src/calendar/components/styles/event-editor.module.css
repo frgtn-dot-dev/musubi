@@ -544,6 +544,20 @@
   align-self: center;
 }
 
+.form[data-compact] .calendarPlacement {
+  max-height: min(280px, 40dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.form[data-compact] .calendarPlacementHeader {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--surface-canvas);
+}
+
 @media (min-width: 900px) {
   .form[data-layout="page"] {
     height: 100%;
