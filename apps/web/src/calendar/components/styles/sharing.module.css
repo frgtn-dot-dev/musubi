@@ -50,9 +50,44 @@
 .inviteOptions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: var(--space-2);
   padding: 0 var(--layer-inline) var(--space-3);
+}
+
+.memberList {
+  align-items: center;
+}
+
+.inviteOptions {
+  align-items: end;
+}
+
+.inviteLimit {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-10);
+}
+
+.inviteLimit input {
+  width: 92px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.inviteLimit input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.createInviteButton {
+  margin-left: auto;
 }
 
 .inviteList {
@@ -221,8 +256,9 @@
   margin: 0;
 }
 
-.leaveButton {
-  margin-right: auto;
+.leaveRow {
+  display: flex;
+  padding: 0 var(--layer-inline) var(--space-3);
 }
 
 @media (max-width: 599px) {

@@ -2732,20 +2732,39 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 		roleGroup.getByRole("radio", { name: "Editor" }),
 	).toHaveAttribute("aria-checked", "true");
 
-	// Create then revoke an invite link.
-	// A link with limits: the default is a week and no cap, and both are chosen
-	// here rather than being decided for the organizer.
-	await page.getByRole("combobox", { name: "How many people" }).click();
-	await page.getByRole("option", { name: "Up to 5" }).click();
-	await page.getByRole("button", { name: "Create invite link" }).click();
+	// Create then revoke an invite link. Both limits are fillable rather than a
+	// short preset list, and the header close makes a second Done footer redundant.
+	await expect(sharingDialog.getByRole("button", { name: "Done" })).toHaveCount(0);
+	await expect(sharingDialog.locator("footer")).toHaveCount(0);
+	const expiryInput = sharingDialog.getByRole("spinbutton", {
+		name: "Expires after days",
+	});
+	const peopleInput = sharingDialog.getByRole("spinbutton", {
+		name: "How many people",
+	});
+	await expect(expiryInput).toHaveValue("7");
+	await expiryInput.fill("10");
+	await peopleInput.fill("5");
+	const createInviteButton = sharingDialog.getByRole("button", {
+		name: "Create invite link",
+	});
+	const limitsBox = (await peopleInput.boundingBox())!;
+	const createBox = (await createInviteButton.boundingBox())!;
+	const optionsBox = (await createInviteButton.locator("xpath=..").boundingBox())!;
+	expect(createBox.x - (limitsBox.x + limitsBox.width)).toBeGreaterThanOrEqual(24);
+	expect(optionsBox.x + optionsBox.width - (createBox.x + createBox.width)).toBeCloseTo(
+		24,
+		0,
+	);
+	await createInviteButton.click();
 	await expect(page.getByRole("textbox", { name: "Invite link" })).toHaveValue(
 		/\/invite\/invite-1$/,
 	);
 	expect(inviteRequest).toMatchObject({ maxUses: 5 });
-	// Seven days by default, counted from now rather than left open forever.
+	// Ten days as entered, counted from now rather than left open forever.
 	const expiry = new Date(inviteRequest!.expiresAt!).getTime() - Date.now();
-	expect(expiry).toBeGreaterThan(6.5 * 24 * 60 * 60_000);
-	expect(expiry).toBeLessThan(7.5 * 24 * 60 * 60_000);
+	expect(expiry).toBeGreaterThan(9.5 * 24 * 60 * 60_000);
+	expect(expiry).toBeLessThan(10.5 * 24 * 60 * 60_000);
 	await page.getByRole("button", { name: "Revoke invite link" }).click();
 	await expect(page.getByRole("textbox", { name: "Invite link" })).toHaveCount(
 		0,

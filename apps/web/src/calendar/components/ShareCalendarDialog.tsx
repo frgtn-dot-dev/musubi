@@ -16,11 +16,10 @@ import {
   ConfirmationNotice,
   DialogError,
 } from "~/ui/ConfirmationDialog";
-import { Dialog, DialogClose } from "~/ui/Dialog";
+import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Segmented } from "~/ui/Segmented";
 import { SectionLabel } from "~/ui/SectionLabel";
-import { Select } from "~/ui/Select";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import styles from "./styles/sharing.module.css";
 
@@ -32,21 +31,6 @@ type ShareCalendarDialogProps = {
 };
 
 type MemberAccess = "editor" | "viewer";
-
-/** Relative, not absolute: nobody thinks "expires on the 14th" about a link. */
-const EXPIRY_OPTIONS = [
-  { label: "In 24 hours", value: "1" },
-  { label: "In 7 days", value: "7" },
-  { label: "In 30 days", value: "30" },
-  { label: "Never", value: "0" },
-];
-
-const USE_OPTIONS = [
-  { label: "One person", value: "1" },
-  { label: "Up to 5", value: "5" },
-  { label: "Up to 25", value: "25" },
-  { label: "No limit", value: "" },
-];
 
 const MEMBER_ACCESS_OPTIONS = [
   { label: "Viewer", value: "viewer" },
@@ -68,10 +52,13 @@ export function ShareCalendarDialog({
   const sharing = useCalendarSharing(userId, calendar);
   const { busy, error, run, setError } = useAsyncAction();
   const [transferMember, setTransferMember] = useState<CalendarMember>();
-  // What the next link will allow. Defaults that expire and run out, because a
-  // link with neither limit is the one still working in a group chat next year.
+  // What the next link will allow. It expires by default; the people cap stays
+  // empty until the organizer needs one.
   const [expiresInDays, setExpiresInDays] = useState("7");
   const [maxUses, setMaxUses] = useState("");
+  const validLimits = [expiresInDays, maxUses].every(
+    (value) => value === "" || (Number.isInteger(Number(value)) && Number(value) > 0),
+  );
   const transferReturnFocusRef = useRef<HTMLButtonElement>(null);
 
   const open = Boolean(calendar);
@@ -128,8 +115,7 @@ export function ShareCalendarDialog({
     const days = Number(expiresInDays);
     const created = await run(async () => {
       await sharing.createInvite({
-        // Counted from now: "expires in a week" is what people mean, and an
-        // absolute date would need a picker to say the same thing.
+        // A relative day count keeps this compact while allowing any expiry.
         expiresAt:
           days > 0 ? new Date(Date.now() + days * 24 * 60 * 60_000) : null,
         maxUses: maxUses === "" ? null : Number(maxUses),
@@ -169,27 +155,6 @@ export function ShareCalendarDialog({
         bodyLayout="flush"
         closeLabel="Close sharing"
         description="Choose who can view or edit this calendar, and manage links for new members."
-        footer={
-          <>
-            {!isOwner && calendar ? (
-              <Button
-                className={styles.leaveButton}
-                disabled={busy}
-                icon={<UserRoundMinus size={16} strokeWidth={1.7} />}
-                variant="ghost"
-                onClick={() => void leaveCalendar()}
-              >
-                Leave calendar
-              </Button>
-            ) : null}
-            <DialogClose>
-              <Button disabled={busy} variant="secondary">
-                Done
-              </Button>
-            </DialogClose>
-
-          </>
-        }
         onOpenChange={handleOpenChange}
         open={open}
         title={`Share ${calendar?.name ?? "calendar"}`}
@@ -302,6 +267,19 @@ export function ShareCalendarDialog({
                 })}
               </ul>
             )}
+            {!isOwner && calendar ? (
+              <div className={styles.leaveRow}>
+                <Button
+                  className={styles.leaveButton}
+                  disabled={busy}
+                  icon={<UserRoundMinus size={16} strokeWidth={1.7} />}
+                  variant="ghost"
+                  onClick={() => void leaveCalendar()}
+                >
+                  Leave calendar
+                </Button>
+              </div>
+            ) : null}
           </section>
 
           {sharing.canInvite ? (
@@ -318,26 +296,39 @@ export function ShareCalendarDialog({
                 </div>
               </div>
 
-              {/* Both limits are the server's already — this is where they get
-                  chosen, next to the links they apply to. */}
+              {/* Empty means no limit; positive whole numbers are sent as-is. */}
               <div className={styles.inviteOptions}>
-                <Select
-                  disabled={busy}
-                  label="Expires"
-                  options={EXPIRY_OPTIONS}
-                  size="compact"
-                  value={expiresInDays}
-                  onChange={setExpiresInDays}
-                />
-                <Select
-                  disabled={busy}
-                  label="How many people"
-                  options={USE_OPTIONS}
-                  size="compact"
-                  value={maxUses}
-                  onChange={setMaxUses}
-                />
+                <label className={styles.inviteLimit}>
+                  <span>Expires after</span>
+                  <input
+                    aria-label="Expires after days"
+                    disabled={busy}
+                    inputMode="numeric"
+                    min="1"
+                    placeholder="Never"
+                    step="1"
+                    type="number"
+                    value={expiresInDays}
+                    onChange={(event) => setExpiresInDays(event.target.value)}
+                  />
+                </label>
+                <label className={styles.inviteLimit}>
+                  <span>People limit</span>
+                  <input
+                    aria-label="How many people"
+                    disabled={busy}
+                    inputMode="numeric"
+                    min="1"
+                    placeholder="No limit"
+                    step="1"
+                    type="number"
+                    value={maxUses}
+                    onChange={(event) => setMaxUses(event.target.value)}
+                  />
+                </label>
                 <Button
+                  className={styles.createInviteButton}
+                  disabled={!validLimits}
                   icon={<Link2 size={16} strokeWidth={1.7} />}
                   loading={busy}
                   size="compact"
