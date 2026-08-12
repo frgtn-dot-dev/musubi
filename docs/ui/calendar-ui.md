@@ -1085,15 +1085,36 @@ vzešlo a nedá se vyčíst z kódu:
   passwordless přes Better Auth `emailOTP`; kód posílá server, účet vznikne až
   jeho použitím. Jméno se zapisuje **jen do prázdného** účtu, aby druhá odpověď
   nepřepsala profil člena, který na veřejný odkaz odpověděl.
-- RSVP je vlastní tabulka, ne `event_users`: to je členská účast uvnitř appky a
-  smíchání by cizího člověka z veřejného odkazu dostalo do seznamu, který vidí
-  členové. Stavy se navíc liší — účast je boolean, RSVP má „možná".
-- Jména vidí čtenář jen když to organizátor zapne, a **jen u těch, kdo řekli
-  ano**: „možná" a „ne" jsou odpovědi, které lidé dávají v důvěře.
-- **Organizátor vidí odpovědi vždycky** (`GET /events/:id/rsvps`, gated stejně
-  jako editace) — nastavení viditelnosti řídí, co vidí *čtenář stránky*, ne
-  vlastník eventu. První verze to zaměňovala a při „Show nothing" neviděl
-  odpovědi nikdo.
+- **RSVP a účast jsou jeden seznam** (spec
+  `docs/superpowers/specs/2026-08-12-attendees-rsvp-unification-design.md`).
+  `event_users` nese `status` (`going | maybe | declined`), veřejná odpověď píše
+  do stejné tabulky a `event_rsvps` zmizelo. Dřív to byly dvě tabulky s
+  odůvodněním, že cizí člověk z odkazu nemá padnout do seznamu, který vidí
+  členové — jenže pak nebyla odpověď v kalendáři vidět nikde kromě dialogu
+  sdílení a dva seznamy u jedné akce se nedaly srovnat. Cena je vědomá: cizí
+  jméno z veřejného odkazu uvidí každý, kdo vidí event.
+- Žádný řádek = **neodpověděl**. Přítomnost + `status` je celá odpověď, takže
+  „zrušit odpověď" je smazání řádku, ne čtvrtý stav.
+- Detail eventu odpovídá **třemi tlačítky** (Going / Maybe / Can't go), klik na
+  už vybrané odpověď zruší (`status: "none"`) — to je dřívější „Leave". Facepile
+  a počet nad seznamem berou jen `going`, rozbalený seznam má skupiny. Řadí
+  **server** (`going` → `maybe` → `declined`, pak jméno), aby web a mobil neměly
+  dvě verze pořadí.
+- `PUT /events/:id/attendance` bere `{status}` a **stále** `{attending}` jako
+  alias (`true`→going, `false`→none): mobilní build je venku na Play a nasazení
+  API nečeká na store review.
+- Jméno je u odpovědi **povinné** — seznam účastníků je seznam lidí, ne prázdna.
+  Klient to blokuje před odesláním kódu, server vrací 400. „Guest" zůstává jen
+  pro řádky z doby, kdy povinné nebylo.
+- Jména vidí čtenář stránky jen když to organizátor zapne, a **jen u těch, kdo
+  řekli ano**: „možná" a „ne" jsou odpovědi, které lidé dávají v důvěře.
+- `attendeeVisibility` řídí **jen veřejnou projekci**. Uvnitř appky seznam vidí
+  každý, kdo vidí event, takže „Show nothing" neoslepí organizátora. Zvláštní
+  endpoint na to (`GET /events/:id/rsvps`) proto zmizel i s blokem odpovědí v
+  dialogu sdílení — odpovědi se čtou v detailu eventu.
+- Publikování stránky zapne `hasAttendees`: publikovaný event sbírá odpovědi a
+  sekce, která je ukazuje, musí být zapnutá. Ptát se organizátora na totéž dvakrát
+  není nastavení, jen práce.
 - V dialogu sdílení jsou přepínače řádky, ne `Select`: dialog se otevírá z
   popoveru a dropdown si otevírá vlastní popover, který se zaskládá pod něj —
   tentýž problém s vrstvami, co je popsaný výš. Odznak s počtem u ikony sdílení
