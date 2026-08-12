@@ -121,6 +121,27 @@ describe("Workspace", () => {
     expect(onSavePage).not.toHaveBeenCalled();
   });
 
+  it("keeps shortcuts working while focus sits on the last button clicked", async () => {
+    const user = userEvent.setup();
+    const onDateChange = vi.fn();
+    const onViewChange = vi.fn();
+
+    render(
+      <Workspace
+        {...commonProps}
+        onDateChange={onDateChange}
+        onViewChange={onViewChange}
+      />,
+    );
+
+    const today = screen.getByRole("button", { name: "Today" });
+    await user.click(today);
+    expect(document.activeElement).toBe(today);
+
+    await user.keyboard("w");
+    expect(onViewChange).toHaveBeenCalledWith("week");
+  });
+
   it("allows view changes while Page settings are saving", async () => {
     const user = userEvent.setup();
     let resolveSave!: (result: SavePageResult) => void;

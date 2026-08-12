@@ -763,20 +763,25 @@ export function Workspace({
   function handleWorkspaceKeyDown(event: globalThis.KeyboardEvent) {
     const target = event.target;
     // An open layer owns the keyboard: a letter behind a dialog must not switch
-    // the view under it. Radix gives popovers and dialogs both role="dialog".
-    if (target instanceof Element && target.closest('[role="dialog"]')) {
+    // the view under it, and a menu or a listbox spends letters on its own
+    // type-ahead. Radix gives popovers and dialogs both role="dialog".
+    if (
+      target instanceof Element &&
+      target.closest('[role="dialog"], [role="menu"], [role="listbox"]')
+    ) {
       return;
     }
 
     const command = shortcutFor(event, {
-      // A button is not typing, but Space, Enter and letter shortcuts are its
-      // own. Slash is the exception: closing search returns focus to its toolbar
-      // button, and the global search shortcut must still reopen it from there.
+      // Only a text field reads letters as text. A focused button used to count
+      // as typing too, which killed every shortcut for as long as focus sat on
+      // the last thing clicked — and a button answers to Space and Enter, neither
+      // of which is a shortcut here, so there was nothing to protect.
       typing:
         target instanceof HTMLInputElement ||
         target instanceof HTMLSelectElement ||
         target instanceof HTMLTextAreaElement ||
-        (target instanceof HTMLButtonElement && event.key !== "/"),
+        (target instanceof HTMLElement && target.isContentEditable),
     });
     if (!command) {
       return;
