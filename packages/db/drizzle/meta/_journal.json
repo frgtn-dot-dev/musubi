@@ -302,6 +302,13 @@
       "when": 1786356963578,
       "tag": "0042_fearless_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786546697200,
+      "tag": "0043_flippant_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

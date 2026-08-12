@@ -397,36 +397,6 @@ export const schedulingSlotsRelations = relations(schedulingSlots, ({ many, one 
   votes: many(schedulingVotes),
 }));
 
-// An RSVP from the public page. Separate from `event_users`, which is member
-// attendance inside the app: mixing them would put a stranger who answered a
-// public link into the attendee list members see, and the organizer is supposed
-// to decide who learns about whom. The states differ too — attendance is a
-// boolean, an RSVP has a maybe.
-export const eventRsvps = pgTable("event_rsvps", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  eventID: uuid("event_id")
-    .references(() => events.id, { onDelete: "cascade" })
-    .notNull(),
-  // Always a real (if passwordless) account: the address is proved by an email
-  // code before this row exists, so "12 going" means twelve confirmed people.
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  status: text("status").notNull(), // going | maybe | declined
-});
-
-export type NewEventRsvp = typeof eventRsvps.$inferInsert;
-
-export const eventRsvpsRelations = relations(eventRsvps, ({ one }) => ({
-  event: one(events, { fields: [eventRsvps.eventID], references: [events.id] }),
-  user: one(user, { fields: [eventRsvps.userID], references: [user.id] }),
-}));
-
 export const calendarInvites = pgTable("calendar_invites", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -525,9 +495,9 @@ export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
 }));
 
 
-// Attendees. Presence in the table = attending; the creator is added on event
-// creation. When RSVP lands (web), add a `status` column — presence + status
-// covers yes/no/maybe with no rework.
+// Attendees and their answer. Public RSVPs land here too (spec
+// `docs/superpowers/specs/2026-08-12-attendees-rsvp-unification-design.md`): one
+// event, one list of people, so the calendar shows what the page collected.
 export const eventUsers = pgTable("event_users", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -545,6 +515,10 @@ export const eventUsers = pgTable("event_users", {
       onDelete: "cascade",
     })
     .notNull(),
+  // going | maybe | declined. No row = has not answered; presence + status is the
+  // whole answer. Membership from before answers existed means "going", which is
+  // what it meant.
+  status: text("status").notNull().default("going"),
 }, (t) => [unique().on(t.eventID, t.userID)]); // makes join idempotent (onConflictDoNothing)
 
 

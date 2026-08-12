@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
   calendarEvents,
+  eventUsers,
   pages,
   schedulingParticipants,
   schedulingPolls,
@@ -71,6 +72,17 @@ assert.ok(
   ),
   "a participant must have at most one answer per slot",
 );
+assert.equal(
+  eventUsers.status.notNull,
+  true,
+  "an attendee row must always say which answer it is",
+);
+assert.equal(
+  eventUsers.status.default,
+  "going",
+  "membership rows that predate answers mean 'going'",
+);
+
 const pagesPositionIndex = getTableConfig(pages).indexes.find(
   (index) => index.config.name === "pages_user_position_idx",
 );
