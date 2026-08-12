@@ -153,28 +153,18 @@ export function PollForm({
 						label="Answers close"
 						trailing={
 							// Reads like the time above it: the picker itself asks, and only a
-							// chosen day turns into a deadline. Clearing stays available once
-							// there is something to clear.
-							<div className={styles.deadlineControls}>
-								<DatePicker
-									className={styles.dateInput}
-									label="Answers close"
-									min={toDateKey(new Date())}
-									placeholder="Set deadline"
-									value={deadline}
-									weekStartsOn={weekStartsOn}
-									onChange={setDeadline}
-								/>
-								{deadline ? (
-									<Button
-										size="compact"
-										variant="ghost"
-										onClick={() => setDeadline("")}
-									>
-										Clear
-									</Button>
-								) : null}
-							</div>
+							// chosen day turns into a deadline. Taking it back lives inside the
+							// picker, so this row never changes width.
+							<DatePicker
+								className={styles.dateInput}
+								label="Answers close"
+								min={toDateKey(new Date())}
+								placeholder="Set deadline"
+								value={deadline}
+								weekStartsOn={weekStartsOn}
+								onChange={setDeadline}
+								onClear={deadline ? () => setDeadline("") : undefined}
+							/>
 						}
 					/>
 				</div>

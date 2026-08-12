@@ -120,6 +120,9 @@
 }
 
 .corner {
+  /* Spans the rows below it, so the label sits in the middle of the block rather
+     than at the top of its first row. */
+  vertical-align: middle;
   color: var(--text-secondary);
   font-size: var(--text-11);
   font-weight: 400;

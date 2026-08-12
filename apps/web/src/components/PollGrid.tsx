@@ -106,7 +106,14 @@ export function PollGrid({
         >
           <thead>
             <tr>
-              <th className={styles.corner} rowSpan={showTimeRow ? 2 : 1} scope="col">
+              {/* Spans the times and the counts under it: those rows describe the
+                  columns, not a participant, and the blank cell they used to need
+                  under this one read as a missing name. */}
+              <th
+                className={styles.corner}
+                rowSpan={showTimeRow ? 3 : 2}
+                scope="col"
+              >
                 Participants
               </th>
               {groupByDay(slots).map(([day, ofDay]) => (
@@ -135,19 +142,17 @@ export function PollGrid({
                 ))}
               </tr>
             ) : null}
-          </thead>
-
-          <tbody>
-            {/* The count first, because it answers the question before anyone
-                reads a single row. */}
+            {/* The counts before any single row, because they answer the question
+                the poll asks. In the header rather than the body: they belong to
+                the columns. */}
             <tr className={styles.countRow}>
-              {/* Not "Yes": in a column of people's names, a row labelled with an
-                  answer reads as somebody called Yes. */}
-              <th className={styles.rowHead} scope="row">
-                Can make it
-              </th>
               {slots.map((slot) => (
                 <td
+                  aria-label={`${slot.yes.length} can make it${
+                    slot.ifNeeded.length > 0
+                      ? `, ${slot.ifNeeded.length} if needed`
+                      : ""
+                  }`}
                   className={styles.count}
                   data-chosen={slot.id === chosenSlotID ? "" : undefined}
                   data-leading={leading.has(slot.id) ? "" : undefined}
@@ -162,7 +167,9 @@ export function PollGrid({
                 </td>
               ))}
             </tr>
+          </thead>
 
+          <tbody>
             {people
               .filter((person) => person.id !== mineID)
               .map((person) => (

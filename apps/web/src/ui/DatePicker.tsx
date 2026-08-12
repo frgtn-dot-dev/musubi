@@ -16,6 +16,12 @@ export type DatePickerProps = {
   max?: string;
   min?: string;
   onChange: (value: string) => void;
+  /**
+   * Offered inside the popover when a date can be taken back. Outside it, a Clear
+   * button beside the trigger changed the row's width and moved the trigger every
+   * time a date was picked.
+   */
+  onClear?: () => void;
   /** What the trigger says while nothing is chosen. */
   placeholder?: string;
   value: string;
@@ -46,6 +52,7 @@ export function DatePicker({
   max,
   min,
   onChange,
+  onClear,
   placeholder = "Choose date",
   value,
   weekStartsOn,
@@ -138,19 +145,29 @@ export function DatePicker({
           >
             Today
           </Button>
+          {onClear ? (
+            <Button
+              size="compact"
+              variant="ghost"
+              onClick={() => {
+                onClear();
+                setOpen(false);
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
         </div>
-        <p
-          className={styles.datePickerHint}
-          role={draft.length > 0 && !draftValid ? "alert" : undefined}
-        >
-          {draft.length > 0 && !draftValid
-            ? min && draft < min
+        {/* Only when it is wrong: the calendar above is the instruction. */}
+        {draft.length > 0 && !draftValid ? (
+          <p className={styles.datePickerHint} role="alert">
+            {min && draft < min
               ? `Choose ${min} or later.`
               : max && draft > max
                 ? `Choose ${max} or earlier.`
-                : "Use the format YYYY-MM-DD."
-            : "Type a date and press Enter."}
-        </p>
+                : "Use the format YYYY-MM-DD."}
+          </p>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

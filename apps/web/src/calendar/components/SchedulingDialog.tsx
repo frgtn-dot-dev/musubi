@@ -299,20 +299,22 @@ export function PollResults({
 						? "This poll is closed. Nothing was picked."
 						: `Answers closed on ${formatDay(data.deadline)}. Nothing was picked.`}
 				</p>
-			) : (
+			) : !data ? (
+				<p className={styles.summary}>Loading answers…</p>
+			) : data.respondents === 0 || data.deadline ? (
+				// Only what the grid below cannot say. Counting the answers here was
+				// saying twice what the numbers under each day already say.
 				<p className={styles.summary}>
-					{data
-						? data.respondents === 0
+					{[
+						data.respondents === 0
 							? "Nobody has answered yet. The link is below."
-							: `${data.respondents} ${
-									data.respondents === 1 ? "person has" : "people have"
-								} answered. Pick a day when you have enough of them.`
-						: "Loading answers…"}
-					{data?.deadline && !data.closed
-						? ` Answers close on ${formatDay(data.deadline)}.`
-						: ""}
+							: "",
+						data.deadline ? `Answers close on ${formatDay(data.deadline)}.` : "",
+					]
+						.filter(Boolean)
+						.join(" ")}
 				</p>
-			)}
+			) : null}
 
 			{data ? (
 				<PollGrid

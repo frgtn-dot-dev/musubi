@@ -186,12 +186,6 @@
 	justify-content: flex-end;
 }
 
-.deadlineControls {
-	display: flex;
-	align-items: center;
-	gap: var(--space-1);
-}
-
 .formActions {
 	display: flex;
 	min-height: var(--control-height);
