@@ -1266,7 +1266,9 @@ test("scrolls a long calendar list inside quick create", async ({ page }) => {
 	});
 	await expect(calendarList).toBeVisible();
 	expect(
-		await calendarList.evaluate((element) => element.scrollHeight > element.clientHeight),
+		await calendarList.evaluate(
+			(element) => element.scrollHeight > element.clientHeight,
+		),
 	).toBe(true);
 	await calendarList.hover();
 	await page.mouse.wheel(0, 420);
@@ -2777,7 +2779,9 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 
 	// Create then revoke an invite link. Both limits are fillable rather than a
 	// short preset list, and the header close makes a second Done footer redundant.
-	await expect(sharingDialog.getByRole("button", { name: "Done" })).toHaveCount(0);
+	await expect(sharingDialog.getByRole("button", { name: "Done" })).toHaveCount(
+		0,
+	);
 	await expect(sharingDialog.locator("footer")).toHaveCount(0);
 	const expiryInput = sharingDialog.getByRole("spinbutton", {
 		name: "Expires after days",
@@ -2786,9 +2790,13 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 		name: "How many people",
 	});
 	await expect(expiryInput).toHaveValue("7");
-	await expect(expiryInput.locator("xpath=..").getByText("days", { exact: true })).toBeVisible();
+	await expect(
+		expiryInput.locator("xpath=..").getByText("days", { exact: true }),
+	).toBeVisible();
 	await expiryInput.fill("1");
-	await expect(expiryInput.locator("xpath=..").getByText("day", { exact: true })).toBeVisible();
+	await expect(
+		expiryInput.locator("xpath=..").getByText("day", { exact: true }),
+	).toBeVisible();
 	await expiryInput.fill("10");
 	await peopleInput.fill("5");
 	const createInviteButton = sharingDialog.getByRole("button", {
@@ -2796,12 +2804,15 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 	});
 	const limitsBox = (await peopleInput.boundingBox())!;
 	const createBox = (await createInviteButton.boundingBox())!;
-	const optionsBox = (await createInviteButton.locator("xpath=..").boundingBox())!;
-	expect(createBox.x - (limitsBox.x + limitsBox.width)).toBeGreaterThanOrEqual(24);
-	expect(optionsBox.x + optionsBox.width - (createBox.x + createBox.width)).toBeCloseTo(
+	const optionsBox = (await createInviteButton
+		.locator("xpath=..")
+		.boundingBox())!;
+	expect(createBox.x - (limitsBox.x + limitsBox.width)).toBeGreaterThanOrEqual(
 		24,
-		0,
 	);
+	expect(
+		optionsBox.x + optionsBox.width - (createBox.x + createBox.width),
+	).toBeCloseTo(24, 0);
 	await createInviteButton.click();
 	await expect(page.getByRole("textbox", { name: "Invite link" })).toHaveValue(
 		/\/invite\/invite-1$/,
@@ -7367,8 +7378,12 @@ test("shows participant polls as striped all-day calendar items", async ({
 	);
 	expect(paints[0]!.image).toContain("repeating-linear-gradient");
 	expect(paints[0]!.color).not.toBe(paints[1]!.color);
-	expect(await chips.first().getAttribute("data-continues-after")).not.toBeNull();
-	expect(await chips.last().getAttribute("data-continues-before")).not.toBeNull();
+	expect(
+		await chips.first().getAttribute("data-continues-after"),
+	).not.toBeNull();
+	expect(
+		await chips.last().getAttribute("data-continues-before"),
+	).not.toBeNull();
 	const geometry = await page.evaluate(() => {
 		const poll = document.querySelector<HTMLElement>(
 			'[data-poll-calendar="poll-calendar-1"]',
@@ -7385,7 +7400,8 @@ test("shows participant polls as striped all-day calendar items", async ({
 		const pollBox = poll.getBoundingClientRect();
 		const nextPollBox = nextPoll.getBoundingClientRect();
 		return {
-			eventFont: getComputedStyle(event.querySelector("[class*='eventTitle']")!).fontSize,
+			eventFont: getComputedStyle(event.querySelector("[class*='eventTitle']")!)
+				.fontSize,
 			eventHeight: event.getBoundingClientRect().height,
 			eventIcon: event.querySelector("svg")!.getBoundingClientRect().width,
 			joinGap: nextPollBox.left - pollBox.right,
@@ -7407,16 +7423,20 @@ test("shows participant polls as striped all-day calendar items", async ({
 	await chips.first().click();
 	const dialog = page.getByRole("dialog", { name: "Studio planning" });
 	await expect(dialog).toContainText("verified account");
-	const ownAnswer = dialog.getByRole("button", { name: /Change your answer/ }).first();
+	const ownAnswer = dialog
+		.getByRole("button", { name: /Change your answer/ })
+		.first();
 	await ownAnswer.click();
 	await page
 		.getByRole("dialog", { name: /Your answer for/ })
 		.getByRole("button", { name: "If needed" })
 		.click();
 	await dialog.getByRole("button", { name: "Save answers" }).click();
-	await expect.poll(() => savedVotes).toEqual({
-		votes: [{ slotID: "s1", value: "if-needed" }],
-	});
+	await expect
+		.poll(() => savedVotes)
+		.toEqual({
+			votes: [{ slotID: "s1", value: "if-needed" }],
+		});
 });
 
 test("refreshes an SSR-anonymous poll after the browser session resolves", async ({
@@ -7438,9 +7458,7 @@ test("refreshes an SSR-anonymous poll after the browser session resolves", async
 		durationMinutes: 24 * 60,
 		mine: {},
 		mineID: authenticated ? "1" : null,
-		people: authenticated
-			? [{ answers: {}, id: "1", name: "Web QA" }]
-			: [],
+		people: authenticated ? [{ answers: {}, id: "1", name: "Web QA" }] : [],
 		respondents: 0,
 		slots: [
 			{
@@ -7534,7 +7552,9 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 		.click();
 	await dialog.getByRole("button", { name: "Save my answers" }).click();
 
-	await expect(dialog.getByRole("button", { name: "Answers saved" })).toBeDisabled();
+	await expect(
+		dialog.getByRole("button", { name: "Answers saved" }),
+	).toBeDisabled();
 	expect(savedVotes[0]).toEqual({
 		votes: [{ slotID: "owner-slot", value: "yes" }],
 	});
@@ -7542,7 +7562,9 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 	// The same authenticated identity owns the row on the public link too.
 	await page.goto(`/s/${POLL_TOKEN}`);
 	await expect(page.getByText("You created this poll.")).toBeVisible();
-	const ownAnswer = page.getByRole("button", { name: /10 Aug.*you answered yes/ });
+	const ownAnswer = page.getByRole("button", {
+		name: /10 Aug.*you answered yes/,
+	});
 	await ownAnswer.click();
 	await page
 		.getByRole("dialog", { name: /Your answer for/ })
@@ -7967,9 +7989,11 @@ test("creates a poll, collects answers and turns one into an event", async ({
 		title: "Studio planning",
 	});
 	expect(created).not.toHaveProperty("durationMinutes");
-	const sent = (created as {
-		slots: Array<{ date: string; start: string }>;
-	}).slots;
+	const sent = (
+		created as {
+			slots: Array<{ date: string; start: string }>;
+		}
+	).slots;
 	expect(sent).toHaveLength(2);
 	// Date is the semantic value; UTC noon is only a timezone-stable carrier.
 	expect(sent).toEqual([

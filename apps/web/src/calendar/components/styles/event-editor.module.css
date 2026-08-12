@@ -1,789 +1,785 @@
 .form {
-  display: grid;
-  min-width: 0;
-  padding-bottom: var(--space-2);
+	display: grid;
+	min-width: 0;
+	padding-bottom: var(--space-2);
 }
 
 .titleField {
-  padding: var(--space-3) var(--space-4);
+	padding: var(--space-3) var(--space-4);
 }
 
 .titleField input {
-  font-family: var(--font-serif);
-  font-size: var(--text-19);
+	font-family: var(--font-serif);
+	font-size: var(--text-19);
 }
 
 .titleField input::placeholder {
-  color: var(--text-muted);
+	color: var(--text-muted);
 }
 
 .section {
-  min-width: 0;
-  border-top: 1px solid var(--border-subtle);
+	min-width: 0;
+	border-top: 1px solid var(--border-subtle);
 }
 
 .sectionLabel {
-  padding: var(--space-3) var(--space-4) var(--space-2);
+	padding: var(--space-3) var(--space-4) var(--space-2);
 }
 
 .pickerRow,
 .timeRow {
-  display: grid;
-  min-height: var(--control-height);
-  align-items: center;
-  gap: var(--space-3);
-  padding: 0 var(--space-4);
-  color: var(--text-muted);
+	display: grid;
+	min-height: var(--control-height);
+	align-items: center;
+	gap: var(--space-3);
+	padding: 0 var(--space-4);
+	color: var(--text-muted);
 }
 
 .pickerRow {
-  grid-template-columns: 18px 44px minmax(0, 1fr);
+	grid-template-columns: 18px 44px minmax(0, 1fr);
 }
 
 .timeRow {
-  grid-template-columns:
-    18px minmax(0, 1fr) auto
-    minmax(0, 1fr);
+	grid-template-columns:
+		18px minmax(0, 1fr) auto
+		minmax(0, 1fr);
 }
 
 .pickerRow .pickerValue {
-  justify-content: flex-end;
-  text-align: right;
+	justify-content: flex-end;
+	text-align: right;
 }
 
 .pickerLabel,
 .timeSeparator {
-  color: var(--text-secondary);
-  font-size: var(--text-11);
+	color: var(--text-secondary);
+	font-size: var(--text-11);
 }
 
 .timeSeparator {
-  white-space: nowrap;
+	white-space: nowrap;
 }
 
 .timeLabel {
-  display: none;
+	display: none;
 }
 
 .toggleRow {
-  width: 100%;
-  min-height: var(--control-height);
-  box-sizing: border-box;
-  padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+	width: 100%;
+	min-height: var(--control-height);
+	box-sizing: border-box;
+	padding: 0 var(--space-4);
+	border-bottom: 1px solid var(--border-subtle);
 }
 
 .inlineField {
-  padding-block: 7px;
+	padding-block: 7px;
 }
 
 .fieldLabel {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-2);
+	display: inline-flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-2);
 }
 
 .recurrenceEditor {
-  display: grid;
-  min-width: 0;
-  gap: var(--space-2);
+	display: grid;
+	min-width: 0;
+	gap: var(--space-2);
 }
 
 .customRecurrence,
 .unsupportedRecurrence {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--surface-raised) 48%, transparent);
+	display: grid;
+	gap: var(--space-3);
+	padding: var(--space-3);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-control);
+	background: color-mix(in srgb, var(--surface-raised) 48%, transparent);
 }
 
 .recurrenceEvery {
-  display: grid;
-  grid-template-columns: auto 64px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--text-12);
+	display: grid;
+	grid-template-columns: auto 64px minmax(0, 1fr);
+	align-items: center;
+	gap: var(--space-2);
+	color: var(--text-secondary);
+	font-size: var(--text-12);
 }
 
 .recurrenceEvery input,
 .recurrenceCount input {
-  width: 100%;
-  min-width: 0;
-  height: var(--compact-control-height);
-  box-sizing: border-box;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-control);
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  font: inherit;
-  text-align: center;
+	width: 100%;
+	min-width: 0;
+	height: var(--compact-control-height);
+	box-sizing: border-box;
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-control);
+	background: var(--surface-panel);
+	color: var(--text-primary);
+	font: inherit;
+	text-align: center;
 }
 
 .recurrenceDays {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  border: 0;
-  margin: 0;
+	display: grid;
+	gap: var(--space-2);
+	padding: 0;
+	border: 0;
+	margin: 0;
 }
 
 .recurrenceDays legend,
 .recurrenceEnds > span {
-  color: var(--text-secondary);
-  font-size: var(--text-11);
+	color: var(--text-secondary);
+	font-size: var(--text-11);
 }
 
 .recurrenceDays > div {
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(7, minmax(28px, 1fr));
+	display: grid;
+	gap: 4px;
+	grid-template-columns: repeat(7, minmax(28px, 1fr));
 }
 
 .recurrenceDays button {
-  min-height: 30px;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-control);
-  background: var(--surface-panel);
-  color: var(--text-secondary);
-  cursor: pointer;
+	min-height: 30px;
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-control);
+	background: var(--surface-panel);
+	color: var(--text-secondary);
+	cursor: pointer;
 }
 
 .recurrenceDays button[aria-pressed="true"] {
-  border-color: var(--control-fill);
-  background: var(--control-fill);
-  color: var(--control-on-fill);
+	border-color: var(--control-fill);
+	background: var(--control-fill);
+	color: var(--control-on-fill);
 }
 
 .recurrenceDays button:focus-visible,
 .recurrenceEvery input:focus-visible,
 .recurrenceCount input:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 2px;
+	outline: var(--focus-ring);
+	outline-offset: 2px;
 }
 
 .recurrenceDays button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+	cursor: not-allowed;
+	opacity: 0.6;
 }
 
 .recurrenceEnds {
-  display: grid;
-  grid-template-columns: auto minmax(130px, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2);
+	display: grid;
+	grid-template-columns: auto minmax(130px, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
 }
 
 .recurrenceCount {
-  display: flex;
-  width: 88px;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--text-11);
+	display: flex;
+	width: 88px;
+	align-items: center;
+	gap: var(--space-2);
+	color: var(--text-secondary);
+	font-size: var(--text-11);
 }
 
 .recurrenceCount input {
-  width: 52px;
+	width: 52px;
 }
 
 .recurrenceSummary,
 .recurrenceUntil,
 .recurrenceHint,
 .unsupportedRecurrence p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-11);
-  line-height: 1.4;
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--text-11);
+	line-height: 1.4;
 }
 
 .recurrenceSummary {
-  font-style: italic;
+	font-style: italic;
 }
 
 .recurrenceUntil,
 .unsupportedRecurrence {
-  border-left: 2px solid var(--accent-primary);
+	border-left: 2px solid var(--accent-primary);
 }
 
 .unsupportedRecurrence > :last-child {
-  justify-self: start;
+	justify-self: start;
 }
 
 .calendarDot {
-  width: 9px;
-  height: 9px;
-  flex: none;
-  border: 1px solid rgb(0 0 0 / 10%);
-  border-radius: var(--radius-pill);
+	width: 9px;
+	height: 9px;
+	flex: none;
+	border: 1px solid rgb(0 0 0 / 10%);
+	border-radius: var(--radius-pill);
 }
 
 .calendarSummary {
-  display: grid;
-  width: 100%;
-  min-height: 56px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  border: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+	display: grid;
+	width: 100%;
+	min-height: 56px;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-3);
+	padding: var(--space-2) var(--space-4);
+	border: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
 }
 
 .calendarSummary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
 
 .calendarSummary:disabled {
-  cursor: wait;
-  opacity: 0.55;
+	cursor: wait;
+	opacity: 0.55;
 }
 
 .calendarSummaryCopy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
+	display: grid;
+	min-width: 0;
+	gap: 2px;
 }
 
 .calendarSummaryCopy strong,
 .calendarPlacementCopy strong {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: var(--text-14);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	color: var(--text-primary);
+	font-size: var(--text-14);
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .calendarSummaryCopy > span,
 .calendarPlacementCopy > span {
-  color: var(--text-secondary);
-  font-size: var(--text-11);
-  line-height: 1.35;
+	color: var(--text-secondary);
+	font-size: var(--text-11);
+	line-height: 1.35;
 }
 
 .calendarSummaryAction {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--text-secondary);
-  font-size: var(--text-11);
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--text-secondary);
+	font-size: var(--text-11);
 }
 
 .calendarSummaryAction svg {
-  transition: transform var(--motion-fast) ease;
+	transition: transform var(--motion-fast) ease;
 }
 
 .calendarSummaryAction svg[data-open] {
-  transform: rotate(180deg);
+	transform: rotate(180deg);
 }
 
 .calendarHint {
-  margin: 0;
-  padding: 0 var(--space-4) var(--space-3);
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-  line-height: 1.45;
+	margin: 0;
+	padding: 0 var(--space-4) var(--space-3);
+	color: var(--text-secondary);
+	font-size: var(--text-12);
+	line-height: 1.45;
 }
 
 .calendarPlacement {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-top: 1px solid var(--border-subtle);
+	display: grid;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-top: 1px solid var(--border-subtle);
 }
 
 .calendarPlacementHeader {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 54px;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4) 5px;
-  color: var(--text-secondary);
-  font-size: var(--text-10);
-  font-weight: 500;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 54px;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-4) 5px;
+	color: var(--text-secondary);
+	font-size: var(--text-10);
+	font-weight: 500;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
 }
 
 .calendarPlacementHeader > span:last-child {
-  text-align: center;
+	text-align: center;
 }
 
 .calendarGroupHeading {
-  display: grid;
-  gap: 2px;
-  padding: var(--space-2) var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-raised) 42%, transparent);
+	display: grid;
+	gap: 2px;
+	padding: var(--space-2) var(--space-4);
+	border-top: 1px solid var(--border-subtle);
+	background: color-mix(in srgb, var(--surface-raised) 42%, transparent);
 }
 
 .calendarGroupHeading strong {
-  color: var(--text-secondary);
-  font-size: var(--text-11);
-  font-weight: 500;
+	color: var(--text-secondary);
+	font-size: var(--text-11);
+	font-weight: 500;
 }
 
 .calendarGroupHeading span {
-  color: var(--text-muted);
-  font-size: var(--text-10);
+	color: var(--text-muted);
+	font-size: var(--text-10);
 }
 
 .calendarGroup ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .calendarPlacementRow {
-  display: grid;
-  width: 100%;
-  min-height: 56px;
-  grid-template-columns: minmax(0, 1fr) 54px;
-  align-items: stretch;
-  box-sizing: border-box;
-  padding-right: var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+	display: grid;
+	width: 100%;
+	min-height: 56px;
+	grid-template-columns: minmax(0, 1fr) 54px;
+	align-items: stretch;
+	box-sizing: border-box;
+	padding-right: var(--space-4);
+	border-bottom: 1px solid var(--border-subtle);
 }
 
 .calendarMembership {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 18px 9px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
-  cursor: pointer;
+	position: relative;
+	display: grid;
+	min-width: 0;
+	grid-template-columns: 18px 9px minmax(0, 1fr);
+	align-items: center;
+	gap: var(--space-3);
+	padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+	cursor: pointer;
 }
 
 .calendarMembership:hover:not([data-disabled]) {
-  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
 
 .calendarMembership[data-disabled] {
-  cursor: default;
+	cursor: default;
 }
 
 .calendarMembership[data-disabled]:not([data-home]) {
-  opacity: 0.58;
+	opacity: 0.58;
 }
 
 .calendarMembership input,
 .homeChoice input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
 }
 
 .calendarMembershipBox {
-  display: grid;
-  width: 18px;
-  height: 18px;
-  place-content: center;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  color: var(--control-on-fill);
+	display: grid;
+	width: 18px;
+	height: 18px;
+	place-content: center;
+	border: 1px solid var(--border-strong);
+	border-radius: 4px;
+	color: var(--control-on-fill);
 }
 
 .calendarMembership input:checked + .calendarMembershipBox {
-  border-color: var(--control-fill);
-  background: var(--control-fill);
+	border-color: var(--control-fill);
+	background: var(--control-fill);
 }
 
 .calendarMembership input:focus-visible + .calendarMembershipBox,
 .homeChoice input:focus-visible + span {
-  outline: var(--focus-ring);
-  outline-offset: 3px;
+	outline: var(--focus-ring);
+	outline-offset: 3px;
 }
 
 .calendarPlacementCopy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
+	display: grid;
+	min-width: 0;
+	gap: 2px;
 }
 
 .homeChoice,
 .homeBadge {
-  display: inline-grid;
-  align-self: center;
-  justify-self: center;
-  place-content: center;
-  color: var(--text-secondary);
+	display: inline-grid;
+	align-self: center;
+	justify-self: center;
+	place-content: center;
+	color: var(--text-secondary);
 }
 
 .homeChoice {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-control);
-  cursor: pointer;
+	position: relative;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--radius-control);
+	cursor: pointer;
 }
 
 .homeChoice > span:first-of-type {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-content: center;
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-pill);
-  background: transparent;
+	display: grid;
+	width: 26px;
+	height: 26px;
+	place-content: center;
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-pill);
+	background: transparent;
 }
 
 .homeChoice:hover:not([data-disabled]) > span:first-of-type {
-  border-color: var(--border-strong);
-  background: var(--surface-raised);
-  color: var(--text-primary);
+	border-color: var(--border-strong);
+	background: var(--surface-raised);
+	color: var(--text-primary);
 }
 
 .homeChoice[data-checked] > span:first-of-type {
-  border-color: var(--control-fill);
-  background: var(--control-fill);
-  color: var(--control-on-fill);
+	border-color: var(--control-fill);
+	background: var(--control-fill);
+	color: var(--control-on-fill);
 }
 
 .homeChoice[data-checked]:hover:not([data-disabled]) > span:first-of-type {
-  border-color: color-mix(
-    in srgb,
-    var(--control-fill) 88%,
-    var(--control-on-fill)
-  );
-  background: color-mix(
-    in srgb,
-    var(--control-fill) 88%,
-    var(--control-on-fill)
-  );
-  color: var(--control-on-fill);
+	border-color: color-mix(
+		in srgb,
+		var(--control-fill) 88%,
+		var(--control-on-fill)
+	);
+	background: color-mix(
+		in srgb,
+		var(--control-fill) 88%,
+		var(--control-on-fill)
+	);
+	color: var(--control-on-fill);
 }
 
 .homeChoice[data-disabled] {
-  cursor: not-allowed;
-  opacity: 0.5;
+	cursor: not-allowed;
+	opacity: 0.5;
 }
 
 .homeBadge {
-  gap: 2px;
-  font-size: var(--text-10);
+	gap: 2px;
+	font-size: var(--text-10);
 }
 
 .srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  margin: -1px;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	padding: 0;
+	border: 0;
+	margin: -1px;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
 }
 
 .formError {
-  margin: var(--space-3) var(--space-4) 0;
-  padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
+	margin: var(--space-3) var(--space-4) 0;
+	padding: var(--space-2) var(--space-3);
+	border-left: 2px solid var(--accent-primary);
+	background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
 }
 
 .formError p,
 .formError span {
-  margin: 0;
-  font-size: var(--text-11);
-  line-height: 1.45;
+	margin: 0;
+	font-size: var(--text-11);
+	line-height: 1.45;
 }
 
 .formError p {
-  color: var(--text-primary);
+	color: var(--text-primary);
 }
 
 .formError span {
-  color: var(--text-secondary);
+	color: var(--text-secondary);
 }
 
 .actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) var(--space-1);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	padding: var(--space-3) var(--space-4) var(--space-1);
 }
 
 .actions > :last-child {
-  min-width: 112px;
+	min-width: 112px;
 }
 
 .form[data-compact] .sectionLabel {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  margin: -1px;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	padding: 0;
+	border: 0;
+	margin: -1px;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
 }
 
 .form[data-compact] .titleField {
-  padding-block: var(--space-2);
+	padding-block: var(--space-2);
 }
 
 .form[data-compact] .inlineField {
-  grid-template-columns: 86px minmax(0, 1fr);
+	grid-template-columns: 86px minmax(0, 1fr);
 }
 
 .form[data-compact] .inlineField > label {
-  align-self: center;
+	align-self: center;
 }
 
 .form[data-compact] .calendarPlacement {
-  max-height: min(280px, 40dvh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+	max-height: min(280px, 40dvh);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 }
 
 .form[data-compact] .calendarPlacementHeader {
-  position: sticky;
-  z-index: 1;
-  top: 0;
-  background: var(--surface-canvas);
+	position: sticky;
+	z-index: 1;
+	top: 0;
+	background: var(--surface-canvas);
 }
 
 .form[data-compact] .actions {
-  position: sticky;
-  z-index: 2;
-  bottom: 0;
-  padding-block: var(--space-3);
-  background: var(--surface-canvas);
-  box-shadow: 0 -1px var(--border-subtle);
+	position: sticky;
+	z-index: 2;
+	bottom: 0;
+	padding-block: var(--space-3);
+	background: var(--surface-canvas);
+	box-shadow: 0 -1px var(--border-subtle);
 }
 
 @media (min-width: 900px) {
-  .form[data-layout="page"] {
-    height: 100%;
-    min-height: 0;
-    gap: var(--space-3);
-    padding: var(--space-3);
-    grid-template-areas:
-      "title title"
-      "when details"
-      "calendars calendars"
-      "error error"
-      "actions actions";
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  }
+	.form[data-layout="page"] {
+		height: 100%;
+		min-height: 0;
+		gap: var(--space-3);
+		padding: var(--space-3);
+		grid-template-areas:
+			"title title"
+			"when details"
+			"calendars calendars"
+			"error error"
+			"actions actions";
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+	}
 
-  .form[data-layout="page"] .titleField {
-    grid-area: title;
-    padding: 0;
-  }
+	.form[data-layout="page"] .titleField {
+		grid-area: title;
+		padding: 0;
+	}
 
-  .form[data-layout="page"] .whenSection {
-    grid-area: when;
-  }
+	.form[data-layout="page"] .whenSection {
+		grid-area: when;
+	}
 
-  /* The page layout stretches every column to the row height, so the last field
+	/* The page layout stretches every column to the row height, so the last field
      takes the slack instead of leaving dead space under it. Notes are the one
      field that benefits from more room, which is why they go last. */
-  .form[data-layout="page"] .detailsSection {
-    display: flex;
-    min-height: 0;
-    flex-direction: column;
-    grid-area: details;
-  }
+	.form[data-layout="page"] .detailsSection {
+		display: flex;
+		min-height: 0;
+		flex-direction: column;
+		grid-area: details;
+	}
 
-  .form[data-layout="page"] .descriptionField {
-    min-height: 0;
-    flex: 1;
-    grid-template-rows: auto minmax(96px, 1fr);
-  }
+	.form[data-layout="page"] .descriptionField {
+		min-height: 0;
+		flex: 1;
+		grid-template-rows: auto minmax(96px, 1fr);
+	}
 
-  .form[data-layout="page"] .descriptionField > div {
-    min-height: 0;
-  }
+	.form[data-layout="page"] .descriptionField > div {
+		min-height: 0;
+	}
 
-  .form[data-layout="page"] .descriptionField textarea {
-    /* Fills the column, so dragging a resize handle has nothing left to give. */
-    height: 100%;
-    min-height: 0;
-    resize: none;
-  }
+	.form[data-layout="page"] .descriptionField textarea {
+		/* Fills the column, so dragging a resize handle has nothing left to give. */
+		height: 100%;
+		min-height: 0;
+		resize: none;
+	}
 
-  .form[data-layout="page"] .calendarSection {
-    display: grid;
-    min-height: 0;
-    grid-area: calendars;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    overflow: hidden;
-  }
+	.form[data-layout="page"] .calendarSection {
+		display: grid;
+		min-height: 0;
+		grid-area: calendars;
+		grid-template-rows: auto auto minmax(0, 1fr);
+		overflow: hidden;
+	}
 
-  .form[data-layout="page"] .section {
-    border: 1px solid var(--border-medium);
-    border-radius: var(--radius-lg);
-    background: color-mix(
-      in srgb,
-      var(--surface-canvas) 32%,
-      transparent
-    );
-    overflow: hidden;
-  }
+	.form[data-layout="page"] .section {
+		border: 1px solid var(--border-medium);
+		border-radius: var(--radius-lg);
+		background: color-mix(in srgb, var(--surface-canvas) 32%, transparent);
+		overflow: hidden;
+	}
 
-  .form[data-layout="page"] .formError {
-    grid-area: error;
-  }
+	.form[data-layout="page"] .formError {
+		grid-area: error;
+	}
 
-  .form[data-layout="page"] .actions {
-    grid-area: actions;
-  }
+	.form[data-layout="page"] .actions {
+		grid-area: actions;
+	}
 
-  .form[data-layout="page"] .sectionLabel {
-    padding: var(--space-3) var(--space-4) var(--space-2);
-  }
+	.form[data-layout="page"] .sectionLabel {
+		padding: var(--space-3) var(--space-4) var(--space-2);
+	}
 
-  .form[data-layout="page"] .pickerRow,
-  .form[data-layout="page"] .timeRow,
-  .form[data-layout="page"] .toggleRow {
-    min-height: var(--control-height);
-  }
+	.form[data-layout="page"] .pickerRow,
+	.form[data-layout="page"] .timeRow,
+	.form[data-layout="page"] .toggleRow {
+		min-height: var(--control-height);
+	}
 
-  .form[data-layout="page"] .pickerRow,
-  .form[data-layout="page"] .timeRow {
-    gap: var(--space-2);
-  }
+	.form[data-layout="page"] .pickerRow,
+	.form[data-layout="page"] .timeRow {
+		gap: var(--space-2);
+	}
 
-  .form[data-layout="page"] .timeRow {
-    grid-template-columns:
-      18px 44px minmax(0, 1fr) auto
-      minmax(0, 1fr);
-  }
+	.form[data-layout="page"] .timeRow {
+		grid-template-columns:
+			18px 44px minmax(0, 1fr) auto
+			minmax(0, 1fr);
+	}
 
-  .form[data-layout="page"] .timeLabel {
-    display: block;
-  }
+	.form[data-layout="page"] .timeLabel {
+		display: block;
+	}
 
-  .form[data-layout="page"] .inlineField {
-    grid-template-columns: 70px minmax(0, 1fr);
-    column-gap: var(--space-2);
-    padding-block: 5px;
-  }
+	.form[data-layout="page"] .inlineField {
+		grid-template-columns: 70px minmax(0, 1fr);
+		column-gap: var(--space-2);
+		padding-block: 5px;
+	}
 
-  .form[data-layout="page"] .calendarHint {
-    padding-bottom: var(--space-2);
-  }
+	.form[data-layout="page"] .calendarHint {
+		padding-bottom: var(--space-2);
+	}
 
-  .form[data-layout="page"] .calendarPlacement {
-    min-height: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    /* Rows keep their own height and stay under the header; without this they
+	.form[data-layout="page"] .calendarPlacement {
+		min-height: 0;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		/* Rows keep their own height and stay under the header; without this they
        share the stretched column and the list floats in the middle of it. */
-    align-content: start;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+		align-content: start;
+		overflow-x: hidden;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
 
-  /* The column heading belongs to the column, not to the list inside it: it stays
+	/* The column heading belongs to the column, not to the list inside it: it stays
      put while the calendars under it scroll. */
-  .form[data-layout="page"] .calendarPlacementHeader {
-    position: sticky;
-    z-index: 1;
-    top: 0;
-    grid-column: 1 / -1;
-    background: var(--surface-panel);
-  }
+	.form[data-layout="page"] .calendarPlacementHeader {
+		position: sticky;
+		z-index: 1;
+		top: 0;
+		grid-column: 1 / -1;
+		background: var(--surface-panel);
+	}
 
-  .form[data-layout="page"] .calendarGroup {
-    min-width: 0;
-  }
+	.form[data-layout="page"] .calendarGroup {
+		min-width: 0;
+	}
 
-  .form[data-layout="page"] .calendarGroup + .calendarGroup {
-    border-left: 1px solid var(--border-subtle);
-  }
+	.form[data-layout="page"] .calendarGroup + .calendarGroup {
+		border-left: 1px solid var(--border-subtle);
+	}
 
-  .form[data-layout="page"] .calendarGroup:only-child {
-    grid-column: 1 / -1;
-  }
+	.form[data-layout="page"] .calendarGroup:only-child {
+		grid-column: 1 / -1;
+	}
 
-  .form[data-layout="page"] .calendarGroup:only-child ul {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+	.form[data-layout="page"] .calendarGroup:only-child ul {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 
-  .form[data-layout="page"]
-    .calendarGroup:only-child
-    .calendarPlacementRow:nth-child(odd) {
-    border-right: 1px solid var(--border-subtle);
-  }
+	.form[data-layout="page"]
+		.calendarGroup:only-child
+		.calendarPlacementRow:nth-child(odd) {
+		border-right: 1px solid var(--border-subtle);
+	}
 
-  .form[data-layout="page"] .calendarPlacementRow {
-    min-height: 56px;
-  }
+	.form[data-layout="page"] .calendarPlacementRow {
+		min-height: 56px;
+	}
 
-  /* Cancel belongs beside Create, not a thousand pixels away at the other end of
+	/* Cancel belongs beside Create, not a thousand pixels away at the other end of
      the page. Space-between is right for the compact layout, where the left slot
      is "More options" — a disclosure rather than the other half of a pair. */
-  .form[data-layout="page"] .actions {
-    min-height: var(--control-height);
-    justify-content: flex-end;
-    padding: 0;
-  }
+	.form[data-layout="page"] .actions {
+		min-height: var(--control-height);
+		justify-content: flex-end;
+		padding: 0;
+	}
 }
 
 @media (min-width: 1000px) {
-  .form[data-layout="page"] {
-    grid-template-areas:
-      "title title title"
-      "when details calendars"
-      "error error error"
-      "actions actions actions";
-    grid-template-columns:
-      minmax(0, 0.95fr)
-      minmax(0, 1.05fr)
-      minmax(320px, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-  }
+	.form[data-layout="page"] {
+		grid-template-areas:
+			"title title title"
+			"when details calendars"
+			"error error error"
+			"actions actions actions";
+		grid-template-columns:
+			minmax(0, 0.95fr)
+			minmax(0, 1.05fr)
+			minmax(320px, 1fr);
+		grid-template-rows: auto minmax(0, 1fr) auto auto;
+	}
 
-  .form[data-layout="page"] .calendarPlacement {
-    grid-template-columns: minmax(0, 1fr);
-  }
+	.form[data-layout="page"] .calendarPlacement {
+		grid-template-columns: minmax(0, 1fr);
+	}
 
-  .form[data-layout="page"] .calendarGroup:only-child {
-    grid-column: auto;
-  }
+	.form[data-layout="page"] .calendarGroup:only-child {
+		grid-column: auto;
+	}
 
-  .form[data-layout="page"] .calendarGroup:only-child ul {
-    display: block;
-  }
+	.form[data-layout="page"] .calendarGroup:only-child ul {
+		display: block;
+	}
 
-  .form[data-layout="page"]
-    .calendarGroup:only-child
-    .calendarPlacementRow:nth-child(odd) {
-    border-right: 0;
-  }
+	.form[data-layout="page"]
+		.calendarGroup:only-child
+		.calendarPlacementRow:nth-child(odd) {
+		border-right: 0;
+	}
 }
 
 @media (max-width: 599px) {
-  .inlineField {
-    grid-template-columns: 86px minmax(0, 1fr);
-  }
+	.inlineField {
+		grid-template-columns: 86px minmax(0, 1fr);
+	}
 
-  .inlineField > label {
-    align-self: center;
-  }
+	.inlineField > label {
+		align-self: center;
+	}
 
-  .pickerRow,
-  .timeRow,
-  .toggleRow {
-    min-height: 52px;
-  }
+	.pickerRow,
+	.timeRow,
+	.toggleRow {
+		min-height: 52px;
+	}
 }
