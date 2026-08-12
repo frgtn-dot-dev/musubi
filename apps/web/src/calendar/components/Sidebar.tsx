@@ -1,12 +1,14 @@
 import {
   CalendarClock,
   CircleCheck,
+  CloudOff,
   Layers3,
   Link2,
   LogOut,
   type LucideIcon,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Settings,
   X,
 } from "lucide-react";
@@ -58,6 +60,8 @@ type SidebarProps = {
   pages: PageDocument[];
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
   syncLabel: string;
+  /** What the label is about, which decides the glyph and whether it warns. */
+  syncTone: "connected" | "offline" | "refreshing";
   user: Pick<User, "email" | "image" | "name">;
   weekStartsOn: UserSettings["weekStartsOn"];
 };
@@ -82,6 +86,7 @@ export function Sidebar({
   pages,
   returnFocusRef,
   syncLabel,
+  syncTone,
   user,
   weekStartsOn,
 }: SidebarProps) {
@@ -361,8 +366,21 @@ export function Sidebar({
         </div>
 
         <footer className={styles.sidebarFooter}>
-          <p className={styles.syncStatus}>
-            <CircleCheck aria-hidden="true" size={15} strokeWidth={1.6} />
+          {/* The one place that says how current the calendar is. It used to be a
+              full-width bar above the grid, which popped in and out on every
+              refresh for a fact that belongs next to the account. */}
+          {/* `aria-live`, not `role="status"`: this is a standing label rather
+              than the app's announcement channel — the toast owns that role, and
+              two of them make "the status" ambiguous for readers and tests
+              alike. Changes still get announced. */}
+          <p aria-live="polite" className={styles.syncStatus} data-tone={syncTone}>
+            {syncTone === "offline" ? (
+              <CloudOff aria-hidden="true" size={15} strokeWidth={1.6} />
+            ) : syncTone === "refreshing" ? (
+              <RefreshCw aria-hidden="true" size={14} strokeWidth={1.6} />
+            ) : (
+              <CircleCheck aria-hidden="true" size={15} strokeWidth={1.6} />
+            )}
             {syncLabel}
           </p>
           <div className={styles.profile}>

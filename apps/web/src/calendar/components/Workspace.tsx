@@ -28,7 +28,7 @@ import {
 } from "react";
 import { Button } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
-import { StaleBanner } from "~/ui/StaleBanner";
+import { describeAge, StaleBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
 import {
   DEFAULT_MULTI_WEEK_WEEKS,
@@ -929,11 +929,18 @@ export function Workspace({
         returnFocusRef={sidebarTriggerRef}
         syncLabel={
           offline
-            ? "Offline — showing saved data"
-            : isRefreshing
-              ? "Refreshing server data…"
-              : "Connected to server"
+            ? snapshotAt
+              ? `Offline — saved data from ${describeAge(snapshotAt)}`
+              : "Offline — server unreachable"
+            : stale
+              ? snapshotAt
+                ? `Saved data from ${describeAge(snapshotAt)} — refreshing`
+                : "Saved data — refreshing"
+              : isRefreshing
+                ? "Refreshing server data…"
+                : "Connected to server"
         }
+        syncTone={offline ? "offline" : stale || isRefreshing ? "refreshing" : "connected"}
         user={user}
         weekStartsOn={settings.weekStartsOn}
       />
@@ -949,13 +956,14 @@ export function Workspace({
             Scheduling polls could not be loaded. Calendar events are still shown.
           </div>
         ) : null}
-        {offline ? (
+        {/* Offline is the one state worth a bar, and only where the sidebar is a
+            drawer: a reader who cannot see the status would trust data that may
+            be days old. Everything else lives in the sidebar. */}
+        {offline && narrow ? (
           <StaleBanner
             savedAt={snapshotAt}
             suffix="Changes cannot be saved until it is back."
           />
-        ) : stale ? (
-          <StaleBanner savedAt={snapshotAt} tone="refreshing" />
         ) : null}
         <Toolbar
           activeView={activeView}

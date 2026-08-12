@@ -347,6 +347,16 @@
 	font-size: 0.69rem;
 }
 
+.syncStatus svg {
+	flex: none;
+}
+
+/* Nothing is coming until the server is back, which is the one sync state worth
+   a colour. Refreshing stays muted — fresher data is already on its way. */
+.syncStatus[data-tone="offline"] {
+	color: var(--accent-primary);
+}
+
 .profile {
 	display: grid;
 	min-width: 0;

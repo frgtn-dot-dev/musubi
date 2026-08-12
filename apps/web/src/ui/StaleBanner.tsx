@@ -18,10 +18,12 @@ export function describeAge(savedAt: number, now = Date.now()) {
 /**
  * Says the calendar on screen came out of a snapshot rather than from the server.
  *
- * Full width and above the calendar rather than tucked into the sidebar: on a
- * phone the sidebar is a drawer, and a reader who cannot see this would trust
- * data that may be days old. Wording carries the age, because "offline" alone
- * does not say whether what you are looking at is worth acting on.
+ * Narrow viewports only, and only while offline: everywhere else this fact lives
+ * in the sidebar's sync status, because a bar that appeared above the grid on
+ * every refresh moved the whole calendar down for a note. On a phone the sidebar
+ * is a drawer, so a reader who cannot open it would trust data that may be days
+ * old — that case still earns the bar. Wording carries the age, because "offline"
+ * alone does not say whether what you are looking at is worth acting on.
  */
 export function StaleBanner({
   savedAt,
