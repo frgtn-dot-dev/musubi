@@ -80,10 +80,26 @@ export function RsvpBlock({ token }: { token: string }) {
   }
 
   const mine = summary.data?.mine;
+  // An attendee list is a list of people, so an answer needs a name. A member who
+  // already has one is never asked; an account made by an emailed code is.
+  const needsName = signedIn && !session.data?.user.name?.trim();
+  const identityReady = name.trim().length > 0 && email.trim().length > 0;
 
   return (
     <section aria-labelledby="rsvp-title" className={styles.rsvp}>
       <h2 id="rsvp-title">Are you coming?</h2>
+
+      {needsName ? (
+        <Field label="Your name">
+          <input
+            autoComplete="name"
+            name="name"
+            placeholder="How the organizer knows you"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+      ) : null}
 
       <div className={styles.answers} role="group" aria-label="Your answer">
         {ANSWERS.map((option) => {
@@ -92,12 +108,13 @@ export function RsvpBlock({ token }: { token: string }) {
           return (
             <Button
               aria-pressed={chosen}
+              disabled={needsName && name.trim().length === 0}
               key={option.value}
               loading={answer.isPending && answer.variables?.status === option.value}
               variant={chosen ? "primary" : "secondary"}
               onClick={() => {
                 if (signedIn) {
-                  answer.mutate({ status: option.value });
+                  answer.mutate({ name: name.trim() || undefined, status: option.value });
                   return;
                 }
                 // Held here, not sent: nothing is recorded until an address is
@@ -155,6 +172,7 @@ export function RsvpBlock({ token }: { token: string }) {
                   autoComplete="name"
                   name="name"
                   placeholder="How the organizer knows you"
+                  required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
@@ -180,7 +198,11 @@ export function RsvpBlock({ token }: { token: string }) {
             </p>
           ) : null}
 
-          <Button type="submit">{sent ? "Confirm" : "Send me a code"}</Button>
+          {/* Asked before the code is sent, not after: the server refuses a
+              nameless answer, and finding that out post-login is a dead end. */}
+          <Button disabled={!sent && !identityReady} type="submit">
+            {sent ? "Confirm" : "Send me a code"}
+          </Button>
         </form>
       ) : null}
 

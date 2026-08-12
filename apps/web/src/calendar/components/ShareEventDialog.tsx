@@ -3,7 +3,6 @@ import { Check, Copy, Globe, Link2, Lock } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { getServerOrigin } from "~/api/query-keys";
 import {
-  getEventRsvps,
   getEventShare,
   publishEvent,
   unpublishEvent,
@@ -98,15 +97,6 @@ export function ShareEventDialog({
     queryKey: shareKey,
   });
 
-  // The organizer's own view of the answers. Fetched here rather than badged on
-  // the event, which would cost a request every time anyone opened any event's
-  // details for a feature most events never use.
-  const rsvps = useQuery({
-    queryFn: ({ signal }) => getEventRsvps(eventId, signal),
-    queryKey: ["event-rsvps", getServerOrigin(), eventId],
-    refetchOnWindowFocus: true,
-  });
-
   const publish = useMutation({
     mutationFn: (input: {
       attendeeVisibility?: EventShare["attendeeVisibility"];
@@ -136,8 +126,6 @@ export function ShareEventDialog({
   });
 
   const current = share.data;
-  const counts = rsvps.data?.counts ?? { declined: 0, going: 0, maybe: 0 };
-  const answered = counts.going + counts.maybe + counts.declined > 0;
   const mode: Mode = current?.mode ?? "private";
   const busy = publish.isPending || unpublish.isPending;
   const error = publish.error ?? unpublish.error;
@@ -259,21 +247,6 @@ export function ShareEventDialog({
           </div>
         ) : null}
 
-        {answered ? (
-          <section aria-labelledby="rsvp-answers-title" className={styles.answers}>
-            <h3 id="rsvp-answers-title">
-              {counts.going} going
-              {counts.maybe > 0 ? ` · ${counts.maybe} maybe` : ""}
-              {counts.declined > 0 ? ` · ${counts.declined} can’t` : ""}
-            </h3>
-            {/* Always shown to whoever can edit the event, whatever readers of
-                the page are allowed to see — the setting above is about them. */}
-            <AnswerList label="Going" names={rsvps.data?.going ?? []} />
-            <AnswerList label="Maybe" names={rsvps.data?.maybe ?? []} />
-            <AnswerList label="Can’t go" names={rsvps.data?.declined ?? []} />
-          </section>
-        ) : null}
-
         {error ? (
           <p className={styles.error} role="alert">
             {error.message}
@@ -319,16 +292,5 @@ export function ShareEventDialog({
         </DialogClose>
       </div>
     </Dialog>
-  );
-}
-
-function AnswerList({ label, names }: { label: string; names: string[] }) {
-  if (names.length === 0) return null;
-
-  return (
-    <p className={styles.answerLine}>
-      <span className={styles.answerLabel}>{label}</span>
-      {names.join(", ")}
-    </p>
   );
 }
