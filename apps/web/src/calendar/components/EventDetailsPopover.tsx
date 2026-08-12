@@ -12,6 +12,7 @@ import {
 	CalendarDays,
 	ChevronDown,
 	ChevronUp,
+	Check,
 	Clock3,
 	CopyPlus,
 	FileText,
@@ -29,9 +30,9 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Attendee, RemoveEventResponse } from "~/api/contracts";
 import {
+	answerLabel,
 	ATTENDANCE_CHOICES,
 	groupAttendees,
-	nextChoice,
 	type AttendanceChoice,
 } from "../attendance";
 import { getEventAttendees } from "~/api/resources";
@@ -42,6 +43,13 @@ import {
 	ConfirmationNotice,
 	DialogError,
 } from "~/ui/ConfirmationDialog";
+import {
+	Menu,
+	MenuContent,
+	MenuItem,
+	MenuSeparator,
+	MenuTrigger,
+} from "~/ui/Menu";
 import {
 	Popover,
 	PopoverAnchor,
@@ -422,10 +430,9 @@ export function EventDetailsPopover({
 		});
 	}
 
-	async function handleAnswer(choice: Attendee["status"]) {
+	async function handleAnswer(next: AttendanceChoice) {
 		setBusyAction("attendance");
 		setActionError(undefined);
-		const next = nextChoice(mine, choice);
 
 		try {
 			setAttendees(
@@ -726,33 +733,51 @@ export function EventDetailsPopover({
 													)}
 												</Button>
 											</SectionLabel>
+											{/* A menu, not three buttons: three labels beside the
+                          heading overflowed the popover, and what fell off the
+                          edge was the answer. Radix owns the menu's focus and
+                          dismissal, and it layers above the popover it opens
+                          from — both surfaces sit at the same z-index, and this
+                          one mounts second. */}
+											{attendees ? (
+												<Menu>
+													<MenuTrigger asChild>
+														<Button
+															className={styles.answerTrigger}
+															loading={busyAction === "attendance"}
+															size="compact"
+															variant={mine ? "primary" : "secondary"}
+														>
+															{answerLabel(mine) ?? "Answer"}
+															<ChevronDown aria-hidden="true" size={14} />
+														</Button>
+													</MenuTrigger>
+													<MenuContent align="end" label="Your answer">
+														{ATTENDANCE_CHOICES.map((choice) => (
+															<MenuItem
+																icon={
+																	mine === choice.value ? (
+																		<Check aria-hidden="true" size={15} />
+																	) : undefined
+																}
+																key={choice.value}
+																onSelect={() => void handleAnswer(choice.value)}
+															>
+																{choice.label}
+															</MenuItem>
+														))}
+														{mine ? (
+															<>
+																<MenuSeparator />
+																<MenuItem onSelect={() => void handleAnswer("none")}>
+																	Clear answer
+																</MenuItem>
+															</>
+														) : null}
+													</MenuContent>
+												</Menu>
+											) : null}
 										</div>
-
-										{/* Its own row: three answers plus the heading did not fit
-                        the popover's width, and what overflowed was the answer.
-                        One tap each, which a dropdown would have made two. */}
-										{attendees ? (
-											<div
-												aria-label="Your answer"
-												className={styles.answerRow}
-												role="group"
-											>
-												{ATTENDANCE_CHOICES.map((choice) => (
-													<Button
-														aria-pressed={mine === choice.value}
-														key={choice.value}
-														loading={busyAction === "attendance"}
-														size="compact"
-														variant={
-															mine === choice.value ? "primary" : "secondary"
-														}
-														onClick={() => void handleAnswer(choice.value)}
-													>
-														{choice.label}
-													</Button>
-												))}
-											</div>
-										) : null}
 
 										{/* The facepile falls apart into the list — one or the
                           other, never both. */}

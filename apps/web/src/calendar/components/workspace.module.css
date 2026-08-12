@@ -338,8 +338,11 @@
 	padding: 0 14px 14px;
 }
 
+/* A slot, not a line that grows: the three states are different lengths, and a
+   row that reflows moves the profile under it on every refresh. */
 .syncStatus {
 	display: flex;
+	min-height: 20px;
 	align-items: center;
 	gap: 8px;
 	margin: 0 10px;
@@ -349,6 +352,13 @@
 
 .syncStatus svg {
 	flex: none;
+}
+
+.syncStatus span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Nothing is coming until the server is back, which is the one sync state worth

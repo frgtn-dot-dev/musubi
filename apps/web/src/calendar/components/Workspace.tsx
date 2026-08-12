@@ -927,17 +927,18 @@ export function Workspace({
         }
         onSignOut={onSignOut}
         returnFocusRef={sidebarTriggerRef}
+        /* Short enough to fit the sidebar's slot on one line. The snapshot's age
+           only appears while offline: that is the case where how old the data is
+           changes what you do about it. */
         syncLabel={
           offline
             ? snapshotAt
-              ? `Offline — saved data from ${describeAge(snapshotAt)}`
+              ? `Offline — saved ${describeAge(snapshotAt)}`
               : "Offline — server unreachable"
             : stale
-              ? snapshotAt
-                ? `Saved data from ${describeAge(snapshotAt)} — refreshing`
-                : "Saved data — refreshing"
+              ? "Refreshing saved data…"
               : isRefreshing
-                ? "Refreshing server data…"
+                ? "Refreshing…"
                 : "Connected to server"
         }
         syncTone={offline ? "offline" : stale || isRefreshing ? "refreshing" : "connected"}

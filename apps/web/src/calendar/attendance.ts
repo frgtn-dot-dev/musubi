@@ -32,10 +32,7 @@ export function groupAttendees(attendees: Attendee[]) {
   })).filter((group) => group.items.length > 0);
 }
 
-/** Clicking the answer you already gave takes it back — this is the old "Leave". */
-export function nextChoice(
-  mine: Attendee["status"] | undefined,
-  clicked: Attendee["status"],
-): AttendanceChoice {
-  return mine === clicked ? "none" : clicked;
+/** The answer as the menu's trigger says it. */
+export function answerLabel(mine: Attendee["status"] | undefined) {
+  return ATTENDANCE_CHOICES.find((choice) => choice.value === mine)?.label;
 }

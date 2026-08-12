@@ -368,20 +368,30 @@ export function Sidebar({
         <footer className={styles.sidebarFooter}>
           {/* The one place that says how current the calendar is. It used to be a
               full-width bar above the grid, which popped in and out on every
-              refresh for a fact that belongs next to the account. */}
-          {/* `aria-live`, not `role="status"`: this is a standing label rather
+              refresh for a fact that belongs next to the account.
+
+              A slot of a fixed height with one line of text: the three states are
+              different lengths, and letting the row grow moved the profile below
+              it every time a refresh started.
+
+              `aria-live`, not `role="status"`: this is a standing label rather
               than the app's announcement channel — the toast owns that role, and
               two of them make "the status" ambiguous for readers and tests
               alike. Changes still get announced. */}
-          <p aria-live="polite" className={styles.syncStatus} data-tone={syncTone}>
+          <p
+            aria-live="polite"
+            className={styles.syncStatus}
+            data-tone={syncTone}
+            title={syncLabel}
+          >
             {syncTone === "offline" ? (
               <CloudOff aria-hidden="true" size={15} strokeWidth={1.6} />
             ) : syncTone === "refreshing" ? (
-              <RefreshCw aria-hidden="true" size={14} strokeWidth={1.6} />
+              <RefreshCw aria-hidden="true" size={15} strokeWidth={1.6} />
             ) : (
               <CircleCheck aria-hidden="true" size={15} strokeWidth={1.6} />
             )}
-            {syncLabel}
+            <span>{syncLabel}</span>
           </p>
           <div className={styles.profile}>
             <RowAction

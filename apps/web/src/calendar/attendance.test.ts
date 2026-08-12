@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupAttendees, nextChoice } from "./attendance";
+import { answerLabel, groupAttendees } from "./attendance";
 
 const attendee = (id: string, status: "declined" | "going" | "maybe") => ({
   id,
@@ -26,10 +26,10 @@ describe("groupAttendees", () => {
   });
 });
 
-describe("nextChoice", () => {
-  it("clears the answer when the chosen state is clicked again", () => {
-    expect(nextChoice("going", "going")).toBe("none");
-    expect(nextChoice("going", "maybe")).toBe("maybe");
-    expect(nextChoice(undefined, "declined")).toBe("declined");
+describe("answerLabel", () => {
+  it("names the answer for the menu's trigger, and nothing without one", () => {
+    expect(answerLabel("going")).toBe("Going");
+    expect(answerLabel("declined")).toBe("Can’t go");
+    expect(answerLabel(undefined)).toBeUndefined();
   });
 });

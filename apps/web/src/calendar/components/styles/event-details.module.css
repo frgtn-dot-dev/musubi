@@ -237,12 +237,12 @@
   gap: 5px;
 }
 
-/* One answer out of three — a row, not three loose actions. Wraps rather than
-   overflowing: the popover is narrower than the three labels on some locales. */
-.answerRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+/* The chevron shares the button's label span, where the text baseline lifts it
+   off centre — same slot, same fix as the toggle above. */
+.answerTrigger > span > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .attendeeGroups {
