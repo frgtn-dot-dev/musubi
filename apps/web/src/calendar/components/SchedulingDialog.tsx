@@ -340,11 +340,6 @@ export function PollResults({
 					}
 					answers={ownAnswers}
 					approximateStartTime={data.approximateStartTime}
-					caption={
-						data.closed
-							? "How everyone answered."
-							: "Who can make which day. The most yeses are marked."
-					}
 					chosenSlotID={data.chosenSlotID}
 					leadingSlotIDs={leading}
 					mineID={data.mineID}

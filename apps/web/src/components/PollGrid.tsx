@@ -45,7 +45,12 @@ export function PollGrid({
   answers?: Record<string, VoteValue | null>;
   /** One wall-clock hint for every candidate day; informational only. */
   approximateStartTime?: null | string;
-  caption: string;
+  /**
+   * An instruction for someone who has not seen this grid before. Absent for the
+   * organizer, whose own screen already says what they are looking at — a line of
+   * explanation over your own poll is furniture.
+   */
+  caption?: string;
   chosenSlotID?: null | string;
   /** Columns worth a second look — the most yeses, marked, never auto-picked. */
   leadingSlotIDs?: string[];
@@ -89,11 +94,16 @@ export function PollGrid({
     <div className={styles.box}>
       {/* Outside the scrolling box: an instruction that slides away when you
           scroll to Friday is not an instruction. */}
-      <p className={styles.caption} id="poll-grid-caption">
-        {caption}
-      </p>
+      {caption ? (
+        <p className={styles.caption} id="poll-grid-caption">
+          {caption}
+        </p>
+      ) : null}
       <div className={styles.scroller}>
-        <table aria-describedby="poll-grid-caption" className={styles.grid}>
+        <table
+          aria-describedby={caption ? "poll-grid-caption" : undefined}
+          className={styles.grid}
+        >
           <thead>
             <tr>
               <th className={styles.corner} rowSpan={showTimeRow ? 2 : 1} scope="col">
