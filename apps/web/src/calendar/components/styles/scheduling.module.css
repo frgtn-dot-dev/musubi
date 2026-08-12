@@ -172,6 +172,12 @@
    the row's right edge instead of drifting to the far left of the control. */
 .timeInput {
 	width: 9rem;
+}
+
+/* On the input itself: a text input does not inherit `text-align` from its
+   wrapper, so setting it a level up did nothing. The padding on the right is the
+   chevron's room, so the value lands just left of it. */
+.timeInput input {
 	text-align: right;
 }
 
