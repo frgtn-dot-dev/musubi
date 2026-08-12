@@ -350,8 +350,11 @@
 	height: var(--control-height);
 }
 
-.editColorRow {
-	min-height: 60px;
+/* The create bar, two columns instead of four: name, then its colour. */
+.editBar {
+	composes: createBar;
+	grid-template-columns: minmax(0, 1fr) auto;
+	margin: var(--space-4) var(--layer-inline);
 }
 
 .error p,

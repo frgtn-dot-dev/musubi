@@ -847,7 +847,9 @@ function EditCalendarDialog({
 				id="edit-calendar-form"
 				onSubmit={(event) => void handleSubmit(event)}
 			>
-				<Field label="Calendar name" variant="section">
+				{/* Name and colour are the same decision — what this calendar looks like
+            in a list — so they share one bar, the way a new calendar is made. */}
+				<div className={styles.editBar}>
 					<input
 						aria-label={`Rename ${calendar.name}`}
 						disabled={busy}
@@ -856,20 +858,15 @@ function EditCalendarDialog({
 						value={name}
 						onChange={(event) => setName(event.target.value)}
 					/>
-				</Field>
-				<Row
-					className={styles.editColorRow}
-					label="Color"
-					trailing={
-						<ColorPicker
-							disabled={busy}
-							label={`${calendar.name} color`}
-							provider={calendar.provider}
-							value={color}
-							onChange={setColor}
-						/>
-					}
-				/>
+					<ColorPicker
+						className={styles.formColorPicker}
+						disabled={busy}
+						label={`${calendar.name} color`}
+						provider={calendar.provider}
+						value={color}
+						onChange={setColor}
+					/>
+				</div>
 				{error ? <ErrorMessage error={error} compact /> : null}
 			</form>
 		</Dialog>
