@@ -1032,8 +1032,6 @@ export function Workspace({
               anchor={anchor}
               calendars={calendars}
               events={visibleEvents}
-              pollItems={visiblePollItems}
-              onOpenPoll={openPoll}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}

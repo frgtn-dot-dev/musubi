@@ -642,7 +642,7 @@ describe("Workspace", () => {
     ).toBeNull();
   });
 
-  it("renders enabled poll days in every calendar view", async () => {
+  it("renders enabled poll days in every grid view", async () => {
     const user = userEvent.setup();
     const poll: PollCalendar = {
       approximateStartTime: null,
@@ -683,10 +683,15 @@ describe("Workspace", () => {
     const rendered = render(<Workspace {...props} activeView="month" />);
 
     expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(1);
-    for (const activeView of ["day", "week", "agenda", "multi-week"] as const) {
+    for (const activeView of ["day", "week", "multi-week"] as const) {
       rendered.rerender(<Workspace {...props} activeView={activeView} />);
       expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(1);
     }
+
+    // Not the agenda: that view lists what is agreed, and a poll is still a
+    // question.
+    rendered.rerender(<Workspace {...props} activeView="agenda" />);
+    expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(0);
     rendered.rerender(
       <Workspace {...props} activeView="month" pollsError />,
     );

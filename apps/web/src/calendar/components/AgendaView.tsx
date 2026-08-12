@@ -7,14 +7,9 @@ import {
 	freeDaysBetween,
 	getAgendaGroups,
 	getAgendaLabel,
-	getAgendaStart,
 	relativeDayName,
 } from "../agenda-math";
-import {
-	getEventDateLabel,
-	getEventRangeLabel,
-	parseDateKey,
-} from "../calendar-math";
+import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { eventHomeCalendarId } from "../event-permissions";
 import { EventMarks } from "./EventMarks";
@@ -22,18 +17,12 @@ import {
 	EventDetailsPopover,
 	type EventActionHandlers,
 } from "./EventDetailsPopover";
-import {
-	PollCalendarChip,
-	type PollCalendarItem,
-} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 type AgendaViewProps = EventActionHandlers & {
 	anchor: Date;
 	calendars: Calendar[];
 	events: Event[];
-	pollItems?: PollCalendarItem[];
-	onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
 	timeFormat: Settings["timeFormat"];
 	weekStartsOn: Settings["weekStartsOn"];
 };
@@ -54,48 +43,21 @@ export function AgendaView({
 	anchor,
 	calendars,
 	events,
-	pollItems = [],
-	onOpenPoll,
 	timeFormat,
 	weekStartsOn,
 	...eventActions
 }: AgendaViewProps) {
-	// One reading per render keeps the poll horizon and relative labels aligned.
+	// One reading per render keeps the relative labels aligned.
 	const now = new Date();
-	const firstPollDay = toDateKey(getAgendaStart(anchor, now));
-	const groups = (() => {
-		const merged = new Map<
-			string,
-			{ date: Date; items: Event[]; key: string; polls: PollCalendarItem[] }
-		>();
-		for (const group of getAgendaGroups(events, anchor)) {
-			merged.set(group.key, { ...group, polls: [] });
-		}
-		for (const item of pollItems) {
-			if (item.date < firstPollDay) continue;
-			const group = merged.get(item.date);
-			if (group) group.polls.push(item);
-			else {
-				merged.set(item.date, {
-					date: parseDateKey(item.date),
-					items: [],
-					key: item.date,
-					polls: [item],
-				});
-			}
-		}
-		return [...merged.values()].sort((left, right) =>
-			left.key.localeCompare(right.key),
-		);
-	})();
+	// Polls live on the day, week and month grids only: the agenda is what is
+	// already agreed, and a poll is a question that has not landed on a day yet.
+	const groups = getAgendaGroups(events, anchor);
 	const calendarsById = useMemo(
 		() => new Map(calendars.map((calendar) => [calendar.id, calendar])),
 		[calendars],
 	);
 	const groupFingerprint = `${anchor.getTime()}:${events
 		.map((event) => event.id)
-		.join("|")}:${pollItems
-		.map((item) => `${item.poll.id}:${item.day.id}`)
 		.join("|")}`;
 	const [pagination, setPagination] = useState({
 		fingerprint: groupFingerprint,
@@ -213,16 +175,6 @@ export function AgendaView({
 									)}
 								</time>
 								<div className={styles.agendaEvents}>
-									{onOpenPoll
-										? group.polls.map((item) => (
-											<PollCalendarChip
-												className={styles.agendaPoll}
-												item={item}
-												key={`${item.poll.id}:${item.day.id}`}
-												onOpen={onOpenPoll}
-											/>
-										))
-										: null}
 									{group.items.map((event) => {
 										const calendar = calendarsById.get(
 											eventHomeCalendarId(event) ?? "",

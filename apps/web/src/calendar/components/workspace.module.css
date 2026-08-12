@@ -46,7 +46,9 @@
 	display: flex;
 	min-height: 78px;
 	align-items: center;
-	justify-content: space-between;
+	/* Centred: on a desktop the close button beside it is hidden, so
+     space-between only ever pushed the wordmark to the left wall. */
+	justify-content: center;
 	padding: 15px 20px;
 }
 
@@ -708,15 +710,6 @@
 
 .agendaDayToday .agendaDate strong {
 	color: var(--accent-primary);
-}
-
-.agendaPoll {
-	--poll-chip-height: 43px;
-	width: 100%;
-	min-height: 43px;
-	padding: 0 14px;
-	border-radius: var(--radius-sm);
-	font-size: var(--text-12);
 }
 
 .agendaEventCopy {
@@ -1910,6 +1903,11 @@
 	.sidebar .mobileClose,
 	.toolbar .sidebarMenuButton {
 		display: inline-flex;
+	}
+
+	/* The close button is back, so the row is a pair again. */
+	.sidebarHeader {
+		justify-content: space-between;
 	}
 
 	.toolbarControls {
