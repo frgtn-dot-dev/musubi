@@ -319,9 +319,6 @@ export function ColorPicker({
             </p>
           </div>
         ) : null}
-        <p className={styles.colorPickerHint}>
-          Use arrow keys to move between colors.
-        </p>
       </PopoverContent>
     </Popover>
   );
