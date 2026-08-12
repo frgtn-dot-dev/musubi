@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
-import { type NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
+import { type AttendanceStatus, type NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
 import { BadRequestError, type Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
@@ -257,25 +257,56 @@ export async function handlerGetAttendees(req: Request, res: Response) {
   res.status(200).json(await getEventAttendees(eventID));
 }
 
-// PUT desired state ({ attending: boolean }) rather than POST/DELETE — retries
-// are safe and the client just sends what it wants. Returns the fresh list.
-export async function handlerSetAttendance(req: Request, res: Response) {
-  const eventID = requireUUID(req.params.eventId, "eventId");
-  const attending = req.body?.attending;
-  if (typeof attending !== "boolean") throw new BadRequestError("attending (boolean) is required...");
-  const eventCalendars = await assertCanViewEvent(req.user!.id, eventID);
-  await setAttendance(eventID, req.user!.id, attending);
-  const attendees = await getEventAttendees(eventID);
+const ATTENDANCE_STATUSES = new Set(["declined", "going", "maybe", "none"]);
 
-  // Live-update open detail modals for everyone who can see the event. The actor
-  // gets the frame too — it carries the same list the PUT response does, harmless.
+/**
+ * What the client wants to be true.
+ *
+ * `{status}` is the shape everything speaks now. `{attending: boolean}` is the
+ * mobile build that is already on Play — deploying the API must not wait on a
+ * store review, so it keeps working and means going/withdrawn.
+ */
+export function parseAttendanceBody(body: unknown): AttendanceStatus | "none" {
+  const input = (body ?? {}) as { attending?: unknown; status?: unknown };
+
+  if (typeof input.status === "string") {
+    if (!ATTENDANCE_STATUSES.has(input.status)) {
+      throw new BadRequestError("status must be going, maybe, declined or none...");
+    }
+    return input.status as AttendanceStatus | "none";
+  }
+  if (typeof input.attending === "boolean") return input.attending ? "going" : "none";
+
+  throw new BadRequestError("status (going | maybe | declined | none) is required...");
+}
+
+/**
+ * Live-update open details for everyone who can see the event, and hand back the
+ * list that was sent. Shared with the public RSVP path: an answer from the page
+ * and attendance from the app are the same list, so they are the same frame.
+ */
+export async function notifyAttendanceChanged(eventID: string, eventCalendars: string[]) {
+  const attendees = await getEventAttendees(eventID);
+  // The actor gets the frame too — it carries the same list the PUT response
+  // does, harmless.
   const memberIDSeen = new Set<string>();
   for (const cal of eventCalendars) {
     for (const member of await getCalendarMembers(cal)) memberIDSeen.add(member.userID);
   }
   notifyCalendarMembers([...memberIDSeen], "attendance_changed", { eventID, attendees });
 
-  res.status(200).json(attendees);
+  return attendees;
+}
+
+// PUT desired state rather than POST/DELETE — retries are safe and the client
+// just sends what it wants. Returns the fresh list.
+export async function handlerSetAttendance(req: Request, res: Response) {
+  const eventID = requireUUID(req.params.eventId, "eventId");
+  const status = parseAttendanceBody(req.body);
+  const eventCalendars = await assertCanViewEvent(req.user!.id, eventID);
+  await setAttendance(eventID, req.user!.id, status);
+
+  res.status(200).json(await notifyAttendanceChanged(eventID, eventCalendars));
 }
 
 export function parseEventReadQuery(query: Request["query"]) {
