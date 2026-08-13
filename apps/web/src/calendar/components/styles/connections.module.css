@@ -201,8 +201,11 @@
 	color: var(--text-secondary);
 }
 
+/* No offset: the margin here matched the height of the field's description, and
+   that description is gone — it was carrying the button a row below the input it
+   belongs beside. `align-items: end` on the form does the rest. */
 .inviteSubmit {
-	margin-bottom: var(--space-5);
+	margin-bottom: 0;
 }
 
 .invitePreview,
@@ -363,7 +366,6 @@
 
 	.inviteSubmit {
 		width: 100%;
-		margin-bottom: 0;
 	}
 
 	.invitePreview,

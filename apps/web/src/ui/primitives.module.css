@@ -129,8 +129,13 @@
 	opacity: 0;
 }
 
+/* A pixel down: centring the line box is not the same as centring what the eye
+   reads. Inter Tight puts its baseline low in the em box, so a label sitting
+   exactly in the middle of the box reads as sitting above the middle of the
+   button. One pixel is the whole correction — more and it looks dropped. */
 .buttonLabel {
 	min-width: 0;
+	padding-top: 1px;
 	line-height: 1.2;
 	white-space: nowrap;
 }
