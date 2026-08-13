@@ -100,6 +100,7 @@ export function SchedulingDialog({
 			) : (
 				<div className={styles.content}>
 					<NewPoll
+						calendars={calendars}
 						onCreated={(poll) => {
 							void queryClient.invalidateQueries({ queryKey: pollsKey });
 							void queryClient.invalidateQueries({ queryKey: ["poll-calendar"] });
@@ -139,10 +140,12 @@ export function SchedulingDialog({
 }
 
 function NewPoll({
+	calendars,
 	onCreated,
 	timeFormat,
 	weekStartsOn,
 }: {
+	calendars: Calendar[];
 	onCreated: (poll: PollSummary) => void;
 	timeFormat: Settings["timeFormat"];
 	weekStartsOn: Settings["weekStartsOn"];
@@ -156,6 +159,7 @@ function NewPoll({
 		<section className={styles.section}>
 			<PollForm
 				busy={create.isPending}
+				calendars={calendars}
 				error={create.error?.message}
 				timeFormat={timeFormat}
 				weekStartsOn={weekStartsOn}
@@ -201,11 +205,13 @@ export function PollResults({
 	const queryClient = useQueryClient();
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [draft, setDraft] = useState<Record<string, VoteValue | null>>();
-	// The event lands in the first calendar the organizer can write to. Choosing
-	// which one is a question for the day this poll grows a "create in…" row; a
-	// select here would be a third thing to answer while picking a time.
+	// Where the poll said it would land, when it said so. Older polls and ones made
+	// without an account carry nothing, so the first writable calendar stands in —
+	// the same choice the server would make.
 	const calendarId =
-		calendars.find((calendar) => calendar.role !== "viewer")?.id ?? "";
+		poll.calendarID ??
+		calendars.find((calendar) => calendar.role !== "viewer")?.id ??
+		"";
 
 	const answers = useQuery({
 		queryFn: ({ signal }) => getPoll(poll.token, signal),

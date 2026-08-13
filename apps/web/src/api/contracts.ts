@@ -191,6 +191,8 @@ export type VoteValue = "if-needed" | "no" | "yes";
 /** A poll in the organizer's own list. */
 export const PollSummarySchema = z.object({
   approximateStartTime: z.string().nullish(),
+  /** Where the decided event lands. Absent on polls made without an account. */
+  calendarID: z.string().nullish(),
   /** Set when a time was picked; a poll can be closed without one. */
   chosenSlotID: z.string().nullish(),
   /** Shut to answers, decided by the server: a deadline is a clock comparison. */

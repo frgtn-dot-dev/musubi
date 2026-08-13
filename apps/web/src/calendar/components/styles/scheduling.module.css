@@ -45,6 +45,26 @@
 	gap: var(--space-3);
 }
 
+/* Name and calendar are one answer: what this is and where it ends up. The
+   select keeps its own width so a long calendar name cannot squeeze the field. */
+.titleRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.calendarSelect {
+	max-width: 11rem;
+}
+
+.calendarDot {
+	width: 9px;
+	height: 9px;
+	border: 1px solid rgb(0 0 0 / 10%);
+	border-radius: var(--radius-pill);
+}
+
 .field {
 	display: grid;
 	gap: var(--space-2);

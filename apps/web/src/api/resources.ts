@@ -426,6 +426,8 @@ export function getPollCalendar(signal?: AbortSignal) {
 export function createPoll(input: {
   /** Informational wall-clock hint; decided events remain all-day. */
   approximateStartTime?: string;
+  /** Where the decided event lands. Absent when the creator has no calendars. */
+  calendarId?: string;
   /** When answers stop being taken, if the organizer set a date. */
   deadline?: string;
   description?: string;

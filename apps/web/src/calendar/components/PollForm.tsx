@@ -1,4 +1,4 @@
-import type { Settings } from "@musubi/types";
+import { can, type Calendar, type Settings } from "@musubi/types";
 import { useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
 import { toDateKey } from "../date-key";
@@ -8,6 +8,7 @@ import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { Select } from "~/ui/Select";
 import { TimePicker } from "~/ui/TimePicker";
 import styles from "./styles/scheduling.module.css";
 
@@ -20,6 +21,8 @@ const MAX_POLL_SLOTS = 60;
 export type PollDraft = {
 	/** Informational wall-clock hint only; the resulting event stays all-day. */
 	approximateStartTime?: string;
+	/** Where the decided event lands. Absent when there is nothing to choose from. */
+	calendarId?: string;
 	/** End of the chosen day, in the organizer's own zone. Absent means no limit. */
 	deadline?: string;
 	email?: string;
@@ -38,6 +41,7 @@ export type PollDraft = {
  */
 export function PollForm({
 	busy = false,
+	calendars = [],
 	collectIdentity = false,
 	error,
 	onSubmit,
@@ -46,6 +50,12 @@ export function PollForm({
 	weekStartsOn,
 }: {
 	busy?: boolean;
+	/**
+	 * Calendars the decided event could land in. Empty on the public page, where
+	 * the poll is written before its author has an account — that one resolves to
+	 * their own calendar when they pick a day.
+	 */
+	calendars?: Calendar[];
 	collectIdentity?: boolean;
 	error?: string;
 	onSubmit: (draft: PollDraft) => void;
@@ -53,7 +63,16 @@ export function PollForm({
 	timeFormat: Settings["timeFormat"];
 	weekStartsOn: Settings["weekStartsOn"];
 }) {
+	const writable = calendars.filter((calendar) => can(calendar.role, "editEvents"));
 	const [title, setTitle] = useState("");
+	// Their own calendar first: a poll usually decides into the same place their
+	// other events live, so the common answer is the one already filled in.
+	const [calendarId, setCalendarId] = useState(
+		() =>
+			writable.find((calendar) => calendar.isDefault)?.id ??
+			writable[0]?.id ??
+			"",
+	);
 	const [email, setEmail] = useState("");
 	const [name, setName] = useState("");
 	const [days, setDays] = useState<string[]>([]);
@@ -77,14 +96,35 @@ export function PollForm({
 	return (
 		<div className={styles.form}>
 			{/* The placeholder carries it — the label above an empty first field was
-          a second heading under the dialog's own. */}
-			<Field label="What is it about" labelHidden>
-				<input
-					placeholder="Studio planning"
-					value={title}
-					onChange={(event) => setTitle(event.target.value)}
-				/>
-			</Field>
+          a second heading under the dialog's own. Beside it, where the decided
+          event will land: the same two answers a new event asks for. */}
+			<div className={styles.titleRow}>
+				<Field label="What is it about" labelHidden>
+					<input
+						placeholder="Studio planning"
+						value={title}
+						onChange={(event) => setTitle(event.target.value)}
+					/>
+				</Field>
+				{writable.length > 0 ? (
+					<Select
+						className={styles.calendarSelect}
+						label="Calendar"
+						options={writable.map((calendar) => ({
+							icon: (
+								<span
+									className={styles.calendarDot}
+									style={{ background: calendar.color }}
+								/>
+							),
+							label: calendar.name,
+							value: calendar.id,
+						}))}
+						value={calendarId}
+						onChange={setCalendarId}
+					/>
+				) : null}
+			</div>
 
 			{collectIdentity ? (
 				<>
