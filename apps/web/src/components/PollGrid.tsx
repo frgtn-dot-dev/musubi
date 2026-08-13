@@ -99,7 +99,19 @@ export function PollGrid({
           {caption}
         </p>
       ) : null}
-      <div className={styles.scroller}>
+      <div
+        className={styles.scroller}
+        onWheel={(event) => {
+          // Shift+wheel reports a *vertical* delta, and the dialog's scroll lock
+          // (`react-remove-scroll`) refuses a vertical wheel where nothing scrolls
+          // vertically — so the shortcut did nothing and only the scrollbar handle
+          // worked. Moved by hand, the same way the time list handles its own
+          // wheel. A real horizontal delta is left to the browser, or it would
+          // scroll twice as far.
+          if (!event.shiftKey || event.deltaX) return;
+          event.currentTarget.scrollLeft += event.deltaY;
+        }}
+      >
         <table
           aria-describedby={caption ? "poll-grid-caption" : undefined}
           className={styles.grid}
