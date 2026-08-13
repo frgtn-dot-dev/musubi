@@ -51,7 +51,11 @@
      and lets the grid show through the seam. */
   border-collapse: separate;
   border-spacing: 0;
-  width: 100%;
+  /* max-content, not 100%: at 100% a table squeezes its columns to fit the box, so
+     three weeks of days came out unreadably narrow and the scroller had nothing
+     left to scroll. The min-width keeps a two-day poll filling the box. */
+  width: max-content;
+  min-width: 100%;
   font-size: var(--text-12);
 }
 

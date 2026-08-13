@@ -251,6 +251,19 @@
 	padding: var(--space-4) var(--layer-inline);
 }
 
+/* The dialog opens with `bodyScroll="panels"`, so above 900px its body stops
+   scrolling and each panel owns its own overflow. This view is one panel: without
+   this, a poll with a month of days had rows below the fold and no way down. */
+@media (min-width: 900px) {
+	.results {
+		align-content: start;
+		min-height: 0;
+		height: 100%;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+}
+
 /* What was decided, said in words before the grid that proves it. */
 .decidedPanel {
 	display: grid;

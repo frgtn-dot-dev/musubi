@@ -307,18 +307,10 @@ export function PollResults({
 				</p>
 			) : !data ? (
 				<p className={styles.summary}>Loading answers…</p>
-			) : data.respondents === 0 || data.deadline ? (
-				// Only what the grid below cannot say. Counting the answers here was
-				// saying twice what the numbers under each day already say.
+			) : data.deadline ? (
+				// The one fact the grid cannot show: when it stops taking answers.
 				<p className={styles.summary}>
-					{[
-						data.respondents === 0
-							? "Nobody has answered yet. The link is below."
-							: "",
-						data.deadline ? `Answers close on ${formatDay(data.deadline)}.` : "",
-					]
-						.filter(Boolean)
-						.join(" ")}
+					Answers close on {formatDay(data.deadline)}.
 				</p>
 			) : null}
 
