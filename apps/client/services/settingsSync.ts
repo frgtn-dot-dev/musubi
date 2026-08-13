@@ -4,7 +4,7 @@ import type {
 	SettingsDocument,
 	SettingsPatch,
 } from "@musubi/types";
-import { SettingsConflictError } from "@/services/api";
+import { SettingsConflictError } from "@/lib/settingsConflict";
 import { useSettingsStore } from "@/store/useSettingsStore";
 
 type SettingsApi = {

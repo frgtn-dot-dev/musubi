@@ -48,7 +48,7 @@ const fake = vi.hoisted(() => {
 	};
 });
 
-vi.mock("@/services/api", () => ({ SettingsConflictError: fake.Conflict }));
+vi.mock("@/lib/settingsConflict", () => ({ SettingsConflictError: fake.Conflict }));
 vi.mock("@/store/useSettingsStore", () => ({
 	useSettingsStore: { getState: fake.getState },
 }));

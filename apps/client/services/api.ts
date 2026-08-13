@@ -2,6 +2,7 @@ import { Calendar, CalendarInvitePreview, Event, Invite, GoogleCheck, PatchSetti
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
+import { SettingsConflictError } from "@/lib/settingsConflict";
 import { notifySessionExpired } from "@/lib/signOut";
 import { fetchWithTimeout } from "@/lib/network";
 import type { AttendanceChoice } from "@/lib/attendance";
@@ -20,13 +21,6 @@ export type Attendee = {
   image?: string | null;
   status: "declined" | "going" | "maybe";
 };
-
-export class SettingsConflictError extends Error {
-  constructor() {
-    super("Settings changed on another device.");
-    this.name = "SettingsConflictError";
-  }
-}
 
 // Every endpoint below did the same check inline; keep it in one place.
 // `asserts error is null` preserves the narrowing the inline `if (error) throw`
