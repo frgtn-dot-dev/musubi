@@ -1,55 +1,44 @@
-# Musubi — the full stack on Dokploy.
+# Musubi — the full production stack on Dokploy.
 #
-# Same three services as docker-compose.yml (web + API + database) minus the
-# Caddy gateway: Dokploy already runs Traefik, so the one-origin split lives in
-# Traefik labels instead. Everything else about the shape is identical, and it
-# has to be — the web client and the API MUST share one public origin, or the
-# session cookie stops being first-party and the browser hits CORS.
+# Traefik exposes one service only: the Caddy gateway. Caddy owns the stable
+# /api/* versus web split from ops/gateway/Caddyfile, exactly as in the default
+# docker-compose.yml. Do not add Dokploy Domains to web or api.
 #
-#   1. New Dokploy project → Compose, point it at this file.
-#   2. In the Environment tab set at least:
-#        PUBLIC_HOST=musubi.example.com   (the hostname, no scheme, no path)
-#        BETTER_AUTH_URL=https://musubi.example.com
-#        BETTER_AUTH_SECRET=...           (openssl rand -base64 32)
-#        POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
-#      Dokploy writes those into the .env this file reads; this production
-#      stack forces ENVIRONMENT=prod.
-#   3. Deploy. Point the DNS record at the server first, or the certificate
-#      cannot be issued.
+# Required environment:
+#   PUBLIC_HOST=musubi.example.com
+#   BETTER_AUTH_URL=https://musubi.example.com
+#   BETTER_AUTH_SECRET=...              (openssl rand -base64 32)
+#   POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
 #
-# Do NOT also add a Domain in the Dokploy UI for `web` or `api`: the labels below
-# already declare the routers, and a second one for the same host and path is
-# ambiguous. Routing is here so it is reviewable and moves with the repo.
-#
-# Upgrade: bump MUSUBI_TAG and redeploy. Rollback requires restoring the
-# pre-upgrade database backup with the previous images; migrations are
-# forward-only.
+# Upgrade: bump MUSUBI_TAG and redeploy. Safe rollback also requires restoring
+# the matching pre-upgrade database backup because migrations are forward-only.
 services:
-  # Everything that is not the API. Catch-all router, so it must stay the lowest
-  # priority of the three.
-  web:
-    image: frgtndev/musubi-web:${MUSUBI_TAG:-latest}
+  gateway:
+    image: caddy:2-alpine
     environment:
-      PORT: 3000
+      # TLS terminates at Traefik; Caddy serves plain HTTP inside Docker.
+      PUBLIC_HOST: :80
+    volumes:
+      - ./ops/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - web
     expose:
-      - "3000"
+      - "80"
     networks:
       dokploy-network: {}
       default: {}
     labels:
       traefik.enable: "true"
-      # Required whenever a container sits on more than one network: without it
-      # Traefik may pick `default` and route to an address it cannot reach.
       traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-web.loadbalancer.server.port: "3000"
-      traefik.http.routers.musubi-web.rule: >-
+      traefik.http.services.musubi-gateway.loadbalancer.server.port: "80"
+      traefik.http.routers.musubi-gateway.rule: >-
         Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your hostname}`)
-      traefik.http.routers.musubi-web.entrypoints: websecure
-      traefik.http.routers.musubi-web.tls.certresolver: >-
+      traefik.http.routers.musubi-gateway.entrypoints: websecure
+      traefik.http.routers.musubi-gateway.tls.certresolver: >-
         ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      traefik.http.routers.musubi-web.priority: "1"
-      # Plain HTTP exists only to send people to HTTPS. One router for the whole
-      # host: it never reaches a backend, so its named service is irrelevant.
       traefik.http.middlewares.musubi-https.redirectscheme.scheme: https
       traefik.http.middlewares.musubi-https.redirectscheme.permanent: "true"
       traefik.http.routers.musubi-http.rule: Host(`${PUBLIC_HOST}`)
@@ -57,11 +46,15 @@ services:
       traefik.http.routers.musubi-http.middlewares: musubi-https
     restart: unless-stopped
 
+  web:
+    image: frgtndev/musubi-web:${MUSUBI_TAG:-latest}
+    environment:
+      PORT: 3000
+    expose:
+      - "3000"
+    restart: unless-stopped
+
   api:
-    # Prebuilt image from Docker Hub (published on each GitHub Release by
-    # .github/workflows/docker-publish.yml). Pin MUSUBI_TAG to a version so the
-    # API only updates when you bump it; `latest` tracks the newest release.
-    # Migrations run on container start (see apps/api/Dockerfile CMD).
     image: frgtndev/musubi:${MUSUBI_TAG:-latest}
     env_file:
       - .env
@@ -74,43 +67,6 @@ services:
         condition: service_healthy
     expose:
       - "${API_SERVER_PORT:-7531}"
-    networks:
-      dokploy-network:
-        aliases:
-          - musubi-api
-      default: {}
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-api.loadbalancer.server.port: >-
-        ${API_SERVER_PORT:-7531}
-      # The API owns /api/* — Better Auth on /api/auth/*, REST on /api/v1/*, the
-      # federation gateway underneath — plus HTML pages for links that arrive
-      # from outside the app (password reset, account deletion, email
-      # confirmation, the iOS universal-link file). Invitations are NOT here:
-      # with a web client on this origin they open as a page you can accept.
-      # Those predate the web client and are shared with mobile, so they stay on
-      # the API and must not fall through to the catch-all above.
-      #
-      # Server-sent events at /api/stream need no special Traefik setting: it does
-      # not buffer response bodies and flushes streams every 100 ms by default.
-      traefik.http.routers.musubi-api.rule: >-
-        Host(`${PUBLIC_HOST}`) && (
-        PathPrefix(`/api`)
-        || Path(`/reset-password`)
-        || Path(`/delete-account`)
-        || Path(`/email-verified`)
-        || Path(`/.well-known/apple-app-site-association`)
-        )
-      traefik.http.routers.musubi-api.entrypoints: websecure
-      traefik.http.routers.musubi-api.tls.certresolver: >-
-        ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      # Above the web catch-all. Traefik would rank the longer rule first anyway;
-      # explicit priority keeps edits from silently swapping the two routers.
-      traefik.http.routers.musubi-api.priority: "100"
-    # Do not scale this service horizontally. A second process sharing the same
-    # DB is rejected by the API's singleton advisory lock, and SSE connections
-    # live in the process that accepted them.
     deploy:
       replicas: 1
     restart: unless-stopped
@@ -132,6 +88,8 @@ services:
 
 volumes:
   data:
+  caddy-data:
+  caddy-config:
 
 networks:
   dokploy-network:

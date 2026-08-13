@@ -16,7 +16,7 @@ Musubi is designed to be self-hosted. If you want your calendar data on your own
 
 | | `docker-compose.yml` | `docker-compose.api.yml` | `docker-compose.dokploy.yml` |
 | --- | --- | --- | --- |
-| Contains | Gateway + web client + API + PostgreSQL | API + PostgreSQL | Web client + API + PostgreSQL |
+| Contains | Gateway + web client + API + PostgreSQL | API + PostgreSQL | Gateway + web client + API + PostgreSQL |
 | Use it when | You want the browser client — the default | Your users are on the mobile app only, or you bring your own front end | You deploy with [Dokploy](https://dokploy.com) |
 | Public surface | One origin, HTTPS handled for you | The API port, behind your own proxy | One origin, terminated by Dokploy's Traefik |
 
@@ -244,11 +244,10 @@ nothing to get wrong.
 
 ### Dokploy
 
-`docker-compose.dokploy.yml` is the same stack without the gateway: Dokploy
-already runs Traefik, so the split above lives in Traefik labels on the `web` and
-`api` services. Create a Compose project pointing at that file, set `PUBLIC_HOST`
-(hostname only, no scheme) plus the usual secrets in the Environment tab, and
-deploy.
+`docker-compose.dokploy.yml` keeps the same gateway. Dokploy's Traefik sends the
+whole hostname to Caddy, and Caddy applies the checked-in split above. Create a
+Compose project pointing at that file, set `PUBLIC_HOST` (hostname only, no
+scheme) plus the usual secrets in the Environment tab, and deploy.
 
 For a second, disposable instance off a branch there is
 `docker-compose.dokploy.dev.yml`: the same stack, but built from the checkout
@@ -258,14 +257,14 @@ redirect URIs registered for that hostname.
 
 Two things to know:
 
-- **Do not also add a Domain in the Dokploy UI** for `web` or `api`. The labels
-  already declare the routers; a second one for the same host and path is
-  ambiguous. Routing lives in the file so it is reviewable and moves with the repo.
+- **Do not also add a Domain in the Dokploy UI** for `gateway`, `web`, or `api`.
+  The gateway labels already declare the router; another router for the same host
+  is ambiguous. Web and API intentionally have no public Traefik labels.
 - `TRAEFIK_CERT_RESOLVER` defaults to `letsencrypt`, which is what a stock Dokploy
   install calls its resolver. Change it only if yours is named differently.
 
-Traefik needs nothing special for SSE — it does not buffer response bodies, and
-flushes a stream every 100 ms.
+SSE uses Caddy's explicit unbuffered `/api/stream` route, the same as the default
+Compose stack.
 
 ### Using your own reverse proxy instead
 

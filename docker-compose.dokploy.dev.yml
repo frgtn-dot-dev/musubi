@@ -1,28 +1,48 @@
-# Musubi — a Dokploy deployment that builds the branch it is pointed at.
+# Musubi — a Dokploy dev deployment built from the selected branch.
 #
-# Same stack and the same one-origin split as docker-compose.dokploy.yml; the
-# only difference is where the images come from. Production pulls a published
-# tag, so a deploy is a known artifact. This one builds from the checkout, so a
-# deploy is whatever the branch says right now — which is the point of a dev
-# instance, and the reason it must never be the production file.
+# Traefik exposes only Caddy. Caddy uses the same checked-in routing contract as
+# production and the default Compose stack, so /api/* cannot fall through to the
+# TanStack web server. Never point this file at production data or secrets.
 #
-#   1. New Dokploy project → Compose, this file, the branch you want deployed.
-#   2. Environment tab, at least:
-#        PUBLIC_HOST=dev.musubi.pro
-#        BETTER_AUTH_URL=https://dev.musubi.pro
-#        BETTER_AUTH_SECRET=...            (its own, NOT the production one)
-#        POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
-#        ENVIRONMENT=dev
-#   3. Deploy. The first build takes a few minutes — two images from source.
-#
-# Its own everything: database volume, router names, auth secret. Sharing any of
-# those with production means a bad branch can reach real data.
-#
-# OAuth: every provider matches redirect URIs exactly, so this host needs its own
-# entries — https://dev.musubi.pro/api/auth/callback/{google,microsoft,apple} —
-# registered alongside the production ones. Apple additionally needs the dev
-# domain on the Services ID.
+# Required environment:
+#   PUBLIC_HOST=dev.musubi.pro
+#   BETTER_AUTH_URL=https://dev.musubi.pro
+#   BETTER_AUTH_SECRET=...              (dev-only secret)
+#   POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
+#   ENVIRONMENT=dev
 services:
+  gateway:
+    image: caddy:2-alpine
+    environment:
+      PUBLIC_HOST: :80
+    volumes:
+      - ./ops/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      - dev-caddy-data:/data
+      - dev-caddy-config:/config
+    depends_on:
+      - api
+      - web
+    expose:
+      - "80"
+    networks:
+      dokploy-network: {}
+      default: {}
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: dokploy-network
+      traefik.http.services.musubi-dev-gateway.loadbalancer.server.port: "80"
+      traefik.http.routers.musubi-dev-gateway.rule: >-
+        Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your dev hostname}`)
+      traefik.http.routers.musubi-dev-gateway.entrypoints: websecure
+      traefik.http.routers.musubi-dev-gateway.tls.certresolver: >-
+        ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.middlewares.musubi-dev-https.redirectscheme.scheme: https
+      traefik.http.middlewares.musubi-dev-https.redirectscheme.permanent: "true"
+      traefik.http.routers.musubi-dev-http.rule: Host(`${PUBLIC_HOST}`)
+      traefik.http.routers.musubi-dev-http.entrypoints: web
+      traefik.http.routers.musubi-dev-http.middlewares: musubi-dev-https
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -31,25 +51,6 @@ services:
       PORT: 3000
     expose:
       - "3000"
-    networks:
-      dokploy-network: {}
-      default: {}
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-dev-web.loadbalancer.server.port: "3000"
-      # Router names carry -dev: Traefik keys routers by name across the whole
-      # host, so reusing production's would have one deployment quietly take over
-      # the other's traffic.
-      traefik.http.routers.musubi-dev-web.rule: Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your dev hostname}`)
-      traefik.http.routers.musubi-dev-web.entrypoints: websecure
-      traefik.http.routers.musubi-dev-web.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      traefik.http.routers.musubi-dev-web.priority: "1"
-      traefik.http.middlewares.musubi-dev-https.redirectscheme.scheme: https
-      traefik.http.middlewares.musubi-dev-https.redirectscheme.permanent: "true"
-      traefik.http.routers.musubi-dev-http.rule: Host(`${PUBLIC_HOST}`)
-      traefik.http.routers.musubi-dev-http.entrypoints: web
-      traefik.http.routers.musubi-dev-http.middlewares: musubi-dev-https
     restart: unless-stopped
 
   api:
@@ -59,37 +60,13 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
     expose:
       - "${API_SERVER_PORT:-7531}"
-    networks:
-      dokploy-network:
-        aliases:
-          - musubi-dev-api
-      default: {}
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-dev-api.loadbalancer.server.port: "${API_SERVER_PORT:-7531}"
-      # Identical split to production: /api/* plus the HTML pages the API serves
-      # for links that arrive from outside the app. Invitations go to the web
-      # client, which can show and accept them.
-      traefik.http.routers.musubi-dev-api.rule: >-
-        Host(`${PUBLIC_HOST}`) && (
-        PathPrefix(`/api`)
-        || Path(`/reset-password`)
-        || Path(`/delete-account`)
-        || Path(`/email-verified`)
-        || Path(`/.well-known/apple-app-site-association`)
-        )
-      traefik.http.routers.musubi-dev-api.entrypoints: websecure
-      traefik.http.routers.musubi-dev-api.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      traefik.http.routers.musubi-dev-api.priority: "100"
-    # One process per database here too — the advisory lock does not care that
-    # this is a dev box.
     deploy:
       replicas: 1
     restart: unless-stopped
@@ -110,9 +87,9 @@ services:
     restart: unless-stopped
 
 volumes:
-  # Named apart from production's `data` so the two can never be pointed at each
-  # other by a copy-pasted deploy.
   dev-data:
+  dev-caddy-data:
+  dev-caddy-config:
 
 networks:
   dokploy-network:

@@ -103,7 +103,7 @@ pnpm db:migrate
 pnpm dev            # API + native client + web + docs
 ```
 
-The client uses custom native modules, so it needs a development build rather than Expo Go. Testing on a real device? Set `BETTER_AUTH_URL` and the app's server URL (welcome screen) to your machine's LAN IP (`http://192.168.x.x:7531`), not `localhost`. `docker-compose.yml` runs the whole stack — web client, API, Postgres and a Caddy gateway that puts the first two on one origin (which the browser client requires); `docker-compose.api.yml` runs the API and Postgres alone, for mobile-only servers. Dokploy has its own `docker-compose.dokploy.yml`, same stack with Traefik labels instead of the gateway. Follow the [local development guide](https://musubi.pro/docs/guides/running-locally/) or the [self-hosting runbook](https://musubi.pro/docs/guides/self-hosting/).
+The client uses custom native modules, so it needs a development build rather than Expo Go. Testing on a real device? Set `BETTER_AUTH_URL` and the app's server URL (welcome screen) to your machine's LAN IP (`http://192.168.x.x:7531`), not `localhost`. `docker-compose.yml` runs the whole stack — web client, API, Postgres and a Caddy gateway that puts the first two on one origin (which the browser client requires); `docker-compose.api.yml` runs the API and Postgres alone, for mobile-only servers. Dokploy has its own `docker-compose.dokploy.yml`; Traefik exposes the same Caddy gateway, so routing stays identical. Follow the [local development guide](https://musubi.pro/docs/guides/running-locally/) or the [self-hosting runbook](https://musubi.pro/docs/guides/self-hosting/).
 
 ## How it's built
 
