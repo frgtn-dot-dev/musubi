@@ -261,40 +261,35 @@ export default function EventDetailModal({ event, visible, onClose, onEdit }: Pr
                 // paddingHorizontal 26 (not the container's 16) — optically lines
                 // up with the title block above; circles at 16 read wider than text.
                 <View style={[styles.fieldContainer, { borderBottomWidth: 0, paddingHorizontal: 26 }]}>
-                  {/* Same row anatomy as MemberRolesModal: label left, pill action right.
-                      The label doubles as the expand/collapse toggle (chevron lives here so
-                      it survives the facepile ↔ list swap below). */}
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <Tap scaleTo={1} hitSlop={10} onPress={() => setAttendeesOpen(o => !o)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <Tap scaleTo={1} hitSlop={10} onPress={() => setAttendeesOpen(o => !o)} style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}>
                       <Text style={[styles.fieldLabel, { fontFamily: fonts.sans, marginBottom: 0 }]}>
                         Attendees · {going.length}
                       </Text>
                       <Feather name={attendeesOpen ? "chevron-up" : "chevron-down"} size={14} color={colors.fg4} />
                     </Tap>
-                  </View>
-                  {/* Its own row: three answers next to the label do not fit a phone,
-                      and what gets squeezed out is the answer. One tap each. */}
-                  <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
-                    {ATTENDANCE_CHOICES.map(choice => {
-                      const chosen = mine === choice.value;
-                      return (
-                        <Tap
-                          key={choice.value}
-                          onPress={() => answer(choice.value)}
-                          haptic={chosen ? "warn" : "success"}
-                          style={{
-                            borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
-                            backgroundColor: chosen ? colors.fill : "transparent",
-                          }}
-                        >
-                          <View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
-                            <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: chosen ? colors.onFill : colors.fg2 }}>
-                              {choice.label}
-                            </Text>
-                          </View>
-                        </Tap>
-                      );
-                    })}
+                    <View style={{ flexDirection: "row", gap: 4 }}>
+                      {ATTENDANCE_CHOICES.map(choice => {
+                        const chosen = mine === choice.value;
+                        return (
+                          <Tap
+                            key={choice.value}
+                            onPress={() => answer(choice.value)}
+                            haptic={chosen ? "warn" : "success"}
+                            style={{
+                              borderWidth: 1, borderColor: colors.line2, borderRadius: 999, padding: 2,
+                              backgroundColor: chosen ? colors.fill : "transparent",
+                            }}
+                          >
+                            <View style={{ paddingHorizontal: 7, paddingVertical: 5 }}>
+                              <Text style={{ fontFamily: fonts.sans, fontSize: 10, color: chosen ? colors.onFill : colors.fg2 }}>
+                                {choice.label}
+                              </Text>
+                            </View>
+                          </Tap>
+                        );
+                      })}
+                    </View>
                   </View>
                   {/* Facepile "falls apart" into the list on expand — one or the other, never both. */}
                   {!attendeesOpen ? (
