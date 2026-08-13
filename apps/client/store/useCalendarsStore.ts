@@ -1,5 +1,5 @@
-import { Calendar } from "@musubi/types";
-import { useApi } from "@/services/api";
+import type { Calendar } from "@musubi/types";
+import type { useApi } from "@/services/api";
 import { create } from "zustand";
 
 

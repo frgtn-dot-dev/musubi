@@ -1,5 +1,5 @@
-import { Event } from "@musubi/types";
-import { useApi } from "@/services/api";
+import type { Event } from "@musubi/types";
+import type { useApi } from "@/services/api";
 import { create } from "zustand";
 import { cancelEventNotification, syncEventNotification } from "@/services/notifications";
 import { cacheDeleteEvents, cacheUpsertEvents } from "@/services/eventsCache";

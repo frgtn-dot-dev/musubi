@@ -2,11 +2,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { createClient } from "@/services/auth-client";
 import { defaultUrl } from "@/constants/url";
+import { normalizeServerUrl } from "@/lib/serverUrl";
+import { resetLocalAccountState } from "@/lib/signOut";
 
 type ServerContextType = {
   apiUrl: string | null;
   authClient: ReturnType<typeof createClient>;
-  setNewServerUrl: (url: string) => void;
+  setNewServerUrl: (url: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -21,7 +23,7 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
     const getApiUrl = async () => {
       setIsLoading(true);
       const retrievedApiUrl = await SecureStore.getItemAsync("API_URL");
-      const url = retrievedApiUrl?.toLowerCase() ?? defaultUrl;
+      const url = normalizeServerUrl(retrievedApiUrl ?? defaultUrl);
       setApiUrl(url);
       setAuthClient(() => createClient(url));
       setIsLoading(false);
@@ -29,9 +31,12 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
     getApiUrl();
   }, []);
 
-  const setNewServerUrl = (url: string) => {
-    const normalized = url.toLowerCase();
-    SecureStore.setItem("API_URL", normalized);
+  const setNewServerUrl = async (url: string) => {
+    const normalized = normalizeServerUrl(url);
+    // A server is an account boundary: never display one server's cached data
+    // or reuse its Better Auth session on another.
+    await resetLocalAccountState();
+    await SecureStore.setItemAsync("API_URL", normalized);
     setAuthClient(() => createClient(normalized));
     setApiUrl(normalized);
   };

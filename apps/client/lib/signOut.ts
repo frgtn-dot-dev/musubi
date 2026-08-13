@@ -12,15 +12,18 @@ import { resetSettingsSync } from "@/services/settingsSync";
 // expiry recovery all route through here so no path forgets a cleanup step:
 // stores → launcher widget → SQLite mirror → scheduled notifications → native
 // Google session → Better Auth session → welcome screen.
-export async function signOutAndReset(authClient: { signOut: () => Promise<unknown> }) {
+export async function resetLocalAccountState() {
   resetSettingsSync();
   useCalendarsStore.getState().loadCalendars([]);
   useEventsStore.getState().loadEvents([]);
-  resetOnboardingRoute(); // next account starts onboarding at step 1, not mid-flow
-  // Remove private agenda data from the launcher as soon as local state is gone.
+  resetOnboardingRoute();
   await clearAgendaWidget();
   await cacheClearAll();
   await clearAllEventNotifications();
+}
+
+export async function signOutAndReset(authClient: { signOut: () => Promise<unknown> }) {
+  await resetLocalAccountState();
   // Clear the natively-cached Google account so the next sign-in shows the
   // account picker again instead of silently reusing the last account.
   try { await GoogleSignin.signOut(); } catch { /* not signed in via Google */ }
