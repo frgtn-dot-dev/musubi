@@ -219,12 +219,14 @@
 
 /* The toggle carries the label, so it inherits the heading's type instead of
    the button's and drops the inset that would push the label off the column. */
+/* A button that looks like one, not like the heading it lives in: it borrowed the
+   section label's uppercase tracking and lost its own padding, which is how a
+   borderless control ends up reading as a title. Both are inherited properties, so
+   they have to be turned off rather than simply not asked for. */
 .attendeeToggle {
   gap: var(--space-2);
-  padding-inline: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 /* The count and its chevron share the button's label span, where the heading's

@@ -720,7 +720,7 @@ export function EventDetailsPopover({
 														/>
 													}
 													size="compact"
-													variant="ghost"
+													variant="secondary"
 													onClick={() => setAttendeesOpen((open) => !open)}
 												>
 													{attendees
