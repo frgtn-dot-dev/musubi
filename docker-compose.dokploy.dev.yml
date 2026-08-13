@@ -14,6 +14,8 @@ services:
     image: caddy:2-alpine
     environment:
       PUBLIC_HOST: :80
+      API_UPSTREAM: musubi-api-internal:7531
+      WEB_UPSTREAM: musubi-web-internal:3000
     volumes:
       - ./ops/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - dev-caddy-data:/data
@@ -36,6 +38,10 @@ services:
       PORT: 3000
     expose:
       - "3000"
+    networks:
+      default:
+        aliases:
+          - musubi-web-internal
     restart: unless-stopped
 
   api:
@@ -44,6 +50,10 @@ services:
       dockerfile: apps/api/Dockerfile
     env_file:
       - .env
+    networks:
+      default:
+        aliases:
+          - musubi-api-internal
     environment:
       DATABASE_URL: >-
         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}

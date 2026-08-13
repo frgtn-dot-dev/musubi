@@ -17,6 +17,8 @@ services:
     environment:
       # TLS terminates at Traefik; Caddy serves plain HTTP inside Docker.
       PUBLIC_HOST: :80
+      API_UPSTREAM: musubi-api-internal:7531
+      WEB_UPSTREAM: musubi-web-internal:3000
     volumes:
       - ./ops/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -37,12 +39,20 @@ services:
       PORT: 3000
     expose:
       - "3000"
+    networks:
+      default:
+        aliases:
+          - musubi-web-internal
     restart: unless-stopped
 
   api:
     image: frgtndev/musubi:${MUSUBI_TAG:-latest}
     env_file:
       - .env
+    networks:
+      default:
+        aliases:
+          - musubi-api-internal
     environment:
       ENVIRONMENT: prod
       DATABASE_URL: >-
