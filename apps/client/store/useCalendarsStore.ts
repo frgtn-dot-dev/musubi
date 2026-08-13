@@ -61,26 +61,33 @@ export const useCalendarsStore = create<CalendarStore>((set, get) => ({
   },
 
   addCalendar: async (calendar, api) => {
-    const result = await api.createCalendar(calendar);
-    set((state) => ({
-      calendars: [...state.calendars, result],
-    }));
-    return result;
+    set((state) => ({ calendars: [...state.calendars.filter(c => c.id !== calendar.id), calendar] }));
+    try {
+      const result = await api.createCalendar(calendar);
+      set((state) => ({ calendars: [...state.calendars.filter(c => c.id !== calendar.id), result] }));
+      return result;
+    } catch (error) {
+      set((state) => ({ calendars: state.calendars.filter(c => c.id !== calendar.id) }));
+      throw error;
+    }
   },
 
   loadCalendars: (calendars: Calendar[]) => set({ calendars }),
 
   removeCalendar: async (calendar, api) => {
-    const result = await api.removeCalendar(calendar);
-    set((state) => {
-      const next = new Set(state.activeCals);
-      next.delete(calendar.id);
-      return {
-        calendars: [...state.calendars.filter(c => c.id !== result)],
-        activeCals: next,
-        soloCalId: state.soloCalId === calendar.id ? null : state.soloCalId,
-      }
-    });
+    const previousActive = new Set(get().activeCals);
+    const previousSolo = get().soloCalId;
+    get().localRemoveCalendar(calendar);
+    try {
+      await api.removeCalendar(calendar);
+    } catch (error) {
+      set((state) => ({
+        calendars: [...state.calendars.filter(c => c.id !== calendar.id), calendar],
+        activeCals: previousActive,
+        soloCalId: previousSolo,
+      }));
+      throw error;
+    }
   },
 
   localRemoveCalendar: (calendar) => {
@@ -96,11 +103,17 @@ export const useCalendarsStore = create<CalendarStore>((set, get) => ({
   },
 
   updateCalendar: async (calendar, api) => {
-    const result = await api.updateCalendar(calendar);
-    // MERGE, don't replace: the update response is the raw calendars row and
-    // omits per-user fields (role, provider…). Replacing would drop the user's
-    // role → the calendar shows as read-only/locked until the next full sync.
-    return get().localUpdateCalendar(result);
+    const previous = get().calendars.find(c => c.id === calendar.id);
+    get().localUpdateCalendar(calendar);
+    try {
+      const result = await api.updateCalendar(calendar);
+      // MERGE, don't replace: the update response is the raw calendars row and
+      // omits per-user fields (role, provider…).
+      return get().localUpdateCalendar(result);
+    } catch (error) {
+      if (previous) get().localUpdateCalendar(previous);
+      throw error;
+    }
   },
 
   localUpdateCalendar: (calendar) => {

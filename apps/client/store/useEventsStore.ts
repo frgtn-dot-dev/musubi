@@ -21,11 +21,23 @@ type EventsStore = {
 export const useEventsStore = create<EventsStore>((set, get) => ({
   events: [],
   addEvent: async (event, api) => {
-    const result = await api.createEvent(event);
-    set((state) => ({
-      events: [...state.events.filter(e => e.id !== result.id), result]
-    }));
-    cacheUpsertEvents([result]);
+    const previous = get().events.find(e => e.id === event.id);
+    set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), event] }));
+    void cacheUpsertEvents([event]);
+    try {
+      const result = await api.createEvent(event);
+      set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), result] }));
+      void cacheUpsertEvents([result]);
+    } catch (error) {
+      set((state) => ({
+        events: previous
+          ? [...state.events.filter(e => e.id !== event.id), previous]
+          : state.events.filter(e => e.id !== event.id),
+      }));
+      if (previous) void cacheUpsertEvents([previous]);
+      else void cacheDeleteEvents([event.id]);
+      throw error;
+    }
   },
   localAddEvent: async (event: Event) => {
     if (get().events.some(e => e.id === event.id)) return;
@@ -50,19 +62,32 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     events: events,
   })),
   removeEvent: async (event, api, unlinkCalendarID) => {
-    const result = await api.removeEvent(event, unlinkCalendarID);
-    if (!result.removed) {
-      // Still linked to calendars the user can't edit → keep it, just update links.
-      const updated = { ...event, calendars: result.calendars };
-      set((state) => ({ events: state.events.map(e => e.id === event.id ? updated : e) }));
-      cacheUpsertEvents([updated]);
-      return;
-    }
-    cancelEventNotification(event.id).catch(() => { });
+    const optimisticCalendars = unlinkCalendarID
+      ? event.calendars.filter(id => id !== unlinkCalendarID)
+      : [];
+    const optimistic = { ...event, calendars: optimisticCalendars };
     set((state) => ({
-      events: [...state.events.filter(e => e.id !== result.id)],
+      events: optimisticCalendars.length
+        ? state.events.map(e => e.id === event.id ? optimistic : e)
+        : state.events.filter(e => e.id !== event.id),
     }));
-    cacheDeleteEvents([event.id]);
+    if (optimisticCalendars.length) void cacheUpsertEvents([optimistic]);
+    else void cacheDeleteEvents([event.id]);
+
+    try {
+      const result = await api.removeEvent(event, unlinkCalendarID);
+      if (!result.removed) {
+        const updated = { ...event, calendars: result.calendars };
+        set((state) => ({ events: state.events.map(e => e.id === event.id ? updated : e) }));
+        void cacheUpsertEvents([updated]);
+        return;
+      }
+      void cancelEventNotification(event.id).catch(() => { });
+    } catch (error) {
+      set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), event] }));
+      void cacheUpsertEvents([event]);
+      throw error;
+    }
   },
   localRemoveEvent: async (event) => {
     set((state) => ({
@@ -72,11 +97,20 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     void cancelEventNotification(event.id).catch(() => { });
   },
   updateEvent: async (event, api) => {
-    const result = await api.updateEvent(event);
-    set((state) => ({
-      events: [...state.events.filter(e => e.id !== result.id), result],
-    }));
-    cacheUpsertEvents([result]);
+    const previous = get().events.find(e => e.id === event.id);
+    set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), event] }));
+    void cacheUpsertEvents([event]);
+    try {
+      const result = await api.updateEvent(event);
+      set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), result] }));
+      void cacheUpsertEvents([result]);
+    } catch (error) {
+      if (previous) {
+        set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), previous] }));
+        void cacheUpsertEvents([previous]);
+      }
+      throw error;
+    }
   },
   localUpdateEvent: async (event) => {
     set((state) => ({
