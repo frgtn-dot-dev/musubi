@@ -248,12 +248,13 @@ function PollRoute() {
 					<PollGrid
 						answers={answers}
 						approximateStartTime={data.approximateStartTime}
+						/* Only the instruction survives: describing the grid to someone
+						   looking straight at it is furniture. Somebody who has not answered
+						   yet does need telling which row is theirs. */
 						caption={
-							data.closed
-								? "How everyone answered."
-								: Object.keys(answers).length > 0
-									? "Who can make which day."
-									: "Fill in your own row — the last one — then send."
+							data.closed || Object.keys(answers).length > 0
+								? undefined
+								: "Fill in your own row — the last one — then send."
 						}
 						chosenSlotID={data.chosenSlotID}
 						mineID={data.mineID}
