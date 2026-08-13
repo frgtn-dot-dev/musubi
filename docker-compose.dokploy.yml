@@ -42,12 +42,14 @@ services:
       # Traefik may pick `default` and route to an address it cannot reach.
       traefik.docker.network: dokploy-network
       traefik.http.services.musubi-web.loadbalancer.server.port: "3000"
-      traefik.http.routers.musubi-web.rule: Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your hostname}`)
+      traefik.http.routers.musubi-web.rule: >-
+        Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your hostname}`)
       traefik.http.routers.musubi-web.entrypoints: websecure
-      traefik.http.routers.musubi-web.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.musubi-web.tls.certresolver: >-
+        ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
       traefik.http.routers.musubi-web.priority: "1"
       # Plain HTTP exists only to send people to HTTPS. One router for the whole
-      # host: it never reaches a backend, so which service it names is irrelevant.
+      # host: it never reaches a backend, so its named service is irrelevant.
       traefik.http.middlewares.musubi-https.redirectscheme.scheme: https
       traefik.http.middlewares.musubi-https.redirectscheme.permanent: "true"
       traefik.http.routers.musubi-http.rule: Host(`${PUBLIC_HOST}`)
@@ -80,9 +82,10 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-api.loadbalancer.server.port: "${API_SERVER_PORT:-7531}"
+      traefik.http.services.musubi-api.loadbalancer.server.port: >-
+        ${API_SERVER_PORT:-7531}
       # The API owns /api/* — Better Auth on /api/auth/*, REST on /api/v1/*, the
-      # federation gateway underneath — plus the HTML pages for links that arrive
+      # federation gateway underneath — plus HTML pages for links that arrive
       # from outside the app (password reset, account deletion, email
       # confirmation, the iOS universal-link file). Invitations are NOT here:
       # with a web client on this origin they open as a page you can accept.
@@ -90,7 +93,7 @@ services:
       # the API and must not fall through to the catch-all above.
       #
       # Server-sent events at /api/stream need no special Traefik setting: it does
-      # not buffer response bodies, and flushes a stream every 100 ms by default.
+      # not buffer response bodies and flushes streams every 100 ms by default.
       traefik.http.routers.musubi-api.rule: >-
         Host(`${PUBLIC_HOST}`) && (
         PathPrefix(`/api`)
@@ -100,9 +103,10 @@ services:
         || Path(`/.well-known/apple-app-site-association`)
         )
       traefik.http.routers.musubi-api.entrypoints: websecure
-      traefik.http.routers.musubi-api.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.musubi-api.tls.certresolver: >-
+        ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
       # Above the web catch-all. Traefik would rank the longer rule first anyway;
-      # saying it out loud means an edit to either rule cannot silently swap them.
+      # explicit priority keeps edits from silently swapping the two routers.
       traefik.http.routers.musubi-api.priority: "100"
     # Do not scale this service horizontally. A second process sharing the same
     # DB is rejected by the API's singleton advisory lock, and SSE connections
