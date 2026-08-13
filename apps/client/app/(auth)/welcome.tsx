@@ -7,6 +7,9 @@ import { Btn } from "@/components/ui/Btn";
 import { useServer } from "@/contexts/ServerContext";
 import { normalizeServerUrl } from "@/lib/serverUrl";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
+import semver from "semver";
+
+const requiredServerVersion = "0.1.3";
 
 export default function Welcome() {
   const { apiUrl, setNewServerUrl } = useServer();
@@ -25,8 +28,14 @@ export default function Welcome() {
 
     if (result.ok) {
       const data = await result.json();
-      if (data.ok) {
+      if (data.ok && semver.valid(data.version) && semver.gte(data.version, requiredServerVersion)) {
         return { ok: true, error: "" };
+      }
+      if (data.ok) {
+        return {
+          ok: false,
+          error: `This server runs ${data.version ?? "an old build"}; Musubi ${requiredServerVersion} is required.`,
+        };
       }
     }
 

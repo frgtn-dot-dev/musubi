@@ -3,6 +3,8 @@ import { config } from "@musubi/config";
 import { appleWebSignInEnabled } from "@musubi/auth";
 import { canSendEmail } from "@musubi/emails";
 
+const serverVersion = "0.1.3";
+
 // Which social logins this server can actually perform — a provider counts only
 // when its credentials are configured. Lets self-hosted clients render just the
 // buttons that will work against their server (see welcome screen).
@@ -48,11 +50,12 @@ function enabledSyncProviders(): string[] {
 }
 
 export function handlerServerStatus(_: Request, res: Response) {
-  res.status(200).json({ ok: true });
+  res.status(200).json({ ok: true, version: serverVersion });
 }
 
 export function handlerServer(_: Request, res: Response) {
   res.status(200).json({
+    version: serverVersion,
     minClientVersion: "0.1.2",
     socials: enabledSocials(),
     socialsWeb: enabledWebSocials(),
