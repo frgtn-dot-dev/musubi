@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
   claimPollOwnership,
+  getUsersCalendars,
   closePoll,
   createEvent,
   createPoll,
@@ -18,7 +19,7 @@ import {
   setPollVotes,
   type SchedulingPollRow,
 } from "@musubi/db";
-import { BadRequestError, ForbiddenError, NotFoundError } from "@musubi/types";
+import { BadRequestError, can, ForbiddenError, NotFoundError } from "@musubi/types";
 import { config } from "@musubi/config";
 import type { Request, Response } from "express";
 import { assertCan } from "../permissions";
@@ -32,6 +33,24 @@ const VOTE_VALUES = new Set(["if-needed", "no", "yes"]);
 const MAX_SLOTS = 60;
 const MAX_TITLE = 120;
 const ALL_DAY_DURATION_MINUTES = 24 * 60;
+
+/**
+ * The calendar a poll decides into when it was made without one — a poll created
+ * on the public page, before its author had an account, or one whose calendar has
+ * since been deleted. Their own personal calendar first, then anything they can
+ * write to.
+ */
+async function fallbackCalendarID(userID: string) {
+  const memberships = await getUsersCalendars(userID);
+  const writable = memberships.filter((membership) =>
+    can(membership.role, "editEvents"),
+  );
+
+  return (
+    writable.find((membership) => membership.calendars.isDefault)?.calendarID ??
+    writable[0]?.calendarID
+  );
+}
 
 function pollToken() {
   return randomBytes(16).toString("hex");
@@ -58,6 +77,7 @@ function identityName(value: unknown) {
 function pollSummary(poll: SchedulingPollRow) {
   return {
     approximateStartTime: poll.approximateStartTime,
+    calendarID: poll.calendarID,
     chosenSlotID: poll.chosenSlotID,
     closed: pollIsClosed(poll),
     closedAt: poll.closedAt,
@@ -150,10 +170,16 @@ export async function handlerCreatePoll(req: Request, res: Response) {
   }
 
   const parsed = slots.map(parsePollSlot);
+  // Chosen when the question is written, used when a day is picked — days apart,
+  // so it travels with the poll. Absent on the public page, which has no
+  // calendars to offer.
+  const calendarID = String(req.body?.calendarId ?? "").trim() || null;
+  if (calendarID) await assertCan(req.user!.id, calendarID, "editEvents");
 
   const poll = await createPoll(
     {
       approximateStartTime,
+      calendarID,
       deadline: req.body?.deadline ? new Date(String(req.body.deadline)) : null,
       description: String(req.body?.description ?? "").trim() || null,
       // Kept in storage and projections for older clients; new polls become
@@ -525,9 +551,19 @@ export async function handlerDecidePoll(req: Request, res: Response) {
   if (poll.closedAt) throw new BadRequestError("This poll is already decided...");
 
   const slotID = String(req.body?.slotId ?? "");
-  const calendarID = String(req.body?.calendarId ?? "");
   const slot = (await listPollSlots(poll.id)).find((item) => item.id === slotID);
   if (!slot) throw new BadRequestError("That time is not on this poll...");
+
+  // What the caller asked for, then what the poll was created with, then their own
+  // calendar: a poll made without an account has nothing stored, and its author
+  // still has to be able to decide it.
+  const calendarID =
+    String(req.body?.calendarId ?? "").trim() ||
+    poll.calendarID ||
+    (await fallbackCalendarID(req.user!.id));
+  if (!calendarID) {
+    throw new BadRequestError("Make a calendar before picking a time...");
+  }
 
   await assertCan(req.user!.id, calendarID, "editEvents");
   const eventTiming = pollSlotEventTiming(slot.start);
