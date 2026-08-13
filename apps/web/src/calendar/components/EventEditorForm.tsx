@@ -374,7 +374,7 @@ export function EventEditorForm({
 
 				{expanded ? (
 					<Field
-						className={styles.inlineField}
+						className={`${styles.inlineField} ${styles.recurrenceField}`}
 						label={
 							<span className={styles.fieldLabel}>
 								<Repeat2 aria-hidden="true" size={16} strokeWidth={1.5} />
