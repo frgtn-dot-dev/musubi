@@ -88,11 +88,10 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `GET /api/v1/calendars/tokens/:token` | Invite preview; token is the capability | 30 / 15 min / IP |
 | `POST /api/v1/federation/accept` | Accept invite as a remote-server shadow user | 10 / 15 min / IP |
 | `POST /api/v1/users/delete/confirm` | Complete email-token account deletion | 10 / 15 min / IP |
-| `POST /api/v1/users/reset` | **Development-only full user reset**; 403 outside `dev` | — |
 | `GET /api/v1/users/:userId/avatar` | Public immutable avatar bytes | — |
 | `GET /api/v1/public/events/:token` | Read the narrow published-event projection; token is the capability | 60 / 15 min / IP |
-| `GET /api/v1/public/events/:token/rsvp` | Read the authenticated guest's answer | 60 / 15 min / IP |
-| `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated guest's answer | 30 / 15 min / IP |
+| `GET /api/v1/public/events/:token/rsvp` | Read the verified-email guest's answer | 60 / 15 min / IP |
+| `PUT /api/v1/public/events/:token/rsvp` | Write the verified-email guest's answer | 30 / 15 min / IP |
 | `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
 | `PUT /api/v1/public/polls/:token/votes` | Write a participant's complete answer set; auth is optional for the first answer | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |

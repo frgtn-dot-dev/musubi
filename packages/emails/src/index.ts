@@ -7,18 +7,21 @@ export { getVerifyEmailHtml } from "./verify_email";
 export { getChangeEmailHtml } from "./change_email";
 export { getSignInCodeHtml } from "./sign_in_code";
 
+export function smtpTransportOptions(smtp: typeof config.smtp) {
+  return {
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.port === 465,
+    requireTLS: smtp.port !== 465,
+    auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+    connectionTimeout: 5_000,
+    greetingTimeout: 5_000,
+    socketTimeout: 5_000,
+  };
+}
+
 const transporter = config.smtp.host
-  ? nodemailer.createTransport({
-      host: config.smtp.host,
-      port: config.smtp.port,
-      secure: config.smtp.port === 465,
-      auth: config.smtp.user
-        ? { user: config.smtp.user, pass: config.smtp.pass }
-        : undefined,
-      connectionTimeout: 5_000,
-      greetingTimeout: 5_000,
-      socketTimeout: 5_000,
-    })
+  ? nodemailer.createTransport(smtpTransportOptions(config.smtp))
   : null;
 
 let emailAvailable = false;

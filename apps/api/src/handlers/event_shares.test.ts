@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import {
   publicEventProjection,
+  requireVerifiedRsvpUser,
   rsvpSummaryOf,
   type SharedEventRow,
 } from "./event_shares";
+
+assert.throws(
+  () => requireVerifiedRsvpUser({ emailVerified: false }),
+  (error: any) => error?.kind === "Forbidden",
+);
+assert.doesNotThrow(() => requireVerifiedRsvpUser({ emailVerified: true }));
 
 const BASE: SharedEventRow = {
   description: "Come see the presses.",
@@ -160,7 +167,11 @@ const ANSWERS = [
 
 // Nobody yet is an empty list, not a missing one — the page renders either.
 {
-  const empty = rsvpSummaryOf({ answers: [], userID: "u-1", visibility: "names" });
+  const empty = rsvpSummaryOf({
+    answers: [],
+    userID: "u-1",
+    visibility: "names",
+  });
   assert.deepEqual(empty.counts, { declined: 0, going: 0, maybe: 0 });
   assert.deepEqual(empty.names, []);
   assert.equal(empty.mine, null);

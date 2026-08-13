@@ -20,14 +20,38 @@ async function main() {
   process.env.SMTP_PORT = String(address.port);
   process.env.SMTP_USER = "";
   process.env.SMTP_PASS = "";
+  process.env.ENVIRONMENT = "dev";
 
-  const { canSendEmail, initializeEmailCapability } = await import("./index");
+  const { canSendEmail, initializeEmailCapability, smtpTransportOptions } =
+    await import("./index");
+  assert.equal(
+    smtpTransportOptions({
+      host: "smtp.example",
+      port: 587,
+      user: "",
+      pass: "",
+      from: "",
+    }).requireTLS,
+    true,
+  );
+  assert.equal(
+    smtpTransportOptions({
+      host: "smtp.example",
+      port: 465,
+      user: "",
+      pass: "",
+      from: "",
+    }).requireTLS,
+    false,
+  );
   assert.equal(canSendEmail(), false);
-  assert.equal(await initializeEmailCapability(), true);
+  // The local plaintext stand-in cannot negotiate STARTTLS: refusing it proves
+  // a configured submission port cannot silently downgrade.
+  assert.equal(await initializeEmailCapability(), false);
   await new Promise<void>((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
-  assert.equal(canSendEmail(), true);
+  assert.equal(canSendEmail(), false);
   console.log("SMTP startup capability self-check: OK");
 }
 

@@ -238,10 +238,6 @@ route must still authorize against `calendar_members`. Clients rotate in the
 final 14 days through a compare-and-swap endpoint, and removing the final
 membership revokes token hashes transactionally.
 
-<Aside type="note">
-`POST /api/v1/users/reset` is public and its inline comment says "password reset entry" — but it maps to `handlerResetUsers`, the **dev-only** full user wipe (guarded by `ENVIRONMENT === "dev"`, throws `Forbidden` otherwise). The comment is misleading; real password reset is a Better Auth route under `/api/auth`. Worth a cleanup.
-</Aside>
-
 ## How to add an endpoint
 
 <Steps>

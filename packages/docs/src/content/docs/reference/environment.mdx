@@ -30,9 +30,9 @@ Generate the auth secret with `openssl rand -base64 32`.
 | Variable | Required | Default | Used by |
 | --- | ---: | ---: | --- |
 | `DATABASE_URL` | Yes | — | API, Drizzle, migrations |
-| `ENVIRONMENT` | Yes | — | API feature gates and dev origins |
+| `ENVIRONMENT` | Yes | — | Closed set: `dev`, `test`, or `prod`; API feature gates and dev origins |
 | `BETTER_AUTH_URL` | Yes | — | Better Auth base URL, emails, invites, avatar URLs |
-| `BETTER_AUTH_SECRET` | Yes | — | Session signing and OAuth-token encryption |
+| `BETTER_AUTH_SECRET` | Yes | — | Session signing and OAuth-token encryption; outside `dev`, at least 32 non-placeholder characters |
 | `API_SERVER_PORT` | No | `7531` | Public API listener |
 | `EXTERNAL_SYNC_INTERVAL_MIN` | No | `5` | Provider polling interval; `0` disables scheduled sync |
 | `LOG_LEVEL` | No | `info` | `debug`, `info`, `warn`, `error`, or `silent` |
@@ -48,9 +48,9 @@ It affects security-sensitive and user-visible URLs. In production, use the
 same public HTTPS origin users enter in the app.
 
 <Aside type="caution">
-`ENVIRONMENT=dev` enables development behavior, including the full-user reset
-endpoint and extra trusted Expo/browser origins. Use a different value in
-production.
+`ENVIRONMENT=dev` enables extra trusted Expo/browser origins and automatically
+allows private federation and CalDAV targets. Use `prod` in production; unknown
+values fail at boot instead of silently weakening the SSRF boundary.
 </Aside>
 
 ## Docker Compose
@@ -86,7 +86,7 @@ All email settings are optional at boot, but the feature needs the complete set:
 | Variable | Purpose |
 | --- | --- |
 | `SMTP_HOST` | SMTP hostname; `/api/v1/server` reports `email: true` only after the configured server accepts an SMTP handshake |
-| `SMTP_PORT` | Commonly `587` (STARTTLS) or `465` (implicit TLS) |
+| `SMTP_PORT` | Commonly `587` (required STARTTLS) or `465` (implicit TLS) |
 | `SMTP_USER` | SMTP username |
 | `SMTP_PASS` | SMTP password/token |
 | `FROM_EMAIL` | Envelope/from address |
@@ -164,7 +164,7 @@ The HTML hand-off page and `musubi://` deep link still work.
 | Variable | Required when | Format |
 | --- | --- | --- |
 | `CALDAV_ENC_KEY` | Connecting CalDAV accounts or storing federated Musubi connections | 32 random bytes as 64 hexadecimal characters |
-| `FEDERATION_ALLOW_PRIVATE_HOSTS` | Only to federate with a Musubi server on a private address | `true` to allow; anything else refuses. Defaults to allowed outside `ENVIRONMENT=prod` |
+| `FEDERATION_ALLOW_PRIVATE_HOSTS` | Only to federate with a Musubi server on a private address | `true` to allow; anything else refuses. Defaults to allowed only with `ENVIRONMENT=dev` |
 
 Generate the key with:
 

@@ -9,6 +9,12 @@
 
 {$PUBLIC_HOST::80} {
 	encode zstd gzip
+	header {
+		Content-Security-Policy "frame-ancestors 'none'"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
 
 	# Server-sent events: the API holds these open for as long as a client is
 	# connected. Without flush_interval -1 Caddy buffers the response and live

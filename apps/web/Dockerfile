@@ -17,6 +17,9 @@ RUN pnpm --filter @musubi/web build
 # Nitro emits a self-contained bundle: .output/server carries its own
 # node_modules, so the runtime needs neither pnpm nor the monorepo source.
 FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS runner
+USER root
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx
 WORKDIR /app
 COPY --from=build /repo/apps/web/.output /app/.output
 ENV NODE_ENV=production

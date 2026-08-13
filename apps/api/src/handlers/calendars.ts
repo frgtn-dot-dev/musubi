@@ -1,9 +1,34 @@
 import type { Request, Response } from "express";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
-import { addCalendarMember, consumeInvite, createCalendar, createEvent, getCalendar, getCalendarEvents, getCalendarIDFromToken, getCalendarMembers, getExternalLinkForCalendar, getUserRoleForCalendar, getUsersCalendars, importExternalCalendar, type NewCalendar, removeCalendar, removeCalendarMember, setCalendarMemberRole, transferCalendarOwnership, updateCalendar } from '@musubi/db';
+import {
+  createCalendar,
+  createEvent,
+  getCalendar,
+  getCalendarEvents,
+  getCalendarIDFromToken,
+  getCalendarMembers,
+  getExternalLinkForCalendar,
+  getUserRoleForCalendar,
+  getUsersCalendars,
+  importExternalCalendar,
+  joinCalendarFromInvite,
+  type NewCalendar,
+  removeCalendar,
+  removeCalendarMember,
+  setCalendarMemberRole,
+  transferCalendarOwnership,
+  updateCalendar,
+} from "@musubi/db";
 import { toVevent, veventToFields } from "../sync/adapters/caldav";
-import { BadRequestError, type Calendar, CalendarSchema, ForbiddenError, NotFoundError, type User } from "@musubi/types";
+import {
+  BadRequestError,
+  type Calendar,
+  CalendarSchema,
+  ForbiddenError,
+  NotFoundError,
+  type User,
+} from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { assertCan } from "../permissions";
 import { getAdapter, pushEventToProviders } from "../sync/engine";
@@ -15,19 +40,27 @@ import { buildInvitePreview } from "../invite_preview";
 async function pushExternal(
   userID: string,
   calendarID: string,
-  action: (adapter: NonNullable<ReturnType<typeof getAdapter>>, link: NonNullable<Awaited<ReturnType<typeof getExternalLinkForCalendar>>>) => Promise<void>,
+  action: (
+    adapter: NonNullable<ReturnType<typeof getAdapter>>,
+    link: NonNullable<Awaited<ReturnType<typeof getExternalLinkForCalendar>>>,
+  ) => Promise<void>,
 ) {
   const link = await getExternalLinkForCalendar(calendarID);
   if (!link) return;
   if (link.userID !== userID) {
-    throw new ForbiddenError("Only the owner of the connected account can change this calendar.");
+    throw new ForbiddenError(
+      "Only the owner of the connected account can change this calendar.",
+    );
   }
   const adapter = getAdapter(link.provider);
-  if (!adapter) throw new BadRequestError(`Unknown provider "${link.provider}".`);
+  if (!adapter)
+    throw new BadRequestError(`Unknown provider "${link.provider}".`);
   try {
     await action(adapter, link);
   } catch (e: any) {
-    throw new BadRequestError(e?.message ?? "The provider rejected the change.");
+    throw new BadRequestError(
+      e?.message ?? "The provider rejected the change.",
+    );
   }
 }
 
@@ -36,24 +69,38 @@ async function createCalendarAtDestination(
   input: { accountId?: string; color: string; name: string; provider?: string },
 ) {
   if (Boolean(input.provider) !== Boolean(input.accountId)) {
-    throw new BadRequestError("Calendar destination requires both provider and accountId.");
+    throw new BadRequestError(
+      "Calendar destination requires both provider and accountId.",
+    );
   }
 
   if (input.provider && input.accountId) {
     const adapter = getAdapter(input.provider);
-    if (!adapter) throw new BadRequestError(`Unknown provider "${input.provider}".`);
+    if (!adapter)
+      throw new BadRequestError(`Unknown provider "${input.provider}".`);
     const accounts = await adapter.listAccounts(user.id);
-    const account = accounts.find(a => a.id === input.accountId);
-    if (!account) throw new ForbiddenError("That account isn't connected to your user.");
+    const account = accounts.find((a) => a.id === input.accountId);
+    if (!account)
+      throw new ForbiddenError("That account isn't connected to your user.");
 
     let externalId: string;
     try {
-      ({ externalId } = await adapter.createCalendar(user.id, account.id, { name: input.name, color: input.color }));
+      ({ externalId } = await adapter.createCalendar(user.id, account.id, {
+        name: input.name,
+        color: input.color,
+      }));
     } catch (error: unknown) {
-      throw new BadRequestError(error instanceof Error ? error.message : "The provider rejected the new calendar.");
+      throw new BadRequestError(
+        error instanceof Error
+          ? error.message
+          : "The provider rejected the new calendar.",
+      );
     }
     const created = await importExternalCalendar(
-      input.provider, user.id, account.id, account.label,
+      input.provider,
+      user.id,
+      account.id,
+      account.label,
       { externalId, name: input.name, color: input.color },
     );
     const link = await getExternalLinkForCalendar(created.id);
@@ -113,15 +160,18 @@ export async function handlerRemoveCalendar(req: Request, res: Response) {
   }
   // External mirror → delete on the provider first; failure aborts the local delete.
   await pushExternal(req.user!.id, calendar.id, (adapter, link) =>
-    adapter.deleteCalendar(link.userID, link.accountID, link.externalCalendarID));
+    adapter.deleteCalendar(
+      link.userID,
+      link.accountID,
+      link.externalCalendarID,
+    ),
+  );
   const removedCalendar = await removeCalendar(calendar.id);
 
   if (removedCalendar) {
-
     const result = { ...removedCalendar, members: [] };
 
     const memberIDSeen = new Set<string>();
-
 
     for (const member of members) {
       if (!memberIDSeen.has(member.userID)) {
@@ -133,8 +183,7 @@ export async function handlerRemoveCalendar(req: Request, res: Response) {
 
     return res.status(200).json(result);
   }
-  throw new NotFoundError("Calendar not found...")
-
+  throw new NotFoundError("Calendar not found...");
 }
 
 export async function handlerUpdateCalendar(req: Request, res: Response) {
@@ -148,13 +197,21 @@ export async function handlerUpdateCalendar(req: Request, res: Response) {
   await assertCan(req.user!.id, calendar.id, "editCalendar");
   // External mirror → rename/recolor on the provider first; failure aborts the local write.
   await pushExternal(req.user!.id, calendar.id, (adapter, link) =>
-    adapter.updateCalendar(link.userID, link.accountID, link.externalCalendarID, { name: calendar.name, color: calendar.color }));
+    adapter.updateCalendar(
+      link.userID,
+      link.accountID,
+      link.externalCalendarID,
+      { name: calendar.name, color: calendar.color },
+    ),
+  );
   // isDefault is server-managed — never writable from the client.
   const { isDefault: _ignored, ...editable } = calendar;
-  const updatedCalendar = await updateCalendar({ ...editable, creatorID: req.user!.id });
+  const updatedCalendar = await updateCalendar({
+    ...editable,
+    creatorID: req.user!.id,
+  });
 
   if (updatedCalendar) {
-
     const result = { ...updatedCalendar, members: calendar.members };
 
     const memberIDSeen = new Set<string>();
@@ -169,7 +226,6 @@ export async function handlerUpdateCalendar(req: Request, res: Response) {
 
     notifyCalendarMembers([...memberIDSeen], "calendar_updated", result);
 
-
     return res.status(200).json(result);
   }
   throw new NotFoundError("Calendar not found...");
@@ -183,7 +239,11 @@ export async function handlerGetCalendars(req: Request, res: Response) {
     const members: User[] = [];
     const users = await getCalendarMembers(calendar.calendarID);
     for (const user of users) {
-      members.push({ id: user.user.id, name: user.user.name, email: user.user.email });
+      members.push({
+        id: user.user.id,
+        name: user.user.name,
+        email: user.user.email,
+      });
     }
     const link = await getExternalLinkForCalendar(calendar.calendarID);
     const ownsExternalAccount = link?.userID === req.user!.id;
@@ -197,11 +257,14 @@ export async function handlerGetCalendars(req: Request, res: Response) {
       serverUrl: link?.serverUrl ?? null, // caldav only — client uses it to spot iCloud
       // Only the account owner can repair OAuth. Other Musubi members may see
       // the shared mirror, but must not be prompted to link their own Google.
-      syncStatus: ownsExternalAccount && (link?.syncStatus === "active" || link?.syncStatus === "reconnect_required")
-        ? link.syncStatus
-        : null,
-      syncErrorCode: ownsExternalAccount ? link?.syncErrorCode ?? null : null,
-    })
+      syncStatus:
+        ownsExternalAccount &&
+        (link?.syncStatus === "active" ||
+          link?.syncStatus === "reconnect_required")
+          ? link.syncStatus
+          : null,
+      syncErrorCode: ownsExternalAccount ? (link?.syncErrorCode ?? null) : null,
+    });
   }
 
   res.status(200).json(result);
@@ -246,7 +309,7 @@ export async function getCalendarDetailsForUser(
   const members = await dependencies.getCalendarMembers(calendarID);
   return {
     ...result,
-    members: members.map(u => ({
+    members: members.map((u) => ({
       name: u.user.name,
       email: u.user.email,
       id: u.user.id,
@@ -268,7 +331,8 @@ export async function handlerGetCalendar(req: Request, res: Response) {
 // the query string.
 export async function handlerImportCalendar(req: Request, res: Response) {
   const ics = req.body;
-  if (typeof ics !== "string" || !ics.trim()) throw new BadRequestError("Request body must be an iCalendar file...");
+  if (typeof ics !== "string" || !ics.trim())
+    throw new BadRequestError("Request body must be an iCalendar file...");
 
   let vcal: ICAL.Component;
   try {
@@ -277,12 +341,18 @@ export async function handlerImportCalendar(req: Request, res: Response) {
     throw new BadRequestError("That file isn't valid iCalendar data...");
   }
 
-  const name = (req.query.name as string)
-    || (vcal.getFirstPropertyValue("x-wr-calname") as string | null)
-    || "Imported calendar";
+  const vevents = vcal.getAllSubcomponents("vevent");
+  assertImportEventLimit(vevents.length);
+
+  const name =
+    (req.query.name as string) ||
+    (vcal.getFirstPropertyValue("x-wr-calname") as string | null) ||
+    "Imported calendar";
   const color = (req.query.color as string) || "#7a9e7e";
-  const provider = typeof req.query.provider === "string" ? req.query.provider : undefined;
-  const accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
+  const provider =
+    typeof req.query.provider === "string" ? req.query.provider : undefined;
+  const accountId =
+    typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
   const created = await createCalendarAtDestination(req.user!, {
     accountId,
@@ -296,29 +366,40 @@ export async function handlerImportCalendar(req: Request, res: Response) {
   // instances, which Musubi doesn't model yet. Also one createEvent per VEVENT
   // (3 inserts each) — batch if huge imports ever matter.
   let imported = 0;
-  for (const vevent of vcal.getAllSubcomponents("vevent")) {
+  for (const vevent of vevents) {
     if (vevent.getFirstPropertyValue("recurrence-id")) continue;
     const fields = veventToFields(vevent);
     if (!fields) continue;
-    const event = await createEvent({
-      id: randomUUID(),
-      creatorID: req.user!.id,
-      organizer: req.user!.id,
-      title: fields.title,
-      color,
-      start: fields.start,
-      end: fields.end,
-      isAllDay: fields.isAllDay,
-      description: fields.description,
-      location: fields.location,
-      recurrence: fields.recurrence,
-      originCalendarID: created.id,
-    }, [created.id]);
+    const event = await createEvent(
+      {
+        id: randomUUID(),
+        creatorID: req.user!.id,
+        organizer: req.user!.id,
+        title: fields.title,
+        color,
+        start: fields.start,
+        end: fields.end,
+        isAllDay: fields.isAllDay,
+        description: fields.description,
+        location: fields.location,
+        recurrence: fields.recurrence,
+        originCalendarID: created.id,
+      },
+      [created.id],
+    );
     await pushEventToProviders({ ...event, calendars: [created.id] }, "create");
     imported++;
   }
 
   res.status(201).json({ ...created, imported });
+}
+
+export function assertImportEventLimit(count: number) {
+  if (count > 10_000) {
+    throw new BadRequestError(
+      "An iCalendar import may contain at most 10,000 events.",
+    );
+  }
 }
 
 // One-shot .ics snapshot of a whole calendar. Any member may export — they can
@@ -351,14 +432,19 @@ export async function handlerJoinCalendar(req: Request, res: Response) {
   // Membership is granted by invite only — a bare calendar id is NOT enough
   // (ids leak via shared events' `calendars` arrays).
   const token = req.body?.token as string | undefined;
-  if (!token || (await getCalendarIDFromToken(token)) !== calendarID) {
-    throw new ForbiddenError("A valid invite is required to join this calendar.");
+  if (!token) {
+    throw new ForbiddenError(
+      "A valid invite is required to join this calendar.",
+    );
   }
-  const result = await addCalendarMember(req.user?.id!, calendarID);
-  // Empty result = was already a member (conflict) — don't burn a use on re-joins.
-  if (result.length > 0) await consumeInvite(token);
+  const result = await joinCalendarFromInvite(req.user!.id, token);
+  if (result.calendarID !== calendarID) {
+    throw new ForbiddenError(
+      "A valid invite is required to join this calendar.",
+    );
+  }
 
-  res.status(200).json(result);
+  res.status(200).json(result.added);
 }
 
 export async function handlerLeaveCalendar(req: Request, res: Response) {
@@ -369,7 +455,9 @@ export async function handlerLeaveCalendar(req: Request, res: Response) {
   }
   if (removal.status === "owner") {
     // Would orphan the calendar — transfer ownership (setMemberRole "owner") or delete it.
-    throw new BadRequestError("The owner can't leave. Transfer ownership or delete the calendar.");
+    throw new BadRequestError(
+      "The owner can't leave. Transfer ownership or delete the calendar.",
+    );
   }
   if (removal.status === "member_not_found") {
     throw new NotFoundError("Member not found on this calendar...");
@@ -386,7 +474,11 @@ export async function handlerKickMember(req: Request, res: Response) {
 
   await assertCan(req.user!.id, calendarID, "manageMembers");
 
-  const removal = await removeCalendarMember(targetUserID, calendarID, req.user!.id);
+  const removal = await removeCalendarMember(
+    targetUserID,
+    calendarID,
+    req.user!.id,
+  );
   if (removal.status === "calendar_not_found") {
     throw new NotFoundError("Calendar not found...");
   }
@@ -412,12 +504,14 @@ export async function handlerGetCalendarMembers(req: Request, res: Response) {
   if (!role) throw new ForbiddenError("You're not a member of this calendar.");
   const members = await getCalendarMembers(calendarID);
   // No email — members only need to recognize each other, not contact-scrape.
-  res.status(200).json(members.map(m => ({
-    id: m.user.id,
-    name: m.user.name,
-    image: m.user.image,
-    role: m.role,
-  })));
+  res.status(200).json(
+    members.map((m) => ({
+      id: m.user.id,
+      name: m.user.name,
+      image: m.user.image,
+      role: m.role,
+    })),
+  );
 }
 
 export async function handlerSetMemberRole(req: Request, res: Response) {
@@ -444,9 +538,15 @@ export async function handlerSetMemberRole(req: Request, res: Response) {
       throw new ForbiddenError("Only the owner can transfer ownership.");
     }
     if (calendar.isDefault) {
-      throw new BadRequestError("Your personal calendar's ownership can't be transferred.");
+      throw new BadRequestError(
+        "Your personal calendar's ownership can't be transferred.",
+      );
     }
-    const transfer = await transferCalendarOwnership(calendarID, req.user!.id, targetUserID);
+    const transfer = await transferCalendarOwnership(
+      calendarID,
+      req.user!.id,
+      targetUserID,
+    );
     if (transfer.status === "calendar_not_found") {
       throw new NotFoundError("Calendar not found...");
     }
@@ -454,21 +554,36 @@ export async function handlerSetMemberRole(req: Request, res: Response) {
       throw new ForbiddenError("Only the owner can transfer ownership.");
     }
     if (transfer.status === "default_calendar") {
-      throw new BadRequestError("Your personal calendar's ownership can't be transferred.");
+      throw new BadRequestError(
+        "Your personal calendar's ownership can't be transferred.",
+      );
     }
     if (transfer.status === "external_calendar") {
-      throw new BadRequestError("A connected provider calendar's ownership can't be transferred.");
+      throw new BadRequestError(
+        "A connected provider calendar's ownership can't be transferred.",
+      );
     }
     if (transfer.status === "member_not_found") {
       throw new NotFoundError("Member not found on this calendar...");
     }
     // Role is per-user → personalized payloads, so open clients update live.
-    notifyCalendarMembers([targetUserID], "calendar_updated", { ...transfer.calendar, role: "owner" });
-    notifyCalendarMembers([req.user!.id], "calendar_updated", { ...transfer.calendar, role: "editor" });
+    notifyCalendarMembers([targetUserID], "calendar_updated", {
+      ...transfer.calendar,
+      role: "owner",
+    });
+    notifyCalendarMembers([req.user!.id], "calendar_updated", {
+      ...transfer.calendar,
+      role: "editor",
+    });
     return res.status(200).json({ id: targetUserID, role: "owner" });
   }
 
-  const roleUpdate = await setCalendarMemberRole(req.user!.id, targetUserID, calendarID, role);
+  const roleUpdate = await setCalendarMemberRole(
+    req.user!.id,
+    targetUserID,
+    calendarID,
+    role,
+  );
   if (roleUpdate.status === "calendar_not_found") {
     throw new NotFoundError("Calendar not found...");
   }
@@ -483,7 +598,10 @@ export async function handlerSetMemberRole(req: Request, res: Response) {
   }
 
   // Tell the affected user right away — no reload needed to gain/lose edit UI.
-  notifyCalendarMembers([targetUserID], "calendar_updated", { ...calendar, role });
+  notifyCalendarMembers([targetUserID], "calendar_updated", {
+    ...calendar,
+    role,
+  });
 
   res.status(200).json({ id: targetUserID, role: roleUpdate.member.role });
 }

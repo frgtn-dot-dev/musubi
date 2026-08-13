@@ -1,17 +1,18 @@
 import { lookup } from "node:dns/promises";
 import { isIPv4 } from "node:net";
+import ipaddr from "ipaddr.js";
 import { config } from "@musubi/config";
 
 export function canonicalHttpOrigin(value: string): string | null {
   try {
     const parsed = new URL(value);
     if (
-      (parsed.protocol !== "https:" && parsed.protocol !== "http:")
-      || parsed.username
-      || parsed.password
-      || parsed.pathname !== "/"
-      || parsed.search
-      || parsed.hash
+      (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
     ) {
       return null;
     }
@@ -28,17 +29,17 @@ export function canonicalHttpOrigin(value: string): string | null {
 
 // [network, prefix length]
 const BLOCKED_V4: [string, number][] = [
-  ["0.0.0.0", 8],        // "this host"
-  ["10.0.0.0", 8],       // private
-  ["100.64.0.0", 10],    // CGNAT
-  ["127.0.0.0", 8],      // loopback
-  ["169.254.0.0", 16],   // link-local — cloud metadata lives at 169.254.169.254
-  ["172.16.0.0", 12],    // private
-  ["192.0.0.0", 24],     // IETF protocol assignments
-  ["192.168.0.0", 16],   // private
-  ["198.18.0.0", 15],    // benchmarking
-  ["224.0.0.0", 4],      // multicast
-  ["240.0.0.0", 4],      // reserved
+  ["0.0.0.0", 8], // "this host"
+  ["10.0.0.0", 8], // private
+  ["100.64.0.0", 10], // CGNAT
+  ["127.0.0.0", 8], // loopback
+  ["169.254.0.0", 16], // link-local — cloud metadata lives at 169.254.169.254
+  ["172.16.0.0", 12], // private
+  ["192.0.0.0", 24], // IETF protocol assignments
+  ["192.168.0.0", 16], // private
+  ["198.18.0.0", 15], // benchmarking
+  ["224.0.0.0", 4], // multicast
+  ["240.0.0.0", 4], // reserved
 ];
 
 function v4ToInt(ip: string): number | null {
@@ -71,14 +72,17 @@ export function isBlockedAddress(address: string): boolean {
   // so e.g. "fe80.example.com" isn't mistaken for a link-local address.
   if (!ip.includes(":")) return false;
 
-  // Unwrap ::ffff:a.b.c.d so a mapped private v4 can't sneak through.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(ip);
-  if (mapped) return isBlockedAddress(mapped[1]!);
-  if (ip === "::" || ip === "::1") return true;
-  if (ip.startsWith("fe80")) return true; // link-local
-  const firstByte = parseInt(ip.slice(0, 2), 16);
-  if (!Number.isNaN(firstByte) && (firstByte & 0xfe) === 0xfc) return true; // fc00::/7
-  return false;
+  try {
+    const parsed = ipaddr.parse(ip);
+    if (parsed.kind() !== "ipv6") return true;
+    const ipv6 = parsed as ipaddr.IPv6;
+    if (ipv6.isIPv4MappedAddress()) {
+      return isBlockedAddress(ipv6.toIPv4Address().toString());
+    }
+    return ipv6.range() !== "unicast";
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -100,7 +104,12 @@ export async function assertPublicOrigin(
 ): Promise<void> {
   if (allowPrivate) return;
 
-  const host = new URL(origin).hostname.replace(/^\[|\]$/g, ""); // strip IPv6 brackets
+  let host: string;
+  try {
+    host = new URL(origin).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    throw new Error("Invalid HTTP origin.");
+  }
 
   // A literal internal address needs no lookup.
   if (isBlockedAddress(host)) {
@@ -109,7 +118,9 @@ export async function assertPublicOrigin(
 
   let addresses: string[];
   try {
-    addresses = (await lookup(host, { all: true })).map((entry) => entry.address);
+    addresses = (await lookup(host, { all: true })).map(
+      (entry) => entry.address,
+    );
   } catch {
     throw new Error(`Could not resolve ${host}.`);
   }

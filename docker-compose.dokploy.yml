@@ -12,7 +12,8 @@
 #        BETTER_AUTH_URL=https://musubi.example.com
 #        BETTER_AUTH_SECRET=...           (openssl rand -base64 32)
 #        POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
-#      Dokploy writes those into the .env this file reads.
+#      Dokploy writes those into the .env this file reads; this production
+#      stack forces ENVIRONMENT=prod.
 #   3. Deploy. Point the DNS record at the server first, or the certificate
 #      cannot be issued.
 #
@@ -62,7 +63,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      ENVIRONMENT: prod
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy

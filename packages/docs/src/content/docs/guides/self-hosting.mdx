@@ -67,9 +67,9 @@ Edit the `.env` you just downloaded and set your production values. Key variable
 | --- | --- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Database credentials — Compose starts Postgres with these and builds `DATABASE_URL` from them |
 | `DATABASE_URL` | PostgreSQL connection string (Compose overrides this to point at the `db` service) |
-| `BETTER_AUTH_SECRET` | Long random secret — generate with `openssl rand -base64 32` |
+| `BETTER_AUTH_SECRET` | Long random secret — generate with `openssl rand -base64 32`; production rejects placeholders and values shorter than 32 characters |
 | `BETTER_AUTH_URL` | The public URL of your API, e.g. `https://musubi.yourdomain.com` |
-| `ENVIRONMENT` | Set to anything other than `dev` for production |
+| `ENVIRONMENT` | Set to `prod` for production; only `dev`, `test`, and `prod` are accepted |
 | `LOG_LEVEL` | Server verbosity: `debug`, `info`, `warn`, `error`, or `silent`; defaults to `info` |
 | `METRICS_PORT` | Internal Prometheus listener; defaults to `9464`, set `0` to disable |
 | `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in (the browser redirect flow needs the secret; the phone's native flow needs only the client id) and Google Calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/google` as an authorized Web redirect URI |
@@ -77,7 +77,7 @@ Edit the `.env` you just downloaded and set your production values. Key variable
 | `APPLE_CLIENT_ID` | Enables Sign in with Apple in the phone app — set it to the app's bundle id — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |
 | `APPLE_SERVICES_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Sign in with Apple in a browser, which is a separate registration from the app's: a Services ID whose return URL is `{BETTER_AUTH_URL}/api/auth/callback/apple`, plus a "Sign in with Apple" key. The server signs Apple's short-lived client secret from the `.p8` itself, so nothing expires behind your back. All three (and `APPLE_TEAM_ID`) must be set before the web login offers the button |
 | `APPLE_TEAM_ID` | Apple Developer Team ID — serves the apple-app-site-association file so iOS invite links open the app directly (universal links). Optional; unset → the Safari hand-off still works |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails. The API verifies SMTP once before listening; restart it after changing these values |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails. Port 465 uses implicit TLS; other ports require STARTTLS. The API verifies SMTP once before listening; restart it after changing these values |
 | `REQUIRE_EMAIL_VERIFICATION` | `true` refuses sign-in until the address is confirmed. Needs SMTP; the API refuses to boot without it. See [Requiring confirmed email addresses](#requiring-confirmed-email-addresses) |
 | `CALDAV_ENC_KEY` | Encrypts stored CalDAV passwords and federated Musubi member tokens — required before anyone connects a CalDAV account or a federated calendar |
 | `PUBLIC_HOST` | The hostname the gateway serves (e.g. `musubi.example.com` for automatic HTTPS, or `:80` for plain HTTP behind another proxy). Also the hostname the Dokploy routers match. Not used by the API-only file |

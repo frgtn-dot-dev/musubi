@@ -9,6 +9,7 @@ import {
   ensurePollParticipant,
   getPollById,
   getPollByToken,
+  getCalendarMembers,
   listActivePollsForCalendar,
   listPollCalendarSlots,
   listPollCalendarVotes,
@@ -19,10 +20,17 @@ import {
   setPollVotes,
   type SchedulingPollRow,
 } from "@musubi/db";
-import { BadRequestError, can, ForbiddenError, NotFoundError } from "@musubi/types";
+import {
+  BadRequestError,
+  can,
+  ForbiddenError,
+  NotFoundError,
+} from "@musubi/types";
 import { config } from "@musubi/config";
 import type { Request, Response } from "express";
 import { assertCan } from "../permissions";
+import { pushEventToProviders } from "../sync/engine";
+import { notifyCalendarMembers } from "./stream";
 
 const VOTE_VALUES = new Set(["if-needed", "no", "yes"]);
 /**
@@ -61,7 +69,9 @@ function pollUrl(token: string) {
 }
 
 function emailIdentity(value: unknown) {
-  const email = String(value ?? "").trim().toLowerCase();
+  const email = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new BadRequestError("Enter a valid email address...");
   }
@@ -69,7 +79,9 @@ function emailIdentity(value: unknown) {
 }
 
 function identityName(value: unknown) {
-  const name = String(value ?? "").trim().slice(0, 120);
+  const name = String(value ?? "")
+    .trim()
+    .slice(0, 120);
   if (!name) throw new BadRequestError("Enter your name...");
   return name;
 }
@@ -155,15 +167,21 @@ export function parsePollSlot(slot: { date?: string; start?: string }) {
 }
 
 export async function handlerCreatePoll(req: Request, res: Response) {
-  const title = String(req.body?.title ?? "").trim().slice(0, MAX_TITLE);
+  const title = String(req.body?.title ?? "")
+    .trim()
+    .slice(0, MAX_TITLE);
   const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
-  const approximateStartTime = parseApproximateStartTime(req.body?.approximateStartTime);
+  const approximateStartTime = parseApproximateStartTime(
+    req.body?.approximateStartTime,
+  );
   const ownerEmail = emailIdentity(req.body?.email ?? req.user?.email);
   const ownerName = identityName(req.body?.name ?? req.user?.name);
 
   if (!title) throw new BadRequestError("A poll needs a title...");
   if (slots.length === 0) {
-    throw new BadRequestError("A poll needs at least one day to choose from...");
+    throw new BadRequestError(
+      "A poll needs at least one day to choose from...",
+    );
   }
   if (slots.length > MAX_SLOTS) {
     throw new BadRequestError(`A poll can offer at most ${MAX_SLOTS} days...`);
@@ -239,33 +257,36 @@ export function pollCalendarProjection(
     if (poll.chosenSlotID && role === "organizer") return [];
 
     const pollVotes = votes.filter((vote) => vote.pollID === poll.id);
-    const respondents = new Set(
-      pollVotes.map((vote) => vote.participantID),
-    ).size;
-    return [{
-      ...pollSummary(poll),
-      days: slots
-        .filter(
-          (slot) =>
-            slot.pollID === poll.id &&
-            (!poll.chosenSlotID || slot.id === poll.chosenSlotID),
-        )
-        .map((slot) => {
-          const slotVotes = pollVotes.filter((vote) => vote.slotID === slot.id);
-          return {
-            date: slot.start.toISOString().slice(0, 10),
-            end: slot.end,
-            id: slot.id,
-            ifNeeded: slotVotes.filter((vote) => vote.value === "if-needed")
-              .length,
-            no: slotVotes.filter((vote) => vote.value === "no").length,
-            start: slot.start,
-            yes: slotVotes.filter((vote) => vote.value === "yes").length,
-          };
-        }),
-      respondents,
-      role,
-    }];
+    const respondents = new Set(pollVotes.map((vote) => vote.participantID))
+      .size;
+    return [
+      {
+        ...pollSummary(poll),
+        days: slots
+          .filter(
+            (slot) =>
+              slot.pollID === poll.id &&
+              (!poll.chosenSlotID || slot.id === poll.chosenSlotID),
+          )
+          .map((slot) => {
+            const slotVotes = pollVotes.filter(
+              (vote) => vote.slotID === slot.id,
+            );
+            return {
+              date: slot.start.toISOString().slice(0, 10),
+              end: slot.end,
+              id: slot.id,
+              ifNeeded: slotVotes.filter((vote) => vote.value === "if-needed")
+                .length,
+              no: slotVotes.filter((vote) => vote.value === "no").length,
+              start: slot.start,
+              yes: slotVotes.filter((vote) => vote.value === "yes").length,
+            };
+          }),
+        respondents,
+        role,
+      },
+    ];
   });
 }
 
@@ -282,7 +303,9 @@ export async function handlerListPollCalendar(req: Request, res: Response) {
 
   res
     .status(200)
-    .json(pollCalendarProjection(polls, slots, votes, { email, id: req.user!.id }));
+    .json(
+      pollCalendarProjection(polls, slots, votes, { email, id: req.user!.id }),
+    );
 }
 
 /** Shut to answers, for either reason. */
@@ -320,15 +343,9 @@ export async function handlerGetPoll(req: Request, res: Response) {
     listPollVotes(poll.id),
   ]);
 
-  res.status(200).json(
-    pollProjection(
-      poll,
-      slots,
-      votes,
-      viewer?.email,
-      viewer?.role,
-    ),
-  );
+  res
+    .status(200)
+    .json(pollProjection(poll, slots, votes, viewer?.email, viewer?.role));
 }
 
 export type PollRow = {
@@ -371,9 +388,7 @@ export function pollProjection(
     ...new Set(votes.map((vote) => vote.participantID)),
   ].sort();
   const people = participantIDs.map((participantID, index) => {
-    const theirs = votes.filter(
-      (vote) => vote.participantID === participantID,
-    );
+    const theirs = votes.filter((vote) => vote.participantID === participantID);
 
     return {
       answers: Object.fromEntries(
@@ -486,8 +501,14 @@ export async function handlerVotePoll(req: Request, res: Response) {
   // means nothing left behind. Withdrawing is still possible — with an
   // explicitly empty list, which says so.
   if (votes.length > 0) {
-    const slots = new Set((await listPollSlots(poll.id)).map((slot) => slot.id));
-    if (!votes.some((vote: { slotID?: string }) => slots.has(String(vote?.slotID)))) {
+    const slots = new Set(
+      (await listPollSlots(poll.id)).map((slot) => slot.id),
+    );
+    if (
+      !votes.some((vote: { slotID?: string }) =>
+        slots.has(String(vote?.slotID)),
+      )
+    ) {
       throw new BadRequestError("None of those times are on this poll...");
     }
   }
@@ -523,9 +544,7 @@ export async function handlerVotePoll(req: Request, res: Response) {
     listPollVotes(poll.id),
   ]);
 
-  res
-    .status(200)
-    .json(pollProjection(poll, slots, saved, email, viewer?.role));
+  res.status(200).json(pollProjection(poll, slots, saved, email, viewer?.role));
 }
 
 /**
@@ -536,11 +555,13 @@ export async function handlerVotePoll(req: Request, res: Response) {
  * told by looking at the poll again.
  */
 export function pollSlotEventTiming(slotStart: Date) {
-  const date = new Date(Date.UTC(
-    slotStart.getUTCFullYear(),
-    slotStart.getUTCMonth(),
-    slotStart.getUTCDate(),
-  ));
+  const date = new Date(
+    Date.UTC(
+      slotStart.getUTCFullYear(),
+      slotStart.getUTCMonth(),
+      slotStart.getUTCDate(),
+    ),
+  );
   return { end: date, isAllDay: true, start: date };
 }
 
@@ -548,10 +569,13 @@ export async function handlerDecidePoll(req: Request, res: Response) {
   const poll = await getPollById(String(req.params.pollId));
   if (!poll) throw new NotFoundError("Poll not found...");
   await assertPollOwner(poll, req);
-  if (poll.closedAt) throw new BadRequestError("This poll is already decided...");
+  if (poll.closedAt)
+    throw new BadRequestError("This poll is already decided...");
 
   const slotID = String(req.body?.slotId ?? "");
-  const slot = (await listPollSlots(poll.id)).find((item) => item.id === slotID);
+  const slot = (await listPollSlots(poll.id)).find(
+    (item) => item.id === slotID,
+  );
   if (!slot) throw new BadRequestError("That time is not on this poll...");
 
   // What the caller asked for, then what the poll was created with, then their own
@@ -583,7 +607,19 @@ export async function handlerDecidePoll(req: Request, res: Response) {
     [calendarID],
   );
 
-  await closePoll({ chosenSlotID: slot.id, eventID: event.id, pollID: poll.id });
+  await closePoll({
+    chosenSlotID: slot.id,
+    eventID: event.id,
+    pollID: poll.id,
+  });
+
+  const result = { ...event, calendars: [calendarID] };
+  await pushEventToProviders(result, "create");
+  notifyCalendarMembers(
+    (await getCalendarMembers(calendarID)).map((member) => member.userID),
+    "event_created",
+    result,
+  );
 
   res.status(200).json({ eventId: event.id, slotId: slot.id });
 }
@@ -599,7 +635,8 @@ export async function handlerClosePoll(req: Request, res: Response) {
   const poll = await getPollById(String(req.params.pollId));
   if (!poll) throw new NotFoundError("Poll not found...");
   await assertPollOwner(poll, req);
-  if (poll.closedAt) throw new BadRequestError("This poll is already closed...");
+  if (poll.closedAt)
+    throw new BadRequestError("This poll is already closed...");
 
   await closePoll({ pollID: poll.id });
 

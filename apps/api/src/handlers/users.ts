@@ -1,9 +1,8 @@
-import { Request, Response } from "express";
-import { getUserAvatar, resetUsers, setUserAvatar } from '@musubi/db';
+import type { Request, Response } from "express";
+import { getUserAvatar, setUserAvatar } from "@musubi/db";
 import { config } from "@musubi/config";
 import { auth } from "@musubi/auth";
 import { BadRequestError, NotFoundError } from "@musubi/types";
-
 
 // Step 1 (authenticated, from the app): triggers Better Auth's
 // sendDeleteAccountVerification, which emails a confirmation link and returns
@@ -27,10 +26,13 @@ export async function handlerDeleteUser(req: Request, res: Response) {
 // Auth's own internal adapter so cleanup matches its native delete flow.
 export async function handlerConfirmDeleteUser(req: Request, res: Response) {
   const { token } = req.body ?? {};
-  if (!token || typeof token !== "string") throw new BadRequestError("token is required...");
+  if (!token || typeof token !== "string")
+    throw new BadRequestError("token is required...");
 
   const ctx = await auth.$context;
-  const record = await ctx.internalAdapter.consumeVerificationValue(`delete-account-${token}`);
+  const record = await ctx.internalAdapter.consumeVerificationValue(
+    `delete-account-${token}`,
+  );
   if (!record || new Date(record.expiresAt).getTime() < Date.now()) {
     throw new BadRequestError("This deletion link is invalid or has expired.");
   }
@@ -42,26 +44,27 @@ export async function handlerConfirmDeleteUser(req: Request, res: Response) {
   res.sendStatus(200);
 }
 
-
-// DEV ONLY
-
-export async function handlerResetUsers(req: Request, res: Response) {
-  if (config.api.environment === "dev") {
-    await resetUsers();
-    res.sendStatus(205);
-  } else {
-    res.sendStatus(403);
-  }
-}
-
 // Avatars: stored in Postgres (see schema note) — tiny after client-side
 // optimization. Validation here is the trust boundary: size cap + magic bytes.
 const AVATAR_MAX_BYTES = 256 * 1024;
 
 function sniffImageMime(buf: Buffer): string | null {
-  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
-  if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff)
+    return "image/jpeg";
+  if (
+    buf.length > 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  )
+    return "image/png";
+  if (
+    buf.length > 12 &&
+    buf.toString("ascii", 0, 4) === "RIFF" &&
+    buf.toString("ascii", 8, 12) === "WEBP"
+  )
+    return "image/webp";
   return null;
 }
 
@@ -70,12 +73,19 @@ export async function handlerUploadAvatar(req: Request, res: Response) {
   if (!data) throw new BadRequestError("data (base64 image) is required...");
 
   let buf: Buffer;
-  try { buf = Buffer.from(data, "base64"); } catch { throw new BadRequestError("Invalid base64 data..."); }
+  try {
+    buf = Buffer.from(data, "base64");
+  } catch {
+    throw new BadRequestError("Invalid base64 data...");
+  }
   if (buf.length === 0 || buf.length > AVATAR_MAX_BYTES) {
-    throw new BadRequestError(`Avatar must be a non-empty image up to ${AVATAR_MAX_BYTES / 1024} KB.`);
+    throw new BadRequestError(
+      `Avatar must be a non-empty image up to ${AVATAR_MAX_BYTES / 1024} KB.`,
+    );
   }
   const mime = sniffImageMime(buf);
-  if (!mime) throw new BadRequestError("Avatar must be a JPEG, PNG or WebP image.");
+  if (!mime)
+    throw new BadRequestError("Avatar must be a JPEG, PNG or WebP image.");
 
   await setUserAvatar(req.user!.id, buf, mime);
   // versioned URL → immutable caching; client saves it into user.image

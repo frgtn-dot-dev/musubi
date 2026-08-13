@@ -1,13 +1,23 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import {
-  addCalendarMember, consumeInvite, createExternalUser, deleteMusubiAccount,
-  getCalendar, getCalendarIDFromToken, getMusubiAccounts, getUserByTokenHash,
-  replaceMemberToken, rotateMemberToken, upsertMusubiAccount,
+  createExternalUser,
+  deleteMusubiAccount,
+  getCalendar,
+  getMusubiAccounts,
+  getUserByTokenHash,
+  joinCalendarFromInvite,
+  replaceMemberToken,
+  rotateMemberToken,
+  upsertMusubiAccount,
 } from "@musubi/db";
 import { BadRequestError, UnauthorizedError } from "@musubi/types";
 import { decryptSecret, encryptSecret } from "../sync/crypto";
-import { bearerMemberToken, hashMemberToken, issueMemberToken } from "../federation_tokens";
+import {
+  bearerMemberToken,
+  hashMemberToken,
+  issueMemberToken,
+} from "../federation_tokens";
 import { assertPublicOrigin, canonicalHttpOrigin } from "../federation_origin";
 import { config, logger } from "@musubi/config";
 
@@ -35,17 +45,18 @@ const FederationProfileSchema = z.object({
  */
 export async function handlerFederationAccept(req: Request, res: Response) {
   const { token, profile } = req.body ?? {};
-  if (!token || typeof token !== "string") throw new BadRequestError("Missing invite token...");
+  if (!token || typeof token !== "string")
+    throw new BadRequestError("Missing invite token...");
 
   const parsedProfile = FederationProfileSchema.safeParse(profile);
-  if (!parsedProfile.success) throw new BadRequestError("Profile needs a valid name, email and homeServer...");
+  if (!parsedProfile.success)
+    throw new BadRequestError(
+      "Profile needs a valid name, email and homeServer...",
+    );
   const { name, email, image } = parsedProfile.data;
   const homeServer = canonicalHttpOrigin(parsedProfile.data.homeServer);
-  if (!homeServer) throw new BadRequestError("homeServer must be an http(s) origin...");
-
-  // Same semantics as the native join: token must exist (expired ones are
-  // purged hourly); throws NotFound otherwise.
-  const calendarID = await getCalendarIDFromToken(token);
+  if (!homeServer)
+    throw new BadRequestError("homeServer must be an http(s) origin...");
 
   const currentToken = bearerMemberToken(req.headers.authorization);
   let shadow;
@@ -55,7 +66,9 @@ export async function handlerFederationAccept(req: Request, res: Response) {
       ? canonicalHttpOrigin(proved.homeServer)
       : null;
     if (!proved || !proved.isExternal || provedHome !== homeServer) {
-      throw new UnauthorizedError("The existing federation credential is invalid.");
+      throw new UnauthorizedError(
+        "The existing federation credential is invalid.",
+      );
     }
     shadow = proved;
   } else {
@@ -64,8 +77,7 @@ export async function handlerFederationAccept(req: Request, res: Response) {
     shadow = await createExternalUser({ name, email, image, homeServer });
   }
 
-  const added = await addCalendarMember(shadow.id, calendarID); // viewer; conflict-safe on re-accept
-  if (added.length > 0) await consumeInvite(token); // burn a use only on a NEW membership
+  const { calendarID } = await joinCalendarFromInvite(shadow.id, token);
 
   const issued = issueMemberToken();
   if (currentToken) {
@@ -75,7 +87,9 @@ export async function handlerFederationAccept(req: Request, res: Response) {
       issued.tokenHash,
     );
     if (!rotated) {
-      throw new UnauthorizedError("The federation credential was already rotated.");
+      throw new UnauthorizedError(
+        "The federation credential was already rotated.",
+      );
     }
   } else {
     await replaceMemberToken(shadow.id, issued.tokenHash);
@@ -91,7 +105,10 @@ export async function handlerFederationAccept(req: Request, res: Response) {
 }
 
 /** Exchange a still-valid member token for a fresh 90-day credential. */
-export async function handlerFederationRotateToken(req: Request, res: Response) {
+export async function handlerFederationRotateToken(
+  req: Request,
+  res: Response,
+) {
   const currentToken = bearerMemberToken(req.headers.authorization);
   const external = req.user as typeof req.user & { isExternal?: boolean };
   if (!currentToken || !external?.isExternal) {
@@ -105,7 +122,9 @@ export async function handlerFederationRotateToken(req: Request, res: Response) 
     issued.tokenHash,
   );
   if (!rotated) {
-    throw new UnauthorizedError("The federation credential was already rotated.");
+    throw new UnauthorizedError(
+      "The federation credential was already rotated.",
+    );
   }
 
   res.status(200).json({
@@ -200,7 +219,10 @@ export async function handlerFederationConnect(req: Request, res: Response) {
     "content-type": "application/json",
   });
   if (existing) {
-    headers.set("authorization", `Bearer ${decryptSecret(existing.encryptedToken)}`);
+    headers.set(
+      "authorization",
+      `Bearer ${decryptSecret(existing.encryptedToken)}`,
+    );
   }
 
   let upstream: globalThis.Response;
@@ -258,7 +280,10 @@ export async function handlerFederationConnect(req: Request, res: Response) {
  * connected servers through the gateway, so they never need the raw token
  * (ADR-005). `id` is the gateway's `:connectionId`.
  */
-export async function handlerGetFederationConnections(req: Request, res: Response) {
+export async function handlerGetFederationConnections(
+  req: Request,
+  res: Response,
+) {
   const rows = await getMusubiAccounts(req.user!.id);
   res.status(200).json(
     rows.map((row) => ({
@@ -290,7 +315,10 @@ export async function handlerDeleteMusubiAccount(req: Request, res: Response) {
 export function handlerInvitePage(origin: string) {
   return (req: Request, res: Response) => {
     const token = String(req.params.token ?? "");
-    if (!/^[0-9a-f-]{16,64}$/i.test(token)) { res.status(400).send("Invalid invite."); return; }
+    if (!/^[0-9a-f-]{16,64}$/i.test(token)) {
+      res.status(400).send("Invalid invite.");
+      return;
+    }
     const appUrl = `musubi://invite/${token}?server=${encodeURIComponent(origin)}`;
     res.status(200).type("html").send(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

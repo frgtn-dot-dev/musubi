@@ -17,7 +17,7 @@ for (const blocked of [
   "172.31.255.254",
   "192.168.1.10",
   "169.254.169.254", // cloud metadata
-  "100.64.0.1",      // CGNAT
+  "100.64.0.1", // CGNAT
   "0.0.0.0",
   "224.0.0.1",
   "240.0.0.1",
@@ -27,7 +27,9 @@ for (const blocked of [
   "fc00::1",
   "fd12:3456::1",
   "::ffff:127.0.0.1", // v4-mapped loopback
+  "::ffff:7f00:1", // canonical URL form of mapped 127.0.0.1
   "::ffff:10.1.2.3",
+  "febf::1", // full fe80::/10 link-local range
 ]) {
   assert.equal(isBlockedAddress(blocked), true, `${blocked} must be refused`);
 }
@@ -35,9 +37,9 @@ for (const blocked of [
 for (const allowed of [
   "1.1.1.1",
   "8.8.8.8",
-  "172.32.0.1",   // just outside 172.16/12
-  "192.169.0.1",  // just outside 192.168/16
-  "100.128.0.1",  // just outside 100.64/10
+  "172.32.0.1", // just outside 172.16/12
+  "192.169.0.1", // just outside 192.168/16
+  "100.128.0.1", // just outside 100.64/10
   "2606:4700::1111",
 ]) {
   assert.equal(isBlockedAddress(allowed), false, `${allowed} must be allowed`);
@@ -50,14 +52,18 @@ assert.equal(isBlockedAddress("example.com"), false);
 // ── Origin canonicalization ──────────────────────────────────────────────────
 assert.equal(canonicalHttpOrigin("https://b.example"), "https://b.example");
 for (const rejected of [
-  "https://user:pw@b.example",     // credentials
-  "file:///etc/passwd",            // non-http scheme
+  "https://user:pw@b.example", // credentials
+  "file:///etc/passwd", // non-http scheme
   "gopher://b.example",
-  "https://b.example/some/path",   // path
-  "https://b.example/?a=1",        // query
+  "https://b.example/some/path", // path
+  "https://b.example/?a=1", // query
   "not a url",
 ]) {
-  assert.equal(canonicalHttpOrigin(rejected), null, `${rejected} must be refused`);
+  assert.equal(
+    canonicalHttpOrigin(rejected),
+    null,
+    `${rejected} must be refused`,
+  );
 }
 
 // ── Literal internal targets are refused without a lookup ────────────────────
@@ -76,7 +82,10 @@ async function originGuardChecks() {
   );
   // Unresolvable host fails closed.
   await assert.rejects(
-    () => assertPublicOrigin("https://no-such-host.invalid", { allowPrivate: false }),
+    () =>
+      assertPublicOrigin("https://no-such-host.invalid", {
+        allowPrivate: false,
+      }),
     /Could not resolve/,
   );
   // The opt-in escape hatch (LAN self-hosting) skips the guard.
@@ -95,9 +104,9 @@ assert.equal(
 );
 
 for (const escape of [
-  "/api/v1/../../etc/passwd",       // traversal normalizes out of /api/v1
+  "/api/v1/../../etc/passwd", // traversal normalizes out of /api/v1
   "api/v1/../../../secret",
-  "api/auth/session",               // outside the allowlisted prefix
+  "api/auth/session", // outside the allowlisted prefix
   "healthz",
 ]) {
   assert.throws(
@@ -108,8 +117,15 @@ for (const escape of [
 }
 
 // A protocol-relative or absolute path must not change host.
-for (const hostSwap of ["//evil.example/api/v1/x", "https://evil.example/api/v1/x"]) {
-  assert.throws(() => gatewayTarget(origin, hostSwap), /gateway/, `${hostSwap} must be refused`);
+for (const hostSwap of [
+  "//evil.example/api/v1/x",
+  "https://evil.example/api/v1/x",
+]) {
+  assert.throws(
+    () => gatewayTarget(origin, hostSwap),
+    /gateway/,
+    `${hostSwap} must be refused`,
+  );
 }
 
 void originGuardChecks().then(() => {

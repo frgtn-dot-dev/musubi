@@ -15,9 +15,10 @@ import {
 import {
   BadRequestError,
   EventPageThemeSchema,
+  ForbiddenError,
   NotFoundError,
 } from "@musubi/types";
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { config } from "@musubi/config";
 import { assertCanEditEvent } from "../permissions";
 import { notifyAttendanceChanged } from "./events";
@@ -91,7 +92,9 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   // Publishing straight from the public page: the account was made a moment ago
   // by an emailed code, and "Organized by" reads from the profile. Only fills an
   // empty name, so it can never rewrite an existing one.
-  const organizer = String(req.body?.name ?? "").trim().slice(0, 80);
+  const organizer = String(req.body?.name ?? "")
+    .trim()
+    .slice(0, 80);
   if (organizer) await nameAnonymousUser(req.user!.id, organizer);
 
   if (!VISIBILITIES.has(attendeeVisibility)) {
@@ -192,7 +195,7 @@ export function publicEventProjection(shared: SharedEventRow) {
     // Parsed on the way out as well: a row written before a knob existed, or by
     // an older server, still renders as a valid look instead of a broken one.
     theme: EventPageThemeSchema.parse(
-      (shared.theme && typeof shared.theme === "object") ? shared.theme : {},
+      shared.theme && typeof shared.theme === "object" ? shared.theme : {},
     ),
     title: shared.title,
     url: shared.url,
@@ -202,6 +205,14 @@ export function publicEventProjection(shared: SharedEventRow) {
 // ── RSVP ─────────────────────────────────────────────────────────────────────
 
 const RSVP_STATUSES = new Set(["declined", "going", "maybe"]);
+
+export function requireVerifiedRsvpUser(
+  user: { emailVerified?: boolean } | undefined,
+) {
+  if (!user?.emailVerified) {
+    throw new ForbiddenError("Verify your email before answering this event.");
+  }
+}
 
 /**
  * Answer a published event.
@@ -215,6 +226,7 @@ const RSVP_STATUSES = new Set(["declined", "going", "maybe"]);
  * calendar has to be able to show what the page collected.
  */
 export async function handlerPutPublicRsvp(req: Request, res: Response) {
+  requireVerifiedRsvpUser(req.user);
   const status = String(req.body?.status ?? "");
   if (!RSVP_STATUSES.has(status)) {
     throw new BadRequestError("status must be going, maybe or declined...");
@@ -223,7 +235,9 @@ export async function handlerPutPublicRsvp(req: Request, res: Response) {
   // else, and an attendee list is a list of people, not of blanks. Only fills an
   // empty name, so it can never rewrite the profile of a member who happens to
   // answer.
-  const name = String(req.body?.name ?? "").trim().slice(0, 80);
+  const name = String(req.body?.name ?? "")
+    .trim()
+    .slice(0, 80);
   if (!name && !req.user!.name?.trim()) {
     throw new BadRequestError("name is required the first time you answer...");
   }
@@ -245,6 +259,7 @@ export async function handlerPutPublicRsvp(req: Request, res: Response) {
 
 /** The reader's own answer plus whatever the organizer lets readers see. */
 export async function handlerGetPublicRsvp(req: Request, res: Response) {
+  requireVerifiedRsvpUser(req.user);
   const share = await getSharedEventId(String(req.params.token));
   if (!share) throw new NotFoundError("This event page is not available...");
 

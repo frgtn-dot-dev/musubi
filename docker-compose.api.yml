@@ -5,9 +5,11 @@
 # which puts it and the API on one origin behind a gateway.
 #
 #   1. Download this file and an env file next to it:
-#        curl -O https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/docker-compose.api.yml
-#        curl -o .env https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/.env.example
-#   2. Edit .env — at minimum POSTGRES_PASSWORD, BETTER_AUTH_SECRET, BETTER_AUTH_URL.
+#        base=https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main
+#        curl -O "$base/docker-compose.api.yml"
+#        curl -o .env "$base/.env.example"
+#   2. Edit .env — at minimum POSTGRES_PASSWORD, BETTER_AUTH_SECRET and
+#      BETTER_AUTH_URL. This production stack forces ENVIRONMENT=prod.
 #   3. docker compose -f docker-compose.api.yml up -d
 #
 # Upgrade:   docker compose -f docker-compose.api.yml pull && \
@@ -31,8 +33,10 @@ services:
     env_file:
       - .env
     environment:
+      ENVIRONMENT: prod
       # Point at the db service on the compose network, overriding .env.
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy

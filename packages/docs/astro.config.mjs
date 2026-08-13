@@ -7,6 +7,14 @@ import node from "@astrojs/node";
 export default defineConfig({
 	site: "https://musubi.pro",
 	base: "/docs",
+	server: {
+		headers: {
+			"Content-Security-Policy": "frame-ancestors 'none'",
+			"Referrer-Policy": "no-referrer",
+			"X-Content-Type-Options": "nosniff",
+			"X-Frame-Options": "DENY",
+		},
+	},
 
 	integrations: [
 		// astro-mermaid must come BEFORE starlight so its rehype step runs first.

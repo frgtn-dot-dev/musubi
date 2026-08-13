@@ -10,6 +10,16 @@ export default defineConfig({
 		}),
 		viteReact(),
 		nitro({
+			routeRules: {
+				"/**": {
+					headers: {
+						"content-security-policy": "frame-ancestors 'none'",
+						"referrer-policy": "no-referrer",
+						"x-content-type-options": "nosniff",
+						"x-frame-options": "DENY",
+					},
+				},
+			},
 			devProxy: {
 				"/api/**": {
 					changeOrigin: true,

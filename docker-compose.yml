@@ -3,13 +3,18 @@
 # This is the default file: `docker compose up -d` picks it with no -f flag.
 #
 #   1. Download this file, the gateway config and an env file:
-#        curl -O https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/docker-compose.yml
-#        curl -o .env https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/.env.example
-#        mkdir -p ops/gateway && curl -o ops/gateway/Caddyfile \
-#          https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/ops/gateway/Caddyfile
+#        curl -O \
+#          https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/docker-compose.yml
+#        curl -o .env \
+#          https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/.env.example
+#        mkdir -p ops/gateway
+#        base=https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main
+#        curl -o ops/gateway/Caddyfile "$base/ops/gateway/Caddyfile"
 #   2. Edit .env — at minimum POSTGRES_PASSWORD, BETTER_AUTH_SECRET and
-#      BETTER_AUTH_URL (your public https:// origin).
-#   3. Set PUBLIC_HOST to the same hostname so the gateway can get a certificate:
+#      BETTER_AUTH_URL (your public https:// origin). This production stack
+#      forces ENVIRONMENT=prod regardless of the development template.
+#   3. Set PUBLIC_HOST to the same hostname so the gateway can get a
+#      certificate:
 #        PUBLIC_HOST=musubi.example.com
 #   4. docker compose up -d
 #
@@ -68,8 +73,11 @@ services:
     env_file:
       - .env
     environment:
+      # Production stacks fail closed even when .env came from the dev template.
+      ENVIRONMENT: prod
       # Point at the db service on the compose network, overriding .env.
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
