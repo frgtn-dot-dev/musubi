@@ -19,6 +19,8 @@ import { showToast } from "@/components/ui/Toast";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import Constants from "expo-constants";
 import { queueSettingsPatch } from "@/services/settingsSync";
+import { getServerDiagnostics } from "@/lib/serverDiagnostics";
+import { useCalendarsStore } from "@/store/useCalendarsStore";
 
 const SUPPORT_EMAIL = "hello@frgtn.dev";
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -30,6 +32,7 @@ const TERMS_URL = "https://musubi.pro/terms/";
 export default function SettingsTab() {
   const api = useApi();
   const { authClient, apiUrl } = useServer();
+  const calendars = useCalendarsStore((state) => state.calendars);
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
@@ -77,6 +80,11 @@ export default function SettingsTab() {
       `Musubi ${appVersion} (${appBuild})`,
       `${Platform.OS} ${String(Platform.Version)}`,
       `Server: ${apiUrl ?? "unknown"}`,
+      `Calendars: ${calendars.length}`,
+      ...calendars.map((calendar) =>
+        `- ${calendar.name}: ${calendar.serverUrl ?? "home"} (${calendar.provider ?? "musubi"})`),
+      "Requests:",
+      getServerDiagnostics(),
     ].join("\n");
     const body = `${intro}\n\n\n---\n${diagnostics}`;
     void openExternal(

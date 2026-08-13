@@ -4,6 +4,7 @@ import { createClient } from "@/services/auth-client";
 import { defaultUrl } from "@/constants/url";
 import { normalizeServerUrl } from "@/lib/serverUrl";
 import { resetLocalAccountState } from "@/lib/signOut";
+import { recordServerDiagnostic } from "@/lib/serverDiagnostics";
 
 type ServerContextType = {
   apiUrl: string | null;
@@ -24,6 +25,7 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       const retrievedApiUrl = await SecureStore.getItemAsync("API_URL");
       const url = normalizeServerUrl(retrievedApiUrl ?? defaultUrl);
+      recordServerDiagnostic(`selected ${url} (stored: ${retrievedApiUrl ?? "none"})`);
       setApiUrl(url);
       setAuthClient(() => createClient(url));
       setIsLoading(false);
@@ -33,6 +35,7 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
 
   const setNewServerUrl = async (url: string) => {
     const normalized = normalizeServerUrl(url);
+    recordServerDiagnostic(`switch ${apiUrl ?? "none"} → ${normalized}`);
     // A server is an account boundary: never display one server's cached data
     // or reuse its Better Auth session on another.
     await resetLocalAccountState();
