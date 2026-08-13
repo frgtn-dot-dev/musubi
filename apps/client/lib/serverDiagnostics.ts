@@ -19,7 +19,7 @@ export function recordServerDiagnostic(message: string) {
 	const entry = `${new Date().toISOString()} ${message}`;
 	entries.push(entry);
 	if (entries.length > 40) entries.shift();
-	console.info(`[server-debug] ${message}`);
+	if (typeof __DEV__ !== "undefined" && __DEV__) console.info(`[server-debug] ${message}`);
 }
 
 export function diagnosticFetchFor(serverOrigin: string) {
