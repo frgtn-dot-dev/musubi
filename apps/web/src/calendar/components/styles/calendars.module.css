@@ -266,7 +266,7 @@
 
 .cardHeading p {
 	margin-top: 2px;
-	color: var(--text-secondary);
+	color: var(--text-primary);
 	font-size: var(--text-10);
 	line-height: 1.4;
 }
@@ -321,7 +321,7 @@
 .fileCopy {
 	min-width: 0;
 	overflow: hidden;
-	color: var(--text-secondary);
+	color: var(--text-primary);
 	font-size: var(--text-11);
 	text-overflow: ellipsis;
 	white-space: nowrap;

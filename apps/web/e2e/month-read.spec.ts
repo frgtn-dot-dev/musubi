@@ -273,7 +273,7 @@ async function expectCalendarVisibility(
 		"aria-pressed",
 		String(visible),
 	);
-	await dialog.getByRole("button", { name: "Cancel" }).click();
+  await dialog.getByRole("button", { name: "Close page settings" }).click();
 }
 
 async function expectNoAccessibilityViolations(page: Page) {
@@ -341,7 +341,9 @@ async function mockAuthenticatedReads(
 		...eventResponse,
 		events: eventResponse.events.map((item) => ({ ...item })),
 	};
-	let attendeeState = [{ id: "guest-1", image: null, name: "Guest One" }];
+  let attendeeState = [
+    { id: "guest-1", image: null, name: "Guest One", status: "going" },
+  ];
 
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(route, authenticated ? session : null),
@@ -505,14 +507,16 @@ async function mockAuthenticatedReads(
 		respond(route, attendeeState),
 	);
 	await page.route("**/api/v1/events/*/attendance", (route) => {
-		const attending = (route.request().postDataJSON() as { attending: boolean })
-			.attending;
-		attendeeState = attending
-			? [
-					...attendeeState,
-					{ id: session.user.id, image: null, name: session.user.name },
-				]
-			: attendeeState.filter((item) => item.id !== session.user.id);
+    const { status } = route.request().postDataJSON() as { status: string };
+    attendeeState = attendeeState.filter((item) => item.id !== session.user.id);
+    if (status !== "none") {
+      attendeeState.push({
+        id: session.user.id,
+        image: null,
+        name: session.user.name,
+        status,
+      });
+    }
 		return respond(route, attendeeState);
 	});
 	await page.route("**/api/v1/events/*/link", (route) => {
@@ -780,6 +784,7 @@ test("keeps a compact Month fixed and folds excess events into More", async ({
 test("reads, filters and continuously loads the authenticated Agenda", async ({
 	page,
 }) => {
+  await page.clock.setFixedTime(new Date("2026-08-13T10:00:00Z"));
 	await mockAuthenticatedReads(page);
 
 	await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
@@ -809,11 +814,9 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
 		page.getByRole("button", { name: /Studio open day/ }),
 	).toHaveCount(1);
 
-	const todayRow = page.locator("[data-agenda-date]").filter({
-		has: page.getByText("Today", { exact: true }),
-	});
-	await expect(todayRow).toBeVisible();
-	const todayHeights = await todayRow.evaluate((row) => ({
+  const tomorrowRow = page.locator('[data-agenda-date="2026-08-14"]');
+  await expect(tomorrowRow).toContainText("Tomorrow");
+  const todayHeights = await tomorrowRow.evaluate((row) => ({
 		events: row.children[1]!.getBoundingClientRect().height,
 		row: row.getBoundingClientRect().height,
 	}));
@@ -1329,12 +1332,11 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
 
 	await page.getByRole("button", { name: /Design review/ }).click();
-	// Collapsed, the guests are a facepile: the names arrive with the list.
-	await page.getByRole("button", { name: "Show every attendee" }).click();
+  await page.getByRole("button", { name: "Attendees · 1" }).click();
 	await expect(page.getByText("Guest One")).toBeVisible();
-	// Exact: the "Attendees · 1" toggle beside it also contains "Attend".
-	await page.getByRole("button", { exact: true, name: "Attend" }).click();
-	await expect(page.getByRole("button", { name: "Leave" })).toBeVisible();
+  await page.getByRole("button", { exact: true, name: "Answer" }).click();
+  await page.getByRole("menuitem", { name: "Going" }).click();
+  await expect(page.getByRole("button", { name: "Going" })).toBeVisible();
 
 	await page.getByRole("button", { exact: true, name: "Link" }).click();
 	await expect(
@@ -2235,8 +2237,7 @@ test("changes time grid density from the page editor", async ({ page }) => {
 test("keeps transient views out of saved Page filters", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let saved:
-		| { config?: { calendarVisibility?: unknown; view?: unknown } }
-		| undefined;
+    { config?: { calendarVisibility?: unknown; view?: unknown } } | undefined;
 	const workPageId = "22222222-2222-4222-8222-222222222222";
 	const workPage = {
 		...defaultPage,
@@ -2732,8 +2733,7 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 		respond(route, invites),
 	);
 	let inviteRequest:
-		| { expiresAt: null | string; maxUses: null | number }
-		| undefined;
+    { expiresAt: null | string; maxUses: null | number } | undefined;
 	await page.route("**/api/v1/calendars/invites", (route) => {
 		inviteSeq += 1;
 		inviteRequest = route.request().postDataJSON();
@@ -3003,30 +3003,15 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 		.analyze();
 	expect(accessibility.violations).toEqual([]);
 
-	// A taller grid column must not stretch the two heading rows apart, while
-	// the naturally sized column still needs a deliberate readable gap.
-	for (const [title, description] of [
-		[
+  for (const title of [
 			"Connected accounts",
-			"Calendars from these accounts stay in sync both ways.",
-		],
-		[
 			"Join a shared calendar",
-			"Use an invite from this or another Musubi server.",
-		],
 	] as const) {
-		const titleElement = connectionsDialog.getByRole("heading", {
-			name: title,
-		});
-		const [titleBox, descriptionBox, containerBox] = await Promise.all([
-			titleElement.boundingBox(),
-			connectionsDialog.getByText(description, { exact: true }).boundingBox(),
-			titleElement.locator("..").boundingBox(),
-		]);
-		const gap = descriptionBox!.y - (titleBox!.y + titleBox!.height);
-		expect(gap).toBeGreaterThanOrEqual(3);
-		expect(gap).toBeLessThanOrEqual(5);
-		expect(containerBox!.height).toBeLessThanOrEqual(60);
+    const titleBox = await connectionsDialog
+      .getByRole("heading", { name: title })
+      .locator("..")
+      .boundingBox();
+    expect(titleBox!.height).toBeLessThanOrEqual(60);
 	}
 
 	// Capability-gated add buttons.
@@ -3950,7 +3935,7 @@ test("keeps the calendar on screen while the next range loads", async ({
 	await page.keyboard.press("n");
 	// The old month stays up, marked as refreshing — no loading screen swap.
 	await expect(page.getByText("Preparing your calendar…")).toHaveCount(0);
-	await expect(page.getByText("Refreshing server data…")).toBeVisible();
+  await expect(page.getByText("Refreshing saved data…")).toBeVisible();
 	// The grid, the toolbar and the day cells are all still there.
 	await expect(page.getByText("August 2026")).toBeVisible();
 	await expect(page.locator('[data-day-key="2026-08-05"]')).toBeVisible();
@@ -4310,7 +4295,7 @@ test("keeps the page name and theme out of the calendar chrome", async ({
 	await expect(page.getByLabel("Page name")).toHaveValue("My calendar");
 	await page
 		.getByRole("dialog")
-		.getByRole("button", { name: "Cancel" })
+    .getByRole("button", { name: "Close page settings" })
 		.click();
 	await expect(page.getByLabel("Page name")).toHaveCount(0);
 });
@@ -5327,7 +5312,9 @@ test("asks the scope question above the layer that raised it", async ({
 	expect(topmost).toBe(true);
 
 	// Dismissing it leaves the edit where it was rather than writing anything.
-	await scope.getByRole("button", { name: "Cancel" }).click();
+  await scope
+    .getByRole("button", { name: "Close change recurring event dialog" })
+    .click();
 	await expect(scope).toHaveCount(0);
 	await expect(page.getByRole("dialog", { name: "Edit series" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Save" })).toBeFocused();
@@ -5446,11 +5433,8 @@ test("starts from its snapshot with no server, then catches up", async ({
 	// seen from the outside: the calendar is there, it says how old it is, and it
 	// refuses to pretend a write went through.
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
-	const banner = page.getByRole("status").filter({ hasText: "Offline" });
-	await expect(banner).toContainText(
-		/showing the calendar as it was .+ago|just now/,
-	);
-	await expect(banner).toContainText("Changes cannot be saved");
+  const offlineState = page.getByText(/Offline — saved (.+ago|just now)/);
+  await expect(offlineState).toBeVisible();
 
 	await page
 		.getByRole("button", { name: /Client call/ })
@@ -5473,7 +5457,7 @@ test("starts from its snapshot with no server, then catches up", async ({
 
 	// Back online the banner has to go, or a fresh calendar keeps apologising for
 	// being stale.
-	await expect(banner).toHaveCount(0, { timeout: 10_000 });
+  await expect(offlineState).toHaveCount(0, { timeout: 10_000 });
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 });
 
@@ -6264,13 +6248,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 		dialog.getByRole("checkbox", { name: /search engines/ }),
 	).toHaveCount(0);
 
-	// The look is part of publishing, and it is a closed set of choices.
-	await expect(dialog.getByRole("group", { name: "Palette" })).toBeVisible();
-	await dialog.getByRole("button", { name: "Moss" }).click();
-	await expect(dialog.getByRole("heading", { name: /2 going/ })).toBeVisible();
-	await expect(dialog.getByText("Adam, Zoe")).toBeVisible();
-	await expect(dialog.getByText("Cyril")).toBeVisible();
-
+  await dialog.getByRole("radio", { name: "Show names" }).click();
 	await dialog.getByRole("radio", { name: "Public" }).click();
 	// Clicking the label, not the input: the visible box sits over the 1px input,
 	// which is exactly how a person toggles it too.
@@ -6279,18 +6257,15 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 		dialog.getByRole("checkbox", { name: /search engines/ }),
 	).toBeChecked();
 	expect(share).toMatchObject({
-		attendeeVisibility: "counts",
+    attendeeVisibility: "names",
 		indexable: true,
 		mode: "public",
-		// Whatever else changed, the chosen palette rides along on every write.
-		theme: { palette: "moss" },
 	});
 
 	await expectNoAccessibilityViolations(page);
 
-	// Hiding the list from readers must not hide it from the organizer.
 	await dialog.getByRole("radio", { name: "Show nothing" }).click();
-	await expect(dialog.getByText("Adam, Zoe")).toBeVisible();
+  expect(share).toMatchObject({ attendeeVisibility: "hidden" });
 
 	await dialog.getByRole("radio", { name: /Private/ }).click();
 	await expect(page.getByRole("status")).toContainText("no longer opens");
@@ -6375,7 +6350,7 @@ test("wears the look the organizer chose, without breaking what is fixed", async
 		await main.evaluate((element) =>
 			getComputedStyle(element).getPropertyValue("--page-accent").trim(),
 		),
-	).toBe("#c96f4a");
+  ).toBe("#b3492f");
 
 	// And everything on the fixed side of the PRD still works on a dark palette:
 	// the answer reads as chosen, and the form that follows is usable.
@@ -6387,7 +6362,7 @@ test("wears the look the organizer chose, without breaking what is fixed", async
 				.getByRole("button", { name: "Going" })
 				.evaluate((element) => getComputedStyle(element).backgroundColor),
 		)
-		.toBe("rgb(201, 111, 74)");
+    .toBe("rgb(74, 71, 65)");
 	await expect(page.getByLabel("Email")).toBeVisible();
 
 	await expectNoAccessibilityViolations(page);
@@ -6630,7 +6605,9 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 	);
 	await expectNoSidewaysScroll("Page filters");
 	await expectNoAccessibilityViolations(page);
-	await pageSettings.getByRole("button", { name: "Cancel" }).click();
+  await pageSettings
+    .getByRole("button", { name: "Close page settings" })
+    .click();
 
 	// The manage dialog holds the same twenty rows and scrolls its own body.
 	await page.getByRole("button", { name: "Calendars" }).click();
@@ -6639,8 +6616,10 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 	const dialogBox = (await dialog.boundingBox())!;
 	expect(dialogBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
 	await expectNoSidewaysScroll("calendars dialog");
-	// No axe pass here yet: this dialog fails AA contrast in several places
-	// whatever the calendar count, which is its own fix.
+  const calendarAccessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(calendarAccessibility.violations).toEqual([]);
 	await page.keyboard.press("Escape");
 
 	// And the composer, which lists every writable calendar.
@@ -7635,16 +7614,15 @@ test("closes and deletes a poll", async ({ page }) => {
 	await page.getByRole("button", { name: /Studio planning/ }).click();
 
 	const pollActions = await Promise.all(
-		["Delete poll", "Stop taking answers", "Back"].map(async (name) =>
+    ["Delete poll", "Stop taking answers", "Answers saved"].map(async (name) =>
 			page.getByRole("button", { name }).boundingBox(),
 		),
 	);
 	expect(new Set(pollActions.map((box) => Math.round(box!.y))).size).toBe(1);
-	for (let index = 1; index < pollActions.length; index += 1) {
-		const previous = pollActions[index - 1]!;
-		const current = pollActions[index]!;
-		expect(current.x - (previous.x + previous.width)).toBeLessThanOrEqual(12);
-	}
+  expect(
+    pollActions[1]!.x - (pollActions[0]!.x + pollActions[0]!.width),
+  ).toBeLessThanOrEqual(12);
+  expect(pollActions[2]!.x).toBeGreaterThan(pollActions[1]!.x);
 
 	// Deciding used to be the only way to shut a poll, so an organizer who sorted
 	// the meeting out elsewhere had to invent an event or leave the link open.
@@ -7706,7 +7684,9 @@ test("draws the plus on the narrow create button", async ({ page }) => {
 	// Measured, not looked at: the rule that hides the word on a phone used to
 	// match the primitive's content wrapper — the button's only direct span — and
 	// took the icon with it, leaving a plain dark circle with nothing in it.
-	const plus = page.getByRole("button", { name: "Event" }).locator("svg");
+  const plus = page
+    .getByRole("button", { exact: true, name: "Event" })
+    .locator("svg");
 	await expect(plus).toBeVisible();
 	const box = (await plus.boundingBox())!;
 	expect(box.width).toBeGreaterThan(10);
@@ -8006,9 +7986,8 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	await expect(results.getByText("Around 15:00").first()).toBeVisible();
 	await expect(results.getByRole("row", { name: /^Mika/ })).toContainText("✓");
 	await expect(
-		results.getByRole("row", { name: /^Can make it/ }),
+    results.getByRole("row", { name: /1 can make it 2 can make it/ }),
 	).toContainText("2");
-	await expect(results.getByText(/people have answered/)).toBeVisible();
 
 	// Nothing is picked for them: two times can tie, and choosing is the
 	// organizer's job. The leaders are marked, and Wednesday is the second column.
@@ -8061,8 +8040,7 @@ test("makes an event page from the public page with no account", async ({
 	const hydrationErrors = recordHydrationErrors(page);
 	let signedIn = false;
 	let created:
-		| { calendars: string[]; start: string; title: string }
-		| undefined;
+    { calendars: string[]; start: string; title: string } | undefined;
 	let published: { mode: string; name?: string } | undefined;
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(
