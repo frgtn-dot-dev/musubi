@@ -1,6 +1,7 @@
 
 import { CalendarView, Settings, SettingsDocument } from "@musubi/types";
 import { cacheGetSettingsSync, cacheSetSettings } from "@/services/eventsCache";
+import { defaultSettings } from "@/lib/settingsDefaults";
 import { create } from "zustand";
 
 // Seed the initial state from the local snapshot SYNCHRONOUSLY — the theme has
@@ -37,7 +38,10 @@ type SettingsStore = {
 
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
-  clearSettingsDocument: () => set(() => ({ settingsDocument: null })),
+  clearSettingsDocument: () => set(() => ({
+    ...defaultSettings,
+    settingsDocument: null,
+  })),
   loadSettingsDocument: (document, optimistic = {}) => set((state) =>
     state.settingsDocument && state.settingsDocument.revision > document.revision
       ? {}

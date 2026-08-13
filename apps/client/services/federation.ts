@@ -38,6 +38,14 @@ export function setHomeRequester(request: HomeRequest) {
   homeRequest = request;
 }
 
+export async function resetFederatedAccounts() {
+  accounts = [];
+  loaded = false;
+  calendarOrigin.clear();
+  homeRequest = null;
+  await SecureStore.deleteItemAsync(STORE_KEY);
+}
+
 function requireHome(): HomeRequest {
   if (!homeRequest) {
     throw new Error("Federation is not ready: no home server request available.");

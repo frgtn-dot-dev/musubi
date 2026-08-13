@@ -7,6 +7,7 @@ import { clearAllEventNotifications } from "@/services/notifications";
 import { resetOnboardingRoute } from "@/lib/onboardingState";
 import { clearAgendaWidget } from "@/services/agendaWidget";
 import { resetSettingsSync } from "@/services/settingsSync";
+import { resetFederatedAccounts } from "@/services/federation";
 
 // THE sign-out sequence — Settings (user action), account delete and session
 // expiry recovery all route through here so no path forgets a cleanup step:
@@ -14,6 +15,7 @@ import { resetSettingsSync } from "@/services/settingsSync";
 // Google session → Better Auth session → welcome screen.
 export async function resetLocalAccountState() {
   resetSettingsSync();
+  await resetFederatedAccounts();
   useCalendarsStore.getState().loadCalendars([]);
   useEventsStore.getState().loadEvents([]);
   resetOnboardingRoute();
