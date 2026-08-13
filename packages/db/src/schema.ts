@@ -312,6 +312,13 @@ export const schedulingPolls = pgTable("scheduling_polls", {
   // and revocable by closing the poll rather than by renaming anything.
   token: text("token").notNull().unique(),
   deadline: timestamp("deadline"),
+  // Where the decided event lands. Chosen when the poll is written, used days
+  // later when a day is picked — so it has to be stored rather than guessed at
+  // the end. Null for polls made without an account: those resolve to the
+  // creator's own calendar when they decide.
+  calendarID: uuid("calendar_id").references(() => calendars.id, {
+    onDelete: "set null",
+  }),
   // Set when the organizer picks. The poll stays readable afterwards so people
   // who voted can see what was chosen without hunting for the calendar invite.
   chosenSlotID: uuid("chosen_slot_id"),
