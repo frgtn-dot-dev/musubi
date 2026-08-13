@@ -140,7 +140,7 @@ export function DatePicker({
           <Button
             disabled={!todayAvailable}
             size="compact"
-            variant="ghost"
+            variant="secondary"
             onClick={() => choose(today)}
           >
             Today
@@ -148,7 +148,7 @@ export function DatePicker({
           {onClear ? (
             <Button
               size="compact"
-              variant="ghost"
+              variant="secondary"
               onClick={() => {
                 onClear();
                 setOpen(false);

@@ -372,7 +372,7 @@ function LoginRoute() {
             <Button
               disabled={submitting}
               size="compact"
-              variant="ghost"
+              variant="secondary"
               onClick={() => void requestReset()}
             >
               Forgotten your passphrase?

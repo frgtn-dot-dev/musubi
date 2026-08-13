@@ -683,7 +683,7 @@ export function EventEditorForm({
 					// same form state, not a second editor.
 					<Button
 						disabled={saving}
-						variant="ghost"
+						variant="secondary"
 						onClick={() => (onExpand ? onExpand(values) : setExpanded(true))}
 					>
 						More options

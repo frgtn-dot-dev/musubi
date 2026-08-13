@@ -414,7 +414,7 @@ export function PollResults({
 					<Button
 						className={styles.deletePoll}
 						loading={remove.isPending}
-						variant="ghost"
+						variant="secondary"
 						onClick={() => setConfirmingDelete(true)}
 					>
 						Delete poll
@@ -423,7 +423,7 @@ export function PollResults({
 						<Button
 							loading={close.isPending}
 							title="Stop taking answers without picking a time"
-							variant="ghost"
+							variant="secondary"
 							onClick={() => close.mutate()}
 						>
 							Stop taking answers

@@ -140,7 +140,7 @@ export function AuthSwitch({
   return (
     <p className={styles.authSwitch}>
       <span>{children}</span>
-      <Button size="compact" variant="ghost" onClick={onAction}>
+      <Button size="compact" variant="secondary" onClick={onAction}>
         {action}
       </Button>
     </p>

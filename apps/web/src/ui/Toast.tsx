@@ -70,7 +70,7 @@ export function Toast({
           <Button
             className={styles.toastAction}
             size="compact"
-            variant="ghost"
+            variant="secondary"
             onClick={action.onClick}
           >
             {action.label}
