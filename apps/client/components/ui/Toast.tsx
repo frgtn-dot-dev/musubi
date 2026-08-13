@@ -74,7 +74,7 @@ export function ToastHost() {
     <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom, alignItems: "center", paddingHorizontal: 16 }}>
       <Animated.View style={[{
         flexDirection: "row", alignItems: "center", gap: 14,
-        maxWidth: 460, paddingLeft: 24, paddingRight: toast.actionLabel ? 8 : 24, paddingVertical: 12,
+        maxWidth: 460, paddingHorizontal: 16, paddingLeft: 24, paddingVertical: 12,
         backgroundColor: colors.fg, borderRadius: 999, borderCurve: "continuous",
         shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8,
       }, reveal]}>
