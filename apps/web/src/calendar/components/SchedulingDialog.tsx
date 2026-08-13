@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Check, Copy } from "lucide-react";
-import { useState, type RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import type { Calendar, Settings } from "@musubi/types";
 import type { PollSummary, VoteValue } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
@@ -203,6 +203,7 @@ export function PollResults({
 	poll: PollSummary;
 }) {
 	const queryClient = useQueryClient();
+	const gridScroller = useRef<HTMLDivElement>(null);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [draft, setDraft] = useState<Record<string, VoteValue | null>>();
 	// Where the poll said it would land, when it said so. Older polls and ones made
@@ -354,12 +355,13 @@ export function PollResults({
 					}
 					showSlotTimes={data.durationMinutes < 24 * 60}
 					people={data.people}
+					scrollerRef={gridScroller}
 					slots={data.slots}
 					yourRow={<span>{ownName}</span>}
 				/>
 			) : null}
 
-			<PollLegend />
+			<PollLegend scrollerRef={gridScroller} />
 
 			{/* Still worth sending once a time is picked — it is where everyone reads
           the answer — but a link labelled nothing on a closed poll looks like an

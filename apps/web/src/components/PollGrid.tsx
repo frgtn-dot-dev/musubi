@@ -1,5 +1,13 @@
-import { useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { Poll, PollSlot, VoteValue } from "~/api/contracts";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { IconButton } from "~/ui/Button";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import styles from "./poll-grid.module.css";
 
@@ -35,6 +43,7 @@ export function PollGrid({
   onAnswer,
   people,
   personAction,
+  scrollerRef,
   showSlotTimes = false,
   slots,
   yourRow,
@@ -60,6 +69,11 @@ export function PollGrid({
   people: Poll["people"];
   /** Optional quiet action beside each participant name. */
   personAction?: (person: Poll["people"][number]) => ReactNode;
+  /**
+   * Handed in when something outside wants to steer the sideways scroll — the
+   * legend's arrows do, and they sit below this box rather than inside it.
+   */
+  scrollerRef?: RefObject<HTMLDivElement | null>;
   /** Keeps old, timed polls readable after new polls switched to day choices. */
   showSlotTimes?: boolean;
   slots: PollSlot[];
@@ -101,6 +115,7 @@ export function PollGrid({
       ) : null}
       <div
         className={styles.scroller}
+        ref={scrollerRef}
         onWheel={(event) => {
           // Shift+wheel reports a *vertical* delta, and the dialog's scroll lock
           // (`react-remove-scroll`) refuses a vertical wheel where nothing scrolls
@@ -334,7 +349,47 @@ export function PollNameField({
 }
 
 /** What the marks mean, said once under the grid. */
-export function PollLegend() {
+/**
+ * What the marks mean, and — when the grid is wider than its box — a way to walk
+ * the days sideways.
+ *
+ * The arrows live here rather than in the grid because this row is already the
+ * grid's footer, and a scrollbar is a poor affordance: a wheel needs Shift, and a
+ * trackpad needs a gesture people do not think to try on a table.
+ */
+export function PollLegend({
+  scrollerRef,
+}: {
+  scrollerRef?: RefObject<HTMLDivElement | null>;
+}) {
+  const [scrollable, setScrollable] = useState(false);
+
+  useEffect(() => {
+    const scroller = scrollerRef?.current;
+    if (!scroller) return;
+
+    const measure = () =>
+      setScrollable(scroller.scrollWidth > scroller.clientWidth + 1);
+    measure();
+    // Both: the box changes with the window, the table changes with the poll.
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+    return () => observer.disconnect();
+  }, [scrollerRef]);
+
+  function page(direction: -1 | 1) {
+    const scroller = scrollerRef?.current;
+    // Not the whole width: a page that leaves nothing on screen loses the
+    // column you were comparing against.
+    if (scroller) {
+      scroller.scrollBy({
+        behavior: "smooth",
+        left: direction * scroller.clientWidth * 0.8,
+      });
+    }
+  }
+
   return (
     <p className={styles.legend}>
       {ANSWERS.map((option) => (
@@ -343,6 +398,26 @@ export function PollLegend() {
           {option.label}
         </span>
       ))}
+      {scrollable ? (
+        <span className={styles.legendScroll}>
+          <IconButton
+            label="Earlier days"
+            size="compact"
+            variant="ghost"
+            onClick={() => page(-1)}
+          >
+            <ChevronLeft aria-hidden="true" size={16} strokeWidth={1.7} />
+          </IconButton>
+          <IconButton
+            label="Later days"
+            size="compact"
+            variant="ghost"
+            onClick={() => page(1)}
+          >
+            <ChevronRight aria-hidden="true" size={16} strokeWidth={1.7} />
+          </IconButton>
+        </span>
+      ) : null}
     </p>
   );
 }

@@ -309,6 +309,14 @@
   gap: 5px;
 }
 
+/* At the end of the row, away from the marks it is not part of. */
+.legendScroll {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
 
 /* The organizer's row of "pick this", under the column each one belongs to. */
 .actionRow th,

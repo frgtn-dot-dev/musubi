@@ -1,6 +1,6 @@
 import type { Calendar } from "@musubi/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import type { PollCalendar, VoteValue } from "~/api/contracts";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { getPoll, votePoll } from "~/api/resources";
@@ -84,6 +84,7 @@ function ParticipantPollResults({
   poll: PollCalendar;
 }) {
   const queryClient = useQueryClient();
+  const gridScroller = useRef<HTMLDivElement>(null);
   const answers = useQuery({
     queryFn: ({ signal }) => getPoll(poll.token, signal),
     queryKey: ["poll", poll.token],
@@ -130,6 +131,7 @@ function ParticipantPollResults({
                   setDraft((current) => ({ ...current, [slotID]: value }))
           }
           people={data.people}
+          scrollerRef={gridScroller}
           showSlotTimes={data.durationMinutes < 24 * 60}
           slots={data.slots}
           yourRow={<span>You</span>}
@@ -146,7 +148,7 @@ function ParticipantPollResults({
       ) : (
         <p className={styles.summary}>Loading answers…</p>
       )}
-      {data ? <PollLegend /> : null}
+      {data ? <PollLegend scrollerRef={gridScroller} /> : null}
       {save.error ? (
         <p className={styles.error} role="alert">
           {save.error.message}

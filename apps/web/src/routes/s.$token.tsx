@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Ellipsis, Info } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { VoteValue } from "~/api/contracts";
 import { getServerOrigin } from "~/api/query-keys";
 import { getPoll, getServerCapabilities, votePoll } from "~/api/resources";
@@ -46,6 +46,7 @@ function PollRoute() {
 
 	// `null` is "answered, then cleared" — different from a slot never touched,
 	// which is what lets withdrawing one answer be sent rather than ignored.
+	const gridScroller = useRef<HTMLDivElement>(null);
 	const [draft, setDraft] = useState<Record<string, VoteValue | null>>({});
 	const [email, setEmail] = useState("");
 	const [name, setName] = useState("");
@@ -257,6 +258,7 @@ function PollRoute() {
 						chosenSlotID={data.chosenSlotID}
 						mineID={data.mineID}
 						people={data.people}
+						scrollerRef={gridScroller}
 						personAction={
 							authenticatedViewer
 								? undefined
@@ -291,7 +293,7 @@ function PollRoute() {
 						onAnswer={data.closed ? undefined : pick}
 					/>
 
-					<PollLegend />
+					<PollLegend scrollerRef={gridScroller} />
 
 					{data.closed ? null : authenticatedViewer ? (
 						<div className={pollStyles.send}>
