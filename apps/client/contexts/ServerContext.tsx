@@ -7,45 +7,43 @@ import { resetLocalAccountState } from "@/lib/signOut";
 import { recordServerDiagnostic } from "@/lib/serverDiagnostics";
 
 type ServerContextType = {
-  apiUrl: string | null;
+  apiUrl: string;
   authClient: ReturnType<typeof createClient>;
   setNewServerUrl: (url: string) => Promise<void>;
-  isLoading: boolean;
 }
 
 const ServerContext = createContext<ServerContextType | null>(null);
 
 export function ServerProvider({ children }: { children: React.ReactNode }) {
-  const [apiUrl, setApiUrl] = useState<string | null>(null);
-  const [authClient, setAuthClient] = useState<ReturnType<typeof createClient>>(() => createClient(defaultUrl));
-  const [isLoading, setIsLoading] = useState(true);
+  const [server, setServer] = useState<{
+    apiUrl: string;
+    authClient: ReturnType<typeof createClient>;
+  } | null>(null);
 
   useEffect(() => {
     const getApiUrl = async () => {
-      setIsLoading(true);
       const retrievedApiUrl = await SecureStore.getItemAsync("API_URL");
       const url = normalizeServerUrl(retrievedApiUrl ?? defaultUrl);
       recordServerDiagnostic(`selected ${url} (stored: ${retrievedApiUrl ?? "none"})`);
-      setApiUrl(url);
-      setAuthClient(() => createClient(url));
-      setIsLoading(false);
+      setServer({ apiUrl: url, authClient: createClient(url) });
     };
     getApiUrl();
   }, []);
 
   const setNewServerUrl = async (url: string) => {
     const normalized = normalizeServerUrl(url);
-    recordServerDiagnostic(`switch ${apiUrl ?? "none"} → ${normalized}`);
+    recordServerDiagnostic(`switch ${server?.apiUrl ?? "none"} → ${normalized}`);
     // A server is an account boundary: never display one server's cached data
     // or reuse its Better Auth session on another.
     await resetLocalAccountState();
     await SecureStore.setItemAsync("API_URL", normalized);
-    setAuthClient(() => createClient(normalized));
-    setApiUrl(normalized);
+    setServer({ apiUrl: normalized, authClient: createClient(normalized) });
   };
 
+  if (!server) return null;
+
   return (
-    <ServerContext.Provider value={{ apiUrl, authClient, setNewServerUrl, isLoading }}>
+    <ServerContext.Provider value={{ ...server, setNewServerUrl }}>
       {children}
     </ServerContext.Provider>
   );

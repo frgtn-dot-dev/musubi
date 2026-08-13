@@ -58,7 +58,7 @@ function AppContent() {
     if (migError) console.error("Migration failed:", migError);
   }, [migError]);
 
-  const { isLoading, authClient, apiUrl } = useServer();
+  const { authClient, apiUrl } = useServer();
   const router = useRouter();
 
   const [loaded, error] = useFonts({
@@ -92,7 +92,7 @@ function AppContent() {
       .finally(() => setVersionChecked(true));
   }, [apiUrl]);
 
-  const ready = (loaded || !!error) && !isPending && !isLoading && versionChecked && migrated;
+  const ready = (loaded || !!error) && !isPending && versionChecked && migrated;
 
   const everReady = useRef(false);
   if (ready) everReady.current = true;
