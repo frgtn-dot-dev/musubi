@@ -90,13 +90,14 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `POST /api/v1/users/delete/confirm` | Complete email-token account deletion | 10 / 15 min / IP |
 | `GET /api/v1/users/:userId/avatar` | Public immutable avatar bytes | — |
 | `GET /api/v1/public/events/:token` | Read the narrow published-event projection; token is the capability | 60 / 15 min / IP |
-| `GET /api/v1/public/events/:token/rsvp` | Read the verified-email guest's answer | 60 / 15 min / IP |
-| `PUT /api/v1/public/events/:token/rsvp` | Write the verified-email guest's answer | 30 / 15 min / IP |
+| `GET /api/v1/public/events/:token/rsvp` | Read the authenticated, verified-email guest's answer | 60 / 15 min / IP |
+| `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated, verified-email guest's answer | 30 / 15 min / IP |
 | `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
 | `PUT /api/v1/public/polls/:token/votes` | Write a participant's complete answer set; auth is optional for the first answer | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |
 | `GET /reset-password` | Self-hosted password reset HTML | — |
 | `GET /delete-account` | Self-hosted account-deletion HTML | — |
+| `GET /email-verified` | Self-hosted email-verification landing HTML | — |
 | `GET /.well-known/apple-app-site-association` | iOS invite universal-link association | — |
 
 Invite preview and federation accept validate UUID shape, expiry, and usage
@@ -179,15 +180,14 @@ and answers, never email addresses or private participant identifiers.
 | `POST /api/v1/events/:eventId/link` | `{ calendarID }` | Same event linked into target |
 | `POST /api/v1/events/:eventId/fork` | `{ calendarID }` | Independent new `Event` |
 | `GET /api/v1/events/:eventId/attendees` | — | `[{ id, name, image }]`; no emails |
-| `PUT /api/v1/events/:eventId/attendance` | `{ attending: boolean }` | Fresh attendee list |
+| `PUT /api/v1/events/:eventId/attendance` | `{ status: "going" | "maybe" | "declined" | "none" }`; legacy`{ attending: boolean }` remains accepted | Fresh attendee list |
 | `GET /api/v1/events/:eventId/share` | — | Current published-page settings or `null` |
 | `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility }` | Create or update the published page and token URL |
 | `DELETE /api/v1/events/:eventId/share` | — | Revoke the public token |
-| `GET /api/v1/events/:eventId/rsvps` | — | Organizer view of answer counts and names |
 
 Published event reads are open to possession of the token. RSVP reads and writes
-require a session; the public page authenticates guests with an emailed code
-before accepting an answer.
+require a verified-email session; the public page authenticates guests with an
+emailed code before accepting an answer.
 
 Event/calendar identifiers on this surface must use canonical hyphenated UUID
 form. Invalid body references, route parameters, `unlinkCalendarID`, and
@@ -229,7 +229,7 @@ does not allow `creatorID` or `originCalendarID` to change. The home
 | `POST /api/v1/calendars` | `Calendar`; optional provider/account creates remotely first |
 | `PUT /api/v1/calendars` | `Calendar`; owner-only calendar metadata update |
 | `DELETE /api/v1/calendars` | `Calendar`; returns removed row |
-| `POST /api/v1/calendars/import?name=&color=` | Raw iCalendar body; returns calendar + `imported` count |
+| `POST /api/v1/calendars/import?name=&color=` | Raw iCalendar body, capped at 10 MiB and 10,000 VEVENTs; returns calendar + `imported` count |
 | `GET /api/v1/calendars/:id/export` | `text/calendar` snapshot; any member |
 | `GET /api/v1/calendars/tokens/:token` | Minimal invite preview: calendar identity, member names/avatars, 30-day event summaries |
 | `GET /api/v1/calendars/:calendarId/members` | `[{ id, name, image, role }]` |

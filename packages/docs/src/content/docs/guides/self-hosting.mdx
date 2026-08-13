@@ -310,20 +310,20 @@ variable and redeploy.
 
 ### Rolling back
 
-Set `MUSUBI_TAG` to the previous version and bring the stack up again. Pinning is
-what makes this possible, so pin in production rather than tracking `latest`.
+Image rollback is safe only while the database schema remains compatible. Pin
+production versions rather than tracking `latest`, but treat migrations as
+forward-only unless a release explicitly documents backward compatibility.
 
 ```sh
 MUSUBI_TAG=1.1.0 docker compose up -d
 ```
 
 <Aside type="caution" title="Rolling back across a migration">
-Images roll back cleanly; **schema does not**. Migrations run forward on startup
-and there is no down-migration path, so an older API can meet a newer database.
-Musubi's migrations are written expand/contract precisely so this usually works —
-but before upgrading a production instance, take a dump
-([Backups](#backups-and-recovery-drills)). Restoring it is the reliable way back
-if a release turns out to be wrong for you.
+**Schema does not roll back with an image.** Migrations run forward on startup
+and there is no down-migration path. Contract migrations may remove data or
+structures an older API needs. Before every production upgrade, take and verify
+a dump ([Backups](#backups-and-recovery-drills)). Restoring that dump together
+with the previous images is the reliable rollback path.
 </Aside>
 
 ---

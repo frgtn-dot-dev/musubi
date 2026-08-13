@@ -18,8 +18,9 @@
 #        PUBLIC_HOST=musubi.example.com
 #   4. docker compose up -d
 #
-# Upgrade:   docker compose pull && docker compose up -d
-# Roll back: set MUSUBI_TAG to the previous version and run the same command.
+# Upgrade: docker compose pull && docker compose up -d
+# Rollback: restore a pre-upgrade DB backup with the previous images. Schema
+# migrations are forward-only; changing only MUSUBI_TAG is not a safe rollback.
 #
 # Other shapes of the same stack:
 #   docker-compose.api.yml      API + database only, for mobile clients or your
