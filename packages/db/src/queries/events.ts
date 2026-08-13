@@ -1,41 +1,60 @@
 import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
-import { type NewEvent, calendarEvents, calendarMembers, eventUsers, events, user } from "../schema";
+import {
+  type NewEvent,
+  calendarEvents,
+  calendarMembers,
+  eventUsers,
+  events,
+  user,
+} from "../schema";
 
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export async function createEvent(event: NewEvent, calendars: string[]) {
-  return db.transaction(async (tx) => {
-    // Home calendar = where it's created (first picked). Edit-content is gated by
-    // editEvents on this calendar; the other picked calendars are read-only shares.
-    const [result] = await tx
-      .insert(events)
-      .values({ ...event, originCalendarID: event.originCalendarID ?? calendars[0] })
-      .onConflictDoNothing()
-      .returning();
-    await tx.insert(eventUsers).values({
-      userID: result.creatorID,
-      eventID: result.id,
-    });
+export async function createEventInTransaction(
+  tx: Transaction,
+  event: NewEvent,
+  calendars: string[],
+) {
+  // Home calendar = where it's created (first picked). Edit-content is gated by
+  // editEvents on this calendar; the other picked calendars are read-only shares.
+  const [result] = await tx
+    .insert(events)
+    .values({
+      ...event,
+      originCalendarID: event.originCalendarID ?? calendars[0],
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (!result) throw new Error(`Event ${event.id} already exists.`);
 
-    await tx
-      .insert(calendarEvents)
-      .values(calendars.map(c => ({
-        calendarID: c,
-        eventID: result.id,
-      })))
-      .onConflictDoNothing({
-        target: [calendarEvents.eventID, calendarEvents.calendarID],
-      });
-
-    return result;
+  await tx.insert(eventUsers).values({
+    userID: result.creatorID,
+    eventID: result.id,
   });
+  await tx
+    .insert(calendarEvents)
+    .values(calendars.map((c) => ({ calendarID: c, eventID: result.id })))
+    .onConflictDoNothing({
+      target: [calendarEvents.eventID, calendarEvents.calendarID],
+    });
+  return result;
+}
+
+export function createEvent(event: NewEvent, calendars: string[]) {
+  return db.transaction((tx) => createEventInTransaction(tx, event, calendars));
 }
 
 // Who governs editing this event's shared content: its home calendar (+ creator
 // as legacy fallback when origin is null). Used by assertCanEditEvent.
-export async function getEventOrigin(eventID: string): Promise<{ originCalendarID: string | null; creatorID: string } | undefined> {
+export async function getEventOrigin(
+  eventID: string,
+): Promise<{ originCalendarID: string | null; creatorID: string } | undefined> {
   const [row] = await db
-    .select({ originCalendarID: events.originCalendarID, creatorID: events.creatorID })
+    .select({
+      originCalendarID: events.originCalendarID,
+      creatorID: events.creatorID,
+    })
     .from(events)
     .where(eq(events.id, eventID));
   return row;
@@ -48,14 +67,11 @@ export async function getEventCalendars(eventID: string): Promise<string[]> {
     .select({ calendarID: calendarEvents.calendarID })
     .from(calendarEvents)
     .where(eq(calendarEvents.eventID, eventID));
-  return rows.map(r => r.calendarID);
+  return rows.map((r) => r.calendarID);
 }
 
 export async function getEvent(id: string) {
-  const [result] = await db
-    .select()
-    .from(events)
-    .where(eq(events.id, id));
+  const [result] = await db.select().from(events).where(eq(events.id, id));
   return result;
 }
 
@@ -63,7 +79,8 @@ export async function updateEvent(event: Partial<NewEvent> & { id: string }) {
   const [result] = await db
     .update(events)
     .set(event)
-    .where(eq(events.id, event.id!)).returning();
+    .where(eq(events.id, event.id!))
+    .returning();
   return result;
 }
 
@@ -88,7 +105,10 @@ export async function getUsersEvents(
   return db
     .select({ event: events, calendarID: calendarEvents.calendarID })
     .from(calendarMembers)
-    .innerJoin(calendarEvents, eq(calendarEvents.calendarID, calendarMembers.calendarID))
+    .innerJoin(
+      calendarEvents,
+      eq(calendarEvents.calendarID, calendarMembers.calendarID),
+    )
     .innerJoin(events, eq(events.id, calendarEvents.eventID))
     .where(and(eq(calendarMembers.userID, userID), eventFilter));
 }
@@ -131,7 +151,11 @@ export async function setAttendance(
   status: AttendanceStatus | "none",
 ) {
   if (status === "none") {
-    await db.delete(eventUsers).where(and(eq(eventUsers.eventID, eventID), eq(eventUsers.userID, userID)));
+    await db
+      .delete(eventUsers)
+      .where(
+        and(eq(eventUsers.eventID, eventID), eq(eventUsers.userID, userID)),
+      );
     return;
   }
 
@@ -146,7 +170,10 @@ export async function setAttendance(
 
 // Publishing a page collects answers, so the event's attendee section has to be
 // on. Set by the share handler rather than asked of the organizer twice.
-export async function setEventHasAttendees(eventID: string, hasAttendees: boolean) {
+export async function setEventHasAttendees(
+  eventID: string,
+  hasAttendees: boolean,
+) {
   await db.update(events).set({ hasAttendees }).where(eq(events.id, eventID));
 }
 
@@ -154,13 +181,16 @@ export async function setEventHasAttendees(eventID: string, hasAttendees: boolea
 // externalEvents mappings). Clients that haven't synced in that long won't see
 // the removal, but that window is intentionally generous.
 export async function purgeDeletedEvents(before: Date) {
-  await db.delete(events).where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before)));
+  await db
+    .delete(events)
+    .where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before)));
 }
 
 export async function removeEvent(eventID: string) {
   // Soft-delete: keep the row as a tombstone so delta sync can tell clients to
   // drop it. Bumps updatedAt via $onUpdate → picked up by `since` queries.
-  const [result] = await db.update(events)
+  const [result] = await db
+    .update(events)
     .set({ deletedAt: new Date() })
     .where(eq(events.id, eventID))
     .returning();

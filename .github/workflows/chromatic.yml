@@ -34,17 +34,18 @@ jobs:
     steps:
       - name: Report missing project token
         if: env.CHROMATIC_PROJECT_TOKEN == ''
-        run: echo "::notice::Chromatic is ready but CHROMATIC_PROJECT_TOKEN is not configured."
+        run: >-
+          echo "::notice::Chromatic disabled: project token is not configured."
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         if: env.CHROMATIC_PROJECT_TOKEN != ''
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
         if: env.CHROMATIC_PROJECT_TOKEN != ''
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         if: env.CHROMATIC_PROJECT_TOKEN != ''
         with:
           node-version: 22
@@ -55,7 +56,7 @@ jobs:
 
       - name: Publish and test Storybook
         if: env.CHROMATIC_PROJECT_TOKEN != ''
-        uses: chromaui/action@v18
+        uses: chromaui/action@aeb03996bc5edda8cb56ac3cf4f5f294b4846baf # v18
         with:
           buildScriptName: storybook:build
           externals: |

@@ -3,8 +3,8 @@ import {
   claimPollOwnership,
   getUsersCalendars,
   closePoll,
-  createEvent,
   createPoll,
+  decidePoll,
   deletePoll,
   ensurePollParticipant,
   getPollById,
@@ -590,13 +590,12 @@ export async function handlerDecidePoll(req: Request, res: Response) {
   }
 
   await assertCan(req.user!.id, calendarID, "editEvents");
-  const eventTiming = pollSlotEventTiming(slot.start);
-
-  const event = await createEvent(
-    {
+  const decision = await decidePoll({
+    calendars: [calendarID],
+    event: {
       color: "#c8553d",
       creatorID: req.user!.id,
-      ...eventTiming,
+      ...pollSlotEventTiming(slot.start),
       id: crypto.randomUUID(),
       isCanceled: false,
       organizer: req.user!.id,
@@ -604,15 +603,20 @@ export async function handlerDecidePoll(req: Request, res: Response) {
       title: poll.title,
       ...(poll.description ? { description: poll.description } : {}),
     },
-    [calendarID],
-  );
-
-  await closePoll({
-    chosenSlotID: slot.id,
-    eventID: event.id,
     pollID: poll.id,
+    slotID,
   });
+  if (decision.status === "not_found") {
+    throw new NotFoundError("Poll not found...");
+  }
+  if (decision.status === "already_closed") {
+    throw new BadRequestError("This poll is already decided...");
+  }
+  if (decision.status === "invalid_slot") {
+    throw new BadRequestError("That time is not on this poll...");
+  }
 
+  const { event } = decision;
   const result = { ...event, calendars: [calendarID] };
   await pushEventToProviders(result, "create");
   notifyCalendarMembers(
@@ -638,7 +642,9 @@ export async function handlerClosePoll(req: Request, res: Response) {
   if (poll.closedAt)
     throw new BadRequestError("This poll is already closed...");
 
-  await closePoll({ pollID: poll.id });
+  if (!(await closePoll(poll.id))) {
+    throw new BadRequestError("This poll is already closed...");
+  }
 
   res.status(200).json({ closed: true });
 }

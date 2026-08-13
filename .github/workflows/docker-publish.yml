@@ -1,16 +1,8 @@
-name: Publish Docker image
+name: Publish Docker images
 
-# Manually triggered. Builds & pushes the API image to Docker Hub (frgtndev/musubi)
-# FIRST, then creates the git tag + GitHub Release LAST. That ordering matters:
-# Dokploy deploys on the git tag, so the tag must appear only once the image
-# already exists in the registry — otherwise a deploy races an unfinished build.
-#
-# Release flow: Actions → "Publish Docker image" → Run workflow → enter version.
-#
-# Required repo secrets:
-#   DOCKERHUB_USERNAME  — a Docker Hub account with push access to frgtndev/musubi
-#   DOCKERHUB_TOKEN     — a Docker Hub access token (Account Settings → Security)
-
+# Manual release. API and web are built under the same immutable version first.
+# The Git tag is created only after both manifests exist and is the sole Dokploy
+# deployment signal. Mutable latest/minor aliases are not published.
 on:
   workflow_dispatch:
     inputs:
@@ -19,84 +11,93 @@ on:
         required: true
 
 permissions:
-  contents: write # create the tag + release
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
 
 jobs:
   quality:
     uses: ./.github/workflows/quality.yml
 
-  publish:
+  prepare:
     needs: quality
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
-
+      - uses: >-
+          actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - id: ver
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
+          test "$GITHUB_REF_NAME" = "main" || {
+            echo "::error::Releases must run from main"
+            exit 1
+          }
           V="$RELEASE_VERSION"
-          [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be X.Y.Z (no leading v)"; exit 1; }
+          [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::version must be X.Y.Z (no leading v)"
+            exit 1
+          }
           node scripts/verify-release.mjs "$V"
-          echo "full=$V" >> "$GITHUB_OUTPUT"
-          echo "minor=${V%.*}" >> "$GITHUB_OUTPUT"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$V" \
+            >/dev/null 2>&1; then
+            echo "::error::v$V already exists and cannot be overwritten"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: frgtndev/musubi
+            dockerfile: apps/api/Dockerfile
+            scope: api
+          - image: frgtndev/musubi-web
+            dockerfile: apps/web/Dockerfile
+            scope: web
+    steps:
+      - uses: >-
+          actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: >-
+          docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+      - uses: >-
+          docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: >-
+          docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: frgtndev/musubi
-          tags: |
-            type=raw,value=${{ steps.ver.outputs.full }}
-            type=raw,value=${{ steps.ver.outputs.minor }}
-            type=raw,value=latest
-
-      # 1. Build & push the images FIRST.
-      - uses: docker/build-push-action@v6
+      - uses: >-
+          docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
+          tags: ${{ matrix.image }}:${{ needs.prepare.outputs.version }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.scope }}
+          cache-to: type=gha,scope=${{ matrix.scope }},mode=max
 
-      # The web image carries the SAME tags, so one MUSUBI_TAG in a self-hoster's
-      # .env can never pin mismatched web and API versions.
-      - id: meta-web
-        uses: docker/metadata-action@v5
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: >-
+          softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          images: frgtndev/musubi-web
-          tags: |
-            type=raw,value=${{ steps.ver.outputs.full }}
-            type=raw,value=${{ steps.ver.outputs.minor }}
-            type=raw,value=latest
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
-
-      # 2. Only now — both images are in the registry — create the tag + release. This is
-      #    Dokploy's deploy signal, so the image is guaranteed to exist first.
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.ver.outputs.full }}
+          tag_name: v${{ needs.prepare.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Musubi v${{ steps.ver.outputs.full }}
+          name: Musubi v${{ needs.prepare.outputs.version }}
           generate_release_notes: true

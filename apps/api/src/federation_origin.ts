@@ -1,7 +1,13 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { isIPv4 } from "node:net";
-import ipaddr from "ipaddr.js";
+import { isIP, isIPv4 } from "node:net";
 import { config } from "@musubi/config";
+import ipaddr from "ipaddr.js";
+
+export type LookupAll = (
+  hostname: string,
+  options: { all: true },
+) => Promise<LookupAddress[]>;
 
 export function canonicalHttpOrigin(value: string): string | null {
   try {
@@ -85,25 +91,16 @@ export function isBlockedAddress(address: string): boolean {
   }
 }
 
-/**
- * Resolve `origin` and refuse it when any address is internal.
- *
- * Called when a connection is saved AND immediately before every gateway
- * request, so a record that later points inward stops working. A DNS rebinding
- * window between this check and the connect remains: we validate the resolved
- * addresses but still connect by hostname (pinning the IP would break TLS SNI).
- * Accepted for v1 — reaching this code already requires an authenticated user
- * probing their own home server's network, and `FEDERATION_ALLOW_PRIVATE_HOSTS`
- * exists for deployments where internal targets are legitimate (LAN self-host).
- */
-export async function assertPublicOrigin(
+export async function resolveHttpAddresses(
   origin: string,
-  // Overridable so the guard itself is testable — outside prod the flag defaults
-  // to true, which would short-circuit every check.
-  { allowPrivate = config.security.federationAllowPrivateHosts } = {},
-): Promise<void> {
-  if (allowPrivate) return;
-
+  {
+    allowPrivate = config.security.federationAllowPrivateHosts,
+    lookupImpl = lookup as LookupAll,
+  }: {
+    allowPrivate?: boolean;
+    lookupImpl?: LookupAll;
+  } = {},
+): Promise<LookupAddress[]> {
   let host: string;
   try {
     host = new URL(origin).hostname.replace(/^\[|\]$/g, "");
@@ -111,21 +108,29 @@ export async function assertPublicOrigin(
     throw new Error("Invalid HTTP origin.");
   }
 
-  // A literal internal address needs no lookup.
-  if (isBlockedAddress(host)) {
-    throw new Error(`Refusing to reach the internal address ${host}.`);
-  }
+  const family = isIP(host);
+  const addresses = family
+    ? [{ address: host, family }]
+    : await lookupImpl(host, { all: true }).catch(() => {
+        throw new Error(`Could not resolve ${host}.`);
+      });
 
-  let addresses: string[];
-  try {
-    addresses = (await lookup(host, { all: true })).map(
-      (entry) => entry.address,
-    );
-  } catch {
-    throw new Error(`Could not resolve ${host}.`);
-  }
-
-  if (addresses.length === 0 || addresses.some(isBlockedAddress)) {
+  if (
+    addresses.length === 0 ||
+    (!allowPrivate &&
+      addresses.some(({ address }) => isBlockedAddress(address)))
+  ) {
     throw new Error(`Refusing to reach the internal address behind ${host}.`);
   }
+  return addresses;
+}
+
+/** Resolve `origin` and refuse it when any address is internal. */
+export async function assertPublicOrigin(
+  origin: string,
+  options: { allowPrivate?: boolean } = {},
+): Promise<void> {
+  if (options.allowPrivate ?? config.security.federationAllowPrivateHosts)
+    return;
+  await resolveHttpAddresses(origin, options);
 }

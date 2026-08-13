@@ -15,11 +15,11 @@ jobs:
     name: Typecheck, test, lint, docs, and migrations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: pnpm
@@ -37,7 +37,7 @@ jobs:
           pnpm db:generate
           if [ -n "$(git status --porcelain -- packages/db/drizzle)" ]; then
             git status --short -- packages/db/drizzle
-            echo "::error::Database schema and committed Drizzle migrations differ"
+            echo "::error::Schema and committed Drizzle migrations differ"
             exit 1
           fi
 
@@ -45,11 +45,11 @@ jobs:
     name: Web end-to-end
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: pnpm
@@ -60,12 +60,14 @@ jobs:
       # server are the slow part, and keeping them off the critical path means
       # typecheck/lint still report in under a minute.
       - name: Install Playwright browser
-        run: pnpm --filter @musubi/web exec playwright install --with-deps chromium
+        run: >-
+          pnpm --filter @musubi/web exec playwright install --with-deps chromium
 
       - run: pnpm --filter @musubi/web test:e2e
 
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: >-
+          actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: playwright-report
           path: apps/web/test-results
@@ -75,19 +77,19 @@ jobs:
     name: Client bundle secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
-      # Builds the client with a canary in every server-only variable and fails if
-      # any of them reaches a file the browser can fetch. Its own job because it
+      # Builds the client with canaries in server-only variables and fails if
+      # any reaches a file the browser can fetch. Its own job because it
       # needs a production build, which `pnpm check` deliberately does not do.
       - run: node scripts/scan-client-bundle.mjs
 
@@ -104,14 +106,21 @@ jobs:
           - name: web
             dockerfile: apps/web/Dockerfile
             scope: web
+          - name: docs
+            dockerfile: packages/docs/Dockerfile
+            scope: docs
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: docker/setup-buildx-action@v3
+      # docker/setup-buildx-action v3
+      - uses: >-
+          docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       # Per-image cache scope: sharing one scope would make the two matrix jobs
       # overwrite each other's layers on every run.
-      - uses: docker/build-push-action@v6
+      # docker/build-push-action v6
+      - uses: >-
+          docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: ${{ matrix.dockerfile }}

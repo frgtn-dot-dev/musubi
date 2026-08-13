@@ -7,7 +7,7 @@ catalog:
   # root node_modules, and it needs expo-router (a peer) resolvable there.
   expo-router: ~56.2.16
 # Expo/React Native tooling assumes a flat node_modules (config plugins, Metro).
-# pnpm's default isolated layout hides transitive deps like @expo/config-plugins.
+# pnpm's isolated layout hides transitive deps like @expo/config-plugins.
 nodeLinker: hoisted
 # Every workspace declares the peers it actually uses. Disabling implicit peer
 # installation keeps filtered production images from inheriting Expo through
@@ -20,7 +20,9 @@ allowBuilds:
   unrs-resolver: false
 overrides:
   esbuild@<=0.24.2: ">=0.25.0"
-  postcss@<8.5.10: ">=8.5.10"
+  js-yaml@<4.3.1: 4.3.1
+  nanoid@<3.3.17: 3.3.17
+  postcss@<8.5.23: 8.5.23
   # Security bumps for transitive docs (Astro) deps flagged by Dependabot.
   svgo@>=4.0.0 <4.0.2: ">=4.0.2"
   dompurify@<=3.4.11: ">=3.4.12"

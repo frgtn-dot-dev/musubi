@@ -17,6 +17,8 @@ import {
   schedulingSlots,
   schedulingVotes,
 } from "..";
+import type { NewEvent } from "../schema";
+import { createEventInTransaction } from "./events";
 
 export type SchedulingPollRow = typeof schedulingPolls.$inferSelect;
 
@@ -28,9 +30,9 @@ export async function createPoll(
     const [created] = await tx.insert(schedulingPolls).values(poll).returning();
     // A poll with no slots is a question with no answers — the handler refuses
     // it, and this keeps the two writes from ever disagreeing about that.
-    await tx.insert(schedulingSlots).values(
-      slots.map((slot) => ({ ...slot, pollID: created!.id })),
-    );
+    await tx
+      .insert(schedulingSlots)
+      .values(slots.map((slot) => ({ ...slot, pollID: created!.id })));
     return created!;
   });
 }
@@ -182,7 +184,10 @@ export async function ensurePollParticipant(input: {
     .insert(schedulingParticipants)
     .values({ ...input, name: input.name || "Guest" })
     .onConflictDoUpdate({
-      set: { ...(input.name ? { name: input.name } : {}), userID: input.userID },
+      set: {
+        ...(input.name ? { name: input.name } : {}),
+        userID: input.userID,
+      },
       target: [schedulingParticipants.pollID, schedulingParticipants.email],
     });
 }
@@ -236,17 +241,15 @@ export async function setPollVotes(input: {
     }
 
     if (slots.length > 0) {
-      await tx
-        .delete(schedulingVotes)
-        .where(
-          and(
-            eq(schedulingVotes.participantID, participant.id),
-            inArray(
-              schedulingVotes.slotID,
-              slots.map((slot) => slot.id),
-            ),
+      await tx.delete(schedulingVotes).where(
+        and(
+          eq(schedulingVotes.participantID, participant.id),
+          inArray(
+            schedulingVotes.slotID,
+            slots.map((slot) => slot.id),
           ),
-        );
+        ),
+      );
     }
     if (accepted.length > 0) {
       await tx.insert(schedulingVotes).values(
@@ -260,27 +263,66 @@ export async function setPollVotes(input: {
   });
 }
 
-/**
- * Stop taking answers.
- *
- * With a slot the poll was decided and an event exists; without one it was closed
- * for some other reason — the meeting was arranged elsewhere, or nobody could
- * make any of it. Both leave the poll readable, so the people who answered can
- * still see what came of it.
- */
-export async function closePoll(input: {
-  chosenSlotID?: string;
-  eventID?: string;
+export type DecidePollResult =
+  | { status: "already_closed" }
+  | { status: "invalid_slot" }
+  | { status: "not_found" }
+  | {
+      event: Awaited<ReturnType<typeof createEventInTransaction>>;
+      slot: typeof schedulingSlots.$inferSelect;
+      status: "decided";
+    };
+
+/** Atomically elect one slot and create its calendar event. */
+export function decidePoll(input: {
+  calendars: string[];
+  event: NewEvent;
   pollID: string;
-}) {
-  await db
+  slotID: string;
+}): Promise<DecidePollResult> {
+  return db.transaction(async (tx) => {
+    const [poll] = await tx
+      .select()
+      .from(schedulingPolls)
+      .where(eq(schedulingPolls.id, input.pollID))
+      .for("update");
+    if (!poll) return { status: "not_found" };
+    if (poll.closedAt) return { status: "already_closed" };
+
+    const [slot] = await tx
+      .select()
+      .from(schedulingSlots)
+      .where(
+        and(
+          eq(schedulingSlots.id, input.slotID),
+          eq(schedulingSlots.pollID, input.pollID),
+        ),
+      );
+    if (!slot) return { status: "invalid_slot" };
+
+    const event = await createEventInTransaction(
+      tx,
+      input.event,
+      input.calendars,
+    );
+    await tx
+      .update(schedulingPolls)
+      .set({ chosenSlotID: slot.id, closedAt: new Date(), eventID: event.id })
+      .where(eq(schedulingPolls.id, input.pollID));
+    return { event, slot, status: "decided" };
+  });
+}
+
+/** Close an open poll without choosing a slot. */
+export async function closePoll(pollID: string) {
+  const [closed] = await db
     .update(schedulingPolls)
-    .set({
-      chosenSlotID: input.chosenSlotID ?? null,
-      closedAt: new Date(),
-      eventID: input.eventID ?? null,
-    })
-    .where(eq(schedulingPolls.id, input.pollID));
+    .set({ chosenSlotID: null, closedAt: new Date(), eventID: null })
+    .where(
+      and(eq(schedulingPolls.id, pollID), isNull(schedulingPolls.closedAt)),
+    )
+    .returning({ id: schedulingPolls.id });
+  return Boolean(closed);
 }
 
 /** Slots and votes go with it: both cascade from the poll's own row. */
