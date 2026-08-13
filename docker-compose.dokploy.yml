@@ -1,11 +1,10 @@
 # Musubi — the full production stack on Dokploy.
 #
-# Traefik exposes one service only: the Caddy gateway. Caddy owns the stable
-# /api/* versus web split from ops/gateway/Caddyfile, exactly as in the default
-# docker-compose.yml. Do not add Dokploy Domains to web or api.
+# Expose one Dokploy Domain in the UI: service `gateway`, container port 80.
+# Caddy owns the stable /api/* versus web split from ops/gateway/Caddyfile,
+# exactly as in the default docker-compose.yml. Never expose web or api.
 #
 # Required environment:
-#   PUBLIC_HOST=musubi.example.com
 #   BETTER_AUTH_URL=https://musubi.example.com
 #   BETTER_AUTH_SECRET=...              (openssl rand -base64 32)
 #   POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
@@ -30,20 +29,6 @@ services:
     networks:
       dokploy-network: {}
       default: {}
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-gateway.loadbalancer.server.port: "80"
-      traefik.http.routers.musubi-gateway.rule: >-
-        Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your hostname}`)
-      traefik.http.routers.musubi-gateway.entrypoints: websecure
-      traefik.http.routers.musubi-gateway.tls.certresolver: >-
-        ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      traefik.http.middlewares.musubi-https.redirectscheme.scheme: https
-      traefik.http.middlewares.musubi-https.redirectscheme.permanent: "true"
-      traefik.http.routers.musubi-http.rule: Host(`${PUBLIC_HOST}`)
-      traefik.http.routers.musubi-http.entrypoints: web
-      traefik.http.routers.musubi-http.middlewares: musubi-https
     restart: unless-stopped
 
   web:

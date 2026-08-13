@@ -1,11 +1,10 @@
 # Musubi — a Dokploy dev deployment built from the selected branch.
 #
-# Traefik exposes only Caddy. Caddy uses the same checked-in routing contract as
-# production and the default Compose stack, so /api/* cannot fall through to the
-# TanStack web server. Never point this file at production data or secrets.
+# Add one Dokploy Domain in the UI: service `gateway`, container port 80. Caddy
+# uses the same checked-in routing contract as production and the default stack,
+# so /api/* cannot fall through to TanStack. Never expose web or api.
 #
 # Required environment:
-#   PUBLIC_HOST=dev.musubi.pro
 #   BETTER_AUTH_URL=https://dev.musubi.pro
 #   BETTER_AUTH_SECRET=...              (dev-only secret)
 #   POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD
@@ -27,20 +26,6 @@ services:
     networks:
       dokploy-network: {}
       default: {}
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.services.musubi-dev-gateway.loadbalancer.server.port: "80"
-      traefik.http.routers.musubi-dev-gateway.rule: >-
-        Host(`${PUBLIC_HOST:?Set PUBLIC_HOST to your dev hostname}`)
-      traefik.http.routers.musubi-dev-gateway.entrypoints: websecure
-      traefik.http.routers.musubi-dev-gateway.tls.certresolver: >-
-        ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      traefik.http.middlewares.musubi-dev-https.redirectscheme.scheme: https
-      traefik.http.middlewares.musubi-dev-https.redirectscheme.permanent: "true"
-      traefik.http.routers.musubi-dev-http.rule: Host(`${PUBLIC_HOST}`)
-      traefik.http.routers.musubi-dev-http.entrypoints: web
-      traefik.http.routers.musubi-dev-http.middlewares: musubi-dev-https
     restart: unless-stopped
 
   web:
