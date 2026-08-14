@@ -16,6 +16,10 @@ const WEB_MATCHER = /@webclient path ([^\n]+)\n\s*handle @webclient \{\n\s*rever
 // TanStack file routes that produce no URL of their own.
 const NOT_A_ROUTE = new Set(["__root", "index"]);
 
+// Routes the apex is welcome to answer instead. `/favicon.ico` exists here only
+// to return 204, which is worse than the icon a marketing site serves.
+const APEX_MAY_OWN = new Set(["favicon.ico"]);
+
 /** First URL segment of a TanStack file route: `e.$token.tsx` → `e`. */
 function firstSegment(entry: string) {
   const name = entry.replace(/\.(tsx|ts)$/, "");
@@ -33,7 +37,7 @@ function claimedSegments() {
     if (name.startsWith("-") || name.endsWith(".css")) continue;
     if (!entry.isDirectory() && !/\.(tsx|ts)$/.test(name)) continue;
     const segment = entry.isDirectory() ? name : firstSegment(name);
-    if (NOT_A_ROUTE.has(segment)) continue;
+    if (NOT_A_ROUTE.has(segment) || APEX_MAY_OWN.has(segment)) continue;
     segments.add(segment);
   }
   return [...segments].sort();
@@ -48,9 +52,13 @@ function gatewayPaths() {
 describe("gateway routes", () => {
   it("routes every web client route away from the marketing upstream", () => {
     const paths = gatewayPaths();
+    // A wildcard covers `/x`, `/x/` and everything under it; an exact matcher
+    // covers only the string it is, so it has to be spelled both ways or a
+    // stray trailing slash leaves the app.
     const uncovered = claimedSegments().filter(
       (segment) =>
-        !paths.includes(`/${segment}`) && !paths.includes(`/${segment}/*`),
+        !paths.includes(`/${segment}/*`) &&
+        !(paths.includes(`/${segment}`) && paths.includes(`/${segment}/`)),
     );
 
     expect(uncovered).toEqual([]);

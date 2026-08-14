@@ -62,7 +62,14 @@
 	# apex can belong to something else. Keep in sync with apps/web/src/routes —
 	# the gateway-routes test fails on a route that is missing here, because the
 	# symptom otherwise is a new page quietly serving the marketing 404.
-	@webclient path /app /app/* /login /invite/* /e/* /s/* /find-a-time /new-event /healthz /favicon.ico /favicon.svg /assets/* /_serverFn/*
+	#
+	# `path` compares exactly, so a route with no wildcard needs its `/`-suffixed
+	# twin as well: without it `/login/` is somebody else's URL. Wildcards cover
+	# their own trailing slash, because `*` also matches nothing.
+	#
+	# /favicon.ico is deliberately absent: the apex serves the real icon, and the
+	# client's route for it only answers 204.
+	@webclient path /app /app/* /login /login/ /invite/* /e/* /s/* /find-a-time /find-a-time/ /new-event /new-event/ /healthz /healthz/ /favicon.svg /assets/* /_serverFn/*
 	handle @webclient {
 		reverse_proxy {$WEB_UPSTREAM:web:3000}
 	}
