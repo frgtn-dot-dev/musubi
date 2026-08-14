@@ -24,6 +24,11 @@ const WRITE_DELAY_MS = 1_000;
 // (`02-tooling-and-stack.md:16`).
 const store = () => createStore(DATABASE, STORE);
 
+// Every persister that is currently saving. `clearAllSnapshots` silences them
+// before it wipes the store: a write scheduled a moment earlier would otherwise
+// land a moment later and put back what sign-out just removed.
+const writers = new Set<() => void>();
+
 function snapshotKey(namespace: string) {
   return `${namespace}:${SNAPSHOT_KEY}`;
 }
@@ -82,6 +87,15 @@ export function createSnapshotPersister({
     timer = setTimeout(() => void write(), WRITE_DELAY_MS);
   }
 
+  function stop() {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+    unsubscribe?.();
+    unsubscribe = undefined;
+    restoring = true;
+    writers.delete(stop);
+  }
+
   return {
     /** Read the snapshot into the cache. Resolves once, restored or not. */
     async restore() {
@@ -109,23 +123,18 @@ export function createSnapshotPersister({
     subscribe() {
       restoring = false;
       unsubscribe = queryClient.getQueryCache().subscribe(schedule);
+      writers.add(stop);
       // Saving only on the next cache event would mean a client that is already
       // loaded and then goes quiet never gets written at all.
       schedule();
-      return () => this.stop();
+      return stop;
     },
 
-    stop() {
-      if (timer) clearTimeout(timer);
-      timer = undefined;
-      unsubscribe?.();
-      unsubscribe = undefined;
-      restoring = true;
-    },
+    stop,
 
     /** Drop this account's snapshot. Part of the sign-out sequence. */
     async remove() {
-      this.stop();
+      stop();
       await del(key, store()).catch(() => undefined);
     },
   };
@@ -139,5 +148,11 @@ export function createSnapshotPersister({
  * business surviving either (`06-settings-pages-sync.md:167-175`).
  */
 export async function clearAllSnapshots() {
+  // Silence first, then wipe. Sign-out empties the query cache on its way here,
+  // and that emptying is itself a cache event: it schedules a write that would
+  // land after the wipe and recreate the leaving account's key. The provider
+  // that owns the persister is still mounted at this point — it only unmounts
+  // once the navigation to the login route happens, which is later.
+  for (const stop of [...writers]) stop();
   await clear(store()).catch(() => undefined);
 }

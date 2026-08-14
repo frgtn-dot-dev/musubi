@@ -157,6 +157,23 @@ describe("createSnapshotPersister", () => {
     expect(records.size).toBe(0);
   });
 
+  it("leaves nothing behind when the persister is still live", async () => {
+    const { persister, queryClient } = persisterFor("user-1");
+    queryClient.setQueryData(["pages", ORIGIN, "user-1"], []);
+    persister.subscribe();
+    await flushWrites();
+    expect(records.size).toBe(1);
+
+    // Sign-out, in its real order: the cache is emptied and the store wiped
+    // while the provider holding this persister is still mounted. Emptying the
+    // cache schedules a write, and that write must not outlive the wipe.
+    queryClient.clear();
+    await clearAllSnapshots();
+    await flushWrites();
+
+    expect([...records.keys()]).toEqual([]);
+  });
+
   it("survives a store that refuses to write", async () => {
     const { persister, queryClient } = persisterFor("user-1");
     persister.subscribe();
