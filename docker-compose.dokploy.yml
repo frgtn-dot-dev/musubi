@@ -53,9 +53,18 @@ services:
     env_file:
       - .env
     networks:
+      # App traffic never leaves the project network: the gateway reaches the
+      # API by its internal alias, and nothing else needs to.
       default:
         aliases:
           - musubi-api-internal
+      # Except metrics. Prometheus runs as its own Compose project, so the only
+      # place the two can meet is the shared network, under the stable alias the
+      # dashboards and alert rules are written against. A second deployment on
+      # this host must not reuse the name — one alias, one API.
+      dokploy-network:
+        aliases:
+          - musubi-api
     environment:
       ENVIRONMENT: prod
       DATABASE_URL: >-
