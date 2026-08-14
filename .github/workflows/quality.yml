@@ -26,7 +26,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # @musubi/config reads the root .env at import time, which CI does not
+      # have; any package test that imports it needs these three from the
+      # environment instead.
       - run: pnpm check
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musubi
+          ENVIRONMENT: test
+          BETTER_AUTH_URL: http://localhost:7531
 
       - name: Verify generated migrations are committed
         env:
