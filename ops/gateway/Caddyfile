@@ -58,8 +58,20 @@
 		reverse_proxy {$API_UPSTREAM:api:7531}
 	}
 
-	# Everything else is the web client.
-	handle {
+	# The routes the web client owns, listed rather than caught, so that the
+	# apex can belong to something else. Keep in sync with apps/web/src/routes —
+	# the gateway-routes test fails on a route that is missing here, because the
+	# symptom otherwise is a new page quietly serving the marketing 404.
+	@webclient path /app /app/* /login /invite/* /e/* /s/* /find-a-time /new-event /healthz /favicon.ico /favicon.svg /assets/* /_serverFn/*
+	handle @webclient {
 		reverse_proxy {$WEB_UPSTREAM:web:3000}
+	}
+
+	# Everything left over, which is `/` and whatever a marketing site puts
+	# beside it. MARKETING_UPSTREAM is unset on a self-host, so `/` lands on the
+	# web client, whose own `/` redirects to /app — an install with no marketing
+	# site opens the app instead of a landing page nobody asked for.
+	handle {
+		reverse_proxy {$MARKETING_UPSTREAM:web:3000}
 	}
 }
