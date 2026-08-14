@@ -11,6 +11,13 @@ export default defineConfig({
   fullyParallel: true,
   outputDir: "test-results",
   reporter: "list",
+  // Only the first test on each worker is affected: the `/login` probe below
+  // answers before Vite has transformed the route graph or optimized client
+  // deps, so that first navigation is slow and can be cut short by the reload
+  // Vite triggers once it discovers a new dependency. A warm server is not
+  // flaky, so a single retry is the whole fix — a genuinely broken test still
+  // fails twice.
+  retries: process.env.CI ? 1 : 0,
   testDir: "./e2e",
   use: {
     baseURL: origin,
