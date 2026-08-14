@@ -1,7 +1,7 @@
 import { SettingRowAction, SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
-import { CalendarView, Settings } from "@musubi/types";
+import { CalendarView, SettingsPatch } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -18,6 +18,9 @@ import { signOutAndReset } from "@/lib/signOut";
 import { showToast } from "@/components/ui/Toast";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import Constants from "expo-constants";
+import { queueSettingsPatch } from "@/services/settingsSync";
+import { getServerDiagnostics } from "@/lib/serverDiagnostics";
+import { useCalendarsStore } from "@/store/useCalendarsStore";
 
 const SUPPORT_EMAIL = "hello@frgtn.dev";
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -29,6 +32,7 @@ const TERMS_URL = "https://musubi.pro/terms/";
 export default function SettingsTab() {
   const api = useApi();
   const { authClient, apiUrl } = useServer();
+  const calendars = useCalendarsStore((state) => state.calendars);
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
@@ -38,13 +42,13 @@ export default function SettingsTab() {
     dateFormat, setDateFormat,
     theme, setTheme,
     tabBarLabels, setTabBarLabels,
-    onboarded,
   } = useSettingsStore();
 
   const [confrimDeleteVisible, setConfirmDeleteVisible] = useState(false);
   // In-app deletion is email-confirmed, so it needs the server to send email.
   // Assume it can until told otherwise (old servers omit the flag).
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
   useEffect(() => {
     if (!apiUrl) return;
     fetchWithTimeout(`${apiUrl}/api/v1/server`)
@@ -76,6 +80,11 @@ export default function SettingsTab() {
       `Musubi ${appVersion} (${appBuild})`,
       `${Platform.OS} ${String(Platform.Version)}`,
       `Server: ${apiUrl ?? "unknown"}`,
+      `Calendars: ${calendars.length}`,
+      ...calendars.map((calendar) =>
+        `- ${calendar.name}: ${calendar.serverUrl ?? "home"} (${calendar.provider ?? "musubi"})`),
+      "Requests:",
+      getServerDiagnostics(),
     ].join("\n");
     const body = `${intro}\n\n\n---\n${diagnostics}`;
     void openExternal(
@@ -114,6 +123,35 @@ export default function SettingsTab() {
     }
   };
 
+  const changeEmail = async (value: string) => {
+    const next = value.trim().toLowerCase();
+    const current = userSession.data?.user.email;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+      showToast({ message: "That does not look like an email address." });
+      return;
+    }
+    if (!current || next === current.toLowerCase()) return;
+    try {
+      const { error } = await authClient.changeEmail({ newEmail: next });
+      if (error) throw new Error(error.message);
+      success();
+      // Which inbox to check is the whole answer. A verified address approves
+      // the move itself, so a stolen session cannot take the account somewhere
+      // its owner can no longer reach; an unverified one proves the new address
+      // instead. The wording never says whether the new address already exists —
+      // the server answers the same either way, on purpose.
+      showToast({
+        message: userSession.data?.user.emailVerified
+          ? `Check ${current} — approve the change from there.`
+          : `Check ${next} for a link to confirm the new address.`,
+      });
+    } catch (e) {
+      warn();
+      console.error("Email change failed:", e);
+      showToast({ message: userFacingError(e, "Could not start the email change.") });
+    }
+  };
+
   const refresh = useRefreshData();
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async function runRefresh() {
@@ -132,11 +170,8 @@ export default function SettingsTab() {
 
   // Autosave: settings persist the moment they change — no Save button to forget.
   // `patch` carries the just-changed value (store reads here would be stale).
-  const save = (patch: Partial<Settings>) => {
-    api.saveSettings({
-      showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn, timeFormat, dateFormat, theme, onboarded, tabBarLabels,
-      ...patch,
-    }).catch((e) => {
+  const save = (patch: SettingsPatch) => {
+    queueSettingsPatch(api, patch).catch((e) => {
       warn();
       console.error("Settings save failed:", e);
       showToast({ message: userFacingError(e, "This setting could not be saved.") });
@@ -320,6 +355,13 @@ export default function SettingsTab() {
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
+          <Btn
+            label="Change Email"
+            variant="secondary"
+            onPress={() => emailEnabled
+              ? setEmailModalVisible(true)
+              : showToast({ message: "This server can't send email, so a change can't be confirmed here. Ask your server's administrator." })}
+          />
           <Btn label="Sign Out" variant="secondary" onPress={handleSignOut} />
           <Btn
             label="Delete Account"
@@ -330,6 +372,13 @@ export default function SettingsTab() {
           />
         </View>
       </ScrollView >
+      <InputModal
+        visible={emailModalVisible}
+        title="New email address"
+        placeholder={userSession.data?.user.email ?? "you@example.com"}
+        onClose={() => setEmailModalVisible(false)}
+        onConfirm={changeEmail}
+      />
       <InputModal
         visible={nameModalVisible}
         title="Display name"

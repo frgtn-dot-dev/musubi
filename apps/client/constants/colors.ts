@@ -1,7 +1,9 @@
-export const appColors = [
-  { name: "dune", color: "#B3A48A" },
-  { name: "shu", color: "#C8553D" },
-  { name: "moss", color: "#A8B5A0" },
-  { name: "ochre", color: "#D4A574" },
-  { name: "indigo", color: "#7A8BA3" },
-];
+import { MUSUBI_CALENDAR_COLORS } from "@musubi/types";
+
+// Keep the mobile-facing shape while deriving every value from the shared
+// product palette.
+export const appColors: { color: string; name: string }[] =
+  MUSUBI_CALENDAR_COLORS.map(({ hex, name }) => ({
+    color: hex,
+    name,
+  }));

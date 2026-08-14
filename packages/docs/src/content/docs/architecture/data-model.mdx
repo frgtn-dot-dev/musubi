@@ -33,6 +33,7 @@ You rarely edit these — Better Auth's Drizzle adapter owns them. See [Auth in 
 | `userSettings` | Preferences (theme, formats, `onboarded`, `calendarOrder` jsonb) | `id` is the user's FK + primary key; lazy-created conflict-safely on first read |
 | `userAvatars` | Avatar bytes | Stored as a custom **`bytea`** type — see below |
 | `userStatus` | `isSponsor` / `isPremium` flags | |
+| `pages` | Private per-user calendar view profiles (`config` jsonb + `revision`) | Soft-deleted; partial unique index allows one active default per user; lazily backfilled on first `GET /pages` |
 
 <Aside type="caution">
 `userSettings` fields marked optional are **never reset by omission**. `saveUserSettings({ onboarded: undefined })` leaves the stored value untouched — intentional so partial updates don't clobber flags. To actually reset a flag, pass its explicit value.

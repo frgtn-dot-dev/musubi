@@ -1,11 +1,17 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
-const readJson = (relativePath) =>
-  JSON.parse(readFileSync(new URL(relativePath, root), "utf8"));
 const fail = (message) => {
   console.error(`Release metadata error: ${message}`);
   process.exitCode = 1;
+};
+const readJson = (relativePath) => {
+  try {
+    return JSON.parse(readFileSync(new URL(relativePath, root), "utf8"));
+  } catch {
+    fail(`${relativePath} must contain valid JSON`);
+    return {};
+  }
 };
 
 const rootPackage = readJson("package.json");
@@ -68,8 +74,13 @@ if (!/^autoInstallPeers:\s+false\s*$/m.test(workspaceConfig)) {
   fail("pnpm-workspace.yaml must keep autoInstallPeers disabled");
 }
 
-for (const relativePath of ["apps/api/Dockerfile", "packages/docs/Dockerfile"]) {
+for (const relativePath of [
+  "apps/api/Dockerfile",
+  "apps/web/Dockerfile",
+  "packages/docs/Dockerfile",
+]) {
   const source = readFileSync(new URL(relativePath, root), "utf8");
+  const runtimeStage = source.slice(Math.max(0, source.lastIndexOf("\nFROM ")));
   if (/pnpm@\d/.test(source)) {
     fail(`${relativePath} must inherit pnpm from the root manifest through Corepack`);
   }
@@ -78,6 +89,12 @@ for (const relativePath of ["apps/api/Dockerfile", "packages/docs/Dockerfile"]) 
   }
   if (!/FROM node:[^\s]+@sha256:[a-f0-9]{64}/.test(source)) {
     fail(`${relativePath} must pin the Node base image by digest`);
+  }
+  if (!/^USER node$/m.test(runtimeStage)) {
+    fail(`${relativePath} final stage must run as the non-root node user`);
+  }
+  if (!/^HEALTHCHECK /m.test(runtimeStage)) {
+    fail(`${relativePath} final stage must define a container health check`);
   }
 }
 

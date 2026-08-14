@@ -1,0 +1,127 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--surface-canvas);
+}
+
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+/* Focus rings belong to keyboard use. Until a key arms them (see focus-mode.ts)
+   every ring is transparent, so programmatic focus — a dialog opening, focus
+   returning to a trigger — can't flash an outline at someone using a mouse.
+   Outlines don't affect layout, so nothing moves when they light up. */
+:root:not([data-focus-mode="keyboard"]) :focus-visible {
+  outline-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--control-fill);
+  color: var(--control-on-fill);
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.foundation {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.foundation h1 {
+  max-width: 720px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 400;
+  line-height: 1.08;
+}
+
+.foundation p {
+  max-width: 580px;
+  margin: 0 auto;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.foundation > p:first-of-type {
+  color: var(--accent-primary);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.foundation {
+  position: relative;
+  gap: 18px;
+  overflow: hidden;
+}
+
+.foundation__mark {
+  position: absolute;
+  right: -0.05em;
+  bottom: -0.36em;
+  color: var(--text-primary);
+  font-family: var(--font-kanji);
+  font-size: min(42vw, 36rem);
+  line-height: 1;
+  opacity: 0.035;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -334,7 +334,13 @@ function SectionHeader({ group, draggable, onDisconnect, onReconnect, onDragStar
           <View style={{ flex: 1 }}>
             <Text numberOfLines={1} style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: colors.fg3, letterSpacing: 0.5, textTransform: "uppercase" }}>{group.title}</Text>
             {onReconnect ? (
-              <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10, color: colors.accent }}>Authorization expired · reconnect</Text>
+              <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10, color: colors.accent }}>
+                {/* A federated server can't be re-authorized in place — the
+                    member token is replaced by accepting a new invite. */}
+                {group.syncErrorCode === "federation_unauthorized"
+                  ? "Access expired · needs a new invite"
+                  : "Authorization expired · reconnect"}
+              </Text>
             ) : null}
           </View>
         </View>

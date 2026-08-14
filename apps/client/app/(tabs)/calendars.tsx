@@ -18,6 +18,7 @@ import { confirm } from "@/lib/confirm";
 import { warn } from "@/lib/haptics";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
+import { queueSettingsPatch } from "@/services/settingsSync";
 
 
 export default function CalendarsTab() {
@@ -103,19 +104,9 @@ export default function CalendarsTab() {
   // Persist a new drag order: local store first (instant), then the server.
   const persistOrder = (ids: string[]) => {
     setCalendarOrder(ids);
-    api.saveSettings({
-      showKanji: settings.showKanji,
-      notificationsOnByDefault: settings.notificationsOnByDefault,
-      defaultCalendarView: settings.defaultCalendarView,
-      weekStartsOn: settings.weekStartsOn,
-      timeFormat: settings.timeFormat,
-      dateFormat: settings.dateFormat,
-      theme: settings.theme,
-      onboarded: settings.onboarded,
-      calendarOrder: ids,
-    }).catch((e) => {
+    queueSettingsPatch(api, { calendarOrder: ids }).catch((e) => {
       console.error("Order save failed:", e);
-      showToast({ message: userFacingError(e, "Calendar order will sync later.") });
+      showToast({ message: userFacingError(e, "Calendar order could not be saved.") });
     });
   };
 
@@ -166,7 +157,12 @@ export default function CalendarsTab() {
           eventCount={eventCountByCal}
           onOpen={handleOpenCalendar}
           onDisconnect={(g) => handleDisconnect(g.provider!, g.accountId!, g.title)}
-          onReconnect={() => setSyncModalVisible(true)}
+          onReconnect={(g) => g.provider === "musubi"
+            // Federation has no re-authorization: the member token is only
+            // replaced by accepting a new invite, so the sync modal (OAuth /
+            // CalDAV providers) would be a dead end here.
+            ? showToast({ message: `Ask for a new invite link to ${g.title} and open it to reconnect.` })
+            : setSyncModalVisible(true)}
           onReorder={persistOrder}
         />
       </ScrollView>
@@ -182,7 +178,12 @@ export default function CalendarsTab() {
         // Full (not delta) sync: a newly connected account's events predate the
         // delta cursor, so a delta wouldn't pull them (same trap as invite join).
         onConnected={(provider) => {
-          refresh({ full: true, providerSync: provider !== "caldav" }).catch(() => { });
+          // Federation and CalDAV have no server-side provider sync to trigger:
+          // one is another Musubi server behind the gateway, the other imported
+          // its events when it connected. Both still need a FULL refresh — their
+          // events predate the delta cursor.
+          const providerSync = provider !== "caldav" && provider !== "musubi";
+          refresh({ full: true, providerSync }).catch(() => { });
         }}
       />
       <CalendarDetail

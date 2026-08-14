@@ -4,6 +4,7 @@ import { cleanOAuthAccountTokens, disableExternalCalendar, getOAuthCredentials, 
 import { BadRequestError } from "@musubi/types";
 import { revokeGoogleToken } from "../sync/oauth";
 import { decryptToken } from "../tokenCrypto";
+import { notifyCalendarMembers } from "./stream";
 
 const DISCONNECT_PROVIDERS = new Set(["caldav", "google", "microsoft"]);
 
@@ -61,5 +62,6 @@ export async function handlerDisconnectExternalCalendar(req: Request, res: Respo
   const row = await disableExternalCalendar(req.user!.id, calendarId);
   if (!row) throw new BadRequestError("Not an external calendar you can disconnect");
 
-  res.sendStatus(200);
+  notifyCalendarMembers([req.user!.id], "calendar_removed", { id: calendarId });
+  res.status(200).json({ id: calendarId });
 }

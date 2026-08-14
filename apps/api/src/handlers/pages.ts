@@ -26,6 +26,7 @@ const SHELL = (title: string, body: string, script: string) => `<!doctype html>
   button.go{background:var(--fg);color:var(--bg)}
   button.danger{background:var(--accent)}
   button:disabled{opacity:.5;cursor:default}
+  a.btn{display:block;text-align:center;background:var(--fg);color:var(--bg);border-radius:8px;padding:13px;font-size:14px;font-weight:500;text-decoration:none}
   .err{color:var(--accent);font-size:13px;margin:0 0 16px}
   .warn{background:#0e0e12;border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin:0 0 24px;font-size:14px;color:var(--fg)}
   .warn ul{margin:8px 0 0;padding-left:18px;color:var(--muted)}
@@ -105,4 +106,25 @@ export function handlerDeleteAccountPage(_req: Request, res: Response) {
       }catch(x){fail(x.message||'Something went wrong.');go.disabled=false;go.textContent='Delete my account permanently'}
     });`;
   res.status(200).type("html").send(SHELL("Confirm account deletion — Musubi", body, script));
+}
+
+/**
+ * Where the verification link lands when nobody asked for anywhere else.
+ *
+ * Better Auth has already done the work by the time this renders — the address
+ * is confirmed and, with `autoSignInAfterVerification`, the session cookie is
+ * set. So this page has one job: tell the person it worked and get them into
+ * whichever Musubi they came from. On a full-stack deployment "Open Musubi" is
+ * the calendar on this same origin; on an API-only server it is the app.
+ */
+export function handlerEmailVerifiedPage(_req: Request, res: Response) {
+  const body = `
+    <div class="eyebrow">確認済み · Account</div>
+    <h1>Email confirmed</h1>
+    <p class="lead">Your address is verified and you are signed in. Nothing else to do here.</p>
+    <a class="btn" href="/">Open Musubi</a>
+    <footer>Using the phone app? <a href="musubi://">Open it here</a>.</footer>`;
+  // No script: everything already happened server-side, and a page that does
+  // nothing should not ship a line of JavaScript to prove it.
+  res.status(200).type("html").send(SHELL("Email confirmed — Musubi", body, ""));
 }

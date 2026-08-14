@@ -1,21 +1,32 @@
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
-import { Event } from "@musubi/types";
+import type { Event } from "@musubi/types";
 import { logger } from "@musubi/config";
 import { getCaldavAccountById, getCaldavAccountsByUser } from "@musubi/db";
-import { CalendarAdapter, ExternalCalendarInfo, FetchChangesResult, NormalizedEvent } from "../adapter";
-import { createCaldavClient } from "../caldav_client";
+import type {
+  CalendarAdapter,
+  ExternalCalendarInfo,
+  FetchChangesResult,
+  NormalizedEvent,
+} from "../adapter";
+import { createCaldavClient, createGuardedCaldavFetch } from "../caldav_client";
 import { decryptSecret } from "../crypto";
 
 async function clientForAccount(accountId: string) {
   const acc = await getCaldavAccountById(accountId);
   if (!acc) throw new Error("CalDAV account not found");
-  return createCaldavClient(acc.serverUrl, acc.username, decryptSecret(acc.encryptedPassword));
+  return createCaldavClient(
+    acc.serverUrl,
+    acc.username,
+    decryptSecret(acc.encryptedPassword),
+  );
 }
 
 // Basic-auth header for calendar-level ops (MKCALENDAR / PROPPATCH / DELETE) —
 // tsdav's typed client covers objects well, but raw WebDAV keeps the Apple
 // color namespace and MKCALENDAR body under our control.
+const caldavFetch = createGuardedCaldavFetch();
+
 async function basicAuthForAccount(accountId: string) {
   const acc = await getCaldavAccountById(accountId);
   if (!acc) throw new Error("CalDAV account not found");
@@ -23,7 +34,17 @@ async function basicAuthForAccount(accountId: string) {
 }
 
 const escapeXml = (s: string) =>
-  s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!));
+  s.replace(
+    /[<>&'"]/g,
+    (c) =>
+      ({
+        "<": "&lt;",
+        ">": "&gt;",
+        "&": "&amp;",
+        "'": "&apos;",
+        '"': "&quot;",
+      })[c]!,
+  );
 
 // All-day is a tz-less date; anchor to UTC midnight (consistent with the rest of Musubi).
 function utcMidnight(t: { year: number; month: number; day: number }): Date {
@@ -61,12 +82,16 @@ export function veventToFields(vevent: ICAL.Component) {
 
   // EXDATE must survive the round-trip: we push exceptions to the server, and
   // the full-refetch sync would otherwise overwrite them away locally.
-  const exdates = vevent.getAllProperties("exdate")
+  const exdates = vevent
+    .getAllProperties("exdate")
     .map((p) => {
       const t = p.getFirstValue() as ICAL.Time | null;
       if (!t) return null;
       const d = t.isDate ? utcMidnight(t) : t.toJSDate();
-      return `EXDATE:${d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`;
+      return `EXDATE:${d
+        .toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\.\d{3}Z$/, "Z")}`;
     })
     .filter((l): l is string => l !== null);
 
@@ -81,13 +106,18 @@ export function veventToFields(vevent: ICAL.Component) {
     isAllDay,
     description: ev.description ?? null,
     location: ev.location ?? null,
-    organizer: typeof organizer === "string" ? organizer.replace(/^mailto:/i, "") : null,
+    organizer:
+      typeof organizer === "string" ? organizer.replace(/^mailto:/i, "") : null,
     recurrence,
   };
 }
 
 // iCal VEVENT (one calendar object) -> NormalizedEvent
-function icalToNormalized(obj: { url: string; etag?: string; data?: string }): NormalizedEvent | null {
+function icalToNormalized(obj: {
+  url: string;
+  etag?: string;
+  data?: string;
+}): NormalizedEvent | null {
   if (!obj.data) return null;
   let vevent: ICAL.Component | null;
   try {
@@ -112,7 +142,17 @@ function icalToNormalized(obj: { url: string; etag?: string; data?: string }): N
 
 // Musubi Event -> VEVENT component. Shared with calendar export (one VCALENDAR,
 // many VEVENTs) — keep it independent of the wrapping calendar.
-export type IcalEventFields = Pick<Event, "id" | "title" | "description" | "location" | "isAllDay" | "start" | "end" | "recurrence">;
+export type IcalEventFields = Pick<
+  Event,
+  | "id"
+  | "title"
+  | "description"
+  | "location"
+  | "isAllDay"
+  | "start"
+  | "end"
+  | "recurrence"
+>;
 
 export function toVevent(event: IcalEventFields): ICAL.Component {
   const vevent = new ICAL.Component("vevent");
@@ -134,14 +174,22 @@ export function toVevent(event: IcalEventFields): ICAL.Component {
   if (event.recurrence) {
     for (const line of event.recurrence.split("\n")) {
       if (/^(RRULE:)?FREQ=/.test(line)) {
-        vevent.addPropertyWithValue("rrule", ICAL.Recur.fromString(line.replace(/^RRULE:/, "")));
+        vevent.addPropertyWithValue(
+          "rrule",
+          ICAL.Recur.fromString(line.replace(/^RRULE:/, "")),
+        );
       } else if (line.startsWith("EXDATE:")) {
         // Native exception stamps are always UTC (see excludeOccurrence).
         for (const v of line.slice("EXDATE:".length).split(",")) {
           const t = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/);
           if (!t) continue;
-          const d = new Date(Date.UTC(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +t[6]));
-          vevent.addPropertyWithValue("exdate", event.isAllDay ? allDayTime(d) : ICAL.Time.fromJSDate(d, true));
+          const d = new Date(
+            Date.UTC(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +t[6]),
+          );
+          vevent.addPropertyWithValue(
+            "exdate",
+            event.isAllDay ? allDayTime(d) : ICAL.Time.fromJSDate(d, true),
+          );
         }
       }
     }
@@ -167,7 +215,10 @@ export const caldavAdapter: CalendarAdapter = {
     return accounts.map((a) => ({ id: a.id, label: a.username }));
   },
 
-  async listCalendars(_userID: string, accountId: string): Promise<ExternalCalendarInfo[]> {
+  async listCalendars(
+    _userID: string,
+    accountId: string,
+  ): Promise<ExternalCalendarInfo[]> {
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
     return cals
@@ -175,11 +226,18 @@ export const caldavAdapter: CalendarAdapter = {
       .map((c) => ({
         externalId: c.url,
         name: typeof c.displayName === "string" ? c.displayName : "Calendar",
-        color: (typeof c.calendarColor === "string" ? c.calendarColor : "#4285F4").slice(0, 7),
+        color: (typeof c.calendarColor === "string"
+          ? c.calendarColor
+          : "#4285F4"
+        ).slice(0, 7),
       }));
   },
 
-  async fetchChanges(_userID, accountId, externalCalendarId): Promise<FetchChangesResult> {
+  async fetchChanges(
+    _userID,
+    accountId,
+    externalCalendarId,
+  ): Promise<FetchChangesResult> {
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
     const cal = cals.find((c) => c.url === externalCalendarId);
@@ -204,10 +262,13 @@ export const caldavAdapter: CalendarAdapter = {
     const now = Date.now();
     const DAY = 86_400_000;
     const timeRange = {
-      start: new Date(now - 365 * DAY).toISOString(),      // 1 year back
-      end: new Date(now + 3 * 365 * DAY).toISOString(),     // 3 years ahead
+      start: new Date(now - 365 * DAY).toISOString(), // 1 year back
+      end: new Date(now + 3 * 365 * DAY).toISOString(), // 3 years ahead
     };
-    const objects = await client.fetchCalendarObjects({ calendar: cal, timeRange });
+    const objects = await client.fetchCalendarObjects({
+      calendar: cal,
+      timeRange,
+    });
     const changes = objects
       .map((o) => icalToNormalized(o))
       .filter((e): e is NormalizedEvent => e !== null);
@@ -232,11 +293,19 @@ export const caldavAdapter: CalendarAdapter = {
       iCalString: toIcal(event),
     });
     if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
-    const base = externalCalendarId.endsWith("/") ? externalCalendarId : `${externalCalendarId}/`;
+    const base = externalCalendarId.endsWith("/")
+      ? externalCalendarId
+      : `${externalCalendarId}/`;
     return { externalEventId: `${base}${filename}` };
   },
 
-  async pushUpdate(_userID, accountId, _externalCalendarId, externalEventId, event: Event) {
+  async pushUpdate(
+    _userID,
+    accountId,
+    _externalCalendarId,
+    externalEventId,
+    event: Event,
+  ) {
     const client = await clientForAccount(accountId);
     const res = await client.updateCalendarObject({
       calendarObject: { url: externalEventId, data: toIcal(event) },
@@ -249,7 +318,8 @@ export const caldavAdapter: CalendarAdapter = {
     const res = await client.deleteCalendarObject({
       calendarObject: { url: externalEventId },
     });
-    if (!res.ok && res.status !== 404) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
+    if (!res.ok && res.status !== 404)
+      throw new Error(`CalDAV ${res.status} ${res.statusText}`);
   },
 
   async createCalendar(_userID, accountId, { name, color }) {
@@ -257,13 +327,17 @@ export const caldavAdapter: CalendarAdapter = {
     // account has at least one; discovery re-derives partition hosts on iCloud).
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
-    if (cals.length === 0) throw new Error("CalDAV: no calendar home found on this account");
+    if (cals.length === 0)
+      throw new Error("CalDAV: no calendar home found on this account");
     const home = new URL("..", cals[0].url).href;
     const url = `${home}${randomUUID()}/`;
 
-    const res = await fetch(url, {
+    const res = await caldavFetch(url, {
       method: "MKCALENDAR",
-      headers: { Authorization: await basicAuthForAccount(accountId), "Content-Type": "application/xml; charset=utf-8" },
+      headers: {
+        Authorization: await basicAuthForAccount(accountId),
+        "Content-Type": "application/xml; charset=utf-8",
+      },
       body: `<?xml version="1.0" encoding="utf-8"?>
 <C:mkcalendar xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:A="http://apple.com/ns/ical/">
   <D:set><D:prop>
@@ -277,10 +351,18 @@ export const caldavAdapter: CalendarAdapter = {
     return { externalId: url };
   },
 
-  async updateCalendar(_userID, accountId, externalCalendarId, { name, color }) {
-    const res = await fetch(externalCalendarId, {
+  async updateCalendar(
+    _userID,
+    accountId,
+    externalCalendarId,
+    { name, color },
+  ) {
+    const res = await caldavFetch(externalCalendarId, {
       method: "PROPPATCH",
-      headers: { Authorization: await basicAuthForAccount(accountId), "Content-Type": "application/xml; charset=utf-8" },
+      headers: {
+        Authorization: await basicAuthForAccount(accountId),
+        "Content-Type": "application/xml; charset=utf-8",
+      },
       body: `<?xml version="1.0" encoding="utf-8"?>
 <D:propertyupdate xmlns:D="DAV:" xmlns:A="http://apple.com/ns/ical/">
   <D:set><D:prop>
@@ -291,14 +373,16 @@ export const caldavAdapter: CalendarAdapter = {
     });
     // 207 multistatus counts as ok; per-prop failures (e.g. a server ignoring
     // the Apple color prop) are non-fatal — displayname is the one that matters.
-    if (!res.ok && res.status !== 207) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
+    if (!res.ok && res.status !== 207)
+      throw new Error(`CalDAV ${res.status} ${res.statusText}`);
   },
 
   async deleteCalendar(_userID, accountId, externalCalendarId) {
-    const res = await fetch(externalCalendarId, {
+    const res = await caldavFetch(externalCalendarId, {
       method: "DELETE",
       headers: { Authorization: await basicAuthForAccount(accountId) },
     });
-    if (!res.ok && res.status !== 404) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
+    if (!res.ok && res.status !== 404)
+      throw new Error(`CalDAV ${res.status} ${res.statusText}`);
   },
 };

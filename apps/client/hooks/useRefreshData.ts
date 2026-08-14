@@ -1,33 +1,35 @@
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useSettingsStore } from "@/store/useSettingsStore";
 import { reconcileEventNotifications } from "@/services/notifications";
-import { setFederatedAccounts, syncFederatedAccounts } from "@/services/federation";
+import { syncFederatedAccounts } from "@/services/federation";
 import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
+import { refreshSettingsDocument } from "@/services/settingsSync";
+import { mergeHomeEventSnapshot, serializeEventRefresh } from "@/lib/eventSync";
 
 export function useRefreshData() {
   const api = useApi();
   const { loadCalendars } = useCalendarsStore();
   const { loadEvents } = useEventsStore();
-  const { loadSettings } = useSettingsStore();
 
   // providerSync=false: skip triggering the server-side provider sync — used by
   // the SSE "external_sync" handler, where the server JUST synced (re-triggering
   // would loop) and the delta below picks up exactly what changed.
-  // full=true forces a full (non-delta) event sync — needed after JOINING a
-  // calendar (invite accept): its existing events predate `lastSync`, so a delta
-  // would never pull them (you'd only see them after a cache-clearing reinstall).
-  return async (opts?: { providerSync?: boolean; full?: boolean }) => {
+  // full=true forces an authoritative home event snapshot after launch,
+  // reconnect, or joining a calendar. Cached federated events are retained until
+  // their origin server can provide its own authoritative snapshot.
+  return (opts?: { providerSync?: boolean; full?: boolean; settingsOnly?: boolean }) =>
+    serializeEventRefresh(async () => {
     // Load settings FIRST and independently: the onboarding gate (and theme)
     // depend on `onboarded` arriving. It must not be held hostage to the
     // events/calendar pipeline below — a throw there used to leave `onboarded`
     // at its default (true), silently skipping onboarding for new users.
     try {
-      loadSettings(await api.getSettings());
+      await refreshSettingsDocument(api);
     } catch (e) {
       console.error("Settings load failed:", e);
     }
+    if (opts?.settingsOnly) return;
 
     if (opts?.providerSync !== false) {
       // trigger server-side provider sync first, so its imported/changed events
@@ -39,10 +41,14 @@ export function useRefreshData() {
     // Tolerate a garbage stored value → fall back to a full sync (self-heals).
     const lastSync = opts?.full ? null : await getLastSync();
     const sinceDate = lastSync ? new Date(lastSync) : null;
-    const since = sinceDate && !isNaN(sinceDate.getTime()) ? sinceDate : undefined;
+    const since = sinceDate && !Number.isNaN(sinceDate.getTime()) ? sinceDate : undefined;
     const { events, deletedIds, serverTime } = await api.getEvents(since);
+    const cachedCalendars = await cacheGetCalendars();
     if (since === undefined) {
-      await cacheReplaceAllEvents(events); // full sync = authoritative, drops any drift
+      const cachedEvents = await cacheGetAllEvents();
+      await cacheReplaceAllEvents(
+        mergeHomeEventSnapshot(events, cachedEvents, cachedCalendars),
+      );
     } else {
       await cacheUpsertEvents(events);
       await cacheDeleteEvents(deletedIds);
@@ -51,20 +57,12 @@ export function useRefreshData() {
 
     const homeCalendars = await api.getCalendars();
 
-    // Federated servers: the registry's source of truth is the HOME server
-    // (connections roam across devices); SecureStore is the offline fallback.
-    try { await setFederatedAccounts(await api.getMusubiAccounts()); }
-    catch { /* home unreachable or pre-federation server → cached registry */ }
-    // Pull shared calendars + events from each connected Musubi server (v1:
-    // full fetch — no delta). A server that's down keeps its last-cached
-    // calendars so the reconcile below doesn't wipe local copies.
-    const fed = await syncFederatedAccounts(await cacheGetCalendars());
-    // Rotation succeeds at the origin first. Roam the replacement token back
-    // through the home server so other signed-in devices inherit it.
-    for (const account of fed.rotatedAccounts) {
-      try { await api.saveMusubiAccount(account); }
-      catch (e) { console.warn("Could not persist rotated federation token:", e); }
-    }
+    // Pull shared calendars + events from each connected Musubi server through
+    // the home gateway (v1: full fetch — no delta). The registry is refreshed
+    // from the home server inside, falling back to the offline cache; token
+    // rotation now happens server-side (ADR-005). A server that's down keeps
+    // its last-cached calendars so the reconcile below doesn't wipe local copies.
+    const fed = await syncFederatedAccounts(cachedCalendars);
     if (fed.syncedServers.size) {
       // full-set semantics per synced server: cached events living only in that
       // server's calendars and absent from the fresh pull were deleted remotely
@@ -107,5 +105,5 @@ export function useRefreshData() {
     await cacheSetCalendars(calendars);
     // fire-and-forget: drop reminders of gone events, refresh the rest
     reconcileEventNotifications(kept).catch(() => { });
-  };
+  });
 }

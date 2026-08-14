@@ -1,0 +1,7 @@
+{
+  "buildScriptName": "storybook:build",
+  "onlyChanged": true,
+  "projectId": "Project:6a6da68e40cbbc6d84fff732",
+  "storybookBaseDir": "apps/web",
+  "zip": true
+}

@@ -49,12 +49,20 @@ node_modules/
 coverage
 *.lcov
 .nyc_output
+playwright-report/
+test-results/
+chromatic-build-*.xml
+chromatic-diagnostics.json
 
 # Builds
 dist
+.output/
+.tanstack/
+storybook-static/
 
 # AI tooling
 .claude/
+.superdesign/tmp/
 
 # Local notes
 TODO.md
@@ -66,3 +74,6 @@ BUGS.md
 
 # local self-host test dir (not part of the repo)
 /musubi/
+
+# Generated UI screenshots for design review (ui-catalog/README.md explains it)
+ui-catalog/*/

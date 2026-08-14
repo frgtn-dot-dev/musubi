@@ -8,6 +8,7 @@ import { success, warn } from "@/lib/haptics";
 import SocialAuthButtons from "@/components/auth/SocialAuthButtons";
 import { userFacingError } from "@/lib/network";
 import { takePendingInviteHref } from "@/lib/pendingInvite";
+import { isAwaitingConfirmation } from "@/lib/emailVerification";
 
 
 export default function SignUp() {
@@ -56,6 +57,14 @@ export default function SignUp() {
           setIsLoading(false);
           warn();
           Alert.alert("Sign Up Failed", userFacingError(result.error));
+        } else if (isAwaitingConfirmation(result.data)) {
+          setIsLoading(false);
+          success();
+          Alert.alert(
+            "Check your email",
+            `Your account is created. Confirm ${email.trim().toLowerCase()} with the link we sent, then sign in — it expires in an hour.`,
+          );
+          router.replace("/(auth)/sign-in");
         } else {
           success();
           router.replace((await takePendingInviteHref() ?? "/(tabs)") as any);

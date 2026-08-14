@@ -18,6 +18,9 @@ export function chooseOption(
   message: string | undefined,
   options: { label: string; destructive?: boolean; onPress: () => void }[],
   quiet = false, // pickers (view switch…) shouldn't buzz like destructive choices
+  // Backing out is an answer too: a caller waiting on this choice has to hear
+  // it, or it waits forever.
+  onCancel?: () => void,
 ) {
   if (!quiet) warn();
   if (Platform.OS === "ios") {
@@ -30,18 +33,21 @@ export function chooseOption(
         cancelButtonIndex: 0,
         destructiveButtonIndex: destructiveIdx >= 0 ? destructiveIdx + 1 : undefined,
       },
-      (i) => { if (i > 0) options[i - 1].onPress(); },
+      (i) => (i > 0 ? options[i - 1].onPress() : onCancel?.()),
     );
   } else {
     Alert.alert(
       title,
       message,
-      options.map(o => ({
-        text: o.label,
-        style: o.destructive ? "destructive" as const : "default" as const,
-        onPress: o.onPress,
-      })),
-      { cancelable: true },
+      [
+        ...options.map(o => ({
+          text: o.label,
+          style: o.destructive ? "destructive" as const : "default" as const,
+          onPress: o.onPress,
+        })),
+        { text: "Cancel", style: "cancel" as const, onPress: onCancel },
+      ],
+      { cancelable: true, onDismiss: onCancel },
     );
   }
 }

@@ -14,16 +14,25 @@ import { GoogleG } from "@/components/auth/SocialAuthButtons";
 import * as haptics from "@/lib/haptics";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import { hasSeenGoogleDisclosure, markGoogleDisclosureSeen } from "@/lib/googleDisclosure";
+import { parseInviteLink } from "@musubi/types";
+import { router } from "expo-router";
+import { useCalendarsStore } from "@/store/useCalendarsStore";
+import {
+  disconnectFederatedServer,
+  loadFederatedAccounts,
+  refreshFederatedAccounts,
+  type FederatedAccount,
+} from "@/services/federation";
 
 const ICLOUD_URL = "https://caldav.icloud.com";
 const PRIVACY_URL = "https://musubi.pro/privacy/";
 
-type Step = "providers" | "google" | "apple" | "caldav";
+type Step = "providers" | "google" | "apple" | "caldav" | "musubi";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onConnected: (provider: "google" | "microsoft" | "caldav") => void;
+  onConnected: (provider: "google" | "microsoft" | "caldav" | "musubi") => void;
   /** Where the OAuth round-trip lands — onboarding passes its own step so
    *  connecting doesn't dump the user into the app. */
   callbackURL?: string;
@@ -51,6 +60,23 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   const shows = (provider: string) => !available || available.includes(provider);
 
   const [step, setStep] = useState<Step>("providers");
+  // Musubi servers this account is federated with. Loaded when that step opens,
+  // from the home server (the source of truth) with the local registry as the
+  // offline fallback.
+  const [servers, setServers] = useState<FederatedAccount[]>([]);
+  const calendars = useCalendarsStore((state) => state.calendars);
+  // A member token can be revoked or expire, and it can only be replaced by
+  // accepting a new invite — so that state is worth naming rather than leaving
+  // the server looking merely quiet. The flag rides on its calendars, set by the
+  // federated sync when the origin rejected us.
+  const needsInvite = (account: FederatedAccount) =>
+    calendars.some(
+      (calendar) =>
+        calendar.serverUrl === account.server &&
+        calendar.syncStatus === "reconnect_required",
+    );
+  const [serversBusy, setServersBusy] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -62,6 +88,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   const closeSequence = () => {
     onClose();
     setStep("providers");
+    setInviteLink("");
     setServerUrl("");
     setUsername("");
     setPassword("");
@@ -110,6 +137,63 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   const startGoogle = () => (googleAcked ? handleGoogle() : setStep("google"));
   const handleMicrosoft = () => handleOAuth("microsoft", ["Calendars.ReadWrite"], "Outlook");
 
+  const openMusubi = async () => {
+    setStep("musubi");
+    setError("");
+    setServersBusy(true);
+    try {
+      setServers(await refreshFederatedAccounts());
+    } catch {
+      // Offline or the home server is down: the cached registry still names the
+      // servers, which is enough to read and to disconnect from later.
+      setServers(await loadFederatedAccounts());
+    } finally {
+      setServersBusy(false);
+    }
+  };
+
+  const openInvite = () => {
+    const parsed = parseInviteLink(inviteLink, apiUrl ?? "");
+    if (!parsed) {
+      setError("That is not an invite link. Paste the whole link, or just its code.");
+      return;
+    }
+    // The invite screen already previews and accepts, for this server and for a
+    // federated one — routing there beats a second copy of that flow.
+    handleClose();
+    router.push({
+      pathname: "/invite/[token]",
+      params: { token: parsed.token, ...(parsed.server ? { server: parsed.server } : {}) },
+    });
+  };
+
+  const disconnectServer = (account: FederatedAccount) => {
+    Alert.alert(
+      `Disconnect ${account.label}?`,
+      "Its calendars disappear from this account. Nothing is deleted on that server, and a new invite can bring them back.",
+      [
+        { style: "cancel", text: "Cancel" },
+        {
+          style: "destructive",
+          text: "Disconnect",
+          onPress: () => {
+            void (async () => {
+              try {
+                await disconnectFederatedServer(account.server);
+                haptics.success();
+                setServers((current) => current.filter((s) => s.id !== account.id));
+                onConnected("musubi");
+              } catch (e: any) {
+                haptics.warn();
+                Alert.alert("Could not disconnect", userFacingError(e));
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   // Shared for Apple (fixed iCloud server) and generic CalDAV.
   const handleCaldav = async (url: string) => {
     if (!url || !username || !password) {
@@ -135,7 +219,8 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   };
 
   const title =
-    step === "google" ? "Connect Google Calendar"
+    step === "musubi" ? "Musubi servers"
+      : step === "google" ? "Connect Google Calendar"
       : step === "apple" ? "Connect Apple / iCloud"
       : step === "caldav" ? "Connect CalDAV"
       : "Sync a Calendar";
@@ -196,7 +281,84 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
                       />
                     </>
                   )}
+                  {/* Not a provider: another Musubi server is people you share
+                      with, not a system to mirror. It sits here because this is
+                      where someone looks for "add calendars from somewhere else". */}
+                  <Btn
+                    label="Musubi server"
+                    variant="secondary"
+                    icon={<Ionicons name="git-network" size={16} color={colors.fg2} />}
+                    onPress={() => void openMusubi()}
+                  />
                 </View>
+              )}
+
+              {step === "musubi" && (
+                <>
+                  <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
+                    <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.fg2, lineHeight: 21 }}>
+                      Calendars shared from another Musubi server. Paste an invite
+                      link to join one — your server does the handshake and keeps
+                      the credentials, so nothing secret lands on this phone.
+                    </Text>
+                    <View style={styles.fieldContainer}>
+                    <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Invite link</Text>
+                    <TextInput
+                      style={[styles.fieldValueBig, { fontFamily: fonts.sans }]}
+                      placeholder="https://server/invite/…"
+                      placeholderTextColor={colors.fg4}
+                      value={inviteLink}
+                      onChangeText={(value) => { setInviteLink(value); setError(""); }}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                      onSubmitEditing={openInvite}
+                      returnKeyType="go"
+                    />
+                    </View>
+                    {error ? (
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.accent }}>{error}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.modalButtonsColumn}>
+                    <Btn label="Open invite" variant="secondary" disabled={!inviteLink.trim()} onPress={openInvite} />
+                  </View>
+
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 8, gap: 10 }}>
+                    <Text style={[styles.sectionLabel, { paddingHorizontal: 0 }]}>Connected</Text>
+                    {serversBusy && servers.length === 0 ? (
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg3 }}>Loading…</Text>
+                    ) : servers.length === 0 ? (
+                      <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg3 }}>
+                        No other servers yet. An invite link is the only way in — there is no directory to search.
+                      </Text>
+                    ) : (
+                      servers.map((account) => (
+                        <View
+                          key={account.id}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: fonts.sansMedium, fontSize: 15, color: colors.fg }}>
+                              {account.label}
+                            </Text>
+                            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+                              {needsInvite(account) ? "Needs a new invite" : "Connected"}
+                            </Text>
+                          </View>
+                          <Btn
+                            label="Disconnect"
+                            variant="secondary"
+                            onPress={() => disconnectServer(account)}
+                          />
+                        </View>
+                      ))
+                    )}
+                  </View>
+                  <View style={styles.modalButtonsColumn}>
+                    <Btn label="Back" variant="secondary" onPress={() => setStep("providers")} />
+                  </View>
+                </>
               )}
 
               {step === "google" && (

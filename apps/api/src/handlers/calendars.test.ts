@@ -7,7 +7,14 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
-  const { getCalendarDetailsForUser } = await import("./calendars");
+  const { assertImportEventLimit, getCalendarDetailsForUser } =
+    await import("./calendars");
+
+  assert.doesNotThrow(() => assertImportEventLimit(10_000));
+  assert.throws(
+    () => assertImportEventLimit(10_001),
+    (error: any) => error?.kind === "BadRequest",
+  );
 
   let calendarReads = 0;
   let memberReads = 0;
@@ -25,32 +32,30 @@ async function main() {
   };
 
   await assert.rejects(
-    () => getCalendarDetailsForUser(
-      "unrelated-user",
-      "private-calendar",
-      nonMemberDependencies as any,
-    ),
+    () =>
+      getCalendarDetailsForUser(
+        "unrelated-user",
+        "private-calendar",
+        nonMemberDependencies as any,
+      ),
     (error: any) =>
-      error?.kind === "Forbidden"
-      && error?.message === "You're not a member of this calendar.",
+      error?.kind === "Forbidden" &&
+      error?.message === "You're not a member of this calendar.",
   );
   assert.equal(calendarReads, 0, "non-members must not read calendar details");
   assert.equal(memberReads, 0, "non-members must not read calendar members");
 
   let missingCalendarMemberReads = 0;
   await assert.rejects(
-    () => getCalendarDetailsForUser(
-      "member",
-      "missing-calendar",
-      {
+    () =>
+      getCalendarDetailsForUser("member", "missing-calendar", {
         getUserRoleForCalendar: async () => "viewer",
         getCalendar: async () => undefined,
         getCalendarMembers: async () => {
           missingCalendarMemberReads += 1;
           return [];
         },
-      } as any,
-    ),
+      } as any),
     (error: any) => error?.kind === "NotFound",
   );
   assert.equal(
@@ -59,34 +64,34 @@ async function main() {
     "a missing calendar must not trigger a member-list read",
   );
 
-  const details = await getCalendarDetailsForUser(
-    "member",
-    "shared-calendar",
-    {
-      getUserRoleForCalendar: async () => "viewer",
-      getCalendar: async () => ({
-        id: "shared-calendar",
-        name: "Shared",
-        color: "#c8553d",
-      }),
-      getCalendarMembers: async () => [{
+  const details = await getCalendarDetailsForUser("member", "shared-calendar", {
+    getUserRoleForCalendar: async () => "viewer",
+    getCalendar: async () => ({
+      id: "shared-calendar",
+      name: "Shared",
+      color: "#c8553d",
+    }),
+    getCalendarMembers: async () => [
+      {
         user: {
           id: "member",
           name: "Member",
           email: "member@example.com",
         },
-      }],
-    } as any,
-  );
+      },
+    ],
+  } as any);
   assert.deepEqual(details, {
     id: "shared-calendar",
     name: "Shared",
     color: "#c8553d",
-    members: [{
-      id: "member",
-      name: "Member",
-      email: "member@example.com",
-    }],
+    members: [
+      {
+        id: "member",
+        name: "Member",
+        email: "member@example.com",
+      },
+    ],
   });
 
   console.log("calendar detail authorization self-check: OK");

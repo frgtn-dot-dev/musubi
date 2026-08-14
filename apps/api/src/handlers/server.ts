@@ -1,13 +1,40 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { config } from "@musubi/config";
+import { appleWebSignInEnabled } from "@musubi/auth";
+import { canSendEmail } from "@musubi/emails";
+
+const serverVersion = "0.1.3";
 
 // Which social logins this server can actually perform — a provider counts only
 // when its credentials are configured. Lets self-hosted clients render just the
 // buttons that will work against their server (see welcome screen).
+//
+// Which flow a provider is set up for differs by platform, so this list is what
+// the server accepts and each client takes what it can use. Google is both: the
+// phone verifies an identity token against the web client id, the browser does a
+// redirect (which also needs the secret). Microsoft is redirect-only. Apple is
+// the phone alone — it is configured for the native token flow with a bundle id
+// and no web Services ID, so a browser has nothing to redirect to and the web
+// client filters it out.
 function enabledSocials(): string[] {
   const socials: string[] = [];
   if (config.social.googleWebClientID) socials.push("google");
+  if (config.social.microsoftClientID && config.social.microsoftClientSecret) socials.push("microsoft");
   if (config.social.appleClientID) socials.push("apple");
+  return socials;
+}
+
+// The same question for a browser, which needs more: a redirect flow cannot
+// finish without the secret, and Apple's browser flow is a whole separate
+// registration (Services ID + .p8 key) from the app's.
+//
+// A second field rather than a changed `socials`, because the released phone app
+// reads that one as a flat list and must keep seeing what it can do.
+function enabledWebSocials(): string[] {
+  const socials: string[] = [];
+  if (config.social.googleWebClientID && config.social.googleClientSecret) socials.push("google");
+  if (config.social.microsoftClientID && config.social.microsoftClientSecret) socials.push("microsoft");
+  if (appleWebSignInEnabled) socials.push("apple");
   return socials;
 }
 
@@ -23,17 +50,23 @@ function enabledSyncProviders(): string[] {
 }
 
 export function handlerServerStatus(_: Request, res: Response) {
-  res.status(200).json({ ok: true });
+  res.status(200).json({ ok: true, version: serverVersion });
 }
 
 export function handlerServer(_: Request, res: Response) {
   res.status(200).json({
+    version: serverVersion,
     minClientVersion: "0.1.2",
     socials: enabledSocials(),
+    socialsWeb: enabledWebSocials(),
     syncProviders: enabledSyncProviders(),
-    // Whether this server can send email. Password reset and in-app account
-    // deletion both need it, so the client hides/adapts those when it's off.
-    email: config.smtp.host !== "",
+    // Snapshot established during startup, so capability discovery never waits
+    // for an external SMTP server.
+    email: canSendEmail(),
+    // Whether a new account has to confirm its address before it can sign in.
+    // The client cannot infer this from a refused sign-in — "wrong password" and
+    // "not confirmed yet" look the same from outside — so it is said here.
+    emailVerificationRequired: config.security.requireEmailVerification,
   });
 }
 

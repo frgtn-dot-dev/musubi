@@ -1,0 +1,433 @@
+.body {
+	display: grid;
+	padding-bottom: var(--space-4);
+}
+
+.calendarSection,
+.transferSection {
+	display: grid;
+}
+
+/* Side by side once there is room: the list of calendars scrolls on its own and
+   the controls beside it stay where they were put. Stacked, the dialog's single
+   scroller carried both, so reaching Import meant scrolling past every calendar.
+   The columns are the dialog's own rows, so `contents` hands them straight to
+   its grid rather than nesting another one. */
+@media (min-width: 900px) {
+	.body {
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+		align-items: stretch;
+		min-height: 0;
+		padding-bottom: 0;
+	}
+
+	.calendarSection {
+		grid-template-rows: auto auto minmax(0, 1fr);
+		min-height: 0;
+		padding-bottom: 0;
+	}
+
+	.groups {
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding-bottom: var(--space-5);
+	}
+
+	.transferSection {
+		grid-template-rows: auto auto;
+		min-height: 0;
+		overflow-y: auto;
+		border-top: 0;
+		border-left: 1px solid var(--border-subtle);
+	}
+
+	/* One under the other in the side column: two cards there squeeze the file
+     name and the export select into ellipses. Written with the section in front
+     of it so it wins against the base rule further down the file. */
+	.transferSection .transferGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.calendarSection {
+	padding-bottom: var(--space-5);
+}
+
+.transferSection {
+	align-content: start;
+	padding-bottom: var(--space-4);
+	border-top: 1px solid var(--border-subtle);
+}
+
+.sectionHeading {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: var(--space-4);
+	padding: var(--space-5) var(--layer-inline) var(--space-3);
+}
+
+.sectionHeading p {
+	margin: var(--space-1) 0 0;
+	color: var(--text-secondary);
+	font-size: var(--text-11);
+	line-height: 1.45;
+}
+
+.createBar {
+	display: grid;
+	/* Name, where, colour, add. The destination column collapses to nothing when
+     there is no connected account to choose between. */
+	grid-template-columns: minmax(0, 1fr) auto auto auto;
+	align-items: center;
+	gap: var(--space-2);
+	margin: 0 var(--layer-inline) var(--space-5);
+	padding: var(--space-2);
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-lg);
+	background: var(--surface-panel);
+}
+
+.createBar > input {
+	min-width: 0;
+	min-height: var(--control-height);
+	padding-inline: var(--space-3);
+	border: 0;
+	border-radius: var(--radius-control);
+	outline: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font-size: var(--text-14);
+}
+
+.createBar > input:focus-visible {
+	outline: var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.destination {
+	max-width: 11rem;
+}
+
+.calendarDot {
+	width: 9px;
+	height: 9px;
+	border: 1px solid rgb(0 0 0 / 10%);
+	border-radius: var(--radius-pill);
+}
+
+.groups {
+	display: grid;
+	gap: var(--space-5);
+}
+
+.group {
+	display: grid;
+}
+
+.groupHeader {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	padding: 0 var(--layer-inline) var(--space-2);
+}
+
+.groupHeader h3,
+.groupHeader p {
+	margin: 0;
+}
+
+.groupHeader h3 {
+	color: var(--text-primary);
+	font-size: var(--text-13);
+	font-weight: 600;
+}
+
+.groupHeader p {
+	margin-top: 1px;
+	color: var(--text-secondary);
+	font-size: var(--text-10);
+	line-height: 1.35;
+}
+
+.list {
+	margin: 0;
+	padding: 0;
+	border-top: 1px solid var(--border-subtle);
+	list-style: none;
+}
+
+.list > li:last-child > div {
+	border-bottom: 0;
+}
+
+.calendarSwatch {
+	display: block;
+	width: 16px;
+	height: 16px;
+	border: 1px solid rgb(0 0 0 / 12%);
+	border-radius: var(--radius-pill);
+	box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+	transform: translateX(var(--space-1));
+}
+
+.calendarRow {
+	/* The row inset leaves its icon lane on the group mark's optical axis. */
+	padding-left: var(--space-6);
+}
+
+.calendarName {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.calendarName > span:first-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.badge {
+	flex: none;
+	padding: 2px 6px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-pill);
+	color: var(--text-secondary);
+	font-size: 0.58rem;
+	font-weight: 500;
+	letter-spacing: 0.04em;
+	line-height: 1.3;
+	text-transform: uppercase;
+}
+
+.rowActions {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 32px;
+	align-items: center;
+	gap: 2px;
+}
+
+/* A slot is a column whether or not this row can do that thing. */
+.rowActionSlot {
+	display: grid;
+	place-items: center;
+}
+
+.rowActions button[aria-label^="Delete"] {
+	color: color-mix(in srgb, var(--accent-primary) 76%, var(--text-primary));
+}
+
+.transferGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-content: start;
+	gap: var(--space-3);
+	padding: 0 var(--layer-inline);
+}
+
+.transferCard {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-4);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--surface-panel);
+}
+
+.cardHeading {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-3);
+	min-height: 42px;
+}
+
+.cardHeading > svg {
+	flex: none;
+	margin-top: 1px;
+	color: var(--text-muted);
+}
+
+.cardHeading h3,
+.cardHeading p {
+	margin: 0;
+}
+
+.cardHeading h3 {
+	color: var(--text-primary);
+	font-size: var(--text-13);
+	font-weight: 600;
+}
+
+.cardHeading p {
+	margin-top: 2px;
+	color: var(--text-primary);
+	font-size: var(--text-10);
+	line-height: 1.4;
+}
+
+.cardField {
+	padding: 0;
+	border: 0;
+}
+
+/* A file input needs its own <label> to be clickable, so this group cannot be a
+   Field — but it must measure like one, or the column next to it sits two pixels
+   off. Composing the primitive is what keeps them from drifting again. */
+.cardFieldGroup {
+	composes: field from "../../../ui/primitives.module.css";
+}
+
+.cardControlLabel {
+	composes: fieldLabel from "../../../ui/primitives.module.css";
+}
+
+.cardAction {
+	align-self: flex-end;
+	margin-top: auto;
+}
+
+.fileControl {
+	position: relative;
+	display: flex;
+	min-height: var(--control-height);
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	padding: 6px 7px 6px var(--space-3);
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-control);
+	background: var(--surface-raised);
+	cursor: pointer;
+}
+
+.fileControl:focus-within {
+	outline: var(--focus-ring);
+	outline-offset: 2px;
+}
+
+.fileControl input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+.fileCopy {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-primary);
+	font-size: var(--text-11);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.fileButton {
+	flex: none;
+	padding: 5px 8px;
+	border: 1px solid var(--border-medium);
+	border-radius: calc(var(--radius-control) - 2px);
+	color: var(--text-primary);
+	font-size: var(--text-11);
+	font-weight: 500;
+}
+
+.importControls {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: var(--space-2);
+	align-items: center;
+}
+
+.formColorPicker {
+	width: var(--control-height);
+	min-width: var(--control-height);
+	height: var(--control-height);
+}
+
+/* The create bar, two columns instead of four: name, then its colour. */
+.editBar {
+	composes: createBar;
+	grid-template-columns: minmax(0, 1fr) auto;
+	margin: var(--space-4) var(--layer-inline);
+}
+
+.error p,
+.compactError p {
+	margin: 0;
+}
+
+.error,
+.compactError {
+	border: 1px solid
+		color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
+	border-radius: var(--radius-md);
+	background: color-mix(
+		in srgb,
+		var(--accent-primary) 7%,
+		var(--surface-raised)
+	);
+	color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
+	font-size: var(--text-12);
+	line-height: 1.45;
+}
+
+.error {
+	margin: 0 var(--layer-inline);
+	padding: var(--space-3);
+}
+
+.compactError {
+	margin: var(--space-4);
+	padding: var(--space-3);
+}
+
+.error span,
+.compactError span {
+	display: block;
+	margin-top: 2px;
+	font-size: var(--text-10);
+}
+
+.visuallyHidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+	.sectionHeading,
+	.groupHeader {
+		padding-inline: var(--layer-inline);
+	}
+
+	.createBar {
+		grid-template-columns: minmax(0, 1fr) auto;
+		margin-inline: var(--layer-inline);
+	}
+
+	.createBar > button:last-child {
+		grid-column: 1 / -1;
+	}
+
+	.rowActions {
+		gap: 0;
+	}
+
+	.transferGrid {
+		grid-template-columns: minmax(0, 1fr);
+		padding-inline: var(--layer-inline);
+	}
+
+	.error {
+		margin-inline: var(--layer-inline);
+	}
+}

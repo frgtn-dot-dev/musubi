@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" ADD COLUMN "revision" integer DEFAULT 1 NOT NULL;

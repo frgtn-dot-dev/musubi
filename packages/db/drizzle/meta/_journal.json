@@ -239,6 +239,83 @@
       "when": 1784806793435,
       "tag": "0033_busy_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785083971438,
+      "tag": "0034_steady_garia",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785086307300,
+      "tag": "0035_add_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1785694078778,
+      "tag": "0036_cynical_rhodey",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785695820564,
+      "tag": "0037_fat_major_mapleleaf",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1785698770277,
+      "tag": "0038_productive_baron_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785700261297,
+      "tag": "0039_numerous_jetstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1786303668953,
+      "tag": "0040_robust_sleepwalker",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786353443124,
+      "tag": "0041_shocking_the_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786356963578,
+      "tag": "0042_fearless_mentor",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786546697200,
+      "tag": "0043_flippant_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1786605411949,
+      "tag": "0044_ambiguous_red_wolf",
+      "breakpoints": true
     }
   ]
 }

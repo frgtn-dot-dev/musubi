@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { Pressable, PressableProps, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { select, success, tap, thump, warn } from "@/lib/haptics";
+import { motionDurations } from "@musubi/design-system";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const haptics = { select, success, tap, thump, warn };
@@ -26,7 +27,9 @@ export const Tap = forwardRef<View, Props>(function Tap(
   const pressed = useSharedValue(0);
 
   const feedback = useAnimatedStyle(() => ({
-    opacity: withTiming(pressed.value ? 0.65 : 1, { duration: pressed.value ? 40 : 160 }),
+    opacity: withTiming(pressed.value ? 0.65 : 1, {
+      duration: pressed.value ? 40 : motionDurations.native.fast,
+    }),
     transform: [{ scale: withSpring(pressed.value ? scaleTo : 1, { damping: 34, stiffness: 500 }) }],
   }));
 

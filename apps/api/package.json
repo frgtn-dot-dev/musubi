@@ -4,8 +4,8 @@
   "description": "Musubi REST + SSE backend (Express, Better Auth, Drizzle, Postgres).",
   "main": "index.js",
   "scripts": {
-    "dev": "npx tsx src/index.ts",
-    "test": "tsx src/federation.test.ts && tsx src/handlers/calendars.test.ts && tsx src/request_validation.test.ts && tsx src/scheduling.test.ts && tsx src/sync/orchestrator.test.ts && tsx src/sync/adapters/provider_http.test.ts && tsx src/sync/oauth.test.ts && tsx src/sync/adapters/microsoft.test.ts"
+    "dev": "tsx ../../packages/db/src/migrate.ts && tsx watch src/index.ts",
+    "test": "tsx src/federation.test.ts && tsx src/federation_gateway.test.ts && tsx src/federation_stream.test.ts && tsx src/handlers/stream.test.ts && tsx src/handlers/server.test.ts && tsx src/handlers/calendars.test.ts && tsx src/handlers/events.test.ts && tsx src/handlers/settings.test.ts && tsx src/handlers/event_shares.test.ts && tsx src/handlers/scheduling.test.ts && tsx src/handlers/calendar_pages.test.ts && tsx src/middleware/proxy.test.ts && tsx src/request_validation.test.ts && tsx src/scheduling.test.ts && tsx src/sync/orchestrator.test.ts && tsx src/sync/adapters/provider_http.test.ts && tsx src/sync/caldav_client.test.ts && tsx src/sync/oauth.test.ts && tsx src/sync/adapters/microsoft.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",
@@ -15,6 +15,7 @@
     "@musubi/calendar": "workspace:*",
     "@musubi/config": "workspace:*",
     "@musubi/db": "workspace:*",
+    "@musubi/emails": "workspace:*",
     "@musubi/types": "workspace:*",
     "@types/cors": "^2.8.19",
     "better-auth": "^1.6.23",
@@ -22,10 +23,12 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ical.js": "^2.2.1",
+    "ipaddr.js": "^1.9.1",
     "pg": "^8.20.0",
     "prom-client": "^15.1.3",
     "tsdav": "^2.3.0",
     "tsx": "^4.22.4",
+    "undici": "^7.29.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

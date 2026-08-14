@@ -1,0 +1,143 @@
+.page {
+  min-height: 100dvh;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+.navigation {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(
+    in srgb,
+    var(--surface-canvas) 92%,
+    transparent
+  );
+  backdrop-filter: blur(12px);
+}
+
+.navigationInner,
+.content {
+  width: min(680px, calc(100% - var(--space-8)));
+  margin-inline: auto;
+}
+
+.navigationInner {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+}
+
+.backButton {
+  margin-left: calc(var(--space-3) * -1);
+}
+
+.content {
+  padding: var(--space-8) 0 64px;
+}
+
+.heading {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-1) var(--space-5);
+}
+
+.heading h1,
+.heading p {
+  margin: 0;
+}
+
+.heading h1 {
+  font-family: var(--font-serif);
+  font-size: var(--text-26);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.heading p {
+  max-width: 56ch;
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+  line-height: 1.5;
+}
+
+.formSurface {
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sheet);
+  background: var(--surface-panel);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 6%);
+}
+
+@media (min-width: 900px) {
+  .navigationInner,
+  .content {
+    width: min(
+      1120px,
+      calc(100% - clamp(48px, 6vw, 96px))
+    );
+  }
+
+  .content {
+    padding: clamp(var(--space-5), 3vh, var(--space-7)) 0;
+  }
+
+  .heading {
+    padding-bottom: var(--space-4);
+  }
+}
+
+@media (min-width: 1000px) and (min-height: 700px) {
+  .page {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .content {
+    display: grid;
+    height: calc(100dvh - 59px);
+    grid-template-rows: auto minmax(0, 1fr);
+    box-sizing: border-box;
+  }
+
+  .formSurface {
+    min-height: 0;
+  }
+
+  .formSurface > * {
+    height: 100%;
+  }
+}
+
+@media (max-width: 599px) {
+  .navigationInner,
+  .content {
+    width: calc(100% - var(--space-6));
+  }
+
+  .navigationInner {
+    min-height: 54px;
+  }
+
+  .content {
+    padding-top: var(--space-6);
+    padding-bottom: calc(
+      var(--space-8) + env(safe-area-inset-bottom)
+    );
+  }
+
+  .heading {
+    padding-bottom: var(--space-4);
+  }
+
+  .heading h1 {
+    font-size: var(--text-22);
+  }
+
+  .formSurface {
+    border-radius: var(--radius-lg);
+    box-shadow: none;
+  }
+}

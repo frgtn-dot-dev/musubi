@@ -20,7 +20,7 @@ import { cancelEventNotification, getEventNotification, requestEventNotification
 import dayjs from "dayjs";
 import { uuidv7 } from 'uuidv7';
 import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
-import { AdvancedEndType, AdvancedFreq, buildRRule, describeAdvanced, parseAdvanced, parseRRule, RecurrenceOption } from "@/lib/rrule";
+import { AdvancedEndType, AdvancedFreq, buildRRule, describeAdvanced, parseAdvanced, parseRRule, rawUnsupportedRecurrence, RecurrenceOption } from "@/lib/rrule";
 import { validateEventForm } from "@/lib/eventForm";
 import { remoteForCalendar } from "@/services/federation";
 import { Tap } from "@/components/ui/Tap";
@@ -51,7 +51,8 @@ type Props = {
   dockBottomInset?: number;
   onClose: () => void;
   onSave: (event: Event) => Promise<void>;
-  onEdit: (event: Event) => Promise<void>;
+  /** Resolving `false` means the save was called off — keep the composer open. */
+  onEdit: (event: Event) => Promise<boolean | void>;
   calendars: Calendar[];
   event?: Event;
 };
@@ -119,6 +120,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [newLocation, setNewLocation] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>('none');
+  const [unsupportedRecurrence, setUnsupportedRecurrence] = useState<string | null>(null);
   // EXDATE/RDATE lines from the stored recurrence — carried through an edit
   // untouched so deleting one occurrence survives a later series edit.
   const [recurrenceExtras, setRecurrenceExtras] = useState<string[]>([]);
@@ -206,6 +208,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setDetailsOpen(false);
     setAttendeesToggle(false);
     setNewRecurrence('none');
+    setUnsupportedRecurrence(null);
     setRecurrenceExtras([]);
     setSavedUntil(null);
     setAdvFreq('WEEKLY');
@@ -363,6 +366,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         }).catch(() => { });
       }
       const { rrule, extras } = splitRecurrence(event?.recurrence);
+      setUnsupportedRecurrence(rawUnsupportedRecurrence(event?.recurrence));
       setRecurrenceExtras(extras);
       setSavedUntil(rrule.match(/UNTIL=[^;]+/)?.[0] ?? null);
       const option = parseRRule(rrule || null);
@@ -459,7 +463,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       isCanceled: false,
       description: newDescription,
       location: newLocation,
-      recurrence: (() => {
+      recurrence: unsupportedRecurrence ?? (() => {
         let rule = buildRRule(newRecurrence, newStart, {
           freq: advFreq, interval: advInterval, days: advDays,
           endType: advEndType, count: advCount,
@@ -508,7 +512,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       }
 
       if (event?.id) {
-        await onEdit(eventConstruct);
+        // A recurring edit asks which occurrences it belongs to; backing out of
+        // that question must leave the form as it was, not close it empty.
+        if ((await onEdit(eventConstruct)) === false) return;
       } else {
         await onSave(eventConstruct);
       }
@@ -881,7 +887,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                     haptic="select"
                     onPress={() => {
                       setNewRecurrence(opt.value);
+                      if (opt.value !== 'custom') setUnsupportedRecurrence(null);
                       if (opt.value === 'custom' && newRecurrence !== 'custom') {
+                        setUnsupportedRecurrence(null);
                         setAdvFreq('WEEKLY');
                         setAdvInterval(1);
                         setAdvDays(new Set([newStart.getDay() || 1]));
@@ -924,6 +932,35 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           })()}
 
           {newRecurrence === 'custom' && (
+            unsupportedRecurrence ? (
+              <View style={{
+                marginTop: 12, backgroundColor: colors.bg2,
+                borderRadius: 12, padding: 14,
+                borderWidth: 1, borderColor: colors.line, gap: 12,
+              }}>
+                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+                  This imported recurrence uses options this editor cannot safely change. It will be kept exactly as it is.
+                </Text>
+                <Tap
+                  accessibilityRole="button"
+                  accessibilityLabel="Replace with editable recurrence rule"
+                  onPress={() => {
+                    setUnsupportedRecurrence(null);
+                    setSavedUntil(null);
+                    setAdvFreq('WEEKLY');
+                    setAdvInterval(1);
+                    setAdvDays(new Set([newStart.getDay()]));
+                    setAdvEndType('never');
+                    setAdvCount(10);
+                  }}
+                  style={styles.pill}
+                >
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+                    Replace with editable rule
+                  </Text>
+                </Tap>
+              </View>
+            ) : (
             <View style={{
               marginTop: 12, backgroundColor: colors.bg2,
               borderRadius: 12, padding: 14,
@@ -1079,6 +1116,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               </Text>
 
             </View>
+            )
           )}
         </View>
 

@@ -1,10 +1,12 @@
+import { controlHeights, typeSizes } from "@musubi/design-system";
+
 // Shared chrome geometry. Anything that rests above the tab bar (docked
 // composer, toasts) must use the same safe-area-aware height as navigation.
 export const SCREEN_HEADER_HEIGHT = 56;
 export const TAB_BAR_TOP_INSET = 6;
-export const TAB_BAR_ITEM_HEIGHT = 44;
+export const TAB_BAR_ITEM_HEIGHT = controlHeights.touch.compact;
 export const TAB_BAR_MIN_BOTTOM_INSET = 6;
-export const TAB_BAR_LABEL_FONT_SIZE = 10;
+export const TAB_BAR_LABEL_FONT_SIZE = typeSizes[10];
 // With labels the content reaches lower in the item, so give the bar extra
 // bottom padding. Folded into the shared helpers below so the docked composer
 // and toasts (which rest on the bar) follow the height automatically.

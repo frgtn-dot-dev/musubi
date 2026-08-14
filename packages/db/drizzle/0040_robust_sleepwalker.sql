@@ -1,0 +1,1 @@
+ALTER TABLE "scheduling_polls" ADD COLUMN "approximate_start_time" text;

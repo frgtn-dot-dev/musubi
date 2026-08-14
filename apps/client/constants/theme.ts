@@ -1,3 +1,11 @@
+import {
+  controlHeights,
+  radii,
+  spacing,
+  themeTokens,
+  typeSizes,
+  type ThemeTokens,
+} from "@musubi/design-system";
 import { StyleSheet } from "react-native";
 import { SCREEN_HEADER_HEIGHT } from "@/constants/layout";
 
@@ -9,42 +17,31 @@ export const fonts = {
   kanji: 'ShipporiMinchoB1_400Regular',
 };
 
-// Two zen palettes: sumi ink on night (dark) and ink on washi paper (light).
-const dark = {
-  bg: '#0c0c0e',
-  bg1: '#131316',
-  bg2: '#1a1a1e',
-  bg3: '#222226',
-  line: 'rgba(232,228,217,0.06)',
-  line2: 'rgba(232,228,217,0.10)',
-  line3: 'rgba(232,228,217,0.18)',
-  fg: '#e8e4d9',
-  fg2: 'rgba(232,228,217,0.72)',
-  fg3: 'rgba(232,228,217,0.48)',
-  fg4: 'rgba(232,228,217,0.28)',
-  accent: '#c8553d',
-  fill: '#e8e4d9',      // solid background of active pills / primary buttons
-  onFill: '#0c0c0e',    // text/icon sitting on `fill`
-};
+// Transitional aliases keep existing native components stable while their
+// values come from the same semantic roles as the web renderer.
+function makeNativePalette(tokens: ThemeTokens) {
+  return {
+    bg: tokens.surfaceCanvas,
+    bg1: tokens.surfacePanel,
+    bg2: tokens.surfaceRaised,
+    bg3: tokens.surfaceSunken,
+    line: tokens.borderSubtle,
+    line2: tokens.borderMedium,
+    line3: tokens.borderStrong,
+    fg: tokens.textPrimary,
+    fg2: tokens.textSecondary,
+    fg3: tokens.textMuted,
+    fg4: tokens.textFaint,
+    accent: tokens.accentPrimary,
+    fill: tokens.controlFill,
+    onFill: tokens.controlOnFill,
+  };
+}
 
-const light: typeof dark = {
-  bg: '#f4f1e8',
-  bg1: '#efebe0',
-  bg2: '#e8e3d5',
-  bg3: '#dfd9c9',
-  line: 'rgba(28,27,24,0.08)',
-  line2: 'rgba(28,27,24,0.13)',
-  line3: 'rgba(28,27,24,0.24)',
-  fg: '#1c1b18',
-  fg2: 'rgba(28,27,24,0.74)',
-  fg3: 'rgba(28,27,24,0.50)',
-  fg4: 'rgba(28,27,24,0.32)',
-  accent: '#b3492f', // deeper vermilion — keeps contrast on paper
-  fill: '#4a4741',      // dark warm grey, not full ink — softer active fills
-  onFill: '#f4f1e8',
-};
+const dark = makeNativePalette(themeTokens.dark);
+const light = makeNativePalette(themeTokens.light);
 
-export type ThemeScheme = 'dark' | 'light';
+export type ThemeScheme = keyof typeof themeTokens;
 
 // `colors`, `styles` and `calendarTheme` are MUTABLE singletons: every
 // component reads them at render time, so applyTheme() swaps their contents
@@ -70,7 +67,7 @@ const makeStyles = () => StyleSheet.create({
   },
   header: {
     height: SCREEN_HEADER_HEIGHT,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing[4],
     paddingVertical: 6,
     justifyContent: 'center',
     borderBottomWidth: 1,
@@ -79,7 +76,7 @@ const makeStyles = () => StyleSheet.create({
   },
   screenTitle: {
     fontFamily: fonts.serif,
-    fontSize: 20,
+    fontSize: typeSizes[20],
     color: colors.fg,
   },
   pillActive: {
@@ -88,9 +85,9 @@ const makeStyles = () => StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: colors.line3,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderCurve: 'continuous',
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing[3],
     paddingVertical: 6,
     backgroundColor: colors.bg2,
   },
@@ -100,9 +97,9 @@ const makeStyles = () => StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderCurve: 'continuous',
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing[3],
     paddingVertical: 6,
   },
   horizontalPillView: {
@@ -112,11 +109,11 @@ const makeStyles = () => StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    right: 16,
-    bottom: 16,
-    height: 44,
-    minWidth: 44,
-    paddingHorizontal: 16,
+    right: spacing[4],
+    bottom: spacing[4],
+    height: controlHeights.touch.compact,
+    minWidth: controlHeights.touch.compact,
+    paddingHorizontal: spacing[4],
     borderRadius: 26,
     backgroundColor: colors.fill,
     alignItems: 'center',
@@ -124,10 +121,10 @@ const makeStyles = () => StyleSheet.create({
   },
   fabRemove: {
     position: 'absolute',
-    left: 16,
-    bottom: 16,
-    width: 44,
-    height: 44,
+    left: spacing[4],
+    bottom: spacing[4],
+    width: controlHeights.touch.compact,
+    height: controlHeights.touch.compact,
     borderRadius: 26,
     backgroundColor: colors.fill,
     alignItems: 'center',
@@ -143,8 +140,8 @@ const makeStyles = () => StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: colors.bg1,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
     borderCurve: 'continuous',
     // FIXED dp, not a percentage: with statusBarTranslucent the Modal window's
     // height settles a beat after open — a %-minHeight recomputed against the
@@ -162,7 +159,7 @@ const makeStyles = () => StyleSheet.create({
   },
   modalTitleRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing[3],
     alignItems: 'center',
     paddingHorizontal: 22,
     paddingBottom: 14,
@@ -175,17 +172,17 @@ const makeStyles = () => StyleSheet.create({
     paddingVertical: 10,
   },
   container: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
   },
   fieldContainer: {
-    padding: 16,
+    padding: spacing[4],
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
   fieldLabel: {
     fontFamily: fonts.sans,
-    fontSize: 10,
+    fontSize: typeSizes[10],
     color: colors.fg4,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -193,23 +190,23 @@ const makeStyles = () => StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: fonts.sansMedium,
-    fontSize: 10,
+    fontSize: typeSizes[10],
     letterSpacing: 1.5,
     color: colors.fg4,
     textTransform: 'uppercase',
   },
   fieldValueText: {
     color: colors.fg,
-    fontSize: 14,
+    fontSize: typeSizes[14],
   },
   fieldValueBig: {
     color: colors.fg,
-    fontSize: 20,
+    fontSize: typeSizes[20],
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 10,
-    padding: 16,
+    padding: spacing[4],
   },
   modalButtonsColumn: {
     flexDirection: 'column',
@@ -218,15 +215,15 @@ const makeStyles = () => StyleSheet.create({
     justifyContent: "flex-end",
     flex: 1,
     gap: 10,
-    padding: 16,
+    padding: spacing[4],
   },
   btnPrimary: {
     flex: 1,
-    maxHeight: 48,
-    minHeight: 48,
+    maxHeight: controlHeights.touch.control,
+    minHeight: controlHeights.touch.control,
     gap: 6,
     backgroundColor: colors.fill,
-    borderRadius: 10,
+    borderRadius: radii.control,
     padding: 13,
     flexDirection: "row",
     justifyContent: "center",
@@ -234,12 +231,12 @@ const makeStyles = () => StyleSheet.create({
   },
   btnSecondary: {
     flex: 1,
-    maxHeight: 48,
-    minHeight: 48,
+    maxHeight: controlHeights.touch.control,
+    minHeight: controlHeights.touch.control,
     gap: 6,
     borderWidth: 1,
     borderColor: colors.line2,
-    borderRadius: 10,
+    borderRadius: radii.control,
     padding: 13,
     flexDirection: "row",
     justifyContent: "center",
@@ -247,11 +244,11 @@ const makeStyles = () => StyleSheet.create({
   },
   btnRemove: {
     flex: 1,
-    maxHeight: 48,
-    minHeight: 48,
+    maxHeight: controlHeights.touch.control,
+    minHeight: controlHeights.touch.control,
     gap: 6,
     backgroundColor: "#C8553D",
-    borderRadius: 10,
+    borderRadius: radii.control,
     padding: 13,
     flexDirection: "row",
     justifyContent: "center",
@@ -259,11 +256,11 @@ const makeStyles = () => StyleSheet.create({
   },
   btnDisabled: {
     flex: 1,
-    maxHeight: 48,
-    minHeight: 48,
+    maxHeight: controlHeights.touch.control,
+    minHeight: controlHeights.touch.control,
     gap: 6,
     backgroundColor: colors.fg3,
-    borderRadius: 10,
+    borderRadius: radii.control,
     padding: 13,
     flexDirection: "row",
     justifyContent: "center",
@@ -272,26 +269,26 @@ const makeStyles = () => StyleSheet.create({
   btnPrimaryText: {
     color: colors.onFill,
     fontFamily: fonts.sansMedium,
-    fontSize: 13,
+    fontSize: typeSizes[13],
   },
   btnSecondaryText: {
     color: colors.fg2,
     fontFamily: fonts.sansMedium,
-    fontSize: 13,
+    fontSize: typeSizes[13],
   },
   modalTitle: {
     fontFamily: fonts.serif,
-    fontSize: 22,
+    fontSize: typeSizes[22],
     color: colors.fg,
   },
   errorText: {
     color: colors.accent,
     fontFamily: fonts.sans,
-    fontSize: 12,
+    fontSize: typeSizes[12],
   },
   textInput: {
     fontFamily: fonts.sans,
-    fontSize: 20,
+    fontSize: typeSizes[20],
     color: colors.fg2,
   },
   colorDot: {
@@ -302,7 +299,7 @@ const makeStyles = () => StyleSheet.create({
   calendarCircle: {
     width: 28,
     height: 28,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.line3,
     position: 'relative',
@@ -311,7 +308,7 @@ const makeStyles = () => StyleSheet.create({
   calendarCircleInner: {
     position: 'absolute',
     inset: 4,
-    borderRadius: 14,
+    borderRadius: radii.lg,
     opacity: 0.9,
   },
   modalActionBtn: {
@@ -329,47 +326,47 @@ const makeStyles = () => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing[5],
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
   section: {
-    paddingHorizontal: 16,
-    marginBottom: 28,
-    gap: 12,
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[7],
+    gap: spacing[3],
   },
   screenActions: {
     flexDirection: 'row',
     gap: 10,
-    padding: 16,
+    padding: spacing[4],
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
   timelineRow: {
     flexDirection: 'row',
-    paddingVertical: 8,
+    paddingVertical: spacing[2],
     borderBottomWidth: 1,
     borderColor: colors.line,
   },
   timelineDay: {
     fontFamily: fonts.serif,
-    fontSize: 24,
+    fontSize: typeSizes[24],
     color: colors.fg,
   },
   timelineMonth: {
     fontFamily: fonts.sans,
-    fontSize: 12,
+    fontSize: typeSizes[12],
     color: colors.fg3,
   },
   timelineTitle: {
     fontFamily: fonts.sans,
-    fontSize: 14,
+    fontSize: typeSizes[14],
     color: colors.fg,
   },
   timelineMeta: {
     fontFamily: fonts.sans,
-    fontSize: 10,
+    fontSize: typeSizes[10],
     color: colors.fg3,
   },
 });
@@ -393,8 +390,8 @@ const makeCalendarTheme = () => ({
   },
   typography: {
     fontFamily: fonts.sans,
-    xs: { fontSize: 10 },
-    sm: { fontSize: 12 },
+    xs: { fontSize: typeSizes[10] },
+    sm: { fontSize: typeSizes[12] },
   },
   eventCellOverlappingStyle: {
     borderRadius: 4,

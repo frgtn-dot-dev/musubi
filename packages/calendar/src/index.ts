@@ -3,3 +3,4 @@
 export * from './datetime'
 export * from './interfaces'
 export * from './recurrence'
+export * from './recurrence-edit'

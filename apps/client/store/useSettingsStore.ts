@@ -1,6 +1,7 @@
 
-import { CalendarView, Settings } from "@musubi/types";
+import { CalendarView, Settings, SettingsDocument } from "@musubi/types";
 import { cacheGetSettingsSync, cacheSetSettings } from "@/services/eventsCache";
+import { defaultSettings } from "@/lib/settingsDefaults";
 import { create } from "zustand";
 
 // Seed the initial state from the local snapshot SYNCHRONOUSLY — the theme has
@@ -10,13 +11,13 @@ const persisted = cacheGetSettingsSync();
 
 
 type SettingsStore = {
-  loadSettings: (settings: Settings) => void,
+  clearSettingsDocument: () => void,
+  loadSettingsDocument: (document: SettingsDocument, optimistic?: Partial<Settings>) => void,
+  settingsDocument: SettingsDocument | null,
   defaultCalendarView: CalendarView,
   setDefaultCalendarView: (view: CalendarView) => void,
   weekStartsOn: "monday" | "sunday",
   setWeekStartsOn: (start: "monday" | "sunday") => void,
-  accentColor: string,
-  setAccentColor: (color: string) => void,
   showKanji: boolean,
   setShowKanji: (value: boolean) => void,
   notificationsOnByDefault: boolean,
@@ -37,7 +38,19 @@ type SettingsStore = {
 
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
-  loadSettings: (settings: Settings) => set(() => (settings)),
+  clearSettingsDocument: () => set(() => ({
+    ...defaultSettings,
+    settingsDocument: null,
+  })),
+  loadSettingsDocument: (document, optimistic = {}) => set((state) =>
+    state.settingsDocument && state.settingsDocument.revision > document.revision
+      ? {}
+      : {
+        ...document.value,
+        ...optimistic,
+        settingsDocument: document,
+      }),
+  settingsDocument: null,
   defaultCalendarView: "month",
   setDefaultCalendarView: (view) => set(() => ({
     defaultCalendarView: view,
@@ -45,10 +58,6 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   weekStartsOn: "monday",
   setWeekStartsOn: (start) => set(() => ({
     weekStartsOn: start,
-  })),
-  accentColor: "#c8553d",
-  setAccentColor: (color) => set(() => ({
-    accentColor: color,
   })),
   showKanji: true,
   setShowKanji: (value) => set(() => ({
@@ -75,7 +84,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     tabBarLabels: value,
   })),
   // default true so existing sessions never flash the onboarding screen —
-  // the server's value arrives via loadSettings and wins
+  // the server's value arrives via loadSettingsDocument and wins
   onboarded: true,
   calendarOrder: [],
   setCalendarOrder: (ids) => set(() => ({ calendarOrder: ids })),

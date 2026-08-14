@@ -4,12 +4,16 @@ import { Gesture } from "react-native-gesture-handler";
 import { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { motionDurations } from "@musubi/design-system";
 
 // Programmatic enter/exit use TIMING with a deceleration curve: springs are
 // kept for gesture release only (where finger velocity makes them feel right).
 // An overdamped spring here had two uglies — a hard initial lurch and a slow
 // asymptotic tail that made sheets visibly creep up ~4px after "settling".
-const ENTER = { duration: 320, easing: Easing.out(Easing.cubic) };
+const ENTER = {
+  duration: motionDurations.native.slow,
+  easing: Easing.out(Easing.cubic),
+};
 const EXIT = { duration: 240, easing: Easing.in(Easing.cubic) };
 const SPRING = { damping: 28, stiffness: 240, mass: 0.8 };
 const DISMISS_DISTANCE = 100;

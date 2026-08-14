@@ -1,26 +1,34 @@
 {
   "name": "musubi",
   "private": true,
-  "version": "0.1.2",
-  "description": "Musubi monorepo — open, self-hostable shared calendar.",
+  "version": "0.1.3",
+  "description": "Musubi monorepo \u2014 open, self-hostable shared calendar.",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --ui=tui",
+    "dev": "turbo run dev storybook --ui=tui",
     "build": "turbo run build",
     "docs:dev": "pnpm --filter @musubi/docs dev",
     "docs:build": "pnpm --filter @musubi/docs build",
+    "storybook:web": "pnpm --filter @musubi/web storybook",
+    "storybook:web:build": "pnpm --filter @musubi/web storybook:build",
+    "storybook:web:test": "pnpm --filter @musubi/web test:storybook",
+    "chromatic:web": "pnpm --filter @musubi/web chromatic",
     "release:verify": "node scripts/verify-release.mjs",
+    "scan:bundle": "node scripts/scan-client-bundle.mjs",
     "peers:check": "pnpm peers check",
-    "typecheck": "pnpm --filter @musubi/client exec tsc --noEmit && pnpm exec tsc -p apps/api/tsconfig.json --noEmit --skipLibCheck",
-    "test": "pnpm --filter @musubi/client exec tsx lib/eventForm.test.ts && pnpm --filter @musubi/client exec tsx lib/rrule.test.ts && pnpm --filter @musubi/client exec tsx lib/ics.test.ts && pnpm --filter @musubi/api test && pnpm --filter @musubi/db test",
+    "typecheck": "pnpm --filter @musubi/design-system typecheck && pnpm --filter @musubi/client exec tsc --noEmit && pnpm exec tsc -p apps/api/tsconfig.json --noEmit --skipLibCheck && pnpm --filter @musubi/web typecheck",
+    "test": "pnpm --filter @musubi/design-system test && pnpm --filter @musubi/config test && pnpm --filter @musubi/emails test && pnpm --filter @musubi/auth test && pnpm --filter @musubi/calendar test && pnpm --filter @musubi/client exec tsx lib/eventForm.test.ts && pnpm --filter @musubi/client exec tsx lib/rrule.test.ts && pnpm --filter @musubi/client exec tsx lib/ics.test.ts && pnpm --filter @musubi/client test && pnpm --filter @musubi/api test && pnpm --filter @musubi/db test && pnpm --filter @musubi/web test",
     "test:db:oauth": "pnpm --filter @musubi/api exec tsx src/handlers/connections.integration.test.ts",
+    "test:db:pages": "pnpm --filter @musubi/api exec tsx src/handlers/calendar_pages.integration.test.ts",
+    "test:db:scheduling": "pnpm --filter @musubi/api exec tsx src/handlers/scheduling.integration.test.ts",
     "test:federation-db": "pnpm --filter @musubi/api exec tsx src/federation.integration.test.ts",
+    "test:db:federation-gateway": "pnpm --filter @musubi/api exec tsx src/federation_gateway.integration.test.ts",
     "test:provider-db": "pnpm --filter @musubi/api exec tsx src/sync/oauth.integration.test.ts",
     "check": "pnpm release:verify && pnpm peers:check && pnpm typecheck && pnpm test && pnpm lint && pnpm build",
-    "lint": "pnpm --filter @musubi/client lint",
+    "lint": "pnpm --filter @musubi/client lint && pnpm --filter @musubi/web lint",
     "db:generate": "pnpm -F @musubi/db exec drizzle-kit generate",
     "db:migrate": "pnpm -F @musubi/db exec drizzle-kit migrate"
   },
@@ -29,8 +37,19 @@
   "license": "MIT",
   "packageManager": "pnpm@11.8.0",
   "devDependencies": {
+    "@chromatic-com/storybook": "^5.2.1",
+    "@storybook/addon-a11y": "10.5.5",
+    "@storybook/addon-docs": "10.5.5",
+    "@storybook/addon-vitest": "10.5.5",
+    "@storybook/tanstack-react": "10.5.5",
+    "@vitest/browser-playwright": "4.1.10",
+    "@vitest/coverage-v8": "4.1.10",
+    "chromatic": "16.10.0",
     "expo": "catalog:",
+    "expo-router": "catalog:",
+    "storybook": "10.5.5",
     "turbo": "^2.10.6",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "4.1.10"
   }
 }

@@ -15,6 +15,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  isAnonymous: boolean("is_anonymous").default(false).notNull(),
   // Federation: a "shadow account" for a member whose real account lives on
   // another Musubi server. isExternal users have no password/session — they
   // authenticate with a member token (member_tokens) issued on invite accept.
@@ -148,6 +149,7 @@ export const userSettings = pgTable("user_settings", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+  revision: integer("revision").notNull().default(1),
   // settings
   showKanji: boolean("show_kanji").notNull().default(true),
   notificationsOnByDefault: boolean("notifications_on_by_default").notNull().default(true),
@@ -240,6 +242,167 @@ export const eventsRelations = relations(events, ({ many, one }) => ({
   user: one(user, { fields: [events.creatorID], references: [user.id] }),
 }));
 
+
+// A published event page. No row means the event is private, which is every
+// event until somebody says otherwise — publishing is always an explicit act.
+//
+// The token, not the event id, is what a URL carries: an id is guessable by
+// anyone who has seen another one, and revoking a share has to be able to kill
+// the old URL without renaming the event everywhere else.
+export const eventShares = pgTable("event_shares", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  eventID: uuid("event_id")
+    .references(() => events.id, { onDelete: "cascade" })
+    .notNull(),
+  // 128 bits of randomness, hex. Long enough that a link is a credential.
+  token: text("token").notNull().unique(),
+  // `link` — anyone holding the URL, never indexed. `public` — the same, but the
+  // page may say it can be indexed. Access control and indexability are separate
+  // questions and the PRD keeps them separate on purpose.
+  mode: text("mode").notNull(),
+  indexable: boolean("indexable").notNull().default(false),
+  // What a reader of the page learns about who is coming. The organizer decides
+  // (PRD §18.2) — `counts` says how many, `names` says who, `hidden` says
+  // nothing. Never a default that reveals more than the previous state did.
+  attendeeVisibility: text("attendee_visibility").notNull().default("counts"),
+  // How the page looks — a closed set of choices validated at the handler
+  // (`@musubi/types` EventPageThemeSchema), stored as JSONB so adding a knob
+  // later is a schema change in one place rather than a migration per knob.
+  theme: jsonb("theme").notNull().default({}),
+  createdBy: text("created_by")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  // Revoked shares are kept: the token must stay burned rather than be free to
+  // be issued again, and "this used to be public" is worth being able to see.
+  revokedAt: timestamp("revoked_at"),
+});
+
+export type NewEventShare = typeof eventShares.$inferInsert;
+
+export const eventSharesRelations = relations(eventShares, ({ one }) => ({
+  event: one(events, { fields: [eventShares.eventID], references: [events.id] }),
+}));
+
+// ── Scheduling (group poll) ──────────────────────────────────────────────────
+// "When can everyone meet?" — a set of candidate slots people mark up. This is
+// the group poll from PRD §19.1, deliberately NOT a booking page: a poll looks
+// for a time that suits everyone, a booking page hands out one of the
+// organizer's free slots. Mixing them is what the PRD warns against.
+export const schedulingPolls = pgTable("scheduling_polls", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  ownerID: text("owner_id").references(() => user.id, { onDelete: "cascade" }),
+  ownerEmail: text("owner_email").notNull(),
+  ownerName: text("owner_name").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  /** Optional wall-clock hint only; decided events remain all-day. */
+  approximateStartTime: text("approximate_start_time"),
+  durationMinutes: integer("duration_minutes").notNull(),
+  // The link is the invitation, same as a published event page: unguessable,
+  // and revocable by closing the poll rather than by renaming anything.
+  token: text("token").notNull().unique(),
+  deadline: timestamp("deadline"),
+  // Where the decided event lands. Chosen when the poll is written, used days
+  // later when a day is picked — so it has to be stored rather than guessed at
+  // the end. Null for polls made without an account: those resolve to the
+  // creator's own calendar when they decide.
+  calendarID: uuid("calendar_id").references(() => calendars.id, {
+    onDelete: "set null",
+  }),
+  // Set when the organizer picks. The poll stays readable afterwards so people
+  // who voted can see what was chosen without hunting for the calendar invite.
+  chosenSlotID: uuid("chosen_slot_id"),
+  eventID: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+  closedAt: timestamp("closed_at"),
+});
+
+export type NewSchedulingPoll = typeof schedulingPolls.$inferInsert;
+
+export const schedulingSlots = pgTable("scheduling_slots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pollID: uuid("poll_id")
+    .references(() => schedulingPolls.id, { onDelete: "cascade" })
+    .notNull(),
+  start: timestamp("start_at").notNull(),
+  end: timestamp("end_at").notNull(),
+});
+
+export type NewSchedulingSlot = typeof schedulingSlots.$inferInsert;
+
+export const schedulingParticipants = pgTable(
+  "scheduling_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pollID: uuid("poll_id")
+      .references(() => schedulingPolls.id, { onDelete: "cascade" })
+      .notNull(),
+    userID: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+  },
+  (table) => [
+    unique("scheduling_participants_poll_email_unique").on(
+      table.pollID,
+      table.email,
+    ),
+  ],
+);
+
+// One row per person per slot. `yes` / `if-needed` / `no` — the middle one is
+// what makes a poll converge, so it is a first-class answer rather than an
+// absence.
+export const schedulingVotes = pgTable(
+  "scheduling_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    slotID: uuid("slot_id")
+      .references(() => schedulingSlots.id, { onDelete: "cascade" })
+      .notNull(),
+    participantID: uuid("participant_id")
+      .references(() => schedulingParticipants.id, { onDelete: "cascade" })
+      .notNull(),
+    // Kept through the transition for rollback; new writes use participantID.
+    userID: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+  },
+  (table) => [
+    unique("scheduling_votes_slot_participant_unique").on(
+      table.slotID,
+      table.participantID,
+    ),
+  ],
+);
+
+export type NewSchedulingVote = typeof schedulingVotes.$inferInsert;
+
+export const schedulingPollsRelations = relations(schedulingPolls, ({ many, one }) => ({
+  owner: one(user, { fields: [schedulingPolls.ownerID], references: [user.id] }),
+  participants: many(schedulingParticipants),
+  slots: many(schedulingSlots),
+}));
+
+export const schedulingSlotsRelations = relations(schedulingSlots, ({ many, one }) => ({
+  poll: one(schedulingPolls, {
+    fields: [schedulingSlots.pollID],
+    references: [schedulingPolls.id],
+  }),
+  votes: many(schedulingVotes),
+}));
 
 export const calendarInvites = pgTable("calendar_invites", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -339,9 +502,9 @@ export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
 }));
 
 
-// Attendees. Presence in the table = attending; the creator is added on event
-// creation. When RSVP lands (web), add a `status` column — presence + status
-// covers yes/no/maybe with no rework.
+// Attendees and their answer. Public RSVPs land here too (spec
+// `docs/superpowers/specs/2026-08-12-attendees-rsvp-unification-design.md`): one
+// event, one list of people, so the calendar shows what the page collected.
 export const eventUsers = pgTable("event_users", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -359,6 +522,10 @@ export const eventUsers = pgTable("event_users", {
       onDelete: "cascade",
     })
     .notNull(),
+  // going | maybe | declined. No row = has not answered; presence + status is the
+  // whole answer. Membership from before answers existed means "going", which is
+  // what it meant.
+  status: text("status").notNull().default("going"),
 }, (t) => [unique().on(t.eventID, t.userID)]); // makes join idempotent (onConflictDoNothing)
 
 
@@ -484,3 +651,30 @@ export const musubiAccounts = pgTable("musubi_accounts", {
 }, (t) => [unique().on(t.userID, t.server)]);
 
 export type NewMusubiAccount = typeof musubiAccounts.$inferInsert;
+
+
+// Pages: private per-user calendar view profiles. Not shared with calendar
+// members. The config is versioned JSONB (view + calendar visibility + filters)
+// saved atomically with one revision for compare-and-swap. Soft-deleted so a
+// removed Page can't orphan a client that still holds its id.
+export const pages = pgTable("pages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  position: integer("position").notNull().default(0),
+  isDefault: boolean("is_default").notNull().default(false),
+  schemaVersion: integer("schema_version").notNull().default(1),
+  config: jsonb("config").notNull(),
+  revision: integer("revision").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  deletedAt: timestamp("deleted_at"),
+}, (t) => [index("pages_user_position_idx").on(t.userID, t.position)]);
+
+export type NewPage = typeof pages.$inferInsert;
+export type PageRow = typeof pages.$inferSelect;

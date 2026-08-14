@@ -1,10 +1,21 @@
 import { betterAuth } from 'better-auth';
-import { bearer } from "better-auth/plugins";
+import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { CALENDAR_SCOPE, createCalendar, db, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
+import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
-import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml } from '@musubi/emails';
+import { defaultPageConfig } from '@musubi/types';
+import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml, getChangeEmailHtml, getSignInCodeHtml } from '@musubi/emails';
+import { withVerifiedLanding } from './verified_landing';
+import { appleClientSecret, appleWebConfigured, type AppleWebCredentials } from './apple_secret';
+
+const appleWeb: AppleWebCredentials = {
+  keyId: config.social.appleKeyID,
+  privateKey: config.social.applePrivateKey,
+  servicesId: config.social.appleServicesID,
+  teamId: config.social.appleTeamID,
+};
+export const appleWebSignInEnabled = appleWebConfigured(appleWeb);
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -14,9 +25,14 @@ export const auth = betterAuth({
   baseURL: config.api.url,
   trustedOrigins: [
     "musubi://",
+    // Apple returns the browser flow as a cross-site POST from its own domain
+    // (`response_mode=form_post`), so the origin check has to know it.
+    "https://appleid.apple.com",
     "https://musubi.pro",
     "https://dev.musubi.pro",
     ...(config.api.environment === "dev" ? [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
       "exp://",                      // Trust all Expo URLs (prefix matching)
       "exp://**",                    // Trust all Expo URLs (wildcard matching)
       "exp://192.168.*.*:*/**",      // Trust 192.168.x.x IP range with any port and path
@@ -25,11 +41,34 @@ export const auth = betterAuth({
   ],
   emailAndPassword: {
     enabled: true,
+    // Off unless the operator asks for it (REQUIRE_EMAIL_VERIFICATION), because
+    // a server with no SMTP would create accounts nobody could ever sign into.
+    // The config layer refuses that combination at boot.
+    requireEmailVerification: config.security.requireEmailVerification,
     sendResetPassword: async ({ user, token }, _) => {
       // Served by this API on its own origin (apps/api handlers/pages.ts), so
       // self-hosters don't depend on the central website.
       const customUrl = `${config.api.url}/reset-password?token=${token}`
       await sendEmail(user.email, "Reset your password", getPasswordResetHtml(user.name, customUrl, "1 hour"));
+    },
+  },
+  emailVerification: {
+    // Send on both events, so nobody is stuck: on sign-up because that is when
+    // the address is claimed, and on a refused sign-in because that is when the
+    // person notices — including every account that predates the flag being
+    // turned on, whose `emailVerified` is false through no fault of its own.
+    sendOnSignUp: config.security.requireEmailVerification,
+    sendOnSignIn: config.security.requireEmailVerification,
+    // The click both verifies and signs in. Sending someone to a login form to
+    // retype what they just proved is a step that only loses people.
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60, // 1 hour, same as password reset and account deletion
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendEmail(
+        user.email,
+        "Confirm your email",
+        getVerifyEmailHtml(user.name, withVerifiedLanding(url), "1 hour"),
+      );
     },
   },
   socialProviders: {
@@ -48,11 +87,23 @@ export const auth = betterAuth({
       prompt: "select_account",
     },
     apple: {
-      clientId: config.social.appleClientID,
-      // Native Sign in with Apple only: the identity token's `aud` claim is the
-      // app's bundle id, so Better Auth verifies the token against this (clientId
-      // + clientSecret are for the web redirect flow, which we don't use).
+      // Two registrations for one provider. The Services ID goes first because
+      // Better Auth takes the primary client id for the browser redirect; the
+      // bundle id stays in the list, and in `audience`, so the phone's identity
+      // token still verifies. With no Services ID this is exactly what it was
+      // before: the bundle id, native flow only.
+      clientId: appleWebSignInEnabled
+        ? [config.social.appleServicesID, config.social.appleClientID]
+        : config.social.appleClientID,
+      audience: [config.social.appleServicesID, config.social.appleClientID].filter(Boolean),
       appBundleIdentifier: "dev.frgtn.musubi",
+      // A getter, not a value: Apple wants a JWT signed with the .p8 key, and a
+      // fresh one per exchange is what keeps a server that has been up for six
+      // months from waking up unable to sign anyone in. Empty when the browser
+      // flow is not set up — then no client ever offers the button.
+      get clientSecret() {
+        return appleWebSignInEnabled ? appleClientSecret(appleWeb) : "";
+      },
     }
   },
   account: {
@@ -79,6 +130,21 @@ export const auth = betterAuth({
     },
   },
   user: {
+    changeEmail: {
+      enabled: true,
+      // Who gets asked depends on where the trust is. A verified address is the
+      // one the account already proved, so the approval goes THERE — otherwise a
+      // stolen session could quietly move the account somewhere the owner cannot
+      // reach. An unverified address proves nothing, so Better Auth falls
+      // through to verifying the new one instead, which at least proves that.
+      sendChangeEmailConfirmation: async ({ newEmail, url, user }) => {
+        await sendEmail(
+          user.email,
+          "Approve your new email address",
+          getChangeEmailHtml(user.name, newEmail, withVerifiedLanding(url), "1 hour"),
+        );
+      },
+    },
     deleteUser: {
       enabled: true,
       // Email-confirmed deletion. When this is set, the initial request only
@@ -131,6 +197,16 @@ export const auth = betterAuth({
           } catch (e) {
             logger.error("auth.signup.settings_failed", { userId: user.id, error: e });
           }
+          try {
+            // Give the user their default "My calendar" Page up front. Existing
+            // users self-heal lazily on their first GET /pages instead.
+            await ensureDefaultPage(user.id, {
+              name: "My calendar",
+              config: defaultPageConfig("month"),
+            });
+          } catch (e) {
+            logger.error("auth.signup.default_page_failed", { userId: user.id, error: e });
+          }
         },
       },
     },
@@ -138,5 +214,17 @@ export const auth = betterAuth({
   plugins: [
     bearer(),
     expo(),
+    // Passwordless sign-in by emailed code. This is what turns "I want to RSVP"
+    // into an identity without asking a stranger to invent a password for a
+    // calendar app they may never open again (PRD §18.1) — and the code proves
+    // the address, so a confirmed answer means a real inbox.
+    emailOTP({
+      // Ten minutes: long enough to switch to a phone and read the mail, short
+      // enough that a code left in an inbox is not a standing key.
+      expiresIn: 10 * 60,
+      sendVerificationOTP: async ({ email, otp }) => {
+        await sendEmail(email, `${otp} is your Musubi code`, getSignInCodeHtml(otp, "10 minutes"));
+      },
+    }),
   ],
 });

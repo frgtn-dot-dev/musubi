@@ -1,0 +1,62 @@
+.chip {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: var(--poll-chip-height, auto);
+  min-height: var(--poll-chip-height, 0);
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
+  border: 0;
+  background-color: var(--poll-color);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    color-mix(in srgb, var(--poll-foreground) 16%, transparent) 5px 8px
+  );
+  color: var(--poll-foreground);
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: left;
+}
+
+.chip[data-decided] {
+  background-image: none;
+}
+
+.chip[data-continues-before] {
+  width: calc(100% + var(--poll-join, 0px));
+  margin-left: calc(var(--poll-join, 0px) * -1);
+  border-radius: 0 4px 4px 0;
+}
+
+.chip[data-continues-after] {
+  width: calc(100% + var(--poll-join, 0px));
+  border-radius: 4px 0 0 4px;
+}
+
+.chip[data-continues-before][data-continues-after] {
+  width: calc(100% + var(--poll-join, 0px) * 2);
+  border-radius: 0;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  filter: brightness(1.08);
+}
+
+.chip svg {
+  width: var(--poll-icon-size, 11px);
+  height: var(--poll-icon-size, 11px);
+  flex: none;
+}
+
+.chip span {
+  min-width: 0;
+  font-size: var(--poll-font-size, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

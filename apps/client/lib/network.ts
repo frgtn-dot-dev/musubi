@@ -1,3 +1,5 @@
+import { diagnosticFetchFor } from "@/lib/serverDiagnostics";
+
 type ErrorLike = {
   message?: string;
   status?: number | string;
@@ -42,7 +44,12 @@ export async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestI
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    let rawUrl: string;
+    if (typeof input === "string") rawUrl = input;
+    else if (input instanceof URL) rawUrl = input.href;
+    else rawUrl = input.url;
+    const url = new URL(rawUrl);
+    return await diagnosticFetchFor(url.origin)(url, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }

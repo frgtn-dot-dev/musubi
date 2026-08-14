@@ -12,7 +12,7 @@ The `packages/` workspaces hold everything shared between the two apps. `db` has
 The **client/server contract**. Every data shape is a Zod schema; the TypeScript type is inferred from it, so validation and types never drift. Both apps import from `@musubi/types` — there is no duplicated `Event` interface anywhere.
 
 | File | Exports |
-|---|---|
+| --- | --- |
 | `event.ts` | `EventSchema`, `Event` — `start`/`end` via `z.coerce.date()`, `calendars: string[]`, `originCalendarID` nullish, `recurrence` nullish |
 | `calendar.ts` | `CalendarSchema`, `Calendar`, minimal `CalendarInvitePreview`, `providerFlavor()` (detects `"apple"` from iCloud CalDAV) |
 | `federation.ts` | Member-token lifetime, timestamp parsing, proactive-rotation decision |
@@ -42,14 +42,16 @@ When you change any data shape, change it **here first**. Add the field to the Z
 
 ## calendar (`packages/calendar`)
 
-Recurrence logic and date helpers — **pure logic, no UI** (the calendar *views* are custom in `apps/client/components/cal/`). Both apps expand RRULEs through this package.
+Recurrence, date and calendar layout helpers — **pure logic, no UI**. The
+React Native and DOM renderers stay in `apps/client` and `apps/web`, while both
+clients share their range and segmentation rules through this package.
 
 Recurrence is stored on `events.recurrence` as **iCalendar text** — a bare `RRULE` for simple cases, or multi-line `RRULE` + `EXDATE`/`RDATE` when there are exceptions. It is expanded into individual occurrences **at read time**, never stored as instances.
 
 `recurrence.ts` exports:
 
 | Function | Purpose |
-|---|---|
+| --- | --- |
 | `splitRecurrence(str)` | → `{ rrule, extras[] }` (separates the rule from EXDATE/RDATE lines) |
 | `joinRecurrence(rrule, extras)` | the inverse |
 | `excludeOccurrence(rec, date)` | add an `EXDATE` — "delete just this one occurrence" |
@@ -57,6 +59,20 @@ Recurrence is stored on `events.recurrence` as **iCalendar text** — a bare `RR
 | `expandRecurringEvents(events, start, end)` | expand rules into occurrences within a window; occurrence ids are `"<id>_<startMs>"` for stable React keys |
 
 Parsed rules are memoised in a `Map` keyed by `recurrence@dtstart` so swiping the calendar doesn't re-parse. `datetime.ts` holds the all-day handling (`eventDay()` reinterprets a UTC-midnight all-day date in the local frame); `interfaces.ts` has the minimal `ICalendarEventBase` shape the expansion works against.
+
+The `@musubi/calendar/layout` subpath keeps layout consumers separate from the
+RRULE parser:
+
+| Module | Shared responsibility |
+| --- | --- |
+| `month-grid.ts`, `ranges.ts` | six-week Month grids, visible ranges, week starts and calendar-day navigation |
+| `day-buckets.ts` | local/UTC day keys, day buckets and all-day continuation segments |
+| `all-day-spans.ts` | continuous row spans and stable lane assignment |
+| `day-segments.ts`, `overlaps.ts` | per-day clipping and transitive overlap columns |
+
+Musubi's internal all-day `end` is the **inclusive final calendar date**.
+Google, Microsoft and CalDAV adapters convert their exclusive provider end at
+the API boundary; UI layout must not subtract another day.
 
 <Aside type="caution">
 Only ever expand recurring events for the **visible window** — never expand an unbounded series into memory. All-day recurrence needs the UTC-midnight anchor from `eventDay()`; treating those timestamps as normal times causes timezone-dependent off-by-one-day bugs.
@@ -69,7 +85,7 @@ The **Better Auth** configuration (`lib/auth.ts`): the Drizzle/Postgres adapter,
 The one hook contributors hit most: **on user creation, a default personal calendar is auto-created** (`isDefault: true`, undeletable). Every user — email or social — gets one.
 
 <Aside type="note">
-Email features (password reset) are wired but **gated at use, not boot**: if SMTP isn't configured (`config.smtp.host === ""`), the server still starts; sending just fails when attempted. This keeps local dev friction-free.
+Auth's email hooks call `@musubi/emails`; the API verifies the configured SMTP transport once before it starts listening. Missing or unreachable SMTP leaves `GET /api/v1/server` at `email: false`, while the server still starts unless confirmed-email sign-in is required without any SMTP host.
 </Aside>
 
 ## config (`packages/config`)
@@ -84,8 +100,8 @@ function envOrThrow(key: string): string {
 }
 ```
 
-**Required at boot** (server won't start without them): `DATABASE_URL`, `ENVIRONMENT`, `BETTER_AUTH_URL`.
-**Optional, gated at use**: SMTP, Google/Microsoft OAuth credentials, `CALDAV_ENC_KEY`. The pattern is deliberate — a missing optional key disables *one* feature instead of crashing the server, so you can run a minimal stack locally. See [Running Locally](/docs/guides/running-locally/) for the full variable table.
+**Required at boot** (server won't start without them): `DATABASE_URL`, `ENVIRONMENT`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`.
+**Optional, capability-gated**: SMTP, Google/Microsoft OAuth credentials, `CALDAV_ENC_KEY`. The pattern is deliberate — a missing optional key disables *one* feature instead of crashing the server, so you can run a minimal stack locally. SMTP is checked once before listening; restart the API after changing it. See [Running Locally](/docs/guides/running-locally/) for the full variable table.
 
 `LOG_LEVEL` is optional and defaults to `info`; invalid values fail fast at boot.
 The config package also exports the process-wide structured `logger`, shared by
@@ -93,10 +109,10 @@ the API and auth hooks.
 
 ## emails (`packages/emails`)
 
-Transactional email: `sendEmail()` (a nodemailer SMTP transport built from `config.smtp`) plus the HTML templates `getPasswordResetHtml()` and `getDeleteAccountHtml()`. It lives in its own package so `@musubi/auth` can send reset/delete mails without reaching back into `apps/api` — that cross-package relative import broke the deployed image (the package resolves to `node_modules`, not a sibling of `apps/api`). Depends only on `@musubi/config`.
+Transactional email: `sendEmail()` (a nodemailer SMTP transport built from `config.smtp`) plus the HTML templates for password reset, deletion, verification, address changes, and scheduler sign-in codes. `@musubi/auth` uses the send/template surface; `apps/api` calls `initializeEmailCapability()` before listening and serves its instant `canSendEmail()` snapshot through capability discovery. The package depends only on `@musubi/config`.
 
 <Aside type="note">
-Like the SMTP config it uses, sending is **gated at use, not boot**: with SMTP unset, `sendEmail` just fails when called — the server still starts.
+With SMTP unset or unreachable, the server still starts and advertises `email: false`; actual sends fail rather than pretending delivery. The availability snapshot changes only on API restart.
 </Aside>
 
 ## How the packages depend on each other
@@ -104,6 +120,7 @@ Like the SMTP config it uses, sending is **gated at use, not boot**: with SMTP u
 ```mermaid
 flowchart TD
     client[apps/client]
+    web[apps/web]
     api[apps/api]
     auth[packages/auth]
     db[packages/db]
@@ -114,10 +131,13 @@ flowchart TD
 
     client --> types
     client --> calendar
+    web --> types
+    web --> calendar
     api --> types
     api --> calendar
     api --> db
     api --> auth
+    api --> emails
     auth --> db
     db --> types
     api --> config

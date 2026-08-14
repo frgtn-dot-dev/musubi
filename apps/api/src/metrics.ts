@@ -220,6 +220,17 @@ new Gauge({
   },
 });
 
+// Outbound streams this server holds to federated origins (one per connected
+// Musubi server per online user) — the cost side of the federated fan-in.
+new Gauge({
+  name: "musubi_federated_upstream_streams",
+  help: "Open outbound SSE streams to federated Musubi servers.",
+  registers: [registry],
+  collect() {
+    this.set(sseStats().federatedUpstream);
+  },
+});
+
 const KNOWN_HTTP_METHODS = new Set([
   "DELETE",
   "GET",

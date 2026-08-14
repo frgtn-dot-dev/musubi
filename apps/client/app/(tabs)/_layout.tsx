@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 export default function TabLayout() {
-  const { apiUrl, isLoading, authClient } = useServer();
+  const { apiUrl, authClient } = useServer();
   const insets = useSafeAreaInsets();
   const tabBarLabels = useSettingsStore(s => s.tabBarLabels);
   const bottomInset = tabBarBottomInset(insets.bottom, tabBarLabels);
@@ -37,15 +37,6 @@ export default function TabLayout() {
   const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
-    // Server context is still hydrating — keep overlay visible
-    if (isLoading) return;
-
-    // No server URL configured — show the app empty rather than loading forever
-    if (!apiUrl) {
-      setDataReady(true);
-      return;
-    }
-
     const load = async () => {
       try {
         // instant render from the local cache (calendars too, so activeCals is
@@ -54,7 +45,8 @@ export default function TabLayout() {
         loadCalendars(cachedCals);
         loadEvents(cachedEvents);
         setDataReady(true);
-        await refresh();
+        // ponytail: authoritative launch snapshot; add link tombstones if a full home read becomes costly.
+        await refresh({ full: true });
       } catch (e: any) {
         console.error("Could not fetch initial data:", e?.message, e?.status, e);
       } finally {
@@ -62,7 +54,7 @@ export default function TabLayout() {
       }
     };
     load();
-  }, [apiUrl, isLoading]);
+  }, [apiUrl]);
 
   useConnectToEventStream();
 

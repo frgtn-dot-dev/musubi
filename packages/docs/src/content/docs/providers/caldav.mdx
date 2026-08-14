@@ -30,8 +30,10 @@ multiple accounts, and uses Basic authentication rather than OAuth.
 
 2. **Collect server credentials.**
 
-   You need a CalDAV server URL, username, and password. iCloud requires an
-   Apple **app-specific password**, never the Apple ID password.
+   You need a CalDAV server URL, username, and password. Outside development,
+   the URL must use HTTPS and every discovered or redirected target is checked
+   against the private-address SSRF guard before credentials are sent. iCloud
+   requires an Apple **app-specific password**, never the Apple ID password.
 
 3. **Connect through Settings.**
 
@@ -71,7 +73,7 @@ failures are still exported through sync-failure counters and structured logs.
 ## Event mapping
 
 | CalDAV/iCalendar shape | Musubi behavior |
-|---|---|
+| --- | --- |
 | Resource URL | Stable `externalId`; UID alone is not used |
 | DATE `DTSTART` | All-day event at UTC midnight |
 | Exclusive `DTEND` | Subtract one day for inclusive Musubi end |

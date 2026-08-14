@@ -1,5 +1,8 @@
 import { rrulestr } from 'rrule'
 import type { ICalendarEventBase } from './interfaces'
+import { joinRecurrence, splitRecurrence } from './rrule-editor'
+
+export { joinRecurrence, splitRecurrence } from './rrule-editor'
 
 // Parsing an RRULE string is the expensive part of expansion, and expansion
 // re-runs on every calendar swipe. Cache parsed rules so each unique
@@ -46,24 +49,6 @@ function getRule(recurrence: string, dtstart: Date): ParsedRule {
 const toICalUTC = (d: Date) =>
   d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
 
-/** Split stored recurrence into the bare RRULE and any extra lines (EXDATE, …). */
-export function splitRecurrence(recurrence: string | null | undefined): { rrule: string; extras: string[] } {
-  if (!recurrence) return { rrule: '', extras: [] }
-  const lines = recurrence.split('\n').map((l) => l.trim()).filter(Boolean)
-  const rruleLine = lines.find((l) => /^(RRULE:)?FREQ=/.test(l)) ?? ''
-  return {
-    rrule: rruleLine.replace(/^RRULE:/, ''),
-    extras: lines.filter((l) => l !== rruleLine),
-  }
-}
-
-/** Rebuild the stored string; multi-line output gets explicit prefixes. */
-export function joinRecurrence(rrule: string | null, extras: string[]): string | null {
-  if (!rrule) return null
-  if (extras.length === 0) return rrule
-  return [`RRULE:${rrule}`, ...extras].join('\n')
-}
-
 /** "Delete this event": exclude one occurrence via EXDATE. */
 export function excludeOccurrence(recurrence: string, occurrenceStart: Date): string {
   const { rrule, extras } = splitRecurrence(recurrence)
@@ -80,6 +65,101 @@ export function endSeriesBefore(recurrence: string, occurrenceStart: Date): stri
   const parts = rrule.split(';').filter((p) => !/^(UNTIL|COUNT)=/.test(p))
   return joinRecurrence([...parts, `UNTIL=${until}`].join(';'), extras)!
 }
+
+/**
+ * "This and following": the rule the split-off series carries.
+ *
+ * UNTIL is an absolute date, so it survives a split untouched. COUNT does not —
+ * both halves would otherwise claim the full count — so it is reduced by the
+ * occurrences the original half keeps.
+ */
+export function remainderRule(
+  recurrence: string,
+  seriesStart: Date,
+  occurrenceStart: Date,
+): string {
+  const { rrule, extras } = splitRecurrence(recurrence)
+  const count = /COUNT=(\d+)/.exec(rrule)
+  if (!count) return joinRecurrence(rrule, extras)!
+
+  const kept = getRule(recurrence, seriesStart).between(
+    seriesStart,
+    new Date(occurrenceStart.getTime() - 1000),
+    true /* inclusive */,
+  ).length
+  const remaining = Math.max(1, Number(count[1]) - kept)
+  return joinRecurrence(rrule.replace(/COUNT=\d+/, `COUNT=${remaining}`), extras)!
+}
+
+// ── Wall-clock recurrence (the floating frame) ────────────────────────────────
+// "Every weekday at 09:00" means 09:00 on both sides of a daylight-saving
+// change — RFC 5545 evaluates a rule in the event's local time, and Google
+// Calendar behaves that way. `rrule` does its arithmetic on the UTC fields of a
+// Date, so expanding a stored instant directly keeps the *instant* of day and
+// moves the clock: a 09:00 event became 10:00 the moment Europe sprang forward.
+//
+// So the anchor, the window and the rule's own stamps are shifted into a frame
+// where the local wall clock IS the UTC field rrule iterates on, and each
+// occurrence is shifted back into a real instant afterwards. The shift is
+// per-Date, so occurrences on either side of the change come back at the same
+// wall clock with different offsets — which is the whole point.
+//
+// Known limit: the wall clock is the *viewer's*, because an event stores no
+// TZID. Two people in different zones therefore anchor a series differently
+// after a change that only one of their zones makes. Fixing that needs a
+// timezone on the event, not a different frame here.
+function toFloating(date: Date): Date {
+  return new Date(
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      date.getHours(),
+      date.getMinutes(),
+      date.getSeconds(),
+      date.getMilliseconds(),
+    ),
+  )
+}
+
+function fromFloating(date: Date): Date {
+  // A wall clock that does not exist (02:30 on a spring-forward day) lands on
+  // the next real minute, which is what a calendar should do with it.
+  return new Date(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds(),
+    date.getUTCMilliseconds(),
+  )
+}
+
+/**
+ * The same rule with its absolute stamps read as wall clock.
+ *
+ * UNTIL and EXDATE are written in UTC (`toICalUTC`), so inside the floating
+ * frame they would sit an offset away from the occurrences they are meant to
+ * bound or cancel — a deleted occurrence would quietly come back after a DST
+ * change. Stamps carrying a TZID are left alone: they are already somebody's
+ * wall clock, and rrule reads them the same way this frame does.
+ */
+function floatingRecurrence(recurrence: string): string {
+  const shift = (stamp: string) => toICalUTC(toFloating(new Date(fromICalUTC(stamp))))
+
+  return recurrence
+    .split('\n')
+    .map((line) =>
+      /^(EXDATE|RDATE)/i.test(line) && !/TZID=/i.test(line)
+        ? line.replace(/\d{8}T\d{6}Z/g, shift)
+        : line.replace(/UNTIL=(\d{8}T\d{6}Z)/i, (_, stamp: string) => `UNTIL=${shift(stamp)}`),
+    )
+    .join('\n')
+}
+
+const fromICalUTC = (stamp: string) =>
+  `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 11)}:${stamp.slice(11, 13)}:${stamp.slice(13, 15)}Z`
 
 export function expandRecurringEvents<T extends ICalendarEventBase>(
   events: T[],
@@ -99,18 +179,36 @@ export function expandRecurringEvents<T extends ICalendarEventBase>(
 
     try {
       const duration = event.end.getTime() - event.start.getTime()
+      // All-day events are already timezone-invariant DATEs pinned to UTC
+      // midnight (see `eventDay`), so they expand in the frame they are stored
+      // in. Timed events are wall-clock and expand in the floating frame.
+      const floating = !event.isAllDay
+      const anchor = floating ? toFloating(event.start) : event.start
       // rrulestr handles both "RRULE:FREQ=..." and bare "FREQ=..." formats.
       // Passing dtstart anchors the series to the event's own start so the
       // recurrence doesn't drift when the rrule string has no DTSTART line.
-      const rule = getRule(event.recurrence, event.start)
-      const occurrences = rule.between(rangeStart, rangeEnd, true /* inclusive */)
+      const rule = getRule(
+        floating ? floatingRecurrence(event.recurrence) : event.recurrence,
+        anchor,
+      )
+      // Search back by one occurrence duration so an event that starts before
+      // the window but overlaps its leading edge is not lost.
+      const searchStart = new Date(rangeStart.getTime() - Math.max(0, duration))
+      const occurrences = rule.between(
+        floating ? toFloating(searchStart) : searchStart,
+        floating ? toFloating(rangeEnd) : rangeEnd,
+        true /* inclusive */,
+      )
 
-      for (const start of occurrences) {
+      for (const occurrence of occurrences) {
+        const start = floating ? fromFloating(occurrence) : occurrence
+        const end = new Date(start.getTime() + duration)
+        if (end < rangeStart) continue
         result.push({
           ...event,
           id: `${event.id ?? 'r'}_${start.getTime()}`,
           start,
-          end: new Date(start.getTime() + duration),
+          end,
         })
       }
     } catch {

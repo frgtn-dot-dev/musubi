@@ -6,7 +6,7 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useAttendeesStore } from "@/store/useAttendeesStore";
 import { useServer } from "@/contexts/ServerContext";
 import { useRefreshData } from "@/hooks/useRefreshData";
-import { loadFederatedAccounts } from "@/services/federation";
+import { serializeEventRefresh } from "@/lib/eventSync";
 
 export function useConnectToEventStream() {
   // apiUrl comes from ServerContext (SecureStore-backed, self-host aware) — the
@@ -18,27 +18,27 @@ export function useConnectToEventStream() {
   const setAttendees = useAttendeesStore((s) => s.setAttendees);
   // "external_sync" = the server's scheduled provider sync found changes → run a
   // silent delta refresh (WITHOUT re-triggering the provider sync — that'd loop).
-  // Ref so the SSE effect doesn't resubscribe every render; guarded against overlap.
+  // Ref so the SSE effect doesn't resubscribe every render. Refreshes from all
+  // hook instances share one queue, so reconnect catch-up cannot race launch.
   const refresh = useRefreshData();
   const refreshRef = useRef(refresh);
   useEffect(() => { refreshRef.current = refresh; });
-  const refreshing = useRef(false);
-  const silentRefresh = async () => {
-    if (refreshing.current) return;
-    refreshing.current = true;
-    try { await refreshRef.current({ providerSync: false }); }
+  const silentRefresh = async (full = false) => {
+    try { await refreshRef.current({ providerSync: false, full }); }
     catch (e) { console.warn("SSE-triggered refresh failed:", e); }
-    finally { refreshing.current = false; }
+  };
+  const applyLiveMutation = (mutation: () => void | Promise<void>) => {
+    void serializeEventRefresh(async () => { await mutation(); }).catch((e) =>
+      console.warn("SSE event apply failed:", e));
   };
 
   // Offline → online (airplane mode off, wifi back): sync right away instead
-  // of waiting out the SSE retry cycle. Same guarded refresh, so the two
-  // triggers can't overlap. Refs only inside — mount-once is safe.
+  // of waiting out the SSE retry cycle. Refs only inside — mount-once is safe.
   useEffect(() => {
     let wasOffline = false;
     const sub = Network.addNetworkStateListener(({ isConnected, isInternetReachable }) => {
       const offline = isConnected === false || isInternetReachable === false;
-      if (wasOffline && !offline) silentRefresh();
+      if (wasOffline && !offline) silentRefresh(true);
       wasOffline = offline;
     });
     return () => sub.remove();
@@ -51,31 +51,49 @@ export function useConnectToEventStream() {
 
     const handleMessage = (event: { data?: string | null }) => {
       if (!event.data) return;
-      const data = JSON.parse(event.data);
+      let data: any;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        console.warn("Ignoring malformed SSE message.");
+        return;
+      }
 
       const toEvent = (p: any) => ({ ...p, start: new Date(p.start), end: new Date(p.end) });
 
       switch (data.type) {
         case "event_created":
-          localAddEvent(toEvent(data.payload));
+          applyLiveMutation(() => localAddEvent(toEvent(data.payload)));
           break;
         case "event_updated":
-          localUpdateEvent(toEvent(data.payload));
+          applyLiveMutation(() => localUpdateEvent(toEvent(data.payload)));
           break;
         case "event_removed":
-          localRemoveEvent(toEvent(data.payload));
+          applyLiveMutation(() => localRemoveEvent(toEvent(data.payload)));
           break;
         case "calendar_updated":
-          localUpdateCalendar(data.payload);
+          applyLiveMutation(() => { localUpdateCalendar(data.payload); });
           break;
         case "calendar_removed":
-          localRemoveCalendar(data.payload);
-          localRemoveCalendarEvents(data.payload.id);
+          applyLiveMutation(async () => {
+            localRemoveCalendar(data.payload);
+            await localRemoveCalendarEvents(data.payload.id);
+          });
           break;
         case "attendance_changed":
           setAttendees(data.payload.eventID, data.payload.attendees);
           break;
         case "external_sync":
+          silentRefresh();
+          break;
+        case "settings_updated":
+          refreshRef.current({ settingsOnly: true }).catch((e) =>
+            console.warn("Settings refresh failed:", e));
+          break;
+        // A connected Musubi server changed something; the home server relays it
+        // (ADR-005). Remote rows are pulled per server, so refresh rather than
+        // patching a payload from a foreign origin into the local stores.
+        case "federated_sync":
           silentRefresh();
           break;
         default:
@@ -88,31 +106,31 @@ export function useConnectToEventStream() {
         headers: { Authorization: `Bearer ${token}` },
       });
       // The library auto-reconnects every pollingInterval (5s) after an error or
-      // stream end — but frames sent while we were down are lost. Catch up with
-      // one silent delta refresh on the reconnect that follows an error.
-      let hadError = false;
-      sse.addEventListener("error", () => { hadError = true; });
+      // clean stream end. Every open after the first catches up lost frames.
+      // ponytail: full home snapshot; add link tombstones if this becomes costly.
+      let opened = false;
+      let disconnected = false;
+      sse.addEventListener("error", () => { disconnected = true; });
       sse.addEventListener("open", () => {
-        if (hadError) { hadError = false; silentRefresh(); }
+        if (opened || disconnected) silentRefresh(true);
+        opened = true;
+        disconnected = false;
       });
       sse.addEventListener("message", handleMessage);
       sources.push(sse);
     };
 
+    // One stream, to the home server. Federated servers used to get a stream
+    // each (member token as bearer); since ADR-005 the home server subscribes to
+    // them on our behalf and relays their events as `federated_sync`, so remote
+    // calendars stay live without this device holding a credential — and a
+    // freshly accepted server starts streaming immediately instead of on the
+    // next app start.
     const connect = async () => {
       const { data } = await authClient.getSession();
       const token = data?.session?.token;
       if (cancelled || !token) return;
       subscribe(apiUrl, token);
-
-      // Federated servers stream too (member token as bearer — the server's
-      // requireAuth fallback authenticates it), so events and attendance on
-      // remote calendars update live, same as home ones.
-      // ponytail: registry read once per mount — a freshly accepted server
-      // starts streaming on the next app start; until then pulls cover it.
-      for (const acc of await loadFederatedAccounts()) {
-        if (!cancelled) subscribe(acc.server, acc.token);
-      }
     }
     connect();
     return () => { cancelled = true; sources.forEach(s => s.close()); };

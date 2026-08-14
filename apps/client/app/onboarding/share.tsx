@@ -14,6 +14,7 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import * as haptics from "@/lib/haptics";
 import { userFacingError } from "@/lib/network";
+import { queueSettingsPatch } from "@/services/settingsSync";
 
 // Onboarding step 4 — show the core Musubi loop once: create a calendar, then
 // land directly in its invite-link sheet. It is deliberately skippable.
@@ -30,16 +31,7 @@ export default function OnboardingShare() {
   const finish = async () => {
     setFinishing(true);
     try {
-      await api.saveSettings({
-        showKanji: settings.showKanji,
-        notificationsOnByDefault: settings.notificationsOnByDefault,
-        defaultCalendarView: settings.defaultCalendarView,
-        weekStartsOn: settings.weekStartsOn,
-        timeFormat: settings.timeFormat,
-        dateFormat: settings.dateFormat,
-        theme: settings.theme,
-        onboarded: true,
-      });
+      await queueSettingsPatch(api, { onboarded: true });
     } catch (e) {
       console.error("Onboarding finish failed:", e);
       showToast({ message: userFacingError(e, "You can continue; onboarding will sync later.") });

@@ -202,8 +202,9 @@ build-time `EXPO_PUBLIC_*` values must be present. See
 ### Password reset or account deletion cannot send
 
 The API can boot without SMTP, but those flows need all `SMTP_*` values. The
-server advertises `email: false` when `SMTP_HOST` is empty and the client hides
-or adapts the UI.
+server advertises `email: false` when the configured SMTP connection or
+authentication handshake fails, and the client hides or adapts the UI. The
+handshake runs once before the API listens; restart it after changing SMTP.
 
 ## External calendar sync
 

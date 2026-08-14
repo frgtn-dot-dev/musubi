@@ -15,18 +15,25 @@ jobs:
     name: Typecheck, test, lint, docs, and migrations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
+      # @musubi/config reads the root .env at import time, which CI does not
+      # have; any package test that imports it needs these three from the
+      # environment instead.
       - run: pnpm check
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musubi
+          ENVIRONMENT: test
+          BETTER_AUTH_URL: http://localhost:7531
 
       - name: Verify generated migrations are committed
         env:
@@ -37,22 +44,93 @@ jobs:
           pnpm db:generate
           if [ -n "$(git status --porcelain -- packages/db/drizzle)" ]; then
             git status --short -- packages/db/drizzle
-            echo "::error::Database schema and committed Drizzle migrations differ"
+            echo "::error::Schema and committed Drizzle migrations differ"
             exit 1
           fi
 
-  docker:
-    name: Build API image
+  e2e:
+    name: Web end-to-end
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
-      - uses: docker/build-push-action@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Its own job, not part of `pnpm check`: the browser download and the dev
+      # server are the slow part, and keeping them off the critical path means
+      # typecheck/lint still report in under a minute.
+      - name: Install Playwright browser
+        run: >-
+          pnpm --filter @musubi/web exec playwright install --with-deps chromium
+
+      - run: pnpm --filter @musubi/web test:e2e
+
+      - if: failure()
+        uses: >-
+          actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report
+          path: apps/web/test-results
+          retention-days: 7
+
+  bundle:
+    name: Client bundle secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Builds the client with canaries in server-only variables and fails if
+      # any reaches a file the browser can fetch. Its own job because it
+      # needs a production build, which `pnpm check` deliberately does not do.
+      - run: node scripts/scan-client-bundle.mjs
+
+  docker:
+    name: Build ${{ matrix.name }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: API
+            dockerfile: apps/api/Dockerfile
+            scope: api
+          - name: web
+            dockerfile: apps/web/Dockerfile
+            scope: web
+          - name: docs
+            dockerfile: packages/docs/Dockerfile
+            scope: docs
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # docker/setup-buildx-action v3
+      - uses: >-
+          docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      # Per-image cache scope: sharing one scope would make the two matrix jobs
+      # overwrite each other's layers on every run.
+      # docker/build-push-action v6
+      - uses: >-
+          docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.scope }}
+          cache-to: type=gha,scope=${{ matrix.scope }},mode=max

@@ -211,19 +211,10 @@ export default function Invite() {
             setAcceptError("");
             try {
               if (remoteServer) {
-                // Federation handshake on the origin server: shadow account +
-                // member token; the full refresh then pulls the shared calendar.
-                const { account } = await acceptRemoteInvite(remoteServer, inviteToken!, {
-                  name: session?.user.name ?? "Musubi user",
-                  email: session?.user.email ?? "",
-                  image: session?.user.image ?? null,
-                  homeServer: apiUrl!,
-                });
-                // Persist the connection on the HOME server so every signed-in
-                // device inherits it. Best-effort: if it fails, this device still
-                // works from its local registry.
-                try { await api.saveMusubiAccount(account); }
-                catch (e) { console.warn("Storing the federated connection on the home server failed:", e); }
+                // The home server runs the handshake against the origin, stores
+                // the connection (so every device inherits it) and keeps the
+                // member token (ADR-005). The refresh then pulls the calendar.
+                await acceptRemoteInvite(remoteServer, inviteToken!);
               } else {
                 await api.acceptInvite(calendarData!.id, inviteToken!);
               }

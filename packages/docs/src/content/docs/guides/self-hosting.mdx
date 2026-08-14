@@ -12,14 +12,47 @@ Musubi is designed to be self-hosted. If you want your calendar data on your own
 - A server with **Docker** and **Docker Compose** installed
 - A domain name (optional but recommended for HTTPS)
 
+## Which stack do you need?
+
+| | `docker-compose.yml` | `docker-compose.api.yml` | `docker-compose.dokploy.yml` |
+| --- | --- | --- | --- |
+| Contains | Gateway + web client + API + PostgreSQL | API + PostgreSQL | Gateway + web client + API + PostgreSQL |
+| Use it when | You want the browser client — the default | Your users are on the mobile app only, or you bring your own front end | You deploy with [Dokploy](https://dokploy.com) |
+| Public surface | One origin, HTTPS handled for you | The API port, behind your own proxy | One origin, terminated by Dokploy's Traefik |
+
+The full stack is the default file, so `docker compose up -d` with no `-f` gives
+you the whole thing. API-only is supported and not deprecated — a server whose
+users are all on the mobile app has nothing to gain from shipping a browser
+bundle. The web client currently supports desktop and tablet widths; phone
+browsers show a download gate for the native app.
+
+<Aside type="caution" title="The web client needs one origin">
+The web client and the API **must** share a single public origin. That is what
+keeps the session cookie first-party, removes CORS entirely, and lets the browser
+call `/api/*` with relative URLs. Serving them from two hostnames
+(`app.example.com` + `api.example.com`) is not a supported configuration — the
+gateway in `docker-compose.yml` exists to make the supported shape the easy one.
+</Aside>
+
 ## 1. Download the files
 
-No clone or build needed — the API ships as a prebuilt image (`frgtndev/musubi`). Grab the Compose file and an env template into an empty directory:
+No clone or build needed — both the API (`frgtndev/musubi`) and the web client
+(`frgtndev/musubi-web`) ship as prebuilt images. Grab the Compose file, the
+gateway config and an env template into an empty directory:
 
 ```sh
 mkdir musubi && cd musubi
 curl -O https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/docker-compose.yml
 curl -o .env https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/.env.example
+mkdir -p ops/gateway && curl -o ops/gateway/Caddyfile \
+  https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/ops/gateway/Caddyfile
+```
+
+Running API-only? One file, no gateway config — and every `docker compose`
+command below then needs `-f docker-compose.api.yml`:
+
+```sh
+curl -O https://raw.githubusercontent.com/frgtn-dot-dev/musubi/main/docker-compose.api.yml
 ```
 
 <Aside type="tip">
@@ -31,20 +64,24 @@ Prefer to build from source? Clone the repo instead, then in `docker-compose.yml
 Edit the `.env` you just downloaded and set your production values. Key variables:
 
 | Variable | Description |
-|---|---|
+| --- | --- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Database credentials — Compose starts Postgres with these and builds `DATABASE_URL` from them |
 | `DATABASE_URL` | PostgreSQL connection string (Compose overrides this to point at the `db` service) |
-| `BETTER_AUTH_SECRET` | Long random secret — generate with `openssl rand -base64 32` |
+| `BETTER_AUTH_SECRET` | Long random secret — generate with `openssl rand -base64 32`; production rejects placeholders and values shorter than 32 characters |
 | `BETTER_AUTH_URL` | The public URL of your API, e.g. `https://musubi.yourdomain.com` |
-| `ENVIRONMENT` | Set to anything other than `dev` for production |
+| `ENVIRONMENT` | Set to `prod` for production; only `dev`, `test`, and `prod` are accepted |
 | `LOG_LEVEL` | Server verbosity: `debug`, `info`, `warn`, `error`, or `silent`; defaults to `info` |
 | `METRICS_PORT` | Internal Prometheus listener; defaults to `9464`, set `0` to disable |
-| `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in and Google Calendar sync |
-| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Microsoft Entra ID app credentials — needed for Outlook calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/microsoft` as a Web redirect URI on the app registration; `MICROSOFT_TENANT_ID` defaults to `common` |
-| `APPLE_CLIENT_ID` | Enables native Sign in with Apple (iOS) — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |
+| `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in (the browser redirect flow needs the secret; the phone's native flow needs only the client id) and Google Calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/google` as an authorized Web redirect URI |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Microsoft Entra ID app credentials — needed for Microsoft sign-in on the web and for Outlook calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/microsoft` as a Web redirect URI on the app registration; `MICROSOFT_TENANT_ID` defaults to `common` |
+| `APPLE_CLIENT_ID` | Enables Sign in with Apple in the phone app — set it to the app's bundle id — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |
+| `APPLE_SERVICES_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Sign in with Apple in a browser, which is a separate registration from the app's: a Services ID whose return URL is `{BETTER_AUTH_URL}/api/auth/callback/apple`, plus a "Sign in with Apple" key. The server signs Apple's short-lived client secret from the `.p8` itself, so nothing expires behind your back. All three (and `APPLE_TEAM_ID`) must be set before the web login offers the button |
 | `APPLE_TEAM_ID` | Apple Developer Team ID — serves the apple-app-site-association file so iOS invite links open the app directly (universal links). Optional; unset → the Safari hand-off still works |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset and account-deletion confirmation emails |
-| `CALDAV_ENC_KEY` | Encrypts stored CalDAV passwords — required before anyone connects a CalDAV account |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails. Port 465 uses implicit TLS; other ports require STARTTLS. The API verifies SMTP once before listening; restart it after changing these values |
+| `REQUIRE_EMAIL_VERIFICATION` | `true` refuses sign-in until the address is confirmed. Needs SMTP; the API refuses to boot without it. See [Requiring confirmed email addresses](#requiring-confirmed-email-addresses) |
+| `CALDAV_ENC_KEY` | Encrypts stored CalDAV passwords and federated Musubi member tokens — required before anyone connects a CalDAV account or a federated calendar |
+| `PUBLIC_HOST` | The hostname the default gateway serves (e.g. `musubi.example.com` for automatic HTTPS, or `:80` behind another proxy). Dokploy sets its gateway to `:80` internally; configure its public hostname as a UI Domain |
+| `FEDERATION_ALLOW_PRIVATE_HOSTS` | Allows federating with a Musubi server on a private address. Off in production: the API fetches other servers on a user's behalf, so private targets are refused to prevent internal network probing. Set `true` only if you genuinely federate servers on a LAN or the same box |
 
 Use the [Environment variable reference](/docs/reference/environment/) for the
 complete list, exact defaults, build-time variables, and rotation consequences.
@@ -92,7 +129,7 @@ domain or host port for the metrics listener. Set `METRICS_PORT=0` if metrics
 are not needed.
 
 <Aside type="caution">
-Required to boot: the `POSTGRES_*` credentials, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `ENVIRONMENT`. The Google, Microsoft, SMTP, and `CALDAV_ENC_KEY` variables are optional — the API starts without them and the matching feature just stays off until you set it.
+Required to boot: the `POSTGRES_*` credentials, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `ENVIRONMENT`. The Google, Microsoft, SMTP, and `CALDAV_ENC_KEY` variables are optional — the API starts without them and the matching feature stays off. SMTP capability is checked once before the API listens, so restart it after changing mail settings.
 </Aside>
 
 <Aside type="caution">
@@ -109,13 +146,23 @@ Which social logins your build offers is decided at runtime from what you config
 docker compose up -d
 ```
 
-This pulls the API image, starts it alongside PostgreSQL, publishes the API on
-`API_SERVER_PORT`, and runs migrations automatically. The image executes the
+This pulls the API and web images, starts them alongside PostgreSQL behind the
+Caddy gateway, and runs migrations automatically. The API image executes the
 Drizzle ORM migrator in `packages/db/src/migrate.ts` before starting Express; it
-does not need the development-only `drizzle-kit` CLI at runtime.
+does not need the development-only `drizzle-kit` CLI at runtime. Caddy obtains and
+renews the certificate for `PUBLIC_HOST` on its own — point the DNS record at the
+server before starting, or the first issue attempt fails.
+
+API-only is the same command with the other file:
+
+```sh
+docker compose -f docker-compose.api.yml up -d
+```
 
 <Aside type="note">
-For HTTPS, put a reverse proxy (Caddy, nginx, Traefik…) in front of the published port and set `BETTER_AUTH_URL` to the public `https://` origin. Deploying with [Dokploy](https://dokploy.com) instead of a plain host? Use `docker-compose.dokploy.yml`, which attaches to the external `dokploy-network` and lets Dokploy's proxy terminate TLS.
+API-only publishes `API_SERVER_PORT` and nothing else. For HTTPS put a reverse
+proxy (Caddy, nginx, Traefik…) in front of it and set `BETTER_AUTH_URL` to the
+public `https://` origin.
 </Aside>
 
 <Aside type="caution" title="Run one API replica">
@@ -132,8 +179,101 @@ Password reset and account-deletion confirmation are fully self-contained: your 
 </Aside>
 
 <Aside type="caution">
-Both of those flows send an email, so **without `SMTP_*` configured they don't work**: email/password users can't reset a forgotten password, and in-app account deletion can't be confirmed. The client adapts — the API reports whether it can send email (`GET /api/v1/server` → `email`), so the app hides "Forgotten password?" and, for deletion, tells the user to contact the administrator. As the operator you can still reset a password or delete an account directly in Postgres. If you offer email/password sign-in to real users, configure SMTP. (Social-login users are unaffected by the reset gap — they have no password.)
+Both of those flows send an email, so **without `SMTP_*` configured they don't work**: email/password users can't reset a forgotten password, and in-app account deletion can't be confirmed. The client adapts — the API reports whether it can send email (`GET /api/v1/server` → `email`), so the app hides "Forgotten password?" and, for deletion, tells the user to contact the administrator. As the operator you can still reset a password or delete an account directly in Postgres. If you offer email/password sign-in to real users, configure SMTP. The advertised capability is the result of the startup handshake, not a per-request probe; restart the API after changing SMTP. (Social-login users are unaffected by the reset gap — they have no password.)
 </Aside>
+
+## Requiring confirmed email addresses
+
+Off by default, because a private instance among people who know each other gains
+nothing from it, and a server with no SMTP would create accounts that can never
+sign in. Turn it on for anything with open registration — an unconfirmed address
+is a typo at best and someone else's inbox at worst:
+
+```sh
+REQUIRE_EMAIL_VERIFICATION=true
+```
+
+Sign-up then sends a confirmation link, and the link both verifies the address and
+signs the person in, landing them on the calendar (`/email-verified` on an
+API-only server). Links expire after an hour; a refused sign-in sends a fresh one,
+so nobody has to find a way to ask.
+
+<Aside type="caution" title="It applies to accounts that already exist">
+Every account created before you turned this on has an unconfirmed address. Their
+next sign-in is refused and mails them a link — no data is lost and no action is
+needed from you, but it will surprise them. Say so before you flip it.
+</Aside>
+
+Changing an address works the same way from either client: a verified account is
+asked to approve the move **from its current address**, so a stolen session
+cannot walk off with the account; an unverified one confirms the new address
+instead. Either way the answer to "does that address already exist" is the same
+sentence, which is what keeps the form from being a way to test who has an
+account.
+
+<Aside type="note">
+The API refuses to start when this is `true` and `SMTP_HOST` is empty. That pair
+cannot serve anyone — the account is created, the confirmation never arrives, and
+nobody can sign in — so it fails at boot rather than at the first sign-up.
+</Aside>
+
+## How one origin is split
+
+The default file runs four services: the API and database, the web client, and a
+[Caddy](https://caddyserver.com) gateway that fronts both. Only the gateway
+publishes ports — web and API are reachable only inside the Compose network, so
+there is no second origin that could bypass it. Use `PUBLIC_HOST=:80` for plain
+HTTP when something else already terminates TLS.
+
+Wherever the proxy lives, it has to make the same split:
+
+| Path | Goes to | Why |
+| --- | --- | --- |
+| `/api/stream` | API, unbuffered | Server-sent events. Caddy needs `flush_interval -1`, or it buffers the response and live updates arrive in clumps, or never |
+| `/api/*` | API | Better Auth, the REST surface, the federation gateway |
+| `/reset-password`, `/delete-account`, `/email-verified`, `/.well-known/apple-app-site-association` | API | HTML hand-off pages for links arriving from email. They predate the web client and are shared with mobile, so they stay on the API |
+| `/invite/*` | Web client | An invitation is a page you read and accept. On an API-only install the same path serves the API's hand-off page instead, which deep-links into the phone app |
+| `/e/*` | Web client | Published event pages. An API-only install has nobody to render them, so publishing an event there produces a link that goes nowhere — the feature belongs to the full stack |
+| everything else | Web client | The browser app |
+
+<Aside type="note">
+The web container never talks to the API itself — the browser does, against the
+same origin. That is why it takes no API URL: there is nothing to configure and
+nothing to get wrong.
+</Aside>
+
+### Dokploy
+
+`docker-compose.dokploy.yml` keeps the same gateway. Create a Compose project,
+then add one Domain in Dokploy: choose service **gateway**, set container port
+**80**, and enable HTTPS. Traefik sends the hostname to Caddy, which applies the
+checked-in split above. Set `BETTER_AUTH_URL` to that public HTTPS origin.
+
+For a second, disposable instance off a branch there is
+`docker-compose.dokploy.dev.yml`: the same stack, but built from the checkout
+instead of pulling a published tag, with its own database volume and secrets so
+a bad branch cannot reach production data. It needs its own Domain and OAuth
+redirect URIs registered for that hostname.
+
+Add **exactly one** Domain, on `gateway:80`. Do not expose `web` or `api`; doing
+so bypasses Caddy and can send `/api/*` to the TanStack catch-all.
+
+SSE uses Caddy's explicit unbuffered `/api/stream` route, the same as the default
+Compose stack.
+
+### Using your own reverse proxy instead
+
+If you already run nginx, Traefik or another proxy, you can skip the gateway
+service and route to the containers yourself. Reproduce the table above, and get
+these two right:
+
+- **Send `/api/stream` through unbuffered.** nginx needs
+  `proxy_buffering off;` and `proxy_read_timeout` long enough (or `0`) on that
+  location; Traefik needs no special flag. Buffered SSE is the single most common
+  self-host complaint, and it looks like "live updates are broken", not like a
+  proxy problem.
+- **Keep one origin.** Anything that puts the web client and the API on different
+  hostnames breaks the session cookie.
 
 ## 4. Point the mobile app at your server
 
@@ -156,6 +296,29 @@ Pin a specific version instead of `latest` by setting `MUSUBI_TAG` to the
 published image tag in `.env` (for example `MUSUBI_TAG=1.2.0`). Building from a
 clone? Review incoming changes first, then rebuild with
 `docker compose up -d --build`.
+
+One `MUSUBI_TAG` pins the API and web images together, so they never end up on
+mismatched versions. Running API-only or Dokploy? Same commands with `-f
+docker-compose.api.yml` / `-f docker-compose.dokploy.yml` — on Dokploy, bump the
+variable and redeploy.
+
+### Rolling back
+
+Image rollback is safe only while the database schema remains compatible. Pin
+production versions rather than tracking `latest`, but treat migrations as
+forward-only unless a release explicitly documents backward compatibility.
+
+```sh
+MUSUBI_TAG=1.1.0 docker compose up -d
+```
+
+<Aside type="caution" title="Rolling back across a migration">
+**Schema does not roll back with an image.** Migrations run forward on startup
+and there is no down-migration path. Contract migrations may remove data or
+structures an older API needs. Before every production upgrade, take and verify
+a dump ([Backups](#backups-and-recovery-drills)). Restoring that dump together
+with the previous images is the reliable rollback path.
+</Aside>
 
 ---
 
@@ -187,7 +350,8 @@ publishing it, and removes local dumps older than the retention window:
 ./ops/backup-postgres.sh
 ```
 
-It defaults to `docker-compose.yml`, `./backups`, and 14 days. Override
+It defaults to `docker-compose.yml`, `./backups`, and 14 days (set
+`MUSUBI_COMPOSE_FILE` if you run one of the other files). Override
 those settings when scheduling it with cron or your hosting control panel:
 
 ```sh

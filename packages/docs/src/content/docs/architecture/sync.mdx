@@ -105,7 +105,7 @@ commit. No durable retry outbox currently exists.
 This distinction matters during incidents:
 
 | Mutation | Ordering | Current failure result |
-|---|---|---|
+| --- | --- | --- |
 | Calendar create/update/delete | Provider, then local DB | Provider rejection aborts local change; later DB failure can diverge |
 | Event create | Local DB transaction, then provider(s) | Provider failure is logged; request continues |
 | Event update/delete | Provider delete for removed links, local DB transaction, then provider create/update | Provider failure is logged; local reconciliation continues |
@@ -116,8 +116,7 @@ all of its local mirrors, events, opt-out tombstones, and (for CalDAV) stored
 credentials in one transaction. Google revocation and Better Auth OAuth unlink
 still sit outside PostgreSQL and therefore keep the same cross-system boundary.
 
-See the [observability runbook](/docs/operations/observability/#incident-triage)
-and [audit recommendation](/docs/contributing/codebase-audit/#p1--make-provider-event-delivery-recoverable).
+See the [observability runbook](/docs/operations/observability/#incident-triage).
 
 ## The engine
 
@@ -205,6 +204,7 @@ The key is `CALDAV_ENC_KEY` (64 hex chars = 32 bytes; generate with `openssl ran
 Most sync bugs are recurrence and all-day edge cases. The existing adapters already handle these — study them before writing a new one.
 
 **Google (`adapters/google.ts`):**
+
 - The adapter refreshes expired access tokens against Google's token endpoint so
   it can retain the safe OAuth `error`/`error_subtype` codes that Better Auth's
   generic `getAccessToken` error otherwise discards. Tokens and error descriptions
@@ -221,6 +221,7 @@ Most sync bugs are recurrence and all-day edge cases. The existing adapters alre
 - All-day end is **exclusive** (±1 day on pull/push).
 
 **Microsoft (`adapters/microsoft.ts`):**
+
 - OAuth mirrors the Google lifecycle exactly — both adapters share `sync/oauth.ts`
   (token refresh, `invalid_grant` → `reconnect_required`) and the generic
   `queries/oauth.ts` account queries. One Microsoft quirk handled there: the
@@ -243,6 +244,7 @@ Most sync bugs are recurrence and all-day edge cases. The existing adapters alre
   update map the chosen Musubi hex to the nearest Graph preset.
 
 **CalDAV (`adapters/caldav.ts` + `caldav_client.ts`):**
+
 - Wraps `tsdav`; Basic auth; principal/home discovery is automatic (incl. iCloud hosts).
 - Events parsed via `ical.js`; `externalId` is the **resource URL**, not the UID.
 - **Always returns `reset: true`** — full fetch every sync (a deliberate simplification; upgrade path is WebDAV `sync-collection`). This cleanly handles deletions.
@@ -313,7 +315,7 @@ For setup and provider-specific debugging, use the dedicated guides:
 [Apple / CalDAV](/docs/providers/caldav/).
 
 | File | Contents |
-|---|---|
+| --- | --- |
 | `sync/engine.ts` | `syncProvider`, `syncUser`, `pushEventToCalendars`, registry |
 | `sync/orchestrator.ts` | Provider/account failure boundary, strict/scoped selection |
 | `sync/adapter.ts` | `NormalizedEvent`, `ExternalCalendarInfo`, `FetchChangesResult`, `CalendarAdapter` |

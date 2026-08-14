@@ -1,0 +1,65 @@
+# Musubi reference gateway.
+#
+# Puts the web client and the API on ONE public origin, which is what makes
+# cookies first-party, removes CORS entirely, and lets the browser call /api/*
+# with relative URLs. Everything Musubi assumes about origins depends on this.
+#
+# PUBLIC_HOST is the hostname Caddy serves. Set it to your domain for automatic
+# HTTPS, or to `:80` to run plain HTTP behind another proxy / on a LAN.
+
+{$PUBLIC_HOST::80} {
+	encode zstd gzip
+	header {
+		Content-Security-Policy "frame-ancestors 'none'"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	# Server-sent events: the API holds these open for as long as a client is
+	# connected. Without flush_interval -1 Caddy buffers the response and live
+	# updates arrive in clumps (or not at all).
+	@stream path /api/stream
+	handle @stream {
+		reverse_proxy {$API_UPSTREAM:api:7531} {
+			flush_interval -1
+			transport http {
+				# No read timeout: an idle stream is normal, not a stall.
+				read_timeout 0
+			}
+		}
+	}
+
+	# The API owns /api/* — Better Auth on /api/auth/*, the REST surface on
+	# /api/v1/*, and the federation gateway underneath it.
+	handle /api/* {
+		reverse_proxy {$API_UPSTREAM:api:7531}
+	}
+
+	# HTML hand-off pages the API serves for links that arrive from outside the
+	# app: the emailed password reset, account deletion and email confirmation
+	# landings, and the iOS universal-link association. These deliberately stay on
+	# the API (they predate the web client and are shared with mobile), so the
+	# gateway must not send them to the web app.
+	#
+	# /invite/* is NOT here: with a web client on this origin, an invitation opens
+	# as a page you can read and accept. The API's own invite page is the fallback
+	# for API-only installs, where the phone app is the only client there is.
+	handle /reset-password {
+		reverse_proxy {$API_UPSTREAM:api:7531}
+	}
+	handle /delete-account {
+		reverse_proxy {$API_UPSTREAM:api:7531}
+	}
+	handle /email-verified {
+		reverse_proxy {$API_UPSTREAM:api:7531}
+	}
+	handle /.well-known/apple-app-site-association {
+		reverse_proxy {$API_UPSTREAM:api:7531}
+	}
+
+	# Everything else is the web client.
+	handle {
+		reverse_proxy {$WEB_UPSTREAM:web:3000}
+	}
+}

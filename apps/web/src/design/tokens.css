@@ -1,0 +1,67 @@
+@import "@musubi/design-system/colors.css";
+@import "@musubi/design-system/foundations.css";
+
+@font-face {
+  font-display: swap;
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 400;
+  src: url("@expo-google-fonts/inter-tight/400Regular/InterTight_400Regular.ttf")
+    format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 500;
+  src: url("@expo-google-fonts/inter-tight/500Medium/InterTight_500Medium.ttf")
+    format("truetype");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "Noto Serif";
+  font-style: normal;
+  font-weight: 400;
+  src: url("@expo-google-fonts/noto-serif/400Regular/NotoSerif_400Regular.ttf")
+    format("truetype");
+}
+
+:root {
+  --font-sans: "Inter Tight", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Serif", Georgia, serif;
+  --font-kanji: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* A block that is not (yet) real: the create draft, and the trace a dragged
+     event leaves behind. A veil of the canvas itself — light on the light theme,
+     dark on the dark one — so it mutes the grid under it without introducing a
+     colour of its own. Translucent, because both blocks sit *on* the grid rather
+     than replacing it. */
+  --draft-fill: color-mix(in srgb, var(--surface-canvas) 72%, transparent);
+
+  --event-radius: 6px;
+
+  --sidebar-width: 244px;
+  --toolbar-height: 132px;
+  --date-header-height: 48px;
+  --popover-width: 360px;
+  --layer-viewport-gutter: var(--space-6);
+  --layer-inline: var(--space-6);
+  --layer-body-block: var(--space-5);
+  --layer-footer-block: var(--space-4);
+  /* One hour of the time grid. TimeGridView overrides it per density; the CSS
+     grid and the JS geometry must derive from the same number or the cursor
+     drifts against the time it points at. */
+  --hour-height: 64px;
+
+  --focus-ring: 2px solid var(--accent-primary);
+}
+
+@media (max-width: 599px) {
+  :root {
+    --layer-viewport-gutter: 0px;
+    --layer-inline: var(--space-5);
+  }
+}
