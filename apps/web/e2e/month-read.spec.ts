@@ -608,6 +608,17 @@ test("redirects an anonymous Month request to sign in", async ({ page }) => {
 	await expectNoAccessibilityViolations(page);
 });
 
+test("opens a calendar for a bare /app request", async ({ page }) => {
+	// The URL the marketing site links to. It matches the layout and no child,
+	// so without an index route a signed-in visitor gets an empty outlet.
+	await mockAuthenticatedReads(page);
+
+	await page.goto("/app");
+
+	await expect(page).toHaveURL(/\/app\/p\/[^/]+\/month\?date=/);
+	await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+});
+
 test("keeps sign in clear and keyboard-usable on a narrow screen", async ({
 	page,
 }) => {
