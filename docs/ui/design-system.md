@@ -342,11 +342,10 @@ popover. Open-layer testing is required because hidden content is not included
 in the normal accessibility pass.
 
 Run a cloud build with `pnpm chromatic:web` and provide
-`CHROMATIC_PROJECT_TOKEN` through the environment. CI reads the same value
-from the GitHub Actions secret; forks and repositories without the secret skip
-publishing without exposing credentials. The committed project ID created by
-the Visual Tests panel is public metadata, but the project token must never be
-written to source, configuration, logs, or documentation.
+`CHROMATIC_PROJECT_TOKEN` through the environment. Visual regression is a
+manual, on-demand build; CI does not publish snapshots. The committed project
+ID created by the Visual Tests panel is public metadata, but the project token
+must never be written to source, configuration, logs, or documentation.
 
 The baseline catalog visualizes the implemented color, typography, spacing,
 shape, motion, and responsive contracts. It also covers Authentication,
