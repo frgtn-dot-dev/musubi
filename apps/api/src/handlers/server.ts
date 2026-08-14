@@ -56,7 +56,7 @@ export function handlerServerStatus(_: Request, res: Response) {
 export function handlerServer(_: Request, res: Response) {
   res.status(200).json({
     version: serverVersion,
-    minClientVersion: "0.1.2",
+    minClientVersion: "0.1.3",
     socials: enabledSocials(),
     socialsWeb: enabledWebSocials(),
     syncProviders: enabledSyncProviders(),
