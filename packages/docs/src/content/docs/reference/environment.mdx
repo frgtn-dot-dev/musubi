@@ -65,6 +65,7 @@ directly:
 | `POSTGRES_PASSWORD` | Yes | Compose refuses to start when missing |
 | `MUSUBI_TAG` | No | `latest`; pin a published image tag for controlled upgrades. One tag covers both the API and web images, so they can't end up mismatched |
 | `PUBLIC_HOST` | Default full stack | Hostname Caddy serves — a domain gets automatic HTTPS; `:80` serves HTTP behind another proxy. Dokploy fixes the internal gateway to `:80` and takes its public hostname from the UI Domain |
+| `MARKETING_UPSTREAM` | No | `host:port` of a landing page for `/`, reachable from the gateway's network. Unset, `/` opens the app: the web client redirects it to `/app`. The app's own routes are never handed over, so only the apex and unknown paths reach it |
 | `APPLE_SERVICES_ID` | No | Services ID for Sign in with Apple in a browser. With `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` and `APPLE_TEAM_ID` it turns the web Apple button on; the phone's native flow uses `APPLE_CLIENT_ID` and needs none of them |
 | `APPLE_KEY_ID` | No | Key ID of the "Sign in with Apple" `.p8` key |
 | `APPLE_PRIVATE_KEY` | No | Contents of that `.p8`. Escaped newlines (`\n`) are accepted so it fits one env line. The server signs Apple's short-lived client secret from it per exchange — there is no six-month token to rotate |

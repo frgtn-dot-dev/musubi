@@ -19,6 +19,9 @@ services:
       PUBLIC_HOST: :80
       API_UPSTREAM: musubi-api-internal:7531
       WEB_UPSTREAM: musubi-web-internal:3000
+      # A marketing site on `/`, reached across dokploy-network by its service
+      # name (host:port). Unset leaves the apex with the web client.
+      MARKETING_UPSTREAM: ${MARKETING_UPSTREAM:-musubi-web-internal:3000}
     volumes:
       - ./ops/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
