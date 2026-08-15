@@ -1,7 +1,29 @@
 import { z } from "zod";
+import { ReminderRuleSchema } from "./reminder";
 
 export const CalendarViewSchema = z.enum(["week", "month", "day", "schedule"]);
 export type CalendarView = z.infer<typeof CalendarViewSchema>;
+
+/**
+ * An IANA zone name, checked by asking the platform rather than by pattern.
+ * A reminder for an all-day event is a wall-clock time, so a zone the runtime
+ * cannot resolve would silently move somebody's morning.
+ */
+export const TimezoneSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine(
+    (value) => {
+      try {
+        new Intl.DateTimeFormat(undefined, { timeZone: value });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Not a time zone this runtime knows." },
+  );
 
 export const SettingsSchema = z.object({
   showKanji: z.boolean(),
@@ -18,6 +40,12 @@ export const SettingsSchema = z.object({
   tabBarLabels: z.boolean().optional(),
   // user-chosen calendar order (flat id list); optional for the same reason
   calendarOrder: z.array(z.string()).optional(),
+  // Where all-day reminders land on the clock. Optional so a client that has
+  // never sent one cannot reset a zone another device already reported.
+  timezone: TimezoneSchema.optional(),
+  // The bottom of the reminder inheritance chain. Optional for the same reason;
+  // the server keeps `notificationsOnByDefault` in step with it.
+  defaultReminder: ReminderRuleSchema.optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -27,12 +55,14 @@ export const SettingsPatchSchema = z
     calendarOrder: z.array(z.string()).max(500).optional(),
     dateFormat: z.enum(["dmy", "mdy", "ymd"]).optional(),
     defaultCalendarView: CalendarViewSchema.optional(),
+    defaultReminder: ReminderRuleSchema.optional(),
     notificationsOnByDefault: z.boolean().optional(),
     onboarded: z.boolean().optional(),
     showKanji: z.boolean().optional(),
     tabBarLabels: z.boolean().optional(),
     theme: z.enum(["system", "dark", "light"]).optional(),
     timeFormat: z.enum(["12h", "24h"]).optional(),
+    timezone: TimezoneSchema.optional(),
     weekStartsOn: z.enum(["monday", "sunday"]).optional(),
   })
   .strict()

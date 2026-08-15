@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { boolean, customType, index, jsonb, pgTable, text, timestamp, uuid, integer, unique } from "drizzle-orm/pg-core";
+import { DEFAULT_REMINDER_RULE, type ReminderRule } from "@musubi/types";
 
 // drizzle has no built-in bytea — minimal custom type
 const bytea = customType<{ data: Buffer }>({
@@ -162,6 +163,17 @@ export const userSettings = pgTable("user_settings", {
   onboarded: boolean("onboarded").notNull().default(false),
   // flat, user-chosen calendar order; group order derives from first appearance
   calendarOrder: jsonb("calendar_order").$type<string[]>().notNull().default([]),
+  // IANA zone. All-day reminders are a wall-clock time ("the evening before at
+  // 18:00"), which UTC cannot answer. Timed events need no zone — they are
+  // instants, and an offset from an instant is another instant.
+  timezone: text("timezone").notNull().default("UTC"),
+  // Bottom of the reminder inheritance chain, so always a concrete rule.
+  // `notificationsOnByDefault` above stays in step with it for older mobile
+  // clients, which read the boolean and know nothing about rules.
+  defaultReminder: jsonb("default_reminder")
+    .$type<ReminderRule>()
+    .notNull()
+    .default(DEFAULT_REMINDER_RULE),
 });
 
 export type NewSettings = typeof userSettings.$inferInsert;
