@@ -1,11 +1,13 @@
 import { config, logger } from "@musubi/config";
 import nodemailer from "nodemailer";
+import { logoAttachment } from "./brand";
 
 export { getPasswordResetHtml } from "./password_reset";
 export { getDeleteAccountHtml } from "./delete_account";
 export { getVerifyEmailHtml } from "./verify_email";
 export { getChangeEmailHtml } from "./change_email";
 export { getSignInCodeHtml } from "./sign_in_code";
+export { brandUrl, LOGO_CID, logoAttachment } from "./brand";
 
 export function smtpTransportOptions(smtp: typeof config.smtp) {
   return {
@@ -48,6 +50,11 @@ export async function sendEmail(to: string, subject: string, html: string) {
   if (!transporter) throw new Error("SMTP is not configured");
   try {
     const info = await transporter.sendMail({
+      // Every template carries the mark, so every message carries the file it
+      // points at. Attaching it beats hosting it: a self-hosted server with no
+      // public domain still shows a logo, and no client has to be persuaded to
+      // load a remote image first.
+      attachments: logoAttachment(),
       from: config.smtp.from,
       to,
       subject,

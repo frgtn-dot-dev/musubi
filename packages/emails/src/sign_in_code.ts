@@ -1,5 +1,4 @@
-
-
+import { brandUrl, logoMarkup } from "./brand";
 export function getSignInCodeHtml(code: string, expiresIn: string) {
   return `
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -45,7 +44,7 @@ export function getSignInCodeHtml(code: string, expiresIn: string) {
                 <tbody>
                   <tr style="width:100%">
                     <td>
-                      <h1
+                      ${logoMarkup()}<h1
                         style="margin:0;padding:0;font-size:26px;line-height:1.44em;padding-top:0.389em;font-weight:700;color:#ffffff;margin-bottom:16px">
                         ${code}
                       </h1>
@@ -82,7 +81,7 @@ Didn&#x27;t ask for a code? Someone typed your address into
                               <p
                                 style="margin:0;padding:0;font-size:12px;padding-top:0.5em;padding-bottom:0.5em;color:#6b6b75;line-height:160%">
                                 <a
-                                  href="#"
+                                  href="${brandUrl()}"
                                   rel="noopener noreferrer nofollow"
                                   style="color:#C8553D;text-decoration-line:none;text-decoration:underline"
                                   target="_blank"
