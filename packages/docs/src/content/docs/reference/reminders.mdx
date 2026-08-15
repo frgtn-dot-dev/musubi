@@ -1,0 +1,95 @@
+---
+title: Reminders
+description: How Musubi decides which events remind you, where those rules live, and which device actually rings.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Musubi answers "which events should remind me?" with a **rule**, not two hundred
+toggles. That matters most in a shared calendar: joining one with forty
+birthdays in it should take one decision, not forty.
+
+## The chain
+
+Three levels. The first one that has an answer wins.
+
+1. **An override on the event** — `event_reminders`, one row per person per
+   event. A row is always a deliberate choice, "never" included.
+2. **Your rule for a calendar** — `calendar_members.reminder`. An event can be
+   in several calendars, so the rules are read in the order of your own
+   `settings.calendarOrder`; the first calendar with a rule decides. A rule that
+   says "never" wins there like any other, because saying nothing and saying no
+   are different answers.
+3. **Your global default** — `user_settings.default_reminder`. Always a concrete
+   rule, since there is nothing above it to fall back on.
+
+Inheriting is the **absence** of a rule — a missing row, a null column — never a
+rule value. Encoding "inherit" as a value would allow a rule that inherits from
+itself, and every reader would need a cycle check it has no way to resolve.
+
+<Aside type="note">
+The calendar rule lives on the **membership**, not on the calendar. Your copy of
+a shared calendar reminds you the way you asked; its owner has no say in when
+your phone rings.
+</Aside>
+
+Nothing reminds, whatever the rule says, for an event you have **declined**
+(`event_users.status`), an event marked **cancelled**, or an occurrence whose
+reminder time has already passed.
+
+## What a rule says
+
+```ts
+type ReminderRule = {
+  // Timed events: minutes before the start. null = do not remind.
+  minutesBefore: number | null;
+  // All-day events: a wall-clock time instead, because "15 minutes before
+  // Christmas" is 23:45 on the 24th. null = do not remind.
+  allDay: { daysBefore: number; atMinute: number } | null;
+};
+```
+
+Two branches because the two kinds of event ask different questions. All-day
+events are stored as UTC midnight of a timezone-invariant date, so their
+reminder is built from that calendar date in **your** zone — hence
+`user_settings.timezone`, which every client reports when it changes. Timed
+events need no zone: they are instants, and an offset from an instant is another
+instant.
+
+## Who rings
+
+The server stores rules and nothing else. Clients ask
+`resolveReminders({ context, events, from, to })` from `@musubi/calendar` what
+falls due in a window, and that one function is what keeps the phone, the
+browser, and any future server-side dispatcher from disagreeing about a declined
+birthday.
+
+| Where | How it rings | Ceiling |
+| --- | --- | --- |
+| Mobile | `expo-notifications`, scheduled locally from the rules | A device that has not synced for a while can ring on stale data |
+| Web | `setTimeout` plus the `Notification` API | Only while a tab is open — web push is a later phase |
+
+Permission is asked **contextually**, where somebody is switching a reminder on
+— never at launch, and never the first time one happens to come due. A prompt
+with no context is the one people dismiss forever.
+
+## Changing a rule
+
+- **Globally** — Settings → Reminders.
+- **Per calendar** — Settings → Reminders by calendar.
+- **Per event** — the event's details, under "Remind me". Choosing "Use the
+  calendar's setting" clears the override.
+
+Surfaces write an override only where the choice **differs** from what the event
+would inherit. Storing one every time would make every event an exception, and a
+later change to a calendar rule would then reach none of them.
+
+## Upgrading
+
+The migration that introduces `default_reminder` sets it from
+`notificationsOnByDefault`: accounts with notifications off get a silent rule,
+so nobody is woken by an upgrade they did not ask for. Accounts with them on get
+the standard rule — ten minutes before a timed event, the evening before an
+all-day one — which now applies to **every** event rather than only the ones
+that had been toggled on individually. That is the point of the change, and one
+click on a calendar quiets it again.
