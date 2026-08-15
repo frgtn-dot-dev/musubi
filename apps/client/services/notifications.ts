@@ -12,6 +12,7 @@ import { db } from "./db";
 import { notificationsTable } from "@/db/schema";
 import { cacheGetReminders, cacheSetReminders } from "./eventsCache";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { deviceTimezone } from "@/lib/timezone";
 
 const REMINDER_CHANNEL_ID = "musubi-reminders";
 
@@ -135,14 +136,6 @@ function context(): ReminderContext | null {
     eventRules: rules.events,
     timezone: deviceTimezone(),
   };
-}
-
-export function deviceTimezone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
 }
 
 /**

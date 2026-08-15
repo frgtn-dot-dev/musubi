@@ -5,10 +5,11 @@ import {
 	type EditScope,
 } from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
-import { providerDisplayName } from "@musubi/types";
+import { providerDisplayName, sameRule } from "@musubi/types";
 import {
 	AlertTriangle,
 	ArrowLeft,
+	BellRing,
 	CalendarDays,
 	ChevronDown,
 	ChevronUp,
@@ -76,6 +77,19 @@ import {
 	getEventMutationError,
 } from "../event-permissions";
 import type { Notify } from "../notice";
+import {
+	eventReminder,
+	inheritedFrom,
+	type EventReminder,
+	type ReminderControl,
+} from "../reminder-control";
+import {
+	allDayValue,
+	optionsFor,
+	timedValue,
+	withAllDay,
+	withTimed,
+} from "../reminder-options";
 import { EventEditorForm } from "./EventEditorForm";
 import { ShareEventDialog } from "./ShareEventDialog";
 
@@ -102,8 +116,22 @@ export type EventActionHandlers = {
 		status: AttendanceChoice;
 	}) => Promise<Attendee[]>;
 	onUpdateEvent: (event: Event) => Promise<Event>;
+	/** Absent where reminders are not loaded yet — the control simply hides. */
+	reminders?: ReminderControl;
 	user: { id: string; name: string };
 };
+
+/** Sentinel for the menu item that removes an override rather than setting one. */
+const INHERIT = "inherit";
+
+function reminderLabel(reminder: EventReminder, kind: "allDay" | "timed") {
+	const value =
+		kind === "timed" ? timedValue(reminder.rule) : allDayValue(reminder.rule);
+	const option = optionsFor(reminder.rule, kind).find(
+		(entry) => entry.value === value,
+	);
+	return option?.label ?? "Off";
+}
 
 /** Faces before the pile turns into "+N", the same count the phone shows. */
 const FACEPILE_LIMIT = 7;
@@ -148,6 +176,7 @@ export function EventDetailsPopover({
 	onRestoreEvent,
 	onSetAttendance,
 	onUpdateEvent,
+	reminders,
 	timeFormat,
 	user,
 	weekStartsOn,
@@ -157,6 +186,7 @@ export function EventDetailsPopover({
 	const notesTitleId = useId();
 	const guestsTitleId = useId();
 	const targetActionTitleId = useId();
+	const reminderTitleId = useId();
 	const [open, setOpen] = useState(false);
 	const [editing, setEditing] = useState(false);
 	const [sharing, setSharing] = useState(false);
@@ -430,6 +460,42 @@ export function EventDetailsPopover({
 		});
 	}
 
+	const reminder = reminders ? eventReminder(reminders, master) : undefined;
+	const reminderKind = master.isAllDay ? "allDay" : "timed";
+	const reminderSource = reminders ? inheritedFrom(reminders, master) : null;
+
+	async function handleReminder(value: string) {
+		if (!reminders || !reminder) return;
+		setBusyAction("reminder");
+		setActionError(undefined);
+
+		try {
+			if (value === INHERIT) {
+				await reminders.onChange(master.id, null);
+				onNotice("Reminder follows the calendar again.");
+				return;
+			}
+
+			const next =
+				reminderKind === "timed"
+					? withTimed(reminder.rule, value)
+					: withAllDay(reminder.rule, value);
+			// Only store an override where it actually differs. Writing one for
+			// every glance would make each event an exception, and a later change
+			// to the calendar rule would then reach none of them.
+			const base = eventReminder(
+				{ ...reminders, document: { ...reminders.document, events: {} } },
+				master,
+			).rule;
+			await reminders.onChange(master.id, sameRule(next, base) ? null : next);
+			onNotice("Reminder saved.");
+		} catch (error) {
+			setActionError(getEventMutationError(error, "update", homeCalendar));
+		} finally {
+			setBusyAction(undefined);
+		}
+	}
+
 	async function handleAnswer(next: AttendanceChoice) {
 		setBusyAction("attendance");
 		setActionError(undefined);
@@ -688,6 +754,66 @@ export function EventDetailsPopover({
 											</SectionLabel>
 										</div>
 										<p>{event.description}</p>
+									</section>
+								) : null}
+
+								{reminder ? (
+									<section
+										aria-labelledby={reminderTitleId}
+										className={styles.notes}
+									>
+										<div className={styles.sectionHeading}>
+											<BellRing aria-hidden="true" size={17} />
+											<SectionLabel id={reminderTitleId} level={3}>
+												Remind me
+											</SectionLabel>
+											<Menu>
+												<MenuTrigger asChild>
+													<Button
+														className={styles.answerTrigger}
+														loading={busyAction === "reminder"}
+														size="compact"
+														variant={reminder.inherited ? "secondary" : "primary"}
+													>
+														{reminderLabel(reminder, reminderKind)}
+														<ChevronDown aria-hidden="true" size={14} />
+													</Button>
+												</MenuTrigger>
+												<MenuContent align="end" label="Reminder">
+													{optionsFor(reminder.rule, reminderKind).map((option) => {
+														const current =
+															reminderKind === "timed"
+																? timedValue(reminder.rule)
+																: allDayValue(reminder.rule);
+														return (
+															<MenuItem
+																icon={
+																	!reminder.inherited && current === option.value ? (
+																		<Check aria-hidden="true" size={15} />
+																	) : undefined
+																}
+																key={option.value}
+																onSelect={() => void handleReminder(option.value)}
+															>
+																{option.label}
+															</MenuItem>
+														);
+													})}
+													{reminder.inherited ? null : (
+														<MenuItem onSelect={() => void handleReminder(INHERIT)}>
+															Use the calendar's setting
+														</MenuItem>
+													)}
+												</MenuContent>
+											</Menu>
+										</div>
+										{reminder.inherited ? (
+											<p>
+												{reminderSource
+													? `Following ${calendars.find((entry) => entry.id === reminderSource)?.name ?? "its calendar"}.`
+													: "Following your default."}
+											</p>
+										) : null}
 									</section>
 								) : null}
 

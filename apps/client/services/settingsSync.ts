@@ -6,6 +6,7 @@ import type {
 } from "@musubi/types";
 import { SettingsConflictError } from "@/lib/settingsConflict";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { deviceTimezone } from "@/lib/timezone";
 
 type SettingsApi = {
 	getSettingsDocument: () => Promise<SettingsDocument>;
@@ -70,6 +71,16 @@ export async function refreshSettingsDocument(api: SettingsApi) {
 	useSettingsStore
 		.getState()
 		.loadSettingsDocument(document, pendingValues(started));
+
+	// Tell the server where this device is. All-day reminders are a wall-clock
+	// time ("the evening before at 18:00"), which no server can place without
+	// knowing whose evening. Only written when it actually differs — travelling
+	// changes it, opening the app does not.
+	const here = deviceTimezone();
+	if (document.value.timezone !== here) {
+		queueSettingsPatch(api, { timezone: here });
+	}
+
 	return document;
 }
 

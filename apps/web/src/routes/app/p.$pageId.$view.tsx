@@ -59,7 +59,7 @@ function WorkspaceRoute() {
   useServerStream(userId);
   // Reminders ring only while a tab is open (web push is a later phase), so
   // this lives at the top of the signed-in shell rather than inside a view.
-  useReminders(userId);
+  const reminders = useReminders(userId);
   // Above Workspace: provider return state must survive canonical Page redirects.
   const providerLink = useProviderLinkReturn(userId);
   const activeView: CalendarViewId =
@@ -248,6 +248,7 @@ function WorkspaceRoute() {
       onRemoveEvent={eventMutations.removeEvent}
       onPatchSettings={settingsMutations.patchSettings}
       onSetAttendance={eventMutations.setAttendance}
+      reminders={reminders}
       settings={workspace.settings.data}
       user={user!}
       onDateChange={(nextDate) =>
