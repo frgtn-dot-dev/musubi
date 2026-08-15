@@ -70,6 +70,12 @@ import {
   handlerRevokeInvite,
 } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
+import {
+  handlerDeleteEventReminder,
+  handlerGetReminders,
+  handlerPutCalendarReminder,
+  handlerPutEventReminder,
+} from "./handlers/reminders";
 import { middlewareLogHandler } from "./middleware/log_handler";
 import {
   handlerGetSettings,
@@ -477,6 +483,26 @@ app.delete(
   "/api/v1/calendars/:calendarId/members/:userId",
   requireAuth,
   wrap(handlerKickMember),
+);
+
+// Reminders — one document per user (global default, per-calendar rules,
+// per-event overrides). Clients resolve the schedule themselves from it with
+// `resolveReminders` in @musubi/calendar; the server stores only the rules.
+app.get("/api/v1/reminders", requireAuth, wrap(handlerGetReminders));
+app.put(
+  "/api/v1/reminders/calendars/:calendarId",
+  requireAuth,
+  wrap(handlerPutCalendarReminder),
+);
+app.put(
+  "/api/v1/reminders/events/:eventId",
+  requireAuth,
+  wrap(handlerPutEventReminder),
+);
+app.delete(
+  "/api/v1/reminders/events/:eventId",
+  requireAuth,
+  wrap(handlerDeleteEventReminder),
 );
 
 // Users & connections

@@ -235,7 +235,6 @@ export const events = pgTable("events", {
   hasAttendees: boolean("has_attendees").notNull().default(false),
   organizer: text("organizer").notNull(),
   recurrence: text("recurrence"),
-  // reminders:
   url: text("url"),
   // home calendar — where the event was created / claimed. Edit-content is gated by
   // editEvents on THIS calendar; links into other calendars are read-only shares.
@@ -478,6 +477,10 @@ export const calendarMembers = pgTable("calendar_members", {
     })
     .notNull(),
   role: text("role").notNull().default("viewer"), // owner | editor | viewer
+  // MY reminder rule for this calendar, not the owner's. null = inherit the
+  // user's global default. Deliberately on the membership: letting a calendar
+  // owner set this would be a way to make somebody else's phone buzz.
+  reminder: jsonb("reminder").$type<ReminderRule>(),
 }, (t) => [unique().on(t.userID, t.calendarID)]); // re-join hits onConflictDoNothing instead of duplicating the membership
 
 export const calendarMembersRelations = relations(calendarMembers, ({ one }) => ({
@@ -539,6 +542,35 @@ export const eventUsers = pgTable("event_users", {
   // what it meant.
   status: text("status").notNull().default("going"),
 }, (t) => [unique().on(t.eventID, t.userID)]); // makes join idempotent (onConflictDoNothing)
+
+
+// A per-user reminder override on one event — the exception to whatever the
+// calendar rule says. Its own table rather than a column on `eventUsers`,
+// because there "no row = has not answered", and wanting a reminder is not an
+// answer: plenty of people want the nudge for something they are not attending.
+//
+// A row is always an explicit choice, "never" included. Inheriting is the
+// absence of a row.
+export const eventReminders = pgTable("event_reminders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  eventID: uuid("event_id")
+    .references(() => events.id, { onDelete: "cascade" })
+    .notNull(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  rule: jsonb("rule").$type<ReminderRule>().notNull(),
+}, (t) => [unique().on(t.eventID, t.userID)]);
+
+export const eventRemindersRelations = relations(eventReminders, ({ one }) => ({
+  event: one(events, { fields: [eventReminders.eventID], references: [events.id] }),
+  user: one(user, { fields: [eventReminders.userID], references: [user.id] }),
+}));
 
 
 export const eventUsersRelations = relations(eventUsers, ({ one }) => ({

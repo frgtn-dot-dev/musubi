@@ -8,6 +8,7 @@ const settings = {
   dateFormat: "dmy",
   defaultCalendarView: "month",
   id: "user-1",
+  defaultReminder: { minutesBefore: 10, allDay: { daysBefore: 1, atMinute: 1080 } },
   notificationsOnByDefault: true,
   onboarded: true,
   revision: 4,
@@ -15,6 +16,7 @@ const settings = {
   tabBarLabels: true,
   theme: "system",
   timeFormat: "24h",
+  timezone: "Europe/Prague",
   updatedAt: new Date("2026-07-26T11:00:00.000Z"),
   weekStartsOn: "monday",
 };

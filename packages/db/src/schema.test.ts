@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
   calendarEvents,
+  calendarMembers,
+  eventReminders,
   eventUsers,
   pages,
   schedulingParticipants,
@@ -92,3 +94,31 @@ assert.ok(
 );
 
 console.log("database schema invariant self-check: OK");
+
+// ── Reminders ────────────────────────────────────────────────────────────────
+
+assert.equal(
+  userSettings.timezone.default,
+  "UTC",
+  "an account with no reported zone must still resolve all-day reminders",
+);
+assert.equal(
+  userSettings.defaultReminder.notNull,
+  true,
+  "the bottom of the inheritance chain has nothing to fall back to",
+);
+
+assert.equal(
+  calendarMembers.reminder.notNull,
+  false,
+  "a null calendar rule is how a membership says 'inherit'",
+);
+
+assert.ok(
+  getTableConfig(eventReminders).uniqueConstraints.some((constraint) =>
+    ["event_id", "user_id"].every((column) =>
+      constraint.columns.some((c) => c.name === column),
+    ),
+  ),
+  "one override per person per event, so a repeated PUT updates rather than piles up",
+);
