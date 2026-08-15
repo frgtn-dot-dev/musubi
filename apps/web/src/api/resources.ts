@@ -14,6 +14,7 @@ import {
   PollSchema,
   PollSummarySchema,
   PublicEventSchema,
+  RemindersResponseSchema,
   RemoveEventResponseSchema,
   RsvpSummarySchema,
   ServerCapabilitiesSchema,
@@ -28,6 +29,7 @@ import {
   type CreatePageRequest,
   type Event,
   type PatchSettingsRequest,
+  type ReminderRule,
   type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
@@ -137,6 +139,26 @@ export function patchSettings(request: PatchSettingsRequest) {
     body: request,
     method: "PATCH",
     responseSchema: SettingsDocumentResponseSchema,
+  });
+}
+
+export function getReminders(signal?: AbortSignal) {
+  return apiRequest("/api/v1/reminders", {
+    responseSchema: RemindersResponseSchema,
+    signal,
+  });
+}
+
+/** `rule: null` clears an event override, or puts a calendar back to inheriting. */
+export function putReminderRule(
+  scope: "calendars" | "events",
+  id: string,
+  rule: ReminderRule | null,
+) {
+  return apiRequest(`/api/v1/reminders/${scope}/${id}`, {
+    body: { rule },
+    method: "PUT",
+    responseSchema: z.void(),
   });
 }
 

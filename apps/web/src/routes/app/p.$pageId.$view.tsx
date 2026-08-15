@@ -6,6 +6,7 @@ import { ApiError, ApiResponseError } from "~/api/http";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { getPollCalendar } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
+import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
 import { useSessionUser } from "~/auth/use-session-user";
 import { useSnapshot } from "~/offline/SnapshotProvider";
@@ -56,6 +57,9 @@ function WorkspaceRoute() {
     () => new Map(),
   );
   useServerStream(userId);
+  // Reminders ring only while a tab is open (web push is a later phase), so
+  // this lives at the top of the signed-in shell rather than inside a view.
+  useReminders(userId);
   // Above Workspace: provider return state must survive canonical Page redirects.
   const providerLink = useProviderLinkReturn(userId);
   const activeView: CalendarViewId =

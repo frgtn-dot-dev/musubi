@@ -61,6 +61,7 @@ export function useServerStream(userId: string) {
     let closed = false;
     const pagesKey = queryKeys.pages(origin, userId);
     const settingsKey = queryKeys.settings(origin, userId);
+    const remindersKey = queryKeys.reminders(origin, userId);
     const calendarsKey = queryKeys.calendars(origin, userId);
     const federatedKey = queryKeys.federated(origin, userId);
     // Event ranges share this prefix; a prefix match invalidates every window.
@@ -97,6 +98,12 @@ export function useServerStream(userId: string) {
           break;
         case "settings_updated":
           void queryClient.invalidateQueries({ queryKey: settingsKey });
+          break;
+        // This user changed a reminder rule somewhere else. Only their own
+        // connections get this frame, and refetching is what makes "an hour
+        // before" set on the phone reach the tab that will actually ring.
+        case "reminders_updated":
+          void queryClient.invalidateQueries({ queryKey: remindersKey });
           break;
         // Something changed on a connected Musubi server. Its rows live in the
         // federation snapshot, so refetch that rather than patching local caches.

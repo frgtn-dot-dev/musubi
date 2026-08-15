@@ -3,6 +3,7 @@ import {
   EventSchema,
   InviteSchema,
   PageDocumentSchema,
+  RemindersDocumentSchema,
   SettingsDocumentSchema,
   SettingsSchema,
 } from "@musubi/types";
@@ -37,6 +38,8 @@ export const RemoveEventResponseSchema = z.object({
 
 export const SettingsResponseSchema = SettingsSchema;
 export const SettingsDocumentResponseSchema = SettingsDocumentSchema;
+
+export const RemindersResponseSchema = RemindersDocumentSchema;
 
 export const PageResponseSchema = PageDocumentSchema;
 export const PagesResponseSchema = z.array(PageDocumentSchema);

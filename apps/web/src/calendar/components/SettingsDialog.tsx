@@ -1,8 +1,10 @@
 import type {
+  ReminderRule,
   Settings,
   SettingsDocument,
   SettingsPatch,
 } from "@musubi/types";
+import { DEFAULT_REMINDER_RULE } from "@musubi/types";
 import {
   ExternalLink,
   LifeBuoy,
@@ -21,6 +23,13 @@ import {
   RowToggle,
 } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import {
+  allDayValue,
+  optionsFor,
+  timedValue,
+  withAllDay,
+  withTimed,
+} from "~/calendar/reminder-options";
 import styles from "./styles/settings.module.css";
 
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -154,6 +163,14 @@ export function SettingsDialog({
     setError("");
     setSettings(undefined);
     setLoadAttempt((attempt) => attempt + 1);
+  }
+
+  // The bottom of the reminder chain is always a concrete rule, so a settings
+  // document that predates the field still gives the control something to show.
+  const defaultReminder = settings?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+
+  function saveDefaultReminder(rule: ReminderRule) {
+    return save({ defaultReminder: rule });
   }
 
   async function save(patch: SettingsPatch) {
@@ -319,21 +336,27 @@ export function SettingsDialog({
           </SettingsSection>
 
           <SettingsSection
-            // The setting is shared with the phone, the delivery is not: a
-            // browser reminder would need a service worker and a push
-            // subscription, which Musubi does not run. Saying so beats a toggle
-            // that quietly does nothing where you are standing.
-            description="Reminders are delivered by the Musubi app on your phone. This browser does not send them."
-            title="Notifications"
+            // What every calendar falls back to. A calendar can overrule it and
+            // a single event can overrule that, so this is the answer for
+            // everything nobody has said anything about.
+            description="The reminder an event gets when neither it nor its calendar says otherwise. The phone rings on its own; this browser only while a tab is open."
+            title="Reminders"
           >
-            <RowToggle
-              checked={settings.value.notificationsOnByDefault}
-              detail="New events on any device start with a reminder"
+            <RowOptions
+              detail="Meetings and anything with a time"
               disabled={saving}
-              label="On by default"
-              onCheckedChange={(notificationsOnByDefault) =>
-                void save({ notificationsOnByDefault })
-              }
+              label="Timed events"
+              onChange={(value) => void saveDefaultReminder(withTimed(defaultReminder, value))}
+              options={optionsFor(defaultReminder, "timed")}
+              value={timedValue(defaultReminder)}
+            />
+            <RowOptions
+              detail="Birthdays, holidays, anything without a time"
+              disabled={saving}
+              label="All-day events"
+              onChange={(value) => void saveDefaultReminder(withAllDay(defaultReminder, value))}
+              options={optionsFor(defaultReminder, "allDay")}
+              value={allDayValue(defaultReminder)}
             />
           </SettingsSection>
 
