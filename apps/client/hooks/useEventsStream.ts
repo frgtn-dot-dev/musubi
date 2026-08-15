@@ -90,6 +90,13 @@ export function useConnectToEventStream() {
           refreshRef.current({ settingsOnly: true }).catch((e) =>
             console.warn("Settings refresh failed:", e));
           break;
+        // Another device of this user changed a reminder rule. Only that user's
+        // own connections receive it, and rescheduling is the whole point:
+        // "remind me an hour before" set on the laptop has to reach the phone
+        // that will actually ring.
+        case "reminders_updated":
+          silentRefresh();
+          break;
         // A connected Musubi server changed something; the home server relays it
         // (ADR-005). Remote rows are pulled per server, so refresh rather than
         // patching a payload from a foreign origin into the local stores.

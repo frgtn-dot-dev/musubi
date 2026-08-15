@@ -6,6 +6,8 @@ import m0001 from './0001_next_stark_industries.sql';
 import m0002 from './0002_loving_psynapse.sql';
 import m0003 from './0003_classy_vermin.sql';
 import m0004 from './0004_fast_patch.sql';
+import m0005 from './0005_drop_old_reminder_receipts.sql';
+import m0006 from './0006_reminder_receipts.sql';
 
   export default {
     journal,
@@ -14,7 +16,9 @@ import m0004 from './0004_fast_patch.sql';
 m0001,
 m0002,
 m0003,
-m0004
+m0004,
+m0005,
+m0006
     }
   }
   

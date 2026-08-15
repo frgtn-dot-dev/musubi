@@ -65,6 +65,21 @@ export function isSilentRule(rule: ReminderRule) {
   return rule.minutesBefore === null && rule.allDay === null;
 }
 
+/**
+ * Two rules that say the same thing.
+ *
+ * Used to decide whether an event needs an override at all: a form that always
+ * wrote one would turn every event into an exception and quietly undo the point
+ * of having calendar rules.
+ */
+export function sameRule(left: ReminderRule, right: ReminderRule) {
+  return (
+    left.minutesBefore === right.minutesBefore &&
+    left.allDay?.daysBefore === right.allDay?.daysBefore &&
+    left.allDay?.atMinute === right.allDay?.atMinute
+  );
+}
+
 /** Everything a client needs to resolve reminders without asking again. */
 export const RemindersDocumentSchema = z
   .object({

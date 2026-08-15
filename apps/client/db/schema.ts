@@ -1,13 +1,17 @@
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+// What this device has actually handed to the OS. Not the configuration —
+// that lives on the server now and roams between devices; this table is the
+// executor's receipt, so a reconcile can tell what to cancel and what to leave
+// alone. One row per OCCURRENCE: a daily standup schedules many, and keying by
+// event would mean a series only ever reminded once per app launch.
 export const notificationsTable = sqliteTable("notifications_table", {
   id: int().primaryKey({ autoIncrement: true }),
   identifier: text().notNull(),
+  // `${eventID}_${occurrenceStartMs}` — what resolveReminders() mints.
+  occurrenceID: text().notNull().unique(),
   eventID: text().notNull(),
-  triggerDate: text(),
-  // "notify N minutes before" — kept so remote event changes can reschedule
-  // with the user's original choice
-  offsetMinutes: int().notNull().default(15),
+  triggerDate: text().notNull(),
 });
 
 // Local cache of events (full mirror). Dates stored as ISO text; calendars as

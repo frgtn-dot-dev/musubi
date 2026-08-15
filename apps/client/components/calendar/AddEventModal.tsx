@@ -1,5 +1,5 @@
 import "react-native-get-random-values";
-import { Calendar, Event, can } from "@musubi/types";
+import { Calendar, DEFAULT_REMINDER_RULE, Event, ReminderRule, SILENT_REMINDER_RULE, can, isSilentRule, sameRule } from "@musubi/types";
 import { activeScheme, colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
@@ -16,7 +16,7 @@ import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { cancelEventNotification, getEventNotification, requestEventNotificationPermission, upsertEventNotification } from "@/services/notifications";
+import { effectiveReminderRule, inheritedReminderRule, requestEventNotificationPermission, setEventReminderRule } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from 'uuidv7';
 import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
@@ -358,12 +358,16 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       setNewUrl(event?.url ?? "");
       setDetailsOpen(!!(event?.description || event?.location || event?.url));
       setAttendeesToggle(event?.hasAttendees ?? false);
-      if (event?.id) {
-        // reflect the reminder's REAL state, not the global default
-        getEventNotification(event.id).then((row) => {
-          setNotificationToggle(!!row);
-          if (row) setNotifyBeforeTime(row.offsetMinutes);
-        }).catch(() => { });
+      // Open on what will ACTUALLY happen — the rule inherited from the
+      // calendar, or the event's own override where it has one. A form that
+      // opened on the global default would tell people their birthdays
+      // calendar reminds them ten minutes before.
+      {
+        const rule = event?.id
+          ? effectiveReminderRule(event)
+          : inheritedReminderRule({ id: "", calendars: [...(event?.calendars ?? [])] });
+        setNotificationToggle(!isSilentRule(rule));
+        if (rule.minutesBefore !== null) setNotifyBeforeTime(rule.minutesBefore);
       }
       const { rrule, extras } = splitRecurrence(event?.recurrence);
       setUnsupportedRecurrence(rawUnsupportedRecurrence(event?.recurrence));
@@ -520,10 +524,24 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       }
 
       try {
-        if (notificationToggle && reminderAllowed) {
-          await upsertEventNotification(eventConstruct, notifyBeforeTime);
-        } else if (!notificationToggle) {
-          await cancelEventNotification(eventConstruct.id);
+        if (notificationToggle ? reminderAllowed : true) {
+          // Only store an override where the answer differs from what the
+          // event would inherit. Writing one every time would make every event
+          // an exception, and a later change to the calendar rule would then
+          // reach none of them.
+          const inherited = inheritedReminderRule(eventConstruct);
+          const chosen: ReminderRule = notificationToggle
+            ? {
+                minutesBefore: allDayToggle ? null : notifyBeforeTime,
+                allDay: allDayToggle
+                  ? inherited.allDay ?? DEFAULT_REMINDER_RULE.allDay
+                  : inherited.allDay,
+              }
+            : SILENT_REMINDER_RULE;
+          await setEventReminderRule(
+            eventConstruct,
+            sameRule(chosen, inherited) ? null : chosen,
+          );
         }
       } catch (error) {
         console.warn("Event saved, but its reminder could not be updated:", error);

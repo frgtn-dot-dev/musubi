@@ -6,7 +6,7 @@ vi.mock("@/services/eventsCache", () => ({
 }));
 vi.mock("@/services/notifications", () => ({
   cancelEventNotification: vi.fn(),
-  syncEventNotification: vi.fn(),
+  syncScheduledReminders: vi.fn(),
 }));
 
 import { useCalendarsStore } from "./useCalendarsStore";

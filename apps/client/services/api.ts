@@ -1,7 +1,8 @@
-import { Calendar, CalendarInvitePreview, Event, Invite, GoogleCheck, PatchSettingsRequest, SettingsDocument } from "@musubi/types";
+import { Calendar, CalendarInvitePreview, Event, Invite, GoogleCheck, PatchSettingsRequest, RemindersDocument, SettingsDocument } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
+import { setReminderWriter } from "@/services/notifications";
 import { SettingsConflictError } from "@/lib/settingsConflict";
 import { notifySessionExpired } from "@/lib/signOut";
 import { fetchWithTimeout } from "@/lib/network";
@@ -64,6 +65,20 @@ export function useApi() {
     });
     throwOnError(error);
     return data as T;
+  });
+
+  // Same reason: a reminder rule is written from modals and background tasks
+  // that have no business receiving an api object.
+  setReminderWriter(async (scope, id, rule) => {
+    const { error } = await authClient.$fetch(
+      `${apiUrl}/api/${apiVersion}/reminders/${scope}/${id}`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rule }),
+      },
+    );
+    throwOnError(error);
   });
 
   return {
@@ -479,6 +494,19 @@ export function useApi() {
       throwOnError(error);
 
       return true;
+    },
+
+    // Reminder rules — one document, because every client needs all of them to
+    // resolve anything and they are only the explicit choices.
+    async getReminders() {
+      const { data, error } = await authClient.$fetch<RemindersDocument>(
+        `${apiUrl}/api/${apiVersion}/reminders`,
+        { method: "GET" },
+      );
+
+      throwOnError(error);
+
+      return data;
     },
 
     async getSettingsDocument() {

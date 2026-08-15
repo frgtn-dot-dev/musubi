@@ -1,19 +1,20 @@
 import { Event } from "@musubi/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const SILENT = { minutesBefore: null, allDay: null };
+
 // The seam: both of these reach React Native and Expo, which a node test has no
 // business booting. Everything below them is the app's own logic.
 const chooseOption = vi.fn();
-const getEventNotification = vi.fn();
-const upsertEventNotification = vi.fn();
+const reminderRules = vi.fn();
+const setEventReminderRule = vi.fn();
 
 vi.mock("@/lib/confirm", () => ({
   chooseOption: (...args: unknown[]) => chooseOption(...args),
 }));
 vi.mock("@/services/notifications", () => ({
-  getEventNotification: (...args: unknown[]) => getEventNotification(...args),
-  upsertEventNotification: (...args: unknown[]) =>
-    upsertEventNotification(...args),
+  reminderRules: () => reminderRules(),
+  setEventReminderRule: (...args: unknown[]) => setEventReminderRule(...args),
 }));
 
 const { applySeriesEdit } = await import("./seriesEdit");
@@ -73,8 +74,8 @@ describe("applySeriesEdit", () => {
     vi.clearAllMocks();
     addEvent = vi.fn<EventWrite>(async () => undefined);
     updateEvent = vi.fn<EventWrite>(async () => undefined);
-    getEventNotification.mockResolvedValue(null);
-    upsertEventNotification.mockResolvedValue(undefined);
+    reminderRules.mockReturnValue({ default: SILENT, calendars: {}, events: {} });
+    setEventReminderRule.mockResolvedValue(undefined);
   });
 
   it("writes a plain event straight through, with no question", async () => {
@@ -148,25 +149,32 @@ describe("applySeriesEdit", () => {
     expect(addEvent).not.toHaveBeenCalled();
   });
 
-  it("carries the series' reminder onto the event a split creates", async () => {
+  it("carries the series' OVERRIDE onto the event a split creates", async () => {
     answer("This event");
-    getEventNotification.mockResolvedValue({ offsetMinutes: 15 });
+    const override = { minutesBefore: 15, allDay: null };
+    reminderRules.mockReturnValue({
+      default: SILENT,
+      calendars: {},
+      events: { [master.id]: override },
+    });
 
     await applySeriesEdit({ addEvent, edited, master, occurrence, updateEvent });
 
-    const [reminderEvent, offset] = upsertEventNotification.mock.calls[0]! as [
+    const [reminderEvent, rule] = setEventReminderRule.mock.calls[0]! as [
       Event,
-      number,
+      unknown,
     ];
     expect(reminderEvent.id).not.toBe(master.id);
-    expect(offset).toBe(15);
+    expect(rule).toEqual(override);
   });
 
-  it("leaves reminders alone when the series had none", async () => {
+  it("writes nothing when the series only inherits its rule", async () => {
     answer("This event");
 
     await applySeriesEdit({ addEvent, edited, master, occurrence, updateEvent });
 
-    expect(upsertEventNotification).not.toHaveBeenCalled();
+    // The split event sits in the same calendars, so it inherits the same rule
+    // on its own. An override here would freeze it against later changes.
+    expect(setEventReminderRule).not.toHaveBeenCalled();
   });
 });
