@@ -13,6 +13,11 @@ export type ReminderControl = {
   document: RemindersDocument;
   /** `null` clears the override and puts the event back on its calendar's rule. */
   onChange: (eventId: string, rule: ReminderRule | null) => Promise<unknown>;
+  /** `null` puts the calendar back on the global default. */
+  onCalendarChange: (
+    calendarId: string,
+    rule: ReminderRule | null,
+  ) => Promise<unknown>;
 };
 
 export type EventReminder = {

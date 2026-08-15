@@ -137,6 +137,12 @@ export function useReminders(userId: string) {
         ? {
             calendarOrder,
             document: reminders.data,
+            onCalendarChange: async (calendarId, rule) => {
+              await putReminderRule("calendars", calendarId, rule);
+              await queryClient.invalidateQueries({
+                queryKey: queryKeys.reminders(origin, userId),
+              });
+            },
             onChange: async (eventId, rule) => {
               await putReminderRule("events", eventId, rule);
               // The server broadcasts `reminders_updated` to this user's other

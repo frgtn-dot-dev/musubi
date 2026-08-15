@@ -1,4 +1,5 @@
 import type {
+  Calendar,
   ReminderRule,
   Settings,
   SettingsDocument,
@@ -23,13 +24,21 @@ import {
   RowToggle,
 } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import type { ReminderControl } from "~/calendar/reminder-control";
 import {
   allDayValue,
   optionsFor,
+  presetOptions,
+  presetRule,
+  presetValue,
   timedValue,
   withAllDay,
   withTimed,
 } from "~/calendar/reminder-options";
+
+// A calendar rule is absent, not silent, when it follows the global default —
+// so the control needs a value for "say nothing" that is not a rule.
+const FOLLOW_DEFAULT = "default";
 import styles from "./styles/settings.module.css";
 
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -67,6 +76,9 @@ const DATE_FORMAT_OPTIONS = [
 ] as const;
 
 type SettingsDialogProps = {
+  /** For the per-calendar reminder rows; empty hides that section. */
+  calendars?: Calendar[];
+  reminders?: ReminderControl;
   onAdopt: (document: SettingsDocument) => void;
   onLoad: (signal?: AbortSignal) => Promise<SettingsDocument>;
   onManageAccount: () => void;
@@ -112,6 +124,8 @@ function withRequestId(message: string, error: unknown) {
 }
 
 export function SettingsDialog({
+  calendars = [],
+  reminders,
   onAdopt,
   onLoad,
   onManageAccount,
@@ -171,6 +185,19 @@ export function SettingsDialog({
 
   function saveDefaultReminder(rule: ReminderRule) {
     return save({ defaultReminder: rule });
+  }
+
+  async function saveCalendarReminder(
+    calendarId: string,
+    rule: ReminderRule | null,
+  ) {
+    if (!reminders) return;
+    try {
+      await reminders.onCalendarChange(calendarId, rule);
+      onNotice("Reminder saved.");
+    } catch {
+      setError("That reminder could not be saved.");
+    }
   }
 
   async function save(patch: SettingsPatch) {
@@ -359,6 +386,38 @@ export function SettingsDialog({
               value={allDayValue(defaultReminder)}
             />
           </SettingsSection>
+
+          {reminders && calendars.length > 0 ? (
+            <SettingsSection
+              // Per calendar and per MEMBER: this is what YOUR copy of a shared
+              // calendar does. Its owner has no say in when your phone rings.
+              description="Overrule the default for one calendar. A birthdays calendar wants the evening before; a holidays calendar usually wants nothing at all."
+              title="Reminders by calendar"
+            >
+              {calendars.map((calendar) => {
+                const rule = reminders.document.calendars[calendar.id];
+                return (
+                  <RowOptions
+                    detail={rule ? undefined : "Following your default"}
+                    disabled={saving}
+                    key={calendar.id}
+                    label={calendar.name}
+                    onChange={(value) =>
+                      void saveCalendarReminder(
+                        calendar.id,
+                        value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
+                      )
+                    }
+                    options={[
+                      { label: "Default", value: FOLLOW_DEFAULT },
+                      ...presetOptions(rule),
+                    ]}
+                    value={rule ? presetValue(rule) : FOLLOW_DEFAULT}
+                  />
+                );
+              })}
+            </SettingsSection>
+          ) : null}
 
           <SettingsSection title="Help & About">
             <RowAction

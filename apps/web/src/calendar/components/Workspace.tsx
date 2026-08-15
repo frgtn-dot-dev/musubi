@@ -1418,6 +1418,8 @@ export function Workspace({
         />
       ) : null}
       <SettingsDialog
+        calendars={calendars}
+        reminders={reminders}
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}
         onManageAccount={() => {

@@ -87,3 +87,53 @@ export function optionsFor(rule: ReminderRule, kind: "allDay" | "timed") {
     ? [...base, { label: customLabel(rule, kind), value: CUSTOM }]
     : [...base];
 }
+
+/**
+ * Whole rules, for choosing how one calendar reminds you.
+ *
+ * Presets rather than the two branches side by side: a calendar has a
+ * character — work reminds you shortly before, birthdays the evening before,
+ * holidays never — and asking about timed and all-day events separately for
+ * every calendar in the list buries that under twice as many rows.
+ */
+export const CALENDAR_PRESETS = [
+  { label: "Off", rule: { allDay: null, minutesBefore: null } },
+  { label: "10 min", rule: { allDay: null, minutesBefore: 10 } },
+  { label: "1 hour", rule: { allDay: null, minutesBefore: 60 } },
+  { label: "Evening before", rule: { allDay: { ...EVENING }, minutesBefore: null } },
+] as const satisfies ReadonlyArray<{ label: string; rule: ReminderRule }>;
+
+/** Which preset a stored rule matches, or `CUSTOM` when it matches none. */
+export function presetValue(rule: ReminderRule): string {
+  const match = CALENDAR_PRESETS.find(
+    (preset) =>
+      preset.rule.minutesBefore === rule.minutesBefore &&
+      preset.rule.allDay?.daysBefore === rule.allDay?.daysBefore &&
+      preset.rule.allDay?.atMinute === rule.allDay?.atMinute,
+  );
+  return match?.label ?? CUSTOM;
+}
+
+export function presetRule(label: string): ReminderRule | undefined {
+  const match = CALENDAR_PRESETS.find((preset) => preset.label === label);
+  return match ? structuredClone(match.rule) : undefined;
+}
+
+/** Presets plus a slot for a rule the phone set that has no button here. */
+export function presetOptions(rule: ReminderRule | undefined) {
+  const base = CALENDAR_PRESETS.map((preset) => ({
+    label: preset.label,
+    value: preset.label,
+  }));
+  if (!rule || presetValue(rule) !== CUSTOM) return base;
+  return [
+    ...base,
+    {
+      label:
+        rule.minutesBefore !== null
+          ? customLabel(rule, "timed")
+          : customLabel(rule, "allDay"),
+      value: CUSTOM,
+    },
+  ];
+}
