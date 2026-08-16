@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ReminderRuleSchema } from "./reminder";
+import { NotificationEmailsSchema, ReminderRuleSchema } from "./reminder";
 
 export const CalendarViewSchema = z.enum(["week", "month", "day", "schedule"]);
 export type CalendarView = z.infer<typeof CalendarViewSchema>;
@@ -46,6 +46,9 @@ export const SettingsSchema = z.object({
   // The bottom of the reminder inheritance chain. Optional for the same reason;
   // the server keeps `notificationsOnByDefault` in step with it.
   defaultReminder: ReminderRuleSchema.optional(),
+  // Emails about what other people did. Optional so an older client saving the
+  // whole document cannot silence them by not knowing about them.
+  notificationEmails: NotificationEmailsSchema.optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -56,6 +59,7 @@ export const SettingsPatchSchema = z
     dateFormat: z.enum(["dmy", "mdy", "ymd"]).optional(),
     defaultCalendarView: CalendarViewSchema.optional(),
     defaultReminder: ReminderRuleSchema.optional(),
+    notificationEmails: NotificationEmailsSchema.optional(),
     notificationsOnByDefault: z.boolean().optional(),
     onboarded: z.boolean().optional(),
     showKanji: z.boolean().optional(),

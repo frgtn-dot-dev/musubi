@@ -4,7 +4,9 @@ import { colors, fonts, styles } from "@/constants/theme";
 import {
   allDayValue,
   CalendarView,
+  DEFAULT_NOTIFICATION_EMAILS,
   DEFAULT_REMINDER_RULE,
+  NotificationEmails,
   optionsFor,
   presetOptions,
   presetRule,
@@ -193,6 +195,13 @@ export default function SettingsTab() {
   // The bottom of the reminder chain is always a concrete rule, so an account
   // whose settings predate the field still gives the pills something to show.
   const defaultReminder = settingsDocument?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+
+  const notificationEmails =
+    settingsDocument?.value.notificationEmails ?? DEFAULT_NOTIFICATION_EMAILS;
+
+  const saveNotificationEmails = (patch: Partial<NotificationEmails>) => {
+    save({ notificationEmails: { ...notificationEmails, ...patch } });
+  };
 
   const saveDefaultReminder = (rule: ReminderRule) => {
     save({ defaultReminder: rule });
@@ -392,6 +401,22 @@ export default function SettingsTab() {
             })}
           </>
         ) : null}
+
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>Email Me When</Text>
+        <SettingRowToggle
+          label="An Event Moves or Is Cancelled"
+          toggle={notificationEmails.eventChanged}
+          onToggle={() =>
+            saveNotificationEmails({ eventChanged: !notificationEmails.eventChanged })
+          }
+        />
+        <SettingRowToggle
+          label="A Poll Gets a Time"
+          toggle={notificationEmails.pollDecided}
+          onToggle={() =>
+            saveNotificationEmails({ pollDecided: !notificationEmails.pollDecided })
+          }
+        />
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Help & About</Text>
         <SettingRowAction

@@ -5,7 +5,7 @@ import type {
   SettingsDocument,
   SettingsPatch,
 } from "@musubi/types";
-import { DEFAULT_REMINDER_RULE } from "@musubi/types";
+import { DEFAULT_NOTIFICATION_EMAILS, DEFAULT_REMINDER_RULE } from "@musubi/types";
 import {
   ExternalLink,
   LifeBuoy,
@@ -184,6 +184,8 @@ export function SettingsDialog({
   // The bottom of the reminder chain is always a concrete rule, so a settings
   // document that predates the field still gives the control something to show.
   const defaultReminder = settings?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+  const notificationEmails =
+    settings?.value.notificationEmails ?? DEFAULT_NOTIFICATION_EMAILS;
 
   function saveDefaultReminder(rule: ReminderRule) {
     return save({ defaultReminder: rule });
@@ -452,6 +454,36 @@ export function SettingsDialog({
               })}
             </SettingsSection>
           ) : null}
+
+          <SettingsSection
+            // Not reminders: those are a promise you made about your own
+            // calendar. These arrive because somebody else did something.
+            description="Only when a person does something that affects you. Nothing here is a digest or a summary."
+            title="Email me when"
+          >
+            <RowToggle
+              checked={notificationEmails.eventChanged}
+              detail="Only the time changing or the event being called off — not every edit"
+              disabled={saving}
+              label="An event I'm attending moves or is cancelled"
+              onCheckedChange={(eventChanged) =>
+                void save({
+                  notificationEmails: { ...notificationEmails, eventChanged },
+                })
+              }
+            />
+            <RowToggle
+              checked={notificationEmails.pollDecided}
+              detail="The one moment a poll actually has an answer"
+              disabled={saving}
+              label="A poll I answered gets a time"
+              onCheckedChange={(pollDecided) =>
+                void save({
+                  notificationEmails: { ...notificationEmails, pollDecided },
+                })
+              }
+            />
+          </SettingsSection>
 
           <SettingsSection title="Help & About">
             <RowAction

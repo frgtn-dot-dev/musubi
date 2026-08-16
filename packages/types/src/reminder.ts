@@ -99,3 +99,33 @@ export const PutReminderRequestSchema = z
   .strict();
 
 export type PutReminderRequest = z.infer<typeof PutReminderRequestSchema>;
+
+/**
+ * Which emails about OTHER PEOPLE'S actions this account wants.
+ *
+ * Separate from reminder rules on purpose: a reminder is a promise you made to
+ * yourself about your own calendar, these arrive because somebody else did
+ * something. Different question, different switch.
+ *
+ * The calendar invite is deliberately absent. It is transactional — somebody
+ * typed an address and pressed send, and the recipient may not have an account
+ * to hold a preference in. You do not opt out of being invited any more than
+ * you opt out of a password reset you asked for.
+ */
+export const NotificationEmailsSchema = z
+  .object({
+    /** An event you are attending was cancelled or moved. */
+    eventChanged: z.boolean(),
+    /** A poll you answered has a time. */
+    pollDecided: z.boolean(),
+  })
+  .strict();
+
+export type NotificationEmails = z.infer<typeof NotificationEmailsSchema>;
+
+// On by default. Both only fire when a human deliberately changed something
+// that affects you, which is the kind of mail people are cross about MISSING.
+export const DEFAULT_NOTIFICATION_EMAILS: NotificationEmails = {
+  eventChanged: true,
+  pollDecided: true,
+};

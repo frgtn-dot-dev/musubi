@@ -1,6 +1,11 @@
 import { relations } from "drizzle-orm";
 import { boolean, customType, index, jsonb, pgTable, text, timestamp, uuid, integer, unique } from "drizzle-orm/pg-core";
-import { DEFAULT_REMINDER_RULE, type ReminderRule } from "@musubi/types";
+import {
+  DEFAULT_NOTIFICATION_EMAILS,
+  DEFAULT_REMINDER_RULE,
+  type NotificationEmails,
+  type ReminderRule,
+} from "@musubi/types";
 
 // drizzle has no built-in bytea — minimal custom type
 const bytea = customType<{ data: Buffer }>({
@@ -174,6 +179,13 @@ export const userSettings = pgTable("user_settings", {
     .$type<ReminderRule>()
     .notNull()
     .default(DEFAULT_REMINDER_RULE),
+  // Emails about what OTHER people did — an event you are attending moving, a
+  // poll you answered being decided. Not reminders, which are a promise you
+  // made to yourself; these arrive unbidden, so they get their own switches.
+  notificationEmails: jsonb("notification_emails")
+    .$type<NotificationEmails>()
+    .notNull()
+    .default(DEFAULT_NOTIFICATION_EMAILS),
 });
 
 export type NewSettings = typeof userSettings.$inferInsert;
