@@ -108,8 +108,11 @@ the hosted install and silently disable push.
 
 ## Changing a rule
 
-- **Globally** — Settings → Reminders.
-- **Per calendar** — Settings → Reminders by calendar.
+- **Globally** — Settings → Reminders, on the phone and on the web.
+- **Per calendar** — Settings → Reminders by calendar, on both. The phone offers
+  whole-rule presets ("Evening before"), the web the same set; the option lists
+  live in `packages/types/src/reminder_options.ts` so neither client can offer a
+  choice the other cannot display.
 - **Per event** — the event's details, under "Remind me". Choosing "Use the
   calendar's setting" clears the override.
 

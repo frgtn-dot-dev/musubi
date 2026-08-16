@@ -1,7 +1,11 @@
-import type { ReminderRule } from "@musubi/types";
+import type { ReminderRule } from "./reminder";
 
 /**
- * The handful of reminder choices a segmented control can hold.
+ * The handful of reminder choices a control can hold.
+ *
+ * Shared rather than per-client on purpose: "10 min" and "Evening before" are
+ * product vocabulary, and a phone offering a set the web does not is how one
+ * device ends up unable to show what the other one saved.
  *
  * Two rows, because a timed event and an all-day event ask different questions:
  * "how long before" makes no sense for a birthday, and "which morning" makes

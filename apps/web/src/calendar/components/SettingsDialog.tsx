@@ -34,7 +34,7 @@ import {
   timedValue,
   withAllDay,
   withTimed,
-} from "~/calendar/reminder-options";
+} from "@musubi/types";
 
 // A calendar rule is absent, not silent, when it follows the global default —
 // so the control needs a value for "say nothing" that is not a rule.

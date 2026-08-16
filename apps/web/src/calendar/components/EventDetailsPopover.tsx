@@ -89,7 +89,7 @@ import {
 	timedValue,
 	withAllDay,
 	withTimed,
-} from "../reminder-options";
+} from "@musubi/types";
 import { EventEditorForm } from "./EventEditorForm";
 import { ShareEventDialog } from "./ShareEventDialog";
 
