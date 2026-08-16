@@ -9,6 +9,7 @@ export * from './queries/sessions';
 export * from './queries/settings';
 export * from './queries/reminders';
 export * from './queries/push';
+export * from './queries/notifications';
 export * from './queries/pages';
 export * from './queries/event_shares';
 export * from './queries/scheduling';

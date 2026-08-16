@@ -1,6 +1,6 @@
 import { config, logger } from "@musubi/config";
 import { auth } from "@musubi/auth";
-import { initializeEmailCapability } from "@musubi/emails";
+import { canSendEmail, initializeEmailCapability } from "@musubi/emails";
 import {
   deleteExpiredInvites,
   deleteExpiredMemberTokens,
@@ -140,6 +140,7 @@ import {
   startMetricsServer,
 } from "./metrics";
 import { dispatchDueReminders, pushEnabled } from "./reminder_dispatch";
+import { drainPendingNotifications } from "./notification_dispatch";
 import { nonOverlapping } from "./scheduling";
 import { acquireApiSingletonLock } from "./singleton";
 import { trustPrivateProxies } from "./middleware/proxy";
@@ -671,6 +672,23 @@ const runReminders = nonOverlapping(dispatchReminders, () => {
   logger.warn("reminders.dispatch.skipped", { reason: "previous_run_active" });
 });
 
+// Emails about what other people did. Separate from the reminder tick on
+// purpose: that one needs push keys, this one needs a mail server, and an
+// install can have either, both or neither.
+async function sendPendingNotifications() {
+  try {
+    const { sent } = await drainPendingNotifications();
+    if (sent > 0) logger.info("notifications.sent", { emails: sent });
+  } catch (e) {
+    logger.error("notifications.drain_failed", { error: e });
+  }
+}
+
+const runNotifications = nonOverlapping(sendPendingNotifications, () => {
+  recordScheduledTaskSkip("notifications");
+  logger.warn("notifications.skipped", { reason: "previous_run_active" });
+});
+
 async function start() {
   // The dedicated PostgreSQL session lock makes the documented deployment
   // boundary fail-safe: a second API process sharing this DB does not serve
@@ -705,6 +723,13 @@ async function start() {
     // Not a warning: a server with no VAPID keys is a valid, complete install.
     // Its clients still remind themselves while they are open.
     logger.info("reminders.dispatch.disabled", { reason: "no_vapid_keys" });
+  }
+
+  if (canSendEmail()) {
+    logger.info("notifications.enabled");
+    setInterval(() => void runNotifications(), 60_000);
+  } else {
+    logger.info("notifications.disabled", { reason: "no_smtp" });
   }
 
   if (config.api.externalSyncIntervalMin > 0) {

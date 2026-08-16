@@ -1,4 +1,4 @@
-import { brandUrl, button, logoMarkup } from "./brand";
+import { brandUrl, button, escapeHtml, logoMarkup } from "./brand";
 export function getChangeEmailHtml(userName: string, newEmail: string, approveUrl: string, expiresIn: string) {
   return `
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -50,8 +50,8 @@ export function getChangeEmailHtml(userName: string, newEmail: string, approveUr
                       </h1>
                       <p
                         style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em;color:#d4d4dc;line-height:160%">
-                        Hi ${userName}, someone asked to move your Musubi
-                        account to ${newEmail}. This link is how that change is
+                        Hi ${escapeHtml(userName)}, someone asked to move your Musubi
+                        account to ${escapeHtml(newEmail)}. This link is how that change is
                         approved — nothing moves until you use it.
                       </p>
                       <table

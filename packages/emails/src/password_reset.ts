@@ -1,4 +1,4 @@
-import { brandUrl, button, logoMarkup } from "./brand";
+import { brandUrl, button, escapeHtml, logoMarkup } from "./brand";
 export function getPasswordResetHtml(userName: string, resetUrl: string, expiresIn: string) {
   return `
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -50,7 +50,7 @@ export function getPasswordResetHtml(userName: string, resetUrl: string, expires
                       </h1>
                       <p
                         style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em;color:#d4d4dc;line-height:160%">
-                        Hi ${userName}, we received a request to
+                        Hi ${escapeHtml(userName)}, we received a request to
                         reset the password for your account. Click the button
                         below to choose a new one.
                       </p>

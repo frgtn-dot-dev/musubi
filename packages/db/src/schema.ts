@@ -601,6 +601,33 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
 }, (t) => [index("push_subscriptions_user_id_idx").on(t.userID)]);
 
+// An email waiting for its moment.
+//
+// Notifications about other people's actions are batched rather than sent the
+// instant they happen: somebody dragging twenty events across a week would
+// otherwise send twenty emails and earn Musubi a spam label. One row per
+// (person, kind, subject) collapses repeated tugs at the same thing into one.
+//
+// `dueAt` is set from the FIRST change and never pushed forward. Extending it
+// on every edit would mean somebody who keeps fiddling never tells anyone
+// anything.
+export const pendingNotifications = pgTable("pending_notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  /** What happened: "event_changed", and whatever comes later. */
+  kind: text("kind").notNull(),
+  /** What it happened to. Text, not a uuid FK — a poll is not an event. */
+  subjectID: text("subject_id").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  dueAt: timestamp("due_at").notNull(),
+}, (t) => [
+  unique().on(t.userID, t.kind, t.subjectID),
+  index("pending_notifications_due_at_idx").on(t.dueAt),
+]);
+
 // How far a scheduled job has already looked. One row per job, not per user:
 // "which slice of time has been dispatched" is the same question whoever is
 // asking. In the database rather than in memory so a restart neither re-sends

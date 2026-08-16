@@ -66,7 +66,11 @@ export function recordReminderPush(outcome: ReminderPushOutcome, count = 1) {
   if (count > 0) reminderPushes.inc({ outcome }, count);
 }
 
-export type ScheduledTaskName = "cleanup" | "external_sync" | "reminders";
+export type ScheduledTaskName =
+  | "cleanup"
+  | "external_sync"
+  | "notifications"
+  | "reminders";
 
 export function recordScheduledTaskSkip(task: ScheduledTaskName) {
   scheduledTaskSkips.inc({ task });

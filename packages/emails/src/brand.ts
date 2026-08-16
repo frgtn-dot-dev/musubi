@@ -88,6 +88,23 @@ export function button(
                                   >${label}</span><span></span></a>`;
 }
 
+/**
+ * Anything a user typed, on its way into an HTML email.
+ *
+ * Names and addresses are user input. An email client runs no scripts, so this
+ * is not the same danger as a web page — but an unescaped `<` still lets one
+ * person post markup into another person's inbox, and a name containing an
+ * anchor tag would arrive as a working link somebody else's client renders.
+ */
+export function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 /** The header mark. `display:block` and real width/height are for Outlook. */
 export function logoMarkup() {
   return `<img
