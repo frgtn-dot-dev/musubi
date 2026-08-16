@@ -94,6 +94,22 @@ Without SMTP, email/password sign-in still works, but forgotten-password
 recovery and email-confirmed account deletion cannot send. The client adapts to
 `email: false`.
 
+## Web Push
+
+Optional. With keys, the server sends event reminders to a browser even when it
+is closed; without them it never pushes and each client rings on its own while
+it is open. Generate a pair with `npx web-push generate-vapid-keys`.
+
+| Variable | Purpose |
+| --- | --- |
+| `VAPID_PUBLIC_KEY` | Identifies this server to the browser vendors' push services. Served to clients as `pushPublicKey` on `/api/v1/server`; a browser cannot subscribe without it |
+| `VAPID_PRIVATE_KEY` | Signs every push. A secret, and per-install — do not copy one between servers |
+| `VAPID_SUBJECT` | `mailto:` address or an https URL. Push services reject anything else |
+
+The public and private keys must be set together: the API refuses to boot with
+one of them, because advertising a key the server cannot sign with would let
+browsers subscribe to reminders that then fail silently on every send.
+
 ## Google
 
 ### Server runtime

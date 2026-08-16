@@ -567,6 +567,37 @@ export const eventReminders = pgTable("event_reminders", {
   rule: jsonb("rule").$type<ReminderRule>().notNull(),
 }, (t) => [unique().on(t.eventID, t.userID)]);
 
+// One browser that has agreed to be pushed to. The endpoint is a URL at the
+// browser vendor's push service and IS the address, so it is the unique key —
+// the same person on a laptop and a phone browser is two rows, and re-granting
+// permission in the same browser returns the same endpoint rather than a second.
+//
+// `p256dh` and `auth` are the keys the payload is encrypted to, so the push
+// service relays a message it cannot read. Losing this table costs nothing but
+// a re-subscribe; there is no history here worth keeping.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  // Bumped on every successful send, so a dead endpoint is visible before the
+  // push service admits it with a 410.
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+}, (t) => [index("push_subscriptions_user_id_idx").on(t.userID)]);
+
+// How far a scheduled job has already looked. One row per job, not per user:
+// "which slice of time has been dispatched" is the same question whoever is
+// asking. In the database rather than in memory so a restart neither re-sends
+// the last window nor skips it.
+export const dispatchCursors = pgTable("dispatch_cursors", {
+  name: text("name").primaryKey(),
+  value: timestamp("value").notNull(),
+});
+
 export const eventRemindersRelations = relations(eventReminders, ({ one }) => ({
   event: one(events, { fields: [eventReminders.eventID], references: [events.id] }),
   user: one(user, { fields: [eventReminders.userID], references: [user.id] }),

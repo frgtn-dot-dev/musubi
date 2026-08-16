@@ -242,6 +242,9 @@ export const ServerCapabilitiesSchema = z
     // login screen falls back accordingly.
     socialsWeb: z.array(z.string()).optional(),
     syncProviders: z.array(z.string()).default([]),
+    // VAPID public key, or null on a server with no push keys. Absent entirely
+    // on an API older than this field, which means the same thing.
+    pushPublicKey: z.string().nullish(),
   })
   .loose();
 
