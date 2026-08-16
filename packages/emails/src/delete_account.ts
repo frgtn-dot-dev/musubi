@@ -1,4 +1,4 @@
-import { brandUrl, logoMarkup } from "./brand";
+import { brandUrl, button, logoMarkup } from "./brand";
 export function getDeleteAccountHtml(userName: string, confirmUrl: string, expiresIn: string) {
   return `
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -66,14 +66,7 @@ export function getDeleteAccountHtml(userName: string, confirmUrl: string, expir
                         <tbody style="width:100%">
                           <tr style="width:100%">
                             <td align="left" data-id="__react-email-column">
-                              <a
-                                class="button"
-                                href="${confirmUrl}"
-                                style="line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px;margin:0;padding:0;padding-top:12px;padding-right:24px;padding-bottom:12px;padding-left:24px;background-color:#C8553D;color:#ffffff;border-radius:8px;font-weight:500;font-size:0.875em;text-align:center;margin-top:24px;margin-bottom:24px"
-                                target="_blank"
-                                ><span></span><span
-                                  style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px"
-                                  >Delete my account</span><span></span></a>
+                              ${button(`${confirmUrl}`, "Delete my account", "destructive")}
                             </td>
                           </tr>
                         </tbody>

@@ -54,6 +54,40 @@ export function brandUrl() {
   return config.api.url;
 }
 
+/**
+ * The one button an email carries.
+ *
+ * Two tones, and they are the app's own (`packages/design-system` dark theme),
+ * not a third vocabulary invented for mail:
+ *
+ * - `primary` is the cream control fill — confirm, reset, approve.
+ * - `destructive` is the shu accent — and in the app that is what the accent
+ *   MEANS. Every email used to be accent-filled, so the one button that
+ *   permanently deletes an account looked exactly like the one that confirms an
+ *   address. Now it is the only one wearing that colour.
+ *
+ * Black on the accent rather than white: it clears 4.5:1, and white does not.
+ *
+ * The `<span>`s and `mso-` properties are Outlook's price for a padded link.
+ */
+export function button(
+  href: string,
+  label: string,
+  tone: "destructive" | "primary" = "primary",
+) {
+  const [background, text] =
+    tone === "destructive" ? ["#c8553d", "#000000"] : ["#e8e4d9", "#0c0c0e"];
+
+  return `<a
+                                class="button"
+                                href="${href}"
+                                style="line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px;margin:0;padding:0;padding-top:12px;padding-right:24px;padding-bottom:12px;padding-left:24px;background-color:${background};color:${text};border-radius:8px;font-weight:500;font-size:0.875em;text-align:center;margin-top:24px;margin-bottom:24px"
+                                target="_blank"
+                                ><span></span><span
+                                  style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px"
+                                  >${label}</span><span></span></a>`;
+}
+
 /** The header mark. `display:block` and real width/height are for Outlook. */
 export function logoMarkup() {
   return `<img

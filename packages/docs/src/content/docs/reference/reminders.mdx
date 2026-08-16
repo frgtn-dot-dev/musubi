@@ -122,6 +122,11 @@ later change to a calendar rule would then reach none of them.
 
 ## Upgrading
 
+Per-event reminders that existing phones hold in local SQLite are **not**
+carried up: the old table only stored an offset, the migration drops it, and
+those events fall back to their calendar or the global rule like any other. A
+deliberate skip, not an oversight.
+
 The migration that introduces `default_reminder` sets it from
 `notificationsOnByDefault`: accounts with notifications off get a silent rule,
 so nobody is woken by an upgrade they did not ask for. Accounts with them on get
