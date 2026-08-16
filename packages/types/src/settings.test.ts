@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { SettingsPatchSchema } from "./settings";
+
+// A phone updates from a store; a self-hosted server updates when its admin
+// gets round to it. So a client newer than its server is the ordinary case, and
+// what the patch schema does with a field it has never heard of decides whether
+// that user can change their settings at all.
+
+{
+  // The case that broke in the wild: the app had learned about `timezone`, the
+  // server had not, and `.strict()` refused the whole patch — so the theme
+  // change went down with it and nothing was saved.
+  const parsed = SettingsPatchSchema.safeParse({
+    theme: "dark",
+    somethingThisServerHasNeverHeardOf: "value",
+  });
+
+  assert.equal(parsed.success, true, "an unknown field must not sink the patch");
+  assert.deepEqual(
+    parsed.data,
+    { theme: "dark" },
+    "the unknown field is stripped, the known one applied",
+  );
+}
+
+{
+  // Stripping must not turn nothing into success. A patch of only unknown
+  // fields has nothing to apply, and answering 200 would claim otherwise.
+  const parsed = SettingsPatchSchema.safeParse({ onlyUnknown: true });
+  assert.equal(parsed.success, false);
+}
+
+{
+  // Still a schema: a known field with the wrong shape is an error, not a
+  // silent strip. Leniency is about fields from the future, not bad data.
+  assert.equal(SettingsPatchSchema.safeParse({ theme: "chartreuse" }).success, false);
+  assert.equal(SettingsPatchSchema.safeParse({ weekStartsOn: 3 }).success, false);
+  assert.equal(SettingsPatchSchema.safeParse({}).success, false, "empty is empty");
+}
+
+{
+  // And the fields that caused this still work when the server does know them.
+  const parsed = SettingsPatchSchema.safeParse({ timezone: "Europe/Prague" });
+  assert.equal(parsed.success, true);
+  assert.equal(SettingsPatchSchema.safeParse({ timezone: "Mars/Olympus" }).success, false);
+}
+
+console.log("settings.test.ts ok");

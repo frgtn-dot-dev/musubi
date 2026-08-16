@@ -1,6 +1,12 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { Event, ReminderRule, RemindersDocument, SILENT_REMINDER_RULE } from "@musubi/types";
+import {
+  DEFAULT_REMINDER_RULE,
+  Event,
+  ReminderRule,
+  RemindersDocument,
+  SILENT_REMINDER_RULE,
+} from "@musubi/types";
 import {
   resolveReminderRule,
   resolveReminders,
@@ -163,6 +169,35 @@ export async function storeReminderRules(document: RemindersDocument) {
 
 export function reminderRules() {
   return rules;
+}
+
+/**
+ * Stand-in rules for a server that has none.
+ *
+ * An install older than the reminder rules answers 404, and without this the
+ * app would resolve against nothing and schedule nothing — silently turning off
+ * a feature that worked before the phone was updated. Self-hosted servers move
+ * on their admin's schedule, so that gap is a normal state, not a broken one.
+ *
+ * `notificationsOnByDefault` is the one thing such a server does say about
+ * reminders, and it is the same mapping the server-side migration uses, so the
+ * phone behaves the way it will once the server catches up.
+ *
+ * Never cached: it is a substitute for an answer, and a cached substitute would
+ * outlive the upgrade that makes it wrong. A real document, including one read
+ * from the cache, always wins.
+ */
+export async function adoptLegacyReminderRules(notificationsOnByDefault: boolean) {
+  if (await loadCachedReminderRules()) return false;
+
+  rules = {
+    calendars: {},
+    default: notificationsOnByDefault
+      ? DEFAULT_REMINDER_RULE
+      : SILENT_REMINDER_RULE,
+    events: {},
+  };
+  return true;
 }
 
 // Writing a rule needs the API, which is a hook. Registering the writer once

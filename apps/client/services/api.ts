@@ -498,12 +498,21 @@ export function useApi() {
 
     // Reminder rules — one document, because every client needs all of them to
     // resolve anything and they are only the explicit choices.
+    /**
+     * The reminder rules, or null on a server too old to have them.
+     *
+     * A 404 here is not a failure, it is an older server answering honestly —
+     * self-hosted installs update on their admin's schedule, not the app
+     * store's. Returning null lets the caller fall back to what such a server
+     * DOES provide, instead of the app quietly scheduling nothing.
+     */
     async getReminders() {
       const { data, error } = await authClient.$fetch<RemindersDocument>(
         `${apiUrl}/api/${apiVersion}/reminders`,
         { method: "GET" },
       );
 
+      if (Number(error?.status) === 404) return null;
       throwOnError(error);
 
       return data;

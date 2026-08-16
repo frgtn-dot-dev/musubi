@@ -1,7 +1,12 @@
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { storeReminderRules, syncScheduledReminders } from "@/services/notifications";
+import {
+  adoptLegacyReminderRules,
+  storeReminderRules,
+  syncScheduledReminders,
+} from "@/services/notifications";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { syncFederatedAccounts } from "@/services/federation";
 import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
 import { refreshSettingsDocument } from "@/services/settingsSync";
@@ -109,7 +114,16 @@ export function useRefreshData() {
     // Best-effort — the cached rules stand in when the request fails.
     try {
       const reminders = await api.getReminders();
-      if (reminders) await storeReminderRules(reminders);
+      if (reminders) {
+        await storeReminderRules(reminders);
+      } else {
+        // null, not a throw: this server predates reminder rules. Fall back to
+        // the one thing it does say, or the phone schedules nothing at all and
+        // a feature that worked before the app update silently stops.
+        await adoptLegacyReminderRules(
+          useSettingsStore.getState().notificationsOnByDefault,
+        );
+      }
     } catch (e) {
       console.error("Reminder rules load failed:", e);
     }
