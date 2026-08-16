@@ -16,6 +16,11 @@ import { deviceTimezone } from "@/lib/timezone";
 
 const REMINDER_CHANNEL_ID = "musubi-reminders";
 
+/** Ties a scheduled reminder to the buttons below. */
+export const REMINDER_CATEGORY_ID = "musubi-reminder";
+export const ACTION_DECLINE = "decline";
+export const ACTION_OPEN = "open";
+
 // This device is an EXECUTOR, not the authority. Which events get a reminder is
 // a set of rules on the server (global default → per-calendar → per-event), so
 // it roams to every device the user signs into. Here we only ask
@@ -40,6 +45,33 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+/**
+ * The buttons on a reminder.
+ *
+ * Registered once per launch rather than per notification: the category is a
+ * property of the OS, and a scheduled reminder only carries its id. A reminder
+ * scheduled before this ran still fires — it just shows without buttons, which
+ * is why this is done at startup and not lazily.
+ *
+ * Declining from here is the same write the app makes, so the organizer sees it
+ * immediately and — by the rules in @musubi/calendar — the event stops
+ * reminding on every device.
+ */
+export async function registerReminderActions() {
+  await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY_ID, [
+    {
+      buttonTitle: "Can't make it",
+      identifier: ACTION_DECLINE,
+      options: { opensAppToForeground: false },
+    },
+    {
+      buttonTitle: "Show in calendar",
+      identifier: ACTION_OPEN,
+      options: { opensAppToForeground: true },
+    },
+  ]);
+}
 
 async function ensureAndroidReminderChannel() {
   if (Platform.OS !== "android") return;
@@ -175,6 +207,7 @@ export function inheritedReminderRule(
 
 async function schedule(reminder: ResolvedReminder): Promise<string> {
   await ensureAndroidReminderChannel();
+  await registerReminderActions();
   return Notifications.scheduleNotificationAsync({
     content: {
       title: reminder.title,
@@ -182,6 +215,17 @@ async function schedule(reminder: ResolvedReminder): Promise<string> {
         dateStyle: "medium",
         ...(reminder.isAllDay ? {} : { timeStyle: "short" }),
       }),
+      categoryIdentifier: REMINDER_CATEGORY_ID,
+      // What the buttons act on. Without it a tap has nothing to open and
+      // "Can't make it" has nothing to decline.
+      data: {
+        eventID: reminder.eventID,
+        occurrenceStart: reminder.occurrenceStart.toISOString(),
+      },
+      // A meeting starting is the case Apple added this level for: it goes
+      // through Focus. Reminders only — spend it anywhere else and the level
+      // stops meaning anything.
+      interruptionLevel: "timeSensitive",
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,

@@ -189,6 +189,24 @@ Receipts are per occurrence, not per event: keying by event meant a daily standu
 
 Rules arrive with the refresh (`api.getReminders()` → `storeReminderRules`), are cached in `sync_meta` so a cold offline start can still schedule, and are re-fetched when the SSE frame `reminders_updated` says another device changed them. `deviceTimezone()` (in `lib/timezone.ts`) resolves all-day reminders here, and is reported to the server on a settings refresh it was making anyway — groundwork for the phase-2 dispatcher, which cannot place "the evening before at 18:00" without knowing whose evening.
 
+**Reminders are exact alarms.** `expo-notifications` only asks for one when the
+app is allowed to — otherwise it silently falls back to `setAndAllowWhileIdle`,
+which Doze can sit on. `plugins/withExactAlarms.js` declares `USE_EXACT_ALARM`
+(Android 13+, granted automatically, and Play review checks the app really is a
+calendar) plus `SCHEDULE_EXACT_ALARM` capped at SDK 32 for Android 12. Without
+both, "10 minutes before" is a suggestion.
+
+A reminder carries **two buttons**: "Can't make it", which writes the decline
+through the ordinary attendance API and therefore also silences the event by the
+shared rules, and "Show in calendar". `hooks/useNotificationActions.ts` handles
+them and the plain tap; it is mounted at the tabs layout because the app can be
+launched cold by a notification, and it reads the events store when the response
+arrives rather than closing over what was there when it mounted.
+
+On iOS a reminder is sent at the **time-sensitive** interruption level, so it
+goes through Focus. Reminders only — an entitlement spent on everything stops
+meaning anything, and people switch the app off wholesale instead.
+
 Notification permission is **contextual**: the app never prompts at launch. `AddEventModal` calls `requestEventNotificationPermission()` only while saving an event whose reminder toggle is on. The event API write completes before the reminder rule is written, so denial or a native scheduling failure cannot fail event creation/editing; the user gets a toast instead. The composer opens on the rule the event will actually get, inherited or not, and only writes an override where the answer **differs** from what it inherits — always writing one would turn every event into an exception and stop later calendar changes from reaching any of them.
 
 ## Help and diagnostics

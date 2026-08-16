@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { getOnboardingRoute } from '@/lib/onboardingState';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRefreshData } from '@/hooks/useRefreshData';
+import { useNotificationActions } from '@/hooks/useNotificationActions';
 import { useEventsStore } from '@/store/useEventsStore';
 import { useCalendarsStore } from '@/store/useCalendarsStore';
 import { cacheGetAllEvents, cacheGetCalendars } from '@/services/eventsCache';
@@ -32,6 +33,9 @@ export default function TabLayout() {
     signOutAndReset(authClient).catch(e => console.warn("Session expiry recovery failed:", e));
   }), [authClient]);
   const refresh = useRefreshData();
+  // Registers the reminder buttons and what they do. Here rather than deeper in
+  // the tree because the app can be launched cold by a notification.
+  useNotificationActions();
   const { loadEvents } = useEventsStore();
   const { loadCalendars } = useCalendarsStore();
   const [dataReady, setDataReady] = useState(false);

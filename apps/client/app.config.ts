@@ -37,6 +37,13 @@ const expoConfig: ExpoConfig = {
   ios: {
     "supportsTablet": true,
     "bundleIdentifier": "dev.frgtn.musubi",
+    // Lets a reminder through Focus and Do Not Disturb. A meeting starting is
+    // the case Apple added the level for; the app spends it on reminders only,
+    // because an entitlement used on everything stops meaning anything and
+    // people turn the app off wholesale instead.
+    "entitlements": {
+      "com.apple.developer.usernotifications.time-sensitive": true
+    },
     "usesAppleSignIn": true,
     // iOS 18 can switch app icons with the system appearance. Keep the warm
     // paper mark for light mode and the original sumi version for dark mode.
@@ -174,6 +181,7 @@ const expoConfig: ExpoConfig = {
       }
     ],
     "./plugins/withCalendarAppCategory",
+    "./plugins/withExactAlarms",
     "expo-sharing"
   ],
   experiments: {
