@@ -16,6 +16,7 @@ import {
 	schedulingPolls,
 	schedulingSlots,
 	schedulingVotes,
+	userSettings,
 } from "..";
 import type { NewEvent } from "../schema";
 import { createEventInTransaction } from "./events";
@@ -314,6 +315,28 @@ export function decidePoll(input: {
 }
 
 /** Close an open poll without choosing a slot. */
+/**
+ * Everyone who answered, with the address to tell and the preference to respect.
+ *
+ * A participant can be somebody with no account at all — a public poll takes a
+ * name and an email and nothing else — so `userID` and therefore the settings
+ * join are both optional. No account means no preference to have expressed,
+ * which is treated as consent: they typed their address into this poll for
+ * exactly this answer.
+ */
+export async function getPollParticipants(pollID: string) {
+  return db
+    .select({
+      email: schedulingParticipants.email,
+      name: schedulingParticipants.name,
+      notificationEmails: userSettings.notificationEmails,
+      userID: schedulingParticipants.userID,
+    })
+    .from(schedulingParticipants)
+    .leftJoin(userSettings, eq(userSettings.id, schedulingParticipants.userID))
+    .where(eq(schedulingParticipants.pollID, pollID));
+}
+
 export async function closePoll(pollID: string) {
 	const [closed] = await db
 		.update(schedulingPolls)
