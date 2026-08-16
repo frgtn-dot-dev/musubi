@@ -36,7 +36,7 @@ import Constants from "expo-constants";
 import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
-import { chooseOption } from "@/lib/confirm";
+import { OptionPicker, type PickerOption } from "@/components/ui/OptionPicker";
 import { useEventsStore } from "@/store/useEventsStore";
 import { reminderRules, setCalendarReminderRule } from "@/services/notifications";
 
@@ -63,6 +63,12 @@ export default function SettingsTab() {
   const calendars = useCalendarsStore((state) => state.calendars);
   const events = useEventsStore((state) => state.events);
   const settingsDocument = useSettingsStore((state) => state.settingsDocument);
+  const [picker, setPicker] = useState<{
+    apply: (value: string) => void;
+    choices: PickerOption[];
+    title: string;
+    value: string;
+  } | null>(null);
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
@@ -211,27 +217,20 @@ export default function SettingsTab() {
   };
 
   /**
-   * The app's own picker, the same one a recurring edit uses.
+   * Open the picker for one reminder row.
    *
    * A row of pills only holds three choices before it squashes, and reminders
-   * have more than that — plus one extra whenever a rule set on another device
-   * has no button here. `SettingRowAction` shows what is set and hands the list
-   * to `chooseOption`, which is what every other multi-way choice already does.
+   * have more — plus one extra whenever a rule set on another device has no
+   * button here. So `SettingRowAction` shows what is set and this opens the
+   * list, in the app's own dressing rather than a platform sheet.
    */
   const pickReminder = (
     title: string,
-    choices: { label: string; value: string }[],
-    apply: (value: string) => void,
+    choices: PickerOption[],
+    value: string,
+    apply: (next: string) => void,
   ) => {
-    chooseOption(
-      title,
-      undefined,
-      choices.map((choice) => ({
-        label: choice.label,
-        onPress: () => apply(choice.value),
-      })),
-      true, // a picker, not a destructive confirmation — no buzz
-    );
+    setPicker({ apply, choices, title, value });
   };
 
   const saveDefaultReminder = (rule: ReminderRule) => {
@@ -396,8 +395,11 @@ export default function SettingsTab() {
           detail="Meetings and anything with a time"
           value={reminderLabel(defaultReminder, "timed")}
           onPress={() =>
-            pickReminder("Timed events", optionsFor(defaultReminder, "timed"), (value) =>
-              saveDefaultReminder(withTimed(defaultReminder, value)),
+            pickReminder(
+              "Timed events",
+              optionsFor(defaultReminder, "timed"),
+              timedValue(defaultReminder),
+              (value) => saveDefaultReminder(withTimed(defaultReminder, value)),
             )
           }
         />
@@ -406,8 +408,11 @@ export default function SettingsTab() {
           detail="Birthdays, holidays, anything without a time"
           value={reminderLabel(defaultReminder, "allDay")}
           onPress={() =>
-            pickReminder("All-day events", optionsFor(defaultReminder, "allDay"), (value) =>
-              saveDefaultReminder(withAllDay(defaultReminder, value)),
+            pickReminder(
+              "All-day events",
+              optionsFor(defaultReminder, "allDay"),
+              allDayValue(defaultReminder),
+              (value) => saveDefaultReminder(withAllDay(defaultReminder, value)),
             )
           }
         />
@@ -432,11 +437,15 @@ export default function SettingsTab() {
                       : "Default"
                   }
                   onPress={() =>
-                    pickReminder(calendar.name, choices, (value) =>
-                      saveCalendarReminder(
-                        calendar.id,
-                        value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
-                      ),
+                    pickReminder(
+                      calendar.name,
+                      choices,
+                      rule ? presetValue(rule) : FOLLOW_DEFAULT,
+                      (value) =>
+                        saveCalendarReminder(
+                          calendar.id,
+                          value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
+                        ),
                     )
                   }
                 />
@@ -532,6 +541,14 @@ export default function SettingsTab() {
         onClose={() => setConfirmDeleteVisible(false)}
         onTest={(value) => testDeleteConfirm(value)}
         onConfirm={handleUserDelete}
+      />
+      <OptionPicker
+        visible={picker !== null}
+        title={picker?.title ?? ""}
+        options={picker?.choices ?? []}
+        value={picker?.value}
+        onSelect={(value) => picker?.apply(value)}
+        onClose={() => setPicker(null)}
       />
     </View >
   );
