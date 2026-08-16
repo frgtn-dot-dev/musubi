@@ -1,11 +1,13 @@
 import { resolveReminders, type ReminderEvent } from "@musubi/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getEvents,
   getReminders,
   getServerCapabilities,
   getSettings,
+  getSettingsDocument,
+  patchSettings,
   putReminderRule,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -140,15 +142,6 @@ export function useReminders(userId: string) {
   const queryClient = useQueryClient();
   const calendarOrder = settings.data?.calendarOrder ?? NO_ORDER;
 
-  // This browser deliberately does NOT report its zone to the server.
-  //
-  // Nothing reads the stored value yet — every client resolves reminders with
-  // its own live zone, `browserTimezone()` above — so a write on page load
-  // would be a request and a settings revision bump that buys nothing today.
-  // The mobile app reports its zone on an existing settings refresh, which
-  // costs no extra request; the web gets a proper reporter when the server-side
-  // dispatcher in phase 2 actually needs one. See reference/reminders.
-
   // Turning this on is the moment to ask for permission — not at launch, and
   // not the first time a reminder happens to come due.
   const setPush = useCallback(
@@ -162,12 +155,32 @@ export function useReminders(userId: string) {
 
       const subscribed = await subscribeToPush(pushPublicKey);
       setPushing(subscribed);
+      // Now the server has to place "the evening before at 18:00" on this
+      // person's clock, and it cannot ask the browser at dispatch time. Written
+      // here rather than on page load: this is a deliberate act by the user, so
+      // an extra request and a settings revision are earned.
+      if (subscribed) void reportTimezone();
       return subscribed;
     },
     // `setPushing` is stable, but the compiler checks what the body reads
     // rather than what is stable, and a skipped optimization is a lint error.
     [pushPublicKey, setPushing],
   );
+
+  // Travelling changes the answer. Only for browsers that already opted into
+  // push, and once per mount — a signed-out or tab-only user writes nothing.
+  const reported = useRef(false);
+  const storedTimezone = settings.data?.timezone;
+  useEffect(() => {
+    if (!pushing || reported.current || !storedTimezone) return;
+    if (storedTimezone === browserTimezone()) return;
+    reported.current = true;
+    void reportTimezone().then(() =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings(origin, userId),
+      }),
+    );
+  }, [origin, pushing, queryClient, storedTimezone, userId]);
 
   const push = useMemo(
     () => ({
@@ -205,6 +218,26 @@ export function useReminders(userId: string) {
         : undefined,
     [calendarOrder, origin, push, queryClient, reminders.data, userId],
   );
+}
+
+/**
+ * Store this browser's zone against the account.
+ *
+ * Reads the document first because the patch is compare-and-swap and the
+ * workspace only caches the plain settings, which carry no revision. Failures
+ * are swallowed: a conflict or an offline tab means the zone stays as it was,
+ * which is stale rather than wrong, and the next subscribe tries again.
+ */
+async function reportTimezone() {
+  try {
+    const document = await getSettingsDocument();
+    await patchSettings({
+      baseRevision: document.revision,
+      patch: { timezone: browserTimezone() },
+    });
+  } catch {
+    // Nothing the user needs to see.
+  }
 }
 
 export function browserTimezone() {

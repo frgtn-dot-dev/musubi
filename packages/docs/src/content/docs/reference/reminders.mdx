@@ -57,9 +57,9 @@ zone: they are instants, and an offset from an instant is another instant.
 `user_settings.timezone` is what the server dispatcher resolves all-day
 reminders against — it cannot ask the device what time it is there. Clients
 resolving for themselves use their own live zone instead. The mobile app reports
-its zone on a settings refresh it was making anyway; the web does not report one
-yet, so an account that has only ever signed in on the web is dispatched against
-`UTC` until it does.
+its zone on a settings refresh it was making anyway. The web reports it when
+somebody turns on push, and again if they have since travelled — not on page
+load, which would be a request and a settings revision for every visit.
 
 ## Who rings
 
