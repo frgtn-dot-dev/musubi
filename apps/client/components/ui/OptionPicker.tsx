@@ -73,7 +73,14 @@ export function OptionPicker({
           justifyContent: "center",
         }}
       >
-        <Animated.View style={[{ width: "80%", alignSelf: "center" }, fadeStyle]}>
+        <Animated.View
+          style={[
+            // Same frame as TextInputModal, so two dialogs opened from the same
+            // screen are the same size and in the same place.
+            { alignSelf: "center", justifyContent: "center", minHeight: "10%", width: "80%" },
+            fadeStyle,
+          ]}
+        >
           <View
             style={{
               backgroundColor: colors.bg3,
@@ -95,8 +102,14 @@ export function OptionPicker({
 
             {/* Scrolls rather than grows: a calendar can carry more presets than
                 fit on a short phone, and a dialog taller than the screen has no
-                way to reach its own buttons. */}
-            <ScrollView style={{ maxHeight: 320 }} bounces={false}>
+                way to reach its own buttons. No indicator — it would sit over
+                the tick on the selected row, and the dividers already read as a
+                list that continues. */}
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 420 }}
+            >
               {options.map((option, index) => {
                 const selected = option.value === value;
                 return (
