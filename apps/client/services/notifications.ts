@@ -14,7 +14,44 @@ import { cacheGetReminders, cacheSetReminders } from "./eventsCache";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { deviceTimezone } from "@/lib/timezone";
 
-const REMINDER_CHANNEL_ID = "musubi-reminders";
+/**
+ * One channel per kind of reminder, because they are not equally urgent.
+ *
+ * "Porada za 10 minut" should interrupt; "zítra večer jsou narozeniny" should
+ * not have to. On Android the channel is where that lives — importance, sound
+ * and vibration all belong to the user once it exists, and a single channel
+ * means one answer for both. Splitting them is the difference between someone
+ * silencing all-day reminders and someone silencing Musubi.
+ *
+ * A channel is created the first time its kind is actually scheduled. Declaring
+ * all of them up front would put rows in system settings for notifications this
+ * app has never sent, which is how a settings screen stops being trustworthy.
+ */
+const REMINDER_CHANNELS = {
+  allDay: {
+    id: "musubi-reminders-allday",
+    // DEFAULT, not MAX: an all-day reminder is a heads-up, not an interruption.
+    // Somebody who wants it louder can say so, and now has somewhere to.
+    importance: () => Notifications.AndroidImportance.DEFAULT,
+    name: "All-day reminders",
+    vibrationPattern: [0, 200],
+  },
+  timed: {
+    id: "musubi-reminders-timed",
+    importance: () => Notifications.AndroidImportance.MAX,
+    name: "Event reminders",
+    vibrationPattern: [0, 250, 250, 250],
+  },
+} as const;
+
+/**
+ * The single channel everything used to go through.
+ *
+ * Deleted rather than reused: an existing channel's importance belongs to the
+ * user, so the OS ignores any change to it. Leaving it would strand whatever
+ * they had set on a channel nothing sends to any more.
+ */
+const RETIRED_CHANNEL_ID = "musubi-reminders";
 
 /** Ties a scheduled reminder to the buttons below. */
 export const REMINDER_CATEGORY_ID = "musubi-reminder";
@@ -73,14 +110,37 @@ export async function registerReminderActions() {
   ]);
 }
 
-async function ensureAndroidReminderChannel() {
-  if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
-    name: "Event reminders",
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 250, 250, 250],
+// Channels are cheap to re-declare but not free, and `schedule` runs per
+// occurrence. Remembering which ones this launch has already set up keeps a
+// fifty-reminder reconcile from making fifty round trips to the OS.
+const readyChannels = new Set<string>();
+let retiredOldChannel = false;
+
+async function ensureReminderChannel(kind: keyof typeof REMINDER_CHANNELS) {
+  if (Platform.OS !== "android") return undefined;
+
+  const channel = REMINDER_CHANNELS[kind];
+  if (readyChannels.has(channel.id)) return channel.id;
+
+  await Notifications.setNotificationChannelAsync(channel.id, {
+    importance: channel.importance(),
     lightColor: "#C8553D",
+    name: channel.name,
+    vibrationPattern: [...channel.vibrationPattern],
   });
+  readyChannels.add(channel.id);
+
+  // Once per launch, not once per channel. Best-effort: the old channel does
+  // not exist on a fresh install, and failing to remove it is not worth
+  // interrupting a reminder over.
+  if (!retiredOldChannel) {
+    retiredOldChannel = true;
+    await Notifications.deleteNotificationChannelAsync(
+      RETIRED_CHANNEL_ID,
+    ).catch(() => undefined);
+  }
+
+  return channel.id;
 }
 
 // ── The rules ────────────────────────────────────────────────────────────────
@@ -206,7 +266,9 @@ export function inheritedReminderRule(
 // ── The OS ───────────────────────────────────────────────────────────────────
 
 async function schedule(reminder: ResolvedReminder): Promise<string> {
-  await ensureAndroidReminderChannel();
+  const channelId = await ensureReminderChannel(
+    reminder.isAllDay ? "allDay" : "timed",
+  );
   await registerReminderActions();
   return Notifications.scheduleNotificationAsync({
     content: {
@@ -230,7 +292,7 @@ async function schedule(reminder: ResolvedReminder): Promise<string> {
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
       date: reminder.dueAt,
-      ...(Platform.OS === "android" ? { channelId: REMINDER_CHANNEL_ID } : {}),
+      ...(channelId ? { channelId } : {}),
     },
   });
 }
@@ -360,7 +422,9 @@ export async function clearAllEventNotifications() {
 
 /** Ask only when the user is actively enabling/saving their first reminder. */
 export async function requestEventNotificationPermission() {
-  await ensureAndroidReminderChannel();
+  // Timed only. Asking here creates the channel, and creating the all-day one
+  // before anything all-day exists is exactly the empty row this split avoids.
+  await ensureReminderChannel("timed");
 
   const existing = await Notifications.getPermissionsAsync();
   if (existing.status === "granted") return true;

@@ -203,6 +203,17 @@ them and the plain tap; it is mounted at the tabs layout because the app can be
 launched cold by a notification, and it reads the events store when the response
 arrives rather than closing over what was there when it mounted.
 
+Android reminders go to **one channel per kind** — `musubi-reminders-timed` at
+MAX importance and `musubi-reminders-allday` at DEFAULT. A meeting in ten
+minutes should interrupt; a birthday tomorrow evening should not have to, and on
+Android that distinction lives in the channel, because importance and sound
+belong to the user once a channel exists. One channel would have forced one
+answer for both, so the only way to quieten all-day reminders would have been to
+quieten Musubi. Each channel is created the first time its kind is actually
+scheduled — declaring both up front would list a notification the app has never
+sent. The old single `musubi-reminders` channel is deleted rather than reused,
+since the OS ignores changes to an existing channel's importance.
+
 On iOS a reminder is sent at the **time-sensitive** interruption level, so it
 goes through Focus. Reminders only — an entitlement spent on everything stops
 meaning anything, and people switch the app off wholesale instead.
