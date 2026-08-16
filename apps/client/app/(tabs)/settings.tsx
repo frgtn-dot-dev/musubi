@@ -1,4 +1,4 @@
-import { SettingRowAction, SettingRowOptions, SettingRowPills, SettingRowToggle } from "@/components/SettingRow";
+import { SettingRowAction, SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import {
@@ -36,6 +36,7 @@ import Constants from "expo-constants";
 import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
+import { OptionPicker, type PickerOption } from "@/components/ui/OptionPicker";
 import { useEventsStore } from "@/store/useEventsStore";
 import { reminderRules, setCalendarReminderRule } from "@/services/notifications";
 
@@ -50,12 +51,24 @@ const TERMS_URL = "https://musubi.pro/terms/";
 // so the control needs a value for "say nothing" that is not itself a rule.
 const FOLLOW_DEFAULT = "default";
 
+/** What the row shows on the right: whatever is stored, in the shared wording. */
+function reminderLabel(rule: ReminderRule, kind: "allDay" | "timed") {
+  const value = kind === "timed" ? timedValue(rule) : allDayValue(rule);
+  return optionsFor(rule, kind).find((option) => option.value === value)?.label ?? "Off";
+}
+
 export default function SettingsTab() {
   const api = useApi();
   const { authClient, apiUrl } = useServer();
   const calendars = useCalendarsStore((state) => state.calendars);
   const events = useEventsStore((state) => state.events);
   const settingsDocument = useSettingsStore((state) => state.settingsDocument);
+  const [picker, setPicker] = useState<{
+    apply: (value: string) => void;
+    choices: PickerOption[];
+    title: string;
+    value: string;
+  } | null>(null);
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
@@ -201,6 +214,23 @@ export default function SettingsTab() {
 
   const saveNotificationEmails = (patch: Partial<NotificationEmails>) => {
     save({ notificationEmails: { ...notificationEmails, ...patch } });
+  };
+
+  /**
+   * Open the picker for one reminder row.
+   *
+   * A row of pills only holds three choices before it squashes, and reminders
+   * have more — plus one extra whenever a rule set on another device has no
+   * button here. So `SettingRowAction` shows what is set and this opens the
+   * list, in the app's own dressing rather than a platform sheet.
+   */
+  const pickReminder = (
+    title: string,
+    choices: PickerOption[],
+    value: string,
+    apply: (next: string) => void,
+  ) => {
+    setPicker({ apply, choices, title, value });
   };
 
   const saveDefaultReminder = (rule: ReminderRule) => {
@@ -360,19 +390,31 @@ export default function SettingsTab() {
         />
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Reminders</Text>
-        <SettingRowPills
+        <SettingRowAction
           label="Timed Events"
           detail="Meetings and anything with a time"
-          value={timedValue(defaultReminder)}
-          options={optionsFor(defaultReminder, "timed")}
-          onChange={(value) => saveDefaultReminder(withTimed(defaultReminder, value))}
+          value={reminderLabel(defaultReminder, "timed")}
+          onPress={() =>
+            pickReminder(
+              "Timed events",
+              optionsFor(defaultReminder, "timed"),
+              timedValue(defaultReminder),
+              (value) => saveDefaultReminder(withTimed(defaultReminder, value)),
+            )
+          }
         />
-        <SettingRowPills
+        <SettingRowAction
           label="All-day Events"
           detail="Birthdays, holidays, anything without a time"
-          value={allDayValue(defaultReminder)}
-          options={optionsFor(defaultReminder, "allDay")}
-          onChange={(value) => saveDefaultReminder(withAllDay(defaultReminder, value))}
+          value={reminderLabel(defaultReminder, "allDay")}
+          onPress={() =>
+            pickReminder(
+              "All-day events",
+              optionsFor(defaultReminder, "allDay"),
+              allDayValue(defaultReminder),
+              (value) => saveDefaultReminder(withAllDay(defaultReminder, value)),
+            )
+          }
         />
 
         {calendars.length > 0 ? (
@@ -380,20 +422,30 @@ export default function SettingsTab() {
             <Text style={[styles.sectionLabel, local.sectionHeading]}>Reminders by Calendar</Text>
             {calendars.map((calendar) => {
               const rule = reminderRules()?.calendars[calendar.id];
+              const choices = [
+                { label: "Default", value: FOLLOW_DEFAULT },
+                ...presetOptions(rule),
+              ];
               return (
-                <SettingRowPills
+                <SettingRowAction
                   key={calendar.id}
                   label={calendar.name}
                   detail={rule ? undefined : "Following your default"}
-                  value={rule ? presetValue(rule) : FOLLOW_DEFAULT}
-                  options={[
-                    { label: "Default", value: FOLLOW_DEFAULT },
-                    ...presetOptions(rule),
-                  ]}
-                  onChange={(value) =>
-                    saveCalendarReminder(
-                      calendar.id,
-                      value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
+                  value={
+                    rule
+                      ? choices.find((choice) => choice.value === presetValue(rule))?.label
+                      : "Default"
+                  }
+                  onPress={() =>
+                    pickReminder(
+                      calendar.name,
+                      choices,
+                      rule ? presetValue(rule) : FOLLOW_DEFAULT,
+                      (value) =>
+                        saveCalendarReminder(
+                          calendar.id,
+                          value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
+                        ),
                     )
                   }
                 />
@@ -489,6 +541,14 @@ export default function SettingsTab() {
         onClose={() => setConfirmDeleteVisible(false)}
         onTest={(value) => testDeleteConfirm(value)}
         onConfirm={handleUserDelete}
+      />
+      <OptionPicker
+        visible={picker !== null}
+        title={picker?.title ?? ""}
+        options={picker?.choices ?? []}
+        value={picker?.value}
+        onSelect={(value) => picker?.apply(value)}
+        onClose={() => setPicker(null)}
       />
     </View >
   );
