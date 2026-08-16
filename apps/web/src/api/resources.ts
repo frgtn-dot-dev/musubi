@@ -162,6 +162,25 @@ export function putReminderRule(
   });
 }
 
+export function subscribePush(subscription: {
+  endpoint: string;
+  keys: { auth: string; p256dh: string };
+}) {
+  return apiRequest("/api/v1/push/subscriptions", {
+    body: subscription,
+    method: "POST",
+    responseSchema: z.void(),
+  });
+}
+
+export function unsubscribePush(input: { endpoint: string }) {
+  return apiRequest("/api/v1/push/subscriptions", {
+    body: input,
+    method: "DELETE",
+    responseSchema: z.void(),
+  });
+}
+
 export function createCalendar(calendar: Calendar) {
   return apiRequest("/api/v1/calendars", {
     body: calendar,

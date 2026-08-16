@@ -11,6 +11,13 @@ import type { ReminderRule, RemindersDocument } from "@musubi/types";
 export type ReminderControl = {
   calendarOrder: readonly string[];
   document: RemindersDocument;
+  /** Web push for THIS browser. Absent capability hides the choice entirely. */
+  push: {
+    available: boolean;
+    enabled: boolean;
+    /** Resolves to whether it ended up on — a denied prompt returns false. */
+    set: (wanted: boolean) => Promise<boolean>;
+  };
   /** `null` clears the override and puts the event back on its calendar's rule. */
   onChange: (eventId: string, rule: ReminderRule | null) => Promise<unknown>;
   /** `null` puts the calendar back on the global default. */

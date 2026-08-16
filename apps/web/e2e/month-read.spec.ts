@@ -385,6 +385,33 @@ async function mockAuthenticatedReads(
 		}
 		return respond(route, calendarState);
 	});
+	// Asked for on every load since reminders landed. Unmocked they 500 against
+	// the dev server, and a test that only asserts "no console errors" then fails
+	// for a reason that has nothing to do with what it is testing.
+	await page.route("**/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			// No VAPID keys: the "notify me when this browser is closed" toggle
+			// stays hidden, which is the state most tests should see.
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: ["google"],
+		}),
+	);
+	await page.route("**/api/v1/reminders", (route) =>
+		respond(route, {
+			calendars: { work: { allDay: null, minutesBefore: 60 } },
+			default: {
+				allDay: { atMinute: 1080, daysBefore: 1 },
+				minutesBefore: 10,
+			},
+			events: {},
+		}),
+	);
+	await page.route("**/api/v1/reminders/**", (route) =>
+		route.fulfill({ body: "", status: 204 }),
+	);
 	await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
 	await page.route("**/api/v1/scheduling/polls/calendar", (route) =>
 		respond(route, []),
@@ -555,19 +582,6 @@ async function mockAuthenticatedReads(
 		};
 		return respond(route, forked, 201);
 	});
-	await page.route("**/api/v1/reminders", (route) =>
-		respond(route, {
-			calendars: { work: { allDay: null, minutesBefore: 60 } },
-			default: {
-				allDay: { atMinute: 1080, daysBefore: 1 },
-				minutesBefore: 10,
-			},
-			events: {},
-		}),
-	);
-	await page.route("**/api/v1/reminders/**", (route) =>
-		route.fulfill({ status: 204, body: "" }),
-	);
 	await page.route("**/api/v1/users/settings", (route) =>
 		respond(route, settingsState),
 	);

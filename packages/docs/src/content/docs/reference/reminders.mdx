@@ -54,11 +54,12 @@ events are stored as UTC midnight of a timezone-invariant date, so their
 reminder is built from that calendar date in **your** zone. Timed events need no
 zone: they are instants, and an offset from an instant is another instant.
 
-`user_settings.timezone` exists for the server-side dispatcher in phase 2 and is
-not read by anything today — each client resolves against its own live zone. The
-mobile app reports its zone on a settings refresh it was making anyway; the web
-deliberately does not write one on load, since that would be a request and a
-revision bump for a value nobody reads yet.
+`user_settings.timezone` is what the server dispatcher resolves all-day
+reminders against — it cannot ask the device what time it is there. Clients
+resolving for themselves use their own live zone instead. The mobile app reports
+its zone on a settings refresh it was making anyway; the web does not report one
+yet, so an account that has only ever signed in on the web is dispatched against
+`UTC` until it does.
 
 ## Who rings
 
@@ -71,11 +72,39 @@ birthday.
 | Where | How it rings | Ceiling |
 | --- | --- | --- |
 | Mobile | `expo-notifications`, scheduled locally from the rules | A device that has not synced for a while can ring on stale data |
-| Web | `setTimeout` plus the `Notification` API | Only while a tab is open — web push is a later phase |
+| Web, tab open | `setTimeout` plus the `Notification` API | Stops when the tab does |
+| Web, tab closed | Web Push from the server, when the install has VAPID keys | Nothing without keys; the tab-open path still works |
+
+A browser never does both. Once it is on the server's push list the in-tab
+scheduler stands down, because two notifications raised from two places for one
+occurrence may not coalesce on their tag.
 
 Permission is asked **contextually**, where somebody is switching a reminder on
 — never at launch, and never the first time one happens to come due. A prompt
 with no context is the one people dismiss forever.
+
+### The dispatcher
+
+`apps/api/src/reminder_dispatch.ts`, on a one-minute tick beside the external
+sync. A minute because a reminder is a promise about a specific minute; a
+five-minute tick would make "10 minutes before" mean somewhere between five and
+ten.
+
+It keeps one cursor for the whole server in `dispatch_cursors` and dispatches
+the window `(cursor, now]`, so consecutive passes abut and nothing falls between
+them. After an outage the window is clamped to the last 15 minutes and the drop
+is logged: announcing a stack of meetings that already happened is worse than
+silence. Delivery is at-least-once — the cursor advances after the sends — and
+the payload carries the occurrence id as the notification tag, so a repeat
+replaces the banner rather than stacking a second one.
+
+A push service answering 404 or 410 means that endpoint is finished (permission
+revoked, storage cleared, browser reinstalled) and the subscription is deleted.
+That is counted as `gone`, not `failed`: it is the system working.
+
+The service worker is served from `/app/sw.js`, not the origin root — the
+gateway gives `/` to the marketing site, so a worker at the root would 404 on
+the hosted install and silently disable push.
 
 ## Changing a rule
 

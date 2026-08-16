@@ -137,6 +137,8 @@ export function SettingsDialog({
   const [settings, setSettings] = useState<SettingsDocument>();
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -185,6 +187,26 @@ export function SettingsDialog({
 
   function saveDefaultReminder(rule: ReminderRule) {
     return save({ defaultReminder: rule });
+  }
+
+  async function togglePush(wanted: boolean) {
+    if (!reminders) return;
+    setPushBusy(true);
+    setPushMessage("");
+    try {
+      const enabled = await reminders.push.set(wanted);
+      // A refused prompt is an answer, not an error. Saying where to change it
+      // beats a toggle that springs back with no explanation.
+      if (wanted && !enabled) {
+        setPushMessage(
+          "Your browser refused notifications. Allow them for this site to turn this on.",
+        );
+      }
+    } catch {
+      setPushMessage("That could not be changed. Try again.");
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   async function saveCalendarReminder(
@@ -385,6 +407,18 @@ export function SettingsDialog({
               options={optionsFor(defaultReminder, "allDay")}
               value={allDayValue(defaultReminder)}
             />
+            {reminders?.push.available ? (
+              <RowToggle
+                checked={reminders.push.enabled}
+                detail={
+                  pushMessage ||
+                  "Without this, reminders only appear while a Musubi tab is open"
+                }
+                disabled={saving || pushBusy}
+                label="Notify me when this browser is closed"
+                onCheckedChange={(wanted) => void togglePush(wanted)}
+              />
+            ) : null}
           </SettingsSection>
 
           {reminders && calendars.length > 0 ? (

@@ -1,15 +1,26 @@
 import { resolveReminders, type ReminderEvent } from "@musubi/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getEvents,
   getReminders,
+  getServerCapabilities,
   getSettings,
   putReminderRule,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import { notifyReminder, scheduleReminders } from "./reminder-scheduler";
+import {
+  notifyReminder,
+  requestReminderPermission,
+  scheduleReminders,
+} from "./reminder-scheduler";
 import type { ReminderControl } from "./reminder-control";
+import {
+  currentSubscription,
+  pushSupported,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from "~/push/subscribe";
 
 // How far ahead to resolve. Long enough that a tab left open over a weekend
 // still rings on Monday, short enough that the event query stays small.
@@ -51,6 +62,27 @@ export function useReminders(userId: string) {
     return {
       end: new Date(start.getTime() + HORIZON_DAYS * 24 * 3_600_000),
       start,
+    };
+  }, []);
+
+  // Whether the server can push at all, and whether this browser is on its
+  // list. Both cheap; both decide whether the tab schedules for itself.
+  const capabilities = useQuery({
+    enabled,
+    queryFn: ({ signal }) => getServerCapabilities(signal),
+    queryKey: ["server-capabilities", origin],
+    staleTime: 5 * 60_000,
+  });
+  const pushPublicKey = capabilities.data?.pushPublicKey ?? null;
+
+  const [pushing, setPushing] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void currentSubscription().then((subscription) => {
+      if (live) setPushing(Boolean(subscription));
+    });
+    return () => {
+      live = false;
     };
   }, []);
 
@@ -96,7 +128,14 @@ export function useReminders(userId: string) {
     });
   }, [events.data, reminders.data, settings.data]);
 
-  useEffect(() => scheduleReminders(due, notifyReminder), [due]);
+  // When the server is pushing to this browser, the tab must NOT also schedule:
+  // the two would race to announce the same occurrence and, being raised from
+  // different places, may not coalesce on their tag. The server wins because it
+  // works whether the tab is open or not.
+  useEffect(() => {
+    if (pushing) return;
+    return scheduleReminders(due, notifyReminder);
+  }, [due, pushing]);
 
   const queryClient = useQueryClient();
   const calendarOrder = settings.data?.calendarOrder ?? NO_ORDER;
@@ -110,12 +149,44 @@ export function useReminders(userId: string) {
   // costs no extra request; the web gets a proper reporter when the server-side
   // dispatcher in phase 2 actually needs one. See reference/reminders.
 
+  // Turning this on is the moment to ask for permission — not at launch, and
+  // not the first time a reminder happens to come due.
+  const setPush = useCallback(
+    async (wanted: boolean) => {
+      if (!wanted) {
+        await unsubscribeFromPush();
+        setPushing(false);
+        return false;
+      }
+      if (!pushPublicKey || !(await requestReminderPermission())) return false;
+
+      const subscribed = await subscribeToPush(pushPublicKey);
+      setPushing(subscribed);
+      return subscribed;
+    },
+    // `setPushing` is stable, but the compiler checks what the body reads
+    // rather than what is stable, and a skipped optimization is a lint error.
+    [pushPublicKey, setPushing],
+  );
+
+  const push = useMemo(
+    () => ({
+      // Absent key means the server has no VAPID keys, so there is nothing to
+      // offer and the toggle should not appear at all.
+      available: Boolean(pushPublicKey) && pushSupported(),
+      enabled: pushing,
+      set: setPush,
+    }),
+    [pushPublicKey, pushing, setPush],
+  );
+
   return useMemo(
     (): ReminderControl | undefined =>
       reminders.data
         ? {
             calendarOrder,
             document: reminders.data,
+            push,
             onCalendarChange: async (calendarId, rule) => {
               await putReminderRule("calendars", calendarId, rule);
               await queryClient.invalidateQueries({
@@ -132,7 +203,7 @@ export function useReminders(userId: string) {
             },
           }
         : undefined,
-    [calendarOrder, origin, queryClient, reminders.data, userId],
+    [calendarOrder, origin, push, queryClient, reminders.data, userId],
   );
 }
 
