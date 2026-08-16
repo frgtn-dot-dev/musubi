@@ -151,7 +151,13 @@ export function OptionPicker({
               })}
             </View>
 
-            <Btn label="Cancel" variant="secondary" onPress={handleClose} />
+            {/* In a row, even alone. `btnSecondary` is `flex: 1` — built to
+                share a row with a confirm button — and in a column that flex
+                grows along the wrong axis and pushes the button out of the
+                card. Same wrapper TextInputModal uses. */}
+            <View style={{ flexDirection: "row", gap: 16 }}>
+              <Btn label="Cancel" variant="secondary" onPress={handleClose} />
+            </View>
           </View>
         </Animated.View>
       </View>
