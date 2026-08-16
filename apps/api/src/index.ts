@@ -139,6 +139,7 @@ import {
   recordScheduledTaskSkip,
   startMetricsServer,
 } from "./metrics";
+import { dispatchDueReminders, pushEnabled } from "./reminder_dispatch";
 import { nonOverlapping } from "./scheduling";
 import { acquireApiSingletonLock } from "./singleton";
 import { trustPrivateProxies } from "./middleware/proxy";
@@ -635,6 +636,26 @@ async function syncExternalAccounts() {
   }
 }
 
+// Event reminders for browsers that are not open. The clients ring for
+// themselves while they are running; this covers the closed laptop. Every minute
+// because a reminder is a promise about a specific minute — a five-minute tick
+// would make "10 minutes before" mean somewhere between 5 and 10.
+async function dispatchReminders() {
+  const startedAt = performance.now();
+  try {
+    const { sent, users } = await dispatchDueReminders();
+    const fields = {
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      sent,
+      users,
+    };
+    if (sent > 0) logger.info("reminders.dispatch.completed", fields);
+    else logger.debug("reminders.dispatch.completed", fields);
+  } catch (e) {
+    logger.error("reminders.dispatch.failed", { error: e });
+  }
+}
+
 const runCleanup = nonOverlapping(cleanupExpired, () => {
   recordScheduledTaskSkip("cleanup");
   logger.warn("cleanup.skipped", { reason: "previous_run_active" });
@@ -643,6 +664,11 @@ const runCleanup = nonOverlapping(cleanupExpired, () => {
 const runExternalSync = nonOverlapping(syncExternalAccounts, () => {
   recordScheduledTaskSkip("external_sync");
   logger.warn("sync.scheduler.skipped", { reason: "previous_run_active" });
+});
+
+const runReminders = nonOverlapping(dispatchReminders, () => {
+  recordScheduledTaskSkip("reminders");
+  logger.warn("reminders.dispatch.skipped", { reason: "previous_run_active" });
 });
 
 async function start() {
@@ -671,6 +697,15 @@ async function start() {
 
   void runCleanup(); // run once at boot (setInterval's first tick is delayed)
   setInterval(() => void runCleanup(), 60 * 60 * 1000);
+
+  if (pushEnabled()) {
+    logger.info("reminders.dispatch.enabled");
+    setInterval(() => void runReminders(), 60_000);
+  } else {
+    // Not a warning: a server with no VAPID keys is a valid, complete install.
+    // Its clients still remind themselves while they are open.
+    logger.info("reminders.dispatch.disabled", { reason: "no_vapid_keys" });
+  }
 
   if (config.api.externalSyncIntervalMin > 0) {
     logger.info("sync.scheduler.enabled", {

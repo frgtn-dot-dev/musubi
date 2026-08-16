@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { ReminderRule, RemindersDocument } from "@musubi/types";
-import { calendarMembers, db, eventReminders } from "..";
+import { calendarMembers, db, eventReminders, eventUsers } from "..";
 import { getUserSettings } from "./settings";
 
 // Reminder rules are read as one document rather than per event: they are tiny
@@ -35,6 +35,23 @@ export async function getRemindersDocument(
   for (const row of overrides) events[row.eventID] = row.rule;
 
   return { default: settings.defaultReminder, calendars, events };
+}
+
+/**
+ * Events this person has said no to.
+ *
+ * Only "declined" is asked for: the resolver treats every other answer, and no
+ * answer at all, as a reason to remind. Fetching the whole attendance table to
+ * find the one status that silences a reminder would be the wrong shape.
+ */
+export async function getDeclinedEventIDs(userID: string) {
+  const rows = await db
+    .select({ eventID: eventUsers.eventID })
+    .from(eventUsers)
+    .where(
+      and(eq(eventUsers.userID, userID), eq(eventUsers.status, "declined")),
+    );
+  return rows.map((row) => row.eventID);
 }
 
 /** My rule for one calendar. `null` puts it back to inheriting. */
