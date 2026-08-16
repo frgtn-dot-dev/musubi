@@ -28,6 +28,8 @@
     "test:db:federation-gateway": "pnpm --filter @musubi/api exec tsx src/federation_gateway.integration.test.ts",
     "test:provider-db": "pnpm --filter @musubi/api exec tsx src/sync/oauth.integration.test.ts",
     "check": "pnpm release:verify && pnpm peers:check && pnpm typecheck && pnpm test && pnpm lint && pnpm build",
+    "test:e2e": "pnpm --filter @musubi/web test:e2e",
+    "verify": "pnpm check && pnpm test:e2e",
     "lint": "pnpm --filter @musubi/client lint && pnpm --filter @musubi/web lint",
     "db:generate": "pnpm -F @musubi/db exec drizzle-kit generate",
     "db:migrate": "pnpm -F @musubi/db exec drizzle-kit migrate"
