@@ -276,7 +276,37 @@ async function expectCalendarVisibility(
 	await dialog.getByRole("button", { name: "Close page settings" }).click();
 }
 
+/**
+ * Wait for anything moving to stop.
+ *
+ * A colour-contrast check on a half-faded element is a coin toss: axe reads the
+ * computed background through it and flags not just that element but everything
+ * visible underneath. One toast caught mid-fade produced sixty-four violations
+ * across a dialog that was fine.
+ *
+ * Looping animations (spinners) are skipped — they never finish, and waiting on
+ * one would hang the suite. A stuck animation degrades to scanning anyway
+ * rather than failing, because this is a guard, not an assertion.
+ */
+async function settleAnimations(page: Page) {
+	await page
+		.waitForFunction(
+			() =>
+				document
+					.getAnimations()
+					.filter(
+						(animation) =>
+							animation.effect?.getComputedTiming().iterations !== Infinity,
+					)
+					.every((animation) => animation.playState !== "running"),
+			undefined,
+			{ timeout: 2_000 },
+		)
+		.catch(() => undefined);
+}
+
 async function expectNoAccessibilityViolations(page: Page) {
+	await settleAnimations(page);
 	let results;
 	try {
 		results = await new AxeBuilder({ page }).analyze();
