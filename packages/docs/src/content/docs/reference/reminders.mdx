@@ -120,6 +120,22 @@ Surfaces write an override only where the choice **differs** from what the event
 would inherit. Storing one every time would make every event an exception, and a
 later change to a calendar rule would then reach none of them.
 
+## An older server
+
+A self-hosted server updates when its admin gets round to it, so a phone newer
+than the API it talks to is an ordinary state rather than an edge case. Two
+things make that survivable:
+
+- `SettingsPatchSchema` strips fields it does not know instead of refusing the
+  patch that carries them. Under `.strict()` a phone that had learned about
+  `timezone` lost its theme change too — the whole write refused over one field
+  the server could have ignored.
+- `GET /api/v1/reminders` answering 404 is read as "this server has no rules",
+  not as an error. The phone falls back to a document built from
+  `notificationsOnByDefault`, which every version sends, so reminders keep
+  working at the global default until the server catches up. The stand-in is
+  never cached — a real document, including a cached one, always wins.
+
 ## Upgrading
 
 Per-event reminders that existing phones hold in local SQLite are **not**

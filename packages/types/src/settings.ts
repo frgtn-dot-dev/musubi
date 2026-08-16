@@ -69,7 +69,18 @@ export const SettingsPatchSchema = z
     timezone: TimezoneSchema.optional(),
     weekStartsOn: z.enum(["monday", "sunday"]).optional(),
   })
-  .strict()
+  // NOT strict, deliberately. A field this server has never heard of is
+  // stripped, not a reason to reject everything around it.
+  //
+  // The app updates from a store and a self-hosted server updates when its
+  // admin gets round to it, so a client newer than its server is the ordinary
+  // case rather than an edge one. Under `.strict()` a phone that had learned
+  // about `timezone` lost its theme change too — the whole patch refused over
+  // one field the server could simply have ignored.
+  //
+  // The emptiness check below runs AFTER stripping, so a patch consisting only
+  // of fields this server does not know is still an error: there is genuinely
+  // nothing to apply, and answering 200 would claim otherwise.
   .refine((patch) => Object.keys(patch).length > 0, {
     message: "Settings patch cannot be empty.",
   });
