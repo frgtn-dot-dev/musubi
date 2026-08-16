@@ -271,6 +271,18 @@ export function createInvite(
   });
 }
 
+/** Send an existing invite link to an address. The link itself does not change. */
+export function sendInvite(
+  inviteId: string,
+  email: string,
+  connectionId?: string,
+) {
+  return apiRequest(
+    route(connectionId, `/api/v1/calendars/invites/${inviteId}/send`),
+    { body: { email }, method: "POST", responseSchema: z.void() },
+  );
+}
+
 export function revokeInvite(inviteId: string, connectionId?: string) {
   return apiRequest(
     route(connectionId, `/api/v1/calendars/invites/${inviteId}`),

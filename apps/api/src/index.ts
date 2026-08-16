@@ -68,6 +68,7 @@ import {
   handlerCreateCalendarInvite,
   handlerGetCalendarInvites,
   handlerRevokeInvite,
+  handlerSendCalendarInvite,
 } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
 import {
@@ -464,6 +465,15 @@ app.delete(
   "/api/v1/calendars/invites/:inviteId",
   requireAuth,
   wrap(handlerRevokeInvite),
+);
+// Makes the server send mail to an address the caller chose, so it is capped
+// per ACCOUNT — that is what an abuser has to keep creating, and an IP limit
+// would both punish an office and miss a roaming phone.
+app.post(
+  "/api/v1/calendars/invites/:inviteId/send",
+  requireAuth,
+  rateLimit(20, 60 * 60_000, { byUser: true }),
+  wrap(handlerSendCalendarInvite),
 );
 app.get(
   "/api/v1/calendars/:calendarId/members",

@@ -241,6 +241,7 @@ does not allow `creatorID` or `originCalendarID` to change. The home
 | `POST /api/v1/calendars/invites` | `Invite` |
 | `GET /api/v1/calendars/:calendarId/invites` | Active invite records |
 | `DELETE /api/v1/calendars/invites/:inviteId` | Revoke immediately |
+| `POST /api/v1/calendars/invites/:inviteId/send` | `{ email }`; mails the EXISTING link, so revoking still kills every copy. Needs `invite` on that calendar and is capped at 20/hour per **account** — an IP cap would punish an office and miss a roaming phone |
 
 New invite members start as `viewer`. An invite can have nullable `expiresAt`
 (never expires) and nullable `maxUses` (unlimited); `uses` increments only for a
@@ -278,6 +279,24 @@ real — see [Reminders](/reference/reminders/).
 
 The server stores rules, never a schedule: clients resolve what to ring with
 `resolveReminders` from `@musubi/calendar`.
+
+## Notification emails
+
+Sent because a **person** did something, as opposed to a reminder, which is a
+promise you made to yourself. Two switches in `settings.notificationEmails`
+(`eventChanged`, `pollDecided`), both on by default.
+
+| What | When | Batched |
+| --- | --- | --- |
+| An event moved or was cancelled | Only the start/end changing or `isCanceled` going true. Guests who have not declined, minus whoever made the change | Yes — `pending_notifications`, one email per person per batch |
+| A poll has a time | `POST /api/v1/scheduling/polls/:pollId/decide` | No — a poll is decided once, and half the participants may have no account |
+| A calendar invitation | Somebody typed an address and pressed send | No — transactional, and it has no preference for the same reason a password reset does not |
+
+Batched notifications wait `BATCH_DELAY_MS` (3 minutes) from the **first**
+change, never extended: rearranging an afternoon is one email, and somebody who
+keeps fiddling still tells people something. Rows are only deleted once the mail
+is accepted, so a failed send is retried — and abandoned after 24 hours, because
+nobody needs to hear on Tuesday that Monday moved.
 
 ## Pages
 
