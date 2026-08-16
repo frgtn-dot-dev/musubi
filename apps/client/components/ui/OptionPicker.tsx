@@ -1,7 +1,7 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
 import { Btn } from "@/components/ui/Btn";
@@ -100,16 +100,16 @@ export function OptionPicker({
               ) : null}
             </View>
 
-            {/* Scrolls rather than grows: a calendar can carry more presets than
-                fit on a short phone, and a dialog taller than the screen has no
-                way to reach its own buttons. No indicator — it would sit over
-                the tick on the selected row, and the dividers already read as a
-                list that continues. */}
-            <ScrollView
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 420 }}
-            >
+            {/* A plain View, not a ScrollView.
+                The longest list this ever shows is six rows — five choices plus
+                the extra one that appears when a rule set on another device has
+                no button here — which fits on any phone. A ScrollView sized by
+                `maxHeight` measured itself a little shorter than its content
+                every time, so every list scrolled and every list hid its last
+                few pixels, whether it held three options or five.
+                If some future list genuinely outgrows a screen, that is the
+                moment to make it scroll, and it can be measured then. */}
+            <View>
               {options.map((option, index) => {
                 const selected = option.value === value;
                 return (
@@ -149,7 +149,7 @@ export function OptionPicker({
                   </Tap>
                 );
               })}
-            </ScrollView>
+            </View>
 
             <Btn label="Cancel" variant="secondary" onPress={handleClose} />
           </View>
