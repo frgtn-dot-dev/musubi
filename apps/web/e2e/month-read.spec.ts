@@ -555,6 +555,19 @@ async function mockAuthenticatedReads(
 		};
 		return respond(route, forked, 201);
 	});
+	await page.route("**/api/v1/reminders", (route) =>
+		respond(route, {
+			calendars: { work: { allDay: null, minutesBefore: 60 } },
+			default: {
+				allDay: { atMinute: 1080, daysBefore: 1 },
+				minutesBefore: 10,
+			},
+			events: {},
+		}),
+	);
+	await page.route("**/api/v1/reminders/**", (route) =>
+		route.fulfill({ status: 204, body: "" }),
+	);
 	await page.route("**/api/v1/users/settings", (route) =>
 		respond(route, settingsState),
 	);
@@ -1494,24 +1507,42 @@ test("saves revisioned settings and applies display preferences", async ({
 	const settingsDialog = page.getByRole("dialog", { name: "Settings" });
 	const sectionHeadings = [
 		"Appearance",
-		"Notifications",
+		"Reminders",
+		"Reminders by calendar",
 		"Help & About",
 		"Account",
 	];
 	const sectionTops = await Promise.all(
 		sectionHeadings.map(
 			async (name) =>
-				(await settingsDialog.getByRole("heading", { name }).boundingBox())!.y,
+				// exact: the default is a substring match, and "Reminders" would
+				// otherwise also claim "Reminders by calendar".
+				(await settingsDialog
+					.getByRole("heading", { exact: true, name })
+					.boundingBox())!.y,
 		),
 	);
 	expect(sectionTops).toEqual([...sectionTops].sort((a, b) => a - b));
 
-	// The toggle is account-wide and worth having here, but the delivery is not:
-	// a browser sends no reminders, and a switch that says otherwise is a promise
-	// this client cannot keep.
-	await expect(settingsDialog).toContainText(
-		"Reminders are delivered by the Musubi app on your phone",
-	);
+	// Timed and all-day events are asked about separately: an offset cannot
+	// answer for a birthday, and the control must not pretend it can.
+	// `SettingsSection` is a labelled <section>, which is a region.
+	const remindersSection = settingsDialog
+		.getByRole("region")
+		.filter({ has: page.getByRole("heading", { exact: true, name: "Reminders" }) });
+	await expect(
+		remindersSection.getByRole("radiogroup", { name: "Timed events" }),
+	).toBeVisible();
+	await expect(
+		remindersSection.getByRole("radio", { name: "10 min" }),
+	).toHaveAttribute("aria-checked", "true");
+	await expect(
+		remindersSection.getByRole("radio", { name: "Evening before" }),
+	).toHaveAttribute("aria-checked", "true");
+
+	// A calendar with no rule of its own says so rather than showing a value it
+	// does not hold — the difference between inheriting and choosing.
+	await expect(settingsDialog).toContainText("Following your default");
 
 	await expect(
 		settingsDialog.getByRole("radiogroup", { name: "Theme" }),

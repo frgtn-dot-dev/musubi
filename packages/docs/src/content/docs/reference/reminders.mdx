@@ -51,10 +51,14 @@ type ReminderRule = {
 
 Two branches because the two kinds of event ask different questions. All-day
 events are stored as UTC midnight of a timezone-invariant date, so their
-reminder is built from that calendar date in **your** zone — hence
-`user_settings.timezone`, which every client reports when it changes. Timed
-events need no zone: they are instants, and an offset from an instant is another
-instant.
+reminder is built from that calendar date in **your** zone. Timed events need no
+zone: they are instants, and an offset from an instant is another instant.
+
+`user_settings.timezone` exists for the server-side dispatcher in phase 2 and is
+not read by anything today — each client resolves against its own live zone. The
+mobile app reports its zone on a settings refresh it was making anyway; the web
+deliberately does not write one on load, since that would be a request and a
+revision bump for a value nobody reads yet.
 
 ## Who rings
 

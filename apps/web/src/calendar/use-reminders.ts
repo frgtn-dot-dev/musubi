@@ -5,8 +5,6 @@ import {
   getEvents,
   getReminders,
   getSettings,
-  getSettingsDocument,
-  patchSettings,
   putReminderRule,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -103,33 +101,14 @@ export function useReminders(userId: string) {
   const queryClient = useQueryClient();
   const calendarOrder = settings.data?.calendarOrder ?? NO_ORDER;
 
-  // Tell the server where this browser is. All-day reminders are a wall-clock
-  // time, so a user who only ever signs in on the web would otherwise have
-  // "the evening before at 18:00" mean 18:00 UTC.
-  const storedTimezone = settings.data?.timezone;
-  useEffect(() => {
-    if (!enabled || !settings.data) return;
-    const here = browserTimezone();
-    if (storedTimezone === here) return;
-
-    // The workspace caches the plain settings, which carry no revision; the
-    // document does, and this runs about once per browser.
-    void getSettingsDocument()
-      .then((document) =>
-        patchSettings({
-          baseRevision: document.revision,
-          patch: { timezone: here },
-        }),
-      )
-      .then(() =>
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.settings(origin, userId),
-        }),
-      )
-      // A conflict or an offline tab is not worth surfacing: the next load
-      // tries again, and the stored zone is only ever stale, never wrong.
-      .catch(() => undefined);
-  }, [enabled, origin, queryClient, settings.data, storedTimezone, userId]);
+  // This browser deliberately does NOT report its zone to the server.
+  //
+  // Nothing reads the stored value yet — every client resolves reminders with
+  // its own live zone, `browserTimezone()` above — so a write on page load
+  // would be a request and a settings revision bump that buys nothing today.
+  // The mobile app reports its zone on an existing settings refresh, which
+  // costs no extra request; the web gets a proper reporter when the server-side
+  // dispatcher in phase 2 actually needs one. See reference/reminders.
 
   return useMemo(
     (): ReminderControl | undefined =>
