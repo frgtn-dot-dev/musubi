@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" ADD COLUMN "notification_emails" jsonb DEFAULT '{"eventChanged":true,"pollDecided":true}'::jsonb NOT NULL;

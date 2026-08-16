@@ -2,10 +2,7 @@ import { Event } from "@musubi/types";
 import { EditScope, seriesEditWrites } from "@musubi/calendar";
 import { uuidv7 } from "uuidv7";
 import { chooseOption } from "@/lib/confirm";
-import {
-  getEventNotification,
-  upsertEventNotification,
-} from "@/services/notifications";
+import { reminderRules, setEventReminderRule } from "@/services/notifications";
 
 /**
  * Ask which occurrences an edit belongs to, then run the writes it produces.
@@ -71,13 +68,13 @@ export async function applySeriesEdit({
   }
   for (const create of creates) {
     await addEvent(create);
-    // A split gives the occurrence a new id, so its reminder does not follow by
-    // itself — the series keeps one and the detached event silently loses it.
-    const reminder = await getEventNotification(master.id).catch(() => null);
-    if (reminder) {
-      await upsertEventNotification(create, reminder.offsetMinutes).catch(
-        () => undefined,
-      );
+    // A split gives the occurrence a new id, so an OVERRIDE on the series does
+    // not follow by itself — the series keeps it and the detached event
+    // silently falls back to whatever its calendar says. Inherited rules need
+    // no copying: the new event is in the same calendars.
+    const override = reminderRules()?.events[master.id];
+    if (override) {
+      await setEventReminderRule(create, override).catch(() => undefined);
     }
   }
 

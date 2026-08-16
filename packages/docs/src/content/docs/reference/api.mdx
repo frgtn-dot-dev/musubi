@@ -136,12 +136,13 @@ Current event types:
 | `attendance_changed` | Refresh open attendee state |
 | `external_sync` | Silent delta refresh; do not trigger provider sync again |
 | `settings_updated` | Refetch settings; carries only `{ revision }` |
+| `reminders_updated` | Refetch reminder rules and reschedule; carries no payload |
 | `page_created` | Add the `PageDocument` in `data.page` |
 | `page_updated` | Replace the `PageDocument`; dedupe by `revision` |
 | `page_removed` | Drop the page id in `data.id`; the default may have moved |
 | `federated_sync` | Something changed on the connected server in `data.server`; refetch that server's data |
 
-Page and settings events fan out only to the acting user's own sessions,
+Page, settings, and reminder events fan out only to the acting user's own sessions,
 including the originating one, which discards the duplicate by revision.
 
 SSE is best-effort and has no replay buffer. The durable recovery path is event
@@ -240,6 +241,7 @@ does not allow `creatorID` or `originCalendarID` to change. The home
 | `POST /api/v1/calendars/invites` | `Invite` |
 | `GET /api/v1/calendars/:calendarId/invites` | Active invite records |
 | `DELETE /api/v1/calendars/invites/:inviteId` | Revoke immediately |
+| `POST /api/v1/calendars/invites/:inviteId/send` | `{ email }`; mails the EXISTING link, so revoking still kills every copy. Needs `invite` on that calendar and is capped at 20/hour per **account** — an IP cap would punish an office and miss a roaming phone |
 
 New invite members start as `viewer`. An invite can have nullable `expiresAt`
 (never expires) and nullable `maxUses` (unlimited); `uses` increments only for a
@@ -260,6 +262,41 @@ new membership.
 
 `Settings` is defined in `packages/types/src/settings.ts`. Optional fields are
 intentional so older clients cannot reset newer settings when saving.
+
+`timezone` and `defaultReminder` were added for reminders. The server keeps
+`notificationsOnByDefault` in step with `defaultReminder` in both directions, so
+an older client that knows only the boolean still turns reminders on and off for
+real — see [Reminders](/reference/reminders/).
+
+## Reminders
+
+| Method and path | Request / response |
+| --- | --- |
+| `GET /api/v1/reminders` | `{ default, calendars: {id: rule}, events: {id: rule} }` — only explicit choices |
+| `PUT /api/v1/reminders/calendars/:calendarId` | `{ rule }`; `null` inherits the global default. `403` for a non-member |
+| `PUT /api/v1/reminders/events/:eventId` | `{ rule }`; `null` clears the override. Requires only that the caller can *see* the event |
+| `DELETE /api/v1/reminders/events/:eventId` | Same as `PUT` with `rule: null` |
+
+The server stores rules, never a schedule: clients resolve what to ring with
+`resolveReminders` from `@musubi/calendar`.
+
+## Notification emails
+
+Sent because a **person** did something, as opposed to a reminder, which is a
+promise you made to yourself. Two switches in `settings.notificationEmails`
+(`eventChanged`, `pollDecided`), both on by default.
+
+| What | When | Batched |
+| --- | --- | --- |
+| An event moved or was cancelled | Only the start/end changing or `isCanceled` going true. Guests who have not declined, minus whoever made the change | Yes — `pending_notifications`, one email per person per batch |
+| A poll has a time | `POST /api/v1/scheduling/polls/:pollId/decide` | No — a poll is decided once, and half the participants may have no account |
+| A calendar invitation | Somebody typed an address and pressed send | No — transactional, and it has no preference for the same reason a password reset does not |
+
+Batched notifications wait `BATCH_DELAY_MS` (3 minutes) from the **first**
+change, never extended: rearranging an afternoon is one email, and somebody who
+keeps fiddling still tells people something. Rows are only deleted once the mail
+is accepted, so a failed send is retried — and abandoned after 24 hours, because
+nobody needs to hear on Tuesday that Monday moved.
 
 ## Pages
 

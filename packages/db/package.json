@@ -8,7 +8,7 @@
     "./migrate": "./src/migrate.ts"
   },
   "scripts": {
-    "test": "tsx src/schema.test.ts"
+    "test": "tsx src/schema.test.ts && tsx src/queries/settings.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",

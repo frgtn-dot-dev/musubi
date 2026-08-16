@@ -1,7 +1,22 @@
-import { SettingRowAction, SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
+import { SettingRowAction, SettingRowOptions, SettingRowPills, SettingRowToggle } from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
-import { CalendarView, SettingsPatch } from "@musubi/types";
+import {
+  allDayValue,
+  CalendarView,
+  DEFAULT_NOTIFICATION_EMAILS,
+  DEFAULT_REMINDER_RULE,
+  NotificationEmails,
+  optionsFor,
+  presetOptions,
+  presetRule,
+  presetValue,
+  ReminderRule,
+  SettingsPatch,
+  timedValue,
+  withAllDay,
+  withTimed,
+} from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -21,6 +36,8 @@ import Constants from "expo-constants";
 import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
+import { useEventsStore } from "@/store/useEventsStore";
+import { reminderRules, setCalendarReminderRule } from "@/services/notifications";
 
 const SUPPORT_EMAIL = "hello@frgtn.dev";
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -29,15 +46,20 @@ const PRIVACY_URL = "https://musubi.pro/privacy/";
 const TERMS_URL = "https://musubi.pro/terms/";
 
 
+// A calendar rule is absent, not silent, when it follows the global default —
+// so the control needs a value for "say nothing" that is not itself a rule.
+const FOLLOW_DEFAULT = "default";
+
 export default function SettingsTab() {
   const api = useApi();
   const { authClient, apiUrl } = useServer();
   const calendars = useCalendarsStore((state) => state.calendars);
+  const events = useEventsStore((state) => state.events);
+  const settingsDocument = useSettingsStore((state) => state.settingsDocument);
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
     showKanji, setShowKanji,
-    notificationsOnByDefault, setNotificationsOnByDefault,
     timeFormat, setTimeFormat,
     dateFormat, setDateFormat,
     theme, setTheme,
@@ -170,6 +192,30 @@ export default function SettingsTab() {
 
   // Autosave: settings persist the moment they change — no Save button to forget.
   // `patch` carries the just-changed value (store reads here would be stale).
+  // The bottom of the reminder chain is always a concrete rule, so an account
+  // whose settings predate the field still gives the pills something to show.
+  const defaultReminder = settingsDocument?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+
+  const notificationEmails =
+    settingsDocument?.value.notificationEmails ?? DEFAULT_NOTIFICATION_EMAILS;
+
+  const saveNotificationEmails = (patch: Partial<NotificationEmails>) => {
+    save({ notificationEmails: { ...notificationEmails, ...patch } });
+  };
+
+  const saveDefaultReminder = (rule: ReminderRule) => {
+    save({ defaultReminder: rule });
+  };
+
+  const saveCalendarReminder = (calendarID: string, rule: ReminderRule | null) => {
+    // Every event in the calendar may change, so the whole set is rescheduled.
+    setCalendarReminderRule(calendarID, rule, events).catch((e) => {
+      warn();
+      console.error("Calendar reminder save failed:", e);
+      showToast({ message: userFacingError(e, "That reminder could not be saved.") });
+    });
+  };
+
   const save = (patch: SettingsPatch) => {
     queueSettingsPatch(api, patch).catch((e) => {
       warn();
@@ -313,14 +359,63 @@ export default function SettingsTab() {
           }}
         />
 
-        <Text style={[styles.sectionLabel, local.sectionHeading]}>Notifications</Text>
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>Reminders</Text>
+        <SettingRowPills
+          label="Timed Events"
+          detail="Meetings and anything with a time"
+          value={timedValue(defaultReminder)}
+          options={optionsFor(defaultReminder, "timed")}
+          onChange={(value) => saveDefaultReminder(withTimed(defaultReminder, value))}
+        />
+        <SettingRowPills
+          label="All-day Events"
+          detail="Birthdays, holidays, anything without a time"
+          value={allDayValue(defaultReminder)}
+          options={optionsFor(defaultReminder, "allDay")}
+          onChange={(value) => saveDefaultReminder(withAllDay(defaultReminder, value))}
+        />
+
+        {calendars.length > 0 ? (
+          <>
+            <Text style={[styles.sectionLabel, local.sectionHeading]}>Reminders by Calendar</Text>
+            {calendars.map((calendar) => {
+              const rule = reminderRules()?.calendars[calendar.id];
+              return (
+                <SettingRowPills
+                  key={calendar.id}
+                  label={calendar.name}
+                  detail={rule ? undefined : "Following your default"}
+                  value={rule ? presetValue(rule) : FOLLOW_DEFAULT}
+                  options={[
+                    { label: "Default", value: FOLLOW_DEFAULT },
+                    ...presetOptions(rule),
+                  ]}
+                  onChange={(value) =>
+                    saveCalendarReminder(
+                      calendar.id,
+                      value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
+                    )
+                  }
+                />
+              );
+            })}
+          </>
+        ) : null}
+
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>Email Me When</Text>
         <SettingRowToggle
-          label="On by Default"
-          toggle={notificationsOnByDefault}
-          onToggle={() => {
-            setNotificationsOnByDefault(!notificationsOnByDefault);
-            save({ notificationsOnByDefault: !notificationsOnByDefault });
-          }}
+          label="An Event Moves or Is Cancelled"
+          toggle={notificationEmails.eventChanged}
+          onToggle={() =>
+            saveNotificationEmails({ eventChanged: !notificationEmails.eventChanged })
+          }
+        />
+        <SettingRowToggle
+          label="A Poll Gets a Time"
+          toggle={notificationEmails.pollDecided}
+          onToggle={() =>
+            saveNotificationEmails({ pollDecided: !notificationEmails.pollDecided })
+          }
         />
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Help & About</Text>

@@ -5,6 +5,7 @@ import { BadRequestError, type Event, EventSchema, ForbiddenError, NotFoundError
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
 import { assertCan, assertCanEditEvent, assertCanViewEvent, canDo } from "../permissions";
+import { dropEventNotifications, queueEventChange } from "../event_notifications";
 import { optionalDateQuery, optionalDateRangeQuery, requireUUID } from "../request_validation";
 
 const MAX_EVENT_RANGE_MS = 3 * 366 * 24 * 60 * 60 * 1000;
@@ -70,6 +71,10 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
 
   await assertCanEditEvent(req.user!.id, event.id!); // edit-content gated by home calendar
 
+  // Read before write: telling a guest "it moved" needs to know where from, and
+  // once the update lands that is gone.
+  const previous = await getEvent(event.id!);
+
   // Diff the calendar links: what got removed / added / kept.
   const existing = await getEventCalendars(event.id!);
   const incoming = event.calendars;
@@ -108,6 +113,12 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
     }
 
     notifyCalendarMembers([...memberIDSeen], "event_updated", result);
+
+    // Guests get an email if the TIME moved or it was called off; everything
+    // else is an edit, not news. Awaited so a failure is logged, not unhandled.
+    if (previous) {
+      await queueEventChange(previous, updatedEvent, req.user!.id);
+    }
 
     return res.status(200).json({ ...result, calendars: incoming });
   }
@@ -163,6 +174,11 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
     removed ? "event_removed" : "event_updated",
     removed ? result : { ...event, calendars: remaining },
   );
+
+  // A queued "it moved" about an event that no longer exists is a message about
+  // nothing. Deleting outright rather than converting to a cancellation: the
+  // guest list went with it, and the SSE has already taken it off their screen.
+  if (removed) await dropEventNotifications(event.id);
 
   return res.status(200).json(result);
 }

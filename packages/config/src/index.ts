@@ -123,6 +123,19 @@ type SocialConfig = {
   microsoftTenantID: string;
 };
 
+// Web Push (VAPID). OPTIONAL, like SMTP: a server without keys simply never
+// pushes, and every client keeps its own in-tab reminders. Generate a pair with
+// `npx web-push generate-vapid-keys` — they identify THIS server to the browser
+// vendors' push services, so they are per-install and the private one is a
+// secret.
+type PushConfig = {
+  vapidPublicKey: string;
+  vapidPrivateKey: string;
+  // "mailto:you@example.com" or an https URL. Push services require a way to
+  // contact whoever is sending, and reject a subject that is neither.
+  vapidSubject: string;
+};
+
 type SecurityConfig = {
   caldavEncKey: string;
   // Refuse sign-in until the address is confirmed. Off by default: a private
@@ -140,6 +153,7 @@ type SecurityConfig = {
 type Config = {
   api: APIConfig;
   db: DBConfig;
+  push: PushConfig;
   smtp: SMTPConfig;
   social: SocialConfig;
   security: SecurityConfig;
@@ -163,6 +177,30 @@ const apiConfig: APIConfig = {
   logLevel: parseLogLevel(process.env.LOG_LEVEL ?? "info"),
   metricsPort: parseMetricsPort(process.env.METRICS_PORT),
 };
+
+// A half-configured key pair is worse than none: the server would advertise a
+// public key the browser subscribes with, then fail every send with a signature
+// error nobody sees. Both or neither.
+function readPushConfig(): PushConfig {
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? "";
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY ?? "";
+  const vapidSubject = process.env.VAPID_SUBJECT ?? "";
+
+  if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
+    throw new Error(
+      "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together — one without the other advertises push this server cannot send.",
+    );
+  }
+  if (vapidPublicKey && !/^(mailto:|https:\/\/)/.test(vapidSubject)) {
+    throw new Error(
+      "VAPID_SUBJECT must be a mailto: address or an https URL — push services reject anything else.",
+    );
+  }
+
+  return { vapidPrivateKey, vapidPublicKey, vapidSubject };
+}
+
+const pushConfig = readPushConfig();
 
 // SMTP + Google are OPTIONAL — the API boots without them so local dev doesn't
 // need mail or OAuth set up. The features that use them fail/verify at call time
@@ -213,6 +251,7 @@ const securityConfig: SecurityConfig = {
 export const config: Config = {
   api: apiConfig,
   db: dbConfig,
+  push: pushConfig,
   smtp: smtpConfig,
   social: socialConfig,
   security: securityConfig,

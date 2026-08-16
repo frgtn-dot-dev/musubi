@@ -93,6 +93,7 @@ export default defineConfig({
 						{ label: "Commands & Checks", slug: "reference/commands" },
 						{ label: "Environment Variables", slug: "reference/environment" },
 						{ label: "HTTP API", slug: "reference/api" },
+						{ label: "Reminders", slug: "reference/reminders" },
 						{ label: "Glossary", slug: "architecture/glossary" },
 					],
 				},

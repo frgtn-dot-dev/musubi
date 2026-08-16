@@ -276,7 +276,37 @@ async function expectCalendarVisibility(
 	await dialog.getByRole("button", { name: "Close page settings" }).click();
 }
 
+/**
+ * Wait for anything moving to stop.
+ *
+ * A colour-contrast check on a half-faded element is a coin toss: axe reads the
+ * computed background through it and flags not just that element but everything
+ * visible underneath. One toast caught mid-fade produced sixty-four violations
+ * across a dialog that was fine.
+ *
+ * Looping animations (spinners) are skipped — they never finish, and waiting on
+ * one would hang the suite. A stuck animation degrades to scanning anyway
+ * rather than failing, because this is a guard, not an assertion.
+ */
+async function settleAnimations(page: Page) {
+	await page
+		.waitForFunction(
+			() =>
+				document
+					.getAnimations()
+					.filter(
+						(animation) =>
+							animation.effect?.getComputedTiming().iterations !== Infinity,
+					)
+					.every((animation) => animation.playState !== "running"),
+			undefined,
+			{ timeout: 2_000 },
+		)
+		.catch(() => undefined);
+}
+
 async function expectNoAccessibilityViolations(page: Page) {
+	await settleAnimations(page);
 	let results;
 	try {
 		results = await new AxeBuilder({ page }).analyze();
@@ -385,6 +415,33 @@ async function mockAuthenticatedReads(
 		}
 		return respond(route, calendarState);
 	});
+	// Asked for on every load since reminders landed. Unmocked they 500 against
+	// the dev server, and a test that only asserts "no console errors" then fails
+	// for a reason that has nothing to do with what it is testing.
+	await page.route("**/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			// No VAPID keys: the "notify me when this browser is closed" toggle
+			// stays hidden, which is the state most tests should see.
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: ["google"],
+		}),
+	);
+	await page.route("**/api/v1/reminders", (route) =>
+		respond(route, {
+			calendars: { work: { allDay: null, minutesBefore: 60 } },
+			default: {
+				allDay: { atMinute: 1080, daysBefore: 1 },
+				minutesBefore: 10,
+			},
+			events: {},
+		}),
+	);
+	await page.route("**/api/v1/reminders/**", (route) =>
+		route.fulfill({ body: "", status: 204 }),
+	);
 	await page.route("**/api/v1/pages", (route) => respond(route, [defaultPage]));
 	await page.route("**/api/v1/scheduling/polls/calendar", (route) =>
 		respond(route, []),
@@ -1494,24 +1551,42 @@ test("saves revisioned settings and applies display preferences", async ({
 	const settingsDialog = page.getByRole("dialog", { name: "Settings" });
 	const sectionHeadings = [
 		"Appearance",
-		"Notifications",
+		"Reminders",
+		"Reminders by calendar",
 		"Help & About",
 		"Account",
 	];
 	const sectionTops = await Promise.all(
 		sectionHeadings.map(
 			async (name) =>
-				(await settingsDialog.getByRole("heading", { name }).boundingBox())!.y,
+				// exact: the default is a substring match, and "Reminders" would
+				// otherwise also claim "Reminders by calendar".
+				(await settingsDialog
+					.getByRole("heading", { exact: true, name })
+					.boundingBox())!.y,
 		),
 	);
 	expect(sectionTops).toEqual([...sectionTops].sort((a, b) => a - b));
 
-	// The toggle is account-wide and worth having here, but the delivery is not:
-	// a browser sends no reminders, and a switch that says otherwise is a promise
-	// this client cannot keep.
-	await expect(settingsDialog).toContainText(
-		"Reminders are delivered by the Musubi app on your phone",
-	);
+	// Timed and all-day events are asked about separately: an offset cannot
+	// answer for a birthday, and the control must not pretend it can.
+	// `SettingsSection` is a labelled <section>, which is a region.
+	const remindersSection = settingsDialog
+		.getByRole("region")
+		.filter({ has: page.getByRole("heading", { exact: true, name: "Reminders" }) });
+	await expect(
+		remindersSection.getByRole("radiogroup", { name: "Timed events" }),
+	).toBeVisible();
+	await expect(
+		remindersSection.getByRole("radio", { name: "10 min" }),
+	).toHaveAttribute("aria-checked", "true");
+	await expect(
+		remindersSection.getByRole("radio", { name: "Evening before" }),
+	).toHaveAttribute("aria-checked", "true");
+
+	// A calendar with no rule of its own says so rather than showing a value it
+	// does not hold — the difference between inheriting and choosing.
+	await expect(settingsDialog).toContainText("Following your default");
 
 	await expect(
 		settingsDialog.getByRole("radiogroup", { name: "Theme" }),

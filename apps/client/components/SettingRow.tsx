@@ -1,5 +1,5 @@
 import { colors, fonts } from "@/constants/theme";
-import { Switch, View, Text } from "react-native";
+import { ScrollView, Switch, View, Text } from "react-native";
 import { Mode } from "@musubi/calendar";
 import { Tap } from "@/components/ui/Tap";
 import { Feather } from "@expo/vector-icons";
@@ -139,6 +139,85 @@ export function SettingRowOptions({
           );
         })}
       </View>
+    </View>
+  );
+}
+
+type PillsProps = {
+  label: string;
+  detail?: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (value: string) => void;
+};
+
+/**
+ * A label with its choices on the line below, scrolling sideways.
+ *
+ * `SettingRowOptions` puts the pills beside the label, which works for three
+ * and squashes at five. Reminder rules need more than three — "Off, 10 min,
+ * 30 min, 1 hour, 1 day" — and the set grows by one again whenever a rule from
+ * another device has no button here.
+ */
+export function SettingRowPills({ label, detail, value, options, onChange }: PillsProps) {
+  return (
+    <View style={{
+      borderColor: colors.line,
+      borderBottomWidth: 1,
+      gap: spacing[2],
+      paddingVertical: spacing[3],
+    }}>
+      <View style={{ gap: 2 }}>
+        <Text style={{ fontFamily: fonts.sans, fontSize: typeSizes[15], color: colors.fg2 }}>
+          {label}
+        </Text>
+        {detail ? (
+          <Text style={{ fontFamily: fonts.sans, fontSize: typeSizes[13], color: colors.fg3 }}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{
+          flexDirection: "row",
+          borderWidth: 1, borderColor: colors.line2, borderRadius: radii.pill, padding: 2, gap: 2,
+        }}>
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <Tap
+                key={option.value}
+                haptic="select"
+                onPress={() => onChange(option.value)}
+                accessibilityRole="radio"
+                accessibilityLabel={`${label}, ${option.label}`}
+                accessibilityState={{ checked: active }}
+                hitSlop={{ top: 8, bottom: 8 }}
+                style={{
+                  paddingHorizontal: spacing[3],
+                  paddingVertical: 5,
+                  borderRadius: radii.pill,
+                  borderCurve: "continuous",
+                  overflow: "hidden",
+                }}
+              >
+                {active ? (
+                  <View pointerEvents="none" style={{
+                    position: "absolute", inset: 0, borderRadius: radii.pill,
+                    backgroundColor: colors.fill,
+                  }} />
+                ) : null}
+                <Text style={{
+                  fontFamily: fonts.sans, fontSize: typeSizes[11],
+                  color: active ? colors.onFill : colors.fg2,
+                }}>
+                  {option.label}
+                </Text>
+              </Tap>
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 }

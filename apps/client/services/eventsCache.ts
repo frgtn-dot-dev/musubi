@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { Calendar, Event, Settings } from "@musubi/types";
+import { Calendar, Event, RemindersDocument, Settings } from "@musubi/types";
 import { db, sqlite } from "./db";
 import { eventsTable, syncMetaTable } from "@/db/schema";
 
@@ -151,6 +151,23 @@ export function cacheGetSettingsSync(): Settings | null {
     return row ? JSON.parse(row.value) : null;
   } catch {
     return null; // fresh install: the table appears once migrations run
+  }
+}
+
+// Reminder rules (same blob pattern). Cached so a cold, offline start can still
+// reschedule from the local event mirror — a reminder that only works once the
+// network answers is not a reminder.
+export async function cacheSetReminders(document: RemindersDocument) {
+  await setMeta("reminders", JSON.stringify(document));
+}
+
+export async function cacheGetReminders(): Promise<RemindersDocument | null> {
+  const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "reminders"));
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value) as RemindersDocument;
+  } catch {
+    return null;
   }
 }
 

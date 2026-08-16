@@ -43,6 +43,7 @@ import { toDateKey } from "../date-key";
 import type { EventFormValues } from "../event-form";
 import { getEditableCalendars } from "../event-permissions";
 import type { Notify } from "../notice";
+import type { ReminderControl } from "../reminder-control";
 
 import type { AttendanceChoice } from "../attendance";
 import { shortcutFor } from "../shortcuts";
@@ -153,6 +154,8 @@ type WorkspaceProps = {
     eventId: string;
     status: AttendanceChoice;
   }) => Promise<Attendee[]>;
+  /** Reminder rules plus the writer for them; absent hides the control. */
+  reminders?: ReminderControl;
   /**
    * Open the full editor for a draft. An event identifies an update; without
    * one it is a new event. Absent keeps the compact form expanding in place,
@@ -279,6 +282,7 @@ export function Workspace({
   onRemoveEvent,
   onOpenFullEditor,
   onSetAttendance = unavailableAttendance,
+  reminders,
   onSignOut,
   providerLink,
   onUpdateEvent,
@@ -1050,6 +1054,7 @@ export function Workspace({
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
+              reminders={reminders}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               user={user}
@@ -1100,6 +1105,7 @@ export function Workspace({
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
+              reminders={reminders}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               user={user}
@@ -1121,6 +1127,7 @@ export function Workspace({
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
+              reminders={reminders}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               user={user}
@@ -1178,6 +1185,7 @@ export function Workspace({
               onRemoveEvent={onRemoveEvent}
               onRestoreEvent={onCreateEvent}
               onSetAttendance={onSetAttendance}
+              reminders={reminders}
               onUpdateEvent={onUpdateEvent}
               timeFormat={settings.timeFormat}
               user={user}
@@ -1410,6 +1418,8 @@ export function Workspace({
         />
       ) : null}
       <SettingsDialog
+        calendars={calendars}
+        reminders={reminders}
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}
         onManageAccount={() => {

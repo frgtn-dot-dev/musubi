@@ -7,6 +7,7 @@ import {
   kickMember,
   leaveCalendar,
   revokeInvite,
+  sendInvite,
   setMemberRole,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -91,6 +92,11 @@ export function useCalendarSharing(userId: string, calendar: Calendar | null) {
     mutationFn: (inviteId: string) => revokeInvite(inviteId, connectionId),
     onSuccess: () => void invalidateInvites(),
   });
+  // No invalidation: sending a link neither creates nor changes one.
+  const send = useMutation({
+    mutationFn: (input: { email: string; inviteId: string }) =>
+      sendInvite(input.inviteId, input.email, connectionId),
+  });
 
   return {
     canInvite,
@@ -100,6 +106,7 @@ export function useCalendarSharing(userId: string, calendar: Calendar | null) {
     members,
     removeMember: remove.mutateAsync,
     revokeInvite: revoke.mutateAsync,
+    sendInvite: send.mutateAsync,
     setMemberRole: setRole.mutateAsync,
   };
 }

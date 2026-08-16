@@ -2,6 +2,7 @@ import { can, type Calendar } from "@musubi/types";
 import {
   Copy,
   Link2,
+  Send,
   ShieldCheck,
   Trash2,
   UserRoundMinus,
@@ -52,6 +53,7 @@ export function ShareCalendarDialog({
   const sharing = useCalendarSharing(userId, calendar);
   const { busy, error, run, setError } = useAsyncAction();
   const [transferMember, setTransferMember] = useState<CalendarMember>();
+  const [inviteEmail, setInviteEmail] = useState("");
   // What the next link will allow. It expires by default; the people cap stays
   // empty until the organizer needs one.
   const [expiresInDays, setExpiresInDays] = useState("7");
@@ -76,6 +78,37 @@ export function ShareCalendarDialog({
       setTransferMember(undefined);
     }
     onOpenChange(nextOpen);
+  }
+
+  /**
+   * Email an invitation, making a link first if there is not one already.
+   *
+   * The API sends an EXISTING invite, so revoking still kills every copy of a
+   * link however it travelled. Whether one existed already is not something the
+   * person typing an address should have to think about.
+   */
+  async function emailInvite() {
+    const address = inviteEmail.trim();
+    if (!address) return;
+
+    const sent = await run(async () => {
+      const existing = invites[0];
+      const target =
+        existing ??
+        (await sharing.createInvite({
+          expiresAt: expiresInDays
+            ? new Date(Date.now() + Number(expiresInDays) * 86_400_000)
+            : null,
+          maxUses: maxUses ? Number(maxUses) : null,
+        }));
+      await sharing.sendInvite({ email: address, inviteId: target.id });
+      return true;
+    }, "Could not send that invitation.");
+
+    if (sent) {
+      setInviteEmail("");
+      onNotice(`Invitation sent to ${address}.`);
+    }
   }
 
   async function copyLink(inviteId: string) {
@@ -327,6 +360,29 @@ export function ShareCalendarDialog({
                     onChange={(event) => setMaxUses(event.target.value)}
                   />
                 </label>
+                <label className={styles.inviteLimit}>
+                  <span>Invite by email</span>
+                  <input
+                    aria-label="Email an invitation"
+                    disabled={busy}
+                    placeholder="name@example.com"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void emailInvite();
+                    }}
+                  />
+                </label>
+                <Button
+                  disabled={!validLimits || !inviteEmail.trim()}
+                  icon={<Send size={16} strokeWidth={1.7} />}
+                  loading={busy}
+                  size="compact"
+                  onClick={() => void emailInvite()}
+                >
+                  Send
+                </Button>
                 <Button
                   className={styles.createInviteButton}
                   disabled={!validLimits}

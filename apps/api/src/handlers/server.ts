@@ -67,6 +67,11 @@ export function handlerServer(_: Request, res: Response) {
     // The client cannot infer this from a refused sign-in — "wrong password" and
     // "not confirmed yet" look the same from outside — so it is said here.
     emailVerificationRequired: config.security.requireEmailVerification,
+    // The VAPID public key, or null where this install has no keys. A browser
+    // needs it to subscribe at all, and its absence is the honest way to say
+    // "this server never pushes" — the client then keeps its own in-tab
+    // reminders instead of offering something that will not arrive.
+    pushPublicKey: config.push.vapidPublicKey || null,
   });
 }
 

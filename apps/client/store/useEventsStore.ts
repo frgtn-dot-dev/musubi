@@ -1,7 +1,7 @@
 import type { Event } from "@musubi/types";
 import type { useApi } from "@/services/api";
 import { create } from "zustand";
-import { cancelEventNotification, syncEventNotification } from "@/services/notifications";
+import { cancelEventNotification, syncScheduledReminders } from "@/services/notifications";
 import { cacheDeleteEvents, cacheUpsertEvents } from "@/services/eventsCache";
 
 type EventsStore = {
@@ -117,7 +117,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       events: [...state.events.filter(e => e.id !== event.id), event],
     }));
     await cacheUpsertEvents([event]).catch((e) => console.warn("Event cache write failed:", e));
-    void syncEventNotification(event).catch(() => { }); // reschedule if a reminder exists
+    // Scoped to this event: an SSE burst updates events one by one, and a full
+    // pass per message would re-resolve the whole calendar each time.
+    void syncScheduledReminders([event], { onlyEventIDs: [event.id] }).catch(() => { });
   },
   // Lost access to a calendar (kicked / calendar deleted): strip its link from
   // every event, drop events that lived only there — memory AND cache, so they

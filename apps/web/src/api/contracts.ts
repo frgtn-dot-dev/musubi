@@ -3,6 +3,7 @@ import {
   EventSchema,
   InviteSchema,
   PageDocumentSchema,
+  RemindersDocumentSchema,
   SettingsDocumentSchema,
   SettingsSchema,
 } from "@musubi/types";
@@ -37,6 +38,8 @@ export const RemoveEventResponseSchema = z.object({
 
 export const SettingsResponseSchema = SettingsSchema;
 export const SettingsDocumentResponseSchema = SettingsDocumentSchema;
+
+export const RemindersResponseSchema = RemindersDocumentSchema;
 
 export const PageResponseSchema = PageDocumentSchema;
 export const PagesResponseSchema = z.array(PageDocumentSchema);
@@ -239,6 +242,9 @@ export const ServerCapabilitiesSchema = z
     // login screen falls back accordingly.
     socialsWeb: z.array(z.string()).optional(),
     syncProviders: z.array(z.string()).default([]),
+    // VAPID public key, or null on a server with no push keys. Absent entirely
+    // on an API older than this field, which means the same thing.
+    pushPublicKey: z.string().nullish(),
   })
   .loose();
 

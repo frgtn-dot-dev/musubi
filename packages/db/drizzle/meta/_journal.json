@@ -316,6 +316,34 @@
       "when": 1786605411949,
       "tag": "0044_ambiguous_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1786787067150,
+      "tag": "0045_magical_lord_tyger",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1786862112863,
+      "tag": "0046_push_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786865464366,
+      "tag": "0047_notification_emails",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1786865603087,
+      "tag": "0048_pending_notifications",
+      "breakpoints": true
     }
   ]
 }

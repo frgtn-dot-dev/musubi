@@ -1,8 +1,11 @@
 import type {
+  Calendar,
+  ReminderRule,
   Settings,
   SettingsDocument,
   SettingsPatch,
 } from "@musubi/types";
+import { DEFAULT_NOTIFICATION_EMAILS, DEFAULT_REMINDER_RULE } from "@musubi/types";
 import {
   ExternalLink,
   LifeBuoy,
@@ -21,6 +24,21 @@ import {
   RowToggle,
 } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import type { ReminderControl } from "~/calendar/reminder-control";
+import {
+  allDayValue,
+  optionsFor,
+  presetOptions,
+  presetRule,
+  presetValue,
+  timedValue,
+  withAllDay,
+  withTimed,
+} from "@musubi/types";
+
+// A calendar rule is absent, not silent, when it follows the global default —
+// so the control needs a value for "say nothing" that is not a rule.
+const FOLLOW_DEFAULT = "default";
 import styles from "./styles/settings.module.css";
 
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -58,6 +76,9 @@ const DATE_FORMAT_OPTIONS = [
 ] as const;
 
 type SettingsDialogProps = {
+  /** For the per-calendar reminder rows; empty hides that section. */
+  calendars?: Calendar[];
+  reminders?: ReminderControl;
   onAdopt: (document: SettingsDocument) => void;
   onLoad: (signal?: AbortSignal) => Promise<SettingsDocument>;
   onManageAccount: () => void;
@@ -103,6 +124,8 @@ function withRequestId(message: string, error: unknown) {
 }
 
 export function SettingsDialog({
+  calendars = [],
+  reminders,
   onAdopt,
   onLoad,
   onManageAccount,
@@ -114,6 +137,8 @@ export function SettingsDialog({
   const [settings, setSettings] = useState<SettingsDocument>();
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -154,6 +179,49 @@ export function SettingsDialog({
     setError("");
     setSettings(undefined);
     setLoadAttempt((attempt) => attempt + 1);
+  }
+
+  // The bottom of the reminder chain is always a concrete rule, so a settings
+  // document that predates the field still gives the control something to show.
+  const defaultReminder = settings?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+  const notificationEmails =
+    settings?.value.notificationEmails ?? DEFAULT_NOTIFICATION_EMAILS;
+
+  function saveDefaultReminder(rule: ReminderRule) {
+    return save({ defaultReminder: rule });
+  }
+
+  async function togglePush(wanted: boolean) {
+    if (!reminders) return;
+    setPushBusy(true);
+    setPushMessage("");
+    try {
+      const enabled = await reminders.push.set(wanted);
+      // A refused prompt is an answer, not an error. Saying where to change it
+      // beats a toggle that springs back with no explanation.
+      if (wanted && !enabled) {
+        setPushMessage(
+          "Your browser refused notifications. Allow them for this site to turn this on.",
+        );
+      }
+    } catch {
+      setPushMessage("That could not be changed. Try again.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function saveCalendarReminder(
+    calendarId: string,
+    rule: ReminderRule | null,
+  ) {
+    if (!reminders) return;
+    try {
+      await reminders.onCalendarChange(calendarId, rule);
+      onNotice("Reminder saved.");
+    } catch {
+      setError("That reminder could not be saved.");
+    }
   }
 
   async function save(patch: SettingsPatch) {
@@ -319,20 +387,100 @@ export function SettingsDialog({
           </SettingsSection>
 
           <SettingsSection
-            // The setting is shared with the phone, the delivery is not: a
-            // browser reminder would need a service worker and a push
-            // subscription, which Musubi does not run. Saying so beats a toggle
-            // that quietly does nothing where you are standing.
-            description="Reminders are delivered by the Musubi app on your phone. This browser does not send them."
-            title="Notifications"
+            // What every calendar falls back to. A calendar can overrule it and
+            // a single event can overrule that, so this is the answer for
+            // everything nobody has said anything about.
+            description="The reminder an event gets when neither it nor its calendar says otherwise. The phone rings on its own; this browser only while a tab is open."
+            title="Reminders"
+          >
+            <RowOptions
+              detail="Meetings and anything with a time"
+              disabled={saving}
+              label="Timed events"
+              onChange={(value) => void saveDefaultReminder(withTimed(defaultReminder, value))}
+              options={optionsFor(defaultReminder, "timed")}
+              value={timedValue(defaultReminder)}
+            />
+            <RowOptions
+              detail="Birthdays, holidays, anything without a time"
+              disabled={saving}
+              label="All-day events"
+              onChange={(value) => void saveDefaultReminder(withAllDay(defaultReminder, value))}
+              options={optionsFor(defaultReminder, "allDay")}
+              value={allDayValue(defaultReminder)}
+            />
+            {reminders?.push.available ? (
+              <RowToggle
+                checked={reminders.push.enabled}
+                detail={
+                  pushMessage ||
+                  "Without this, reminders only appear while a Musubi tab is open"
+                }
+                disabled={saving || pushBusy}
+                label="Notify me when this browser is closed"
+                onCheckedChange={(wanted) => void togglePush(wanted)}
+              />
+            ) : null}
+          </SettingsSection>
+
+          {reminders && calendars.length > 0 ? (
+            <SettingsSection
+              // Per calendar and per MEMBER: this is what YOUR copy of a shared
+              // calendar does. Its owner has no say in when your phone rings.
+              description="Overrule the default for one calendar. A birthdays calendar wants the evening before; a holidays calendar usually wants nothing at all."
+              title="Reminders by calendar"
+            >
+              {calendars.map((calendar) => {
+                const rule = reminders.document.calendars[calendar.id];
+                return (
+                  <RowOptions
+                    detail={rule ? undefined : "Following your default"}
+                    disabled={saving}
+                    key={calendar.id}
+                    label={calendar.name}
+                    onChange={(value) =>
+                      void saveCalendarReminder(
+                        calendar.id,
+                        value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
+                      )
+                    }
+                    options={[
+                      { label: "Default", value: FOLLOW_DEFAULT },
+                      ...presetOptions(rule),
+                    ]}
+                    value={rule ? presetValue(rule) : FOLLOW_DEFAULT}
+                  />
+                );
+              })}
+            </SettingsSection>
+          ) : null}
+
+          <SettingsSection
+            // Not reminders: those are a promise you made about your own
+            // calendar. These arrive because somebody else did something.
+            description="Only when a person does something that affects you. Nothing here is a digest or a summary."
+            title="Email me when"
           >
             <RowToggle
-              checked={settings.value.notificationsOnByDefault}
-              detail="New events on any device start with a reminder"
+              checked={notificationEmails.eventChanged}
+              detail="Only the time changing or the event being called off — not every edit"
               disabled={saving}
-              label="On by default"
-              onCheckedChange={(notificationsOnByDefault) =>
-                void save({ notificationsOnByDefault })
+              label="An event I'm attending moves or is cancelled"
+              onCheckedChange={(eventChanged) =>
+                void save({
+                  notificationEmails: { ...notificationEmails, eventChanged },
+                })
+              }
+            />
+            <RowToggle
+              checked={notificationEmails.pollDecided}
+              detail="The one moment a poll actually has an answer"
+              disabled={saving}
+              label="A poll I answered gets a time"
+              onCheckedChange={(pollDecided) =>
+                void save({
+                  notificationEmails: { ...notificationEmails, pollDecided },
+                })
               }
             />
           </SettingsSection>

@@ -1,5 +1,11 @@
 import { relations } from "drizzle-orm";
 import { boolean, customType, index, jsonb, pgTable, text, timestamp, uuid, integer, unique } from "drizzle-orm/pg-core";
+import {
+  DEFAULT_NOTIFICATION_EMAILS,
+  DEFAULT_REMINDER_RULE,
+  type NotificationEmails,
+  type ReminderRule,
+} from "@musubi/types";
 
 // drizzle has no built-in bytea — minimal custom type
 const bytea = customType<{ data: Buffer }>({
@@ -162,6 +168,24 @@ export const userSettings = pgTable("user_settings", {
   onboarded: boolean("onboarded").notNull().default(false),
   // flat, user-chosen calendar order; group order derives from first appearance
   calendarOrder: jsonb("calendar_order").$type<string[]>().notNull().default([]),
+  // IANA zone. All-day reminders are a wall-clock time ("the evening before at
+  // 18:00"), which UTC cannot answer. Timed events need no zone — they are
+  // instants, and an offset from an instant is another instant.
+  timezone: text("timezone").notNull().default("UTC"),
+  // Bottom of the reminder inheritance chain, so always a concrete rule.
+  // `notificationsOnByDefault` above stays in step with it for older mobile
+  // clients, which read the boolean and know nothing about rules.
+  defaultReminder: jsonb("default_reminder")
+    .$type<ReminderRule>()
+    .notNull()
+    .default(DEFAULT_REMINDER_RULE),
+  // Emails about what OTHER people did — an event you are attending moving, a
+  // poll you answered being decided. Not reminders, which are a promise you
+  // made to yourself; these arrive unbidden, so they get their own switches.
+  notificationEmails: jsonb("notification_emails")
+    .$type<NotificationEmails>()
+    .notNull()
+    .default(DEFAULT_NOTIFICATION_EMAILS),
 });
 
 export type NewSettings = typeof userSettings.$inferInsert;
@@ -223,7 +247,6 @@ export const events = pgTable("events", {
   hasAttendees: boolean("has_attendees").notNull().default(false),
   organizer: text("organizer").notNull(),
   recurrence: text("recurrence"),
-  // reminders:
   url: text("url"),
   // home calendar — where the event was created / claimed. Edit-content is gated by
   // editEvents on THIS calendar; links into other calendars are read-only shares.
@@ -466,6 +489,10 @@ export const calendarMembers = pgTable("calendar_members", {
     })
     .notNull(),
   role: text("role").notNull().default("viewer"), // owner | editor | viewer
+  // MY reminder rule for this calendar, not the owner's. null = inherit the
+  // user's global default. Deliberately on the membership: letting a calendar
+  // owner set this would be a way to make somebody else's phone buzz.
+  reminder: jsonb("reminder").$type<ReminderRule>(),
 }, (t) => [unique().on(t.userID, t.calendarID)]); // re-join hits onConflictDoNothing instead of duplicating the membership
 
 export const calendarMembersRelations = relations(calendarMembers, ({ one }) => ({
@@ -527,6 +554,93 @@ export const eventUsers = pgTable("event_users", {
   // what it meant.
   status: text("status").notNull().default("going"),
 }, (t) => [unique().on(t.eventID, t.userID)]); // makes join idempotent (onConflictDoNothing)
+
+
+// A per-user reminder override on one event — the exception to whatever the
+// calendar rule says. Its own table rather than a column on `eventUsers`,
+// because there "no row = has not answered", and wanting a reminder is not an
+// answer: plenty of people want the nudge for something they are not attending.
+//
+// A row is always an explicit choice, "never" included. Inheriting is the
+// absence of a row.
+export const eventReminders = pgTable("event_reminders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  eventID: uuid("event_id")
+    .references(() => events.id, { onDelete: "cascade" })
+    .notNull(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  rule: jsonb("rule").$type<ReminderRule>().notNull(),
+}, (t) => [unique().on(t.eventID, t.userID)]);
+
+// One browser that has agreed to be pushed to. The endpoint is a URL at the
+// browser vendor's push service and IS the address, so it is the unique key —
+// the same person on a laptop and a phone browser is two rows, and re-granting
+// permission in the same browser returns the same endpoint rather than a second.
+//
+// `p256dh` and `auth` are the keys the payload is encrypted to, so the push
+// service relays a message it cannot read. Losing this table costs nothing but
+// a re-subscribe; there is no history here worth keeping.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  // Bumped on every successful send, so a dead endpoint is visible before the
+  // push service admits it with a 410.
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+}, (t) => [index("push_subscriptions_user_id_idx").on(t.userID)]);
+
+// An email waiting for its moment.
+//
+// Notifications about other people's actions are batched rather than sent the
+// instant they happen: somebody dragging twenty events across a week would
+// otherwise send twenty emails and earn Musubi a spam label. One row per
+// (person, kind, subject) collapses repeated tugs at the same thing into one.
+//
+// `dueAt` is set from the FIRST change and never pushed forward. Extending it
+// on every edit would mean somebody who keeps fiddling never tells anyone
+// anything.
+export const pendingNotifications = pgTable("pending_notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userID: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  /** What happened: "event_changed", and whatever comes later. */
+  kind: text("kind").notNull(),
+  /** What it happened to. Text, not a uuid FK — a poll is not an event. */
+  subjectID: text("subject_id").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  dueAt: timestamp("due_at").notNull(),
+}, (t) => [
+  unique().on(t.userID, t.kind, t.subjectID),
+  index("pending_notifications_due_at_idx").on(t.dueAt),
+]);
+
+// How far a scheduled job has already looked. One row per job, not per user:
+// "which slice of time has been dispatched" is the same question whoever is
+// asking. In the database rather than in memory so a restart neither re-sends
+// the last window nor skips it.
+export const dispatchCursors = pgTable("dispatch_cursors", {
+  name: text("name").primaryKey(),
+  value: timestamp("value").notNull(),
+});
+
+export const eventRemindersRelations = relations(eventReminders, ({ one }) => ({
+  event: one(events, { fields: [eventReminders.eventID], references: [events.id] }),
+  user: one(user, { fields: [eventReminders.userID], references: [user.id] }),
+}));
 
 
 export const eventUsersRelations = relations(eventUsers, ({ one }) => ({

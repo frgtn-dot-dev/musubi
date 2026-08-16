@@ -1,7 +1,7 @@
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { reconcileEventNotifications } from "@/services/notifications";
+import { storeReminderRules, syncScheduledReminders } from "@/services/notifications";
 import { syncFederatedAccounts } from "@/services/federation";
 import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
 import { refreshSettingsDocument } from "@/services/settingsSync";
@@ -103,7 +103,17 @@ export function useRefreshData() {
 
     loadEvents(kept);
     await cacheSetCalendars(calendars);
+
+    // Rules first, then reschedule: they are what decides which of these events
+    // ring at all, and a stale document would schedule the previous answer.
+    // Best-effort — the cached rules stand in when the request fails.
+    try {
+      const reminders = await api.getReminders();
+      if (reminders) await storeReminderRules(reminders);
+    } catch (e) {
+      console.error("Reminder rules load failed:", e);
+    }
     // fire-and-forget: drop reminders of gone events, refresh the rest
-    reconcileEventNotifications(kept).catch(() => { });
+    syncScheduledReminders(kept).catch(() => { });
   });
 }

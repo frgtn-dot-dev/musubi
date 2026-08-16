@@ -36,6 +36,20 @@
       "when": 1783886818052,
       "tag": "0004_fast_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786787380757,
+      "tag": "0005_drop_old_reminder_receipts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786787393210,
+      "tag": "0006_reminder_receipts",
+      "breakpoints": true
     }
   ]
 }

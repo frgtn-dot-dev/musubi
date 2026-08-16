@@ -14,6 +14,7 @@ import {
   PollSchema,
   PollSummarySchema,
   PublicEventSchema,
+  RemindersResponseSchema,
   RemoveEventResponseSchema,
   RsvpSummarySchema,
   ServerCapabilitiesSchema,
@@ -28,6 +29,7 @@ import {
   type CreatePageRequest,
   type Event,
   type PatchSettingsRequest,
+  type ReminderRule,
   type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
@@ -140,6 +142,45 @@ export function patchSettings(request: PatchSettingsRequest) {
   });
 }
 
+export function getReminders(signal?: AbortSignal) {
+  return apiRequest("/api/v1/reminders", {
+    responseSchema: RemindersResponseSchema,
+    signal,
+  });
+}
+
+/** `rule: null` clears an event override, or puts a calendar back to inheriting. */
+export function putReminderRule(
+  scope: "calendars" | "events",
+  id: string,
+  rule: ReminderRule | null,
+) {
+  return apiRequest(`/api/v1/reminders/${scope}/${id}`, {
+    body: { rule },
+    method: "PUT",
+    responseSchema: z.void(),
+  });
+}
+
+export function subscribePush(subscription: {
+  endpoint: string;
+  keys: { auth: string; p256dh: string };
+}) {
+  return apiRequest("/api/v1/push/subscriptions", {
+    body: subscription,
+    method: "POST",
+    responseSchema: z.void(),
+  });
+}
+
+export function unsubscribePush(input: { endpoint: string }) {
+  return apiRequest("/api/v1/push/subscriptions", {
+    body: input,
+    method: "DELETE",
+    responseSchema: z.void(),
+  });
+}
+
 export function createCalendar(calendar: Calendar) {
   return apiRequest("/api/v1/calendars", {
     body: calendar,
@@ -228,6 +269,18 @@ export function createInvite(
     method: "POST",
     responseSchema: InviteSchema,
   });
+}
+
+/** Send an existing invite link to an address. The link itself does not change. */
+export function sendInvite(
+  inviteId: string,
+  email: string,
+  connectionId?: string,
+) {
+  return apiRequest(
+    route(connectionId, `/api/v1/calendars/invites/${inviteId}/send`),
+    { body: { email }, method: "POST", responseSchema: z.void() },
+  );
 }
 
 export function revokeInvite(inviteId: string, connectionId?: string) {

@@ -50,7 +50,27 @@ const scheduledTaskSkips = new Counter({
   registers: [registry],
 });
 
-export type ScheduledTaskName = "cleanup" | "external_sync";
+const reminderPushes = new Counter({
+  name: "musubi_reminder_pushes_total",
+  help: "Web push reminders the dispatcher attempted, by outcome.",
+  labelNames: ["outcome"] as const,
+  registers: [registry],
+});
+
+// `gone` is not a failure: a browser that revoked permission or cleared its
+// storage answers 404/410, the subscription is dropped, and that is the system
+// working. Alerting on it would page somebody for a user closing a tab.
+export type ReminderPushOutcome = "failed" | "gone" | "sent";
+
+export function recordReminderPush(outcome: ReminderPushOutcome, count = 1) {
+  if (count > 0) reminderPushes.inc({ outcome }, count);
+}
+
+export type ScheduledTaskName =
+  | "cleanup"
+  | "external_sync"
+  | "notifications"
+  | "reminders";
 
 export function recordScheduledTaskSkip(task: ScheduledTaskName) {
   scheduledTaskSkips.inc({ task });

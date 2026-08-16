@@ -35,7 +35,7 @@ import {
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
 import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
-import { syncEventNotification } from "@/services/notifications";
+import { syncScheduledReminders } from "@/services/notifications";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
 
@@ -171,7 +171,7 @@ export default function EventDetailModal({
 			recurrence: excludeOccurrence(master.recurrence, event.start),
 		};
 		updateEvent(updated, api);
-		syncEventNotification(updated).catch(() => {});
+		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(() => {});
 		handleClose();
 	};
 	const deleteFollowing = () => {
@@ -183,7 +183,7 @@ export default function EventDetailModal({
 			recurrence: endSeriesBefore(master.recurrence, event.start),
 		};
 		updateEvent(updated, api);
-		syncEventNotification(updated).catch(() => {});
+		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(() => {});
 		handleClose();
 	};
 

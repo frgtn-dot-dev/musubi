@@ -1,6 +1,6 @@
 import { config, logger } from "@musubi/config";
 import { auth } from "@musubi/auth";
-import { initializeEmailCapability } from "@musubi/emails";
+import { canSendEmail, initializeEmailCapability } from "@musubi/emails";
 import {
   deleteExpiredInvites,
   deleteExpiredMemberTokens,
@@ -68,8 +68,19 @@ import {
   handlerCreateCalendarInvite,
   handlerGetCalendarInvites,
   handlerRevokeInvite,
+  handlerSendCalendarInvite,
 } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
+import {
+  handlerSubscribePush,
+  handlerUnsubscribePush,
+} from "./handlers/push";
+import {
+  handlerDeleteEventReminder,
+  handlerGetReminders,
+  handlerPutCalendarReminder,
+  handlerPutEventReminder,
+} from "./handlers/reminders";
 import { middlewareLogHandler } from "./middleware/log_handler";
 import {
   handlerGetSettings,
@@ -129,6 +140,8 @@ import {
   recordScheduledTaskSkip,
   startMetricsServer,
 } from "./metrics";
+import { dispatchDueReminders, pushEnabled } from "./reminder_dispatch";
+import { drainPendingNotifications } from "./notification_dispatch";
 import { nonOverlapping } from "./scheduling";
 import { acquireApiSingletonLock } from "./singleton";
 import { trustPrivateProxies } from "./middleware/proxy";
@@ -453,6 +466,15 @@ app.delete(
   requireAuth,
   wrap(handlerRevokeInvite),
 );
+// Makes the server send mail to an address the caller chose, so it is capped
+// per ACCOUNT — that is what an abuser has to keep creating, and an IP limit
+// would both punish an office and miss a roaming phone.
+app.post(
+  "/api/v1/calendars/invites/:inviteId/send",
+  requireAuth,
+  rateLimit(20, 60 * 60_000, { byUser: true }),
+  wrap(handlerSendCalendarInvite),
+);
 app.get(
   "/api/v1/calendars/:calendarId/members",
   requireAuth,
@@ -477,6 +499,36 @@ app.delete(
   "/api/v1/calendars/:calendarId/members/:userId",
   requireAuth,
   wrap(handlerKickMember),
+);
+
+// Reminders — one document per user (global default, per-calendar rules,
+// per-event overrides). Clients resolve the schedule themselves from it with
+// `resolveReminders` in @musubi/calendar; the server stores only the rules.
+app.get("/api/v1/reminders", requireAuth, wrap(handlerGetReminders));
+app.put(
+  "/api/v1/reminders/calendars/:calendarId",
+  requireAuth,
+  wrap(handlerPutCalendarReminder),
+);
+app.put(
+  "/api/v1/reminders/events/:eventId",
+  requireAuth,
+  wrap(handlerPutEventReminder),
+);
+app.delete(
+  "/api/v1/reminders/events/:eventId",
+  requireAuth,
+  wrap(handlerDeleteEventReminder),
+);
+
+// Web push. The public VAPID key rides on /api/v1/server with the rest of the
+// capabilities — a client that has to ask a second question to find out whether
+// push exists will ask it on every load.
+app.post("/api/v1/push/subscriptions", requireAuth, wrap(handlerSubscribePush));
+app.delete(
+  "/api/v1/push/subscriptions",
+  requireAuth,
+  wrap(handlerUnsubscribePush),
 );
 
 // Users & connections
@@ -595,6 +647,26 @@ async function syncExternalAccounts() {
   }
 }
 
+// Event reminders for browsers that are not open. The clients ring for
+// themselves while they are running; this covers the closed laptop. Every minute
+// because a reminder is a promise about a specific minute — a five-minute tick
+// would make "10 minutes before" mean somewhere between 5 and 10.
+async function dispatchReminders() {
+  const startedAt = performance.now();
+  try {
+    const { sent, users } = await dispatchDueReminders();
+    const fields = {
+      durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      sent,
+      users,
+    };
+    if (sent > 0) logger.info("reminders.dispatch.completed", fields);
+    else logger.debug("reminders.dispatch.completed", fields);
+  } catch (e) {
+    logger.error("reminders.dispatch.failed", { error: e });
+  }
+}
+
 const runCleanup = nonOverlapping(cleanupExpired, () => {
   recordScheduledTaskSkip("cleanup");
   logger.warn("cleanup.skipped", { reason: "previous_run_active" });
@@ -603,6 +675,28 @@ const runCleanup = nonOverlapping(cleanupExpired, () => {
 const runExternalSync = nonOverlapping(syncExternalAccounts, () => {
   recordScheduledTaskSkip("external_sync");
   logger.warn("sync.scheduler.skipped", { reason: "previous_run_active" });
+});
+
+const runReminders = nonOverlapping(dispatchReminders, () => {
+  recordScheduledTaskSkip("reminders");
+  logger.warn("reminders.dispatch.skipped", { reason: "previous_run_active" });
+});
+
+// Emails about what other people did. Separate from the reminder tick on
+// purpose: that one needs push keys, this one needs a mail server, and an
+// install can have either, both or neither.
+async function sendPendingNotifications() {
+  try {
+    const { sent } = await drainPendingNotifications();
+    if (sent > 0) logger.info("notifications.sent", { emails: sent });
+  } catch (e) {
+    logger.error("notifications.drain_failed", { error: e });
+  }
+}
+
+const runNotifications = nonOverlapping(sendPendingNotifications, () => {
+  recordScheduledTaskSkip("notifications");
+  logger.warn("notifications.skipped", { reason: "previous_run_active" });
 });
 
 async function start() {
@@ -631,6 +725,22 @@ async function start() {
 
   void runCleanup(); // run once at boot (setInterval's first tick is delayed)
   setInterval(() => void runCleanup(), 60 * 60 * 1000);
+
+  if (pushEnabled()) {
+    logger.info("reminders.dispatch.enabled");
+    setInterval(() => void runReminders(), 60_000);
+  } else {
+    // Not a warning: a server with no VAPID keys is a valid, complete install.
+    // Its clients still remind themselves while they are open.
+    logger.info("reminders.dispatch.disabled", { reason: "no_vapid_keys" });
+  }
+
+  if (canSendEmail()) {
+    logger.info("notifications.enabled");
+    setInterval(() => void runNotifications(), 60_000);
+  } else {
+    logger.info("notifications.disabled", { reason: "no_smtp" });
+  }
 
   if (config.api.externalSyncIntervalMin > 0) {
     logger.info("sync.scheduler.enabled", {

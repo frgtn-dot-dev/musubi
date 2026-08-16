@@ -9,6 +9,7 @@ import {
 	ensurePollParticipant,
 	getPollById,
 	getPollByToken,
+	getPollParticipants,
 	getCalendarMembers,
 	listActivePollsForCalendar,
 	listPollCalendarSlots,
@@ -26,7 +27,8 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "@musubi/types";
-import { config } from "@musubi/config";
+import { config, logger } from "@musubi/config";
+import { canSendEmail, getPollDecidedHtml, sendEmail } from "@musubi/emails";
 import type { Request, Response } from "express";
 import { assertCan } from "../permissions";
 import { pushEventToProviders } from "../sync/engine";
@@ -625,7 +627,54 @@ export async function handlerDecidePoll(req: Request, res: Response) {
 		result,
 	);
 
+	await announcePollDecision(poll, slot.start, pollUrl(poll.token));
+
 	res.status(200).json({ eventId: event.id, slotId: slot.id });
+}
+
+/**
+ * Tell everyone who answered what the answer was.
+ *
+ * Sent directly rather than through `pending_notifications`: a poll is decided
+ * once, so there is nothing to batch, and half the participants may have no
+ * account for a queue row to reference.
+ *
+ * Best-effort and awaited only as a group — the decision has already committed
+ * and the organizer is owed their response whatever the mail server thinks.
+ */
+async function announcePollDecision(
+	poll: { id: string; title: string },
+	start: Date,
+	url: string,
+) {
+	if (!canSendEmail()) return;
+
+	try {
+		const participants = await getPollParticipants(poll.id);
+		for (const participant of participants) {
+			const preferences = participant.notificationEmails;
+			// No settings row means no account, or an account that has never
+			// looked. Both read as the default, which is yes — they typed their
+			// address into this poll for exactly this answer.
+			if (preferences && !preferences.pollDecided) continue;
+
+			const when = new Intl.DateTimeFormat("en-GB", {
+				dateStyle: "full",
+				timeStyle: "short",
+				timeZone: "UTC",
+			}).format(start);
+
+			await sendEmail(
+				participant.email,
+				`${poll.title} has a time`,
+				getPollDecidedHtml(participant.name, poll.title, `${when} UTC`, url),
+			).catch((error) =>
+				logger.error("scheduling.decided_email_failed", { error, pollID: poll.id }),
+			);
+		}
+	} catch (error) {
+		logger.error("scheduling.decided_announce_failed", { error, pollID: poll.id });
+	}
 }
 
 /**

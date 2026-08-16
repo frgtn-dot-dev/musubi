@@ -34,9 +34,19 @@ pnpm check
 
 `check` is the contributor baseline. It validates release metadata and peer
 dependencies, typechecks the design system, native client, API, and web client,
-runs package self-checks and Vitest suites across config, email, auth, calendar,
-client, API, database, and web, lints both clients, then builds the web client
-and documentation site.
+runs package self-checks and Vitest suites across config, types, email, auth,
+calendar, client, API, database, and web, lints both clients, then builds the
+web client and documentation site.
+
+**`check` does not run the browser E2E suite.** It is a separate CI job because
+it needs a dev server and a Chromium download, and leaving it out keeps the
+baseline fast. The cost is real: a change can pass `check` and still break E2E,
+which is a thing that has happened. Before opening a pull request that touches
+the web client, run:
+
+```sh
+pnpm verify   # check, then the E2E suite
+```
 
 Run an individual layer while iterating:
 
@@ -47,6 +57,8 @@ Run an individual layer while iterating:
 | API TypeScript                         | `pnpm exec tsc -p apps/api/tsconfig.json --noEmit --skipLibCheck` |
 | Web TypeScript                         | `pnpm --filter @musubi/web typecheck`                             |
 | All existing self-checks               | `pnpm test`                                                       |
+| Browser E2E (Chromium, needs a dev server) | `pnpm test:e2e`                                               |
+| Everything, E2E included               | `pnpm verify`                                                     |
 | Docs production build + Pagefind index | `pnpm docs:build`                                                 |
 | Root Turbo build                       | `pnpm build`                                                      |
 | Client ESLint                          | `pnpm lint`                                                       |
