@@ -134,9 +134,9 @@ Left over from the Expo template, referenced nowhere:
   of the mark.
 - **No web manifest.** `/site.webmanifest` and `/manifest.json` are both 404, so
   neither site is installable and neither declares icons to the OS.
-- **The web app's favicon is not in the server-rendered HTML.** The link is
-  declared in `__root.tsx` and injected on hydration, so `curl https://musubi.pro/login`
-  contains no `favicon` at all. Anything reading raw HTML — some crawlers, some
-  link unfurlers — sees no icon for the app.
+- **The deployed web app is behind.** `curl https://musubi.pro/login` returns a
+  head with no icon at all. That is not a code fault: a local production build
+  of the current tree server-renders the icon links correctly, so the running
+  image simply predates them. It fixes itself on the next web deploy.
 - **The docs site still ships Astro's stock favicon** (see above). Whoever looks
   at a Musubi docs tab today sees a generic sparkle.
