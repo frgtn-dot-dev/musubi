@@ -79,6 +79,7 @@ Edit the `.env` you just downloaded and set your production values. Key variable
 | `APPLE_TEAM_ID` | Apple Developer Team ID — serves the apple-app-site-association file so iOS invite links open the app directly (universal links). Optional; unset → the Safari hand-off still works |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL` | Outgoing mail for password-reset, email-confirmation and account-deletion emails. Port 465 uses implicit TLS; other ports require STARTTLS. The API verifies SMTP once before listening; restart it after changing these values |
 | `REQUIRE_EMAIL_VERIFICATION` | `true` refuses sign-in until the address is confirmed. Needs SMTP; the API refuses to boot without it. See [Requiring confirmed email addresses](#requiring-confirmed-email-addresses) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push, so the server can send event reminders to a browser that is closed. Generate a pair with `npx web-push generate-vapid-keys`; they identify **this** server to the browser vendors' push services, so they are per-install and the private one is a secret. `VAPID_SUBJECT` must be a `mailto:` address or an https URL — push services reject anything else. The public and private keys must be set together: the API refuses to boot with one of them, because advertising a key it cannot sign with would let browsers subscribe to reminders that then fail silently on every send |
 | `CALDAV_ENC_KEY` | Encrypts stored CalDAV passwords and federated Musubi member tokens — required before anyone connects a CalDAV account or a federated calendar |
 | `PUBLIC_HOST` | The hostname the default gateway serves (e.g. `musubi.example.com` for automatic HTTPS, or `:80` behind another proxy). Dokploy sets its gateway to `:80` internally; configure its public hostname as a UI Domain |
 | `FEDERATION_ALLOW_PRIVATE_HOSTS` | Allows federating with a Musubi server on a private address. Off in production: the API fetches other servers on a user's behalf, so private targets are refused to prevent internal network probing. Set `true` only if you genuinely federate servers on a LAN or the same box |
@@ -129,7 +130,7 @@ domain or host port for the metrics listener. Set `METRICS_PORT=0` if metrics
 are not needed.
 
 <Aside type="caution">
-Required to boot: the `POSTGRES_*` credentials, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `ENVIRONMENT`. The Google, Microsoft, SMTP, and `CALDAV_ENC_KEY` variables are optional — the API starts without them and the matching feature stays off. SMTP capability is checked once before the API listens, so restart it after changing mail settings.
+Required to boot: the `POSTGRES_*` credentials, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `ENVIRONMENT`. The Google, Microsoft, SMTP, `VAPID_*`, and `CALDAV_ENC_KEY` variables are optional — the API starts without them and the matching feature stays off. SMTP capability is checked once before the API listens, so restart it after changing mail settings.
 </Aside>
 
 <Aside type="caution">
@@ -180,6 +181,18 @@ Password reset and account-deletion confirmation are fully self-contained: your 
 
 <Aside type="caution">
 Both of those flows send an email, so **without `SMTP_*` configured they don't work**: email/password users can't reset a forgotten password, and in-app account deletion can't be confirmed. The client adapts — the API reports whether it can send email (`GET /api/v1/server` → `email`), so the app hides "Forgotten password?" and, for deletion, tells the user to contact the administrator. As the operator you can still reset a password or delete an account directly in Postgres. If you offer email/password sign-in to real users, configure SMTP. The advertised capability is the result of the startup handshake, not a per-request probe; restart the API after changing SMTP. (Social-login users are unaffected by the reset gap — they have no password.)
+</Aside>
+
+<Aside type="note">
+Without `VAPID_*`, **reminders still work** — the phone schedules them locally
+and a browser rings while a Musubi tab is open. What you lose is the closed
+laptop at 8:50 for a nine o'clock meeting: only the server can cover that, and
+only with keys. The API reports whether it has them (`GET /api/v1/server` →
+`pushPublicKey`), so the web client hides the "notify me when this browser is
+closed" switch rather than offering something that will not arrive.
+
+Email notifications — an event you are attending moving, a poll being decided —
+need `SMTP_*` instead, and are similarly silent without it.
 </Aside>
 
 ## Requiring confirmed email addresses
