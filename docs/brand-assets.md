@@ -43,6 +43,21 @@ each themed variant is a separate file and both must exist.
 
 ## Web app — musubi.pro/app
 
+**The mark inside the app is a React component, not a file.**
+`apps/web/src/components/BrandMark.tsx` draws both arms as SVG paths, and it is
+the mark people actually look at — the sidebar, the login shell, every public
+page and every route state. It takes no file and no bucket URL, because it has
+to recolour itself: one arm is `currentColor` so it follows the text on either
+theme, the other is `var(--accent-primary)`. A bucket asset has its colours
+baked in and would go invisible on the light theme.
+
+Used by `Sidebar.tsx`, `AuthShell.tsx`, `RouteState.tsx`, `ProviderIcon.tsx`,
+`find-a-time.tsx`, `new-event.tsx`, `e.$token.tsx` and `s.$token.tsx`. Its size
+is set in CSS in three places — `workspace.module.css .brandMark`,
+`primitives.module.css .authBrand svg` and `.routeStateMark`,
+`provider-icon.module.css .musubiMark` — so a change of aspect ratio has to be
+followed there too.
+
 | Where | Asset |
 | --- | --- |
 | `apps/web/src/routes/__root.tsx:29` | `/favicon.svg` |
@@ -116,8 +131,10 @@ control, so a DAM is strictly better than what exists now.
 A DAM cannot own these as-is. Either they become files it manages, or they stay
 a manual step on every logo change.
 
-- `apps/web/public/favicon.svg` — the rings are `<circle>`/`<path>` with literal
-  coordinates and colours
+- `apps/web/src/components/BrandMark.tsx` — the mark the app itself shows, as
+  two SVG paths in a React component. This one cannot become a managed file: it
+  needs `currentColor` to survive both themes
+- `apps/web/public/favicon.svg` — literal coordinates and colours
 - `.github/assets/banner.svg` — mark, 結 and wordmark, all as SVG primitives
 
 ## Unused, and safe to delete
