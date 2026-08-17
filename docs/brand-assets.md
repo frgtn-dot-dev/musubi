@@ -9,6 +9,9 @@ marketing site at musubi.pro). Paths in the second are marked `website:`.
 
 Last walked: 2026-08-16.
 
+The format, pixel size and safe area each of these has to be produced at is in
+[`brand-asset-spec.md`](./brand-asset-spec.md).
+
 ## The mark itself
 
 Three hand-authored files. Everything else is either derived from one of these,
