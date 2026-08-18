@@ -732,6 +732,19 @@
 	color: var(--accent-primary);
 }
 
+/* Fixed, not `auto`: every row is its own grid, so an auto-sized marks column
+   is as wide as that row's own marks and the two columns after it start
+   somewhere different on every line. Two marks at 11px plus their gap. */
+.agendaEventMarks {
+	display: flex;
+	width: 26px;
+	justify-content: flex-end;
+}
+
+.agendaEventMarks .eventMarks {
+	margin-left: 0;
+}
+
 .agendaEventCopy {
 	display: grid;
 	min-width: 0;
