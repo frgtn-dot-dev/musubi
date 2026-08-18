@@ -425,14 +425,6 @@ class MusubiCalendarWidgetProvider : AppWidgetProvider() {
         firstOfMonth.get(Calendar.YEAR).toString().takeLast(2),
       )
       views.setTextViewText(
-        R.id.musubi_calendar_kanji,
-        MONTH_KANJI[firstOfMonth.get(Calendar.MONTH)],
-      )
-      views.setViewVisibility(
-        R.id.musubi_calendar_kanji,
-        if (snapshot.showKanji) View.VISIBLE else View.GONE,
-      )
-      views.setTextViewText(
         R.id.musubi_calendar_today,
         context.getString(R.string.musubi_calendar_widget_calendars),
       )
@@ -445,7 +437,6 @@ class MusubiCalendarWidgetProvider : AppWidgetProvider() {
       )
       listOf(
         R.id.musubi_calendar_year,
-        R.id.musubi_calendar_kanji,
         R.id.musubi_calendar_today,
       ).forEach { id ->
         setAdaptiveTextColor(
@@ -867,7 +858,3 @@ private data class WidgetPalette(
   val onAccent: Int,
 )
 
-private val MONTH_KANJI = listOf(
-  "一月", "二月", "三月", "四月", "五月", "六月",
-  "七月", "八月", "九月", "十月", "十一月", "十二月",
-)

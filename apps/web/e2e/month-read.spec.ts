@@ -205,7 +205,6 @@ const settings = {
 	defaultCalendarView: "month",
 	notificationsOnByDefault: true,
 	onboarded: true,
-	showKanji: true,
 	theme: "system",
 	timeFormat: "24h",
 	weekStartsOn: "monday",
@@ -689,7 +688,7 @@ test("keeps sign in clear and keyboard-usable on a narrow screen", async ({
 	await expect(email).toBeFocused();
 	await email.fill("not-an-email");
 	await page.getByLabel("Passphrase").fill("long-enough");
-	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { exact: true, name: "Continue" }).click();
 	await expect(page.getByRole("alert")).toHaveText(
 		"Enter a valid email address.",
 	);
@@ -1552,15 +1551,12 @@ test("saves revisioned settings and applies display preferences", async ({
 	const sectionHeadings = [
 		"Appearance",
 		"Reminders",
-		"Reminders by calendar",
 		"Help & About",
 		"Account",
 	];
 	const sectionTops = await Promise.all(
 		sectionHeadings.map(
 			async (name) =>
-				// exact: the default is a substring match, and "Reminders" would
-				// otherwise also claim "Reminders by calendar".
 				(await settingsDialog
 					.getByRole("heading", { exact: true, name })
 					.boundingBox())!.y,
@@ -1584,9 +1580,9 @@ test("saves revisioned settings and applies display preferences", async ({
 		remindersSection.getByRole("radio", { name: "Evening before" }),
 	).toHaveAttribute("aria-checked", "true");
 
-	// A calendar with no rule of its own says so rather than showing a value it
-	// does not hold — the difference between inheriting and choosing.
-	await expect(settingsDialog).toContainText("Following your default");
+	// Settings answers for events in general. What one calendar does is a fact
+	// about that calendar, and is asked there.
+	await expect(settingsDialog).not.toContainText("Reminders by calendar");
 
 	await expect(
 		settingsDialog.getByRole("radiogroup", { name: "Theme" }),
@@ -2623,10 +2619,10 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	);
 
 	// Rename
-	await page.getByRole("button", { name: "Rename Travel" }).click();
+	await page.getByRole("button", { name: "Settings for Travel" }).click();
 	await page.getByRole("textbox", { name: "Rename Travel" }).fill("Trips");
 	await page
-		.getByRole("dialog", { name: "Edit calendar" })
+		.getByRole("dialog", { name: "Calendar settings" })
 		.getByRole("button", { name: "Save", exact: true })
 		.click();
 	await expect(page.locator('[class*="toastRegion"]')).toContainText(
@@ -2762,7 +2758,7 @@ test("groups calendars by server and connected account", async ({ page }) => {
 	// with people here, the same as one kept on this server. The server renames it
 	// on the provider first and refuses if the account is somebody else's.
 	await expect(
-		googleGroup.getByRole("button", { name: "Rename Studio" }),
+		googleGroup.getByRole("button", { name: "Settings for Studio" }),
 	).toBeVisible();
 	await expect(
 		googleGroup.getByRole("button", { name: "Share Studio" }),
@@ -2781,6 +2777,72 @@ test("groups calendars by server and connected account", async ({ page }) => {
 		googleGroup.boundingBox(),
 	]);
 	expect(musubiBox?.y).toBeLessThan(googleBox?.y ?? 0);
+	const accessibility = await new AxeBuilder({ page })
+		.include('[role="dialog"]')
+		.analyze();
+	expect(accessibility.violations).toEqual([]);
+});
+
+test("keeps a calendar's reminder on the calendar, viewer or not", async ({
+	page,
+}) => {
+	const saved: Array<{ body: unknown; url: string }> = [];
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/reminders/calendars/**", (route) => {
+		saved.push({
+			body: route.request().postDataJSON() as unknown,
+			url: route.request().url(),
+		});
+		return route.fulfill({ body: "", status: 204 });
+	});
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page.getByRole("button", { name: "Calendars" }).click();
+	const dialog = page.getByRole("dialog", { name: "Calendars" });
+	await expect(dialog).toBeVisible();
+
+	// Family is shared with this account as an editor rather than owned, and the
+	// row still offers its settings: when your own phone rings is not the
+	// owner's call.
+	await dialog.getByRole("button", { name: "Settings for Family" }).click();
+	const sheet = page.getByRole("dialog", { name: "Calendar settings" });
+	await expect(sheet).toBeVisible();
+
+	const choices = sheet.getByRole("radiogroup", { name: "Remind me" });
+	await expect(choices).toBeVisible();
+	// No rule of its own yet, so it follows the account default.
+	await expect(sheet.getByRole("radio", { name: "Default" })).toHaveAttribute(
+		"aria-checked",
+		"true",
+	);
+
+	await sheet.getByRole("radio", { name: "Evening before" }).click();
+	await expect(page.locator('[class*="toastRegion"]')).toContainText(
+		"Reminder saved.",
+	);
+	expect(saved).toHaveLength(1);
+	expect(saved[0]?.url).toContain("/api/v1/reminders/calendars/family");
+	expect(saved[0]?.body).toEqual({
+		rule: { allDay: { atMinute: 1080, daysBefore: 1 }, minutesBefore: null },
+	});
+
+	// The label sits above the choices, so a five-option bar gets the full width
+	// instead of being squeezed into the half a row leaves it.
+	const [labelBox, choiceBox] = await Promise.all([
+		sheet.getByText("Remind me", { exact: true }).boundingBox(),
+		choices.boundingBox(),
+	]);
+	expect(labelBox!.y + labelBox!.height).toBeLessThanOrEqual(choiceBox!.y + 1);
+	// Every option readable: an option clipped to less than its text is the bug
+	// this row had when the label sat beside it.
+	for (const label of ["Off", "10 min", "1 hour", "Evening before"]) {
+		const option = choices.getByRole("radio", { exact: true, name: label });
+		const fits = await option.evaluate(
+			(node) => node.scrollWidth <= node.clientWidth + 1,
+		);
+		expect(fits, `${label} is clipped`).toBe(true);
+	}
+
 	const accessibility = await new AxeBuilder({ page })
 		.include('[role="dialog"]')
 		.analyze();
@@ -5725,7 +5787,7 @@ test("explains an unconfirmed address instead of blaming the passphrase", async 
 		.getByRole("textbox", { name: "Email" })
 		.fill("unconfirmed@example.com");
 	await page.getByLabel("Passphrase").fill("supersecret123");
-	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { exact: true, name: "Continue" }).click();
 
 	// The passphrase was right. Saying "check your details" here sends someone to
 	// reset a password that works.
@@ -5855,7 +5917,7 @@ test("shows only the passphrase form on a server with no OAuth", async ({
 		0,
 	);
 	await expect(page.getByText("or", { exact: true })).toHaveCount(0);
-	await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+	await expect(page.getByRole("button", { exact: true, name: "Continue" })).toBeVisible();
 });
 
 test("says so when a provider sign-in does not come back", async ({ page }) => {
@@ -7887,7 +7949,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
 		});
 	}
 	await page.getByLabel("Your name").fill("Zoe Novák");
-	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { exact: true, name: "Continue" }).click();
 
 	// Step two renames the calendar the server already made — it never creates one.
 	await expect(
@@ -7900,7 +7962,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
 		});
 	}
 	await page.getByLabel("Calendar name").fill("Home");
-	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { exact: true, name: "Continue" }).click();
 
 	await expect(
 		page.getByRole("heading", { level: 1, name: /Anything to bring/ }),
@@ -8202,7 +8264,7 @@ test("makes an event page from the public page with no account", async ({
 	await page.getByLabel("Where (optional)").fill("Studio, Brno");
 	// The length is kept when the start moves, rather than the event shrinking.
 	await expect(page.getByLabel("To")).toHaveValue("18:30");
-	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { exact: true, name: "Continue" }).click();
 
 	// Still nothing on the server: the address comes first.
 	expect(created).toBeUndefined();

@@ -18,8 +18,6 @@ type SettingsStore = {
   setDefaultCalendarView: (view: CalendarView) => void,
   weekStartsOn: "monday" | "sunday",
   setWeekStartsOn: (start: "monday" | "sunday") => void,
-  showKanji: boolean,
-  setShowKanji: (value: boolean) => void,
   notificationsOnByDefault: boolean,
   setNotificationsOnByDefault: (value: boolean) => void,
   timeFormat: "12h" | "24h",
@@ -59,10 +57,6 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setWeekStartsOn: (start) => set(() => ({
     weekStartsOn: start,
   })),
-  showKanji: true,
-  setShowKanji: (value) => set(() => ({
-    showKanji: value,
-  })),
   notificationsOnByDefault: true,
   setNotificationsOnByDefault: (value: boolean) => set(() => ({
     notificationsOnByDefault: value,
@@ -99,10 +93,10 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
 // the next cold start hydrates (theme included) before the first themed render
 // — no flash of the system theme while waiting for the server.
 useSettingsStore.subscribe((s) => {
-  const { showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn,
+  const { notificationsOnByDefault, defaultCalendarView, weekStartsOn,
     timeFormat, dateFormat, theme, onboarded, calendarOrder, tabBarLabels } = s;
   cacheSetSettings({
-    showKanji, notificationsOnByDefault, defaultCalendarView, weekStartsOn,
+    notificationsOnByDefault, defaultCalendarView, weekStartsOn,
     timeFormat, dateFormat, theme, onboarded, calendarOrder, tabBarLabels,
   }).catch(() => { }); // fresh install: the table appears once migrations run
 });

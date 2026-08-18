@@ -79,7 +79,6 @@ import {
 import type { Notify } from "../notice";
 import {
 	eventReminder,
-	inheritedFrom,
 	type EventReminder,
 	type ReminderControl,
 } from "../reminder-control";
@@ -462,7 +461,6 @@ export function EventDetailsPopover({
 
 	const reminder = reminders ? eventReminder(reminders, master) : undefined;
 	const reminderKind = master.isAllDay ? "allDay" : "timed";
-	const reminderSource = reminders ? inheritedFrom(reminders, master) : null;
 
 	async function handleReminder(value: string) {
 		if (!reminders || !reminder) return;
@@ -807,13 +805,6 @@ export function EventDetailsPopover({
 												</MenuContent>
 											</Menu>
 										</div>
-										{reminder.inherited ? (
-											<p>
-												{reminderSource
-													? `Following ${calendars.find((entry) => entry.id === reminderSource)?.name ?? "its calendar"}.`
-													: "Following your default."}
-											</p>
-										) : null}
 									</section>
 								) : null}
 

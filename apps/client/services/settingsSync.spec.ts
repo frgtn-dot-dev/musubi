@@ -110,19 +110,19 @@ describe("mobile settings sync", () => {
 
 	it("retries consecutive conflicts when remote changes are unrelated", async () => {
 		const remoteTheme = document(2, { ...base, theme: "dark" });
-		const remoteKanji = document(3, { ...remoteTheme.value, showKanji: false });
+		const remoteFormat = document(3, { ...remoteTheme.value, dateFormat: "ymd" });
 		const api = {
 			getSettingsDocument: vi
 				.fn()
 				.mockResolvedValueOnce(remoteTheme)
-				.mockResolvedValueOnce(remoteKanji),
+				.mockResolvedValueOnce(remoteFormat),
 			patchSettings: vi
 				.fn()
 				.mockRejectedValueOnce(new fake.Conflict())
 				.mockRejectedValueOnce(new fake.Conflict())
 				.mockResolvedValueOnce(
 					document(4, {
-						...remoteKanji.value,
+						...remoteFormat.value,
 						weekStartsOn: "sunday",
 					}),
 				),

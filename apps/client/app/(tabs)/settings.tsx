@@ -8,9 +8,6 @@ import {
   DEFAULT_REMINDER_RULE,
   NotificationEmails,
   optionsFor,
-  presetOptions,
-  presetRule,
-  presetValue,
   ReminderRule,
   SettingsPatch,
   timedValue,
@@ -37,19 +34,12 @@ import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { OptionPicker, type PickerOption } from "@/components/ui/OptionPicker";
-import { useEventsStore } from "@/store/useEventsStore";
-import { reminderRules, setCalendarReminderRule } from "@/services/notifications";
 
 const SUPPORT_EMAIL = "hello@frgtn.dev";
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
 const KOFI_URL = "https://ko-fi.com/frgtn";
 const PRIVACY_URL = "https://musubi.pro/privacy/";
 const TERMS_URL = "https://musubi.pro/terms/";
-
-
-// A calendar rule is absent, not silent, when it follows the global default —
-// so the control needs a value for "say nothing" that is not itself a rule.
-const FOLLOW_DEFAULT = "default";
 
 /** What the row shows on the right: whatever is stored, in the shared wording. */
 function reminderLabel(rule: ReminderRule, kind: "allDay" | "timed") {
@@ -61,7 +51,6 @@ export default function SettingsTab() {
   const api = useApi();
   const { authClient, apiUrl } = useServer();
   const calendars = useCalendarsStore((state) => state.calendars);
-  const events = useEventsStore((state) => state.events);
   const settingsDocument = useSettingsStore((state) => state.settingsDocument);
   const [picker, setPicker] = useState<{
     apply: (value: string) => void;
@@ -72,7 +61,6 @@ export default function SettingsTab() {
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
-    showKanji, setShowKanji,
     timeFormat, setTimeFormat,
     dateFormat, setDateFormat,
     theme, setTheme,
@@ -237,15 +225,6 @@ export default function SettingsTab() {
     save({ defaultReminder: rule });
   };
 
-  const saveCalendarReminder = (calendarID: string, rule: ReminderRule | null) => {
-    // Every event in the calendar may change, so the whole set is rescheduled.
-    setCalendarReminderRule(calendarID, rule, events).catch((e) => {
-      warn();
-      console.error("Calendar reminder save failed:", e);
-      showToast({ message: userFacingError(e, "That reminder could not be saved.") });
-    });
-  };
-
   const save = (patch: SettingsPatch) => {
     queueSettingsPatch(api, patch).catch((e) => {
       warn();
@@ -336,14 +315,6 @@ export default function SettingsTab() {
           }}
         />
         <SettingRowToggle
-          label="Show Kanji"
-          toggle={showKanji}
-          onToggle={() => {
-            setShowKanji(!showKanji);
-            save({ showKanji: !showKanji });
-          }}
-        />
-        <SettingRowToggle
           label="Tab Labels"
           toggle={tabBarLabels}
           onToggle={() => {
@@ -416,43 +387,6 @@ export default function SettingsTab() {
             )
           }
         />
-
-        {calendars.length > 0 ? (
-          <>
-            <Text style={[styles.sectionLabel, local.sectionHeading]}>Reminders by Calendar</Text>
-            {calendars.map((calendar) => {
-              const rule = reminderRules()?.calendars[calendar.id];
-              const choices = [
-                { label: "Default", value: FOLLOW_DEFAULT },
-                ...presetOptions(rule),
-              ];
-              return (
-                <SettingRowAction
-                  key={calendar.id}
-                  label={calendar.name}
-                  detail={rule ? undefined : "Following your default"}
-                  value={
-                    rule
-                      ? choices.find((choice) => choice.value === presetValue(rule))?.label
-                      : "Default"
-                  }
-                  onPress={() =>
-                    pickReminder(
-                      calendar.name,
-                      choices,
-                      rule ? presetValue(rule) : FOLLOW_DEFAULT,
-                      (value) =>
-                        saveCalendarReminder(
-                          calendar.id,
-                          value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
-                        ),
-                    )
-                  }
-                />
-              );
-            })}
-          </>
-        ) : null}
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Email Me When</Text>
         <SettingRowToggle

@@ -341,13 +341,13 @@ describe("row variants", () => {
     render(
       <RowToggle
         checked
-        label="Show kanji labels"
+        label="Show week numbers"
         onCheckedChange={onCheckedChange}
       />,
     );
 
     const toggle = screen.getByRole("switch", {
-      name: "Show kanji labels",
+      name: "Show week numbers",
     });
     expect(toggle.querySelectorAll("button")).toHaveLength(0);
     await user.click(toggle);
@@ -418,7 +418,7 @@ describe("SettingsSection", () => {
       <SettingsSection title="Appearance">
         <RowToggle
           checked
-          label="Show kanji"
+          label="Show week numbers"
           onCheckedChange={vi.fn()}
         />
       </SettingsSection>,
@@ -428,7 +428,7 @@ describe("SettingsSection", () => {
       screen.getByRole("heading", { level: 3, name: "Appearance" }),
     ).not.toBeNull();
     expect(screen.getByRole("region", { name: "Appearance" })).not.toBeNull();
-    expect(screen.getByRole("switch", { name: "Show kanji" })).not.toBeNull();
+    expect(screen.getByRole("switch", { name: "Show week numbers" })).not.toBeNull();
   });
 });
 

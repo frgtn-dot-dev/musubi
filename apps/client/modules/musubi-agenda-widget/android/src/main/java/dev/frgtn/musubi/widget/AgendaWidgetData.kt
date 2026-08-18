@@ -94,7 +94,6 @@ internal object AgendaWidgetData {
         timeFormat = json.optString("timeFormat", "24h"),
         events = events,
         weekStartsOn = json.optString("weekStartsOn", "monday"),
-        showKanji = json.optBoolean("showKanji", true),
         calendarDays = calendarDays,
       )
     } catch (_: Exception) {
@@ -182,7 +181,6 @@ internal data class WidgetSnapshot(
   val timeFormat: String,
   val events: List<WidgetEvent>,
   val weekStartsOn: String = "monday",
-  val showKanji: Boolean = true,
   val calendarDays: Map<String, CalendarWidgetDay> = emptyMap(),
 )
 

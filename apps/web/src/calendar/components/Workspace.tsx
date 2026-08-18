@@ -1310,6 +1310,7 @@ export function Workspace({
         onRemove={onRemoveCalendar}
         onUpdate={onUpdateCalendar}
         open={calendarTransfersOpen}
+        reminders={reminders}
       />
       {showConnections ? (
         <ConnectionsDialog
@@ -1418,7 +1419,6 @@ export function Workspace({
         />
       ) : null}
       <SettingsDialog
-        calendars={calendars}
         reminders={reminders}
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}

@@ -20,7 +20,7 @@ const VIEW_OPTIONS = [
 ] as const;
 
 function SettingsExample({ disabled = false }: { disabled?: boolean }) {
-  const [kanji, setKanji] = useState(true);
+  const [weekNumbers, setWeekNumbers] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("system");
   const [view, setView] = useState<"agenda" | "day" | "month" | "week">(
     "week",
@@ -37,11 +37,11 @@ function SettingsExample({ disabled = false }: { disabled?: boolean }) {
           onChange={setTheme}
         />
         <RowToggle
-          checked={kanji}
+          checked={weekNumbers}
           detail="Display Japanese day labels in the mini calendar"
           disabled={disabled}
-          label="Show kanji"
-          onCheckedChange={setKanji}
+          label="Show week numbers"
+          onCheckedChange={setWeekNumbers}
         />
         <RowOptions
           disabled={disabled}
@@ -94,7 +94,7 @@ export const Overview: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const toggle = canvas.getByRole("switch", { name: /^Show kanji/ });
+    const toggle = canvas.getByRole("switch", { name: /^Show week numbers/ });
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute("aria-checked", "false");
 

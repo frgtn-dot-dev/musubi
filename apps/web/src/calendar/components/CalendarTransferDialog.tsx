@@ -1,15 +1,19 @@
 import {
 	can,
 	DEFAULT_CALENDAR_COLOR,
+	presetOptions,
+	presetRule,
+	presetValue,
 	providerDisplayName,
 	providerFlavor,
 	type Calendar,
+	type ReminderRule,
 } from "@musubi/types";
 import {
 	Download,
 	FileUp,
-	Pencil,
 	Plus,
+	Settings2,
 	Trash2,
 	Unlink,
 	Users,
@@ -37,9 +41,10 @@ import {
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
-import { Row } from "~/ui/Row";
+import { Row, RowOptions } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { Select } from "~/ui/Select";
+import type { ReminderControl } from "~/calendar/reminder-control";
 import { connectionOfCalendar } from "../federation-routing";
 import { AccountMark } from "./ProviderIcon";
 import styles from "./styles/calendars.module.css";
@@ -69,6 +74,8 @@ export type CalendarTransferDialogProps = {
 	onRemove: (calendar: Calendar) => Promise<Calendar>;
 	onUpdate: (calendar: Calendar) => Promise<Calendar>;
 	open: boolean;
+	/** Absent hides the reminder row — a story need not build a rules document. */
+	reminders?: ReminderControl;
 };
 
 type TransferError = {
@@ -77,6 +84,10 @@ type TransferError = {
 };
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+
+// A calendar rule is absent, not silent, when it follows the global default —
+// so the control needs a value for "say nothing" that is not a rule.
+const FOLLOW_DEFAULT = "default";
 
 function transferError(error: unknown, fallback: string): TransferError {
 	return {
@@ -124,6 +135,7 @@ export function CalendarTransferDialog({
 	onRemove,
 	onUpdate,
 	open,
+	reminders,
 }: CalendarTransferDialogProps) {
 	const [exportCalendarId, setExportCalendarId] = useState(
 		calendars[0]?.id ?? "",
@@ -142,6 +154,7 @@ export function CalendarTransferDialog({
 	const [editCalendar, setEditCalendar] = useState<Calendar>();
 	const [deleteCalendar, setDeleteCalendar] = useState<Calendar>();
 	const [disconnectCalendar, setDisconnectCalendar] = useState<Calendar>();
+	const [createError, setCreateError] = useState<TransferError>();
 	const [deleteError, setDeleteError] = useState<TransferError>();
 	const [disconnectError, setDisconnectError] = useState<TransferError>();
 	const [busy, setBusy] = useState<
@@ -217,6 +230,7 @@ export function CalendarTransferDialog({
 			setDeleteCalendar(undefined);
 			setDisconnectCalendar(undefined);
 			setError(undefined);
+			setCreateError(undefined);
 			setDeleteError(undefined);
 			setDisconnectError(undefined);
 		}
@@ -250,11 +264,11 @@ export function CalendarTransferDialog({
 	async function handleCreate(submitEvent: FormEvent<HTMLFormElement>) {
 		submitEvent.preventDefault();
 		if (!newName.trim()) {
-			setError({ message: "Name the new calendar." });
+			setCreateError({ message: "Name the new calendar." });
 			return;
 		}
 		setBusy("create");
-		setError(undefined);
+		setCreateError(undefined);
 		try {
 			const calendar = await onCreate({
 				accountId: destination?.accountId,
@@ -269,8 +283,8 @@ export function CalendarTransferDialog({
 			);
 			setNewName("");
 			setNewColor(DEFAULT_CALENDAR_COLOR);
-		} catch (createError) {
-			setError(transferError(createError, "Could not create the calendar."));
+		} catch (failure) {
+			setCreateError(transferError(failure, "Could not create the calendar."));
 		} finally {
 			setBusy(undefined);
 		}
@@ -393,6 +407,7 @@ export function CalendarTransferDialog({
 						<SectionLabel level={2}>Your calendars</SectionLabel>
 					</div>
 
+					<div className={styles.create}>
 					<form className={styles.createBar} onSubmit={handleCreate}>
 						<label
 							className={styles.visuallyHidden}
@@ -434,6 +449,8 @@ export function CalendarTransferDialog({
 							Add
 						</Button>
 					</form>
+					{createError ? <ErrorMessage error={createError} /> : null}
+					</div>
 
 					<div className={styles.groups}>
 						{groups.map((group) => (
@@ -593,6 +610,7 @@ export function CalendarTransferDialog({
 						if (!nextOpen) setEditCalendar(undefined);
 					}}
 					onUpdate={onUpdate}
+					reminders={reminders}
 					returnFocus={editReturnFocusRef}
 				/>
 			) : null}
@@ -719,20 +737,21 @@ function CalendarGroup({
 												</IconButton>
 											)}
 										</span>
+										{/* Everyone gets this, editor or not: what it holds for a viewer
+                        is when their own phone rings, and the calendar's owner has
+                        no say in that. */}
 										<span className={styles.rowActionSlot}>
-											{editable ? (
-												<IconButton
-													disabled={busy}
-													label={`Rename ${calendar.name}`}
-													size="compact"
-													title="Edit calendar"
-													onClick={(event) =>
-														onEdit(calendar, event.currentTarget)
-													}
-												>
-													<Pencil size={15} strokeWidth={1.7} />
-												</IconButton>
-											) : null}
+											<IconButton
+												disabled={busy}
+												label={`Settings for ${calendar.name}`}
+												size="compact"
+												title="Calendar settings"
+												onClick={(event) =>
+													onEdit(calendar, event.currentTarget)
+												}
+											>
+												<Settings2 size={15} strokeWidth={1.7} />
+											</IconButton>
 										</span>
 										{/* Taking the calendar away, whichever form that takes here:
                         a synced one stops syncing, one of ours is deleted. */}
@@ -786,12 +805,14 @@ function EditCalendarDialog({
 	onNotice,
 	onOpenChange,
 	onUpdate,
+	reminders,
 	returnFocus,
 }: {
 	calendar: Calendar;
 	onNotice: (message: string) => void;
 	onOpenChange: (open: boolean) => void;
 	onUpdate: (calendar: Calendar) => Promise<Calendar>;
+	reminders?: ReminderControl;
 	returnFocus: RefObject<HTMLElement | null>;
 }) {
 	const [name, setName] = useState(calendar.name);
@@ -799,9 +820,25 @@ function EditCalendarDialog({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<TransferError>();
 	const inputRef = useRef<HTMLInputElement>(null);
+	// Naming it is an edit; deciding when it wakes your phone is not. A viewer
+	// opens this dialog for the reminder row alone.
+	const editable = can(calendar.role, "editCalendar");
+	const rule = reminders?.document.calendars[calendar.id];
 	const canSave =
+		editable &&
 		Boolean(name.trim()) &&
 		(name.trim() !== calendar.name || color !== calendar.color);
+
+	async function saveReminder(next: ReminderRule | null) {
+		if (!reminders) return;
+		setError(undefined);
+		try {
+			await reminders.onCalendarChange(calendar.id, next);
+			onNotice("Reminder saved.");
+		} catch (saveError) {
+			setError(transferError(saveError, "Could not save the reminder."));
+		}
+	}
 
 	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -822,10 +859,14 @@ function EditCalendarDialog({
 	return (
 		<Dialog
 			bodyLayout="flush"
-			closeLabel="Close calendar editor"
-			description="Change how this calendar is named and identified across Musubi."
+			closeLabel="Close calendar settings"
+			description={
+				editable
+					? "How this calendar looks across Musubi, and when it reminds you."
+					: "When this calendar reminds you. Only you see this."
+			}
 			footer={
-				<>
+				editable ? (
 					<Button
 						disabled={!canSave}
 						form="edit-calendar-form"
@@ -834,14 +875,14 @@ function EditCalendarDialog({
 					>
 						Save
 					</Button>
-				</>
+				) : undefined
 			}
-			initialFocus={inputRef}
+			initialFocus={editable ? inputRef : undefined}
 			onOpenChange={onOpenChange}
 			open
 			returnFocus={returnFocus}
 			size="compact"
-			title="Edit calendar"
+			title="Calendar settings"
 		>
 			<form
 				id="edit-calendar-form"
@@ -849,24 +890,49 @@ function EditCalendarDialog({
 			>
 				{/* Name and colour are the same decision — what this calendar looks like
             in a list — so they share one bar, the way a new calendar is made. */}
-				<div className={styles.editBar}>
-					<input
-						aria-label={`Rename ${calendar.name}`}
+				{editable ? (
+					<div className={styles.editBar}>
+						<input
+							aria-label={`Rename ${calendar.name}`}
+							disabled={busy}
+							maxLength={80}
+							ref={inputRef}
+							value={name}
+							onChange={(event) => setName(event.target.value)}
+						/>
+						<ColorPicker
+							className={styles.formColorPicker}
+							disabled={busy}
+							label={`${calendar.name} color`}
+							provider={calendar.provider}
+							value={color}
+							onChange={setColor}
+						/>
+					</div>
+				) : null}
+				{/* Saves on its own rather than waiting for the footer: it is per member,
+            it goes to a different endpoint, and it is the only thing in here a
+            viewer can touch. */}
+				{reminders ? (
+					<RowOptions
+						className={styles.reminderRow}
 						disabled={busy}
-						maxLength={80}
-						ref={inputRef}
-						value={name}
-						onChange={(event) => setName(event.target.value)}
+						label="Remind me"
+						stacked
+						options={[
+							{ label: "Default", value: FOLLOW_DEFAULT },
+							...presetOptions(rule),
+						]}
+						value={rule ? presetValue(rule) : FOLLOW_DEFAULT}
+						onChange={(value) =>
+							void saveReminder(
+								value === FOLLOW_DEFAULT
+									? null
+									: (presetRule(value) ?? rule ?? null),
+							)
+						}
 					/>
-					<ColorPicker
-						className={styles.formColorPicker}
-						disabled={busy}
-						label={`${calendar.name} color`}
-						provider={calendar.provider}
-						value={color}
-						onChange={setColor}
-					/>
-				</div>
+				) : null}
 				{error ? <ErrorMessage error={error} compact /> : null}
 			</form>
 		</Dialog>

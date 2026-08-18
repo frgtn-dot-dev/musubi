@@ -232,7 +232,13 @@ export function AgendaView({
 															</span>
 														) : null}
 													</span>
-													<EventMarks event={event} />
+													{/* Always the cell, even when there is nothing to put in it:
+													    EventMarks renders null for a plain event, and a missing
+													    grid item slid the calendar name and the chevron a whole
+													    column left on every one of those rows. */}
+													<span className={styles.agendaEventMarks}>
+														<EventMarks event={event} />
+													</span>
 													<span className={styles.agendaEventCalendar}>
 														{calendar?.name ?? "Calendar"}
 													</span>
