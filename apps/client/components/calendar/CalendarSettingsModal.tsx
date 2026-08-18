@@ -6,7 +6,14 @@ import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { Calendar, can, providerDisplayName } from "@musubi/types";
+import {
+  Calendar,
+  can,
+  presetOptions,
+  presetRule,
+  presetValue,
+  providerDisplayName,
+} from "@musubi/types";
 import { confirm } from "@/lib/confirm";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
@@ -23,6 +30,13 @@ import { warn } from "@/lib/haptics";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
 import { disconnectFederatedServer } from "@/services/federation";
+import { OptionPicker } from "@/components/ui/OptionPicker";
+import { SettingRowAction } from "@/components/SettingRow";
+import { reminderRules, setCalendarReminderRule } from "@/services/notifications";
+
+// A calendar rule is absent, not silent, when it follows the global default —
+// so the control needs a value for "say nothing" that is not itself a rule.
+const FOLLOW_DEFAULT = "default";
 
 
 type Props = {
@@ -41,6 +55,34 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   const [rolesVisible, setRolesVisible] = useState(false);
   const [invitesVisible, setInvitesVisible] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [reminderPicker, setReminderPicker] = useState(false);
+  const events = useEventsStore((state) => state.events);
+
+  /**
+   * This calendar's reminder, per member. It sits here rather than in Settings
+   * because it is a fact about the calendar, and because a list of every
+   * calendar was a screen nobody scrolled to the bottom of.
+   */
+  const rule = calendar ? reminderRules()?.calendars[calendar.id] : undefined;
+  const reminderChoices = [
+    { label: "Default", value: FOLLOW_DEFAULT },
+    ...presetOptions(rule),
+  ];
+  const reminderValue = rule ? presetValue(rule) : FOLLOW_DEFAULT;
+
+  const saveReminder = (next: string) => {
+    if (!calendar) return;
+    // Every event in the calendar may change, so the whole set is rescheduled.
+    setCalendarReminderRule(
+      calendar.id,
+      next === FOLLOW_DEFAULT ? null : (presetRule(next) ?? rule ?? null),
+      events,
+    ).catch((e) => {
+      warn();
+      console.error("Calendar reminder save failed:", e);
+      showToast({ message: userFacingError(e, "That reminder could not be saved.") });
+    });
+  };
 
   // One-shot .ics snapshot: fetch → temp file → OS share sheet.
   const exportCalendar = async () => {
@@ -191,6 +233,14 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.container}>
+                <SettingRowAction
+                  label="Remind Me"
+                  value={
+                    reminderChoices.find((choice) => choice.value === reminderValue)?.label
+                  }
+                  onPress={() => setReminderPicker(true)}
+                />
+
                 <View style={{ gap: 8 }}>
                   {showInvite && (
                   <Btn
@@ -287,6 +337,14 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
         calendar={calendar}
         visible={rolesVisible}
         onClose={() => setRolesVisible(false)}
+      />
+      <OptionPicker
+        visible={reminderPicker}
+        title="Remind Me"
+        options={reminderChoices}
+        value={reminderValue}
+        onSelect={saveReminder}
+        onClose={() => setReminderPicker(false)}
       />
       <InvitesModal
         calendar={calendar}

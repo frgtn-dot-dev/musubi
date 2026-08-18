@@ -1,5 +1,4 @@
 import type {
-  Calendar,
   ReminderRule,
   Settings,
   SettingsDocument,
@@ -28,17 +27,10 @@ import type { ReminderControl } from "~/calendar/reminder-control";
 import {
   allDayValue,
   optionsFor,
-  presetOptions,
-  presetRule,
-  presetValue,
   timedValue,
   withAllDay,
   withTimed,
 } from "@musubi/types";
-
-// A calendar rule is absent, not silent, when it follows the global default —
-// so the control needs a value for "say nothing" that is not a rule.
-const FOLLOW_DEFAULT = "default";
 import styles from "./styles/settings.module.css";
 
 const FEEDBACK_URL = "https://feedback.musubi.pro/";
@@ -76,8 +68,7 @@ const DATE_FORMAT_OPTIONS = [
 ] as const;
 
 type SettingsDialogProps = {
-  /** For the per-calendar reminder rows; empty hides that section. */
-  calendars?: Calendar[];
+  /** Only for the push toggle here — a calendar's own rule lives on the calendar. */
   reminders?: ReminderControl;
   onAdopt: (document: SettingsDocument) => void;
   onLoad: (signal?: AbortSignal) => Promise<SettingsDocument>;
@@ -124,7 +115,6 @@ function withRequestId(message: string, error: unknown) {
 }
 
 export function SettingsDialog({
-  calendars = [],
   reminders,
   onAdopt,
   onLoad,
@@ -208,19 +198,6 @@ export function SettingsDialog({
       setPushMessage("That could not be changed. Try again.");
     } finally {
       setPushBusy(false);
-    }
-  }
-
-  async function saveCalendarReminder(
-    calendarId: string,
-    rule: ReminderRule | null,
-  ) {
-    if (!reminders) return;
-    try {
-      await reminders.onCalendarChange(calendarId, rule);
-      onNotice("Reminder saved.");
-    } catch {
-      setError("That reminder could not be saved.");
     }
   }
 
@@ -422,38 +399,6 @@ export function SettingsDialog({
               />
             ) : null}
           </SettingsSection>
-
-          {reminders && calendars.length > 0 ? (
-            <SettingsSection
-              // Per calendar and per MEMBER: this is what YOUR copy of a shared
-              // calendar does. Its owner has no say in when your phone rings.
-              description="Overrule the default for one calendar. A birthdays calendar wants the evening before; a holidays calendar usually wants nothing at all."
-              title="Reminders by calendar"
-            >
-              {calendars.map((calendar) => {
-                const rule = reminders.document.calendars[calendar.id];
-                return (
-                  <RowOptions
-                    detail={rule ? undefined : "Following your default"}
-                    disabled={saving}
-                    key={calendar.id}
-                    label={calendar.name}
-                    onChange={(value) =>
-                      void saveCalendarReminder(
-                        calendar.id,
-                        value === FOLLOW_DEFAULT ? null : presetRule(value) ?? rule ?? null,
-                      )
-                    }
-                    options={[
-                      { label: "Default", value: FOLLOW_DEFAULT },
-                      ...presetOptions(rule),
-                    ]}
-                    value={rule ? presetValue(rule) : FOLLOW_DEFAULT}
-                  />
-                );
-              })}
-            </SettingsSection>
-          ) : null}
 
           <SettingsSection
             // Not reminders: those are a promise you made about your own

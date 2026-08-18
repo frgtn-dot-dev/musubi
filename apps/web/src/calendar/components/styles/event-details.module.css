@@ -189,6 +189,13 @@
   color: var(--text-muted);
 }
 
+/* The control belongs at the far end of the heading, not tucked against the
+   label. Pushed rather than `space-between`, because a heading with nothing
+   trailing it — Notes — would otherwise fling its own label to the right edge. */
+.sectionHeading .answerTrigger {
+  margin-left: auto;
+}
+
 .notes p,
 .attendeeSection p {
   margin: 0;

@@ -75,6 +75,18 @@
 	line-height: 1.45;
 }
 
+/* Bar and its complaint share one block, so the message lands under the field
+   that caused it rather than at the far bottom of the dialog. */
+.create {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0 var(--layer-inline) var(--space-5);
+}
+
+.create > .error {
+	margin: 0;
+}
+
 .createBar {
 	display: grid;
 	/* Name, where, colour, add. The destination column collapses to nothing when
@@ -82,7 +94,6 @@
 	grid-template-columns: minmax(0, 1fr) auto auto auto;
 	align-items: center;
 	gap: var(--space-2);
-	margin: 0 var(--layer-inline) var(--space-5);
 	padding: var(--space-2);
 	border: 1px solid var(--border-medium);
 	border-radius: var(--radius-lg);
@@ -119,18 +130,27 @@
 
 .groups {
 	display: grid;
-	gap: var(--space-5);
 }
 
 .group {
 	display: grid;
 }
 
+/* A band, not a line of text. With four accounts connected the list is one long
+   run of near-identical rows, and a heading that shares the rows' background
+   reads as another row rather than as the seam between two accounts. It sticks
+   because `.groups` is the scroller here: the account you are looking at stays
+   named while you scroll through its calendars. */
 .groupHeader {
+	position: sticky;
+	top: 0;
+	z-index: 1;
 	display: flex;
 	align-items: center;
 	gap: var(--space-3);
-	padding: 0 var(--layer-inline) var(--space-2);
+	padding: var(--space-2) var(--layer-inline);
+	border-block: 1px solid var(--border-subtle);
+	background: var(--surface-sunken);
 }
 
 .groupHeader h3,
@@ -154,7 +174,6 @@
 .list {
 	margin: 0;
 	padding: 0;
-	border-top: 1px solid var(--border-subtle);
 	list-style: none;
 }
 
@@ -355,6 +374,13 @@
 	composes: createBar;
 	grid-template-columns: minmax(0, 1fr) auto;
 	margin: var(--space-4) var(--layer-inline);
+}
+
+/* A settings row inside a form, so it drops the list divider the primitive
+   draws for a run of rows and lines up with the bar above it. */
+.reminderRow {
+	padding: var(--space-2) var(--layer-inline);
+	border-bottom: 0;
 }
 
 .error p,

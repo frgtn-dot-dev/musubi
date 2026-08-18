@@ -54,16 +54,3 @@ export function eventReminder(
     ),
   };
 }
-
-/** Which calendar the inherited rule came from, for a label worth reading. */
-export function inheritedFrom(
-  control: ReminderControl,
-  event: { calendars?: readonly string[] },
-) {
-  const inEvent = new Set(event.calendars ?? []);
-  const ordered = [
-    ...control.calendarOrder.filter((id) => inEvent.has(id)),
-    ...[...inEvent].filter((id) => !control.calendarOrder.includes(id)).sort(),
-  ];
-  return ordered.find((id) => control.document.calendars[id]) ?? null;
-}
