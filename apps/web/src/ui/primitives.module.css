@@ -692,11 +692,15 @@
 	--segmented-height: var(--control-height);
 }
 
+/* `flex-basis: auto`, not the `0` that `flex: 1` implies. With a basis of zero
+   every option got an equal share of the bar, so "Off" sat in a third of the
+   width it needed while "Evening before" was clipped mid-word beside it. Each
+   option now starts at its own text and only shares out what is left over. */
 .segmentedOption {
 	display: inline-flex;
 	min-width: 0;
 	min-height: calc(var(--segmented-height) - 6px);
-	flex: 1;
+	flex: 1 1 auto;
 	align-items: center;
 	justify-content: center;
 	overflow: hidden;
@@ -706,6 +710,13 @@
 	background: transparent;
 	color: var(--text-secondary);
 	font-size: var(--text-11);
+}
+
+/* The label carries the ellipsis for the case where it still does not fit:
+   `text-overflow` does nothing on the button, which is a flex container. */
+.segmentedLabel {
+	min-width: 0;
+	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -1149,6 +1160,22 @@
 
 .rowOptions {
 	flex: none;
+}
+
+/* Label on its own line, choices across the full width. The narrow-viewport
+   rules further down do the same thing for every options row; this is the
+   opt-in for a row that needs it at any width. */
+.row[data-row-options="stacked"] {
+	flex-wrap: wrap;
+}
+
+.row[data-row-options="stacked"] .rowCopy {
+	flex-basis: 100%;
+}
+
+.row[data-row-options="stacked"] .rowOptions {
+	width: 100%;
+	max-width: none;
 }
 
 .settingsSectionRows .rowAction:focus-visible {

@@ -116,7 +116,7 @@ export function Segmented<Value extends string>({
             onClick={() => choose(index)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
-            {option.label}
+            <span className={styles.segmentedLabel}>{option.label}</span>
           </button>
         );
       })}

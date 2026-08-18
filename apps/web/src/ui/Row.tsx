@@ -196,6 +196,12 @@ export type RowOptionsProps<Value extends string> = Omit<
     onChange: (value: Value) => void;
     options: ReadonlyArray<SegmentedOption<Value>>;
     size?: RowSize;
+    /**
+     * Label above the choices instead of beside them. For a narrow surface, or
+     * a choice set whose labels are words rather than numbers — side by side,
+     * the two halves fight over the same line and both lose.
+     */
+    stacked?: boolean;
     value: Value;
   };
 
@@ -208,6 +214,7 @@ export function RowOptions<Value extends string>({
   onChange,
   options,
   size = "default",
+  stacked = false,
   value,
   ...rowProps
 }: RowOptionsProps<Value>) {
@@ -222,7 +229,7 @@ export function RowOptions<Value extends string>({
         className,
       )}
       aria-disabled={disabled || undefined}
-      data-row-options=""
+      data-row-options={stacked ? "stacked" : ""}
     >
       <RowContent detail={detail} icon={icon} label={label} />
       <Segmented
