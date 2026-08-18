@@ -205,7 +205,6 @@ const settings = {
 	defaultCalendarView: "month",
 	notificationsOnByDefault: true,
 	onboarded: true,
-	showKanji: true,
 	theme: "system",
 	timeFormat: "24h",
 	weekStartsOn: "monday",

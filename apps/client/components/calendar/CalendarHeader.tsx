@@ -1,6 +1,4 @@
-import { MONTH_KANJI } from "@/constants/const";
 import { colors, fonts, styles } from "@/constants/theme";
-import { useSettingsStore } from "@/store/useSettingsStore";
 import { ActivityIndicator, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Tap } from "@/components/ui/Tap";
@@ -28,7 +26,6 @@ export function CalendarHeader({
   anchorDate, calMode, onModeChange, onBackToMonth, drillSourceDate, drillProgress,
   onTodayPress, onRefresh, refreshing,
 }: Props) {
-  const { showKanji } = useSettingsStore();
   const drillRequested = !!onBackToMonth;
   // While drilled, the title continues to describe the month underneath. Only
   // its position changes; no header subtree or text content is swapped.
@@ -78,11 +75,6 @@ export function CalendarHeader({
                   <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: fonts.serif, fontSize: 20, color: colors.fg }}>
                     {displayedDate.toLocaleString("en-UK", { month: "long" })}
                   </Text>
-                  {showKanji ? (
-                    <Text style={{ fontFamily: fonts.kanji, fontSize: 12, color: colors.fg3 }}>
-                      {MONTH_KANJI[displayedDate.getMonth()]}
-                    </Text>
-                  ) : null}
                   <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={colors.fg3} />
                 </View>
               )}

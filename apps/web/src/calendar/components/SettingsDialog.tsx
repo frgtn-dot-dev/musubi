@@ -314,13 +314,6 @@ export function SettingsDialog({
               value={settings.value.theme}
             />
             <RowToggle
-              checked={settings.value.showKanji}
-              detail="Display Japanese day labels in the mini calendar"
-              disabled={saving}
-              label="Show kanji"
-              onCheckedChange={(showKanji) => void save({ showKanji })}
-            />
-            <RowToggle
               checked={settings.value.tabBarLabels ?? true}
               detail="Show labels in the mobile navigation"
               disabled={saving}

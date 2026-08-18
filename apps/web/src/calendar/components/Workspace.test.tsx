@@ -54,7 +54,6 @@ const commonProps = {
     dateFormat: "dmy" as const,
     defaultCalendarView: "month" as const,
     notificationsOnByDefault: true,
-    showKanji: true,
     theme: "system" as const,
     timeFormat: "24h" as const,
     weekStartsOn: "monday" as const,

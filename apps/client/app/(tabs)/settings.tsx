@@ -61,7 +61,6 @@ export default function SettingsTab() {
   const {
     defaultCalendarView, setDefaultCalendarView,
     weekStartsOn, setWeekStartsOn,
-    showKanji, setShowKanji,
     timeFormat, setTimeFormat,
     dateFormat, setDateFormat,
     theme, setTheme,
@@ -313,14 +312,6 @@ export default function SettingsTab() {
           onChange={v => {
             setTheme(v as "system" | "dark" | "light");
             save({ theme: v as "system" | "dark" | "light" });
-          }}
-        />
-        <SettingRowToggle
-          label="Show Kanji"
-          toggle={showKanji}
-          onToggle={() => {
-            setShowKanji(!showKanji);
-            save({ showKanji: !showKanji });
           }}
         />
         <SettingRowToggle

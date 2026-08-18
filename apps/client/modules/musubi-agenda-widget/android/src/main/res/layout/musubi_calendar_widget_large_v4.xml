@@ -29,11 +29,6 @@
       android:layout_marginStart="5dp"
       android:text="July" />
 
-    <TextView
-      android:id="@+id/musubi_calendar_kanji"
-      style="@style/MusubiCalendarMonthKanji"
-      android:text="七月" />
-
     <LinearLayout
       android:layout_width="0dp"
       android:layout_height="1dp"

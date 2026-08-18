@@ -49,7 +49,7 @@ function buildSnapshot() {
 
   const { events } = useEventsStore.getState();
   const { calendars } = useCalendarsStore.getState();
-  const { timeFormat, weekStartsOn, showKanji } = useSettingsStore.getState();
+  const { timeFormat, weekStartsOn } = useSettingsStore.getState();
   const calendarById = new Map(calendars.map(calendar => [calendar.id, calendar]));
 
   const upcoming = expandRecurringEvents(events, rangeStart, rangeEnd)
@@ -125,7 +125,6 @@ function buildSnapshot() {
     generatedAt: now.getTime(),
     timeFormat,
     weekStartsOn,
-    showKanji,
     events: upcoming,
     calendarDays,
   });
