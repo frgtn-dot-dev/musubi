@@ -17,13 +17,12 @@ import {
 import { confirm } from "@/lib/confirm";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useApi } from "@/services/api";
 import { useServer } from "@/contexts/ServerContext";
 import MemberRolesModal from "./MemberRolesModal";
 import InvitesModal from "./InvitesModal";
 import { Tap } from "@/components/ui/Tap";
-import { Btn } from "@/components/ui/Btn";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { warn } from "@/lib/haptics";
@@ -131,6 +130,14 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   // calendar this disconnects the whole origin server instead.
   const showDisconnect = isProviderMirror || isFederated;
 
+  type Action = {
+    destructive?: boolean;
+    disabled?: boolean;
+    icon: keyof typeof Feather.glyphMap;
+    label: string;
+    onPress: () => void;
+  };
+
   // External delete = two-step confirm: first that it's a provider-synced
   // calendar (and where it lives), then the actual deletion.
   const handleDelete = () => {
@@ -213,6 +220,63 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
     });
   };
 
+  /**
+   * The bar along the bottom: everything you DO to this calendar.
+   *
+   * Inviting, listing members and exporting used to be full-width buttons in
+   * the body, which put three verbs above the settings the sheet is named for.
+   * They belong beside Edit and Delete — same kind of thing, same row — and
+   * the body is left to the calendar's own settings.
+   */
+  const actions: Action[] = [
+    showInvite && {
+      icon: "send" as const,
+      label: "Invite",
+      onPress: () => setInvitesVisible(true),
+    },
+    {
+      icon: "users" as const,
+      label: "Members",
+      onPress: () => setRolesVisible(true),
+    },
+    {
+      disabled: exporting || !calendar,
+      icon: "download" as const,
+      label: "Export",
+      onPress: () => void exportCalendar(),
+    },
+    showEdit && {
+      disabled: !calendar,
+      icon: "edit" as const,
+      label: "Edit",
+      onPress: () => {
+        onEdit(calendar!);
+        handleClose();
+      },
+    },
+    showDelete && {
+      destructive: true,
+      disabled: !calendar,
+      icon: "trash" as const,
+      label: "Delete",
+      onPress: handleDelete,
+    },
+    showLeave && {
+      destructive: true,
+      disabled: isLeaving || !calendar,
+      icon: "arrow-left-circle" as const,
+      label: "Leave",
+      onPress: handleLeave,
+    },
+    showDisconnect && {
+      destructive: true,
+      disabled: isLeaving || !calendar,
+      icon: "cloud-off" as const,
+      label: "Disconnect",
+      onPress: handleDisconnect,
+    },
+  ].filter(Boolean) as Action[];
+
   return (
     <Modal
       visible={visible}
@@ -240,32 +304,9 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                   }
                   onPress={() => setReminderPicker(true)}
                 />
-
-                <View style={{ gap: 8 }}>
-                  {showInvite && (
-                  <Btn
-                    label="Invite Links"
-                    icon={<Feather size={14} name="send" color={colors.bg3} />}
-                    onPress={() => setInvitesVisible(true)}
-                  />
-                  )}
-                  <Btn
-                    label="Members"
-                    variant="secondary"
-                    icon={<Feather size={14} name="users" color={colors.fg2} />}
-                    onPress={() => setRolesVisible(true)}
-                  />
-                  <Btn
-                    label="Export (.ics)"
-                    variant="secondary"
-                    icon={<Feather size={14} name="download" color={colors.fg2} />}
-                    loading={exporting}
-                    onPress={exportCalendar}
-                  />
-                </View>
               </View>
             </ScrollView>
-            {(showEdit || showDelete || showLeave || showDisconnect) && (
+            {actions.length > 0 && (
               <View
                 style={{
                   flexDirection: "row",
@@ -275,59 +316,35 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
                   paddingBottom: insets.bottom,
                 }}
               >
-                {showEdit && (
-                  <Tap
-                    style={styles.modalActionBtn}
-                    disabled={calendar ? false : true}
-                    onPress={() => {
-                      onEdit(calendar!);
-                      handleClose();
-                    }}
-                  >
-                    <Feather size={20} name="edit" color={colors.fg2} />
-                    <Text style={{ color: colors.fg2, fontSize: 10 }}>Edit</Text>
-                  </Tap>
-                )}
-
-                {showEdit && (showDelete || showLeave) && <View style={styles.modalActionDivider} />}
-
-                {showDelete && (
-                  <Tap
-                    style={styles.modalActionBtn}
-                    haptic="warn"
-                    disabled={calendar ? false : true}
-                    onPress={handleDelete}
-                  >
-                    <Feather size={20} name="trash" color={colors.accent} />
-                    <Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
-                  </Tap>
-                )}
-
-                {showLeave && (
-                  <Tap
-                    style={styles.modalActionBtn}
-                    haptic="warn"
-                    disabled={isLeaving || !calendar}
-                    onPress={handleLeave}
-                  >
-                    <Feather size={20} name="arrow-left-circle" color={isLeaving ? colors.fg4 : colors.accent} />
-                    <Text style={{ color: isLeaving ? colors.fg4 : colors.accent, fontSize: 10 }}>Leave</Text>
-                  </Tap>
-                )}
-
-                {showDisconnect && (showEdit || showDelete || showLeave) && <View style={styles.modalActionDivider} />}
-
-                {showDisconnect && (
-                  <Tap
-                    style={styles.modalActionBtn}
-                    haptic="warn"
-                    disabled={isLeaving || !calendar}
-                    onPress={handleDisconnect}
-                  >
-                    <Feather size={20} name="cloud-off" color={isLeaving ? colors.fg4 : colors.accent} />
-                    <Text style={{ color: isLeaving ? colors.fg4 : colors.accent, fontSize: 10 }}>Disconnect</Text>
-                  </Tap>
-                )}
+                {actions.map((action, index) => (
+                  <Fragment key={action.label}>
+                    {/* A rule between what this calendar offers and what taking
+                        it away looks like. Only the one seam, wherever it lands. */}
+                    {index > 0 && action.destructive && !actions[index - 1].destructive && (
+                      <View style={styles.modalActionDivider} />
+                    )}
+                    <Tap
+                      style={styles.modalActionBtn}
+                      haptic={action.destructive ? "warn" : false}
+                      disabled={action.disabled}
+                      onPress={action.onPress}
+                    >
+                      <Feather
+                        size={20}
+                        name={action.icon}
+                        color={action.disabled ? colors.fg4 : action.destructive ? colors.accent : colors.fg2}
+                      />
+                      <Text
+                        style={{
+                          color: action.disabled ? colors.fg4 : action.destructive ? colors.accent : colors.fg2,
+                          fontSize: 10,
+                        }}
+                      >
+                        {action.label}
+                      </Text>
+                    </Tap>
+                  </Fragment>
+                ))}
               </View>
             )}
           </Animated.View>
