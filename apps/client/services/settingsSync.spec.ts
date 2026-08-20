@@ -7,7 +7,6 @@ const base: Settings = {
 	defaultCalendarView: "month",
 	notificationsOnByDefault: true,
 	onboarded: true,
-	showKanji: true,
 	tabBarLabels: true,
 	theme: "system",
 	timeFormat: "24h",

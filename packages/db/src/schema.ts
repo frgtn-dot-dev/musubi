@@ -157,7 +157,6 @@ export const userSettings = pgTable("user_settings", {
     .$onUpdate(() => new Date()),
   revision: integer("revision").notNull().default(1),
   // settings
-  showKanji: boolean("show_kanji").notNull().default(true),
   notificationsOnByDefault: boolean("notifications_on_by_default").notNull().default(true),
   defaultCalendarView: text("default_calendar_view").notNull().default("month"),
   weekStartsOn: text("week_starts_on").notNull().default("monday"),

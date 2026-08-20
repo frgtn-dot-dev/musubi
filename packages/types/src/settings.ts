@@ -26,11 +26,6 @@ export const TimezoneSchema = z
   );
 
 export const SettingsSchema = z.object({
-  // Dead: nothing renders kanji by this flag any more. Optional rather than
-  // gone, because the phone builds already on people's devices parse this
-  // response with a schema that still requires it — the column and the value
-  // stay on the wire until those age out.
-  showKanji: z.boolean().optional(),
   notificationsOnByDefault: z.boolean(),
   defaultCalendarView: CalendarViewSchema,
   weekStartsOn: z.enum(["monday", "sunday"]),
@@ -66,7 +61,6 @@ export const SettingsPatchSchema = z
     notificationEmails: NotificationEmailsSchema.optional(),
     notificationsOnByDefault: z.boolean().optional(),
     onboarded: z.boolean().optional(),
-    showKanji: z.boolean().optional(),
     tabBarLabels: z.boolean().optional(),
     theme: z.enum(["system", "dark", "light"]).optional(),
     timeFormat: z.enum(["12h", "24h"]).optional(),
