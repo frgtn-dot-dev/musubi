@@ -1,0 +1,1459 @@
+{
+  "documents": {
+    "Calendar": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "creatorID": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                },
+                "image": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "email"
+              ]
+            }
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isDefault": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "serverUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "syncStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "reconnect_required"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "syncErrorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "creatorID",
+          "name",
+          "color",
+          "members"
+        ]
+      }
+    },
+    "CalendarInvitePreview": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "image": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "start": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "end": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "isAllDay": {
+                  "type": "boolean"
+                },
+                "recurrence": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "color",
+                "start",
+                "end",
+                "isAllDay"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "color",
+          "members",
+          "events"
+        ]
+      }
+    },
+    "Event": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "creatorID": {
+            "type": "string"
+          },
+          "organizer": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "calendars": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "originCalendarID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isCanceled": {
+            "type": "boolean"
+          },
+          "isAllDay": {
+            "type": "boolean"
+          },
+          "hasAttendees": {
+            "default": false,
+            "type": "boolean"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recurrence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "creatorID",
+          "organizer",
+          "title",
+          "color",
+          "start",
+          "end",
+          "calendars",
+          "isCanceled",
+          "isAllDay"
+        ]
+      }
+    },
+    "Invite": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "calendarID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxUses": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uses": {
+            "default": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "calendarID",
+          "expiresAt",
+          "maxUses"
+        ]
+      }
+    },
+    "PageDocument": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "schemaVersion": {
+                "type": "number",
+                "const": 1
+              },
+              "icon": {
+                "type": "string",
+                "enum": [
+                  "house",
+                  "calendar-days",
+                  "star",
+                  "sparkles",
+                  "circle",
+                  "diamond",
+                  "heart",
+                  "plane",
+                  "coffee",
+                  "flag",
+                  "music",
+                  "briefcase"
+                ]
+              },
+              "view": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "day"
+                      },
+                      "configVersion": {
+                        "type": "number",
+                        "const": 1
+                      },
+                      "density": {
+                        "default": "comfortable",
+                        "type": "string",
+                        "enum": [
+                          "compact",
+                          "comfortable",
+                          "spacious"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "configVersion"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "week"
+                      },
+                      "configVersion": {
+                        "type": "number",
+                        "const": 1
+                      },
+                      "weekend": {
+                        "default": true,
+                        "type": "boolean"
+                      },
+                      "density": {
+                        "default": "comfortable",
+                        "type": "string",
+                        "enum": [
+                          "compact",
+                          "comfortable",
+                          "spacious"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "configVersion"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "month"
+                      },
+                      "configVersion": {
+                        "type": "number",
+                        "const": 1
+                      },
+                      "showAdjacentDays": {
+                        "default": true,
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "configVersion"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "agenda"
+                      },
+                      "configVersion": {
+                        "type": "number",
+                        "const": 1
+                      },
+                      "groupBy": {
+                        "default": "day",
+                        "type": "string",
+                        "const": "day"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "configVersion"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "multi-week"
+                      },
+                      "configVersion": {
+                        "type": "number",
+                        "const": 1
+                      },
+                      "weeks": {
+                        "default": 4,
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "configVersion"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "calendarVisibility": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "const": "all"
+                      },
+                      "hiddenCalendarIds": {
+                        "maxItems": 500,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "hiddenCalendarIds"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "const": "include"
+                      },
+                      "calendarIds": {
+                        "maxItems": 500,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "calendarIds"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "filters": {
+                "default": [],
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "attendance"
+                        },
+                        "value": {
+                          "type": "string",
+                          "enum": [
+                            "all",
+                            "attending",
+                            "not-attending"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "time"
+                        },
+                        "value": {
+                          "type": "string",
+                          "enum": [
+                            "all",
+                            "timed",
+                            "all-day"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "showPolls": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "view",
+              "calendarVisibility"
+            ],
+            "additionalProperties": false
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "position",
+          "isDefault",
+          "config",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "PatchSettingsRequest": {
+      "direction": "write",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "baseRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "patch": {
+            "type": "object",
+            "properties": {
+              "calendarOrder": {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "dateFormat": {
+                "type": "string",
+                "enum": [
+                  "dmy",
+                  "mdy",
+                  "ymd"
+                ]
+              },
+              "defaultCalendarView": {
+                "type": "string",
+                "enum": [
+                  "week",
+                  "month",
+                  "day",
+                  "schedule"
+                ]
+              },
+              "defaultReminder": {
+                "type": "object",
+                "properties": {
+                  "minutesBefore": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 40320
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allDay": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "daysBefore": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 30
+                          },
+                          "atMinute": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1439
+                          }
+                        },
+                        "required": [
+                          "daysBefore",
+                          "atMinute"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "minutesBefore",
+                  "allDay"
+                ],
+                "additionalProperties": false
+              },
+              "notificationEmails": {
+                "type": "object",
+                "properties": {
+                  "eventChanged": {
+                    "type": "boolean"
+                  },
+                  "pollDecided": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "eventChanged",
+                  "pollDecided"
+                ],
+                "additionalProperties": false
+              },
+              "notificationsOnByDefault": {
+                "type": "boolean"
+              },
+              "onboarded": {
+                "type": "boolean"
+              },
+              "tabBarLabels": {
+                "type": "boolean"
+              },
+              "theme": {
+                "type": "string",
+                "enum": [
+                  "system",
+                  "dark",
+                  "light"
+                ]
+              },
+              "timeFormat": {
+                "type": "string",
+                "enum": [
+                  "12h",
+                  "24h"
+                ]
+              },
+              "timezone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "weekStartsOn": {
+                "type": "string",
+                "enum": [
+                  "monday",
+                  "sunday"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "baseRevision",
+          "patch"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "PutReminderRequest": {
+      "direction": "write",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "rule": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "minutesBefore": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 40320
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allDay": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "daysBefore": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 30
+                          },
+                          "atMinute": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1439
+                          }
+                        },
+                        "required": [
+                          "daysBefore",
+                          "atMinute"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "minutesBefore",
+                  "allDay"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "rule"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "RemindersDocument": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "default": {
+            "type": "object",
+            "properties": {
+              "minutesBefore": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 40320
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "allDay": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "daysBefore": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 30
+                      },
+                      "atMinute": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1439
+                      }
+                    },
+                    "required": [
+                      "daysBefore",
+                      "atMinute"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "minutesBefore",
+              "allDay"
+            ],
+            "additionalProperties": false
+          },
+          "calendars": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "minutesBefore": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 40320
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "allDay": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "daysBefore": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 30
+                        },
+                        "atMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1439
+                        }
+                      },
+                      "required": [
+                        "daysBefore",
+                        "atMinute"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "minutesBefore",
+                "allDay"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "events": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "minutesBefore": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 40320
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "allDay": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "daysBefore": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 30
+                        },
+                        "atMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1439
+                        }
+                      },
+                      "required": [
+                        "daysBefore",
+                        "atMinute"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "minutesBefore",
+                "allDay"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "default",
+          "calendars",
+          "events"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Settings": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "notificationsOnByDefault": {
+            "type": "boolean"
+          },
+          "defaultCalendarView": {
+            "type": "string",
+            "enum": [
+              "week",
+              "month",
+              "day",
+              "schedule"
+            ]
+          },
+          "weekStartsOn": {
+            "type": "string",
+            "enum": [
+              "monday",
+              "sunday"
+            ]
+          },
+          "timeFormat": {
+            "type": "string",
+            "enum": [
+              "12h",
+              "24h"
+            ]
+          },
+          "dateFormat": {
+            "type": "string",
+            "enum": [
+              "dmy",
+              "mdy",
+              "ymd"
+            ]
+          },
+          "theme": {
+            "default": "system",
+            "type": "string",
+            "enum": [
+              "system",
+              "dark",
+              "light"
+            ]
+          },
+          "onboarded": {
+            "type": "boolean"
+          },
+          "tabBarLabels": {
+            "type": "boolean"
+          },
+          "calendarOrder": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "defaultReminder": {
+            "type": "object",
+            "properties": {
+              "minutesBefore": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 40320
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "allDay": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "daysBefore": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 30
+                      },
+                      "atMinute": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1439
+                      }
+                    },
+                    "required": [
+                      "daysBefore",
+                      "atMinute"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "minutesBefore",
+              "allDay"
+            ],
+            "additionalProperties": false
+          },
+          "notificationEmails": {
+            "type": "object",
+            "properties": {
+              "eventChanged": {
+                "type": "boolean"
+              },
+              "pollDecided": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "eventChanged",
+              "pollDecided"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "notificationsOnByDefault",
+          "defaultCalendarView",
+          "weekStartsOn",
+          "timeFormat",
+          "dateFormat"
+        ]
+      }
+    },
+    "SettingsDocument": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "type": "object",
+            "properties": {
+              "notificationsOnByDefault": {
+                "type": "boolean"
+              },
+              "defaultCalendarView": {
+                "type": "string",
+                "enum": [
+                  "week",
+                  "month",
+                  "day",
+                  "schedule"
+                ]
+              },
+              "weekStartsOn": {
+                "type": "string",
+                "enum": [
+                  "monday",
+                  "sunday"
+                ]
+              },
+              "timeFormat": {
+                "type": "string",
+                "enum": [
+                  "12h",
+                  "24h"
+                ]
+              },
+              "dateFormat": {
+                "type": "string",
+                "enum": [
+                  "dmy",
+                  "mdy",
+                  "ymd"
+                ]
+              },
+              "theme": {
+                "default": "system",
+                "type": "string",
+                "enum": [
+                  "system",
+                  "dark",
+                  "light"
+                ]
+              },
+              "onboarded": {
+                "type": "boolean"
+              },
+              "tabBarLabels": {
+                "type": "boolean"
+              },
+              "calendarOrder": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timezone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "defaultReminder": {
+                "type": "object",
+                "properties": {
+                  "minutesBefore": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 40320
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allDay": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "daysBefore": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 30
+                          },
+                          "atMinute": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1439
+                          }
+                        },
+                        "required": [
+                          "daysBefore",
+                          "atMinute"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "minutesBefore",
+                  "allDay"
+                ],
+                "additionalProperties": false
+              },
+              "notificationEmails": {
+                "type": "object",
+                "properties": {
+                  "eventChanged": {
+                    "type": "boolean"
+                  },
+                  "pollDecided": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "eventChanged",
+                  "pollDecided"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "notificationsOnByDefault",
+              "defaultCalendarView",
+              "weekStartsOn",
+              "timeFormat",
+              "dateFormat"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "updatedAt",
+          "value"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "User": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email"
+        ]
+      }
+    }
+  },
+  "version": "0.1.5"
+}
