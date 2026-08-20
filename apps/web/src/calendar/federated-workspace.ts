@@ -5,6 +5,7 @@ import { ApiError } from "~/api/http";
 import {
   getFederatedCalendars,
   getFederatedEvents,
+  getFederatedServerInfo,
   getFederationConnections,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -32,6 +33,8 @@ export type FederatedServerStatus = {
   label: string;
   server: string;
   state: FederatedServerState;
+  /** What that server is running, or undefined when it would not say. */
+  version?: string;
 };
 
 function failureState(error: unknown): FederatedServerState {
@@ -77,9 +80,12 @@ async function loadFederatedWorkspace(
       try {
         // One server's calendars and events can load together; a failure of
         // either marks just this server unreachable.
-        const [calendars, events] = await Promise.all([
+        const [calendars, events, info] = await Promise.all([
           getFederatedCalendars(connection.id, signal),
           getFederatedEvents(connection.id, signal),
+          // Never the reason a connection is called broken: not knowing the
+          // version is a smaller problem than pretending the server is down.
+          getFederatedServerInfo(connection.id, signal).catch(() => null),
         ]);
         return {
           calendars: calendars.map((calendar) => tagCalendar(calendar, connection)),
@@ -89,6 +95,7 @@ async function loadFederatedWorkspace(
             label: connection.label,
             server: connection.server,
             state: "active" as FederatedServerState,
+            version: info?.version,
           },
         };
       } catch (error) {

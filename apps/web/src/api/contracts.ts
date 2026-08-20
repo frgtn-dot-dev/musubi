@@ -236,6 +236,9 @@ export const ServerCapabilitiesSchema = z
   .object({
     email: z.boolean().default(false),
     minClientVersion: z.string().optional(),
+    // What the server is running. Optional, because a server older than the
+    // field simply says nothing and the tab has nothing to compare against.
+    version: z.string().optional(),
     socials: z.array(z.string()).default([]),
     // Providers a BROWSER can finish. Narrower than `socials`, which also counts
     // the phone's native flows. Absent on an API older than this field, and the

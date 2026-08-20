@@ -28,7 +28,7 @@ import {
 } from "react";
 import { Button } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
-import { describeAge, StaleBanner } from "~/ui/StaleBanner";
+import { describeAge, StaleBanner, UpdateBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
 import {
   DEFAULT_MULTI_WEEK_WEEKS,
@@ -96,6 +96,8 @@ type WorkspaceProps = {
    * The server could not be reached, so what is on screen came from the local
    * snapshot. `snapshotAt` is when that snapshot was written.
    */
+  /** Set when the server has moved past the bundle this tab is running. */
+  newerServer?: { reload: () => void } | null;
   offline?: boolean;
   snapshotAt?: number;
   /** On screen is snapshot data while a refresh is in flight (`05:295-306`). */
@@ -255,6 +257,7 @@ export function Workspace({
   date,
   events,
   isRefreshing,
+  newerServer,
   offline = false,
   snapshotAt,
   stale = false,
@@ -969,6 +972,10 @@ export function Workspace({
             savedAt={snapshotAt}
             suffix="Changes cannot be saved until it is back."
           />
+        ) : null}
+        {/* Not while offline: a reload with no network lands on nothing. */}
+        {newerServer && !offline ? (
+          <UpdateBanner onReload={newerServer.reload} />
         ) : null}
         <Toolbar
           activeView={activeView}

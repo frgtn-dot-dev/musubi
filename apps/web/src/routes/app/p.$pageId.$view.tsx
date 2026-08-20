@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
+import { useNewerServer } from "~/api/use-newer-server";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { getPollCalendar } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
@@ -91,6 +92,9 @@ function WorkspaceRoute() {
   // One source for "the server did not answer", shared with every form that has
   // to refuse a write (`SnapshotProvider`).
   const offline = snapshot.offline;
+  // A tab left open across a deploy still runs the bundle it started with.
+  // Asking costs no request — the capability document is already fetched.
+  const newerServer = useNewerServer(!offline);
   // Restored data that this session has not re-fetched yet. `isFetchedAfterMount`
   // is the honest test: `snapshot.restored` stays true all session, long after
   // the first refresh made it moot.
@@ -221,6 +225,7 @@ function WorkspaceRoute() {
         queries.some((query) => query.isFetching) ||
         (pollEnabled && pollCalendar.isFetching)
       }
+      newerServer={newerServer}
       offline={offline}
       snapshotAt={snapshot.savedAt}
       stale={stale}

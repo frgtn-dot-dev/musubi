@@ -32,7 +32,8 @@
     "verify": "pnpm check && pnpm test:e2e",
     "lint": "pnpm --filter @musubi/client lint && pnpm --filter @musubi/web lint",
     "db:generate": "pnpm -F @musubi/db exec drizzle-kit generate",
-    "db:migrate": "pnpm -F @musubi/db exec drizzle-kit migrate"
+    "db:migrate": "pnpm -F @musubi/db exec drizzle-kit migrate",
+    "wire:snapshot": "tsx scripts/snapshot-wire.mjs"
   },
   "keywords": [],
   "author": "frgtn.dev",
