@@ -69,6 +69,21 @@ was, and you:
 Do not re-baseline to make a red test green. The snapshot is a promise to
 software you cannot reach.
 
+### What the phone does with a response
+
+`apps/client/services/wire.ts` parses every document in the registry above
+against the schema the build was compiled with, the way the web has always
+parsed against `apps/web/src/api/contracts.ts`.
+
+It does **not** throw in production, and that is deliberate. Musubi is
+self-hostable, so "the server is older than the app" is ordinary: someone
+installs today's build and points it at the server they set up last spring.
+`minClientVersion` keeps an old app away from a new server; nothing keeps a new
+app away from an old one. Refusing to render would kill the app for exactly
+those people, so a mismatch degrades as it always did and is written into the
+diagnostics the settings screen copies — which is how such a report reaches us
+at all. In development it throws, because there it can still be fixed.
+
 ### Version metadata
 
 `scripts/verify-release.mjs` asserts that `PRODUCT_VERSION` in
@@ -100,10 +115,6 @@ because nothing anywhere read the column — it is the exception, not the model.
 
 ## Things still worth doing
 
-- **The phone does not validate responses.** It casts (`services/api.ts`), so a
-  shape it cannot handle surfaces as a strange screen rather than a caught
-  error — on the one client that cannot be patched. The web parses every
-  response against `apps/web/src/api/contracts.ts` and fails loudly.
 - **A browser tab outlives a deploy.** The service worker deliberately caches
   nothing, but an open tab keeps running yesterday's JavaScript against today's
   API. The web already fetches `/api/v1/server`; comparing its `version` against
