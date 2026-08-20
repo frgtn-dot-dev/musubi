@@ -3358,6 +3358,16 @@ test("shows federated calendars and reports an unreachable server", async ({
 			},
 		]),
 	);
+	await page.route("**/api/v1/federation/s/conn-1/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: [],
+			version: "0.1.4",
+		}),
+	);
 	// Reachable server: one shared calendar with one event.
 	await page.route("**/api/v1/federation/s/conn-1/api/v1/calendars", (route) =>
 		respond(route, [
@@ -3434,9 +3444,15 @@ test("shows federated calendars and reports an unreachable server", async ({
 	await expect(
 		page.getByRole("button", { name: "Retry dead.example" }),
 	).toBeVisible();
-	await expect(
-		page.getByRole("listitem").filter({ hasText: "friends.example" }),
-	).toContainText("Connected");
+	const friendsRow = page
+		.getByRole("listitem")
+		.filter({ hasText: "friends.example" });
+	await expect(friendsRow).toContainText("Connected");
+	// Federation is the one clock nobody here winds, so what that server runs
+	// has to be readable rather than guessed at.
+	await expect(friendsRow).toContainText("0.1.4");
+	// A server that will not say stays unlabelled instead of claiming a version.
+	await expect(deadRow).not.toContainText("·");
 
 	// Disconnecting a federated server uses its own endpoint, not provider disconnect.
 	await page.getByRole("button", { name: "Disconnect dead.example" }).click();

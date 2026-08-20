@@ -386,6 +386,24 @@ export function getFederatedCalendars(
   );
 }
 
+/**
+ * What a connected server is running.
+ *
+ * Through the gateway like everything else, so it needs no new route and no
+ * credential in the browser. Federation is the one clock nobody here controls
+ * — the peer updates when its owner feels like it — and a version nobody can
+ * see is a difference nobody can diagnose.
+ */
+export function getFederatedServerInfo(
+  connectionId: string,
+  signal?: AbortSignal,
+) {
+  return apiRequest(
+    `/api/v1/federation/s/${connectionId}/api/v1/server`,
+    { responseSchema: ServerCapabilitiesSchema, signal },
+  );
+}
+
 export function getFederatedEvents(
   connectionId: string,
   signal?: AbortSignal,

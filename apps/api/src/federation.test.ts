@@ -12,6 +12,7 @@ import {
   hashMemberToken,
   issueMemberToken,
 } from "./federation_tokens";
+import { peerTooOld } from "./federation_peer";
 import { buildInvitePreview } from "./invite_preview";
 
 const now = new Date("2026-07-23T12:00:00.000Z");
@@ -107,4 +108,62 @@ assert.equal(Object.prototype.hasOwnProperty.call(preview.members[0], "email"), 
 assert.equal(Object.prototype.hasOwnProperty.call(preview.events[0], "description"), false);
 assert.equal(Object.prototype.hasOwnProperty.call(preview.events[0], "location"), false);
 
-console.log("federation security self-check: OK");
+// ── The fourth clock ─────────────────────────────────────────────────────────
+// A peer updates when its owner decides to. Refusing at connect names the
+// reason; refusing on anything less would turn unfamiliar servers into dead
+// ends for no gain.
+
+const realFetch = globalThis.fetch;
+const answering = (body: unknown, status = 200) => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+      status,
+    })) as typeof fetch;
+};
+
+// An IIFE, not top-level await: this file is transformed to CommonJS.
+void (async () => {
+  answering({ version: "0.0.9" });
+  const refusal = await peerTooOld("https://old.example");
+  assert.match(String(refusal), /runs Musubi 0\.0\.9/);
+  assert.match(String(refusal), /has to update it first/);
+
+  answering({ version: "9.9.9" });
+  assert.equal(
+    await peerTooOld("https://new.example"),
+    null,
+    "a newer peer is fine",
+  );
+
+  // Silence is tolerated, not fatal: the read rule says a missing field is
+  // something to cope with, and the handshake that follows is the real test.
+  answering({ ok: true });
+  assert.equal(
+    await peerTooOld("https://unversioned.example"),
+    null,
+    "a peer that names no version is allowed through",
+  );
+
+  answering({}, 500);
+  assert.equal(
+    await peerTooOld("https://broken.example"),
+    null,
+    "a peer that cannot be read is allowed through",
+  );
+
+  globalThis.fetch = (async () => {
+    throw new Error("connection refused");
+  }) as typeof fetch;
+  assert.equal(
+    await peerTooOld("https://down.example"),
+    null,
+    "an unreachable peer is left to the handshake",
+  );
+
+  globalThis.fetch = realFetch;
+  console.log("federation security self-check: OK");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
