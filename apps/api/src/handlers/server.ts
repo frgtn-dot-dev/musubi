@@ -2,8 +2,7 @@ import type { Request, Response } from "express";
 import { config } from "@musubi/config";
 import { appleWebSignInEnabled } from "@musubi/auth";
 import { canSendEmail } from "@musubi/emails";
-
-const serverVersion = "0.1.3";
+import { MIN_CLIENT_VERSION, PRODUCT_VERSION } from "@musubi/types";
 
 // Which social logins this server can actually perform — a provider counts only
 // when its credentials are configured. Lets self-hosted clients render just the
@@ -50,13 +49,13 @@ function enabledSyncProviders(): string[] {
 }
 
 export function handlerServerStatus(_: Request, res: Response) {
-  res.status(200).json({ ok: true, version: serverVersion });
+  res.status(200).json({ ok: true, version: PRODUCT_VERSION });
 }
 
 export function handlerServer(_: Request, res: Response) {
   res.status(200).json({
-    version: serverVersion,
-    minClientVersion: "0.1.3",
+    version: PRODUCT_VERSION,
+    minClientVersion: MIN_CLIENT_VERSION,
     socials: enabledSocials(),
     socialsWeb: enabledWebSocials(),
     syncProviders: enabledSyncProviders(),
