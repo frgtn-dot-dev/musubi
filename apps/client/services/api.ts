@@ -1,4 +1,21 @@
-import { Calendar, CalendarInvitePreview, Event, Invite, GoogleCheck, PatchSettingsRequest, RemindersDocument, SettingsDocument } from "@musubi/types";
+import {
+  CalendarInvitePreviewSchema,
+  CalendarSchema,
+  EventSchema,
+  InviteSchema,
+  RemindersDocumentSchema,
+  SettingsDocumentSchema,
+  type Calendar,
+  type CalendarInvitePreview,
+  type Event,
+  type GoogleCheck,
+  type Invite,
+  type PatchSettingsRequest,
+  type RemindersDocument,
+  type SettingsDocument,
+} from "@musubi/types";
+import { z } from "zod";
+import { readWire } from "@/services/wire";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
@@ -13,6 +30,14 @@ import type { AttendanceChoice } from "@/lib/attendance";
 // run against its origin with our member token — same endpoints, same shapes.
 const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
 const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
+
+const CalendarsResponse = z.array(CalendarSchema);
+const InvitesResponse = z.array(InviteSchema);
+const EventsResponse = z.object({
+  deletedIds: z.array(z.string()),
+  events: z.array(EventSchema),
+  serverTime: z.string(),
+});
 
 // Names + avatars only — the API deliberately sends no attendee emails. `status`
 // is the answer: public RSVPs land in this same list (spec 2026-08-12).
@@ -97,7 +122,7 @@ export function useApi() {
       // Pass the server response through whole — rebuilding the object here
       // silently dropped `role: "owner"`, so the creator didn't get owner
       // actions (invite, roles) until the next full sync.
-      return data;
+      return readWire(CalendarSchema, data, "POST /calendars");
     },
 
     async getCalendars() {
@@ -106,7 +131,7 @@ export function useApi() {
       });
 
       throwOnError(error);
-      return data;
+      return readWire(CalendarsResponse, data, "GET /calendars");
     },
 
     async getCalendar(calendarID: string) {
@@ -115,7 +140,7 @@ export function useApi() {
       });
 
       throwOnError(error);
-      return data;
+      return readWire(CalendarSchema, data, "GET /calendars/:id");
     },
 
     async getCalendarFromToken(token: string) {
@@ -124,14 +149,11 @@ export function useApi() {
       });
 
       throwOnError(error);
-      return {
-        ...data,
-        events: data.events.map(event => ({
-          ...event,
-          start: new Date(event.start),
-          end: new Date(event.end),
-        })),
-      };
+      return readWire(
+        CalendarInvitePreviewSchema,
+        data,
+        "GET /calendars/tokens/:token",
+      );
     },
 
     async createEvent(event: Event) {
@@ -140,7 +162,7 @@ export function useApi() {
         const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
           method: "POST", body: JSON.stringify(event),
         });
-        return { ...data, start: new Date(data.start), end: new Date(data.end) };
+        return readWire(EventSchema, data, "POST /events (federated)");
       }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
         method: 'POST',
@@ -152,14 +174,7 @@ export function useApi() {
 
       throwOnError(error);
 
-
-      const newEvent: Event = {
-        ...data,
-        start: new Date(data.start),
-        end: new Date(data.end),
-      }
-
-      return newEvent;
+      return readWire(EventSchema, data, "POST /events");
     },
 
     async linkEvent(eventID: string, calendarID: string) {
@@ -168,7 +183,7 @@ export function useApi() {
         const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events/${eventID}/link`, {
           method: "POST", body: JSON.stringify({ calendarID }),
         });
-        return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+        return readWire(EventSchema, data, "POST /events/:id/link (federated)");
       }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/link`, {
         method: "POST",
@@ -178,7 +193,7 @@ export function useApi() {
 
       throwOnError(error);
 
-      return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+      return readWire(EventSchema, data, "POST /events/:id/link");
     },
 
     async forkEvent(eventID: string, calendarID: string) {
@@ -187,7 +202,7 @@ export function useApi() {
         const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events/${eventID}/fork`, {
           method: "POST", body: JSON.stringify({ calendarID }),
         });
-        return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+        return readWire(EventSchema, data, "POST /events/:id/fork (federated)");
       }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/fork`, {
         method: "POST",
@@ -197,15 +212,19 @@ export function useApi() {
 
       throwOnError(error);
 
-      return { ...data, start: new Date(data.start), end: new Date(data.end) } as Event;
+      return readWire(EventSchema, data, "POST /events/:id/fork");
     },
 
     async updateCalendar(calendar: Calendar) {
       const remote = remoteOf(calendar.id);
       if (remote) {
-        return fedFetch<Calendar>(remote, `/api/${apiVersion}/calendars`, {
-          method: "PUT", body: JSON.stringify(calendar),
-        });
+        return readWire(
+          CalendarSchema,
+          await fedFetch<Calendar>(remote, `/api/${apiVersion}/calendars`, {
+            method: "PUT", body: JSON.stringify(calendar),
+          }),
+          "PUT /calendars (federated)",
+        );
       }
       const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
         method: "PUT",
@@ -216,7 +235,7 @@ export function useApi() {
       });
       throwOnError(error);
 
-      return data;
+      return readWire(CalendarSchema, data, "PUT /calendars");
     },
 
     async removeCalendar(calendar: Calendar) {
@@ -243,9 +262,13 @@ export function useApi() {
     async updateEvent(event: Event) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
-        return fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
-          method: "PUT", body: JSON.stringify(event),
-        });
+        return readWire(
+          EventSchema,
+          await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
+            method: "PUT", body: JSON.stringify(event),
+          }),
+          "PUT /events (federated)",
+        );
       }
       const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "PUT",
@@ -256,7 +279,7 @@ export function useApi() {
       });
       throwOnError(error);
 
-      return data;
+      return readWire(EventSchema, data, "PUT /events");
     },
 
     async removeEvent(event: Event, unlinkCalendarID?: string) {
@@ -323,15 +346,19 @@ export function useApi() {
 
       throwOnError(error);
 
-      return data; // { events, deletedIds, serverTime }
+      return readWire(EventsResponse, data, "GET /events");
     },
 
     async createInvite(invite: Invite) {
       const remote = remoteOf(invite.calendarID);
       if (remote) {
-        return fedFetch<Invite>(remote, `/api/${apiVersion}/calendars/invites`, {
-          method: "POST", body: JSON.stringify(invite),
-        });
+        return readWire(
+          InviteSchema,
+          await fedFetch<Invite>(remote, `/api/${apiVersion}/calendars/invites`, {
+            method: "POST", body: JSON.stringify(invite),
+          }),
+          "POST /calendars/invites (federated)",
+        );
       }
       const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/${apiVersion}/calendars/invites`, {
         method: "POST",
@@ -343,7 +370,7 @@ export function useApi() {
 
       throwOnError(error);
 
-      return data;
+      return readWire(InviteSchema, data, "POST /calendars/invites");
     },
 
     // Raw iCalendar body — plain fetch (the $fetch helpers assume JSON bodies).
@@ -382,7 +409,11 @@ export function useApi() {
     async getInvites(calendarID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        return (await fedFetch<Invite[]>(remote, `/api/${apiVersion}/calendars/${calendarID}/invites`, { method: "GET" })) ?? [];
+        return readWire(
+          InvitesResponse,
+          (await fedFetch<Invite[]>(remote, `/api/${apiVersion}/calendars/${calendarID}/invites`, { method: "GET" })) ?? [],
+          "GET /calendars/:id/invites (federated)",
+        );
       }
       const { error, data } = await authClient.$fetch<Invite[]>(`${apiUrl}/api/${apiVersion}/calendars/${calendarID}/invites`, {
         method: "GET",
@@ -390,7 +421,7 @@ export function useApi() {
 
       throwOnError(error);
 
-      return data ?? [];
+      return readWire(InvitesResponse, data ?? [], "GET /calendars/:id/invites");
     },
 
     async revokeInvite(calendarID: string, inviteID: string) {
@@ -515,7 +546,7 @@ export function useApi() {
       if (Number(error?.status) === 404) return null;
       throwOnError(error);
 
-      return data;
+      return readWire(RemindersDocumentSchema, data, "GET /reminders");
     },
 
     async getSettingsDocument() {
@@ -525,7 +556,11 @@ export function useApi() {
 
       throwOnError(error);
 
-      return data;
+      return readWire(
+        SettingsDocumentSchema,
+        data,
+        "GET /users/settings/document",
+      );
     },
 
     async patchSettings(request: PatchSettingsRequest) {
@@ -540,7 +575,7 @@ export function useApi() {
       if (Number(error?.status) === 409) throw new SettingsConflictError();
       throwOnError(error);
 
-      return data;
+      return readWire(SettingsDocumentSchema, data, "PATCH /users/me/settings");
     },
 
     async deleteUser() {
