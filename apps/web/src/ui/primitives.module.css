@@ -2201,7 +2201,29 @@
 
 /* Fresher data is already on the way, so this is a note, not a warning — the
    accent is reserved for the case where nothing is coming. */
-.staleBanner[data-tone="refreshing"] {
+.staleBanner[data-tone="refreshing"],
+.staleBanner[data-tone="update"] {
 	background: var(--surface-raised);
 	color: var(--text-secondary);
+}
+
+.staleBannerAction {
+	min-height: 24px;
+	padding: 0 var(--space-3);
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-pill);
+	background: transparent;
+	color: var(--text-primary);
+	cursor: pointer;
+	font: inherit;
+	font-size: var(--text-11);
+}
+
+.staleBannerAction:hover {
+	background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.staleBannerAction:focus-visible {
+	outline: var(--focus-ring);
+	outline-offset: 1px;
 }

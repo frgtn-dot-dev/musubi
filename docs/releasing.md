@@ -84,6 +84,22 @@ those people, so a mismatch degrades as it always did and is written into the
 diagnostics the settings screen copies — which is how such a report reaches us
 at all. In development it throws, because there it can still be fixed.
 
+### What a browser tab does across a deploy
+
+The service worker caches nothing, but a tab keeps running the JavaScript it
+opened with, and people leave Musubi open for days.
+`apps/web/src/api/use-newer-server.ts` compares the version compiled into the
+bundle against the one `/api/v1/server` reports — a document the app already
+fetches, so the check costs no request — and offers a reload when the server is
+ahead.
+
+It offers rather than reloads: someone may be halfway through writing an event.
+It stays quiet when the server is *behind* the tab, because that is the
+self-hosting case and there is no newer bundle to fetch. And because a release
+lands API first and web second, the tab remembers which version it already
+reloaded for — otherwise the bar returns straight after a reload that could not
+have helped yet.
+
 ### Version metadata
 
 `scripts/verify-release.mjs` asserts that `PRODUCT_VERSION` in
@@ -115,10 +131,6 @@ because nothing anywhere read the column — it is the exception, not the model.
 
 ## Things still worth doing
 
-- **A browser tab outlives a deploy.** The service worker deliberately caches
-  nothing, but an open tab keeps running yesterday's JavaScript against today's
-  API. The web already fetches `/api/v1/server`; comparing its `version` against
-  the build's would let it offer a reload.
 - **Federation is a fourth clock.** The Musubi server on the other end updates
   when its owner feels like it. The read rule above is the floor there, not the
   ceiling.

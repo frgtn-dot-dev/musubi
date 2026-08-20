@@ -1,4 +1,4 @@
-import { CloudOff, RefreshCw } from "lucide-react";
+import { CloudOff, RefreshCw, Sparkles } from "lucide-react";
 import styles from "./primitives.module.css";
 
 /** "3 minutes ago" — enough to judge the data, without a clock's precision. */
@@ -59,6 +59,31 @@ export function StaleBanner({
             : "Showing saved data — refreshing."}
         {suffix ? ` ${suffix}` : ""}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Says a newer Musubi is on the server than the one this tab is running.
+ *
+ * Same bar as above, because it is the same kind of fact — what you are looking
+ * at is not what the server has — and a second visual idiom for that would be
+ * one too many. It offers rather than reloads: someone may be halfway through
+ * writing an event, and taking that away to install an update nobody asked for
+ * is worse than running yesterday's code for another minute.
+ */
+export function UpdateBanner({ onReload }: { onReload: () => void }) {
+  return (
+    <div className={styles.staleBanner} data-tone="update" role="status">
+      <Sparkles aria-hidden="true" size={13} strokeWidth={1.8} />
+      <span>A newer Musubi is ready.</span>
+      <button
+        className={styles.staleBannerAction}
+        onClick={onReload}
+        type="button"
+      >
+        Reload
+      </button>
     </div>
   );
 }
