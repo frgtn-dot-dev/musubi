@@ -69,6 +69,51 @@ if (!/version:\s*rootPackage\.version/.test(appConfig)) {
   fail("apps/client/app.config.ts must read the product version from the root manifest");
 }
 
+// The API ships as a `pnpm deploy` closure with no repository root above it, so
+// it cannot import this manifest the way the client config does — it mirrors
+// the string instead, and this is what keeps the mirror honest. Without it the
+// server spent two releases telling every client it was 0.1.3.
+const wire = readFileSync(new URL("packages/types/src/version.ts", root), "utf8");
+const declared = (name) => wire.match(new RegExp(`${name} = "([^"]+)"`))?.[1];
+const productVersion = declared("PRODUCT_VERSION");
+const minClientVersion = declared("MIN_CLIENT_VERSION");
+
+if (productVersion !== rootPackage.version) {
+  fail(
+    `packages/types/src/version.ts declares PRODUCT_VERSION ${productVersion ?? "nothing"}, ` +
+      `but package.json says ${rootPackage.version}`,
+  );
+}
+
+// Numeric, not lexical: "0.1.10" sorts before "0.1.9" as a string.
+const rank = (version) =>
+  (version ?? "").split(".").map((part) => Number(part) || 0);
+const ahead = (left, right) => {
+  const [a = 0, b = 0, c = 0] = rank(left);
+  const [x = 0, y = 0, z = 0] = rank(right);
+  return a > x || (a === x && (b > y || (b === y && c > z)));
+};
+
+if (!minClientVersion || !/^\d+\.\d+\.\d+$/.test(minClientVersion)) {
+  fail("packages/types/src/version.ts must declare MIN_CLIENT_VERSION as X.Y.Z");
+} else if (ahead(minClientVersion, rootPackage.version)) {
+  fail(
+    `MIN_CLIENT_VERSION ${minClientVersion} is ahead of the product ` +
+      `${rootPackage.version}, which locks out every build including this one`,
+  );
+}
+
+// The snapshot records when the contract was last re-baselined, so it trails
+// the product and only moves on a deliberate break. Ahead of it means someone
+// hand-edited the file.
+const contract = readJson("packages/types/contracts/wire.json");
+if (ahead(contract.version, rootPackage.version)) {
+  fail(
+    `packages/types/contracts/wire.json claims ${contract.version}, ` +
+      `ahead of the product at ${rootPackage.version}`,
+  );
+}
+
 const workspaceConfig = readFileSync(new URL("pnpm-workspace.yaml", root), "utf8");
 if (!/^autoInstallPeers:\s+false\s*$/m.test(workspaceConfig)) {
   fail("pnpm-workspace.yaml must keep autoInstallPeers disabled");
