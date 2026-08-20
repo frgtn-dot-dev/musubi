@@ -344,6 +344,13 @@
       "when": 1786865603087,
       "tag": "0048_pending_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1787224907647,
+      "tag": "0049_drop_show_kanji",
+      "breakpoints": true
     }
   ]
 }

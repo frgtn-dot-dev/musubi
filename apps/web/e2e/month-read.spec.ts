@@ -6793,7 +6793,7 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 const UI_SHOTS = process.env.UI_SHOTS;
 const UI_SHOTS_THEME = process.env.UI_SHOTS_THEME === "dark" ? "dark" : "light";
 
-test("ui catalogue", async ({ page }) => {
+test("ui catalogue", async ({ browser, page }) => {
 	test.skip(!UI_SHOTS, "Set UI_SHOTS=<directory> to write the catalogue.");
 	test.setTimeout(600_000);
 
@@ -6802,16 +6802,16 @@ test("ui catalogue", async ({ page }) => {
 	let index = 0;
 	// Reported alongside each shot: on a laptop the page itself should not scroll.
 	const overflow: string[] = [];
-	const shot = async (name: string, target?: Locator) => {
+	const shot = async (name: string, target?: Locator, on: Page = page) => {
 		index += 1;
 		const file = `${UI_SHOTS}/${UI_SHOTS_THEME}/${String(index).padStart(2, "0")}-${name}.png`;
 		// Let motion settle: every layer here fades and lifts on open.
-		await page.waitForTimeout(350);
-		await (target ?? page).screenshot({
+		await on.waitForTimeout(350);
+		await (target ?? on).screenshot({
 			path: file,
 			...(target ? {} : { fullPage: true }),
 		});
-		const size = await page.evaluate(() => ({
+		const size = await on.evaluate(() => ({
 			client: window.document.documentElement.clientHeight,
 			scroll: window.document.documentElement.scrollHeight,
 		}));
@@ -6994,7 +6994,70 @@ test("ui catalogue", async ({ page }) => {
 	await layer("dialog-settings", "Settings");
 
 	await layer("dialog-calendars", "Calendars");
-	await layer("dialog-connections", "Connections");
+
+	// Connections with nothing connected shows none of what the layer is for, so
+	// this one shot runs in its own context: two linked accounts, and a server
+	// that offers every provider. Isolated storage, because the app hydrates the
+	// calendar list from its own cache and would otherwise keep the empty one.
+	const linkedContext = await browser.newContext({
+		locale: "en-GB",
+		timezoneId: "Europe/Prague",
+		viewport: { height: 900, width: 1440 },
+	});
+	const linkedPage = await linkedContext.newPage();
+	await linkedPage.addInitScript(
+		(theme) => window.localStorage.setItem("musubi-theme", theme),
+		UI_SHOTS_THEME,
+	);
+	await mockAuthenticatedReads(linkedPage, events, [
+		...calendars,
+		{
+			accountId: "account-google",
+			accountLabel: "work@gmail.com",
+			color: "#4285f4",
+			creatorID: session.user.id,
+			id: "google-work",
+			members: [],
+			name: "Work",
+			provider: "google",
+			role: "owner",
+			syncStatus: "active",
+		},
+		{
+			accountId: "account-icloud",
+			accountLabel: "home@icloud.com",
+			color: "#7a8ba3",
+			creatorID: session.user.id,
+			id: "icloud-home",
+			members: [],
+			name: "Home",
+			provider: "caldav",
+			role: "owner",
+			syncStatus: "active",
+		},
+	]);
+	await linkedPage.route("**/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: ["google", "microsoft", "caldav"],
+		}),
+	);
+	await linkedPage.clock.setFixedTime(new Date("2026-08-03T10:00:00"));
+	await linkedPage.goto(
+		`${new URL(page.url()).origin}/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`,
+	);
+	await linkedPage.waitForLoadState("networkidle");
+	await linkedPage
+		.getByRole("button", { exact: true, name: "Connections" })
+		.first()
+		.click();
+	const linkedDialog = linkedPage.getByRole("dialog").first();
+	await linkedDialog.waitFor({ state: "visible", timeout: 5_000 });
+	await shot("app-dialog-connections", linkedDialog, linkedPage);
+	await linkedContext.close();
 	await layer("dialog-scheduling", "Find a time");
 
 	// The results of a poll, and the same poll once it is decided: both are the
