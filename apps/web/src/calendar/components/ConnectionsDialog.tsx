@@ -538,7 +538,15 @@ export function ConnectionsDialog({
                   <li key={server.connectionId}>
                     <Row
                       className={styles.connectionRow}
-                      detail="Shared calendars on another Musubi server"
+                      // The version because federation is the one clock nobody
+                      // here winds: that server updates when its owner decides
+                      // to, and a difference nobody can see is one nobody can
+                      // diagnose. Absent when the server would not say.
+                      detail={
+                        server.version
+                          ? `Shared calendars on another Musubi server · ${server.version}`
+                          : "Shared calendars on another Musubi server"
+                      }
                       icon={<ProviderIcon flavor={null} />}
                       label={
                         <span className={styles.rowLabel}>

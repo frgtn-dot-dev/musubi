@@ -100,6 +100,25 @@ lands API first and web second, the tab remembers which version it already
 reloaded for — otherwise the bar returns straight after a reload that could not
 have helped yet.
 
+### Federation, the fourth clock
+
+The Musubi server at the other end of a connection updates when its owner
+decides to, and nothing here can make that happen. Two things follow.
+
+`MIN_PEER_VERSION` in `packages/types/src/version.ts` is the floor. Connecting
+reads the peer's `/api/v1/server` first and refuses below it **by name** — "that
+server runs Musubi 0.0.9" — instead of letting the handshake fail with
+"that server rejected the invite", which explains nothing.
+
+It refuses on nothing else. A peer that names no version, answers with an
+error, or cannot be reached is allowed through: the handshake that follows is
+the real test, and turning every unfamiliar server into a dead end would cost
+more than it saves.
+
+The Connections dialog shows what each connected server is running, read live
+through the gateway — no new route, no credential in the browser. A version
+nobody can see is a difference nobody can diagnose.
+
 ### Version metadata
 
 `scripts/verify-release.mjs` asserts that `PRODUCT_VERSION` in
@@ -131,6 +150,3 @@ because nothing anywhere read the column — it is the exception, not the model.
 
 ## Things still worth doing
 
-- **Federation is a fourth clock.** The Musubi server on the other end updates
-  when its owner feels like it. The read rule above is the floor there, not the
-  ceiling.

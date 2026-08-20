@@ -19,6 +19,7 @@ import {
 	issueMemberToken,
 } from "../federation_tokens";
 import { assertPublicOrigin, canonicalHttpOrigin } from "../federation_origin";
+import { peerTooOld } from "../federation_peer";
 import { config, logger } from "@musubi/config";
 
 // Federation (Musubi ↔ Musubi), v1: an invite token doubles as the cross-server
@@ -210,6 +211,11 @@ export async function handlerFederationConnect(req: Request, res: Response) {
 			"That invite belongs to this server — join it directly.",
 		);
 	}
+
+	// Asked before the handshake, so an old peer is turned away by name rather
+	// than through "that server rejected the invite", which explains nothing.
+	const tooOld = await peerTooOld(origin);
+	if (tooOld) throw new BadRequestError(tooOld);
 
 	const existing = (await getMusubiAccounts(req.user!.id)).find(
 		(row) => row.server === origin,

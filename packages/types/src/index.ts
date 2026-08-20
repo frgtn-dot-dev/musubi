@@ -11,4 +11,9 @@ export * from "./pages";
 export * from "./google";
 export * from "./permissions";
 export * from "./federation";
-export { MIN_CLIENT_VERSION, PRODUCT_VERSION } from "./version";
+export {
+  compareVersions,
+  MIN_CLIENT_VERSION,
+  MIN_PEER_VERSION,
+  PRODUCT_VERSION,
+} from "./version";
