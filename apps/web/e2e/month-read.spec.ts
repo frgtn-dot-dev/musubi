@@ -2849,6 +2849,80 @@ test("keeps a calendar's reminder on the calendar, viewer or not", async ({
 	expect(accessibility.violations).toEqual([]);
 });
 
+test("offers a reload when the server has moved past this tab", async ({
+	page,
+}) => {
+	await mockAuthenticatedReads(page);
+	// Registered after the helper's, so this one answers.
+	await page.route("**/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: ["google"],
+			version: "9.9.9",
+		}),
+	);
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+
+	const banner = page.getByRole("status").filter({ hasText: "A newer Musubi" });
+	await expect(banner).toBeVisible();
+
+	// Offers, never takes over: someone may be mid-sentence in an event.
+	await expect(banner.getByRole("button", { name: "Reload" })).toBeVisible();
+});
+
+test("stays quiet when the server is behind this tab", async ({ page }) => {
+	await mockAuthenticatedReads(page);
+	// The self-hosting case: a server older than the app it serves. Reloading
+	// fetches the same bundle again, so there is nothing to offer.
+	await page.route("**/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: ["google"],
+			version: "0.0.1",
+		}),
+	);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+
+	await expect(
+		page.getByRole("status").filter({ hasText: "A newer Musubi" }),
+	).toHaveCount(0);
+});
+
+test("does not ask twice for a reload that changed nothing", async ({
+	page,
+}) => {
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/server", (route) =>
+		respond(route, {
+			email: true,
+			pushPublicKey: null,
+			socials: [],
+			socialsWeb: [],
+			syncProviders: ["google"],
+			version: "9.9.9",
+		}),
+	);
+	// Releases land API first, web second. Between the two the reload lands on
+	// the same bundle, and a bar that returns each time reads as a broken app.
+	await page.addInitScript(() =>
+		sessionStorage.setItem("musubi-reloaded-for", "9.9.9"),
+	);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+
+	await expect(
+		page.getByRole("status").filter({ hasText: "A newer Musubi" }),
+	).toHaveCount(0);
+});
+
 test("manages members and invite links for a calendar", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let members = [
@@ -8819,3 +8893,4 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
 	);
 	await expectNoAccessibilityViolations(page);
 });
+
