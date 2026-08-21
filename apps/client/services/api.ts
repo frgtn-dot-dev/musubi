@@ -14,8 +14,12 @@ import {
   type RemindersDocument,
   type SettingsDocument,
 } from "@musubi/types";
-import { z } from "zod";
-import { readWire } from "@/services/wire";
+import {
+  CalendarsResponse,
+  EventsResponse,
+  InvitesResponse,
+  readWire,
+} from "@/services/wire";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
 import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
@@ -30,14 +34,6 @@ import type { AttendanceChoice } from "@/lib/attendance";
 // run against its origin with our member token — same endpoints, same shapes.
 const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
 const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
-
-const CalendarsResponse = z.array(CalendarSchema);
-const InvitesResponse = z.array(InviteSchema);
-const EventsResponse = z.object({
-  deletedIds: z.array(z.string()),
-  events: z.array(EventSchema),
-  serverTime: z.string(),
-});
 
 // Names + avatars only — the API deliberately sends no attendee emails. `status`
 // is the answer: public RSVPs land in this same list (spec 2026-08-12).
