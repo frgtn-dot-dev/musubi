@@ -1,7 +1,8 @@
 import { EventSchema } from "@musubi/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
-import { readWire } from "./wire";
+import { z } from "zod";
+import { EventsResponse, readWire, wireTimestamp } from "./wire";
 
 const event = {
   calendars: ["home"],
@@ -72,5 +73,52 @@ describe("readWire", () => {
         readWire(EventSchema, { ...event, start: "not a date" }, "GET /events"),
       ).toThrow(/GET \/events does not match this build/);
     });
+  });
+});
+
+describe("wireTimestamp", () => {
+  // Better Auth's client revives every ISO-8601 string into a Date before any
+  // schema runs, so `GET /events` handed `serverTime` over as a Date and the
+  // shared `z.string()` refused it — on the phone only.
+  const response = z.object({ serverTime: wireTimestamp });
+
+  it("takes the Date this transport actually delivers", () => {
+    const parsed = response.parse({
+      serverTime: new Date("2026-08-20T10:00:00.000Z"),
+    });
+    expect(parsed.serverTime).toBe("2026-08-20T10:00:00.000Z");
+  });
+
+  it("still takes the string the wire carries", () => {
+    const parsed = response.parse({ serverTime: "2026-08-20T10:00:00.000Z" });
+    expect(parsed.serverTime).toBe("2026-08-20T10:00:00.000Z");
+  });
+});
+
+describe("GET /events", () => {
+  it("survives a payload whose timestamps arrived revived", () => {
+    // Exactly what Better Auth's parser hands over: every ISO-8601 string in
+    // the body is already a Date. Written as Dates rather than run through the
+    // real parser, which is not a public export — the shape is the point.
+    const parsed = readWire(
+      EventsResponse,
+      {
+        deletedIds: [],
+        events: [
+          {
+            ...event,
+            end: new Date(event.end),
+            start: new Date(event.start),
+          },
+        ],
+        serverTime: new Date("2026-08-20T12:00:00.000Z"),
+      },
+      "GET /events",
+    );
+
+    // A string, because that is what `setLastSync` stores and what expo-sqlite
+    // on iOS can bind.
+    expect(parsed.serverTime).toBe("2026-08-20T12:00:00.000Z");
+    expect(parsed.events[0]!.start).toBeInstanceOf(Date);
   });
 });

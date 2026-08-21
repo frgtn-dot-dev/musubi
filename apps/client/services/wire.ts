@@ -1,5 +1,6 @@
+import { CalendarSchema, EventSchema, InviteSchema } from "@musubi/types";
 import { recordServerDiagnostic } from "@/lib/serverDiagnostics";
-import type { z } from "zod";
+import { z } from "zod";
 
 /**
  * Check a response against the shape this build was compiled against.
@@ -53,3 +54,36 @@ export function readWire<T>(
   // Exactly what this call returned before there was any checking at all.
   return data as T;
 }
+
+/**
+ * A timestamp as it actually arrives here.
+ *
+ * Better Auth's client parses responses with date revival switched on, so every
+ * ISO-8601 string in every payload is already a `Date` before a schema sees it.
+ * The server sends a string and the browser receives a string; this transport
+ * is the odd one out, which is why a schema shared with the web cannot simply
+ * say `z.string()` for a time.
+ *
+ * `z.coerce.date()` fields are unaffected — they take a `Date` happily — so
+ * this is only for the places the wire carries a timestamp the code wants to
+ * keep as text. `services/eventsCache.ts` had already learned this the hard
+ * way: expo-sqlite on iOS throws when asked to bind a `Date`.
+ */
+export const wireTimestamp = z
+  .union([z.string(), z.date()])
+  .transform((value) =>
+    typeof value === "string" ? value : value.toISOString(),
+  );
+
+// ── The shapes that are not one shared schema on their own ──────────────────
+// Here rather than beside the calls, so a spec can reach them: importing
+// `services/api.ts` drags the whole React Native module graph in with it.
+
+export const CalendarsResponse = z.array(CalendarSchema);
+export const InvitesResponse = z.array(InviteSchema);
+
+export const EventsResponse = z.object({
+  deletedIds: z.array(z.string()),
+  events: z.array(EventSchema),
+  serverTime: wireTimestamp,
+});
