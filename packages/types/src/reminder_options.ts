@@ -11,7 +11,7 @@ import type { ReminderRule } from "./reminder";
  * "how long before" makes no sense for a birthday, and "which morning" makes
  * none for a 3pm meeting.
  *
- * The phone offers a longer list (15 minutes, half a day). A rule set there
+ * A rule saved by an older client or API may sit outside these presets. It
  * must survive being LOOKED at here — hence `CUSTOM`, which shows what is
  * stored and is only ever replaced by a deliberate click.
  */
@@ -134,9 +134,9 @@ export function presetOptions(rule: ReminderRule | undefined) {
     ...base,
     {
       label:
-        rule.minutesBefore !== null
-          ? customLabel(rule, "timed")
-          : customLabel(rule, "allDay"),
+        rule.minutesBefore === null
+          ? customLabel(rule, "allDay")
+          : customLabel(rule, "timed"),
       value: CUSTOM,
     },
   ];

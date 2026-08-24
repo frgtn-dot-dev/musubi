@@ -1,5 +1,5 @@
 import "react-native-get-random-values";
-import { Calendar, DEFAULT_REMINDER_RULE, Event, ReminderRule, SILENT_REMINDER_RULE, can, isSilentRule, sameRule } from "@musubi/types";
+import { allDayValue, Calendar, DEFAULT_REMINDER_RULE, Event, ReminderRule, can, optionsFor, sameRule, timedValue, withAllDay, withTimed } from "@musubi/types";
 import { activeScheme, colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
@@ -29,6 +29,8 @@ import * as haptics from "@/lib/haptics";
 import { userFacingError } from "@/lib/network";
 import { showToast } from "@/components/ui/Toast";
 import { tabBarHeight } from "@/constants/layout";
+import { SettingRowAction } from "@/components/SettingRow";
+import { OptionPicker } from "@/components/ui/OptionPicker";
 
 type Props = {
   visible: boolean;
@@ -95,7 +97,6 @@ const KB_HIDE_MS = 180;
 
 export function AddEventModal({ visible, startingDate, endingDate, docked, anchor, peekVisible = true, dockRevealProgress, dockBottomInset, onClose, onSave, onEdit, calendars, event }: Props) {
   const {
-    notificationsOnByDefault,
     timeFormat,
     dateFormat,
     calendarOrder,
@@ -113,8 +114,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
   const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">("start");
-  const [notifyBeforeTime, setNotifyBeforeTime] = useState<number>(15);
-  const [notificationToggle, setNotificationToggle] = useState<boolean>(notificationsOnByDefault);
+  const [reminderRule, setReminderRule] = useState<ReminderRule>(DEFAULT_REMINDER_RULE);
+  const [reminderPicker, setReminderPicker] = useState(false);
   const [allDayToggle, setAllDayToggle] = useState(false);
   const [attendeesToggle, setAttendeesToggle] = useState(false);
   const [newLocation, setNewLocation] = useState("");
@@ -171,14 +172,6 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const { data: session } = authClient.useSession();
   const userID = session?.user.id;
 
-  const NOTIFY_BEFORE = [
-    { label: "15 minutes", value: 15 },
-    { label: "30 minutes", value: 30 },
-    { label: "1 hour", value: 1 * 60 },
-    { label: "Half a day", value: 12 * 60 },
-    { label: "1 Day", value: 24 * 60 },
-  ]
-
   const closeSequence = () => {
     // Release the keyboard BEFORE unmount. The overlay (edit) composer isn't a
     // native Modal — closing it with a focused input skips keyboardDidHide, so
@@ -196,8 +189,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setStartError("");
     setNewEnd(new Date());
     setEndError("");
-    setNotificationToggle(notificationsOnByDefault);
-    setNotifyBeforeTime(15);
+    setReminderRule(DEFAULT_REMINDER_RULE);
+    setReminderPicker(false);
     setSelectedCals(defaultCalSet());
     setOriginCal(null);
     setNewDescription("");
@@ -366,8 +359,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         const rule = event?.id
           ? effectiveReminderRule(event)
           : inheritedReminderRule({ id: "", calendars: [...(event?.calendars ?? [])] });
-        setNotificationToggle(!isSilentRule(rule));
-        if (rule.minutesBefore !== null) setNotifyBeforeTime(rule.minutesBefore);
+        setReminderRule(rule);
       }
       const { rrule, extras } = splitRecurrence(event?.recurrence);
       setUnsupportedRecurrence(rawUnsupportedRecurrence(event?.recurrence));
@@ -399,6 +391,16 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     }
 
   }, [newStart, newEnd]);
+
+  const reminderKind = allDayToggle ? "allDay" : "timed";
+  const reminderValue = reminderKind === "timed"
+    ? timedValue(reminderRule)
+    : allDayValue(reminderRule);
+  const reminderChoices = optionsFor(reminderRule, reminderKind);
+  const reminderLabel = reminderChoices.find((choice) => choice.value === reminderValue)?.label ?? "Off";
+  const reminderEnabled = reminderKind === "timed"
+    ? reminderRule.minutesBefore !== null
+    : reminderRule.allDay !== null;
 
   const toggleCal = (id: string) => {
     setSelectedCals(prev => {
@@ -510,7 +512,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       // never on app launch. A denial is a valid choice and must not block the
       // event itself from being created or edited.
       let reminderAllowed = false;
-      if (notificationToggle) {
+      if (reminderEnabled) {
         try { reminderAllowed = await requestEventNotificationPermission(); }
         catch (error) { console.warn("Could not check notification permission:", error); }
       }
@@ -524,23 +526,15 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       }
 
       try {
-        if (notificationToggle ? reminderAllowed : true) {
+        if (reminderEnabled ? reminderAllowed : true) {
           // Only store an override where the answer differs from what the
           // event would inherit. Writing one every time would make every event
           // an exception, and a later change to the calendar rule would then
           // reach none of them.
           const inherited = inheritedReminderRule(eventConstruct);
-          const chosen: ReminderRule = notificationToggle
-            ? {
-                minutesBefore: allDayToggle ? null : notifyBeforeTime,
-                allDay: allDayToggle
-                  ? inherited.allDay ?? DEFAULT_REMINDER_RULE.allDay
-                  : inherited.allDay,
-              }
-            : SILENT_REMINDER_RULE;
           await setEventReminderRule(
             eventConstruct,
-            sameRule(chosen, inherited) ? null : chosen,
+            sameRule(reminderRule, inherited) ? null : reminderRule,
           );
         }
       } catch (error) {
@@ -548,7 +542,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         showToast({ message: "Event saved, but the reminder could not be scheduled." });
       }
 
-      if (notificationToggle && !reminderAllowed) {
+      if (reminderEnabled && !reminderAllowed) {
         showToast({ message: "Event saved without a reminder. Allow notifications in system settings to enable it." });
       }
       haptics.success();
@@ -824,52 +818,11 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           }
         </View>
 
-        <View style={styles.fieldContainer}>
-          <View style={{ flexDirection: "row", gap: 36, alignItems: "flex-start" }}>
-            <View style={{ flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Notification</Text>
-              <Switch
-                thumbColor={notificationToggle ? colors.accent : colors.bg3}
-                trackColor={{
-                  false: colors.line,
-                  true: colors.line3,
-                }}
-                ios_backgroundColor={colors.line}
-                onValueChange={(v) => { setNotificationToggle(v); }}
-                value={notificationToggle}
-                accessibilityLabel="Event notification"
-              />
-            </View>
-            {notificationToggle &&
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Notify Before Event</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.horizontalPillView}>
-                    {NOTIFY_BEFORE.map((opt) => {
-                      const active = notifyBeforeTime === opt.value;
-                      return (
-                        <Tap
-                          key={opt.label}
-                          haptic="select"
-                          onPress={() => setNotifyBeforeTime(opt.value)}
-                          hitSlop={{ top: 6, bottom: 6 }}
-                          accessibilityRole="radio"
-                          accessibilityLabel={`Notify ${opt.label.toLowerCase()} before`}
-                          accessibilityState={{ checked: active }}
-                          style={active ? styles.pillActive : styles.pill}
-                        >
-                          <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
-                            {opt.label}
-                          </Text>
-                        </Tap>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-            }
-          </View>
-        </View>
+        <SettingRowAction
+          label="Remind Me"
+          value={reminderLabel}
+          onPress={() => setReminderPicker(true)}
+        />
 
         {/* Attendance toggle — a "kind of event". Non-destructive: switching it
             off keeps event_users rows, re-enabling shows the same people. */}
@@ -1198,6 +1151,18 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           <Btn label={event ? "Save" : "Create"} onPress={handleSave} loading={isLoading} />
         </View>
       )}
+      <OptionPicker
+        visible={reminderPicker}
+        title="Remind Me"
+        options={reminderChoices}
+        value={reminderValue}
+        onSelect={(value) => setReminderRule(
+          reminderKind === "timed"
+            ? withTimed(reminderRule, value)
+            : withAllDay(reminderRule, value),
+        )}
+        onClose={() => setReminderPicker(false)}
+      />
     </>
   );
 
