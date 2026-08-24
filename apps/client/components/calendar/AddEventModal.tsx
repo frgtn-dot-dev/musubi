@@ -220,6 +220,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const DOCK_H = Math.min(win.height * DOCK_HEIGHT_RATIO, DOCK_MAX_H);
   const dockRange = DOCK_H - DOCK_PEEK;
   const dockOff = useSharedValue(peekVisible ? dockRange : DOCK_H + DOCK_HIDDEN_EXTRA);
+  const dockShown = useSharedValue(peekVisible);
   const dockStart = useSharedValue(0);
 
   // Keyboard lift: the window doesn't resize (enforced edge-to-edge), so shift
@@ -249,8 +250,12 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   // When re-shown it lands at peek, never straight into the expanded state.
   useEffect(() => {
     if (!docked) return;
+    const wasShown = dockShown.get();
+    dockShown.set(peekVisible);
     dockOff.value = withSpring(
-      peekVisible ? Math.min(dockOff.value, dockRange) : DOCK_H + DOCK_HIDDEN_EXTRA,
+      peekVisible
+        ? wasShown ? Math.min(dockOff.value, dockRange) : dockRange
+        : DOCK_H + DOCK_HIDDEN_EXTRA,
       DOCK_SPRING,
     );
   }, [docked, peekVisible, dockRange]);
@@ -270,6 +275,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     .activeOffsetY([-12, 12])
     .onStart(() => { dockStart.value = dockOff.value; })
     .onUpdate(e => {
+      if (!dockShown.get()) return;
       // From PEEK the drag may continue past the dock — that's the dismiss path.
       // From EXPANDED it stops at peek (two-stage), so collapsing a tall sheet
       // can't accidentally throw the whole composer away.
@@ -277,8 +283,13 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       dockOff.value = Math.min(Math.max(dockStart.value + e.translationY, 0), maxY);
     })
     .onEnd(e => {
+      if (!dockShown.get()) {
+        dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, DOCK_SPRING);
+        return;
+      }
       const past = dockOff.value - dockRange;
       if (past > DOCK_DISMISS_PAST || (past > 0 && e.velocityY > DOCK_SNAP_VELOCITY)) {
+        dockShown.set(false);
         dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, { ...DOCK_SPRING, velocity: e.velocityY });
         runOnJS(dismissByGesture)();
         return;
@@ -303,18 +314,25 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
 
   const dockedDismiss = () => {
     Keyboard.dismiss();
-    dockOff.value = withSpring(dockRange, DOCK_SPRING);
+    // A pan finishing after this press must not pull the hidden sheet back up.
+    dockShown.set(false);
+    dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, DOCK_SPRING);
     closeSequence(); // resets fields + onClose (parent clears the draft)
   };
   // typing the title pulls the sheet fully open so the rest of the form shows
-  const dockExpand = () => { dockOff.value = withSpring(0, DOCK_SPRING); };
-  const dockCollapse = () => { Keyboard.dismiss(); dockOff.value = withSpring(dockRange, DOCK_SPRING); };
+  const dockExpand = () => {
+    if (dockShown.get()) dockOff.value = withSpring(0, DOCK_SPRING);
+  };
+  const dockCollapse = () => {
+    Keyboard.dismiss();
+    if (dockShown.get()) dockOff.value = withSpring(dockRange, DOCK_SPRING);
+  };
 
   // Backdrop behind an expanded sheet — dims and swallows touches so the
   // calendar underneath can't scroll/move while the form is out of the dock.
   // At peek it's transparent and lets touches through (pointerEvents none).
   const backdropStyle = useAnimatedStyle(() => {
-    const raw = (dockRange - dockOff.value) / dockRange;
+    const raw = dockShown.get() ? (dockRange - dockOff.value) / dockRange : 0;
     const t = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     return { opacity: t, pointerEvents: t > 0.01 ? "auto" : "none" };
   });
