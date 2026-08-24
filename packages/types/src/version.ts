@@ -7,7 +7,7 @@
  * it now prevents is real, this file's predecessor sat two releases behind the
  * product it claimed to be.
  */
-export const PRODUCT_VERSION = "0.1.5";
+export const PRODUCT_VERSION = "0.1.6";
 
 /**
  * The oldest phone build this server will talk to.
@@ -16,7 +16,7 @@ export const PRODUCT_VERSION = "0.1.5";
  * store, so it moves only when a release genuinely cannot serve them — see
  * `docs/releasing.md`.
  */
-export const MIN_CLIENT_VERSION = "0.1.3";
+export const MIN_CLIENT_VERSION = "0.1.6";
 
 /**
  * The oldest Musubi server this one will federate with.
@@ -26,7 +26,7 @@ export const MIN_CLIENT_VERSION = "0.1.3";
  * connect time, by name, beats a handshake that fails later for reasons nobody
  * can read — see `docs/releasing.md`.
  */
-export const MIN_PEER_VERSION = "0.1.3";
+export const MIN_PEER_VERSION = "0.1.6";
 
 /**
  * Order two X.Y.Z versions. Negative when `left` is older.
