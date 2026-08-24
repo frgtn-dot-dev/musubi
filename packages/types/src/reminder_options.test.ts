@@ -32,15 +32,15 @@ assert.equal(timedValue(rule({ minutesBefore: null })), "off");
 assert.equal(allDayValue(rule({ allDay: null })), "off");
 
 {
-  // A rule set on the phone that this control has no button for must SHOW,
-  // not be silently rewritten to the nearest thing the control can express.
-  const fromPhone = rule({ minutesBefore: 15 });
-  assert.equal(timedValue(fromPhone), CUSTOM);
-  assert.deepEqual(optionsFor(fromPhone, "timed").at(-1), {
+  // A rule saved by an older client must SHOW, not be silently rewritten to
+  // the nearest thing this control can express.
+  const legacyRule = rule({ minutesBefore: 15 });
+  assert.equal(timedValue(legacyRule), CUSTOM);
+  assert.deepEqual(optionsFor(legacyRule, "timed").at(-1), {
     label: "15 min",
     value: CUSTOM,
   });
-  assert.deepEqual(withTimed(fromPhone, CUSTOM), fromPhone);
+  assert.deepEqual(withTimed(legacyRule, CUSTOM), legacyRule);
 }
 
 // One branch changes without disturbing the other.
