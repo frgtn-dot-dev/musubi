@@ -34,3 +34,4 @@ minimumReleaseAgeExclude:
   - expo
   - "expo-*"
   - babel-preset-expo
+  - '@vardum/cli@0.4.0'
