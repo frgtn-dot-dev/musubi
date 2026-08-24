@@ -21,7 +21,7 @@ import { CalendarAdapter, NormalizedEvent } from "./adapter";
 import { googleAdapter } from "./adapters/google";
 import { caldavAdapter } from "./adapters/caldav";
 import { microsoftAdapter } from "./adapters/microsoft";
-import { providerAuthErrorFields } from "./errors";
+import { isTransientSyncError, providerAuthErrorFields } from "./errors";
 import { recordExternalSyncFailure } from "../metrics";
 import { ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
 
@@ -174,7 +174,10 @@ export async function syncUser(userID: string, options: ProviderSyncOptions = {}
       syncAccount: syncProvider,
       onFailure: ({ stage, provider, accountId, error }) => {
         recordExternalSyncFailure(stage, provider);
-        logger.error(stage === "discovery" ? "sync.provider.failed" : "sync.account.failed", {
+        // Provider/network hiccups are warn: the next poll retries them. error
+        // is reserved for what a human has to act on (revoked grant, our bug).
+        const level = isTransientSyncError(error) ? "warn" : "error";
+        logger[level](stage === "discovery" ? "sync.provider.failed" : "sync.account.failed", {
           provider,
           userId: userID,
           ...(accountId ? { accountId } : {}),
