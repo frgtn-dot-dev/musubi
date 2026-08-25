@@ -1,6 +1,11 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { auth } from "@musubi/auth";
-import { cleanOAuthAccountTokens, disableExternalCalendar, getOAuthCredentials, removeExternalAccountData } from "@musubi/db";
+import {
+  cleanOAuthAccountTokens,
+  disableExternalCalendar,
+  getOAuthCredentials,
+  removeExternalAccountData,
+} from "@musubi/db";
 import { BadRequestError } from "@musubi/types";
 import { revokeGoogleToken } from "../sync/oauth";
 import { decryptToken } from "../tokenCrypto";
@@ -14,14 +19,20 @@ const DISCONNECT_PROVIDERS = new Set(["caldav", "google", "microsoft"]);
 // accountId, so a second connected Google account is untouched.
 export async function handlerDisconnectAccount(req: Request, res: Response) {
   const { provider, accountId } = req.body ?? {};
-  if (!provider || !accountId) throw new BadRequestError("provider and accountId are required...");
-  if (!DISCONNECT_PROVIDERS.has(provider)) throw new BadRequestError("Unsupported provider");
+  if (!provider || !accountId)
+    throw new BadRequestError("provider and accountId are required...");
+  if (!DISCONNECT_PROVIDERS.has(provider))
+    throw new BadRequestError("Unsupported provider");
 
   try {
     // Best-effort revoke of THIS account's grant before we drop its token.
     // Microsoft/CalDAV have no equivalent revoke step here.
     if (provider === "google") {
-      const creds = await getOAuthCredentials(req.user!.id, "google", accountId);
+      const creds = await getOAuthCredentials(
+        req.user!.id,
+        "google",
+        accountId,
+      );
       const refreshToken = await decryptToken(creds?.refreshToken);
       if (refreshToken) await revokeGoogleToken(refreshToken);
     }
@@ -37,7 +48,7 @@ export async function handlerDisconnectAccount(req: Request, res: Response) {
       // tokens/scope: sync stops, but the login account survives.
       try {
         await auth.api.unlinkAccount({
-          body: { providerId: provider, accountId },
+          body: { accountId },
           headers: new Headers(req.headers as Record<string, string>),
         });
       } catch {
@@ -55,12 +66,16 @@ export async function handlerDisconnectAccount(req: Request, res: Response) {
 // only way to get rid of a read-only mirror (holidays, a calendar you were
 // invited to as viewer) — deleting those isn't allowed, and they aren't yours
 // to delete on the provider.
-export async function handlerDisconnectExternalCalendar(req: Request, res: Response) {
+export async function handlerDisconnectExternalCalendar(
+  req: Request,
+  res: Response,
+) {
   const { calendarId } = req.body ?? {};
   if (!calendarId) throw new BadRequestError("calendarId is required");
 
   const row = await disableExternalCalendar(req.user!.id, calendarId);
-  if (!row) throw new BadRequestError("Not an external calendar you can disconnect");
+  if (!row)
+    throw new BadRequestError("Not an external calendar you can disconnect");
 
   notifyCalendarMembers([req.user!.id], "calendar_removed", { id: calendarId });
   res.status(200).json({ id: calendarId });

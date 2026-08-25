@@ -13,10 +13,10 @@
   "private": true,
   "dependencies": {
     "@musubi/types": "workspace:*",
-    "dayjs": "^1.11.13",
+    "dayjs": "^1.11.23",
     "rrule": "^2.8.1"
   },
   "devDependencies": {
-    "tsx": "^4.22.4"
+    "tsx": "^4.23.12"
   }
 }
