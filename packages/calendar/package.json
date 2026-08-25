@@ -8,7 +8,7 @@
     "./rrule-editor": "./src/rrule-editor.ts"
   },
   "scripts": {
-    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/recurrence-edit.test.ts && tsx src/rrule-editor.test.ts && tsx src/reminders.test.ts"
+    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/recurrence-edit.test.ts && tsx src/rrule-editor.test.ts && tsx src/reminders.test.ts && tsx src/note-links.test.ts"
   },
   "private": true,
   "dependencies": {

@@ -121,13 +121,15 @@
   overflow-wrap: anywhere;
 }
 
-.detailRow a {
+.detailRow a,
+.notes a {
   color: var(--text-primary);
   text-decoration-color: var(--border-strong);
   text-underline-offset: 3px;
 }
 
-.detailRow a:hover {
+.detailRow a:hover,
+.notes a:hover {
   text-decoration-color: currentColor;
 }
 
@@ -177,6 +179,7 @@
 .notes,
 .attendeeSection,
 .calendarActions {
+  min-width: 0;
   padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-subtle);
 }
@@ -206,6 +209,7 @@
 }
 
 .notes p {
+  overflow-wrap: anywhere;
   padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
