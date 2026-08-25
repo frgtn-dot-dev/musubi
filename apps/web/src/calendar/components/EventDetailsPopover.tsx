@@ -197,9 +197,7 @@ export function EventDetailsPopover({
 	const [pendingEdit, setPendingEdit] = useState<Event>();
 	const [pendingEditScope, setPendingEditScope] = useState<EditScope>();
 	const [pendingDeleteScope, setPendingDeleteScope] = useState<DeleteScope>();
-	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(
-		null,
-	);
+	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null);
 	const [anchorPoint, setAnchorPoint] = useState<{ x: number; y: number }>();
 	const [busyAction, setBusyAction] = useState<string>();
 	const [targetAction, setTargetAction] = useState<TargetAction>();
@@ -234,7 +232,8 @@ export function EventDetailsPopover({
 	const mine = attendees?.find((attendee) => attendee.id === user.id)?.status;
 	// The count and the facepile are about who is coming; a "can't go" belongs in
 	// the list, not in the row of faces.
-	const going = attendees?.filter((attendee) => attendee.status === "going") ?? [];
+	const going =
+		attendees?.filter((attendee) => attendee.status === "going") ?? [];
 	const eventCalendars = event.calendars
 		.map((calendarId) => calendars.find((item) => item.id === calendarId))
 		.filter((item): item is Calendar => Boolean(item));
@@ -363,10 +362,7 @@ export function EventDetailsPopover({
 			if (
 				master.recurrence &&
 				scope !== "series" &&
-				!(
-					scope === "following" &&
-					event.start.getTime() <= master.start.getTime()
-				)
+				!(scope === "following" && event.start.getTime() <= master.start.getTime())
 			) {
 				const recurrence =
 					scope === "occurrence"
@@ -590,9 +586,7 @@ export function EventDetailsPopover({
 					{editing ? (
 						<>
 							<header className={styles.editorHeader}>
-								<h2 id={titleId}>
-									{master.recurrence ? "Edit series" : "Edit event"}
-								</h2>
+								<h2 id={titleId}>{master.recurrence ? "Edit series" : "Edit event"}</h2>
 								<IconButton
 									label="Close event editor"
 									size="compact"
@@ -743,10 +737,7 @@ export function EventDetailsPopover({
 								) : null}
 
 								{event.description ? (
-									<section
-										aria-labelledby={notesTitleId}
-										className={styles.notes}
-									>
+									<section aria-labelledby={notesTitleId} className={styles.notes}>
 										<div className={styles.sectionHeading}>
 											<FileText aria-hidden="true" size={17} />
 											<SectionLabel id={notesTitleId} level={3}>
@@ -775,10 +766,7 @@ export function EventDetailsPopover({
 								) : null}
 
 								{reminder ? (
-									<section
-										aria-labelledby={reminderTitleId}
-										className={styles.notes}
-									>
+									<section aria-labelledby={reminderTitleId} className={styles.notes}>
 										<div className={styles.sectionHeading}>
 											<BellRing aria-hidden="true" size={17} />
 											<SectionLabel id={reminderTitleId} level={3}>
@@ -849,19 +837,13 @@ export function EventDetailsPopover({
 													className={styles.attendeeToggle}
 													disabled={!attendees}
 													icon={
-														<UsersRound
-															aria-hidden="true"
-															size={15}
-															strokeWidth={1.6}
-														/>
+														<UsersRound aria-hidden="true" size={15} strokeWidth={1.6} />
 													}
 													size="compact"
 													variant="secondary"
 													onClick={() => setAttendeesOpen((open) => !open)}
 												>
-													{attendees
-														? `Attendees · ${going.length}`
-														: "Attendees"}
+													{attendees ? `Attendees · ${going.length}` : "Attendees"}
 													{attendeesOpen ? (
 														<ChevronUp aria-hidden="true" size={14} />
 													) : (
@@ -925,17 +907,11 @@ export function EventDetailsPopover({
 											<ul className={styles.attendeeGroups}>
 												{groupAttendees(attendees).map((group) => (
 													<li key={group.status}>
-														<p className={styles.attendeeGroupTitle}>
-															{group.title}
-														</p>
+														<p className={styles.attendeeGroupTitle}>{group.title}</p>
 														<ul className={styles.attendeeList}>
 															{group.items.map((item) => (
 																<li key={item.id}>
-																	<Avatar
-																		image={item.image}
-																		name={item.name}
-																		size={32}
-																	/>
+																	<Avatar image={item.image} name={item.name} size={32} />
 																	<span>{item.name}</span>
 																</li>
 															))}
@@ -959,10 +935,7 @@ export function EventDetailsPopover({
 													/>
 												))}
 												{going.length > FACEPILE_LIMIT ? (
-													<span
-														aria-hidden="true"
-														className={styles.facepileMore}
-													>
+													<span aria-hidden="true" className={styles.facepileMore}>
 														+{going.length - FACEPILE_LIMIT}
 													</span>
 												) : null}
@@ -999,14 +972,10 @@ export function EventDetailsPopover({
 													</p>
 												</div>
 											</div>
-											<div
-												className={styles.targetCalendarList}
-												ref={targetListRef}
-											>
+											<div className={styles.targetCalendarList} ref={targetListRef}>
 												{targetCalendars.map((item) => {
 													const pending =
-														pendingTargetId === item.id &&
-														busyAction === targetAction;
+														pendingTargetId === item.id && busyAction === targetAction;
 
 													return (
 														<RowAction
@@ -1035,9 +1004,7 @@ export function EventDetailsPopover({
 																		: "Copying…"
 																	: undefined
 															}
-															onClick={() =>
-																void handleTargetAction(targetAction, item.id)
-															}
+															onClick={() => void handleTargetAction(targetAction, item.id)}
 														/>
 													);
 												})}
@@ -1061,10 +1028,7 @@ export function EventDetailsPopover({
 							</div>
 
 							{!targetAction && (editable || removable || canAddToCalendar) ? (
-								<footer
-									aria-label="Event actions"
-									className={styles.detailActions}
-								>
+								<footer aria-label="Event actions" className={styles.detailActions}>
 									{editable ? (
 										<Button
 											icon={<Pencil size={16} strokeWidth={1.6} />}
@@ -1219,9 +1183,7 @@ export function EventDetailsPopover({
 				returnFocus={triggerElement}
 				title="Delete event?"
 			>
-				<ConfirmationNotice
-					icon={<AlertTriangle size={19} strokeWidth={1.5} />}
-				>
+				<ConfirmationNotice icon={<AlertTriangle size={19} strokeWidth={1.5} />}>
 					<p>{deleteConsequence}</p>
 				</ConfirmationNotice>
 				{actionError ? (

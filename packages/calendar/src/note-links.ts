@@ -11,7 +11,9 @@ export function noteParts(note: string): NotePart[] {
   for (const match of note.matchAll(URL)) {
     const start = match.index;
     const linkedText = match[0].replace(TRAILING_PUNCTUATION, "");
-    const href = /^www\./iu.test(linkedText) ? `https://${linkedText}` : linkedText;
+    const href = /^www\./iu.test(linkedText)
+      ? `https://${linkedText}`
+      : linkedText;
 
     try {
       new globalThis.URL(href);

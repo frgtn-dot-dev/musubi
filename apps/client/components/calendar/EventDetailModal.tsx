@@ -34,7 +34,11 @@ import {
 } from "@/lib/attendance";
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
-import { excludeOccurrence, endSeriesBefore, noteParts } from "@musubi/calendar";
+import {
+	excludeOccurrence,
+	endSeriesBefore,
+	noteParts,
+} from "@musubi/calendar";
 import { syncScheduledReminders } from "@/services/notifications";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
@@ -171,7 +175,9 @@ export default function EventDetailModal({
 			recurrence: excludeOccurrence(master.recurrence, event.start),
 		};
 		updateEvent(updated, api);
-		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(() => {});
+		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(
+			() => {},
+		);
 		handleClose();
 	};
 	const deleteFollowing = () => {
@@ -183,7 +189,9 @@ export default function EventDetailModal({
 			recurrence: endSeriesBefore(master.recurrence, event.start),
 		};
 		updateEvent(updated, api);
-		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(() => {});
+		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(
+			() => {},
+		);
 		handleClose();
 	};
 
@@ -217,11 +225,7 @@ export default function EventDetailModal({
 		>
 			<GestureHandlerRootView style={{ flex: 1 }}>
 				<Animated.View style={[styles.modalOverlay, fadeStyle]}>
-					<Pressable
-						style={{ flex: 1 }}
-						onPress={handleClose}
-						accessible={false}
-					/>
+					<Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
 				</Animated.View>
 				<GestureDetector gesture={gesture}>
 					<Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
@@ -248,9 +252,7 @@ export default function EventDetailModal({
 								}}
 							/>
 							<View style={{ flex: 1, gap: 6 }}>
-								<Text
-									style={[styles.modalTitle, { fontSize: 26, lineHeight: 32 }]}
-								>
+								<Text style={[styles.modalTitle, { fontSize: 26, lineHeight: 32 }]}>
 									{event?.title}
 								</Text>
 								<Text
@@ -293,7 +295,10 @@ export default function EventDetailModal({
 							</View>
 						</View>
 
-						<ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
+						<ScrollView
+							style={{ flexShrink: 1 }}
+							showsVerticalScrollIndicator={false}
+						>
 							{/* Where it lives — quiet metadata under the identity block. No
                   bottom border when nothing follows (avoids an empty "section"). */}
 							<View
@@ -318,23 +323,12 @@ export default function EventDetailModal({
 											return (
 												<View key={cal} style={styles.pill}>
 													{isOrigin ? (
-														<Ionicons
-															name="star"
-															size={12}
-															color={calendar.color}
-														/>
+														<Ionicons name="star" size={12} color={calendar.color} />
 													) : locked ? (
-														<Feather
-															name="lock"
-															size={11}
-															color={calendar.color}
-														/>
+														<Feather name="lock" size={11} color={calendar.color} />
 													) : (
 														<View
-															style={[
-																styles.colorDot,
-																{ backgroundColor: calendar.color },
-															]}
+															style={[styles.colorDot, { backgroundColor: calendar.color }]}
 														/>
 													)}
 													<Text
@@ -357,10 +351,7 @@ export default function EventDetailModal({
 									{event?.location && (
 										<View style={styles.modalDetailRow}>
 											<Feather size={20} name="map-pin" color={colors.fg4} />
-											<Tap
-												style={{ flex: 1 }}
-												onPress={() => openMaps(event.location!)}
-											>
+											<Tap style={{ flex: 1 }} onPress={() => openMaps(event.location!)}>
 												<Text
 													numberOfLines={1}
 													ellipsizeMode="tail"
@@ -413,9 +404,7 @@ export default function EventDetailModal({
 											borderRadius: 8,
 										}}
 									>
-										<Text
-											style={{ fontFamily: fonts.serif, color: colors.fg2 }}
-										>
+										<Text style={{ fontFamily: fonts.serif, color: colors.fg2 }}>
 											{noteParts(event.description).map((part, index) =>
 												part.href ? (
 													<Text
@@ -491,9 +480,7 @@ export default function EventDetailModal({
 															borderColor: colors.line2,
 															borderRadius: 999,
 															padding: 2,
-															backgroundColor: chosen
-																? colors.fill
-																: "transparent",
+															backgroundColor: chosen ? colors.fill : "transparent",
 														}}
 													>
 														<View
@@ -520,9 +507,7 @@ export default function EventDetailModal({
 									{/* Facepile "falls apart" into the list on expand — one or the other, never both. */}
 									{!attendeesOpen ? (
 										<Tap scaleTo={1} onPress={() => setAttendeesOpen(true)}>
-											<View
-												style={{ flexDirection: "row", alignItems: "center" }}
-											>
+											<View style={{ flexDirection: "row", alignItems: "center" }}>
 												{going.slice(0, 7).map((a, i) => (
 													// bg1 ring separates the overlapping circles from each other
 													<View
@@ -593,11 +578,7 @@ export default function EventDetailModal({
 																	gap: 12,
 																}}
 															>
-																<Avatar
-																	name={a.name}
-																	image={a.image}
-																	size={32}
-																/>
+																<Avatar name={a.name} image={a.image} size={32} />
 																<Text
 																	style={{
 																		fontFamily: fonts.sans,
@@ -675,9 +656,7 @@ export default function EventDetailModal({
 										onPress={() => setUnlinkVisible(true)}
 									>
 										<Feather size={20} name="minus-circle" color={colors.fg2} />
-										<Text style={{ color: colors.fg2, fontSize: 10 }}>
-											Unlink
-										</Text>
+										<Text style={{ color: colors.fg2, fontSize: 10 }}>Unlink</Text>
 									</Tap>
 								</>
 							)}
@@ -710,8 +689,7 @@ export default function EventDetailModal({
 												confirm(
 													{
 														title: "Delete event",
-														message:
-															"This removes the event from all calendars.",
+														message: "This removes the event from all calendars.",
 														confirmLabel: "Delete",
 													},
 													deleteAll,
@@ -720,9 +698,7 @@ export default function EventDetailModal({
 										}}
 									>
 										<Feather size={20} name="trash" color={colors.accent} />
-										<Text style={{ color: colors.accent, fontSize: 10 }}>
-											Delete
-										</Text>
+										<Text style={{ color: colors.accent, fontSize: 10 }}>Delete</Text>
 									</Tap>
 								</>
 							)}
@@ -751,8 +727,7 @@ export default function EventDetailModal({
 							title="Remove from calendar"
 							visible={unlinkVisible}
 							filter={(c) =>
-								!!event?.calendars.includes(c.id) &&
-								c.id !== event?.originCalendarID
+								!!event?.calendars.includes(c.id) && c.id !== event?.originCalendarID
 							}
 							emptyLabel="No calendars to remove this from."
 							onClose={() => setUnlinkVisible(false)}
