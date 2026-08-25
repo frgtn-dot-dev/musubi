@@ -8,15 +8,15 @@
     "./rrule-editor": "./src/rrule-editor.ts"
   },
   "scripts": {
-    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/recurrence-edit.test.ts && tsx src/rrule-editor.test.ts && tsx src/reminders.test.ts"
+    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/recurrence-edit.test.ts && tsx src/rrule-editor.test.ts && tsx src/reminders.test.ts && tsx src/note-links.test.ts"
   },
   "private": true,
   "dependencies": {
     "@musubi/types": "workspace:*",
-    "dayjs": "^1.11.13",
+    "dayjs": "^1.11.23",
     "rrule": "^2.8.1"
   },
   "devDependencies": {
-    "tsx": "^4.22.4"
+    "tsx": "^4.23.12"
   }
 }
