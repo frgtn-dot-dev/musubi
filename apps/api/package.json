@@ -5,12 +5,13 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx ../../packages/db/src/migrate.ts && tsx watch src/index.ts",
-    "test": "tsx src/federation.test.ts && tsx src/federation_gateway.test.ts && tsx src/federation_stream.test.ts && tsx src/handlers/stream.test.ts && tsx src/handlers/server.test.ts && tsx src/handlers/calendars.test.ts && tsx src/handlers/events.test.ts && tsx src/handlers/settings.test.ts && tsx src/handlers/reminders.test.ts && tsx src/handlers/push.test.ts && tsx src/handlers/event_shares.test.ts && tsx src/handlers/scheduling.test.ts && tsx src/handlers/calendar_pages.test.ts && tsx src/middleware/proxy.test.ts && tsx src/request_validation.test.ts && tsx src/scheduling.test.ts && tsx src/reminder_dispatch.test.ts && tsx src/event_notifications.test.ts && tsx src/sync/errors.test.ts && tsx src/sync/orchestrator.test.ts && tsx src/sync/adapters/provider_http.test.ts && tsx src/sync/caldav_client.test.ts && tsx src/sync/oauth.test.ts && tsx src/sync/adapters/microsoft.test.ts"
+    "test": "tsx src/media_storage.test.ts && tsx src/federation.test.ts && tsx src/federation_gateway.test.ts && tsx src/federation_stream.test.ts && tsx src/handlers/stream.test.ts && tsx src/handlers/server.test.ts && tsx src/handlers/calendars.test.ts && tsx src/handlers/events.test.ts && tsx src/handlers/settings.test.ts && tsx src/handlers/reminders.test.ts && tsx src/handlers/push.test.ts && tsx src/handlers/event_shares.test.ts && tsx src/handlers/scheduling.test.ts && tsx src/handlers/calendar_pages.test.ts && tsx src/middleware/proxy.test.ts && tsx src/request_validation.test.ts && tsx src/scheduling.test.ts && tsx src/reminder_dispatch.test.ts && tsx src/event_notifications.test.ts && tsx src/sync/errors.test.ts && tsx src/sync/orchestrator.test.ts && tsx src/sync/adapters/provider_http.test.ts && tsx src/sync/caldav_client.test.ts && tsx src/sync/oauth.test.ts && tsx src/sync/adapters/microsoft.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1116.0",
     "@musubi/auth": "workspace:*",
     "@musubi/calendar": "workspace:*",
     "@musubi/config": "workspace:*",

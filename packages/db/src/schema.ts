@@ -128,10 +128,8 @@ export const accountRelations = relations(account, ({ one }) => ({
 // User settings
 
 
-// Avatars live in the DB on purpose: client-side optimization keeps them at
-// ~10-20 KB, self-hosting stays "just docker-compose", and pg_dump backs them
-// up. If bigger media ever lands (event attachments), swap the storage behind
-// the avatar endpoints for S3/MinIO — nothing else needs to change.
+// Compatibility bridge for avatars uploaded before media storage moved out of
+// PostgreSQL. API lazily copies each row to configured storage, then deletes it.
 export const userAvatars = pgTable("user_avatars", {
   id: text("id")
     .primaryKey()
