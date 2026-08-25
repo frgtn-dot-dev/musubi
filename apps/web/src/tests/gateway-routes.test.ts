@@ -10,8 +10,9 @@ import { describe, expect, it } from "vitest";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.join(here, "../routes");
 const CADDYFILE = path.join(here, "../../../../ops/gateway/Caddyfile");
+const DEV_COMPOSE = path.join(here, "../../../../docker-compose.dokploy.dev.yml");
 
-const WEB_MATCHER = /@webclient path ([^\n]+)\n\s*handle @webclient \{\n\s*reverse_proxy \{\$WEB_UPSTREAM/;
+const WEB_MATCHER = /@webclient path ([^\n]+)\n\s*handle @webclient \{\n\s*reverse_proxy \{env\.WEB_UPSTREAM\}/;
 
 // TanStack file routes that produce no URL of their own.
 const NOT_A_ROUTE = new Set(["__root", "index"]);
@@ -67,7 +68,20 @@ describe("gateway routes", () => {
   it("keeps the apex on the marketing upstream", () => {
     expect(gatewayPaths()).not.toContain("/");
     expect(readFileSync(CADDYFILE, "utf8")).toContain(
-      "reverse_proxy {$MARKETING_UPSTREAM:web:3000}",
+      "reverse_proxy {env.MARKETING_UPSTREAM}",
+    );
+  });
+
+  it("resolves replaced containers through Docker DNS at request time", () => {
+    const caddyfile = readFileSync(CADDYFILE, "utf8");
+    expect(caddyfile).toContain("reverse_proxy {env.API_UPSTREAM}");
+    expect(caddyfile).toContain("reverse_proxy {env.WEB_UPSTREAM}");
+    expect(caddyfile).not.toMatch(/\{\$(?:API|WEB|MARKETING)_UPSTREAM/);
+  });
+
+  it("sends the development apex to the app when no marketing site exists", () => {
+    expect(readFileSync(DEV_COMPOSE, "utf8")).toContain(
+      "MARKETING_UPSTREAM: musubi-web-internal:3000",
     );
   });
 });

@@ -39,6 +39,9 @@ services:
       # Hostname Caddy serves. A real domain gets automatic HTTPS; `:80` serves
       # plain HTTP for a LAN or when another proxy terminates TLS.
       PUBLIC_HOST: ${PUBLIC_HOST:-:80}
+      # Runtime hostnames stay stable while Docker replaces container IPs.
+      API_UPSTREAM: api:7531
+      WEB_UPSTREAM: web:3000
       # Optional landing page on `/`, as host:port reachable from this network.
       # Left alone, `/` opens the app.
       MARKETING_UPSTREAM: ${MARKETING_UPSTREAM:-web:3000}

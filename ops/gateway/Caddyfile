@@ -6,6 +6,11 @@
 #
 # PUBLIC_HOST is the hostname Caddy serves. Set it to your domain for automatic
 # HTTPS, or to `:80` to run plain HTTP behind another proxy / on a LAN.
+#
+# Upstream environment variables use runtime placeholders (`{env.*}`), not
+# Caddyfile substitutions (`{$*}`). Caddy therefore hands the stable Compose
+# service name to Docker DNS for each new connection instead of retaining the
+# IP of a container that a deployment has replaced.
 
 {$PUBLIC_HOST::80} {
 	encode zstd gzip
@@ -21,7 +26,7 @@
 	# updates arrive in clumps (or not at all).
 	@stream path /api/stream
 	handle @stream {
-		reverse_proxy {$API_UPSTREAM:api:7531} {
+		reverse_proxy {env.API_UPSTREAM} {
 			flush_interval -1
 			transport http {
 				# No read timeout: an idle stream is normal, not a stall.
@@ -33,7 +38,7 @@
 	# The API owns /api/* — Better Auth on /api/auth/*, the REST surface on
 	# /api/v1/*, and the federation gateway underneath it.
 	handle /api/* {
-		reverse_proxy {$API_UPSTREAM:api:7531}
+		reverse_proxy {env.API_UPSTREAM}
 	}
 
 	# HTML hand-off pages the API serves for links that arrive from outside the
@@ -46,16 +51,16 @@
 	# as a page you can read and accept. The API's own invite page is the fallback
 	# for API-only installs, where the phone app is the only client there is.
 	handle /reset-password {
-		reverse_proxy {$API_UPSTREAM:api:7531}
+		reverse_proxy {env.API_UPSTREAM}
 	}
 	handle /delete-account {
-		reverse_proxy {$API_UPSTREAM:api:7531}
+		reverse_proxy {env.API_UPSTREAM}
 	}
 	handle /email-verified {
-		reverse_proxy {$API_UPSTREAM:api:7531}
+		reverse_proxy {env.API_UPSTREAM}
 	}
 	handle /.well-known/apple-app-site-association {
-		reverse_proxy {$API_UPSTREAM:api:7531}
+		reverse_proxy {env.API_UPSTREAM}
 	}
 
 	# The routes the web client owns, listed rather than caught, so that the
@@ -71,7 +76,7 @@
 	# client's route for it only answers 204.
 	@webclient path /app /app/* /login /login/ /invite/* /e/* /s/* /find-a-time /find-a-time/ /new-event /new-event/ /healthz /healthz/ /favicon.svg /assets/* /_serverFn/*
 	handle @webclient {
-		reverse_proxy {$WEB_UPSTREAM:web:3000}
+		reverse_proxy {env.WEB_UPSTREAM}
 	}
 
 	# Everything left over, which is `/` and whatever a marketing site puts
@@ -79,6 +84,6 @@
 	# web client, whose own `/` redirects to /app — an install with no marketing
 	# site opens the app instead of a landing page nobody asked for.
 	handle {
-		reverse_proxy {$MARKETING_UPSTREAM:web:3000}
+		reverse_proxy {env.MARKETING_UPSTREAM}
 	}
 }
