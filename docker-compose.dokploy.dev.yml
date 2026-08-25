@@ -57,6 +57,10 @@ services:
     environment:
       DATABASE_URL: >-
         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Used only when S3_BUCKET is unset.
+      MEDIA_DIR: /app/data/media
+    volumes:
+      - dev-media:/app/data/media
     depends_on:
       db:
         condition: service_healthy
@@ -83,6 +87,7 @@ services:
 
 volumes:
   dev-data:
+  dev-media:
   dev-caddy-data:
   dev-caddy-config:
 

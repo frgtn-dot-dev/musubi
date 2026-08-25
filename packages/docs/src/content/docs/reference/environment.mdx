@@ -78,6 +78,24 @@ could bypass it. `docker-compose.api.yml` publishes `API_SERVER_PORT` for your o
 proxy to sit in front of. The Dokploy stack publishes nothing — its UI Domain
 reaches only `gateway:80` over `dokploy-network`; web and API remain internal.
 
+## Media storage
+
+Media uses the persistent local `media` volume by default. Setting `S3_BUCKET`
+switches storage to a remote S3 bucket; Compose never starts an object-storage
+service. Existing database avatars move to the selected storage lazily on first
+read. Keep the bucket private: clients always use the public API endpoint. Once
+S3 is active, the API rejects disabling it or changing bucket/endpoint/region
+until media has been migrated explicitly.
+
+| Variable | Purpose |
+| --- | --- |
+| `S3_BUCKET` | Enables remote S3 storage when non-empty |
+| `S3_REGION` | Required with `S3_BUCKET` |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Optional only when the runtime supplies AWS-role credentials; otherwise set both |
+| `S3_ENDPOINT` | Optional endpoint for a remote S3-compatible provider; omit for AWS S3 |
+| `S3_FORCE_PATH_STYLE` | Set `true` only when the remote provider requires path-style URLs |
+| `MEDIA_DIR` | Local fallback path; host default is `./data/media`, while Compose fixes it to `/app/data/media` and mounts the `media` volume |
+
 ## Email
 
 All email settings are optional at boot, but the feature needs the complete set:
@@ -231,7 +249,7 @@ Use this endpoint during setup before debugging the client UI.
 
 - [ ] `BETTER_AUTH_URL` is the final public HTTPS origin.
 - [ ] `ENVIRONMENT` is not `dev`.
-- [ ] Database, auth, SMTP, OAuth, and CalDAV secrets are stored outside Git.
+- [ ] Database, S3, auth, SMTP, OAuth, and CalDAV secrets are stored outside Git.
 - [ ] `MUSUBI_TAG` is pinned when upgrades must be controlled.
 - [ ] `METRICS_PORT` is reachable only from the monitoring network.
 - [ ] `CALDAV_ENC_KEY` and `BETTER_AUTH_SECRET` are backed up separately from PostgreSQL.

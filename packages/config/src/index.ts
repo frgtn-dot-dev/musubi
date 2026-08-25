@@ -92,6 +92,20 @@ type DBConfig = {
   databaseUrl: string;
 };
 
+type S3Config = {
+  bucket: string;
+  region: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  forcePathStyle: boolean;
+};
+
+type MediaConfig = {
+  localDir: string;
+  s3: S3Config | null;
+};
+
 type SMTPConfig = {
   host: string;
   port: number;
@@ -153,6 +167,7 @@ type SecurityConfig = {
 type Config = {
   api: APIConfig;
   db: DBConfig;
+  media: MediaConfig;
   push: PushConfig;
   smtp: SMTPConfig;
   social: SocialConfig;
@@ -165,6 +180,50 @@ validateAuthSecret(environment, process.env.BETTER_AUTH_SECRET);
 const dbConfig: DBConfig = {
   databaseUrl: envOrThrow("DATABASE_URL"),
 };
+
+export function parseMediaConfig(
+  env: Record<string, string | undefined>,
+): MediaConfig {
+  const bucket = env.S3_BUCKET?.trim() ?? "";
+  const region = env.S3_REGION?.trim() ?? "";
+  const endpoint = env.S3_ENDPOINT?.trim() || undefined;
+  const accessKeyId = env.S3_ACCESS_KEY_ID?.trim() || undefined;
+  const secretAccessKey = env.S3_SECRET_ACCESS_KEY?.trim() || undefined;
+
+  if (!bucket) {
+    if (region || endpoint || accessKeyId || secretAccessKey) {
+      throw new Error(
+        "S3_BUCKET is required when any S3 setting is configured.",
+      );
+    }
+    return {
+      localDir:
+        env.MEDIA_DIR?.trim() || path.resolve(process.cwd(), "data/media"),
+      s3: null,
+    };
+  }
+  if (!region) throw new Error("S3_REGION is required when S3_BUCKET is set.");
+  if (Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
+    throw new Error(
+      "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together.",
+    );
+  }
+
+  return {
+    localDir:
+      env.MEDIA_DIR?.trim() || path.resolve(process.cwd(), "data/media"),
+    s3: {
+      bucket,
+      region,
+      endpoint,
+      accessKeyId,
+      secretAccessKey,
+      forcePathStyle: env.S3_FORCE_PATH_STYLE === "true",
+    },
+  };
+}
+
+const mediaConfig = parseMediaConfig(process.env);
 
 const apiConfig: APIConfig = {
   port: Number(process.env.API_SERVER_PORT) || 7531,
@@ -251,6 +310,7 @@ const securityConfig: SecurityConfig = {
 export const config: Config = {
   api: apiConfig,
   db: dbConfig,
+  media: mediaConfig,
   push: pushConfig,
   smtp: smtpConfig,
   social: socialConfig,

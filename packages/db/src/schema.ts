@@ -1,5 +1,16 @@
 import { relations } from "drizzle-orm";
-import { boolean, customType, index, jsonb, pgTable, text, timestamp, uuid, integer, unique } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  customType,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  integer,
+  unique,
+} from "drizzle-orm/pg-core";
 import {
   DEFAULT_NOTIFICATION_EMAILS,
   DEFAULT_REMINDER_RULE,
@@ -9,9 +20,10 @@ import {
 
 // drizzle has no built-in bytea — minimal custom type
 const bytea = customType<{ data: Buffer }>({
-  dataType() { return "bytea"; },
+  dataType() {
+    return "bytea";
+  },
 });
-
 
 // AUTH
 
@@ -124,14 +136,10 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-
 // User settings
 
-
-// Avatars live in the DB on purpose: client-side optimization keeps them at
-// ~10-20 KB, self-hosting stays "just docker-compose", and pg_dump backs them
-// up. If bigger media ever lands (event attachments), swap the storage behind
-// the avatar endpoints for S3/MinIO — nothing else needs to change.
+// Compatibility bridge for avatars uploaded before media storage moved out of
+// PostgreSQL. API lazily copies each row to configured storage, then deletes it.
 export const userAvatars = pgTable("user_avatars", {
   id: text("id")
     .primaryKey()
@@ -157,7 +165,9 @@ export const userSettings = pgTable("user_settings", {
     .$onUpdate(() => new Date()),
   revision: integer("revision").notNull().default(1),
   // settings
-  notificationsOnByDefault: boolean("notifications_on_by_default").notNull().default(true),
+  notificationsOnByDefault: boolean("notifications_on_by_default")
+    .notNull()
+    .default(true),
   defaultCalendarView: text("default_calendar_view").notNull().default("month"),
   weekStartsOn: text("week_starts_on").notNull().default("monday"),
   timeFormat: text("time_format").notNull().default("24h"),
@@ -166,7 +176,10 @@ export const userSettings = pgTable("user_settings", {
   tabBarLabels: boolean("tab_bar_labels").notNull().default(true),
   onboarded: boolean("onboarded").notNull().default(false),
   // flat, user-chosen calendar order; group order derives from first appearance
-  calendarOrder: jsonb("calendar_order").$type<string[]>().notNull().default([]),
+  calendarOrder: jsonb("calendar_order")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
   // IANA zone. All-day reminders are a wall-clock time ("the evening before at
   // 18:00"), which UTC cannot answer. Timed events need no zone — they are
   // instants, and an offset from an instant is another instant.
@@ -189,9 +202,7 @@ export const userSettings = pgTable("user_settings", {
 
 export type NewSettings = typeof userSettings.$inferInsert;
 
-
 // Calendars and Events
-
 
 export const calendars = pgTable("calendars", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -219,7 +230,6 @@ export const calendarsRelations = relations(calendars, ({ many, one }) => ({
   calendarMembers: many(calendarMembers),
   user: one(user, { fields: [calendars.creatorID], references: [user.id] }),
 }));
-
 
 export const events = pgTable("events", {
   id: uuid("id").primaryKey(),
@@ -264,7 +274,6 @@ export const eventsRelations = relations(events, ({ many, one }) => ({
   user: one(user, { fields: [events.creatorID], references: [user.id] }),
 }));
 
-
 // A published event page. No row means the event is private, which is every
 // event until somebody says otherwise — publishing is always an explicit act.
 //
@@ -307,7 +316,10 @@ export const eventShares = pgTable("event_shares", {
 export type NewEventShare = typeof eventShares.$inferInsert;
 
 export const eventSharesRelations = relations(eventShares, ({ one }) => ({
-  event: one(events, { fields: [eventShares.eventID], references: [events.id] }),
+  event: one(events, {
+    fields: [eventShares.eventID],
+    references: [events.id],
+  }),
 }));
 
 // ── Scheduling (group poll) ──────────────────────────────────────────────────
@@ -344,7 +356,9 @@ export const schedulingPolls = pgTable("scheduling_polls", {
   // Set when the organizer picks. The poll stays readable afterwards so people
   // who voted can see what was chosen without hunting for the calendar invite.
   chosenSlotID: uuid("chosen_slot_id"),
-  eventID: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+  eventID: uuid("event_id").references(() => events.id, {
+    onDelete: "set null",
+  }),
   closedAt: timestamp("closed_at"),
 });
 
@@ -412,19 +426,28 @@ export const schedulingVotes = pgTable(
 
 export type NewSchedulingVote = typeof schedulingVotes.$inferInsert;
 
-export const schedulingPollsRelations = relations(schedulingPolls, ({ many, one }) => ({
-  owner: one(user, { fields: [schedulingPolls.ownerID], references: [user.id] }),
-  participants: many(schedulingParticipants),
-  slots: many(schedulingSlots),
-}));
-
-export const schedulingSlotsRelations = relations(schedulingSlots, ({ many, one }) => ({
-  poll: one(schedulingPolls, {
-    fields: [schedulingSlots.pollID],
-    references: [schedulingPolls.id],
+export const schedulingPollsRelations = relations(
+  schedulingPolls,
+  ({ many, one }) => ({
+    owner: one(user, {
+      fields: [schedulingPolls.ownerID],
+      references: [user.id],
+    }),
+    participants: many(schedulingParticipants),
+    slots: many(schedulingSlots),
   }),
-  votes: many(schedulingVotes),
-}));
+);
+
+export const schedulingSlotsRelations = relations(
+  schedulingSlots,
+  ({ many, one }) => ({
+    poll: one(schedulingPolls, {
+      fields: [schedulingSlots.pollID],
+      references: [schedulingPolls.id],
+    }),
+    votes: many(schedulingVotes),
+  }),
+);
 
 export const calendarInvites = pgTable("calendar_invites", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -445,14 +468,17 @@ export const calendarInvites = pgTable("calendar_invites", {
 
 export type NewCalendarInvite = typeof calendarInvites.$inferInsert;
 
-export const calendarInvitesRelations = relations(calendarInvites, ({ one }) => ({
-  calendars: one(calendars, { fields: [calendarInvites.calendarID], references: [calendars.id] }),
-}));
-
-
+export const calendarInvitesRelations = relations(
+  calendarInvites,
+  ({ one }) => ({
+    calendars: one(calendars, {
+      fields: [calendarInvites.calendarID],
+      references: [calendars.id],
+    }),
+  }),
+);
 
 // LINK TABLES
-
 
 export const userStatus = pgTable("user_status", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -468,92 +494,118 @@ export const userStatus = pgTable("user_status", {
     .notNull(),
   isSponsor: boolean("is_sponsor").default(false),
   isPremium: boolean("is_premium").default(false),
-})
+});
 
-export const calendarMembers = pgTable("calendar_members", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  userID: text("user_id")
-    .references(() => user.id, {
-      onDelete: "cascade",
-    })
-    .notNull(),
-  calendarID: uuid("calendar_id")
-    .references(() => calendars.id, {
-      onDelete: "cascade",
-    })
-    .notNull(),
-  role: text("role").notNull().default("viewer"), // owner | editor | viewer
-  // MY reminder rule for this calendar, not the owner's. null = inherit the
-  // user's global default. Deliberately on the membership: letting a calendar
-  // owner set this would be a way to make somebody else's phone buzz.
-  reminder: jsonb("reminder").$type<ReminderRule>(),
-}, (t) => [unique().on(t.userID, t.calendarID)]); // re-join hits onConflictDoNothing instead of duplicating the membership
+export const calendarMembers = pgTable(
+  "calendar_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    userID: text("user_id")
+      .references(() => user.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+    calendarID: uuid("calendar_id")
+      .references(() => calendars.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+    role: text("role").notNull().default("viewer"), // owner | editor | viewer
+    // MY reminder rule for this calendar, not the owner's. null = inherit the
+    // user's global default. Deliberately on the membership: letting a calendar
+    // owner set this would be a way to make somebody else's phone buzz.
+    reminder: jsonb("reminder").$type<ReminderRule>(),
+  },
+  (t) => [unique().on(t.userID, t.calendarID)],
+); // re-join hits onConflictDoNothing instead of duplicating the membership
 
-export const calendarMembersRelations = relations(calendarMembers, ({ one }) => ({
-  calendars: one(calendars, { fields: [calendarMembers.calendarID], references: [calendars.id] }),
-  user: one(user, { fields: [calendarMembers.userID], references: [user.id] }),
-}));
+export const calendarMembersRelations = relations(
+  calendarMembers,
+  ({ one }) => ({
+    calendars: one(calendars, {
+      fields: [calendarMembers.calendarID],
+      references: [calendars.id],
+    }),
+    user: one(user, {
+      fields: [calendarMembers.userID],
+      references: [user.id],
+    }),
+  }),
+);
 
-
-export const calendarEvents = pgTable("calendar_events", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  eventID: uuid("event_id")
-    .references(() => events.id, {
-      onDelete: "cascade",
-    })
-    .notNull(),
-  calendarID: uuid("calendar_id")
-    .references(() => calendars.id, {
-      onDelete: "cascade",
-    })
-    .notNull(),
-}, (t) => [
-  unique("calendar_events_event_id_calendar_id_unique").on(t.eventID, t.calendarID),
-]);
-
+export const calendarEvents = pgTable(
+  "calendar_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    eventID: uuid("event_id")
+      .references(() => events.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+    calendarID: uuid("calendar_id")
+      .references(() => calendars.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+  },
+  (t) => [
+    unique("calendar_events_event_id_calendar_id_unique").on(
+      t.eventID,
+      t.calendarID,
+    ),
+  ],
+);
 
 export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
-  calendars: one(calendars, { fields: [calendarEvents.calendarID], references: [calendars.id] }),
-  events: one(events, { fields: [calendarEvents.eventID], references: [events.id] }),
+  calendars: one(calendars, {
+    fields: [calendarEvents.calendarID],
+    references: [calendars.id],
+  }),
+  events: one(events, {
+    fields: [calendarEvents.eventID],
+    references: [events.id],
+  }),
 }));
-
 
 // Attendees and their answer. Public RSVPs land here too (spec
 // `docs/superpowers/specs/2026-08-12-attendees-rsvp-unification-design.md`): one
 // event, one list of people, so the calendar shows what the page collected.
-export const eventUsers = pgTable("event_users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  eventID: uuid("event_id")
-    .references(() => events.id, {
-      onDelete: "cascade",
-    })
-    .notNull(),
-  userID: text("user_id")
-    .references(() => user.id, {
-      onDelete: "cascade",
-    })
-    .notNull(),
-  // going | maybe | declined. No row = has not answered; presence + status is the
-  // whole answer. Membership from before answers existed means "going", which is
-  // what it meant.
-  status: text("status").notNull().default("going"),
-}, (t) => [unique().on(t.eventID, t.userID)]); // makes join idempotent (onConflictDoNothing)
-
+export const eventUsers = pgTable(
+  "event_users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    eventID: uuid("event_id")
+      .references(() => events.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+    userID: text("user_id")
+      .references(() => user.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+    // going | maybe | declined. No row = has not answered; presence + status is the
+    // whole answer. Membership from before answers existed means "going", which is
+    // what it meant.
+    status: text("status").notNull().default("going"),
+  },
+  (t) => [unique().on(t.eventID, t.userID)],
+); // makes join idempotent (onConflictDoNothing)
 
 // A per-user reminder override on one event — the exception to whatever the
 // calendar rule says. Its own table rather than a column on `eventUsers`,
@@ -562,21 +614,25 @@ export const eventUsers = pgTable("event_users", {
 //
 // A row is always an explicit choice, "never" included. Inheriting is the
 // absence of a row.
-export const eventReminders = pgTable("event_reminders", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  eventID: uuid("event_id")
-    .references(() => events.id, { onDelete: "cascade" })
-    .notNull(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  rule: jsonb("rule").$type<ReminderRule>().notNull(),
-}, (t) => [unique().on(t.eventID, t.userID)]);
+export const eventReminders = pgTable(
+  "event_reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    eventID: uuid("event_id")
+      .references(() => events.id, { onDelete: "cascade" })
+      .notNull(),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    rule: jsonb("rule").$type<ReminderRule>().notNull(),
+  },
+  (t) => [unique().on(t.eventID, t.userID)],
+);
 
 // One browser that has agreed to be pushed to. The endpoint is a URL at the
 // browser vendor's push service and IS the address, so it is the unique key —
@@ -586,19 +642,23 @@ export const eventReminders = pgTable("event_reminders", {
 // `p256dh` and `auth` are the keys the payload is encrypted to, so the push
 // service relays a message it cannot read. Losing this table costs nothing but
 // a re-subscribe; there is no history here worth keeping.
-export const pushSubscriptions = pgTable("push_subscriptions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  endpoint: text("endpoint").notNull().unique(),
-  p256dh: text("p256dh").notNull(),
-  auth: text("auth").notNull(),
-  // Bumped on every successful send, so a dead endpoint is visible before the
-  // push service admits it with a 410.
-  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
-}, (t) => [index("push_subscriptions_user_id_idx").on(t.userID)]);
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    // Bumped on every successful send, so a dead endpoint is visible before the
+    // push service admits it with a 410.
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => [index("push_subscriptions_user_id_idx").on(t.userID)],
+);
 
 // An email waiting for its moment.
 //
@@ -610,22 +670,26 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 // `dueAt` is set from the FIRST change and never pushed forward. Extending it
 // on every edit would mean somebody who keeps fiddling never tells anyone
 // anything.
-export const pendingNotifications = pgTable("pending_notifications", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  /** What happened: "event_changed", and whatever comes later. */
-  kind: text("kind").notNull(),
-  /** What it happened to. Text, not a uuid FK — a poll is not an event. */
-  subjectID: text("subject_id").notNull(),
-  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-  dueAt: timestamp("due_at").notNull(),
-}, (t) => [
-  unique().on(t.userID, t.kind, t.subjectID),
-  index("pending_notifications_due_at_idx").on(t.dueAt),
-]);
+export const pendingNotifications = pgTable(
+  "pending_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    /** What happened: "event_changed", and whatever comes later. */
+    kind: text("kind").notNull(),
+    /** What it happened to. Text, not a uuid FK — a poll is not an event. */
+    subjectID: text("subject_id").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    dueAt: timestamp("due_at").notNull(),
+  },
+  (t) => [
+    unique().on(t.userID, t.kind, t.subjectID),
+    index("pending_notifications_due_at_idx").on(t.dueAt),
+  ],
+);
 
 // How far a scheduled job has already looked. One row per job, not per user:
 // "which slice of time has been dispatched" is the same question whoever is
@@ -637,95 +701,106 @@ export const dispatchCursors = pgTable("dispatch_cursors", {
 });
 
 export const eventRemindersRelations = relations(eventReminders, ({ one }) => ({
-  event: one(events, { fields: [eventReminders.eventID], references: [events.id] }),
+  event: one(events, {
+    fields: [eventReminders.eventID],
+    references: [events.id],
+  }),
   user: one(user, { fields: [eventReminders.userID], references: [user.id] }),
 }));
 
-
 export const eventUsersRelations = relations(eventUsers, ({ one }) => ({
   user: one(user, { fields: [eventUsers.userID], references: [user.id] }),
-  events: one(events, { fields: [eventUsers.eventID], references: [events.id] }),
+  events: one(events, {
+    fields: [eventUsers.eventID],
+    references: [events.id],
+  }),
 }));
-
 
 // EXTERNAL CALENDAR SYNC (provider-agnostic — google | microsoft | caldav)
 
-
-export const externalCalendars = pgTable("external_calendars", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  provider: text("provider").notNull(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  accountID: text("account_id").notNull(),
-  accountLabel: text("account_label"),
-  // Null while disabled: the user opted this calendar out of sync, so its local
-  // mirror was deleted but the row survives as a tombstone. Discovery keys off
-  // (provider, accountID, externalCalendarID) to skip re-importing it.
-  calendarID: uuid("calendar_id")
-    .references(() => calendars.id, { onDelete: "cascade" }),
-  externalCalendarID: text("external_calendar_id").notNull(),
-  cursor: text("cursor"),
-  disabled: boolean("disabled").notNull().default(false),
-}, (t) => [
-  unique().on(t.provider, t.accountID, t.externalCalendarID),
-  unique().on(t.calendarID),
-]);
+export const externalCalendars = pgTable(
+  "external_calendars",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    provider: text("provider").notNull(),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    accountID: text("account_id").notNull(),
+    accountLabel: text("account_label"),
+    // Null while disabled: the user opted this calendar out of sync, so its local
+    // mirror was deleted but the row survives as a tombstone. Discovery keys off
+    // (provider, accountID, externalCalendarID) to skip re-importing it.
+    calendarID: uuid("calendar_id").references(() => calendars.id, {
+      onDelete: "cascade",
+    }),
+    externalCalendarID: text("external_calendar_id").notNull(),
+    cursor: text("cursor"),
+    disabled: boolean("disabled").notNull().default(false),
+  },
+  (t) => [
+    unique().on(t.provider, t.accountID, t.externalCalendarID),
+    unique().on(t.calendarID),
+  ],
+);
 
 export type NewExternalCalendar = typeof externalCalendars.$inferInsert;
 
-
-export const externalEvents = pgTable("external_events", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  provider: text("provider").notNull(),
-  eventID: uuid("event_id")
-    .references(() => events.id, { onDelete: "cascade" })
-    .notNull(),
-  // The LOCAL mirror calendar this mapping belongs to. Scoping by it is what
-  // lets two users mirror the same global external calendar (Google holidays
-  // share one externalCalendarID across all accounts) without colliding.
-  calendarID: uuid("calendar_id")
-    .references(() => calendars.id, { onDelete: "cascade" })
-    .notNull(),
-  externalCalendarID: text("external_calendar_id").notNull(),
-  externalEventID: text("external_event_id").notNull(),
-  etag: text("etag"),
-}, (t) => [
-  unique().on(t.provider, t.calendarID, t.externalEventID),
-]);
+export const externalEvents = pgTable(
+  "external_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    provider: text("provider").notNull(),
+    eventID: uuid("event_id")
+      .references(() => events.id, { onDelete: "cascade" })
+      .notNull(),
+    // The LOCAL mirror calendar this mapping belongs to. Scoping by it is what
+    // lets two users mirror the same global external calendar (Google holidays
+    // share one externalCalendarID across all accounts) without colliding.
+    calendarID: uuid("calendar_id")
+      .references(() => calendars.id, { onDelete: "cascade" })
+      .notNull(),
+    externalCalendarID: text("external_calendar_id").notNull(),
+    externalEventID: text("external_event_id").notNull(),
+    etag: text("etag"),
+  },
+  (t) => [unique().on(t.provider, t.calendarID, t.externalEventID)],
+);
 
 export type NewExternalEvent = typeof externalEvents.$inferInsert;
 
-
 // CalDAV credentials (Apple/iCloud + generic). Password stored AES-GCM encrypted
 // by the app layer — this table never sees plaintext. Multiple accounts per user.
-export const caldavAccounts = pgTable("caldav_accounts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  serverUrl: text("server_url").notNull(),
-  username: text("username").notNull(),
-  encryptedPassword: text("encrypted_password").notNull(),
-}, (t) => [unique().on(t.userID, t.serverUrl, t.username)]);
+export const caldavAccounts = pgTable(
+  "caldav_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    serverUrl: text("server_url").notNull(),
+    username: text("username").notNull(),
+    encryptedPassword: text("encrypted_password").notNull(),
+  },
+  (t) => [unique().on(t.userID, t.serverUrl, t.username)],
+);
 
 export type NewCaldavAccount = typeof caldavAccounts.$inferInsert;
-
 
 // FEDERATION (Musubi ↔ Musubi)
 
@@ -733,14 +808,18 @@ export type NewCaldavAccount = typeof caldavAccounts.$inferInsert;
 // only this SHA-256 hash persists. Authentication accepts createdAt < 90 days;
 // clients rotate during the final 14 days. Removing a shadow user's last
 // membership revokes the row in the same transaction.
-export const memberTokens = pgTable("member_tokens", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  tokenHash: text("token_hash").notNull().unique(),
-}, (t) => [index("member_tokens_user_idx").on(t.userID)]);
+export const memberTokens = pgTable(
+  "member_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+  },
+  (t) => [index("member_tokens_user_idx").on(t.userID)],
+);
 
 export type NewMemberToken = typeof memberTokens.$inferInsert;
 
@@ -748,46 +827,53 @@ export type NewMemberToken = typeof memberTokens.$inferInsert;
 // is stored AES-GCM encrypted at the app layer (same scheme + key as CalDAV
 // passwords) so every signed-in device picks the connection up — accepting an
 // invite on one device federates them all.
-export const musubiAccounts = pgTable("musubi_accounts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  server: text("server").notNull(),          // the origin server's URL
-  remoteUserID: text("remote_user_id").notNull(), // our shadow-user id there
-  encryptedToken: text("encrypted_token").notNull(),
-}, (t) => [unique().on(t.userID, t.server)]);
+export const musubiAccounts = pgTable(
+  "musubi_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    server: text("server").notNull(), // the origin server's URL
+    remoteUserID: text("remote_user_id").notNull(), // our shadow-user id there
+    encryptedToken: text("encrypted_token").notNull(),
+  },
+  (t) => [unique().on(t.userID, t.server)],
+);
 
 export type NewMusubiAccount = typeof musubiAccounts.$inferInsert;
-
 
 // Pages: private per-user calendar view profiles. Not shared with calendar
 // members. The config is versioned JSONB (view + calendar visibility + filters)
 // saved atomically with one revision for compare-and-swap. Soft-deleted so a
 // removed Page can't orphan a client that still holds its id.
-export const pages = pgTable("pages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userID: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  name: text("name").notNull(),
-  position: integer("position").notNull().default(0),
-  isDefault: boolean("is_default").notNull().default(false),
-  schemaVersion: integer("schema_version").notNull().default(1),
-  config: jsonb("config").notNull(),
-  revision: integer("revision").notNull().default(1),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  deletedAt: timestamp("deleted_at"),
-}, (t) => [index("pages_user_position_idx").on(t.userID, t.position)]);
+export const pages = pgTable(
+  "pages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userID: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    isDefault: boolean("is_default").notNull().default(false),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    config: jsonb("config").notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("pages_user_position_idx").on(t.userID, t.position)],
+);
 
 export type NewPage = typeof pages.$inferInsert;
 export type PageRow = typeof pages.$inferSelect;
