@@ -34,7 +34,7 @@ import {
 } from "@/lib/attendance";
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
-import { excludeOccurrence, endSeriesBefore } from "@musubi/calendar";
+import { excludeOccurrence, endSeriesBefore, noteParts } from "@musubi/calendar";
 import { syncScheduledReminders } from "@/services/notifications";
 import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
@@ -293,7 +293,7 @@ export default function EventDetailModal({
 							</View>
 						</View>
 
-						<ScrollView showsVerticalScrollIndicator={false}>
+						<ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
 							{/* Where it lives — quiet metadata under the identity block. No
                   bottom border when nothing follows (avoids an empty "section"). */}
 							<View
@@ -416,7 +416,21 @@ export default function EventDetailModal({
 										<Text
 											style={{ fontFamily: fonts.serif, color: colors.fg2 }}
 										>
-											{event?.description}
+											{noteParts(event.description).map((part, index) =>
+												part.href ? (
+													<Text
+														accessibilityLabel={`Open ${part.href}`}
+														accessibilityRole="link"
+														key={`${part.href}-${index}`}
+														onPress={() => Linking.openURL(part.href!)}
+														style={{ color: colors.accent, textDecorationLine: "underline" }}
+													>
+														{part.text}
+													</Text>
+												) : (
+													part.text
+												),
+											)}
 										</Text>
 									</View>
 								</View>

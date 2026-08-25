@@ -1,7 +1,9 @@
 import {
 	endSeriesBefore,
 	excludeOccurrence,
+	noteParts,
 	seriesEditWrites,
+	shortUrlLabel,
 	type EditScope,
 } from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
@@ -751,7 +753,24 @@ export function EventDetailsPopover({
 												Notes
 											</SectionLabel>
 										</div>
-										<p>{event.description}</p>
+										<p>
+											{noteParts(event.description).map((part, index) =>
+												part.href ? (
+													<a
+														aria-label={`Open ${part.href}`}
+														href={part.href}
+														key={`${part.href}-${index}`}
+														rel="noreferrer"
+														target="_blank"
+														title={part.href}
+													>
+														{part.text}
+													</a>
+												) : (
+													part.text
+												),
+											)}
+										</p>
 									</section>
 								) : null}
 
@@ -1218,12 +1237,12 @@ export function EventDetailsPopover({
 function ExternalEventLink({ url }: { url: string }) {
 	return (
 		<a
-			aria-label={`Open event link, ${getUrlLabel(url)}`}
+			aria-label={`Open event link, ${shortUrlLabel(url)}`}
 			href={url}
 			rel="noreferrer"
 			target="_blank"
 		>
-			{getUrlLabel(url)}
+			{shortUrlLabel(url)}
 		</a>
 	);
 }
@@ -1274,14 +1293,6 @@ function getDurationLabel(event: Event): string {
 	if (!hours) return `${minutes} min`;
 	if (!minutes) return `${hours} ${hours === 1 ? "hr" : "hrs"}`;
 	return `${hours} ${hours === 1 ? "hr" : "hrs"} ${minutes} min`;
-}
-
-function getUrlLabel(url: string): string {
-	try {
-		return new URL(url).hostname.replace(/^www\./, "");
-	} catch {
-		return url;
-	}
 }
 
 function targetCalendarDetail(calendar: Calendar) {
