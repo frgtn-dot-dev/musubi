@@ -178,6 +178,11 @@
 	line-height: 1;
 }
 
+.avatar > span,
+.avatar img {
+	grid-area: 1 / 1;
+}
+
 .avatar img {
 	width: 100%;
 	height: 100%;
@@ -1094,11 +1099,7 @@
 }
 
 .rowAction[data-tone="destructive"]:hover:not(:disabled) {
-	background: color-mix(
-		in srgb,
-		var(--accent-primary) 7%,
-		var(--surface-panel)
-	);
+	background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
 }
 
 .rowAction[data-tone="destructive"] .rowLabel,
@@ -1650,8 +1651,8 @@
 }
 
 .timePickerInput::placeholder {
-  color: var(--text-muted);
-  opacity: 1;
+	color: var(--text-muted);
+	opacity: 1;
 }
 
 .timePickerInput:focus-visible {

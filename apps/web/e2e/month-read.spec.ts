@@ -6415,6 +6415,34 @@ test("opens the same event popover from a week block", async ({ page }) => {
 
 const SHARE_TOKEN = "c89f06867c4b99bddc0fe7fd83244b11";
 
+function publicEvent(overrides: Record<string, unknown> = {}) {
+	return {
+		content: {
+			agenda: [],
+			cover: { focalX: 50, focalY: 50, source: "preset" },
+			tags: [],
+		},
+		coverUrl: null,
+		description: "Come see the presses.",
+		end: "2026-08-20T16:00:00.000Z",
+		indexable: false,
+		isAllDay: false,
+		isCanceled: false,
+		location: "Brno",
+		mapImageUrl: null,
+		organizer: {
+			avatarUrl: "http://127.0.0.1:3000/api/v1/users/organizer/avatar",
+			name: "Mika",
+		},
+		recurrence: null,
+		start: "2026-08-20T13:00:00.000Z",
+		theme: { cover: "none", font: "serif", layout: "classic", palette: "sand" },
+		title: "Studio open day",
+		url: null,
+		...overrides,
+	};
+}
+
 test("publishes an event as a page and can take it back", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let share: { indexable: boolean; mode: string } | null = null;
@@ -6424,6 +6452,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 			share = route.request().postDataJSON() as typeof share;
 			return respond(route, {
 				...share,
+				coverUrl: null,
 				token: SHARE_TOKEN,
 				url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
 			});
@@ -6437,6 +6466,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 			share
 				? {
 						...share,
+						coverUrl: null,
 						token: SHARE_TOKEN,
 						url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
 					}
@@ -6482,6 +6512,18 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 		indexable: false,
 		mode: "link",
 	});
+
+	await dialog.getByLabel("Tags").fill("Workshop, Community");
+	await dialog.getByRole("button", { name: "Add item" }).click();
+	await dialog.getByLabel("Title").fill("Doors open");
+	await dialog.getByRole("button", { name: "Save page" }).click();
+	await expect(page.getByRole("status")).toContainText("Event page updated");
+	expect(share).toMatchObject({
+		content: {
+			agenda: [expect.objectContaining({ time: "18:00", title: "Doors open" })],
+			tags: ["Workshop", "Community"],
+		},
+	});
 	// The link mode's promise is that it stays out of search, so it must not even
 	// offer the indexing choice.
 	await expect(
@@ -6516,19 +6558,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 
 test("shows a published event to someone with no account", async ({ page }) => {
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, {
-			description: "Come see the presses.",
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: "Brno",
-			organizer: "Mika",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			title: "Studio open day",
-			url: null,
-		}),
+		respond(route, publicEvent()),
 	);
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
@@ -6536,12 +6566,13 @@ test("shows a published event to someone with no account", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "Studio open day" }),
 	).toBeVisible();
-	await expect(page.getByText("Organized by Mika")).toBeVisible();
-	await expect(page.getByText("Brno")).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Organized by" })).toBeVisible();
+	await expect(page.getByText("Mika", { exact: true })).toBeVisible();
+	await expect(page.locator("header").getByText("Brno")).toBeVisible();
 	// The reader's timezone, spelled out: the organizer is often somewhere else,
 	// and a bare "3 pm" is a trap.
 	await expect(page.getByText("Europe/Prague")).toBeVisible();
-	await expect(page.getByText(/15:00 – 18:00|3:00/)).toBeVisible();
+	await expect(page.getByText(/15:00–18:00|3:00/)).toBeVisible();
 
 	// No app around it, and nothing that needs a session.
 	await expect(page.getByRole("navigation", { name: "Pages" })).toHaveCount(0);
@@ -6563,26 +6594,20 @@ test("wears the look the organizer chose, without breaking what is fixed", async
 	page,
 }) => {
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, {
-			description: "Presses running.",
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: "Brno",
-			organizer: "Mika",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
-			title: "Studio open day",
-			url: null,
-		}),
+		respond(
+			route,
+			publicEvent({
+				description: "Presses running.",
+				theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
+			}),
+		),
 	);
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	const main = page.getByRole("main");
+	await expect(main).toHaveAttribute("data-font", "sans");
 	await expect(main).toHaveAttribute("data-layout", "poster");
-	await expect(main).toHaveAttribute("data-cover", "grid");
+	await expect(page.locator("header[data-cover='grid']")).toBeVisible();
 
 	// The palette arrives as custom properties, which is what the page paints
 	// from — a chosen look, not a stylesheet the organizer can write.
@@ -6590,19 +6615,15 @@ test("wears the look the organizer chose, without breaking what is fixed", async
 		await main.evaluate((element) =>
 			getComputedStyle(element).getPropertyValue("--page-accent").trim(),
 		),
-	).toBe("#b3492f");
+	).toBe("#c96f4a");
 
 	// And everything on the fixed side of the PRD still works on a dark palette:
 	// the answer reads as chosen, and the form that follows is usable.
 	await page.getByRole("button", { name: "Going" }).click();
-	await page.mouse.move(0, 0);
-	await expect
-		.poll(async () =>
-			page
-				.getByRole("button", { name: "Going" })
-				.evaluate((element) => getComputedStyle(element).backgroundColor),
-		)
-		.toBe("rgb(74, 71, 65)");
+	await expect(page.getByRole("button", { name: "Going" })).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
 	await expect(page.getByLabel("Email")).toBeVisible();
 
 	await expectNoAccessibilityViolations(page);
@@ -6643,19 +6664,7 @@ test("lets a stranger answer after confirming their address", async ({
 		),
 	);
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, {
-			description: null,
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: null,
-			organizer: "Mika",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			title: "Studio open day",
-			url: null,
-		}),
+		respond(route, publicEvent({ description: null, location: null })),
 	);
 	let codeRequest: unknown;
 	await page.route("**/api/auth/email-otp/send-verification-otp", (route) => {
@@ -6667,11 +6676,12 @@ test("lets a stranger answer after confirming their address", async ({
 		return respond(route, { token: "session", user: { id: "guest-1" } });
 	});
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) => {
-		if (route.request().method() === "PUT")
-			rsvp = route.request().postDataJSON();
+		const answered = route.request().method() === "PUT";
+		if (answered) rsvp = route.request().postDataJSON();
 		return respond(route, {
-			counts: { declined: 0, going: 1, maybe: 0 },
-			mine: "going",
+			attendees: [],
+			counts: { declined: 0, going: answered ? 1 : 0, maybe: 0 },
+			mine: answered ? "going" : null,
 			names: [],
 			visibility: "counts",
 		});
@@ -6947,25 +6957,26 @@ test("ui catalogue", async ({ browser, page }) => {
 	await shot("public-invite");
 
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, {
-			description: "Doors at six. Presses running all evening.",
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: "Studio, Brno",
-			organizer: "Mika Novotná",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			theme: {
-				cover: "wash",
-				font: "serif",
-				layout: "classic",
-				palette: "sand",
-			},
-			title: "Studio open day",
-			url: null,
-		}),
+		respond(
+			route,
+			publicEvent({
+				content: {
+					agenda: [
+						{ description: "Coffee and introductions", id: "doors", time: "18:00", title: "Doors open" },
+						{ description: "A tour of the presses", id: "tour", time: "19:00", title: "Studio tour" },
+					],
+					cover: { focalX: 50, focalY: 50, source: "preset" },
+					tags: ["Studio", "Community"],
+				},
+				description: "Doors at six. Presses running all evening.",
+				location: "Studio, Brno",
+				organizer: {
+					avatarUrl: "http://127.0.0.1:3000/api/v1/users/mika/avatar",
+					name: "Mika Novotná",
+				},
+				theme: { cover: "wash", font: "serif", layout: "classic", palette: "sand" },
+			}),
+		),
 	);
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	await page.waitForLoadState("networkidle");

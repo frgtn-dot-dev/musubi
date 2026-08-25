@@ -6,13 +6,20 @@ import {
   getEventShare,
   publishEvent,
   unpublishEvent,
+  uploadEventCover,
 } from "~/api/resources";
-import { defaultEventPageTheme } from "@musubi/types";
+import {
+  defaultEventPageContent,
+  defaultEventPageTheme,
+  type EventPageContent,
+  type EventPageTheme,
+} from "@musubi/types";
 import type { EventShare } from "~/api/contracts";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { RowAction } from "~/ui/Row";
+import { EventPageSettings } from "./EventPageSettings";
 import styles from "./styles/share-event.module.css";
 
 type Mode = "link" | "private" | "public";
@@ -36,7 +43,8 @@ const MODES: Array<{
     value: "link",
   },
   {
-    detail: "A page you can put anywhere. You choose whether search may list it.",
+    detail:
+      "A page you can put anywhere. You choose whether search may list it.",
     icon: Globe,
     label: "Public",
     value: "public",
@@ -100,18 +108,19 @@ export function ShareEventDialog({
   const publish = useMutation({
     mutationFn: (input: {
       attendeeVisibility?: EventShare["attendeeVisibility"];
+      content?: EventPageContent;
       indexable: boolean;
       mode: "link" | "public";
+      theme?: EventPageTheme;
     }) =>
       publishEvent({
         attendeeVisibility:
           input.attendeeVisibility ?? current?.attendeeVisibility ?? "counts",
+        content: input.content ?? current?.content ?? defaultEventPageContent,
         eventId,
         indexable: input.indexable,
         mode: input.mode,
-        // One look for every page. Choosing it is a job for wherever that
-        // becomes a feature; a published page keeps whatever theme it has.
-        theme: current?.theme ?? defaultEventPageTheme,
+        theme: input.theme ?? current?.theme ?? defaultEventPageTheme,
       }),
     onSuccess: (result) => queryClient.setQueryData(shareKey, result),
   });
@@ -154,10 +163,15 @@ export function ShareEventDialog({
       onOpenChange={onOpenChange}
       open
       returnFocus={returnFocus}
+      size="wide"
       title="Share event"
     >
       <div aria-busy={busy || undefined} className={styles.content}>
-        <div className={styles.modes} role="radiogroup" aria-label="Who can open this page">
+        <div
+          className={styles.modes}
+          role="radiogroup"
+          aria-label="Who can open this page"
+        >
           {MODES.map((option) => {
             const Icon = option.icon;
 
@@ -247,6 +261,26 @@ export function ShareEventDialog({
           </div>
         ) : null}
 
+        {current ? (
+          <EventPageSettings
+            busy={busy}
+            coverUrl={current.coverUrl}
+            initial={{ content: current.content, theme: current.theme }}
+            onSave={async ({ content, theme }) => {
+              await publish.mutateAsync({
+                content,
+                indexable: current.indexable,
+                mode: current.mode,
+                theme,
+              });
+              onNotice("Event page updated.");
+            }}
+            onUpload={async (file) => {
+              await uploadEventCover(eventId, file);
+            }}
+          />
+        ) : null}
+
         {error ? (
           <p className={styles.error} role="alert">
             {error.message}
@@ -280,9 +314,9 @@ export function ShareEventDialog({
 
         <p className={styles.note}>
           {/* Said before anyone asks: the page is a projection, not the event. */}
-          A published page shows the title, description, when and where, and who
-          is organizing. It never shows who else is coming, the calendar it lives
-          in, or anything else in it.
+          A published page shows only the details configured here. Guest names
+          appear only when “Show names” is selected; maybe and declined answers
+          always stay private.
         </p>
       </div>
 

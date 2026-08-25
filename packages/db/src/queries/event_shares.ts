@@ -14,7 +14,9 @@ export async function getEventShare(
   const [row] = await db
     .select()
     .from(eventShares)
-    .where(and(eq(eventShares.eventID, eventID), isNull(eventShares.revokedAt)));
+    .where(
+      and(eq(eventShares.eventID, eventID), isNull(eventShares.revokedAt)),
+    );
   return row;
 }
 
@@ -27,6 +29,7 @@ export async function getEventShare(
  */
 export async function upsertEventShare(input: {
   attendeeVisibility: string;
+  content?: unknown;
   theme?: unknown;
   createdBy: string;
   eventID: string;
@@ -43,6 +46,7 @@ export async function upsertEventShare(input: {
         attendeeVisibility: input.attendeeVisibility,
         indexable: input.indexable,
         mode: input.mode,
+        ...(input.content === undefined ? {} : { content: input.content }),
         ...(input.theme === undefined ? {} : { theme: input.theme }),
       })
       .where(eq(eventShares.id, existing.id))
@@ -54,6 +58,7 @@ export async function upsertEventShare(input: {
     .insert(eventShares)
     .values({
       attendeeVisibility: input.attendeeVisibility,
+      ...(input.content === undefined ? {} : { content: input.content }),
       ...(input.theme === undefined ? {} : { theme: input.theme }),
       createdBy: input.createdBy,
       eventID: input.eventID,
@@ -84,6 +89,8 @@ export async function revokeEventShare(eventID: string): Promise<boolean> {
 export async function getSharedEvent(token: string) {
   const [row] = await db
     .select({
+      content: eventShares.content,
+      creatorID: events.creatorID,
       description: events.description,
       end: events.end,
       attendeeVisibility: eventShares.attendeeVisibility,
@@ -149,6 +156,7 @@ export async function getSharedEventId(token: string) {
   const [row] = await db
     .select({
       attendeeVisibility: eventShares.attendeeVisibility,
+      content: eventShares.content,
       eventID: eventShares.eventID,
     })
     .from(eventShares)

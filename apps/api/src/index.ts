@@ -62,6 +62,10 @@ import {
   handlerPutPublicRsvp,
   handlerRevokeEventShare,
 } from "./handlers/event_shares";
+import {
+  handlerGetPublicEventCover,
+  handlerPutEventCover,
+} from "./handlers/event_covers";
 import { BadRequestError, ForbiddenError } from "@musubi/types";
 import { rateLimit } from "./middleware/rate_limit";
 import {
@@ -71,10 +75,7 @@ import {
   handlerSendCalendarInvite,
 } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
-import {
-  handlerSubscribePush,
-  handlerUnsubscribePush,
-} from "./handlers/push";
+import { handlerSubscribePush, handlerUnsubscribePush } from "./handlers/push";
 import {
   handlerDeleteEventReminder,
   handlerGetReminders,
@@ -353,6 +354,15 @@ app.delete(
   requireAuth,
   wrap(handlerRevokeEventShare),
 );
+app.put(
+  "/api/v1/events/:eventId/share/cover",
+  requireAuth,
+  express.raw({
+    limit: "5mb",
+    type: ["image/jpeg", "image/png", "image/webp"],
+  }),
+  wrap(handlerPutEventCover),
+);
 // Who answered. For the organizer, so it ignores the reader-facing visibility.
 
 // Calendars — /google must stay before /:id (both one-segment GETs)
@@ -423,7 +433,7 @@ app.get(
 // first, so every RSVP is an address somebody proved.
 app.get(
   "/api/v1/public/events/:token/rsvp",
-  requireAuth,
+  optionalAuth,
   rateLimit(60, 15 * 60_000),
   wrap(handlerGetPublicRsvp),
 );
@@ -432,6 +442,11 @@ app.put(
   requireAuth,
   rateLimit(30, 15 * 60_000),
   wrap(handlerPutPublicRsvp),
+);
+app.get(
+  "/api/v1/public/events/:token/cover",
+  rateLimit(120, 15 * 60_000),
+  wrap(handlerGetPublicEventCover),
 );
 app.get(
   "/api/v1/calendars/:id/export",

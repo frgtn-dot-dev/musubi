@@ -7,7 +7,12 @@ import {
   SettingsDocumentSchema,
   SettingsSchema,
 } from "@musubi/types";
-import { defaultEventPageTheme, EventPageThemeSchema } from "@musubi/types";
+import {
+  defaultEventPageContent,
+  defaultEventPageTheme,
+  EventPageContentSchema,
+  EventPageThemeSchema,
+} from "@musubi/types";
 import { z } from "zod";
 
 export const CalendarsResponseSchema = z.array(CalendarSchema);
@@ -98,6 +103,8 @@ export type FederationConnection = z.infer<typeof FederationConnectionSchema>;
 // is every event nobody has published.
 export const EventShareSchema = z.object({
   attendeeVisibility: z.enum(["counts", "hidden", "names"]).default("counts"),
+  content: EventPageContentSchema.default(defaultEventPageContent),
+  coverUrl: z.string().url().nullable(),
   indexable: z.boolean(),
   theme: EventPageThemeSchema.default(defaultEventPageTheme),
   mode: z.enum(["link", "public"]),
@@ -109,6 +116,9 @@ export type EventShare = z.infer<typeof EventShareSchema>;
 
 /** Who is coming, as much of it as the organizer lets a reader see. */
 export const RsvpSummarySchema = z.object({
+  attendees: z
+    .array(z.object({ avatarUrl: z.string().url(), name: z.string() }))
+    .default([]),
   counts: z.object({
     declined: z.number(),
     going: z.number(),
@@ -132,13 +142,16 @@ export type RsvpStatus = NonNullable<RsvpSummary["mine"]>;
  * wall-clock and the server's zone is not the reader's.
  */
 export const PublicEventSchema = z.object({
+  content: EventPageContentSchema.default(defaultEventPageContent),
+  coverUrl: z.string().url().nullable(),
   description: z.string().nullish(),
   end: z.coerce.date(),
   indexable: z.boolean().default(false),
   isAllDay: z.boolean().default(false),
   isCanceled: z.boolean().default(false),
   location: z.string().nullish(),
-  organizer: z.string(),
+  mapImageUrl: z.string().url().nullable(),
+  organizer: z.object({ avatarUrl: z.string().url(), name: z.string() }),
   recurrence: z.string().nullish(),
   start: z.coerce.date(),
   theme: EventPageThemeSchema.default(defaultEventPageTheme),
@@ -256,6 +269,4 @@ export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>;
 export type EventsResponse = z.infer<typeof EventsResponseSchema>;
 export type Attendee = z.infer<typeof AttendeeSchema>;
 export type ImportedCalendar = z.infer<typeof ImportedCalendarSchema>;
-export type RemoveEventResponse = z.infer<
-  typeof RemoveEventResponseSchema
->;
+export type RemoveEventResponse = z.infer<typeof RemoveEventResponseSchema>;

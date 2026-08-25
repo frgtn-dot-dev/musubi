@@ -106,6 +106,10 @@ type MediaConfig = {
   s3: S3Config | null;
 };
 
+type PublicEventsConfig = {
+  staticMapUrlTemplate: string;
+};
+
 type SMTPConfig = {
   host: string;
   port: number;
@@ -168,6 +172,7 @@ type Config = {
   api: APIConfig;
   db: DBConfig;
   media: MediaConfig;
+  publicEvents: PublicEventsConfig;
   push: PushConfig;
   smtp: SMTPConfig;
   social: SocialConfig;
@@ -224,6 +229,28 @@ export function parseMediaConfig(
 }
 
 const mediaConfig = parseMediaConfig(process.env);
+
+export function parseStaticMapUrlTemplate(value: string | undefined) {
+  const template = value?.trim() ?? "";
+  if (!template) return "";
+  if (!template.includes("{location}")) {
+    throw new Error("STATIC_MAP_URL_TEMPLATE must include {location}.");
+  }
+  try {
+    const url = new URL(template.split("{location}").join("Prague"));
+    if (url.protocol !== "https:" && url.protocol !== "http:")
+      throw new Error();
+  } catch {
+    throw new Error("STATIC_MAP_URL_TEMPLATE must be an HTTP(S) URL.");
+  }
+  return template;
+}
+
+const publicEventsConfig: PublicEventsConfig = {
+  staticMapUrlTemplate: parseStaticMapUrlTemplate(
+    process.env.STATIC_MAP_URL_TEMPLATE,
+  ),
+};
 
 const apiConfig: APIConfig = {
   port: Number(process.env.API_SERVER_PORT) || 7531,
@@ -311,6 +338,7 @@ export const config: Config = {
   api: apiConfig,
   db: dbConfig,
   media: mediaConfig,
+  publicEvents: publicEventsConfig,
   push: pushConfig,
   smtp: smtpConfig,
   social: socialConfig,

@@ -90,8 +90,9 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `POST /api/v1/users/delete/confirm` | Complete email-token account deletion | 10 / 15 min / IP |
 | `GET /api/v1/users/:userId/avatar` | Public immutable avatar bytes | — |
 | `GET /api/v1/public/events/:token` | Read the narrow published-event projection; token is the capability | 60 / 15 min / IP |
-| `GET /api/v1/public/events/:token/rsvp` | Read the authenticated, verified-email guest's answer | 60 / 15 min / IP |
+| `GET /api/v1/public/events/:token/rsvp` | Read public guest counts/names allowed by the organizer, plus the caller's answer when authenticated | 60 / 15 min / IP |
 | `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated, verified-email guest's answer | 30 / 15 min / IP |
+| `GET /api/v1/public/events/:token/cover` | Read the active uploaded event cover; token is the capability | 120 / 15 min / IP |
 | `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
 | `PUT /api/v1/public/polls/:token/votes` | Write a participant's complete answer set; auth is optional for the first answer | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |
@@ -183,12 +184,14 @@ and answers, never email addresses or private participant identifiers.
 | `GET /api/v1/events/:eventId/attendees` | — | `[{ id, name, image }]`; no emails |
 | `PUT /api/v1/events/:eventId/attendance` | `{ status: "going" | "maybe" | "declined" | "none" }`; legacy`{ attending: boolean }` remains accepted | Fresh attendee list |
 | `GET /api/v1/events/:eventId/share` | — | Current published-page settings or `null` |
-| `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility }` | Create or update the published page and token URL |
+| `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility, content, theme }` | Create or update the published page, tags, agenda, cover focal point, and token URL |
+| `PUT /api/v1/events/:eventId/share/cover` | JPEG, PNG, or WebP bytes (max 5 MB) | Store or replace the uploaded cover in configured media storage |
 | `DELETE /api/v1/events/:eventId/share` | — | Revoke the public token |
 
-Published event reads are open to possession of the token. RSVP reads and writes
-require a verified-email session; the public page authenticates guests with an
-emailed code before accepting an answer.
+Published event reads and organizer-approved attendee counts/names are open to
+possession of the token. Reading one's own RSVP and writing any answer require a
+verified-email session; the public page authenticates guests with an emailed code
+before accepting an answer.
 
 Event/calendar identifiers on this surface must use canonical hyphenated UUID
 form. Invalid body references, route parameters, `unlinkCalendarID`, and

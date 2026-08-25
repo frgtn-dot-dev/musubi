@@ -13,6 +13,7 @@ assert.throws(
 assert.doesNotThrow(() => requireVerifiedRsvpUser({ emailVerified: true }));
 
 const BASE: SharedEventRow = {
+  creatorID: "organizer-1",
   description: "Come see the presses.",
   end: new Date("2026-08-20T18:00:00.000Z"),
   indexable: false,
@@ -35,12 +36,15 @@ const BASE: SharedEventRow = {
   const projection = publicEventProjection(BASE);
 
   assert.deepEqual(Object.keys(projection).sort(), [
+    "content",
+    "coverUrl",
     "description",
     "end",
     "indexable",
     "isAllDay",
     "isCanceled",
     "location",
+    "mapImageUrl",
     "organizer",
     "recurrence",
     "start",
@@ -80,9 +84,34 @@ const BASE: SharedEventRow = {
     palette: "sand",
   });
 
-  // The organizer is a display name, never an address.
-  assert.equal(projection.organizer, "Sharer");
+  // The organizer is a display name and public avatar URL, never an address.
+  assert.equal(projection.organizer.name, "Sharer");
+  assert.match(projection.organizer.avatarUrl, /\/users\/organizer-1\/avatar$/);
+  assert.equal(projection.coverUrl, null);
   assert.equal(JSON.stringify(projection).includes("@"), false);
+}
+
+{
+  const projection = publicEventProjection(
+    {
+      ...BASE,
+      content: {
+        agenda: [
+          {
+            description: "Welcome",
+            id: "doors",
+            time: "18:00",
+            title: "Doors",
+          },
+        ],
+        cover: { focalX: 25, focalY: 70, source: "upload" },
+        tags: ["Community"],
+      },
+    },
+    "public-token",
+  );
+  assert.deepEqual(projection.content.tags, ["Community"]);
+  assert.match(projection.coverUrl!, /\/public\/events\/public-token\/cover$/);
 }
 
 // ── A recurring event ships its rule, not an expansion ──────────────────────
@@ -138,6 +167,11 @@ const ANSWERS = [
   // Alphabetical, and only the yeses: a maybe and a no are answers people give
   // in confidence.
   assert.deepEqual(summary.names, ["Adam", "Zoe"]);
+  assert.deepEqual(
+    summary.attendees.map(({ name }) => name),
+    ["Adam", "Zoe"],
+  );
+  assert.match(summary.attendees[0]!.avatarUrl, /\/users\/u-4\/avatar$/);
 }
 
 // Counts without names is the default, and a reader who never answered has no
@@ -151,6 +185,7 @@ const ANSWERS = [
 
   assert.equal(summary.mine, null);
   assert.deepEqual(summary.names, []);
+  assert.deepEqual(summary.attendees, []);
   assert.deepEqual(summary.counts, { declined: 1, going: 2, maybe: 1 });
 }
 
@@ -174,6 +209,7 @@ const ANSWERS = [
   });
   assert.deepEqual(empty.counts, { declined: 0, going: 0, maybe: 0 });
   assert.deepEqual(empty.names, []);
+  assert.deepEqual(empty.attendees, []);
   assert.equal(empty.mine, null);
 }
 

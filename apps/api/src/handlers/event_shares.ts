@@ -14,6 +14,7 @@ import {
 } from "@musubi/db";
 import {
   BadRequestError,
+  EventPageContentSchema,
   EventPageThemeSchema,
   ForbiddenError,
   NotFoundError,
@@ -29,6 +30,8 @@ import { notifyAttendanceChanged } from "./events";
 const MODES = new Set(["link", "public"]);
 // What a reader learns about who is coming. The organizer decides (PRD §18.2).
 const VISIBILITIES = new Set(["counts", "hidden", "names"]);
+const avatarUrl = (userID: string) =>
+  `${config.api.url}/api/v1/users/${encodeURIComponent(userID)}/avatar`;
 
 /**
  * 128 bits, hex. The URL is the credential, so it has to be unguessable in the
@@ -47,19 +50,25 @@ export async function handlerGetEventShare(req: Request, res: Response) {
   const eventID = String(req.params.eventId);
   await assertCanEditEvent(req.user!.id, eventID);
   const share = await getEventShare(eventID);
+  if (!share) {
+    res.status(200).json(null);
+    return;
+  }
 
-  res.status(200).json(
-    share
-      ? {
-          attendeeVisibility: share.attendeeVisibility,
-          indexable: share.indexable,
-          mode: share.mode,
-          theme: EventPageThemeSchema.parse(share.theme ?? {}),
-          token: share.token,
-          url: shareUrl(share.token),
-        }
-      : null,
-  );
+  const content = EventPageContentSchema.parse(share.content ?? {});
+  res.status(200).json({
+    attendeeVisibility: share.attendeeVisibility,
+    content,
+    coverUrl:
+      content.cover.source === "upload"
+        ? `${config.api.url}/api/v1/public/events/${share.token}/cover`
+        : null,
+    indexable: share.indexable,
+    mode: share.mode,
+    theme: EventPageThemeSchema.parse(share.theme ?? {}),
+    token: share.token,
+    url: shareUrl(share.token),
+  });
 }
 
 /**
@@ -73,6 +82,13 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   const mode = String(req.body?.mode ?? "");
   const indexable = req.body?.indexable === true;
   const attendeeVisibility = String(req.body?.attendeeVisibility ?? "counts");
+  const content =
+    req.body?.content === undefined
+      ? undefined
+      : EventPageContentSchema.safeParse(req.body.content);
+  if (content && !content.success) {
+    throw new BadRequestError("That page content is not valid...");
+  }
   // Parsed against the closed set, never stored as given: this is the boundary
   // that keeps "no arbitrary CSS" true, so an unknown key or value is a refusal
   // rather than something that ends up in a style attribute later.
@@ -107,6 +123,7 @@ export async function handlerPutEventShare(req: Request, res: Response) {
 
   const share = await upsertEventShare({
     attendeeVisibility,
+    content: content?.data,
     theme: theme.data,
     createdBy: req.user!.id,
     eventID,
@@ -119,8 +136,14 @@ export async function handlerPutEventShare(req: Request, res: Response) {
   // organizer to tick it as well would be asking the same question twice.
   await setEventHasAttendees(eventID, true);
 
+  const savedContent = EventPageContentSchema.parse(share.content ?? {});
   res.status(200).json({
     attendeeVisibility: share.attendeeVisibility,
+    content: savedContent,
+    coverUrl:
+      savedContent.cover.source === "upload"
+        ? `${config.api.url}/api/v1/public/events/${share.token}/cover`
+        : null,
     indexable: share.indexable,
     mode: share.mode,
     theme: share.theme,
@@ -149,10 +172,12 @@ export async function handlerGetPublicEvent(req: Request, res: Response) {
   const shared = await getSharedEvent(String(req.params.token));
   if (!shared) throw new NotFoundError("This event page is not available...");
 
-  res.status(200).json(publicEventProjection(shared));
+  res.status(200).json(publicEventProjection(shared, String(req.params.token)));
 }
 
 export type SharedEventRow = {
+  content?: unknown;
+  creatorID: string;
   description: null | string;
   theme?: unknown;
   end: Date;
@@ -181,15 +206,34 @@ export type SharedEventRow = {
  * daylight-saving change. The rule is not a secret — it is the schedule the page
  * exists to publish.
  */
-export function publicEventProjection(shared: SharedEventRow) {
+export function publicEventProjection(shared: SharedEventRow, token = "") {
+  const content = EventPageContentSchema.parse(
+    shared.content && typeof shared.content === "object" ? shared.content : {},
+  );
+  const mapTemplate = config.publicEvents.staticMapUrlTemplate;
+
   return {
+    content,
+    coverUrl:
+      content.cover.source === "upload" && token
+        ? `${config.api.url}/api/v1/public/events/${token}/cover`
+        : null,
     description: shared.description,
     end: shared.end.toISOString(),
     indexable: shared.indexable,
     isAllDay: shared.isAllDay,
     isCanceled: shared.isCanceled,
     location: shared.location,
-    organizer: shared.organizerName,
+    mapImageUrl:
+      shared.location && mapTemplate
+        ? mapTemplate
+            .split("{location}")
+            .join(encodeURIComponent(shared.location))
+        : null,
+    organizer: {
+      avatarUrl: avatarUrl(shared.creatorID),
+      name: shared.organizerName,
+    },
     recurrence: shared.recurrence,
     start: shared.start.toISOString(),
     // Parsed on the way out as well: a row written before a knob existed, or by
@@ -259,11 +303,10 @@ export async function handlerPutPublicRsvp(req: Request, res: Response) {
 
 /** The reader's own answer plus whatever the organizer lets readers see. */
 export async function handlerGetPublicRsvp(req: Request, res: Response) {
-  requireVerifiedRsvpUser(req.user);
   const share = await getSharedEventId(String(req.params.token));
   if (!share) throw new NotFoundError("This event page is not available...");
 
-  res.status(200).json(await rsvpSummary(share, req.user!.id));
+  res.status(200).json(await rsvpSummary(share, req.user?.id ?? ""));
 }
 
 async function rsvpSummary(
@@ -295,8 +338,19 @@ export function rsvpSummaryOf({
 }) {
   const count = (status: string) =>
     answers.filter((answer) => answer.status === status).length;
+  const attendees =
+    visibility === "names"
+      ? answers
+          .filter((answer) => answer.status === "going")
+          .map((answer) => ({
+            avatarUrl: avatarUrl(answer.userID),
+            name: answer.name.trim() || "Guest",
+          }))
+          .sort((left, right) => left.name.localeCompare(right.name))
+      : [];
 
   return {
+    attendees,
     counts: {
       declined: count("declined"),
       going: count("going"),
@@ -305,15 +359,7 @@ export function rsvpSummaryOf({
     mine: answers.find((answer) => answer.userID === userID)?.status ?? null,
     // Names only when the organizer said so, and only of people who are coming:
     // "maybe" and "no" are answers people give in confidence.
-    names:
-      visibility === "names"
-        ? answers
-            .filter((answer) => answer.status === "going")
-            // Never a blank in the list: an account can still be nameless if it
-            // answered before a name was required.
-            .map((answer) => answer.name.trim() || "Guest")
-            .sort((left, right) => left.localeCompare(right))
-        : [],
+    names: attendees.map((attendee) => attendee.name),
     visibility,
   };
 }

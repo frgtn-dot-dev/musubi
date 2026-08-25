@@ -45,6 +45,7 @@ You rarely edit these — Better Auth's Drizzle adapter owns them. See [Auth in 
 | --- | --- | --- |
 | `calendars` | A calendar | `creatorID`, `color`, `isDefault` (one auto-created per user, undeletable) |
 | `events` | An event | `title`, `start`/`end`, `isAllDay`, `hasAttendees`, `recurrence`, `creatorID`, **`originCalendarID`**, `deletedAt` |
+| `eventShares` | Token-gated public event page | publication mode, attendee visibility, closed `theme` JSONB, and validated `content` JSONB for cover placement, display tags, and agenda |
 | `calendarInvites` | Share links | `calendarID`, `expiresAt`, `maxUses` |
 
 <Aside type="caution">
@@ -106,7 +107,10 @@ The `(calendarID)` scoping on `externalEvents` is deliberate: two users can mirr
 stored avatar bytes in PostgreSQL. First read copies a legacy row to configured
 media storage and deletes that row. New uploads go directly to remote S3 when
 `S3_BUCKET` is set, or to the persistent local media volume otherwise. Public
-avatar endpoints and client URLs stay unchanged.
+avatar endpoints and client URLs stay unchanged. Uploaded event covers use the
+same storage abstraction under an event-scoped key; `eventShares.content` stores
+only whether that cover is active and its focal point, never image bytes or an
+S3-specific URL.
 
 ## Soft delete → delta sync
 

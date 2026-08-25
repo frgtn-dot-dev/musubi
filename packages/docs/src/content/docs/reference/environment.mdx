@@ -96,6 +96,13 @@ until media has been migrated explicitly.
 | `S3_FORCE_PATH_STYLE` | Set `true` only when the remote provider requires path-style URLs |
 | `MEDIA_DIR` | Local fallback path; host default is `./data/media`, while Compose fixes it to `/app/data/media` and mounts the `media` volume |
 
+Uploaded event covers use the same backend and remain behind token-scoped public
+API URLs. Public event pages can optionally show a provider-rendered static map:
+
+| Variable | Purpose |
+| --- | --- |
+| `STATIC_MAP_URL_TEMPLATE` | Optional HTTP(S) static-map URL containing `{location}`. Musubi URL-encodes the event location into every placeholder; unset pages fall back to the address plus an Open in map link. Browser-visible provider keys should be domain-restricted |
+
 ## Email
 
 All email settings are optional at boot, but the feature needs the complete set:
