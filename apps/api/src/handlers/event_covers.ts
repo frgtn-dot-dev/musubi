@@ -22,7 +22,8 @@ export async function handlerPutEventCover(req: Request, res: Response) {
   const eventID = String(req.params.eventId);
   await assertCanEditEvent(req.user!.id, eventID);
   const share = await getEventShare(eventID);
-  if (!share) throw new NotFoundError("Publish the event before adding a cover.");
+  if (!share)
+    throw new NotFoundError("Publish the event before adding a cover.");
 
   const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
   if (data.length === 0 || data.length > COVER_MAX_BYTES) {

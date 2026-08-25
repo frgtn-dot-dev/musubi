@@ -34,7 +34,9 @@ export const EventPageContentSchema = z
     agenda: z
       .array(EventPageAgendaItemSchema)
       .max(20)
-      .refine((items) => new Set(items.map((item) => item.id)).size === items.length)
+      .refine(
+        (items) => new Set(items.map((item) => item.id)).size === items.length,
+      )
       .default([]),
     cover: z
       .object({

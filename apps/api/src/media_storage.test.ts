@@ -20,7 +20,10 @@ async function main() {
       await import("./media_storage");
     const data = Buffer.from("image bytes");
 
-    assert.equal(sniffImageMime(Buffer.from([0xff, 0xd8, 0xff, 0x00])), "image/jpeg");
+    assert.equal(
+      sniffImageMime(Buffer.from([0xff, 0xd8, 0xff, 0x00])),
+      "image/jpeg",
+    );
     assert.equal(sniffImageMime(data), null);
     assert.equal(await readFile(path.join(root, ".backend"), "utf8"), "local");
     assert.equal(await getMedia("avatars/missing"), null);
