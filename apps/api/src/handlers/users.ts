@@ -3,7 +3,12 @@ import { deleteUserAvatar, getUserAvatar, userExists } from "@musubi/db";
 import { config, logger } from "@musubi/config";
 import { auth } from "@musubi/auth";
 import { BadRequestError, NotFoundError } from "@musubi/types";
-import { deleteMedia, getMedia, putMedia, withMediaLock } from "../media_storage";
+import {
+  deleteMedia,
+  getMedia,
+  putMedia,
+  withMediaLock,
+} from "../media_storage";
 
 // Step 1 (authenticated, from the app): triggers Better Auth's
 // sendDeleteAccountVerification, which emails a confirmation link and returns
@@ -38,9 +43,12 @@ export async function handlerConfirmDeleteUser(req: Request, res: Response) {
   }
 
   await withMediaLock(avatarKey(pending.value), async () => {
-    const record = await ctx.internalAdapter.consumeVerificationValue(identifier);
+    const record =
+      await ctx.internalAdapter.consumeVerificationValue(identifier);
     if (!record) {
-      throw new BadRequestError("This deletion link is invalid or has expired.");
+      throw new BadRequestError(
+        "This deletion link is invalid or has expired.",
+      );
     }
 
     const userId = record.value;
@@ -124,7 +132,8 @@ export async function handlerUploadAvatar(req: Request, res: Response) {
 
   const userID = req.user!.id;
   await withMediaLock(avatarKey(userID), async () => {
-    if (!(await userExists(userID))) throw new NotFoundError("User not found...");
+    if (!(await userExists(userID)))
+      throw new NotFoundError("User not found...");
     await putMedia(avatarKey(userID), buf, mime);
     await deleteUserAvatar(userID);
   });

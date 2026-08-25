@@ -16,8 +16,9 @@ async function main() {
   process.env.S3_SECRET_ACCESS_KEY = "";
 
   try {
-    const { deleteMedia, getMedia, putMedia, withMediaLock } =
-      await import("./media_storage");
+    const { deleteMedia, getMedia, putMedia, withMediaLock } = await import(
+      "./media_storage"
+    );
     const data = Buffer.from("image bytes");
 
     assert.equal(await readFile(path.join(root, ".backend"), "utf8"), "local");
@@ -36,9 +37,13 @@ async function main() {
 
     const order: string[] = [];
     let releaseFirst!: () => void;
-    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
     let firstStarted!: () => void;
-    const started = new Promise<void>((resolve) => { firstStarted = resolve; });
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
     const first = withMediaLock("avatars/race", async () => {
       order.push("first-start");
       firstStarted();

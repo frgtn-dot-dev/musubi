@@ -38,7 +38,11 @@ try {
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
-if (previousBackend && previousBackend !== "local" && previousBackend !== backendID) {
+if (
+  previousBackend &&
+  previousBackend !== "local" &&
+  previousBackend !== backendID
+) {
   throw new Error(
     `Media backend changed from ${previousBackend} to ${backendID}. Migrate media before changing S3 settings.`,
   );
@@ -52,7 +56,9 @@ const locks = new Map<string, Promise<void>>();
 export async function withMediaLock<T>(key: string, action: () => Promise<T>) {
   const previous = locks.get(key) ?? Promise.resolve();
   let release!: () => void;
-  const current = new Promise<void>((resolve) => { release = resolve; });
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   locks.set(key, current);
   await previous;
   try {
