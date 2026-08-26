@@ -13,7 +13,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { Button } from "~/ui/Button";
+import { Button, buttonClassName } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import styles from "./styles/share-event.module.css";
@@ -33,12 +33,12 @@ function cropForCover(
   imageAspect: number,
 ): Crop {
   const width = Math.min(1 / cover.zoom, 1, HERO_ASPECT / imageAspect);
-  const height = width * imageAspect / HERO_ASPECT;
+  const height = (width * imageAspect) / HERO_ASPECT;
   return {
     height,
     width,
-    x: (1 - width) * cover.focalX / 100,
-    y: (1 - height) * cover.focalY / 100,
+    x: ((1 - width) * cover.focalX) / 100,
+    y: ((1 - height) * cover.focalY) / 100,
   };
 }
 
@@ -113,7 +113,7 @@ export function EventPageSettings({
   function updateCrop(next: Crop) {
     const maxWidth = Math.min(1, HERO_ASPECT / imageAspect);
     const width = clamp(next.width, 1 / 3, maxWidth);
-    const height = width * imageAspect / HERO_ASPECT;
+    const height = (width * imageAspect) / HERO_ASPECT;
     const x = clamp(next.x, 0, 1 - width);
     const y = clamp(next.y, 0, 1 - height);
     change({
@@ -250,38 +250,37 @@ export function EventPageSettings({
               if (file) void upload(file);
             }}
           />
-          <label
-            aria-busy={uploading || undefined}
-            className={styles.uploadChoice}
-            data-selected={content.cover.source === "upload" ? "" : undefined}
-            htmlFor={uploadId}
-          >
-            <ImagePlus aria-hidden="true" size={18} />
-            {uploading ? "Uploading…" : "Upload"}
-          </label>
-        </div>
-
-        {content.cover.source === "upload" && previewUrl ? (
-          <div className={styles.coverPreviewRow}>
-            <div
-              aria-hidden="true"
-              className={styles.coverPreview}
-              style={{
-                backgroundImage: `url(${previewUrl})`,
-                backgroundPosition: `${content.cover.focalX}% ${content.cover.focalY}%`,
-                backgroundSize: `${content.cover.zoom * 100}%`,
-              }}
-            />
-            <Button
+          {content.cover.source === "upload" && previewUrl ? (
+            <button
+              aria-label="Edit uploaded cover framing"
+              className={styles.uploadChoice}
+              data-selected=""
               disabled={busy || uploading}
-              size="compact"
-              variant="secondary"
+              type="button"
               onClick={() => setFramingOpen(true)}
             >
-              Edit framing
-            </Button>
-          </div>
-        ) : null}
+              <span
+                aria-hidden="true"
+                className={styles.uploadPreview}
+                style={{
+                  backgroundImage: `url(${previewUrl})`,
+                  backgroundPosition: `${content.cover.focalX}% ${content.cover.focalY}%`,
+                  backgroundSize: `${content.cover.zoom * 100}%`,
+                }}
+              />
+              Upload
+            </button>
+          ) : (
+            <label
+              aria-busy={uploading || undefined}
+              className={styles.uploadChoice}
+              htmlFor={uploadId}
+            >
+              <ImagePlus aria-hidden="true" size={18} />
+              {uploading ? "Uploading…" : "Upload"}
+            </label>
+          )}
+        </div>
       </div>
 
       <Field description="Comma-separated, up to 6. Display only." label="Tags">
@@ -403,12 +402,21 @@ export function EventPageSettings({
       {previewUrl ? (
         <Dialog
           closeLabel="Close cover framing"
-          description="Position image inside public event header. Original image stays unchanged."
+          description="Move frame to choose visible area; drag corner to zoom. Original image stays unchanged."
           elevated
           footer={
-            <DialogClose>
-              <Button>Done</Button>
-            </DialogClose>
+            <div className={styles.framingFooter}>
+              <label
+                aria-disabled={busy || uploading || undefined}
+                className={buttonClassName({ size: "compact", variant: "secondary" })}
+                htmlFor={busy || uploading ? undefined : uploadId}
+              >
+                Change file
+              </label>
+              <DialogClose>
+                <Button>Done</Button>
+              </DialogClose>
+            </div>
           }
           open={framingOpen}
           size="compact"
@@ -424,7 +432,8 @@ export function EventPageSettings({
                 src={previewUrl}
                 onLoad={(event) =>
                   setImageAspect(
-                    event.currentTarget.naturalWidth / event.currentTarget.naturalHeight,
+                    event.currentTarget.naturalWidth /
+                      event.currentTarget.naturalHeight,
                   )
                 }
               />
@@ -451,7 +460,8 @@ export function EventPageSettings({
                   };
                 }}
                 onPointerMove={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) moveCrop(event);
+                  if (event.currentTarget.hasPointerCapture(event.pointerId))
+                    moveCrop(event);
                 }}
                 onPointerUp={() => {
                   drag.current = undefined;
@@ -466,7 +476,8 @@ export function EventPageSettings({
                     drag.current = { mode: "resize", offsetX: 0, offsetY: 0 };
                   }}
                   onPointerMove={(event) => {
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) moveCrop(event);
+                    if (event.currentTarget.hasPointerCapture(event.pointerId))
+                      moveCrop(event);
                   }}
                   onPointerUp={() => {
                     drag.current = undefined;

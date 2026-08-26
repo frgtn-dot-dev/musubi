@@ -239,18 +239,10 @@
   white-space: nowrap;
 }
 
-.coverPreviewRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.coverPreview {
-  width: 132px;
-  aspect-ratio: 16 / 6;
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+.uploadPreview {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
   background-position: center;
   background-size: cover;
 }
@@ -258,6 +250,12 @@
 .framingDialog {
   display: grid;
   gap: var(--space-4);
+}
+
+.framingFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .cropStage {
