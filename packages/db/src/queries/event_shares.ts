@@ -157,6 +157,7 @@ export async function getSharedEventId(token: string) {
     .select({
       attendeeVisibility: eventShares.attendeeVisibility,
       content: eventShares.content,
+      creatorID: events.creatorID,
       eventID: eventShares.eventID,
     })
     .from(eventShares)

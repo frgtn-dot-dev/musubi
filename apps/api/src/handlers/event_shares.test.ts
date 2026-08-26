@@ -153,11 +153,13 @@ const ANSWERS = [
   { name: "Bea", status: "maybe", userID: "u-2" },
   { name: "Cyril", status: "declined", userID: "u-3" },
   { name: "Adam", status: "going", userID: "u-4" },
+  { name: "Host", status: "going", userID: "host" },
 ];
 
 {
   const summary = rsvpSummaryOf({
     answers: ANSWERS,
+    organizerID: "host",
     userID: "u-2",
     visibility: "names",
   });
@@ -179,6 +181,7 @@ const ANSWERS = [
 {
   const summary = rsvpSummaryOf({
     answers: ANSWERS,
+    organizerID: "host",
     userID: "nobody",
     visibility: "counts",
   });
@@ -193,6 +196,7 @@ const ANSWERS = [
 {
   const summary = rsvpSummaryOf({
     answers: [{ name: "  ", status: "going", userID: "u-5" }],
+    organizerID: "host",
     userID: "u-5",
     visibility: "names",
   });
@@ -204,6 +208,7 @@ const ANSWERS = [
 {
   const empty = rsvpSummaryOf({
     answers: [],
+    organizerID: "host",
     userID: "u-1",
     visibility: "names",
   });

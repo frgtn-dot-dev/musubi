@@ -310,11 +310,12 @@ export async function handlerGetPublicRsvp(req: Request, res: Response) {
 }
 
 async function rsvpSummary(
-  share: { attendeeVisibility: string; eventID: string },
+  share: { attendeeVisibility: string; creatorID: string; eventID: string },
   userID: string,
 ) {
   return rsvpSummaryOf({
     answers: await listEventAnswers(share.eventID),
+    organizerID: share.creatorID,
     userID,
     visibility: share.attendeeVisibility,
   });
@@ -329,18 +330,21 @@ async function rsvpSummary(
  */
 export function rsvpSummaryOf({
   answers,
+  organizerID,
   userID,
   visibility,
 }: {
   answers: Array<{ name: string; status: string; userID: string }>;
+  organizerID: string;
   userID: string;
   visibility: string;
 }) {
+  const guests = answers.filter((answer) => answer.userID !== organizerID);
   const count = (status: string) =>
-    answers.filter((answer) => answer.status === status).length;
+    guests.filter((answer) => answer.status === status).length;
   const attendees =
     visibility === "names"
-      ? answers
+      ? guests
           .filter((answer) => answer.status === "going")
           .map((answer) => ({
             avatarUrl: avatarUrl(answer.userID),
@@ -356,7 +360,7 @@ export function rsvpSummaryOf({
       going: count("going"),
       maybe: count("maybe"),
     },
-    mine: answers.find((answer) => answer.userID === userID)?.status ?? null,
+    mine: guests.find((answer) => answer.userID === userID)?.status ?? null,
     // Names only when the organizer said so, and only of people who are coming:
     // "maybe" and "no" are answers people give in confidence.
     names: attendees.map((attendee) => attendee.name),
