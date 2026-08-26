@@ -32,12 +32,16 @@
   right: clamp(18px, 3vw, 30px);
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--page-surface) 84%, transparent);
   color: var(--page-text);
   backdrop-filter: blur(10px);
+}
+
+.themeToggle > button:hover:not(:disabled) {
+  transform: scale(1.06);
 }
 
 .hero {
@@ -360,10 +364,18 @@
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
   gap: var(--space-3);
+}
+
+.actions > button {
+  width: 100%;
+}
+
+.actions .secondaryAction {
+  grid-column: 1 / -1;
 }
 
 .secondaryAction,
@@ -399,6 +411,12 @@
 .answers button[aria-pressed="false"] {
   border-color: var(--border-strong);
   background: var(--surface-raised);
+}
+
+.answers button[aria-pressed="true"] {
+  border-color: var(--page-accent);
+  background: var(--page-accent);
+  color: var(--page-accent-text);
 }
 
 .answers button[aria-pressed="false"]:hover:not(:disabled) {
@@ -470,7 +488,6 @@
   .page {
     padding: 0 0 var(--space-5);
   }
-
 
   .hero {
     min-height: 420px;

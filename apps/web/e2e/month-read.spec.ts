@@ -6569,7 +6569,9 @@ test("uses the reader's shared theme instead of organizer styling", async ({
 	await expect(hero).toBeVisible();
 	const brand = hero.locator('svg[aria-label="Musubi"]').locator("..");
 	const date = hero.locator("time");
-	const toggle = hero.getByRole("button", { name: /Use dark theme/ }).locator("..");
+	const toggle = hero
+		.getByRole("button", { name: /Use dark theme/ })
+		.locator("..");
 	const [heroBox, brandBox, dateBox, toggleBox] = await Promise.all([
 		hero.boundingBox(),
 		brand.boundingBox(),
@@ -6579,21 +6581,24 @@ test("uses the reader's shared theme instead of organizer styling", async ({
 	expect(Math.abs(dateBox!.x - brandBox!.x)).toBeLessThanOrEqual(1);
 	expect(
 		Math.abs(
-			brandBox!.y + brandBox!.height / 2 -
-				(toggleBox!.y + toggleBox!.height / 2),
+			brandBox!.y + brandBox!.height / 2 - (toggleBox!.y + toggleBox!.height / 2),
 		),
 	).toBeLessThanOrEqual(1);
 	expect(
 		Math.abs(
-			brandBox!.x - heroBox!.x -
+			brandBox!.x -
+				heroBox!.x -
 				(heroBox!.x + heroBox!.width - toggleBox!.x - toggleBox!.width),
 		),
 	).toBeLessThanOrEqual(1);
-	expect(await date.locator("strong").evaluate((node) => getComputedStyle(node).color)).toBe(
-		"rgb(28, 27, 24)",
-	);
 	expect(
-		await brand.locator("path").first().evaluate((node) => getComputedStyle(node).fill),
+		await date.locator("strong").evaluate((node) => getComputedStyle(node).color),
+	).toBe("rgb(28, 27, 24)");
+	expect(
+		await brand
+			.locator("path")
+			.first()
+			.evaluate((node) => getComputedStyle(node).fill),
 	).toBe("rgb(28, 27, 24)");
 
 	const going = page.getByRole("button", { name: "Going" });
@@ -6636,6 +6641,34 @@ test("says a withdrawn page is gone rather than showing an empty shell", async (
 	await expect(
 		page.getByRole("heading", { name: "This page is not available." }),
 	).toBeVisible();
+});
+
+test("hides RSVP controls from an organizer", async ({ page }) => {
+	await page.route("**/api/auth/get-session", (route) =>
+		respond(route, {
+			session: { id: "s1" },
+			user: { email: "organizer@example.com", id: "organizer-1", name: "Mika" },
+		}),
+	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+		respond(route, publicEvent()),
+	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) =>
+		respond(route, {
+			attendees: [],
+			counts: { declined: 0, going: 1, maybe: 0 },
+			isOrganizer: true,
+			mine: null,
+			names: [],
+			visibility: "counts",
+		}),
+	);
+
+	await page.goto(`/e/${SHARE_TOKEN}`);
+	await expect(page.getByRole("heading", { name: "Are you coming?" })).toHaveCount(
+		0,
+	);
+	await expect(page.getByRole("button", { name: "Add to calendar" })).toBeVisible();
 });
 
 test("lets a stranger answer after confirming their address", async ({

@@ -91,6 +91,15 @@ export function RsvpBlock({
   const needsName = signedIn && !session.data?.user.name?.trim();
   const identityReady = name.trim().length > 0 && email.trim().length > 0;
 
+  if (summary.data?.isOrganizer) {
+    return (
+      <>
+        {children}
+        <Attending summary={summary.data} />
+      </>
+    );
+  }
+
   return (
     <>
       <section aria-labelledby="rsvp-title" className={styles.rsvp}>

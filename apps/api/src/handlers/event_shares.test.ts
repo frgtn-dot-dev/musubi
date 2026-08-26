@@ -166,6 +166,7 @@ const ANSWERS = [
 
   assert.deepEqual(summary.counts, { declined: 1, going: 2, maybe: 1 });
   assert.equal(summary.mine, "maybe");
+  assert.equal(summary.isOrganizer, false);
   // Alphabetical, and only the yeses: a maybe and a no are answers people give
   // in confidence.
   assert.deepEqual(summary.names, ["Adam", "Zoe"]);
@@ -174,6 +175,19 @@ const ANSWERS = [
     ["Adam", "Zoe"],
   );
   assert.match(summary.attendees[0]!.avatarUrl, /\/users\/u-4\/avatar$/);
+}
+
+// Organizers already own the event, so they never RSVP as a guest.
+{
+  const summary = rsvpSummaryOf({
+    answers: ANSWERS,
+    organizerID: "host",
+    userID: "host",
+    visibility: "names",
+  });
+
+  assert.equal(summary.isOrganizer, true);
+  assert.equal(summary.mine, null);
 }
 
 // Counts without names is the default, and a reader who never answered has no

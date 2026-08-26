@@ -289,6 +289,9 @@ export async function handlerPutPublicRsvp(req: Request, res: Response) {
 
   const share = await getSharedEventId(String(req.params.token));
   if (!share) throw new NotFoundError("This event page is not available...");
+  if (req.user!.id === share.creatorID) {
+    throw new ForbiddenError("Organizers do not RSVP to their own event...");
+  }
 
   await setAttendance(share.eventID, req.user!.id, status as AttendanceStatus);
   // The same frame attendance from the app sends: it is the same list, so an
@@ -355,6 +358,7 @@ export function rsvpSummaryOf({
 
   return {
     attendees,
+    isOrganizer: userID === organizerID,
     counts: {
       declined: count("declined"),
       going: count("going"),

@@ -132,6 +132,13 @@ function PublicEventRoute() {
         >
           Add to calendar
         </Button>
+        <Button
+          icon={<Share2 size={15} />}
+          variant="secondary"
+          onClick={() => void share()}
+        >
+          {copied ? "Link copied" : "Share"}
+        </Button>
         <a
           className={styles.secondaryAction}
           href={googleCalendarUrl(event, occurrence)}
@@ -140,13 +147,6 @@ function PublicEventRoute() {
         >
           Google Calendar
         </a>
-        <Button
-          icon={<Share2 size={15} />}
-          variant="secondary"
-          onClick={() => void share()}
-        >
-          {copied ? "Link copied" : "Share"}
-        </Button>
       </div>
     </section>
   );

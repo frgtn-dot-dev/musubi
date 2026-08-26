@@ -124,6 +124,7 @@ export const RsvpSummarySchema = z.object({
     going: z.number(),
     maybe: z.number(),
   }),
+  isOrganizer: z.boolean().default(false),
   mine: z.enum(["declined", "going", "maybe"]).nullable(),
   names: z.array(z.string()).default([]),
   visibility: z.enum(["counts", "hidden", "names"]),
