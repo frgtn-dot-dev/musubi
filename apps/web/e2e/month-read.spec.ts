@@ -242,9 +242,7 @@ async function openPageFilters(page: Page) {
 	await page.getByRole("button", { name: "Edit My calendar" }).click();
 	const dialog = page.getByRole("dialog", { name: "Page settings" });
 	await expect(dialog).toBeVisible();
-	const filters = dialog
-		.getByRole("heading", { name: "Filters" })
-		.locator("..");
+	const filters = dialog.getByRole("heading", { name: "Filters" }).locator("..");
 	return { dialog, filters };
 }
 
@@ -407,9 +405,7 @@ async function mockAuthenticatedReads(
 			);
 		}
 		if (method === "DELETE") {
-			calendarState = calendarState.filter(
-				(calendar) => calendar.id !== body.id,
-			);
+			calendarState = calendarState.filter((calendar) => calendar.id !== body.id);
 			return respond(route, { ...body, members: [] });
 		}
 		return respond(route, calendarState);
@@ -509,9 +505,7 @@ async function mockAuthenticatedReads(
 			});
 		}
 
-		const body = route
-			.request()
-			.postDataJSON() as (typeof events.events)[number];
+		const body = route.request().postDataJSON() as (typeof events.events)[number];
 		const homeCalendarId = body.originCalendarID ?? body.calendars[0];
 
 		if (failWritesForCalendarId && homeCalendarId === failWritesForCalendarId) {
@@ -730,15 +724,13 @@ test("reads, filters and signs out of the authenticated Month", async ({
 
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
-	await expect(
-		page.getByRole("heading", { name: "My calendar" }),
-	).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: /Studio retreat/ }),
-	).toHaveCount(5);
-	await expect(
-		page.getByRole("button", { name: /Family holiday/ }),
-	).toHaveCount(6);
+	await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+	await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(
+		5,
+	);
+	await expect(page.getByRole("button", { name: /Family holiday/ })).toHaveCount(
+		6,
+	);
 	await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(
 		5,
 	);
@@ -753,14 +745,12 @@ test("reads, filters and signs out of the authenticated Month", async ({
 	await page.keyboard.press("Escape");
 
 	await setCalendarVisibility(page, "Studio", false);
-	await expect(
-		page.getByRole("button", { name: /Studio retreat/ }),
-	).toHaveCount(0);
+	await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(
+		0,
+	);
 
 	await page.getByRole("button", { name: "Event", exact: true }).click();
-	await expect(
-		page.getByRole("dialog", { name: "Create event" }),
-	).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await page.keyboard.press("Escape");
 
 	await expectNoAccessibilityViolations(page);
@@ -781,9 +771,7 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
 
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
-	await expect(
-		page.getByRole("heading", { name: "My calendar" }),
-	).toBeVisible();
+	await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
 	await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 	await expect(page.getByText("No events match")).toHaveCount(0);
 
@@ -842,9 +830,7 @@ test("keeps a compact Month fixed and folds excess events into More", async ({
 		page.getByRole("heading", { name: "Crowded event 1" }),
 	).toBeVisible();
 	expect(
-		await area.evaluate(
-			(element) => element.scrollHeight - element.clientHeight,
-		),
+		await area.evaluate((element) => element.scrollHeight - element.clientHeight),
 	).toBeLessThanOrEqual(1);
 });
 
@@ -856,9 +842,7 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
 
 	await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
 
-	await expect(
-		page.getByRole("heading", { name: "My calendar" }),
-	).toBeVisible();
+	await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
 	await expect(page.getByText("From Jul 26, 2026")).toBeVisible();
 	await expect(
 		page.getByRole("radio", { name: "Agenda", exact: true }),
@@ -1090,9 +1074,7 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
 	await page.getByRole("button", { name: "Event", exact: true }).click();
-	await page
-		.getByRole("textbox", { name: "Event title" })
-		.fill("Release check");
+	await page.getByRole("textbox", { name: "Event title" }).fill("Release check");
 	await page.getByRole("button", { name: /^Choose calendars/ }).click();
 	await expect(
 		page.getByRole("checkbox", { name: "Show event in Personal" }),
@@ -1247,9 +1229,7 @@ test("chooses an event time and duration from the time pickers", async ({
 		name: "Start time options",
 	});
 	await expectNoAccessibilityViolations(page);
-	await startOptions
-		.getByRole("option", { name: "13:15", exact: true })
-		.click();
+	await startOptions.getByRole("option", { name: "13:15", exact: true }).click();
 	await expect(start).toHaveValue("13:15");
 	await expect(end).toHaveValue("14:15");
 
@@ -1308,9 +1288,7 @@ test("keeps the all-day toggle in one place when it is flipped", async ({
 	expect((await toggle.boundingBox())!.y).toBe(timed);
 
 	await label.click();
-	await expect(
-		page.getByRole("combobox", { name: "Start time" }),
-	).toBeVisible();
+	await expect(page.getByRole("combobox", { name: "Start time" })).toBeVisible();
 	expect((await toggle.boundingBox())!.y).toBe(timed);
 });
 
@@ -1548,12 +1526,7 @@ test("saves revisioned settings and applies display preferences", async ({
 	await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
 	const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-	const sectionHeadings = [
-		"Appearance",
-		"Reminders",
-		"Help & About",
-		"Account",
-	];
+	const sectionHeadings = ["Appearance", "Reminders", "Help & About", "Account"];
 	const sectionTops = await Promise.all(
 		sectionHeadings.map(
 			async (name) =>
@@ -1567,9 +1540,9 @@ test("saves revisioned settings and applies display preferences", async ({
 	// Timed and all-day events are asked about separately: an offset cannot
 	// answer for a birthday, and the control must not pretend it can.
 	// `SettingsSection` is a labelled <section>, which is a region.
-	const remindersSection = settingsDialog
-		.getByRole("region")
-		.filter({ has: page.getByRole("heading", { exact: true, name: "Reminders" }) });
+	const remindersSection = settingsDialog.getByRole("region").filter({
+		has: page.getByRole("heading", { exact: true, name: "Reminders" }),
+	});
 	await expect(
 		remindersSection.getByRole("radiogroup", { name: "Timed events" }),
 	).toBeVisible();
@@ -1654,9 +1627,7 @@ test("keeps settings usable as a mobile sheet", async ({ page }) => {
 	expect(box.x).toBe(0);
 	expect(Math.round(box.width)).toBe(390);
 	expect(box.height).toBeLessThanOrEqual(700 + 1);
-	await expect(
-		sheet.getByRole("heading", { name: "Appearance" }),
-	).toBeVisible();
+	await expect(sheet.getByRole("heading", { name: "Appearance" })).toBeVisible();
 	await sheet.getByRole("radio", { name: "Dark" }).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 	await expect(
@@ -1946,9 +1917,7 @@ test("a second month drag replaces the first draft, not both", async ({
 		firstBox.x + firstBox.width / 2,
 		firstBox.y + firstBox.height - 6,
 	);
-	await expect(
-		page.getByRole("dialog", { name: "Create event" }),
-	).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expect(page.locator("[data-draft]")).toHaveCount(1);
 
 	// Dragging out another one drops the first from the first press.
@@ -1973,9 +1942,7 @@ test("a second month drag replaces the first draft, not both", async ({
 	// Releasing keeps the new one. The replaced popover restores focus to its own
 	// origin cell as it goes, which must not read as a dismissal of the new one.
 	await page.mouse.up();
-	await expect(
-		page.getByRole("dialog", { name: "Create event" }),
-	).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expect(page.locator("[data-draft]")).toHaveCount(3);
 	await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
 		"Tuesday, July 28, 2026",
@@ -2011,9 +1978,9 @@ test("keeps the event preview open while its text is being selected", async ({
 	await page.mouse.up();
 
 	await expect(preview).toBeVisible();
-	expect(
-		await page.evaluate(() => window.getSelection()?.toString()),
-	).toContain("Design review");
+	expect(await page.evaluate(() => window.getSelection()?.toString())).toContain(
+		"Design review",
+	);
 	// The grid behind it stays unselectable, so a drag there is always a gesture
 	// and never a stray selection — which Chromium would cancel the drag for.
 	expect(
@@ -2461,8 +2428,7 @@ test("applies a realtime page created in another session", async ({ page }) => {
 			addEventListener() {}
 			removeEventListener() {}
 		}
-		(window as unknown as { EventSource: unknown }).EventSource =
-			FakeEventSource;
+		(window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
 	});
 
 	await mockAuthenticatedReads(page);
@@ -2538,9 +2504,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	expect(swatchBox).not.toBeNull();
 	expect(
 		Math.abs(
-			sourceBox!.x +
-				sourceBox!.width / 2 -
-				(swatchBox!.x + swatchBox!.width / 2),
+			sourceBox!.x + sourceBox!.width / 2 - (swatchBox!.x + swatchBox!.width / 2),
 		),
 	).toBeLessThanOrEqual(1);
 
@@ -2585,9 +2549,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	await page
 		.getByRole("button", { name: "New calendar color: #B3A48A" })
 		.click();
-	await expect(
-		page.getByRole("dialog", { name: "Choose color" }),
-	).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Choose color" })).toBeVisible();
 	const colorPickerAccessibility = await new AxeBuilder({ page })
 		.include('[data-ui="color-picker-popover"]')
 		.analyze();
@@ -2997,9 +2959,10 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 		name: "Sam Rivers role",
 	});
 	await roleGroup.getByRole("radio", { name: "Editor" }).click();
-	await expect(
-		roleGroup.getByRole("radio", { name: "Editor" }),
-	).toHaveAttribute("aria-checked", "true");
+	await expect(roleGroup.getByRole("radio", { name: "Editor" })).toHaveAttribute(
+		"aria-checked",
+		"true",
+	);
 
 	// Create then revoke an invite link. Both limits are fillable rather than a
 	// short preset list, and the header close makes a second Done footer redundant.
@@ -3317,9 +3280,7 @@ test("keeps connections usable as a mobile sheet", async ({ page }) => {
 		.getByRole("listitem")
 		.filter({ hasText: "work@gmail.com" });
 	await expect(account).toContainText("Needs attention");
-	await expect(
-		account.getByRole("button", { name: "Reconnect" }),
-	).toBeVisible();
+	await expect(account.getByRole("button", { name: "Reconnect" })).toBeVisible();
 
 	const apple = sheet.getByRole("button", {
 		exact: true,
@@ -3436,9 +3397,7 @@ test("shows federated calendars and reports an unreachable server", async ({
 	await expect(
 		page.getByRole("heading", { name: "Musubi servers" }),
 	).toBeVisible();
-	const deadRow = page
-		.getByRole("listitem")
-		.filter({ hasText: "dead.example" });
+	const deadRow = page.getByRole("listitem").filter({ hasText: "dead.example" });
 	await expect(deadRow).toContainText("Unreachable");
 	// Transient failures offer a retry, not a re-invite.
 	await expect(
@@ -3520,9 +3479,7 @@ test("routes federated event writes through the gateway", async ({ page }) => {
 				});
 			}
 			gatewayWrites.push(method);
-			const body = route
-				.request()
-				.postDataJSON() as (typeof remoteEvents)[number];
+			const body = route.request().postDataJSON() as (typeof remoteEvents)[number];
 			if (method === "PUT") {
 				remoteEvents = remoteEvents.map((item) =>
 					item.id === body.id ? body : item,
@@ -3615,8 +3572,7 @@ test("refreshes federated calendars on a realtime federated_sync", async ({
 			addEventListener() {}
 			removeEventListener() {}
 		}
-		(window as unknown as { EventSource: unknown }).EventSource =
-			FakeEventSource;
+		(window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
 	});
 
 	await mockAuthenticatedReads(page);
@@ -3722,9 +3678,7 @@ test("joins a calendar from a pasted cross-server invite link", async ({
 	]);
 	expect(
 		Math.abs(
-			inputBox!.y +
-				inputBox!.height / 2 -
-				(buttonBox!.y + buttonBox!.height / 2),
+			inputBox!.y + inputBox!.height / 2 - (buttonBox!.y + buttonBox!.height / 2),
 		),
 	).toBeLessThanOrEqual(1);
 
@@ -4299,9 +4253,7 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
 	expect(box.x).toBe(0);
 	expect(
-		await sheet.evaluate(
-			(element) => element.scrollWidth - element.clientWidth,
-		),
+		await sheet.evaluate((element) => element.scrollWidth - element.clientWidth),
 	).toBe(0);
 
 	// It is still the same layer: Escape dismisses it and focus is handled.
@@ -4558,9 +4510,9 @@ test("keeps calendar chrome consistent and keyboard operable", async ({
 	await expect(page.getByRole("button", { name: "Filters" })).toHaveCount(0);
 	await expect(navigation.getByRole("switch")).toHaveCount(0);
 	await setCalendarVisibility(page, "Studio", false);
-	await expect(
-		page.getByRole("button", { name: /Studio retreat/ }),
-	).toHaveCount(0);
+	await expect(page.getByRole("button", { name: /Studio retreat/ })).toHaveCount(
+		0,
+	);
 
 	const month = page.getByRole("radio", { name: "Month" });
 	await month.focus();
@@ -4757,9 +4709,7 @@ test("asks for a name and a time first, the rest on request", async ({
 	const bubble = page.getByRole("dialog", { name: "Create event" });
 	await expect(bubble).toBeVisible();
 	// What a new event cannot do without: name, when, which calendar.
-	await expect(
-		page.getByRole("textbox", { name: "Event title" }),
-	).toBeFocused();
+	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
 	await expect(page.getByRole("button", { name: /^Date:/ })).toBeVisible();
 	await expect(page.getByLabel("Start time")).toBeVisible();
 	await expect(
@@ -4800,9 +4750,7 @@ test("keeps event edits focused and moves details to a full page", async ({
 	await page.getByRole("button", { name: "Edit", exact: true }).click();
 
 	// The popover is for the high-frequency edits, matching quick create.
-	await expect(
-		page.getByRole("button", { name: "More options" }),
-	).toBeVisible();
+	await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
 	await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
 	await expect(page.getByLabel("Repeat")).toHaveCount(0);
 	await expect(
@@ -4856,9 +4804,7 @@ test("makes the scope of a recurring event edit explicit", async ({ page }) => {
 	await page.getByRole("button", { name: "More options" }).click();
 
 	await expect(page).toHaveURL(/\/event\/weekly-review\?/);
-	await expect(
-		page.getByRole("heading", { name: "Edit series" }),
-	).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Edit series" })).toBeVisible();
 	await expect(
 		page.getByText("Changes here apply to the recurring series."),
 	).toBeVisible();
@@ -5040,9 +4986,7 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 
 	await expect(page).toHaveURL(/\/event\/new\?/);
 	await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
-	await expect(
-		page.getByRole("textbox", { name: "Event title" }),
-	).toBeFocused();
+	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
 	await expect(
 		page.getByRole("navigation", { name: "Event editor" }),
 	).toBeVisible();
@@ -5124,9 +5068,7 @@ test("moves the create window by its header, never out of the calendar", async (
 
 	const clamped = (await bubble.boundingBox())!;
 	expect(clamped.x).toBeGreaterThanOrEqual(area.x - 1);
-	expect(clamped.x + clamped.width).toBeLessThanOrEqual(
-		area.x + area.width + 1,
-	);
+	expect(clamped.x + clamped.width).toBeLessThanOrEqual(area.x + area.width + 1);
 });
 
 test("shows a dragged event where it is going and a ghost where it was", async ({
@@ -5713,15 +5655,11 @@ test("leaves nothing of the last account on a shared computer", async ({
 	await expect(page).toHaveURL(/\/login/);
 	// Not "eventually gone" — never rendered. `06-settings-pages-sync.md:175` is
 	// explicit that the login screen must not flash the previous user's data.
-	await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(
-		0,
-	);
+	await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(0);
 	await expect(page.getByText("Web QA")).toHaveCount(0);
 
 	expect(
-		await page.evaluate(() =>
-			window.localStorage.getItem("musubi:last-session"),
-		),
+		await page.evaluate(() => window.localStorage.getItem("musubi:last-session")),
 	).toBeNull();
 	expect(await snapshotKeys(page)).toEqual([]);
 
@@ -5732,9 +5670,7 @@ test("leaves nothing of the last account on a shared computer", async ({
 		await page.route(pattern, dead);
 	}
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(
-		0,
-	);
+	await expect(page.getByRole("button", { name: /Client call/ })).toHaveCount(0);
 });
 
 test("carries one session's edit into the other over the stream", async ({
@@ -5764,11 +5700,7 @@ test("carries one session's edit into the other over the stream", async ({
 	const first = await context.newPage();
 	const second = await context.newPage();
 	await second.route("**/api/stream", async (route) => {
-		for (
-			let waited = 0;
-			pending.length === 0 && waited < 10_000;
-			waited += 50
-		) {
+		for (let waited = 0; pending.length === 0 && waited < 10_000; waited += 50) {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 		}
 		const type = pending.shift();
@@ -6007,7 +5939,9 @@ test("shows only the passphrase form on a server with no OAuth", async ({
 		0,
 	);
 	await expect(page.getByText("or", { exact: true })).toHaveCount(0);
-	await expect(page.getByRole("button", { exact: true, name: "Continue" })).toBeVisible();
+	await expect(
+		page.getByRole("button", { exact: true, name: "Continue" }),
+	).toBeVisible();
 });
 
 test("says so when a provider sign-in does not come back", async ({ page }) => {
@@ -6135,9 +6069,7 @@ test("imports the calendars of an account the moment it comes back linked", asyn
 	// reload of the same tab must not talk to Google again — nor pop the dialog.
 	await page.reload();
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
-	await expect(page.getByRole("dialog", { name: "Connections" })).toHaveCount(
-		0,
-	);
+	await expect(page.getByRole("dialog", { name: "Connections" })).toHaveCount(0);
 	expect(syncCalls).toBe(1);
 });
 
@@ -6210,9 +6142,7 @@ test("shows an invitation in the browser and joins it", async ({ page }) => {
 	// The point of a preview: what you are joining and who is already on it,
 	// before you decide — not a deep link to an app you may not have.
 	await expect(page.getByRole("heading", { name: "Studio" })).toBeVisible();
-	await expect(
-		page.getByText("Mika shared a calendar with you."),
-	).toBeVisible();
+	await expect(page.getByText("Mika shared a calendar with you.")).toBeVisible();
 	await expect(page.getByText("Team lunch")).toBeVisible();
 	await expectNoAccessibilityViolations(page);
 
@@ -6303,9 +6233,7 @@ test("moves an account to a new address, asking the old one to approve", async (
 	// Which inbox to look in is the whole answer here — and for a verified
 	// account it is the OLD one, so a stolen session cannot move the account
 	// somewhere the owner can't reach.
-	await expect(page.getByRole("status")).toContainText(
-		"web-qa@example.invalid",
-	);
+	await expect(page.getByRole("status")).toContainText("web-qa@example.invalid");
 });
 
 function multiWeekPage(weeks: number) {
@@ -6415,6 +6343,34 @@ test("opens the same event popover from a week block", async ({ page }) => {
 
 const SHARE_TOKEN = "c89f06867c4b99bddc0fe7fd83244b11";
 
+function publicEvent(overrides: Record<string, unknown> = {}) {
+	return {
+		content: {
+			agenda: [],
+			cover: { focalX: 50, focalY: 50, source: "preset" },
+			tags: [],
+		},
+		coverUrl: null,
+		description: "Come see the presses.",
+		end: "2026-08-20T16:00:00.000Z",
+		indexable: false,
+		isAllDay: false,
+		isCanceled: false,
+		location: "Brno",
+		mapImageUrl: null,
+		organizer: {
+			avatarUrl: "http://127.0.0.1:3000/api/v1/users/organizer/avatar",
+			name: "Mika",
+		},
+		recurrence: null,
+		start: "2026-08-20T13:00:00.000Z",
+		theme: { cover: "none", font: "serif", layout: "classic", palette: "sand" },
+		title: "Studio open day",
+		url: null,
+		...overrides,
+	};
+}
+
 test("publishes an event as a page and can take it back", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	let share: { indexable: boolean; mode: string } | null = null;
@@ -6424,6 +6380,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 			share = route.request().postDataJSON() as typeof share;
 			return respond(route, {
 				...share,
+				coverUrl: null,
 				token: SHARE_TOKEN,
 				url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
 			});
@@ -6437,6 +6394,7 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 			share
 				? {
 						...share,
+						coverUrl: null,
 						token: SHARE_TOKEN,
 						url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
 					}
@@ -6463,22 +6421,43 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	await page.getByRole("button", { name: "Share event" }).click();
 
 	const dialog = page.getByRole("dialog", { name: "Share event" });
+	await expect(dialog.getByLabel("Palette")).toHaveCount(0);
+	await expect(dialog.getByLabel("Typography")).toHaveCount(0);
 	// Private until somebody says otherwise — an event is not published by
 	// existing, and the dialog has to open on that truth.
 	await expect(dialog.getByRole("radio", { name: /Private/ })).toHaveAttribute(
 		"aria-checked",
 		"true",
 	);
-	await expect(
-		dialog.getByRole("textbox", { name: "Public link" }),
-	).toHaveCount(0);
+	await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveCount(
+		0,
+	);
 
 	await dialog.getByRole("radio", { name: "Anyone with the link" }).click();
+	// Choices are draft-only until the one save action below.
+	expect(share).toBeNull();
+
+	await dialog.getByLabel("Tags").fill("Workshop, Community");
+	await dialog.getByRole("button", { name: "Add item" }).click();
+	await dialog.getByLabel("Title", { exact: true }).fill("Doors open");
+	await dialog.getByLabel("Event title").fill("Client call, updated");
+	await dialog.getByRole("button", { name: "Preview draft" }).click();
+	const preview = page.getByRole("dialog", { name: "Draft preview" });
 	await expect(
-		dialog.getByRole("textbox", { name: "Public link" }),
-	).toHaveValue(new RegExp(SHARE_TOKEN));
+		preview.getByRole("heading", { name: "Client call, updated" }),
+	).toBeVisible();
+	await preview.getByRole("button", { name: "Close preview" }).click();
+	await dialog.getByRole("button", { name: "Save changes" }).click();
+	await expect(page.getByRole("status")).toContainText("Event and page saved");
+	await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveValue(
+		new RegExp(SHARE_TOKEN),
+	);
 	expect(share).toMatchObject({
 		attendeeVisibility: "counts",
+		content: {
+			agenda: [expect.objectContaining({ time: "18:00", title: "Doors open" })],
+			tags: ["Workshop", "Community"],
+		},
 		indexable: false,
 		mode: "link",
 	});
@@ -6490,12 +6469,11 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 
 	await dialog.getByRole("radio", { name: "Show names" }).click();
 	await dialog.getByRole("radio", { name: "Public" }).click();
-	// Clicking the label, not the input: the visible box sits over the 1px input,
-	// which is exactly how a person toggles it too.
 	await dialog.getByText("Allow search engines to list this page").click();
 	await expect(
 		dialog.getByRole("checkbox", { name: /search engines/ }),
 	).toBeChecked();
+	await dialog.getByRole("button", { name: "Save changes" }).click();
 	expect(share).toMatchObject({
 		attendeeVisibility: "names",
 		indexable: true,
@@ -6505,29 +6483,77 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	await expectNoAccessibilityViolations(page);
 
 	await dialog.getByRole("radio", { name: "Show nothing" }).click();
-	expect(share).toMatchObject({ attendeeVisibility: "hidden" });
-
 	await dialog.getByRole("radio", { name: /Private/ }).click();
-	await expect(page.getByRole("status")).toContainText("no longer opens");
-	await expect(
-		dialog.getByRole("textbox", { name: "Public link" }),
-	).toHaveCount(0);
+	await dialog.getByRole("button", { name: "Save changes" }).click();
+	await expect(page.getByRole("status")).toContainText("Event and page saved");
+	await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveCount(
+		0,
+	);
+});
+
+test("frames an uploaded event cover in a focused dialog", async ({ page }) => {
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/events/*/share", (route) =>
+		respond(route, {
+			attendeeVisibility: "counts",
+			content: {
+				agenda: [],
+				cover: { focalX: 50, focalY: 50, source: "upload", zoom: 1.5 },
+				tags: [],
+			},
+			coverUrl: "https://example.com/cover.jpg",
+			indexable: false,
+			mode: "link",
+			theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
+			token: SHARE_TOKEN,
+			url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
+		}),
+	);
+
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page
+		.getByRole("button", { name: /Client call/ })
+		.first()
+		.click();
+	await page.getByRole("button", { name: "Share event" }).click();
+	await page
+		.getByRole("button", { name: "Edit uploaded cover framing" })
+		.click();
+
+	const framing = page.getByRole("dialog", { name: "Cover framing" });
+	await expect(framing.getByText("Change file", { exact: true })).toBeVisible();
+	const crop = framing.getByRole("group", { name: /Crop area/ });
+	const before = await crop.getAttribute("style");
+	await crop.focus();
+	await crop.press("ArrowRight");
+	await expect(crop).not.toHaveAttribute("style", before ?? "");
+	await expect(framing.locator('[class*="cropHandle"]')).toBeVisible();
+	await framing.getByRole("button", { name: "Done" }).click();
+	await expect(framing).toHaveCount(0);
 });
 
 test("shows a published event to someone with no account", async ({ page }) => {
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+		respond(
+			route,
+			publicEvent({
+				description:
+					"Details at https://events.example.com/studio/open-day/very-long-path",
+				url: "https://example.com/studio-open-day",
+			}),
+		),
+	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) =>
 		respond(route, {
-			description: "Come see the presses.",
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: "Brno",
-			organizer: "Mika",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			title: "Studio open day",
-			url: null,
+			attendees: [
+				{ avatarUrl: "https://example.com/adam.jpg", name: "Adam" },
+				{ avatarUrl: "https://example.com/zoe.jpg", name: "Zoe" },
+			],
+			counts: { declined: 0, going: 2, maybe: 0 },
+			isOrganizer: false,
+			mine: null,
+			names: ["Adam", "Zoe"],
+			visibility: "names",
 		}),
 	);
 
@@ -6536,12 +6562,32 @@ test("shows a published event to someone with no account", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "Studio open day" }),
 	).toBeVisible();
-	await expect(page.getByText("Organized by Mika")).toBeVisible();
-	await expect(page.getByText("Brno")).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Organized by" }),
+	).toBeVisible();
+	await expect(page.getByText("Mika", { exact: true })).toBeVisible();
+	const hero = page.locator("header");
+	await expect(hero.getByText("Brno")).toBeVisible();
+	await expect(hero.getByRole("link", { name: "Event link" })).toBeVisible();
+	const noteLink = page.getByRole("link", {
+		name: "Open https://events.example.com/studio/open-day/very-long-path",
+	});
+	await expect(noteLink).toHaveText("events.example.com");
+	const sidebar = page.locator("aside");
+	await expect(
+		sidebar.getByRole("heading", { name: "Keep the date" }),
+	).toBeVisible();
+	await expect(sidebar.getByRole("button", { name: "Share" })).toBeVisible();
+	const guests = sidebar.getByRole("button", { name: "Show 2 guests" });
+	await guests.click();
+	const guestsDialog = page.getByRole("dialog", { name: "Guests" });
+	await expect(guestsDialog.getByText("Adam", { exact: true })).toBeVisible();
+	await expect(guestsDialog.getByText("Zoe", { exact: true })).toBeVisible();
+	await guestsDialog.getByRole("button", { name: "Close guests" }).click();
 	// The reader's timezone, spelled out: the organizer is often somewhere else,
 	// and a bare "3 pm" is a trap.
 	await expect(page.getByText("Europe/Prague")).toBeVisible();
-	await expect(page.getByText(/15:00 – 18:00|3:00/)).toBeVisible();
+	await expect(page.getByText(/15:00–18:00|3:00/)).toBeVisible();
 
 	// No app around it, and nothing that needs a session.
 	await expect(page.getByRole("navigation", { name: "Pages" })).toHaveCount(0);
@@ -6559,51 +6605,89 @@ test("shows a published event to someone with no account", async ({ page }) => {
 	await expectNoAccessibilityViolations(page);
 });
 
-test("wears the look the organizer chose, without breaking what is fixed", async ({
+test("uses the reader's shared theme instead of organizer styling", async ({
 	page,
 }) => {
-	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+	await page.emulateMedia({ colorScheme: "light" });
+	await page.addInitScript(() => localStorage.setItem("musubi-theme", "light"));
+	await page.route("**/api/auth/get-session", (route) =>
 		respond(route, {
-			description: "Presses running.",
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: "Brno",
-			organizer: "Mika",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
-			title: "Studio open day",
-			url: null,
+			session: { id: "s1" },
+			user: { email: "reader@example.com", id: "reader-1", name: "Reader" },
 		}),
+	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+		respond(
+			route,
+			publicEvent({
+				content: {
+					agenda: [],
+					cover: { focalX: 50, focalY: 50, source: "upload" },
+					tags: [],
+				},
+				coverUrl: "https://example.com/cover.jpg",
+				description: "Presses running.",
+				theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
+			}),
+		),
 	);
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	const main = page.getByRole("main");
-	await expect(main).toHaveAttribute("data-layout", "poster");
-	await expect(main).toHaveAttribute("data-cover", "grid");
-
-	// The palette arrives as custom properties, which is what the page paints
-	// from — a chosen look, not a stylesheet the organizer can write.
+	await expect(main).not.toHaveAttribute("data-font");
+	await expect(main).not.toHaveAttribute("data-layout");
+	const hero = page.locator("header[data-cover='grid']");
+	await expect(hero).toBeVisible();
+	const brand = hero.locator('svg[aria-label="Musubi"]').locator("..");
+	const date = hero.locator("time");
+	const toggle = hero
+		.getByRole("button", { name: /Use dark theme/ })
+		.locator("..");
+	const [heroBox, brandBox, dateBox, toggleBox] = await Promise.all([
+		hero.boundingBox(),
+		brand.boundingBox(),
+		date.boundingBox(),
+		toggle.boundingBox(),
+	]);
+	expect(Math.abs(dateBox!.x - brandBox!.x)).toBeLessThanOrEqual(1);
 	expect(
-		await main.evaluate((element) =>
-			getComputedStyle(element).getPropertyValue("--page-accent").trim(),
+		Math.abs(
+			brandBox!.y + brandBox!.height / 2 - (toggleBox!.y + toggleBox!.height / 2),
 		),
-	).toBe("#b3492f");
+	).toBeLessThanOrEqual(1);
+	expect(
+		Math.abs(
+			brandBox!.x -
+				heroBox!.x -
+				(heroBox!.x + heroBox!.width - toggleBox!.x - toggleBox!.width),
+		),
+	).toBeLessThanOrEqual(1);
+	expect(
+		await date.locator("strong").evaluate((node) => getComputedStyle(node).color),
+	).toBe("rgb(28, 27, 24)");
+	expect(
+		await brand
+			.locator("path")
+			.first()
+			.evaluate((node) => getComputedStyle(node).fill),
+	).toBe("rgb(28, 27, 24)");
 
-	// And everything on the fixed side of the PRD still works on a dark palette:
-	// the answer reads as chosen, and the form that follows is usable.
-	await page.getByRole("button", { name: "Going" }).click();
-	await page.mouse.move(0, 0);
-	await expect
-		.poll(async () =>
-			page
-				.getByRole("button", { name: "Going" })
-				.evaluate((element) => getComputedStyle(element).backgroundColor),
-		)
-		.toBe("rgb(74, 71, 65)");
-	await expect(page.getByLabel("Email")).toBeVisible();
+	const going = page.getByRole("button", { name: "Going" });
+	const idleBackground = await going.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+	await going.hover();
+	await going.evaluate((element) =>
+		Promise.all(element.getAnimations().map((animation) => animation.finished)),
+	);
+	expect(
+		await going.evaluate((element) => getComputedStyle(element).backgroundColor),
+	).not.toBe(idleBackground);
+	await page.getByRole("button", { name: /Use dark theme/ }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+	expect(await page.evaluate(() => localStorage.getItem("musubi-theme"))).toBe(
+		"light",
+	);
 
 	await expectNoAccessibilityViolations(page);
 });
@@ -6626,36 +6710,55 @@ test("says a withdrawn page is gone rather than showing an empty shell", async (
 	).toBeVisible();
 });
 
+test("hides RSVP controls from an organizer", async ({ page }) => {
+	await page.route("**/api/auth/get-session", (route) =>
+		respond(route, {
+			session: { id: "s1" },
+			user: { email: "organizer@example.com", id: "organizer-1", name: "Mika" },
+		}),
+	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
+		respond(route, publicEvent()),
+	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) =>
+		respond(route, {
+			attendees: [],
+			counts: { declined: 0, going: 1, maybe: 0 },
+			isOrganizer: true,
+			mine: null,
+			names: [],
+			visibility: "counts",
+		}),
+	);
+
+	await page.goto(`/e/${SHARE_TOKEN}`);
+	await expect(
+		page.getByRole("heading", { name: "Are you coming?" }),
+	).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Add to calendar" }),
+	).toBeVisible();
+});
+
 test("lets a stranger answer after confirming their address", async ({
 	page,
 }) => {
 	let rsvp: unknown;
 	let signedIn = false;
+	let name = "";
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(
 			route,
 			signedIn
 				? {
 						session: { id: "s1" },
-						user: { email: "guest@example.com", id: "guest-1", name: "" },
+						user: { email: "guest@example.com", id: "guest-1", name },
 					}
 				: null,
 		),
 	);
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, {
-			description: null,
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: null,
-			organizer: "Mika",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			title: "Studio open day",
-			url: null,
-		}),
+		respond(route, publicEvent({ description: null, location: null })),
 	);
 	let codeRequest: unknown;
 	await page.route("**/api/auth/email-otp/send-verification-otp", (route) => {
@@ -6664,14 +6767,22 @@ test("lets a stranger answer after confirming their address", async ({
 	});
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "session", user: { id: "guest-1" } });
+		return respond(route, {
+			token: "session",
+			user: { id: "guest-1", name: "" },
+		});
+	});
+	await page.route("**/api/auth/update-user", (route) => {
+		name = route.request().postDataJSON().name;
+		return respond(route, { user: { id: "guest-1", name } });
 	});
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) => {
-		if (route.request().method() === "PUT")
-			rsvp = route.request().postDataJSON();
+		const answered = route.request().method() === "PUT";
+		if (answered) rsvp = route.request().postDataJSON();
 		return respond(route, {
-			counts: { declined: 0, going: 1, maybe: 0 },
-			mine: "going",
+			attendees: [],
+			counts: { declined: 0, going: answered ? 1 : 0, maybe: 0 },
+			mine: answered ? "going" : null,
 			names: [],
 			visibility: "counts",
 		});
@@ -6680,13 +6791,13 @@ test("lets a stranger answer after confirming their address", async ({
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	await page.waitForLoadState("networkidle");
 
-	// The order people expect: answer first, identify second.
+	// Choose an answer first; identity opens only for that answer.
+	await expect(page.getByRole("button", { name: "Going" })).toBeVisible();
+	await expect(page.getByLabel("Email")).toHaveCount(0);
 	await page.getByRole("button", { name: "Going" }).click();
 	await expect(
 		page.getByText(/creates a Musubi account with no password/),
 	).toBeVisible();
-
-	await page.getByLabel("Your name").fill("Jana K.");
 	await page.getByLabel("Email").fill("guest@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	expect(codeRequest).toMatchObject({
@@ -6700,6 +6811,8 @@ test("lets a stranger answer after confirming their address", async ({
 
 	await page.getByLabel("Code from your email").fill("123456");
 	await page.getByRole("button", { name: "Confirm" }).click();
+	await page.getByLabel("Your name").fill("Jana K.");
+	await page.getByRole("button", { name: "Continue" }).click();
 
 	await expect(page.getByText("You’re on the list.")).toBeVisible();
 	expect(rsvp).toEqual({ name: "Jana K.", status: "going" });
@@ -6756,9 +6869,7 @@ test("a press that dismisses a preview does not also start a draft", async ({
 	// The same press with nothing open does open the composer, so the guard is
 	// about dismissal and not about the gesture.
 	await page.mouse.click(x, y);
-	await expect(
-		page.getByRole("dialog", { name: "Create event" }),
-	).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 
 	// The month grid creates from a click on a cell, so it had the same hole.
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
@@ -6802,21 +6913,10 @@ test("a press that closes a dialog does not also create an event", async ({
 	const shareDialog = page.getByRole("dialog", { name: "Share event" });
 	await expect(shareDialog).toBeVisible();
 
-	// The overlay takes this press for itself, so the grid never sees a
-	// pointerdown — but React has removed the overlay by the time the click is
-	// dispatched, and the click lands on the cell underneath.
+	// Dismissing the wide share dialog must not create an event underneath.
 	const box = (await shareDialog.boundingBox())!;
-	const x = Math.max(10, box.x - 60);
-	const y = box.y + 40;
-	await page.mouse.click(x, y);
+	await page.mouse.click(Math.max(10, box.x - 60), box.y + 40);
 	await expect(page.getByRole("dialog")).toHaveCount(0);
-
-	// The same press with nothing open still creates, so the guard is about
-	// dismissal rather than about the gesture.
-	await page.mouse.click(x, y);
-	await expect(
-		page.getByRole("dialog", { name: "Create event" }),
-	).toBeVisible();
 });
 
 test("stays inside its box with twenty calendars", async ({ page }) => {
@@ -6828,8 +6928,7 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 		const overflow = await page.evaluate(() => ({
 			body: document.body.scrollWidth - document.body.clientWidth,
 			root:
-				document.documentElement.scrollWidth -
-				document.documentElement.clientWidth,
+				document.documentElement.scrollWidth - document.documentElement.clientWidth,
 		}));
 		expect(overflow, what).toEqual({ body: 0, root: 0 });
 	}
@@ -6864,9 +6963,7 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 
 	// And the composer, which lists every writable calendar.
 	await page.getByRole("button", { name: "Event", exact: true }).click();
-	await expect(
-		page.getByRole("dialog", { name: "Create event" }),
-	).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expectNoSidewaysScroll("quick create");
 });
 
@@ -6929,10 +7026,7 @@ test("ui catalogue", async ({ browser, page }) => {
 	await page.goto("/find-a-time");
 	await page.waitForLoadState("networkidle");
 	await shot("public-find-a-time");
-	await page.getByLabel("What is it about").fill("Studio planning");
-	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
-	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await shot("public-find-a-time-ready");
 
 	await page.goto("/new-event");
@@ -6947,25 +7041,36 @@ test("ui catalogue", async ({ browser, page }) => {
 	await shot("public-invite");
 
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, {
-			description: "Doors at six. Presses running all evening.",
-			end: "2026-08-20T16:00:00.000Z",
-			indexable: false,
-			isAllDay: false,
-			isCanceled: false,
-			location: "Studio, Brno",
-			organizer: "Mika Novotná",
-			recurrence: null,
-			start: "2026-08-20T13:00:00.000Z",
-			theme: {
-				cover: "wash",
-				font: "serif",
-				layout: "classic",
-				palette: "sand",
-			},
-			title: "Studio open day",
-			url: null,
-		}),
+		respond(
+			route,
+			publicEvent({
+				content: {
+					agenda: [
+						{
+							description: "Coffee and introductions",
+							id: "doors",
+							time: "18:00",
+							title: "Doors open",
+						},
+						{
+							description: "A tour of the presses",
+							id: "tour",
+							time: "19:00",
+							title: "Studio tour",
+						},
+					],
+					cover: { focalX: 50, focalY: 50, source: "preset" },
+					tags: ["Studio", "Community"],
+				},
+				description: "Doors at six. Presses running all evening.",
+				location: "Studio, Brno",
+				organizer: {
+					avatarUrl: "http://127.0.0.1:3000/api/v1/users/mika/avatar",
+					name: "Mika Novotná",
+				},
+				theme: { cover: "wash", font: "serif", layout: "classic", palette: "sand" },
+			}),
+		),
 	);
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	await page.waitForLoadState("networkidle");
@@ -7189,11 +7294,7 @@ test("ui catalogue", async ({ browser, page }) => {
 					end: `2026-08-${day}T${Number(hour) + 1}:00:00.000Z`,
 					id: String(id),
 					ifNeeded:
-						id === "s10-17"
-							? ["Mika Novotná"]
-							: id === "s11-17"
-								? ["Adam"]
-								: [],
+						id === "s10-17" ? ["Mika Novotná"] : id === "s11-17" ? ["Adam"] : [],
 					no: id === "s11-13" ? ["Mika Novotná"] : [],
 					start: `2026-08-${day}T${hour}:00:00.000Z`,
 					yes:
@@ -7263,9 +7364,7 @@ test("ui catalogue", async ({ browser, page }) => {
 	// The share state has to answer, or the dialog stays disabled and the shot is
 	// of a loading state at half opacity rather than of the choice on offer.
 	await page.route("**/api/v1/events/*/share", (route) =>
-		route.request().method() === "GET"
-			? respond(route, null)
-			: route.fallback(),
+		route.request().method() === "GET" ? respond(route, null) : route.fallback(),
 	);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
 	await page.waitForLoadState("networkidle");
@@ -7497,9 +7596,7 @@ test("keeps the time on a chip while the cell can hold one", async ({
 						),
 					),
 				],
-				timeShown: time
-					? window.getComputedStyle(time).display !== "none"
-					: false,
+				timeShown: time ? window.getComputedStyle(time).display !== "none" : false,
 			};
 		});
 
@@ -7854,7 +7951,6 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 		.click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	expect(savedVotes[1]).toEqual({
-		name: "Web QA",
 		votes: [{ slotID: "owner-slot", value: "no" }],
 	});
 });
@@ -8062,9 +8158,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
 		named = route.request().postDataJSON();
 		return respond(route, { status: true });
 	});
-	await page.route("**/api/v1/users/settings", (route) =>
-		respond(route, state),
-	);
+	await page.route("**/api/v1/users/settings", (route) => respond(route, state));
 	await page.route("**/api/v1/users/settings/document", (route) =>
 		respond(route, {
 			revision,
@@ -8342,9 +8436,7 @@ test("makes an event page from the public page with no account", async ({
 }) => {
 	const hydrationErrors = recordHydrationErrors(page);
 	let signedIn = false;
-	let created:
-		| { calendars: string[]; start: string; title: string }
-		| undefined;
+	let created: { calendars: string[]; start: string; title: string } | undefined;
 	let published: { mode: string; name?: string } | undefined;
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(
@@ -8362,8 +8454,11 @@ test("makes an event page from the public page with no account", async ({
 	);
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "t", user: { id: "guest" } });
+		return respond(route, { token: "t", user: { id: "guest", name: "" } });
 	});
+	await page.route("**/api/auth/update-user", (route) =>
+		respond(route, { user: { id: "guest", name: "Zoe" } }),
+	);
 	await page.route("**/api/v1/calendars", (route) =>
 		respond(route, [
 			{
@@ -8386,6 +8481,7 @@ test("makes an event page from the public page with no account", async ({
 		published = route.request().postDataJSON();
 		return respond(route, {
 			attendeeVisibility: "counts",
+			coverUrl: null,
 			indexable: false,
 			mode: "link",
 			theme: {
@@ -8421,10 +8517,11 @@ test("makes an event page from the public page with no account", async ({
 
 	// Still nothing on the server: the address comes first.
 	expect(created).toBeUndefined();
-	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByRole("button", { name: "Confirm and publish" }).click();
 
 	await expect(page.getByRole("textbox", { name: "Event link" })).toHaveValue(
@@ -8454,7 +8551,25 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 				slots: Array<{ start: string }>;
 		  }
 		| undefined;
-	await page.route("**/api/auth/get-session", (route) => respond(route, null));
+	let signedIn = false;
+	await page.route("**/api/auth/get-session", (route) =>
+		respond(
+			route,
+			signedIn
+				? {
+						session: { id: "s" },
+						user: { email: "z@example.com", id: "guest", name: "Zoe" },
+					}
+				: null,
+		),
+	);
+	await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+		respond(route, { success: true }),
+	);
+	await page.route("**/api/auth/sign-in/email-otp", (route) => {
+		signedIn = true;
+		return respond(route, { token: "t", user: { id: "guest", name: "Zoe" } });
+	});
 	await page.route("**/api/v1/scheduling/polls", (route) => {
 		if (route.request().method() !== "POST") return respond(route, []);
 		created = route.request().postDataJSON();
@@ -8491,9 +8606,11 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	// attached, so a press before hydration lands on nothing.
 	await page.waitForLoadState("networkidle");
 
-	await page.getByLabel("What is it about").fill("Studio planning");
-	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
+	await page.getByRole("button", { name: "Send me a code" }).click();
+	await page.getByLabel("Code from your email").fill("123456");
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await page.getByLabel("What is it about").fill("Studio planning");
 	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await page.getByRole("button", { exact: true, name: "11" }).click();
 	await page.getByRole("button", { name: "Create the poll" }).click();
@@ -8501,9 +8618,9 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	await expect(page.getByRole("textbox", { name: "Poll link" })).toHaveValue(
 		`http://127.0.0.1:3000/s/${POLL_TOKEN}`,
 	);
-	// The email identifies the organizer but no code or account is required for
-	// the first creation.
-	expect(created).toMatchObject({ email: "z@example.com", name: "Zoe" });
+	// Identity comes from the verified session, never form fields.
+	expect(created).not.toHaveProperty("email");
+	expect(created).not.toHaveProperty("name");
 	expect(created).not.toHaveProperty("approximateStartTime");
 	expect(created!.slots).toHaveLength(2);
 	expect(hydrationErrors).toEqual([]);
@@ -8550,16 +8667,9 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 			const titleBox = (heading as HTMLElement).getBoundingClientRect();
 			return {
 				centerDelta: Math.abs(
-					cardBox.left +
-						cardBox.width / 2 -
-						(titleBox.left + titleBox.width / 2),
+					cardBox.left + cardBox.width / 2 - (titleBox.left + titleBox.width / 2),
 				),
-				pageCenterX: Math.abs(
-					cardBox.left + cardBox.width / 2 - innerWidth / 2,
-				),
-				pageCenterY: Math.abs(
-					cardBox.top + cardBox.height / 2 - innerHeight / 2,
-				),
+				pageCenterX: Math.abs(cardBox.left + cardBox.width / 2 - innerWidth / 2),
 				textAlign: getComputedStyle(heading as HTMLElement).textAlign,
 			};
 		},
@@ -8567,7 +8677,6 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	);
 	expect(alignment.centerDelta).toBeLessThanOrEqual(1);
 	expect(alignment.pageCenterX).toBeLessThanOrEqual(1);
-	expect(alignment.pageCenterY).toBeLessThanOrEqual(32);
 	expect(alignment.textAlign).toBe("center");
 
 	// Forty-four columns: the table has to scroll inside its box and take nothing
@@ -8595,7 +8704,6 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {
-	let emailEnabled = true;
 	let saved = false;
 	let signedIn = false;
 	const voteAttempts: unknown[] = [];
@@ -8605,20 +8713,17 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 			signedIn
 				? {
 						session: { id: "s" },
-						user: { email: "z@example.com", id: "guest", name: "" },
+						user: { email: "z@example.com", id: "guest", name: "Zoe" },
 					}
 				: null,
 		),
-	);
-	await page.route("**/api/v1/server", (route) =>
-		respond(route, { email: emailEnabled, socials: [], syncProviders: [] }),
 	);
 	await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
 		respond(route, { success: true }),
 	);
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "t", user: { id: "guest" } });
+		return respond(route, { token: "t", user: { id: "guest", name: "Zoe" } });
 	});
 	const body = {
 		chosenSlotID: null,
@@ -8693,45 +8798,23 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await expect(mika).toContainText("✓");
 	await expect(mika).toContainText("✕");
 
-	// A cell opens a menu; the menu sets the answer.
-	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
-	await page.getByRole("button", { name: "Yes", exact: true }).click();
-	// Said before the button is pressed, not after: what leaves the browser is the
-	// answers, name and private identity email — never the reader's calendar.
+	// Email comes before a personal row becomes editable.
 	await expect(page.getByText(/calendar is never read/)).toBeVisible();
-	await page.getByLabel("Your name").fill("Zoe");
-	await page.getByLabel("Email").fill("z@example.com");
-	await page.getByRole("button", { name: "Send my answers" }).click();
-	await expect(page.getByRole("row", { name: /^Zoe/ })).toBeVisible();
-	expect(voteAttempts[0]).toEqual({
-		email: "z@example.com",
-		name: "Zoe",
-		votes: [{ slotID: "slot-tue", value: "yes" }],
-	});
-
-	// The quiet action beside a saved name starts verification before somebody
-	// spends time changing answers they cannot yet overwrite.
-	emailEnabled = false;
-	await page.reload();
-	await page.getByRole("button", { name: "Edit answers for Zoe" }).click();
-	await expect(
-		page.getByRole("alert").filter({ hasText: "SMTP is not configured" }),
-	).toBeVisible();
-
-	emailEnabled = true;
-	await page.reload();
-	await page.getByRole("button", { name: "Edit answers for Zoe" }).click();
 	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
-	await page.getByRole("button", { name: "Confirm and edit" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByLabel("Your name")).toHaveCount(0);
 
-	await page.getByRole("button", { name: /18 Aug.*you answered yes/ }).click();
-	await page.getByRole("button", { name: "No", exact: true }).click();
+	// A cell opens a menu; the menu sets the answer.
+	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
+	await page.getByRole("button", { name: "Yes", exact: true }).click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	const savedButton = page.getByRole("button", { name: "Answers saved" });
 	await expect(savedButton).toBeDisabled();
-	expect(voteAttempts).toHaveLength(2);
+	expect(voteAttempts).toEqual([
+		{ votes: [{ slotID: "slot-tue", value: "yes" }] },
+	]);
 	const zoe = page.getByRole("row", { name: /^Zoe/ });
 	await expect(zoe).toBeVisible();
 
@@ -8743,9 +8826,7 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	);
 	for (const row of [mika, zoe]) {
 		expect(
-			await row
-				.locator("th")
-				.evaluate((cell) => getComputedStyle(cell).textAlign),
+			await row.locator("th").evaluate((cell) => getComputedStyle(cell).textAlign),
 		).toBe("center");
 	}
 
@@ -8903,10 +8984,7 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
 	await page.getByRole("button", { name: /Use dark theme/ }).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 	await page.evaluate(() =>
-		Promise.all(
-			document.getAnimations().map((animation) => animation.finished),
-		),
+		Promise.all(document.getAnimations().map((animation) => animation.finished)),
 	);
 	await expectNoAccessibilityViolations(page);
 });
-

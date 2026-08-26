@@ -16,11 +16,15 @@ async function main() {
   process.env.S3_SECRET_ACCESS_KEY = "";
 
   try {
-    const { deleteMedia, getMedia, putMedia, withMediaLock } = await import(
-      "./media_storage"
-    );
+    const { deleteMedia, getMedia, putMedia, sniffImageMime, withMediaLock } =
+      await import("./media_storage");
     const data = Buffer.from("image bytes");
 
+    assert.equal(
+      sniffImageMime(Buffer.from([0xff, 0xd8, 0xff, 0x00])),
+      "image/jpeg",
+    );
+    assert.equal(sniffImageMime(data), null);
     assert.equal(await readFile(path.join(root, ".backend"), "utf8"), "local");
     assert.equal(await getMedia("avatars/missing"), null);
     await putMedia("avatars/user-1", data, "image/png");

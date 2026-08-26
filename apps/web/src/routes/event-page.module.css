@@ -1,18 +1,7 @@
-/* A published page is not the app: no shell, no sidebar, one card and the two
-   things a stranger actually wants — when it is, and how to keep it. */
-/* One look, and it is the reader's: the page follows their light/dark setting and
-   the toggle above it, the same way the poll page does. The `--page-*` variables
-   the rules below read are mapped onto the app's tokens here, which is what makes
-   the whole page switch with the theme. Chosen palettes come back when there is
-   somewhere to choose them. */
 .page {
   position: relative;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: var(--space-4);
   min-height: 100dvh;
-  padding: var(--space-6) var(--space-4);
+  padding: clamp(12px, 3vw, 36px);
   background: var(--surface-canvas);
   color: var(--text-primary);
 
@@ -26,226 +15,583 @@
   --page-text: var(--text-primary);
 }
 
-/* Out of the flow: a row of its own for one icon costs the card its centring. */
-.themeRow {
+.page a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+.shell {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.themeToggle {
   position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
+  z-index: 2;
+  top: clamp(18px, 3vw, 28px);
+  right: clamp(18px, 3vw, 30px);
+  display: grid;
+  place-items: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--page-surface) 84%, transparent);
+  color: var(--page-text);
+  backdrop-filter: blur(10px);
 }
 
-/* Covers are decoration drawn from the same palette — never an upload, which
-   would be a moderation surface and an unbounded contrast risk. */
-.page[data-cover="wash"] {
-  background-image: radial-gradient(
-    120% 80% at 50% 0%,
-    color-mix(in oklab, var(--page-accent) 22%, transparent),
-    transparent 70%
+.themeToggle > button:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+
+.hero {
+  position: relative;
+  display: flex;
+  min-height: clamp(340px, 46vw, 470px);
+  overflow: hidden;
+  border: 1px solid var(--page-border);
+  border-radius: clamp(18px, 3vw, 30px);
+  background: var(--page-surface);
+  background-clip: padding-box;
+  background-position: center;
+  background-size: cover;
+  isolation: isolate;
+}
+
+.hero::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 18%,
+    color-mix(in srgb, var(--page-background) 18%, transparent) 42%,
+    var(--page-background) 100%
   );
+  content: "";
 }
 
-.page[data-cover="grid"] {
+.hero[data-cover="wash"] {
+  background-image: radial-gradient(
+    100% 130% at 15% 0%,
+    color-mix(in srgb, var(--page-accent) 78%, white),
+    var(--page-surface) 72%
+  );
+  background-repeat: no-repeat;
+}
+
+.hero[data-cover="grid"] {
+  background-color: var(--page-surface);
   background-image:
     linear-gradient(
-      color-mix(in oklab, var(--page-accent) 12%, transparent) 1px,
+      color-mix(in srgb, var(--page-accent) 22%, transparent) 1px,
       transparent 1px
     ),
     linear-gradient(
       90deg,
-      color-mix(in oklab, var(--page-accent) 12%, transparent) 1px,
+      color-mix(in srgb, var(--page-accent) 22%, transparent) 1px,
       transparent 1px
     );
-  background-size: 32px 32px;
+  background-size: 34px 34px;
 }
 
-.page[data-font="sans"] .card h1 {
-  font-family: var(--font-sans);
-  letter-spacing: -0.01em;
+.hero[data-upload] {
+  color: white;
 }
 
-/* Poster: the title and the date are the message, at display size. The same
-   content in the same order — a layout variant, not a second page. */
-.page[data-layout="poster"] .card {
-  max-width: 30rem;
-  justify-items: center;
-  text-align: center;
+.hero[data-upload]::after {
+  background: linear-gradient(
+    180deg,
+    rgb(0 0 0 / 5%) 12%,
+    rgb(0 0 0 / 84%) 100%
+  );
 }
 
-.page[data-layout="poster"] .card h1 {
-  font-size: clamp(2.2rem, 6vw, 3.4rem);
+.heroBrand {
+  position: absolute;
+  z-index: 1;
+  top: clamp(18px, 3vw, 28px);
+  left: clamp(18px, 3vw, 30px);
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--page-surface) 84%, transparent);
+  color: var(--page-text);
+  backdrop-filter: blur(10px);
+}
+
+.heroBrand svg {
+  width: 24px;
+  height: 24px;
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: end;
+  width: 100%;
+  padding: clamp(24px, 5vw, 58px) clamp(18px, 3vw, 30px);
+}
+
+.heroTitleRow {
+  display: flex;
+  align-items: end;
+  gap: clamp(18px, 3vw, 30px);
+}
+
+.hero h1 {
+  max-width: 850px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(2.15rem, 5vw, 4.7rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.heroFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-top: clamp(16px, 2vw, 24px);
+  color: currentColor;
+  font-size: var(--text-14);
+}
+
+.heroFacts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dateBadge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 82px;
+  padding: 11px 8px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--page-surface) 92%, transparent);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 12%);
+  color: var(--page-text);
+  text-transform: uppercase;
+}
+
+.dateBadge strong {
+  font-family: var(--font-serif);
+  font-size: 2rem;
   line-height: 1.05;
 }
 
-.page[data-layout="poster"] .facts dd,
-.page[data-layout="poster"] .actions,
-.page[data-layout="poster"] .answers {
-  justify-content: center;
-}
-
-/* Links style themselves here: this route has no app shell to inherit from, and
-   the browser's default blue ignores the theme entirely. Weight rather than
-   colour, for the reason the poll page records: the accent as small text misses
-   AA against the dark canvas, and the brand colour is not ours to bend. */
-.card a,
-.footer a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.card {
-  display: grid;
-  gap: var(--space-5);
-  width: 100%;
-  max-width: 34rem;
-  padding: var(--space-6);
-  border: 1px solid var(--page-border);
-  border-radius: var(--radius-lg);
-  background: var(--page-surface, var(--surface-raised));
-}
-
-.header {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.brand svg {
-  width: 30px;
-  height: 30px;
-}
-
-.header h1 {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: clamp(1.6rem, 3vw, 2.1rem);
-  line-height: 1.15;
-}
-
-.organizer {
-  margin: 0;
-  color: var(--page-muted, var(--text-secondary));
-  font-size: var(--text-13);
+.dateBadge span {
+  color: var(--page-accent);
+  font-size: var(--text-11);
+  font-weight: 650;
+  letter-spacing: 0.08em;
 }
 
 .cancelled {
   justify-self: start;
-  margin: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--page-accent, var(--accent-primary));
-  color: var(--page-accent-text, #fff);
+  width: max-content;
+  margin: 0 0 var(--space-3);
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--page-accent);
+  color: var(--page-accent-text);
   font-size: var(--text-11);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.facts {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.facts dt {
-  color: var(--page-muted, var(--text-muted));
-  font-size: var(--text-11);
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.facts dd {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 3px 0 0;
-  color: var(--page-text, var(--text-primary));
-  font-size: var(--text-15);
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 340px);
+  grid-template-areas: "content sidebar";
+  gap: clamp(18px, 3vw, 32px);
+  align-items: start;
+  margin-top: clamp(18px, 3vw, 30px);
 }
 
-.timezone,
-.repeats {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--page-muted, var(--text-secondary));
-  font-size: var(--text-12);
+.content {
+  display: grid;
+  grid-area: content;
+  gap: clamp(16px, 2vw, 22px);
+}
+
+.sidebar {
+  display: grid;
+  grid-area: sidebar;
+  gap: var(--space-3);
+}
+
+@media (min-width: 821px) {
+  .sidebar {
+    position: sticky;
+    top: var(--space-3);
+    max-height: calc(100dvh - var(--space-6));
+    overflow: auto;
+    scrollbar-width: thin;
+  }
+}
+
+.contentCard,
+.rsvp,
+.attendeeCard,
+.sideCard {
+  display: grid;
+  gap: var(--space-3);
+  padding: clamp(18px, 2.5vw, 28px);
+  border: 1px solid var(--page-border);
+  border-radius: 18px;
+  background: var(--page-surface);
+}
+
+.contentCard h2,
+.rsvp h2,
+.attendeeCard h2,
+.sideCard h2 {
+  margin: 0;
+  font-size: var(--text-15);
+  font-weight: 650;
+}
+
+.contentCard h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.25rem, 2vw, 1.55rem);
 }
 
 .description {
   margin: 0;
-  color: var(--page-muted, var(--text-secondary));
-  font-size: var(--text-14, var(--text-13));
-  line-height: 1.6;
+  color: var(--page-muted);
+  font-size: var(--text-15);
+  line-height: 1.72;
   white-space: pre-wrap;
 }
 
-.actions {
+.description a {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.tags {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--page-raised);
+  color: var(--page-muted);
+  font-size: var(--text-12);
+}
+
+.agenda {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda li {
+  display: grid;
+  grid-template-columns: 4.5rem 14px minmax(0, 1fr);
+  gap: var(--space-3);
+  min-height: 72px;
+}
+
+.agenda time {
+  padding-top: 2px;
+  color: var(--page-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-13);
+}
+
+.agenda li > span {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border: 2px solid var(--page-surface);
+  border-radius: 50%;
+  background: var(--page-accent);
+  box-shadow: 0 0 0 1px var(--page-accent);
+}
+
+.agenda li > span::after {
+  position: absolute;
+  top: 10px;
+  bottom: -58px;
+  left: 3px;
+  width: 2px;
+  background: color-mix(in srgb, var(--page-accent) 32%, transparent);
+  content: "";
+}
+
+.agenda li:last-child > span::after {
+  display: none;
+}
+
+.agenda strong {
+  font-size: var(--text-14);
+}
+
+.agenda p {
+  margin: 5px 0 0;
+  color: var(--page-muted);
+  font-size: var(--text-13);
+  line-height: 1.45;
+}
+
+.timezone,
+.rsvpState,
+.attending,
+.sideCard p {
+  margin: 0;
+  color: var(--page-muted);
+  font-size: var(--text-13);
+  line-height: 1.5;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
   gap: var(--space-3);
 }
 
-.secondaryLink {
-  color: var(--page-accent, var(--text-secondary));
+.actions > button {
+  width: 100%;
+}
+
+.actions .secondaryAction {
+  grid-column: 1 / -1;
+}
+
+.secondaryAction,
+.sideCard a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  color: var(--page-muted);
   font-size: var(--text-13);
+  font-weight: 550;
 }
 
-.footer {
-  margin: 0;
-  color: var(--page-muted, var(--text-muted));
-  font-size: var(--text-12);
-}
-
-/* ── RSVP ─────────────────────────────────────────────────────────────────── */
-.rsvp {
-  display: grid;
-  gap: var(--space-3);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--page-border);
-}
-
-.rsvp h2 {
-  margin: 0;
-  font-size: var(--text-15);
-  font-weight: 500;
+.eventLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: currentColor;
+  font-weight: 600;
 }
 
 .answers {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
-/* The chosen answer is painted inline in the component, not here: the app's
-   button styles and this stylesheet are separate modules whose order is decided
-   by the bundler, and the RSVP flow is on the fixed side of `PRD §17.3` — it has
-   to read correctly in every palette rather than win a cascade fight. */
+.answers button {
+  min-width: 0;
+  padding-inline: 8px;
+}
 
-.rsvpState,
-.attending {
-  margin: 0;
-  color: var(--page-muted, var(--text-secondary));
-  font-size: var(--text-13);
+.answers button[aria-pressed="false"] {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.answers button[aria-pressed="true"] {
+  border-color: var(--page-accent);
+  background: var(--page-accent);
+  color: var(--page-accent-text);
+}
+
+.answers button[aria-pressed="false"]:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  background: var(--surface-sunken);
 }
 
 .rsvpForm {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--page-border);
   border-radius: var(--radius-md);
-  background: var(--surface-canvas);
+  background: var(--page-raised);
 }
 
-.rsvpExplainer {
+.rsvpExplainer,
+.rsvpError {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--page-muted);
   font-size: var(--text-12);
   line-height: 1.5;
 }
 
 .rsvpError {
+  color: var(--page-accent);
+}
+
+.facepile {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.facepile > * {
+  border: 2px solid var(--page-raised);
+}
+
+.facepile > * + * {
+  margin-left: -10px;
+}
+
+.facepileMore {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--page-surface);
+  color: var(--page-muted);
+  font-size: var(--text-11);
+}
+
+.attendeeList {
+  display: grid;
+  gap: var(--space-2);
   margin: 0;
-  color: var(--accent-primary);
+  padding: 0;
+  list-style: none;
+}
+
+.attendeeList li,
+.organizer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-13);
+}
+
+.mapPreview {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
+.sideCard > button {
+  justify-self: start;
+}
+
+.footer {
+  margin: var(--space-6) 0 var(--space-3);
+  color: var(--page-muted);
   font-size: var(--text-12);
+  text-align: center;
+}
+
+.secondaryLink {
+  color: var(--page-accent);
+  font-size: var(--text-13);
+}
+
+@media (max-width: 820px) {
+  .page {
+    padding: 0 0 var(--space-5);
+  }
+
+  .hero {
+    min-height: 420px;
+    border-width: 0 0 1px;
+    border-radius: 0 0 24px 24px;
+  }
+
+  .layout {
+    display: flex;
+    flex-direction: column;
+    padding: 0 var(--space-3);
+  }
+
+  .sidebar {
+    display: contents;
+  }
+
+  .rsvp {
+    order: 1;
+    width: 100%;
+  }
+
+  .content {
+    order: 2;
+    width: 100%;
+  }
+
+  .attendeeCard,
+  .sideCard {
+    order: 3;
+    width: 100%;
+  }
+
+  .footer {
+    padding: 0 var(--space-3);
+  }
+}
+
+@media (max-width: 560px) {
+  .hero {
+    min-height: 390px;
+  }
+
+  .heroCopy {
+    padding: 22px 18px;
+  }
+
+  .heroTitleRow {
+    align-items: flex-start;
+  }
+
+  .dateBadge {
+    width: 62px;
+    padding: 9px 6px;
+    border-radius: 13px;
+  }
+
+  .dateBadge strong {
+    font-size: 1.55rem;
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 11vw, 3rem);
+  }
+
+  .heroFacts {
+    display: grid;
+    gap: 7px;
+  }
+
+  .answers {
+    grid-template-columns: 1fr;
+  }
+
+  .agenda li {
+    grid-template-columns: 3.75rem 12px minmax(0, 1fr);
+    gap: var(--space-2);
+  }
 }

@@ -24,6 +24,15 @@ type RawJsonRequestOptions<T> = {
   timeoutMs?: number;
 };
 
+type RawBodyRequestOptions<T> = {
+  body: BodyInit;
+  contentType: string;
+  method?: "POST" | "PUT";
+  responseSchema: z.ZodType<T>;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
 export class ApiError extends Error {
   readonly requestId?: string;
   readonly status: number;
@@ -53,8 +62,10 @@ function requestId() {
 function responseRequestId(response: Response, body: unknown) {
   const parsed = ApiErrorEnvelopeSchema.safeParse(body);
   return parsed.success
-    ? parsed.data.requestId ?? response.headers.get("x-request-id") ?? undefined
-    : response.headers.get("x-request-id") ?? undefined;
+    ? (parsed.data.requestId ??
+        response.headers.get("x-request-id") ??
+        undefined)
+    : (response.headers.get("x-request-id") ?? undefined);
 }
 
 async function parseJson(response: Response): Promise<unknown> {
@@ -78,7 +89,7 @@ function throwApiError(response: Response, payload: unknown): never {
   // which names the HTTP layer and says nothing about what to do. The request id
   // travels with the error for whoever reads the logs.
   const message = envelope.success
-    ? envelope.data.message ?? envelope.data.error
+    ? (envelope.data.message ?? envelope.data.error)
     : "The server did not say why.";
 
   if (response.status === 401) {
@@ -134,42 +145,44 @@ export async function apiRequest<T>(
   return parsed.data;
 }
 
-export async function apiRawJsonRequest<T>(
+export function apiRawJsonRequest<T>(
+  path: `/api/${string}`,
+  options: RawJsonRequestOptions<T>,
+): Promise<T> {
+  return apiRawBodyRequest(path, { ...options, method: "POST" });
+}
+
+export async function apiRawBodyRequest<T>(
   path: `/api/${string}`,
   {
     body,
     contentType,
+    method = "PUT",
     responseSchema,
     signal,
     timeoutMs = 30_000,
-  }: RawJsonRequestOptions<T>,
+  }: RawBodyRequestOptions<T>,
 ): Promise<T> {
-  const headers = new Headers({
-    accept: "application/json",
-    "content-type": contentType,
-    "x-request-id": requestId(),
-  });
-  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const response = await fetch(path, {
     body,
     credentials: "include",
-    headers,
-    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": contentType,
+      "x-request-id": requestId(),
+    },
+    method,
     signal: signal
-      ? AbortSignal.any([signal, timeoutSignal])
-      : timeoutSignal,
+      ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
   });
   const payload = await parseJson(response);
 
-  if (!response.ok) {
-    throwApiError(response, payload);
-  }
-
+  if (!response.ok) throwApiError(response, payload);
   const parsed = responseSchema.safeParse(payload);
   if (!parsed.success) {
     throw new ApiResponseError(responseRequestId(response, payload));
   }
-
   return parsed.data;
 }
 

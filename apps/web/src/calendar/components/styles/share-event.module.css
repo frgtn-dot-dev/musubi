@@ -1,7 +1,59 @@
-.content {
+.workspace {
   display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1fr) minmax(
+      300px,
+      1fr
+    );
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
   gap: var(--space-4);
-  padding: var(--space-4) var(--layer-inline);
+  padding: var(--space-5) var(--layer-inline);
+  overflow-y: auto;
+  background: var(--surface-canvas);
+}
+
+.columnHeading h3,
+.columnHeading p,
+.sectionHeading h4 {
+  margin: 0;
+}
+
+.columnHeading h3 {
+  font-size: var(--text-16);
+}
+
+.columnHeading p,
+.timezoneNote {
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.timezoneNote {
+  margin: calc(var(--space-3) * -1) 0 0;
+}
+
+.sectionHeading h4 {
+  font-size: var(--text-13);
+}
+
+.dateFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.loading {
+  padding: var(--space-5) var(--layer-inline);
+  margin: 0;
+  color: var(--text-secondary);
 }
 
 .modes {
@@ -66,7 +118,248 @@
 
 .footer {
   display: flex;
+  width: 100%;
+  align-items: center;
   justify-content: flex-end;
-  padding: var(--space-3) var(--layer-inline) var(--space-4);
+  gap: var(--space-2);
 }
 
+.footerError {
+  margin: 0 auto 0 0;
+  color: var(--accent-primary);
+  font-size: var(--text-12);
+}
+
+.pageEditor {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.editorHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.editorHeading h3,
+.editorHeading p,
+.editorSection p {
+  margin: 0;
+}
+
+.editorHeading h3,
+.editorSection strong {
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+
+.editorHeading p,
+.help {
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.45;
+}
+
+.editorSection {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.agendaEditor input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.coverChoices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.coverChoices button,
+.uploadChoice {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 74px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-12);
+  text-align: center;
+}
+
+.coverChoices button[aria-pressed="true"],
+.uploadChoice[data-selected] {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.coverChoices button span {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--surface-canvas);
+}
+
+.coverChoices button[data-cover="wash"] span {
+  background: radial-gradient(
+    circle at 30% 10%,
+    var(--accent-primary),
+    var(--surface-canvas) 70%
+  );
+}
+
+.coverChoices button[data-cover="grid"] span {
+  background-image:
+    linear-gradient(var(--border-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-strong) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.uploadPreview {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
+  background-position: center;
+  background-size: cover;
+}
+
+.framingDialog {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.framingFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cropStage {
+  display: grid;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.cropImage,
+.cropFrame {
+  grid-area: 1 / 1;
+}
+
+.cropImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.cropFrame {
+  position: relative;
+  align-self: start;
+  justify-self: start;
+  box-sizing: border-box;
+  border: 2px solid white;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 45%);
+  cursor: grab;
+  touch-action: none;
+}
+
+.cropFrame:active {
+  cursor: grabbing;
+}
+
+.cropFrame:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.cropHandle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--surface-canvas);
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: nwse-resize;
+}
+
+.agendaEditor {
+  display: grid;
+  grid-template-columns: 7rem minmax(8rem, 1fr) minmax(8rem, 1.3fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.removeAgenda {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.removeAgenda:hover {
+  background: var(--surface-raised);
+  color: var(--accent-primary);
+}
+
+@media (min-width: 900px) {
+  .workspace {
+    height: 100%;
+  }
+}
+
+@media (max-width: 899px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .column {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 680px) {
+  .dateFields,
+  .coverChoices {
+    grid-template-columns: 1fr;
+  }
+
+  .agendaEditor {
+    grid-template-columns: 1fr;
+  }
+
+  .removeAgenda {
+    justify-self: end;
+  }
+}

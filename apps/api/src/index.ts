@@ -62,6 +62,10 @@ import {
   handlerPutPublicRsvp,
   handlerRevokeEventShare,
 } from "./handlers/event_shares";
+import {
+  handlerGetPublicEventCover,
+  handlerPutEventCover,
+} from "./handlers/event_covers";
 import { BadRequestError, ForbiddenError } from "@musubi/types";
 import { rateLimit } from "./middleware/rate_limit";
 import {
@@ -71,10 +75,7 @@ import {
   handlerSendCalendarInvite,
 } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
-import {
-  handlerSubscribePush,
-  handlerUnsubscribePush,
-} from "./handlers/push";
+import { handlerSubscribePush, handlerUnsubscribePush } from "./handlers/push";
 import {
   handlerDeleteEventReminder,
   handlerGetReminders,
@@ -353,6 +354,15 @@ app.delete(
   requireAuth,
   wrap(handlerRevokeEventShare),
 );
+app.put(
+  "/api/v1/events/:eventId/share/cover",
+  requireAuth,
+  express.raw({
+    limit: "5mb",
+    type: ["image/jpeg", "image/png", "image/webp"],
+  }),
+  wrap(handlerPutEventCover),
+);
 // Who answered. For the organizer, so it ignores the reader-facing visibility.
 
 // Calendars — /google must stay before /:id (both one-segment GETs)
@@ -369,9 +379,8 @@ app.get(
   rateLimit(30, 15 * 60_000),
   wrap(handlerGetCalendarFromToken),
 );
-// Scheduling (group poll, PRD §19.1). Creating and deciding belong to the
-// organizer; reading is open by token. A first answer needs only name + email;
-// replacing an existing email's answer requires an authenticated matching inbox.
+// Scheduling (group poll, PRD §19.1). Creating and answering require a verified
+// email; reading stays open by token.
 app.get(
   "/api/v1/scheduling/polls/calendar",
   requireAuth,
@@ -380,7 +389,7 @@ app.get(
 app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
 app.post(
   "/api/v1/scheduling/polls",
-  optionalAuth,
+  requireAuth,
   rateLimit(30, 15 * 60_000),
   wrap(handlerCreatePoll),
 );
@@ -407,7 +416,7 @@ app.get(
 );
 app.put(
   "/api/v1/public/polls/:token/votes",
-  optionalAuth,
+  requireAuth,
   rateLimit(60, 15 * 60_000),
   wrap(handlerVotePoll),
 );
@@ -423,7 +432,7 @@ app.get(
 // first, so every RSVP is an address somebody proved.
 app.get(
   "/api/v1/public/events/:token/rsvp",
-  requireAuth,
+  optionalAuth,
   rateLimit(60, 15 * 60_000),
   wrap(handlerGetPublicRsvp),
 );
@@ -432,6 +441,11 @@ app.put(
   requireAuth,
   rateLimit(30, 15 * 60_000),
   wrap(handlerPutPublicRsvp),
+);
+app.get(
+  "/api/v1/public/events/:token/cover",
+  rateLimit(120, 15 * 60_000),
+  wrap(handlerGetPublicEventCover),
 );
 app.get(
   "/api/v1/calendars/:id/export",

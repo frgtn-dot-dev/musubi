@@ -1,41 +1,78 @@
-import { expandRecurringEvents } from "@musubi/calendar";
+import { expandRecurringEvents, noteParts } from "@musubi/calendar";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarPlus, MapPin, Repeat2 } from "lucide-react";
+import {
+  CalendarPlus,
+  Clock3,
+  ExternalLink,
+  Link as LinkIcon,
+  MapPin,
+  Repeat2,
+  Share2,
+} from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
-import { ThemeToggle } from "~/calendar/components/ThemeToggle";
+import { ThemeToggleButton } from "~/calendar/components/ThemeToggle";
+import type { AppliedTheme } from "~/design/theme";
 import { BrandMark } from "~/components/BrandMark";
-import { RsvpBlock } from "./-rsvp-block";
+import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
 import { RouteState } from "~/ui/RouteState";
+import { RsvpBlock } from "./-rsvp-block";
 import styles from "./event-page.module.css";
 
-/** How far ahead a recurring page looks for the occurrence to show. */
 const NEXT_OCCURRENCE_WINDOW_MS = 365 * 24 * 60 * 60 * 1_000;
+const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
+
+function subscribeToSystemTheme(callback: () => void) {
+  const media = window.matchMedia(DARK_MEDIA_QUERY);
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+function getSystemTheme(): AppliedTheme {
+  return window.matchMedia(DARK_MEDIA_QUERY).matches ? "dark" : "light";
+}
 
 export const Route = createFileRoute("/e/$token")({
   component: PublicEventRoute,
   head: () => ({
-    meta: [
-      // Nothing is indexable until the page itself says otherwise, and it can
-      // only say so after the data has loaded. Starting closed is the only safe
-      // default: a crawler that reads the shell must not take silence for yes.
-      { content: "noindex, nofollow", name: "robots" },
-    ],
+    meta: [{ content: "noindex, nofollow", name: "robots" }],
   }),
 });
 
-/**
- * A published event, for someone with no account here.
- *
- * Deliberately not the app: no sidebar, no session, no data beyond the one
- * projection the API hands out. What it adds is the two things a reader wants —
- * when it is in THEIR timezone, and a way to put it in whatever calendar they
- * actually use.
- */
+function EventThemeToggle() {
+  const systemTheme = useSyncExternalStore(
+    subscribeToSystemTheme,
+    getSystemTheme,
+    (): AppliedTheme => "light",
+  );
+  const [override, setOverride] = useState<AppliedTheme>();
+  const theme = override ?? systemTheme;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.dataset.theme;
+    root.dataset.theme = theme;
+
+    return () => {
+      if (previous) root.dataset.theme = previous;
+      else delete root.dataset.theme;
+    };
+  }, [theme]);
+
+  return (
+    <ThemeToggleButton
+      theme={theme}
+      onToggle={() => setOverride(theme === "dark" ? "light" : "dark")}
+    />
+  );
+}
+
 function PublicEventRoute() {
   const { token } = Route.useParams();
+  const [copied, setCopied] = useState(false);
   const page = useQuery({
     queryFn: ({ signal }) => getPublicEvent(token, signal),
     queryKey: ["public-event", token],
@@ -44,17 +81,12 @@ function PublicEventRoute() {
   });
 
   if (page.isPending) {
-    return (
-      <RouteState busy eyebrow="Musubi" title="Opening the event…" />
-    );
+    return <RouteState busy eyebrow="Musubi" title="Opening the event…" />;
   }
 
   if (page.isError) {
     return (
       <RouteState
-        /* Same reasoning as the missing poll: only the organizer can bring the
-           page back, so the way out offered here is the one the reader can take
-           without them. */
         actions={
           <Link className={styles.secondaryLink} to="/new-event">
             Make an event page of your own
@@ -69,120 +101,249 @@ function PublicEventRoute() {
 
   const event = page.data;
   const occurrence = nextOccurrence(event);
+  const focalPosition = `${event.content.cover.focalX}% ${event.content.cover.focalY}%`;
+
+  async function share() {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          text: event.title,
+          title: event.title,
+          url: location.href,
+        });
+      } else {
+        await navigator.clipboard.writeText(location.href);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2_000);
+      }
+    } catch (error) {
+      if ((error as DOMException).name !== "AbortError") setCopied(false);
+    }
+  }
+
+  const keepDate = (
+    <section className={styles.sideCard}>
+      <h2>Keep the date</h2>
+      <p className={styles.timezone}>Times shown in {localTimezoneLabel()}.</p>
+      <div className={styles.actions}>
+        <Button
+          icon={<CalendarPlus size={16} strokeWidth={1.6} />}
+          onClick={() => downloadIcs(event, occurrence)}
+        >
+          Add to calendar
+        </Button>
+        <Button
+          icon={<Share2 size={15} />}
+          variant="secondary"
+          onClick={() => void share()}
+        >
+          {copied ? "Link copied" : "Share"}
+        </Button>
+        <a
+          className={styles.secondaryAction}
+          href={googleCalendarUrl(event, occurrence)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          Google Calendar
+        </a>
+      </div>
+    </section>
+  );
 
   return (
-    <main
-      className={styles.page}
-      data-cover={event.theme.cover}
-      data-font={event.theme.font}
-      data-layout={event.theme.layout}
-      id="main-content"
-      tabIndex={-1}
-    >
-      {/* The page follows the reader's system setting and lets them override it,
-          like the app and the poll page do. */}
-      <div className={styles.themeRow}>
-        <ThemeToggle />
-      </div>
+    <main className={styles.page} id="main-content" tabIndex={-1}>
+      {event.indexable ? <meta content="index, follow" name="robots" /> : null}
 
-      {/* The indexing decision travels with the data, not with the route: a page
-          shared "anyone with the link" must stay out of search even though the
-          markup is identical. */}
-      {event.indexable ? (
-        <meta content="index, follow" name="robots" />
-      ) : null}
-
-      <article className={styles.card}>
-        <header className={styles.header}>
-          <span aria-hidden="true" className={styles.brand}>
+      <div className={styles.shell}>
+        <header
+          className={styles.hero}
+          data-cover={event.theme.cover}
+          data-upload={event.coverUrl ? "" : undefined}
+          style={
+            event.coverUrl
+              ? {
+                  backgroundImage: `url(${event.coverUrl})`,
+                  backgroundPosition: focalPosition,
+                  backgroundSize: `${event.content.cover.zoom * 100}%`,
+                }
+              : undefined
+          }
+        >
+          <div className={styles.themeToggle}>
+            <EventThemeToggle />
+          </div>
+          <span aria-hidden="true" className={styles.heroBrand}>
             <BrandMark focusable="false" />
           </span>
-          {event.isCanceled ? (
-            <p className={styles.cancelled}>Cancelled</p>
-          ) : null}
-          <h1>{event.title}</h1>
-          <p className={styles.organizer}>Organized by {event.organizer}</p>
+          <div className={styles.heroCopy}>
+            {event.isCanceled ? (
+              <p className={styles.cancelled}>Cancelled</p>
+            ) : null}
+            <div className={styles.heroTitleRow}>
+              <DateBadge date={occurrence.start} />
+              <div>
+                <h1>{event.title}</h1>
+                <div className={styles.heroFacts}>
+                  <span>
+                    <Clock3 aria-hidden="true" size={16} />
+                    {formatWhen(
+                      occurrence.start,
+                      occurrence.end,
+                      event.isAllDay,
+                    )}
+                  </span>
+                  {event.location ? (
+                    <span>
+                      <MapPin aria-hidden="true" size={16} />
+                      {event.location}
+                    </span>
+                  ) : null}
+                  {event.recurrence ? (
+                    <span>
+                      <Repeat2 aria-hidden="true" size={15} /> Repeats
+                    </span>
+                  ) : null}
+                  {event.url ? (
+                    <a
+                      className={styles.eventLink}
+                      href={event.url}
+                      rel="noopener noreferrer nofollow"
+                      target="_blank"
+                    >
+                      <LinkIcon aria-hidden="true" size={14} /> Event link
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
         </header>
 
-        <dl className={styles.facts}>
-          <div>
-            <dt>When</dt>
-            <dd>
-              <time dateTime={occurrence.start.toISOString()}>
-                {formatWhen(occurrence.start, occurrence.end, event.isAllDay)}
-              </time>
-              {/* Spelled out, because the reader is somewhere else than the
-                  organizer often enough that "3pm" alone is a trap. */}
-              <span className={styles.timezone}>{localTimezoneLabel()}</span>
-              {event.recurrence ? (
-                <span className={styles.repeats}>
-                  <Repeat2 aria-hidden="true" size={13} /> Repeats
-                </span>
-              ) : null}
-            </dd>
-          </div>
-          {event.location ? (
-            <div>
-              <dt>Where</dt>
-              <dd>
-                <MapPin aria-hidden="true" size={14} strokeWidth={1.7} />
-                {event.location}
-              </dd>
-            </div>
-          ) : null}
-          {event.url ? (
-            <div>
-              <dt>Link</dt>
-              <dd>
-                <a href={event.url} rel="noopener noreferrer nofollow" target="_blank">
-                  {event.url}
+        <div className={styles.layout}>
+          <aside className={styles.sidebar}>
+            {event.isCanceled ? (
+              keepDate
+            ) : (
+              <RsvpBlock token={token}>{keepDate}</RsvpBlock>
+            )}
+
+            <section className={styles.sideCard}>
+              <h2>Organized by</h2>
+              <div className={styles.organizer}>
+                <Avatar
+                  image={event.organizer.avatarUrl}
+                  name={event.organizer.name}
+                  size={42}
+                />
+                <strong>{event.organizer.name}</strong>
+              </div>
+            </section>
+
+            {event.location ? (
+              <section className={styles.sideCard}>
+                <h2>Location</h2>
+                {event.mapImageUrl ? (
+                  <img
+                    alt=""
+                    className={styles.mapPreview}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    src={event.mapImageUrl}
+                  />
+                ) : null}
+                <p>{event.location}</p>
+                <a
+                  href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(event.location)}`}
+                  rel="noopener noreferrer nofollow"
+                  target="_blank"
+                >
+                  Open in map <ExternalLink aria-hidden="true" size={13} />
                 </a>
-              </dd>
-            </div>
-          ) : null}
-        </dl>
+              </section>
+            ) : null}
+          </aside>
 
-        {event.description ? (
-          <p className={styles.description}>{event.description}</p>
-        ) : null}
+          <div className={styles.content}>
+            {event.description || event.content.tags.length > 0 ? (
+              <section className={styles.contentCard}>
+                <h2>About this event</h2>
+                {event.description ? (
+                  <p className={styles.description}>
+                    {noteParts(event.description).map((part, index) =>
+                      part.href ? (
+                        <a
+                          aria-label={`Open ${part.href}`}
+                          href={part.href}
+                          key={`${part.href}-${index}`}
+                          rel="noopener noreferrer nofollow"
+                          target="_blank"
+                          title={part.href}
+                        >
+                          {part.text}
+                        </a>
+                      ) : (
+                        part.text
+                      ),
+                    )}
+                  </p>
+                ) : null}
+                {event.content.tags.length > 0 ? (
+                  <ul className={styles.tags} aria-label="Event tags">
+                    {event.content.tags.map((tag) => (
+                      <li key={tag}>{tag}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ) : null}
 
-        {/* Only where somebody can be told: a server with no mail cannot send a
-            code, so the block would be a dead end (PRD §18.2). */}
-        {event.isCanceled ? null : <RsvpBlock token={token} />}
-
-        <div className={styles.actions}>
-          <Button
-            icon={<CalendarPlus size={16} strokeWidth={1.6} />}
-            onClick={() => downloadIcs(event, occurrence)}
-          >
-            Add to calendar
-          </Button>
-          <a
-            className={styles.secondaryLink}
-            href={googleCalendarUrl(event, occurrence)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Google Calendar
-          </a>
+            {event.content.agenda.length > 0 ? (
+              <section className={styles.contentCard}>
+                <h2>Program</h2>
+                <ol className={styles.agenda}>
+                  {event.content.agenda.map((item) => (
+                    <li key={item.id}>
+                      <time>{item.time}</time>
+                      <span aria-hidden="true" />
+                      <div>
+                        <strong>{item.title}</strong>
+                        {item.description ? <p>{item.description}</p> : null}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
+          </div>
         </div>
-      </article>
 
-      <p className={styles.footer}>
-        Published with <a href="https://musubi.pro">Musubi</a>
-      </p>
+        <p className={styles.footer}>
+          Published with <a href="https://musubi.pro">Musubi</a>
+        </p>
+      </div>
     </main>
+  );
+}
+
+function DateBadge({ date }: { date: Date }) {
+  return (
+    <time className={styles.dateBadge} dateTime={date.toISOString()}>
+      <span>
+        {new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date)}
+      </span>
+      <strong>
+        {new Intl.DateTimeFormat(undefined, { day: "2-digit" }).format(date)}
+      </strong>
+      <span>
+        {new Intl.DateTimeFormat(undefined, { month: "short" }).format(date)}
+      </span>
+    </time>
   );
 }
 
 type Occurrence = { end: Date; start: Date };
 
-/**
- * Which instance the page is about.
- *
- * Expanded HERE, in the reader's timezone: recurrence is wall-clock, so a server
- * doing this would answer in its own zone and be an hour out for half the year.
- */
 function nextOccurrence(event: PublicEvent): Occurrence {
   if (!event.recurrence) return { end: event.end, start: event.start };
 
@@ -202,16 +363,16 @@ function nextOccurrence(event: PublicEvent): Occurrence {
     new Date(now.getTime() + NEXT_OCCURRENCE_WINDOW_MS),
   );
 
-  // A series whose occurrences are all behind us still has to render something
-  // true, so it falls back to its own times.
-  return next ? { end: next.end, start: next.start } : { end: event.end, start: event.start };
+  return next
+    ? { end: next.end, start: next.start }
+    : { end: event.end, start: event.start };
 }
 
 function localTimezoneLabel(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    return "";
+    return "your local timezone";
   }
 }
 
@@ -219,23 +380,22 @@ function formatWhen(start: Date, end: Date, allDay: boolean): string {
   const date = new Intl.DateTimeFormat(undefined, {
     day: "numeric",
     month: "long",
-    weekday: "long",
-    year: "numeric",
+    weekday: "short",
   }).format(start);
-
   if (allDay) return date;
 
   const time = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
-
-  return `${date}, ${time.format(start)} – ${time.format(end)}`;
+  return `${date} · ${time.format(start)}–${time.format(end)}`;
 }
 
-/** iCal stamps are UTC, seconds precision, no punctuation. */
 function icsStamp(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 function icsEscape(value: string): string {
@@ -246,13 +406,6 @@ function icsEscape(value: string): string {
     .replace(/;/g, "\\;");
 }
 
-/**
- * One event, as a file every calendar app understands.
- *
- * Built in the browser rather than fetched: the data is already here, and it
- * keeps the public API to a single read. Only this occurrence — a stranger is
- * being invited to one thing, not subscribing to a series.
- */
 function downloadIcs(event: PublicEvent, occurrence: Occurrence) {
   const lines = [
     "BEGIN:VCALENDAR",
@@ -264,13 +417,14 @@ function downloadIcs(event: PublicEvent, occurrence: Occurrence) {
     `DTSTART:${icsStamp(occurrence.start)}`,
     `DTEND:${icsStamp(occurrence.end)}`,
     `SUMMARY:${icsEscape(event.title)}`,
-    ...(event.description ? [`DESCRIPTION:${icsEscape(event.description)}`] : []),
+    ...(event.description
+      ? [`DESCRIPTION:${icsEscape(event.description)}`]
+      : []),
     ...(event.location ? [`LOCATION:${icsEscape(event.location)}`] : []),
     ...(event.isCanceled ? ["STATUS:CANCELLED"] : []),
     "END:VEVENT",
     "END:VCALENDAR",
   ];
-
   const blob = new Blob([`${lines.join("\r\n")}\r\n`], {
     type: "text/calendar;charset=utf-8",
   });
@@ -290,6 +444,5 @@ function googleCalendarUrl(event: PublicEvent, occurrence: Occurrence): string {
     ...(event.description ? { details: event.description } : {}),
     ...(event.location ? { location: event.location } : {}),
   });
-
   return `https://calendar.google.com/calendar/render?${query.toString()}`;
 }

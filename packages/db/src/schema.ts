@@ -305,6 +305,9 @@ export const eventShares = pgTable("event_shares", {
   // (`@musubi/types` EventPageThemeSchema), stored as JSONB so adding a knob
   // later is a schema change in one place rather than a migration per knob.
   theme: jsonb("theme").notNull().default({}),
+  // Tags, agenda and uploaded-cover placement. Validated as EventPageContent at
+  // the API boundary; JSONB keeps page-only presentation out of core events.
+  content: jsonb("content").notNull().default({}),
   createdBy: text("created_by")
     .references(() => user.id, { onDelete: "cascade" })
     .notNull(),

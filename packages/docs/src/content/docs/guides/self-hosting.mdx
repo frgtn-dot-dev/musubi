@@ -73,6 +73,7 @@ Edit the `.env` you just downloaded and set your production values. Key variable
 | `LOG_LEVEL` | Server verbosity: `debug`, `info`, `warn`, `error`, or `silent`; defaults to `info` |
 | `METRICS_PORT` | Internal Prometheus listener; defaults to `9464`, set `0` to disable |
 | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Optional remote media storage. Leave `S3_BUCKET` blank to use the persistent local `media` volume; Compose does not launch an S3 service. `S3_ENDPOINT` supports remote S3-compatible providers |
+| `STATIC_MAP_URL_TEMPLATE` | Optional static-map image URL for public event pages. Must contain `{location}`; without it pages show an address and external map link |
 | `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials — needed for Google sign-in (the browser redirect flow needs the secret; the phone's native flow needs only the client id) and Google Calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/google` as an authorized Web redirect URI |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Microsoft Entra ID app credentials — needed for Microsoft sign-in on the web and for Outlook calendar sync. Add `{BETTER_AUTH_URL}/api/auth/callback/microsoft` as a Web redirect URI on the app registration; `MICROSOFT_TENANT_ID` defaults to `common` |
 | `APPLE_CLIENT_ID` | Enables Sign in with Apple in the phone app — set it to the app's bundle id — set to the app bundle id (`dev.frgtn.musubi`); the server verifies the identity token's audience against it |

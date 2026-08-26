@@ -90,10 +90,11 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `POST /api/v1/users/delete/confirm` | Complete email-token account deletion | 10 / 15 min / IP |
 | `GET /api/v1/users/:userId/avatar` | Public immutable avatar bytes | — |
 | `GET /api/v1/public/events/:token` | Read the narrow published-event projection; token is the capability | 60 / 15 min / IP |
-| `GET /api/v1/public/events/:token/rsvp` | Read the authenticated, verified-email guest's answer | 60 / 15 min / IP |
+| `GET /api/v1/public/events/:token/rsvp` | Read public guest counts/names allowed by the organizer, plus the caller's answer when authenticated | 60 / 15 min / IP |
 | `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated, verified-email guest's answer | 30 / 15 min / IP |
+| `GET /api/v1/public/events/:token/cover` | Read the active uploaded event cover; token is the capability | 120 / 15 min / IP |
 | `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
-| `PUT /api/v1/public/polls/:token/votes` | Write a participant's complete answer set; auth is optional for the first answer | 60 / 15 min / IP |
+| `PUT /api/v1/public/polls/:token/votes` | Write a verified participant's complete answer set | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |
 | `GET /reset-password` | Self-hosted password reset HTML | — |
 | `GET /delete-account` | Self-hosted account-deletion HTML | — |
@@ -153,9 +154,9 @@ delta sync.
 | Method and path | Auth | Purpose |
 | --- | --- | --- |
 | `GET /api/v1/scheduling/polls` | Required | List polls owned by the signed-in email identity |
-| `POST /api/v1/scheduling/polls` | Optional | Create a poll from `title`, day `slots`, `name`, `email`, and optional `description`, `deadline`, `approximateStartTime` |
+| `POST /api/v1/scheduling/polls` | Required | Create a poll from `title`, day `slots`, and optional `description`, `deadline`, `approximateStartTime` |
 | `GET /api/v1/public/polls/:token` | Optional | Read the public poll projection and the caller's own answer when identifiable |
-| `PUT /api/v1/public/polls/:token/votes` | Optional | Replace one participant's complete `yes` / `if-needed` / `no` answer set |
+| `PUT /api/v1/public/polls/:token/votes` | Required | Replace one participant's complete `yes` / `if-needed` / `no` answer set |
 | `POST /api/v1/scheduling/polls/:pollId/decide` | Required owner | Pick `slotId` and `calendarId`, create the all-day event, and close the poll |
 | `POST /api/v1/scheduling/polls/:pollId/close` | Required owner | Stop answers without creating an event |
 | `DELETE /api/v1/scheduling/polls/:pollId` | Required owner | Delete the poll and its answers; an already-created event remains |
@@ -164,11 +165,10 @@ Poll choices are calendar days. `approximateStartTime` is optional `HH:mm`
 context only; deciding a current poll creates an all-day event. Older timed polls
 retain their stored duration for compatibility.
 
-Creation and a participant's first answer require a public name and private
-email, but no OTP. Replacing answers already stored for that email, listing or
-managing an anonymously created poll, and deciding it require authentication as
-the matching email identity. The public projection contains participant names
-and answers, never email addresses or private participant identifiers.
+Creation and answers require a verified email OTP. An existing account's saved
+name is reused; a new account chooses one after verification. The public
+projection contains participant names and answers, never email addresses or
+private participant identifiers.
 
 ## Events
 
@@ -183,12 +183,14 @@ and answers, never email addresses or private participant identifiers.
 | `GET /api/v1/events/:eventId/attendees` | — | `[{ id, name, image }]`; no emails |
 | `PUT /api/v1/events/:eventId/attendance` | `{ status: "going" | "maybe" | "declined" | "none" }`; legacy`{ attending: boolean }` remains accepted | Fresh attendee list |
 | `GET /api/v1/events/:eventId/share` | — | Current published-page settings or `null` |
-| `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility }` | Create or update the published page and token URL |
+| `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility, content, theme }` | Create or update the published page, tags, agenda, cover focal point, and token URL |
+| `PUT /api/v1/events/:eventId/share/cover` | JPEG, PNG, or WebP bytes (max 5 MB) | Store or replace the uploaded cover in configured media storage |
 | `DELETE /api/v1/events/:eventId/share` | — | Revoke the public token |
 
-Published event reads are open to possession of the token. RSVP reads and writes
-require a verified-email session; the public page authenticates guests with an
-emailed code before accepting an answer.
+Published event reads and organizer-approved attendee counts/names are open to
+possession of the token. Reading one's own RSVP and writing any answer require a
+verified-email session; the public page authenticates guests with an emailed code
+before accepting an answer.
 
 Event/calendar identifiers on this surface must use canonical hyphenated UUID
 form. Invalid body references, route parameters, `unlinkCalendarID`, and

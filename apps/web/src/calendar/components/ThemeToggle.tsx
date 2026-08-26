@@ -4,23 +4,24 @@ import {
   getAppliedTheme,
   subscribeToTheme,
   toggleTheme,
+  type AppliedTheme,
 } from "~/design/theme";
 import { IconButton } from "~/ui/Button";
 
-export function ThemeToggle() {
-  const theme = useSyncExternalStore(
-    subscribeToTheme,
-    getAppliedTheme,
-    () => "light",
-  );
-
+export function ThemeToggleButton({
+  theme,
+  onToggle,
+}: {
+  theme: AppliedTheme;
+  onToggle: () => void;
+}) {
   const nextTheme = theme === "dark" ? "light" : "dark";
 
   return (
     <IconButton
       label={`Use ${nextTheme} theme`}
       title={`Use ${nextTheme} theme`}
-      onClick={toggleTheme}
+      onClick={onToggle}
     >
       {theme === "dark" ? (
         <Sun aria-hidden="true" size={17} strokeWidth={1.6} />
@@ -29,4 +30,14 @@ export function ThemeToggle() {
       )}
     </IconButton>
   );
+}
+
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(
+    subscribeToTheme,
+    getAppliedTheme,
+    (): AppliedTheme => "light",
+  );
+
+  return <ThemeToggleButton theme={theme} onToggle={toggleTheme} />;
 }

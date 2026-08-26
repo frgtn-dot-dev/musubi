@@ -33,11 +33,12 @@ import {
   type ReorderPagesRequest,
   type SavePageRequest,
 } from "@musubi/types";
-import type { EventPageTheme } from "@musubi/types";
+import type { EventPageContent, EventPageTheme } from "@musubi/types";
 import type { AttendanceChoice } from "~/calendar/attendance";
 import type { RsvpStatus, VoteValue } from "./contracts";
 import { z } from "zod";
 import {
+  apiRawBodyRequest,
   apiRawJsonRequest,
   apiRequest,
   apiTextRequest,
@@ -54,9 +55,7 @@ function route(
   connectionId: string | undefined,
   path: `/api/v1/${string}`,
 ): `/api/${string}` {
-  return connectionId
-    ? `/api/v1/federation/s/${connectionId}${path}`
-    : path;
+  return connectionId ? `/api/v1/federation/s/${connectionId}${path}` : path;
 }
 
 export function getCalendars(signal?: AbortSignal) {
@@ -217,14 +216,11 @@ export function importCalendar(
     query.set("provider", provider);
     query.set("accountId", accountId);
   }
-  return apiRawJsonRequest(
-    `/api/v1/calendars/import?${query.toString()}`,
-    {
-      body: ics,
-      contentType: "text/calendar",
-      responseSchema: ImportedCalendarSchema,
-    },
-  );
+  return apiRawJsonRequest(`/api/v1/calendars/import?${query.toString()}`, {
+    body: ics,
+    contentType: "text/calendar",
+    responseSchema: ImportedCalendarSchema,
+  });
 }
 
 export function exportCalendar(calendarId: string, connectionId?: string) {
@@ -380,10 +376,10 @@ export function getFederatedCalendars(
   connectionId: string,
   signal?: AbortSignal,
 ) {
-  return apiRequest(
-    `/api/v1/federation/s/${connectionId}/api/v1/calendars`,
-    { responseSchema: CalendarsResponseSchema, signal },
-  );
+  return apiRequest(`/api/v1/federation/s/${connectionId}/api/v1/calendars`, {
+    responseSchema: CalendarsResponseSchema,
+    signal,
+  });
 }
 
 /**
@@ -398,20 +394,17 @@ export function getFederatedServerInfo(
   connectionId: string,
   signal?: AbortSignal,
 ) {
-  return apiRequest(
-    `/api/v1/federation/s/${connectionId}/api/v1/server`,
-    { responseSchema: ServerCapabilitiesSchema, signal },
-  );
+  return apiRequest(`/api/v1/federation/s/${connectionId}/api/v1/server`, {
+    responseSchema: ServerCapabilitiesSchema,
+    signal,
+  });
 }
 
-export function getFederatedEvents(
-  connectionId: string,
-  signal?: AbortSignal,
-) {
-  return apiRequest(
-    `/api/v1/federation/s/${connectionId}/api/v1/events`,
-    { responseSchema: EventsResponseSchema, signal },
-  );
+export function getFederatedEvents(connectionId: string, signal?: AbortSignal) {
+  return apiRequest(`/api/v1/federation/s/${connectionId}/api/v1/events`, {
+    responseSchema: EventsResponseSchema,
+    signal,
+  });
 }
 
 export function getEventShare(eventId: string, signal?: AbortSignal) {
@@ -423,6 +416,7 @@ export function getEventShare(eventId: string, signal?: AbortSignal) {
 
 export function publishEvent(input: {
   attendeeVisibility: "counts" | "hidden" | "names";
+  content?: EventPageContent;
   eventId: string;
   indexable: boolean;
   mode: "link" | "public";
@@ -433,6 +427,7 @@ export function publishEvent(input: {
   return apiRequest(`/api/v1/events/${input.eventId}/share`, {
     body: {
       attendeeVisibility: input.attendeeVisibility,
+      content: input.content,
       indexable: input.indexable,
       mode: input.mode,
       name: input.name,
@@ -440,6 +435,14 @@ export function publishEvent(input: {
     },
     method: "PUT",
     responseSchema: EventShareSchema,
+  });
+}
+
+export function uploadEventCover(eventId: string, file: File) {
+  return apiRawBodyRequest(`/api/v1/events/${eventId}/share/cover`, {
+    body: file,
+    contentType: file.type,
+    responseSchema: z.object({ url: z.string().url() }),
   });
 }
 
@@ -627,14 +630,11 @@ export function disconnectAccount(input: {
 }
 
 export function disconnectExternalCalendar(calendarId: string) {
-  return apiRequest(
-    "/api/v1/users/connections/calendars/disconnect",
-    {
-      body: { calendarId },
-      method: "POST",
-      responseSchema: z.object({ id: z.string() }),
-    },
-  );
+  return apiRequest("/api/v1/users/connections/calendars/disconnect", {
+    body: { calendarId },
+    method: "POST",
+    responseSchema: z.object({ id: z.string() }),
+  });
 }
 
 export function deleteAccount() {

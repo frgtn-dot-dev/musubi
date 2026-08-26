@@ -351,6 +351,13 @@
       "when": 1787224907647,
       "tag": "0049_drop_show_kanji",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1787672917072,
+      "tag": "0050_needy_matthew_murdock",
+      "breakpoints": true
     }
   ]
 }

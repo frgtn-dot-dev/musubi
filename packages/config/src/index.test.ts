@@ -5,8 +5,12 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
-  const { parseEnvironment, parseMediaConfig, validateAuthSecret } =
-    await import("./index");
+  const {
+    parseEnvironment,
+    parseMediaConfig,
+    parseStaticMapUrlTemplate,
+    validateAuthSecret,
+  } = await import("./index");
 
   assert.equal(parseEnvironment("dev"), "dev");
   assert.equal(parseEnvironment("test"), "test");
@@ -50,6 +54,20 @@ async function main() {
       S3_REGION: "eu-central-1",
     }).s3?.bucket,
     "media",
+  );
+
+  assert.equal(parseStaticMapUrlTemplate(undefined), "");
+  assert.equal(
+    parseStaticMapUrlTemplate("https://maps.example/static?q={location}"),
+    "https://maps.example/static?q={location}",
+  );
+  assert.throws(
+    () => parseStaticMapUrlTemplate("https://maps.example/static"),
+    /must include \{location\}/,
+  );
+  assert.throws(
+    () => parseStaticMapUrlTemplate("javascript:{location}"),
+    /HTTP\(S\)/,
   );
 
   console.log("config security self-check: OK");

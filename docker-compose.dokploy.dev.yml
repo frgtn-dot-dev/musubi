@@ -16,6 +16,9 @@ services:
       PUBLIC_HOST: :80
       API_UPSTREAM: musubi-api-internal:7531
       WEB_UPSTREAM: musubi-web-internal:3000
+      # Development has no separate marketing site; `/` reaches the app and
+      # its index route redirects to the default calendar under `/app`.
+      MARKETING_UPSTREAM: musubi-web-internal:3000
     volumes:
       - ./ops/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - dev-caddy-data:/data

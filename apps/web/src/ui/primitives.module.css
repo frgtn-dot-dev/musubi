@@ -178,6 +178,11 @@
 	line-height: 1;
 }
 
+.avatar > span,
+.avatar img {
+	grid-area: 1 / 1;
+}
+
 .avatar img {
 	width: 100%;
 	height: 100%;
@@ -1094,11 +1099,7 @@
 }
 
 .rowAction[data-tone="destructive"]:hover:not(:disabled) {
-	background: color-mix(
-		in srgb,
-		var(--accent-primary) 7%,
-		var(--surface-panel)
-	);
+	background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
 }
 
 .rowAction[data-tone="destructive"] .rowLabel,
@@ -1291,6 +1292,31 @@
 	max-height: min(
 		900px,
 		calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+}
+
+.dialog_workspace {
+	width: min(
+		1440px,
+		calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+	max-height: min(
+		900px,
+		calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+}
+
+.dialog_fullscreen {
+	width: calc(
+		100vw -
+		var(--layer-viewport-gutter) -
+		var(--layer-viewport-gutter)
+	);
+	max-width: 1440px;
+	max-height: calc(
+		100dvh -
+		var(--layer-viewport-gutter) -
+		var(--layer-viewport-gutter)
 	);
 }
 
@@ -1650,8 +1676,8 @@
 }
 
 .timePickerInput::placeholder {
-  color: var(--text-muted);
-  opacity: 1;
+	color: var(--text-muted);
+	opacity: 1;
 }
 
 .timePickerInput:focus-visible {
@@ -2027,8 +2053,10 @@
 
 	.dialog,
 	.dialog_compact,
+	.dialog_fullscreen,
 	.dialog_spacious,
-	.dialog_wide {
+	.dialog_wide,
+	.dialog_workspace {
 		top: auto;
 		bottom: 0;
 		left: 0;
