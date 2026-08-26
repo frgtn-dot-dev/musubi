@@ -1,11 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Ellipsis, Info } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Check, Info } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { VoteValue } from "~/api/contracts";
-import { getServerOrigin } from "~/api/query-keys";
-import { getPoll, getServerCapabilities, votePoll } from "~/api/resources";
-import { ApiError } from "~/api/http";
+import { getPoll, votePoll } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
@@ -14,10 +12,9 @@ import {
 	formatSlot,
 	PollGrid,
 	PollLegend,
-	PollNameField,
 } from "~/components/PollGrid";
+import { EmailIdentity } from "~/components/EmailIdentity";
 import { Button } from "~/ui/Button";
-import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
 import styles from "./event-page.module.css";
 import pollStyles from "./poll-page.module.css";
@@ -48,13 +45,7 @@ function PollRoute() {
 	// which is what lets withdrawing one answer be sent rather than ignored.
 	const gridScroller = useRef<HTMLDivElement>(null);
 	const [draft, setDraft] = useState<Record<string, VoteValue | null>>({});
-	const [email, setEmail] = useState("");
-	const [name, setName] = useState("");
-	const [code, setCode] = useState("");
-	const [sent, setSent] = useState(false);
-	const [message, setMessage] = useState("");
-	const [needsVerification, setNeedsVerification] = useState(false);
-	const [editingName, setEditingName] = useState("");
+	const [identifying, setIdentifying] = useState(false);
 
 	const poll = useQuery({
 		queryFn: ({ signal }) => getPoll(token, signal),
@@ -70,12 +61,6 @@ function PollRoute() {
 		if (sessionUserID) void refetchPoll();
 	}, [refetchPoll, sessionUserID]);
 
-	const capabilities = useQuery({
-		enabled: needsVerification && !poll.data?.viewerRole,
-		queryFn: ({ signal }) => getServerCapabilities(signal),
-		queryKey: ["server-capabilities", getServerOrigin()],
-		staleTime: 5 * 60_000,
-	});
 
 	const vote = useMutation({
 		mutationFn: (input: {
@@ -83,15 +68,9 @@ function PollRoute() {
 			name?: string;
 			votes: Array<{ slotID: string; value: VoteValue }>;
 		}) => votePoll({ ...input, token }),
-		onError: (error) => {
-			if (error instanceof ApiError && error.status === 403 && !poll.data?.viewerRole) {
-				setNeedsVerification(true);
-			}
-		},
 		onSuccess: (result) => {
 			queryClient.setQueryData(pollKey, result);
 			setDraft({});
-			setNeedsVerification(false);
 		},
 	});
 
@@ -137,40 +116,6 @@ function PollRoute() {
 		"";
 	const unsaved = Object.keys(draft).length > 0;
 
-	async function requestCode(event: FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		setMessage("");
-		const result = await authClient.emailOtp.sendVerificationOtp({
-			email: email.trim().toLowerCase(),
-			type: "sign-in",
-		});
-		if (result.error) {
-			setMessage(result.error.message ?? "That code could not be sent.");
-			return;
-		}
-		setSent(true);
-	}
-
-	async function confirmCode(event: FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		setMessage("");
-		const result = await authClient.signIn.emailOtp({
-			email: email.trim().toLowerCase(),
-			otp: code.trim(),
-		});
-		if (result.error) {
-			setMessage(result.error.message ?? "That code did not work.");
-			return;
-		}
-		if (editingName) {
-			queryClient.setQueryData(pollKey, await getPoll(token));
-			setEditingName("");
-			setNeedsVerification(false);
-			setSent(false);
-			return;
-		}
-		send();
-	}
 
 	function pick(slotID: string, value: null | VoteValue) {
 		setDraft((current) => ({ ...current, [slotID]: value }));
@@ -178,10 +123,6 @@ function PollRoute() {
 
 	function send() {
 		vote.mutate({
-			email: email.trim().toLowerCase() || undefined,
-			// Sent with the answers so a link-only participant stops being "Guest" to
-			// everyone else in the grid. A signed-in account keeps the name it has.
-			name: name.trim() || myName || undefined,
 			votes: Object.entries(answers)
 				.filter(([, value]) => value !== null)
 				.map(([slotID, value]) => ({ slotID, value: value! })),
@@ -252,51 +193,24 @@ function PollRoute() {
 						   looking straight at it is furniture. Somebody who has not answered
 						   yet does need telling which row is theirs. */
 						caption={
-							data.closed || Object.keys(answers).length > 0
+							data.closed || authenticatedViewer
 								? undefined
-								: "Fill in your own row — the last one — then send."
+								: "Confirm your email below to answer."
 						}
 						chosenSlotID={data.chosenSlotID}
 						mineID={data.mineID}
 						people={data.people}
 						scrollerRef={gridScroller}
-						personAction={
-							authenticatedViewer
-								? undefined
-								: (person) => (
-										<button
-											aria-label={`Edit answers for ${person.name}`}
-											className={pollStyles.editAnswers}
-											title="Edit your answers"
-											type="button"
-											onClick={() => {
-												setEditingName(person.name);
-												setNeedsVerification(true);
-												setMessage("");
-											}}
-										>
-											<Ellipsis aria-hidden="true" size={17} />
-										</button>
-									)
-						}
+						personAction={undefined}
 						showSlotTimes={data.durationMinutes < 24 * 60}
 						slots={data.slots}
-						yourRow={
-							myName ? (
-								myName
-							) : (
-								// Typed in the row it names, so it is obvious whose row it is.
-								// Confirming the address still happens below — this only says who
-								// to call you.
-								<PollNameField onChange={setName} value={name} />
-							)
-						}
-						onAnswer={data.closed ? undefined : pick}
+						yourRow={myName || "Your answers"}
+						onAnswer={data.closed || !authenticatedViewer ? undefined : pick}
 					/>
 
 					<PollLegend scrollerRef={gridScroller} />
 
-					{data.closed ? null : authenticatedViewer ? (
+					{data.closed ? null : authenticatedViewer && !identifying ? (
 						<div className={pollStyles.send}>
 							<Button
 								disabled={!unsaved}
@@ -311,81 +225,24 @@ function PollRoute() {
 								</p>
 							) : null}
 						</div>
-					) : unsaved || editingName ? (
-						<form
-							className={styles.rsvpForm}
-							onSubmit={(event) => {
-								event.preventDefault();
-								if (!needsVerification) send();
-								else void (sent ? confirmCode(event) : requestCode(event));
-							}}
-						>
-							{/* What leaves this browser, said before it does (PRD §19.1). */}
-							<p className={pollStyles.disclosure}>
-								<Info aria-hidden="true" size={14} strokeWidth={1.7} />
-								{editingName
-									? `Verify the email you used when answering as ${editingName}.`
-									: needsVerification
-										? "This email already has answers. Verify the inbox before changing them."
-										: "You are sending your answers, name and email. Your email stays private and your calendar is never read."}
-							</p>
-
-							{needsVerification && capabilities.isPending ? (
+					) : (
+						<EmailIdentity
+							disclosure={
 								<p className={pollStyles.disclosure}>
-									Checking email availability…
+									<Info aria-hidden="true" size={14} strokeWidth={1.7} />
+									Confirm your email to add your answers. Your email stays private
+									and your calendar is never read.
 								</p>
-							) : needsVerification && !capabilities.data?.email ? (
-								<p className={pollStyles.error} role="alert">
-									These answers already belong to this email. This server cannot
-									send the verification code needed to edit them because SMTP is
-									not configured.
-								</p>
-							) : sent ? (
-								<Field label="Code from your email">
-									<input
-										autoComplete="one-time-code"
-										inputMode="numeric"
-										name="code"
-										placeholder="123456"
-										value={code}
-										onChange={(event) => setCode(event.target.value)}
-									/>
-								</Field>
-							) : (
-								<Field label="Email">
-									<input
-										autoCapitalize="none"
-										autoComplete="email"
-										autoFocus={Boolean(editingName)}
-										inputMode="email"
-										name="email"
-										placeholder="you@example.com"
-										type="email"
-										value={email}
-										onChange={(event) => setEmail(event.target.value)}
-									/>
-								</Field>
-							)}
-
-							{message ? (
-								<p className={pollStyles.error} role="alert">
-									{message}
-								</p>
-							) : null}
-
-							{needsVerification && !capabilities.data?.email ? null : (
-								<Button loading={vote.isPending} type="submit">
-									{needsVerification
-										? sent
-											? editingName
-												? "Confirm and edit"
-												: "Confirm and send"
-											: "Send me a code"
-										: "Send my answers"}
-								</Button>
-							)}
-						</form>
-					) : null}
+							}
+							onIdentified={() => {
+								setIdentifying(false);
+								void getPoll(token).then((result) =>
+									queryClient.setQueryData(pollKey, result),
+								);
+							}}
+							onStart={() => setIdentifying(true)}
+						/>
+					)}
 				</div>
 			</article>
 

@@ -172,7 +172,7 @@ function NewEventRoute() {
 							take the page down again.
 						</p>
 					</section>
-				) : asked && !session.data ? (
+				) : asked ? (
 					<section className={styles.step}>
 						<h2>Last thing: who is inviting?</h2>
 						{/* The page as it will be published, read back before an address is
@@ -197,7 +197,6 @@ function NewEventRoute() {
 							) : null}
 						</dl>
 						<EmailIdentity
-							askName
 							busy={publish.isPending}
 							confirmLabel="Confirm and publish"
 							disclosure={
@@ -207,7 +206,7 @@ function NewEventRoute() {
 									name appears on the page as the organizer; your address does not.
 								</p>
 							}
-							onIdentified={(name) => publish.mutate(name)}
+							onIdentified={({ name }) => publish.mutate(name)}
 						/>
 						{publish.error ? (
 							<p className={styles.error} role="alert">

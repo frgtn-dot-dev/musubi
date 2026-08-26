@@ -4,45 +4,44 @@ import { Button } from "~/ui/Button";
 import { Field } from "~/ui/Field";
 import styles from "./email-identity.module.css";
 
+type Identity = { email: string; name: string };
+
 /**
- * "Who are you?", for somebody who has never heard of Musubi.
- *
- * A code to an address, and the account behind it is made on the way past — no
- * password to invent for one poll. Nothing is written before the address is
- * confirmed, so a name and an answer always belong to somebody who proved they
- * can read that inbox.
- *
- * The disclosure is a prop rather than copy of its own: what is about to be sent
- * differs per page, and the PRD asks for it to be said before it happens, not
- * discovered afterwards (§18.2, §19.1).
+ * Passwordless identity without revealing whether an email already has an
+ * account. An existing account supplies its saved name after the code; a new
+ * account asks for one only then.
  */
 export function EmailIdentity({
-  askName = false,
   busy = false,
-  confirmLabel = "Confirm",
+  confirmLabel = "Continue",
   disclosure,
   onIdentified,
+  onStart,
 }: {
-  /** Ask for a name here. Skip it when the page collects one of its own. */
-  askName?: boolean;
   busy?: boolean;
   confirmLabel?: string;
   disclosure?: ReactNode;
-  /** Signed in. The name is whatever they typed, empty if it was not asked. */
-  onIdentified: (name: string) => void;
+  onIdentified: (identity: Identity) => void;
+  onStart?: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
+  const [needsName, setNeedsName] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const normalizedEmail = email.trim().toLowerCase();
+
+  function identified(savedName: string) {
+    onIdentified({ email: normalizedEmail, name: savedName });
+  }
 
   async function requestCode() {
     setMessage("");
     setPending(true);
     const result = await authClient.emailOtp.sendVerificationOtp({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       type: "sign-in",
     });
     setPending(false);
@@ -50,6 +49,7 @@ export function EmailIdentity({
       setMessage(result.error.message ?? "That code could not be sent.");
       return;
     }
+    onStart?.();
     setSent(true);
   }
 
@@ -57,7 +57,7 @@ export function EmailIdentity({
     setMessage("");
     setPending(true);
     const result = await authClient.signIn.emailOtp({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       otp: code.trim(),
     });
     setPending(false);
@@ -65,19 +65,50 @@ export function EmailIdentity({
       setMessage(result.error.message ?? "That code did not work.");
       return;
     }
-    onIdentified(name.trim());
+
+    const savedName = result.data?.user.name?.trim();
+    if (savedName) {
+      identified(savedName);
+      return;
+    }
+    setNeedsName(true);
+  }
+
+  async function saveName() {
+    const savedName = name.trim();
+    if (!savedName) return;
+
+    setMessage("");
+    setPending(true);
+    const result = await authClient.updateUser({ name: savedName });
+    setPending(false);
+    if (result.error) {
+      setMessage(result.error.message ?? "That name could not be saved.");
+      return;
+    }
+    identified(savedName);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void (sent ? confirmCode() : requestCode());
+    void (needsName ? saveName() : sent ? confirmCode() : requestCode());
   }
 
   return (
     <form className={styles.form} onSubmit={submit}>
       {disclosure}
 
-      {sent ? (
+      {needsName ? (
+        <Field label="Your name">
+          <input
+            autoComplete="name"
+            name="name"
+            placeholder="How other people know you"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+      ) : sent ? (
         <Field label="Code from your email">
           <input
             autoComplete="one-time-code"
@@ -89,31 +120,18 @@ export function EmailIdentity({
           />
         </Field>
       ) : (
-        <>
-          {askName ? (
-            <Field label="Your name">
-              <input
-                autoComplete="name"
-                name="name"
-                placeholder="How other people know you"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-          ) : null}
-          <Field label="Email">
-            <input
-              autoCapitalize="none"
-              autoComplete="email"
-              inputMode="email"
-              name="email"
-              placeholder="you@example.com"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </Field>
-        </>
+        <Field label="Email">
+          <input
+            autoCapitalize="none"
+            autoComplete="email"
+            inputMode="email"
+            name="email"
+            placeholder="you@example.com"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
       )}
 
       {message ? (
@@ -122,8 +140,12 @@ export function EmailIdentity({
         </p>
       ) : null}
 
-      <Button loading={busy || pending} type="submit">
-        {sent ? confirmLabel : "Send me a code"}
+      <Button
+        disabled={needsName && !name.trim()}
+        loading={busy || pending}
+        type="submit"
+      >
+        {needsName ? confirmLabel : sent ? "Confirm" : "Send me a code"}
       </Button>
     </form>
   );

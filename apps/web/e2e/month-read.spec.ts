@@ -6545,6 +6545,12 @@ test("uses the reader's shared theme instead of organizer styling", async ({
 }) => {
 	await page.emulateMedia({ colorScheme: "light" });
 	await page.addInitScript(() => localStorage.setItem("musubi-theme", "light"));
+	await page.route("**/api/auth/get-session", (route) =>
+		respond(route, {
+			session: { id: "s1" },
+			user: { email: "reader@example.com", id: "reader-1", name: "Reader" },
+		}),
+	);
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
 		respond(
 			route,
@@ -6620,7 +6626,6 @@ test("uses the reader's shared theme instead of organizer styling", async ({
 
 	await going.click();
 	await expect(going).toHaveAttribute("aria-pressed", "true");
-	await expect(page.getByLabel("Email")).toBeVisible();
 
 	await expectNoAccessibilityViolations(page);
 });
@@ -6665,10 +6670,12 @@ test("hides RSVP controls from an organizer", async ({ page }) => {
 	);
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
-	await expect(page.getByRole("heading", { name: "Are you coming?" })).toHaveCount(
-		0,
-	);
-	await expect(page.getByRole("button", { name: "Add to calendar" })).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Are you coming?" }),
+	).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Add to calendar" }),
+	).toBeVisible();
 });
 
 test("lets a stranger answer after confirming their address", async ({
@@ -6676,13 +6683,14 @@ test("lets a stranger answer after confirming their address", async ({
 }) => {
 	let rsvp: unknown;
 	let signedIn = false;
+	let name = "";
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(
 			route,
 			signedIn
 				? {
 						session: { id: "s1" },
-						user: { email: "guest@example.com", id: "guest-1", name: "" },
+						user: { email: "guest@example.com", id: "guest-1", name },
 					}
 				: null,
 		),
@@ -6697,7 +6705,11 @@ test("lets a stranger answer after confirming their address", async ({
 	});
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "session", user: { id: "guest-1" } });
+		return respond(route, { token: "session", user: { id: "guest-1", name: "" } });
+	});
+	await page.route("**/api/auth/update-user", (route) => {
+		name = route.request().postDataJSON().name;
+		return respond(route, { user: { id: "guest-1", name } });
 	});
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) => {
 		const answered = route.request().method() === "PUT";
@@ -6714,13 +6726,10 @@ test("lets a stranger answer after confirming their address", async ({
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	await page.waitForLoadState("networkidle");
 
-	// The order people expect: answer first, identify second.
-	await page.getByRole("button", { name: "Going" }).click();
+	// Email is proved before the RSVP controls appear.
 	await expect(
 		page.getByText(/creates a Musubi account with no password/),
 	).toBeVisible();
-
-	await page.getByLabel("Your name").fill("Jana K.");
 	await page.getByLabel("Email").fill("guest@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	expect(codeRequest).toMatchObject({
@@ -6734,6 +6743,9 @@ test("lets a stranger answer after confirming their address", async ({
 
 	await page.getByLabel("Code from your email").fill("123456");
 	await page.getByRole("button", { name: "Confirm" }).click();
+	await page.getByLabel("Your name").fill("Jana K.");
+	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { name: "Going" }).click();
 
 	await expect(page.getByText("You’re on the list.")).toBeVisible();
 	expect(rsvp).toEqual({ name: "Jana K.", status: "going" });
@@ -6947,10 +6959,7 @@ test("ui catalogue", async ({ browser, page }) => {
 	await page.goto("/find-a-time");
 	await page.waitForLoadState("networkidle");
 	await shot("public-find-a-time");
-	await page.getByLabel("What is it about").fill("Studio planning");
-	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
-	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await shot("public-find-a-time-ready");
 
 	await page.goto("/new-event");
@@ -7875,7 +7884,6 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 		.click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	expect(savedVotes[1]).toEqual({
-		name: "Web QA",
 		votes: [{ slotID: "owner-slot", value: "no" }],
 	});
 });
@@ -8379,8 +8387,11 @@ test("makes an event page from the public page with no account", async ({
 	);
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "t", user: { id: "guest" } });
+		return respond(route, { token: "t", user: { id: "guest", name: "" } });
 	});
+	await page.route("**/api/auth/update-user", (route) =>
+		respond(route, { user: { id: "guest", name: "Zoe" } }),
+	);
 	await page.route("**/api/v1/calendars", (route) =>
 		respond(route, [
 			{
@@ -8439,10 +8450,11 @@ test("makes an event page from the public page with no account", async ({
 
 	// Still nothing on the server: the address comes first.
 	expect(created).toBeUndefined();
-	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByRole("button", { name: "Confirm and publish" }).click();
 
 	await expect(page.getByRole("textbox", { name: "Event link" })).toHaveValue(
@@ -8472,7 +8484,22 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 				slots: Array<{ start: string }>;
 		  }
 		| undefined;
-	await page.route("**/api/auth/get-session", (route) => respond(route, null));
+	let signedIn = false;
+	await page.route("**/api/auth/get-session", (route) =>
+		respond(
+			route,
+			signedIn
+				? { session: { id: "s" }, user: { email: "z@example.com", id: "guest", name: "Zoe" } }
+				: null,
+		),
+	);
+	await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+		respond(route, { success: true }),
+	);
+	await page.route("**/api/auth/sign-in/email-otp", (route) => {
+		signedIn = true;
+		return respond(route, { token: "t", user: { id: "guest", name: "Zoe" } });
+	});
 	await page.route("**/api/v1/scheduling/polls", (route) => {
 		if (route.request().method() !== "POST") return respond(route, []);
 		created = route.request().postDataJSON();
@@ -8509,9 +8536,11 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	// attached, so a press before hydration lands on nothing.
 	await page.waitForLoadState("networkidle");
 
-	await page.getByLabel("What is it about").fill("Studio planning");
-	await page.getByLabel("Your name").fill("Zoe");
 	await page.getByLabel("Email").fill("z@example.com");
+	await page.getByRole("button", { name: "Send me a code" }).click();
+	await page.getByLabel("Code from your email").fill("123456");
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await page.getByLabel("What is it about").fill("Studio planning");
 	await page.getByRole("button", { exact: true, name: "10" }).click();
 	await page.getByRole("button", { exact: true, name: "11" }).click();
 	await page.getByRole("button", { name: "Create the poll" }).click();
@@ -8519,9 +8548,9 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	await expect(page.getByRole("textbox", { name: "Poll link" })).toHaveValue(
 		`http://127.0.0.1:3000/s/${POLL_TOKEN}`,
 	);
-	// The email identifies the organizer but no code or account is required for
-	// the first creation.
-	expect(created).toMatchObject({ email: "z@example.com", name: "Zoe" });
+	// Identity comes from the verified session, never form fields.
+	expect(created).not.toHaveProperty("email");
+	expect(created).not.toHaveProperty("name");
 	expect(created).not.toHaveProperty("approximateStartTime");
 	expect(created!.slots).toHaveLength(2);
 	expect(hydrationErrors).toEqual([]);
@@ -8605,7 +8634,6 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {
-	let emailEnabled = true;
 	let saved = false;
 	let signedIn = false;
 	const voteAttempts: unknown[] = [];
@@ -8615,20 +8643,17 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 			signedIn
 				? {
 						session: { id: "s" },
-						user: { email: "z@example.com", id: "guest", name: "" },
+						user: { email: "z@example.com", id: "guest", name: "Zoe" },
 					}
 				: null,
 		),
-	);
-	await page.route("**/api/v1/server", (route) =>
-		respond(route, { email: emailEnabled, socials: [], syncProviders: [] }),
 	);
 	await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
 		respond(route, { success: true }),
 	);
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "t", user: { id: "guest" } });
+		return respond(route, { token: "t", user: { id: "guest", name: "Zoe" } });
 	});
 	const body = {
 		chosenSlotID: null,
@@ -8703,45 +8728,21 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await expect(mika).toContainText("✓");
 	await expect(mika).toContainText("✕");
 
-	// A cell opens a menu; the menu sets the answer.
-	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
-	await page.getByRole("button", { name: "Yes", exact: true }).click();
-	// Said before the button is pressed, not after: what leaves the browser is the
-	// answers, name and private identity email — never the reader's calendar.
+	// Email comes before a personal row becomes editable.
 	await expect(page.getByText(/calendar is never read/)).toBeVisible();
-	await page.getByLabel("Your name").fill("Zoe");
-	await page.getByLabel("Email").fill("z@example.com");
-	await page.getByRole("button", { name: "Send my answers" }).click();
-	await expect(page.getByRole("row", { name: /^Zoe/ })).toBeVisible();
-	expect(voteAttempts[0]).toEqual({
-		email: "z@example.com",
-		name: "Zoe",
-		votes: [{ slotID: "slot-tue", value: "yes" }],
-	});
-
-	// The quiet action beside a saved name starts verification before somebody
-	// spends time changing answers they cannot yet overwrite.
-	emailEnabled = false;
-	await page.reload();
-	await page.getByRole("button", { name: "Edit answers for Zoe" }).click();
-	await expect(
-		page.getByRole("alert").filter({ hasText: "SMTP is not configured" }),
-	).toBeVisible();
-
-	emailEnabled = true;
-	await page.reload();
-	await page.getByRole("button", { name: "Edit answers for Zoe" }).click();
 	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
-	await page.getByRole("button", { name: "Confirm and edit" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByLabel("Your name")).toHaveCount(0);
 
-	await page.getByRole("button", { name: /18 Aug.*you answered yes/ }).click();
-	await page.getByRole("button", { name: "No", exact: true }).click();
+	// A cell opens a menu; the menu sets the answer.
+	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
+	await page.getByRole("button", { name: "Yes", exact: true }).click();
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	const savedButton = page.getByRole("button", { name: "Answers saved" });
 	await expect(savedButton).toBeDisabled();
-	expect(voteAttempts).toHaveLength(2);
+	expect(voteAttempts).toEqual([{ votes: [{ slotID: "slot-tue", value: "yes" }] }]);
 	const zoe = page.getByRole("row", { name: /^Zoe/ });
 	await expect(zoe).toBeVisible();
 

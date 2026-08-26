@@ -8,12 +8,13 @@ import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { PollForm } from "~/calendar/components/PollForm";
 import { BrandMark } from "~/components/BrandMark";
+import { EmailIdentity } from "~/components/EmailIdentity";
 import { Button } from "~/ui/Button";
 import styles from "~/components/public-page.module.css";
 
 const TITLE = "Find a time everyone can make — Musubi";
 const DESCRIPTION =
-  "Offer a few days, send one link, and see who can make what. No app to install, no account to create.";
+  "Offer a few days, send one link, and see who can make what. No app to install; email keeps every answer yours.";
 
 export const Route = createFileRoute("/find-a-time")({
   component: FindATimeRoute,
@@ -31,11 +32,13 @@ export const Route = createFileRoute("/find-a-time")({
   }),
 });
 
-/** Making a poll without requiring an account or an email server. */
+/** Making a poll after a passwordless email check. */
 function FindATimeRoute() {
   const session = authClient.useSession();
   const [poll, setPoll] = useState<PollSummary>();
   const [copied, setCopied] = useState(false);
+  const [identified, setIdentified] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
 
   const create = useMutation({
     mutationFn: createPoll,
@@ -56,17 +59,30 @@ function FindATimeRoute() {
           <h1>Find a time everyone can make</h1>
           <p className={styles.lead}>
             Offer a few days, send one link, and watch the answers land in a
-            grid. The people you ask need no account and never hand over
+            grid. The people you ask confirm an email and never hand over
             their calendar — only the answers they type.
           </p>
         </header>
 
         {poll ? (
           <Created poll={poll} copied={copied} onCopied={setCopied} />
+        ) : (!session.data && !identified) || identifying ? (
+          <EmailIdentity
+            disclosure={
+              <p className={styles.lead}>
+                Confirm your email first. Existing accounts keep their saved name;
+                new accounts need one name for the people you invite.
+              </p>
+            }
+            onIdentified={() => {
+              setIdentifying(false);
+              setIdentified(true);
+            }}
+            onStart={() => setIdentifying(true)}
+          />
         ) : (
           <PollForm
             busy={create.isPending}
-            collectIdentity={!session.data}
             error={create.error?.message}
             submitLabel="Create the poll"
             /* A stranger has no settings yet, so this page states its own

@@ -379,9 +379,8 @@ app.get(
   rateLimit(30, 15 * 60_000),
   wrap(handlerGetCalendarFromToken),
 );
-// Scheduling (group poll, PRD §19.1). Creating and deciding belong to the
-// organizer; reading is open by token. A first answer needs only name + email;
-// replacing an existing email's answer requires an authenticated matching inbox.
+// Scheduling (group poll, PRD §19.1). Creating and answering require a verified
+// email; reading stays open by token.
 app.get(
   "/api/v1/scheduling/polls/calendar",
   requireAuth,
@@ -390,7 +389,7 @@ app.get(
 app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
 app.post(
   "/api/v1/scheduling/polls",
-  optionalAuth,
+  requireAuth,
   rateLimit(30, 15 * 60_000),
   wrap(handlerCreatePoll),
 );
@@ -417,7 +416,7 @@ app.get(
 );
 app.put(
   "/api/v1/public/polls/:token/votes",
-  optionalAuth,
+  requireAuth,
   rateLimit(60, 15 * 60_000),
   wrap(handlerVotePoll),
 );

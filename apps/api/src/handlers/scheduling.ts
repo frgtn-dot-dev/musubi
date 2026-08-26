@@ -169,6 +169,10 @@ export function parsePollSlot(slot: { date?: string; start?: string }) {
 }
 
 export async function handlerCreatePoll(req: Request, res: Response) {
+	const user = req.user;
+	if (!user?.emailVerified) {
+		throw new ForbiddenError("Confirm your email before creating a poll...");
+	}
 	const title = String(req.body?.title ?? "")
 		.trim()
 		.slice(0, MAX_TITLE);
@@ -176,8 +180,8 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 	const approximateStartTime = parseApproximateStartTime(
 		req.body?.approximateStartTime,
 	);
-	const ownerEmail = emailIdentity(req.body?.email ?? req.user?.email);
-	const ownerName = identityName(req.body?.name ?? req.user?.name);
+	const ownerEmail = emailIdentity(user.email);
+	const ownerName = identityName(user.name);
 
 	if (!title) throw new BadRequestError("A poll needs a title...");
 	if (slots.length === 0) {
@@ -194,7 +198,7 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 	// so it travels with the poll. Absent on the public page, which has no
 	// calendars to offer.
 	const calendarID = String(req.body?.calendarId ?? "").trim() || null;
-	if (calendarID) await assertCan(req.user!.id, calendarID, "editEvents");
+	if (calendarID) await assertCan(user.id, calendarID, "editEvents");
 
 	const poll = await createPoll(
 		{
@@ -482,6 +486,10 @@ export function bestSlots<T extends { ifNeeded: unknown[]; yes: unknown[] }>(
 }
 
 export async function handlerVotePoll(req: Request, res: Response) {
+	const user = req.user;
+	if (!user?.emailVerified) {
+		throw new ForbiddenError("Confirm your email before answering a poll...");
+	}
 	const poll = await getPollByToken(String(req.params.token));
 	if (!poll) throw new NotFoundError("This poll is not available...");
 	if (poll.closedAt) {
@@ -515,8 +523,8 @@ export async function handlerVotePoll(req: Request, res: Response) {
 		}
 	}
 
-	const email = emailIdentity(req.body?.email ?? req.user?.email);
-	const name = identityName(req.body?.name ?? req.user?.name);
+	const email = emailIdentity(user.email);
+	const name = identityName(user.name);
 	const viewer = authenticatedPollViewer(poll, req);
 	const authenticatedEmail = viewer?.email;
 
@@ -526,7 +534,7 @@ export async function handlerVotePoll(req: Request, res: Response) {
 			email,
 			name,
 			pollID: poll.id,
-			userID: authenticatedEmail === email ? req.user?.id : undefined,
+			userID: authenticatedEmail === email ? user.id : undefined,
 			votes: votes.map((vote: { slotID: string; value: string }) => ({
 				slotID: String(vote.slotID),
 				value: String(vote.value),

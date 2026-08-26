@@ -94,7 +94,7 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated, verified-email guest's answer | 30 / 15 min / IP |
 | `GET /api/v1/public/events/:token/cover` | Read the active uploaded event cover; token is the capability | 120 / 15 min / IP |
 | `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
-| `PUT /api/v1/public/polls/:token/votes` | Write a participant's complete answer set; auth is optional for the first answer | 60 / 15 min / IP |
+| `PUT /api/v1/public/polls/:token/votes` | Write a verified participant's complete answer set | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |
 | `GET /reset-password` | Self-hosted password reset HTML | — |
 | `GET /delete-account` | Self-hosted account-deletion HTML | — |
@@ -154,9 +154,9 @@ delta sync.
 | Method and path | Auth | Purpose |
 | --- | --- | --- |
 | `GET /api/v1/scheduling/polls` | Required | List polls owned by the signed-in email identity |
-| `POST /api/v1/scheduling/polls` | Optional | Create a poll from `title`, day `slots`, `name`, `email`, and optional `description`, `deadline`, `approximateStartTime` |
+| `POST /api/v1/scheduling/polls` | Required | Create a poll from `title`, day `slots`, and optional `description`, `deadline`, `approximateStartTime` |
 | `GET /api/v1/public/polls/:token` | Optional | Read the public poll projection and the caller's own answer when identifiable |
-| `PUT /api/v1/public/polls/:token/votes` | Optional | Replace one participant's complete `yes` / `if-needed` / `no` answer set |
+| `PUT /api/v1/public/polls/:token/votes` | Required | Replace one participant's complete `yes` / `if-needed` / `no` answer set |
 | `POST /api/v1/scheduling/polls/:pollId/decide` | Required owner | Pick `slotId` and `calendarId`, create the all-day event, and close the poll |
 | `POST /api/v1/scheduling/polls/:pollId/close` | Required owner | Stop answers without creating an event |
 | `DELETE /api/v1/scheduling/polls/:pollId` | Required owner | Delete the poll and its answers; an already-created event remains |
@@ -165,11 +165,10 @@ Poll choices are calendar days. `approximateStartTime` is optional `HH:mm`
 context only; deciding a current poll creates an all-day event. Older timed polls
 retain their stored duration for compatibility.
 
-Creation and a participant's first answer require a public name and private
-email, but no OTP. Replacing answers already stored for that email, listing or
-managing an anonymously created poll, and deciding it require authentication as
-the matching email identity. The public projection contains participant names
-and answers, never email addresses or private participant identifiers.
+Creation and answers require a verified email OTP. An existing account's saved
+name is reused; a new account chooses one after verification. The public
+projection contains participant names and answers, never email addresses or
+private participant identifiers.
 
 ## Events
 
