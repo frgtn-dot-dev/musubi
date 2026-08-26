@@ -6705,7 +6705,10 @@ test("lets a stranger answer after confirming their address", async ({
 	});
 	await page.route("**/api/auth/sign-in/email-otp", (route) => {
 		signedIn = true;
-		return respond(route, { token: "session", user: { id: "guest-1", name: "" } });
+		return respond(route, {
+			token: "session",
+			user: { id: "guest-1", name: "" },
+		});
 	});
 	await page.route("**/api/auth/update-user", (route) => {
 		name = route.request().postDataJSON().name;
@@ -6726,7 +6729,10 @@ test("lets a stranger answer after confirming their address", async ({
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	await page.waitForLoadState("networkidle");
 
-	// Email is proved before the RSVP controls appear.
+	// Choose an answer first; identity opens only for that answer.
+	await expect(page.getByRole("button", { name: "Going" })).toBeVisible();
+	await expect(page.getByLabel("Email")).toHaveCount(0);
+	await page.getByRole("button", { name: "Going" }).click();
 	await expect(
 		page.getByText(/creates a Musubi account with no password/),
 	).toBeVisible();
@@ -6745,7 +6751,6 @@ test("lets a stranger answer after confirming their address", async ({
 	await page.getByRole("button", { name: "Confirm" }).click();
 	await page.getByLabel("Your name").fill("Jana K.");
 	await page.getByRole("button", { name: "Continue" }).click();
-	await page.getByRole("button", { name: "Going" }).click();
 
 	await expect(page.getByText("You’re on the list.")).toBeVisible();
 	expect(rsvp).toEqual({ name: "Jana K.", status: "going" });
@@ -8489,7 +8494,10 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 		respond(
 			route,
 			signedIn
-				? { session: { id: "s" }, user: { email: "z@example.com", id: "guest", name: "Zoe" } }
+				? {
+						session: { id: "s" },
+						user: { email: "z@example.com", id: "guest", name: "Zoe" },
+					}
 				: null,
 		),
 	);
@@ -8742,7 +8750,9 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await page.getByRole("button", { name: "Send my answers" }).click();
 	const savedButton = page.getByRole("button", { name: "Answers saved" });
 	await expect(savedButton).toBeDisabled();
-	expect(voteAttempts).toEqual([{ votes: [{ slotID: "slot-tue", value: "yes" }] }]);
+	expect(voteAttempts).toEqual([
+		{ votes: [{ slotID: "slot-tue", value: "yes" }] },
+	]);
 	const zoe = page.getByRole("row", { name: /^Zoe/ });
 	await expect(zoe).toBeVisible();
 

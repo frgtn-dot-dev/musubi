@@ -66,7 +66,48 @@ export function RsvpBlock({
       <section aria-labelledby="rsvp-title" className={styles.rsvp}>
         <h2 id="rsvp-title">Are you coming?</h2>
 
-        {!canRespond ? (
+        {needsName ? (
+          <Field label="Your name">
+            <input
+              autoComplete="name"
+              name="name"
+              placeholder="How the organizer knows you"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+        ) : null}
+
+        <div className={styles.answers} role="group" aria-label="Your answer">
+          {ANSWERS.map((option) => {
+            const chosen = (mine ?? pending) === option.value;
+
+            return (
+              <Button
+                aria-pressed={chosen}
+                disabled={needsName && name.trim().length === 0}
+                key={option.value}
+                loading={
+                  answer.isPending && answer.variables?.status === option.value
+                }
+                variant={chosen ? "primary" : "secondary"}
+                onClick={() => {
+                  setPending(option.value);
+                  if (canRespond) {
+                    answer.mutate({
+                      name: name.trim() || undefined,
+                      status: option.value,
+                    });
+                  }
+                }}
+              >
+                {option.label}
+              </Button>
+            );
+          })}
+        </div>
+
+        {pending && !canRespond ? (
           <EmailIdentity
             disclosure={
               <p className={styles.rsvpExplainer}>
@@ -79,66 +120,21 @@ export function RsvpBlock({
               setName(identity.name);
               setIdentifying(false);
               setIdentified(true);
+              answer.mutate({ name: identity.name, status: pending });
             }}
             onStart={() => setIdentifying(true)}
           />
-        ) : (
-          <>
-            {needsName ? (
-              <Field label="Your name">
-                <input
-                  autoComplete="name"
-                  name="name"
-                  placeholder="How the organizer knows you"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </Field>
-            ) : null}
+        ) : null}
 
-            <div
-              className={styles.answers}
-              role="group"
-              aria-label="Your answer"
-            >
-              {ANSWERS.map((option) => {
-                const chosen = (mine ?? pending) === option.value;
-
-                return (
-                  <Button
-                    aria-pressed={chosen}
-                    disabled={needsName && name.trim().length === 0}
-                    key={option.value}
-                    loading={
-                      answer.isPending &&
-                      answer.variables?.status === option.value
-                    }
-                    variant={chosen ? "primary" : "secondary"}
-                    onClick={() => {
-                      setPending(option.value);
-                      answer.mutate({
-                        name: name.trim() || undefined,
-                        status: option.value,
-                      });
-                    }}
-                  >
-                    {option.label}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {mine ? (
-              <p className={styles.rsvpState}>
-                {mine === "going"
-                  ? "You’re on the list."
-                  : mine === "maybe"
-                    ? "Marked as a maybe."
-                    : "You’ve said you can’t make it."}
-              </p>
-            ) : null}
-          </>
-        )}
+        {mine ? (
+          <p className={styles.rsvpState}>
+            {mine === "going"
+              ? "You’re on the list."
+              : mine === "maybe"
+                ? "Marked as a maybe."
+                : "You’ve said you can’t make it."}
+          </p>
+        ) : null}
       </section>
       {children}
       <Attending summary={summary.data} />
