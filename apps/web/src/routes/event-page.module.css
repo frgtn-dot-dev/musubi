@@ -445,6 +445,34 @@
   color: var(--page-accent);
 }
 
+.facepile {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.facepile > * {
+  border: 2px solid var(--page-raised);
+}
+
+.facepile > * + * {
+  margin-left: -10px;
+}
+
+.facepileMore {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--page-surface);
+  color: var(--page-muted);
+  font-size: var(--text-11);
+}
+
 .attendeeList {
   display: grid;
   gap: var(--space-2);

@@ -6497,6 +6497,19 @@ test("shows a published event to someone with no account", async ({ page }) => {
 			}),
 		),
 	);
+	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}/rsvp`, (route) =>
+		respond(route, {
+			attendees: [
+				{ avatarUrl: "https://example.com/adam.jpg", name: "Adam" },
+				{ avatarUrl: "https://example.com/zoe.jpg", name: "Zoe" },
+			],
+			counts: { declined: 0, going: 2, maybe: 0 },
+			isOrganizer: false,
+			mine: null,
+			names: ["Adam", "Zoe"],
+			visibility: "names",
+		}),
+	);
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
 
@@ -6519,6 +6532,12 @@ test("shows a published event to someone with no account", async ({ page }) => {
 		sidebar.getByRole("heading", { name: "Keep the date" }),
 	).toBeVisible();
 	await expect(sidebar.getByRole("button", { name: "Share" })).toBeVisible();
+	const guests = sidebar.getByRole("button", { name: "Show 2 guests" });
+	await guests.click();
+	const guestsDialog = page.getByRole("dialog", { name: "Guests" });
+	await expect(guestsDialog.getByText("Adam", { exact: true })).toBeVisible();
+	await expect(guestsDialog.getByText("Zoe", { exact: true })).toBeVisible();
+	await guestsDialog.getByRole("button", { name: "Close guests" }).click();
 	// The reader's timezone, spelled out: the organizer is often somewhere else,
 	// and a bare "3 pm" is a trap.
 	await expect(page.getByText("Europe/Prague")).toBeVisible();

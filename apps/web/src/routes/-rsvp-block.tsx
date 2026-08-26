@@ -7,6 +7,7 @@ import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
 import { Field } from "~/ui/Field";
 import { EmailIdentity } from "~/components/EmailIdentity";
+import { Dialog } from "~/ui/Dialog";
 import styles from "./event-page.module.css";
 
 const ANSWERS: Array<{ label: string; value: RsvpStatus }> = [
@@ -144,9 +145,10 @@ export function RsvpBlock({
 
 /** What a reader learns about everyone else, which the organizer decided. */
 function Attending({ summary }: { summary?: RsvpSummary }) {
+  const [open, setOpen] = useState(false);
   if (!summary || summary.visibility === "hidden") return null;
 
-  const { counts } = summary;
+  const { attendees, counts } = summary;
   if (counts.going + counts.maybe === 0) return null;
 
   return (
@@ -156,19 +158,46 @@ function Attending({ summary }: { summary?: RsvpSummary }) {
         {counts.going} going
         {counts.maybe > 0 ? ` · ${counts.maybe} maybe` : ""}
       </p>
-      {summary.visibility === "names" && summary.attendees.length > 0 ? (
-        <ul className={styles.attendeeList}>
-          {summary.attendees.map((attendee) => (
-            <li key={`${attendee.name}-${attendee.avatarUrl}`}>
+      {summary.visibility === "names" && attendees.length > 0 ? (
+        <>
+          <button
+            aria-label={`Show ${attendees.length} guests`}
+            className={styles.facepile}
+            type="button"
+            onClick={() => setOpen(true)}
+          >
+            {attendees.slice(0, 4).map((attendee) => (
               <Avatar
                 image={attendee.avatarUrl}
+                key={`${attendee.name}-${attendee.avatarUrl}`}
                 name={attendee.name}
-                size={30}
+                size={32}
               />
-              <span>{attendee.name}</span>
-            </li>
-          ))}
-        </ul>
+            ))}
+            {attendees.length > 4 ? (
+              <span aria-hidden="true" className={styles.facepileMore}>
+                +{attendees.length - 4}
+              </span>
+            ) : null}
+          </button>
+          <Dialog
+            closeLabel="Close guests"
+            description={`${counts.going} going${counts.maybe > 0 ? ` · ${counts.maybe} maybe` : ""}`}
+            open={open}
+            size="compact"
+            title="Guests"
+            onOpenChange={setOpen}
+          >
+            <ul className={styles.attendeeList}>
+              {attendees.map((attendee) => (
+                <li key={`${attendee.name}-${attendee.avatarUrl}`}>
+                  <Avatar image={attendee.avatarUrl} name={attendee.name} size={32} />
+                  <span>{attendee.name}</span>
+                </li>
+              ))}
+            </ul>
+          </Dialog>
+        </>
       ) : null}
     </section>
   );
