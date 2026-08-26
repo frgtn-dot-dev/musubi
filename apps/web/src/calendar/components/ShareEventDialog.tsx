@@ -11,13 +11,21 @@ import {
   uploadEventCover,
 } from "~/api/resources";
 import type { EventShare } from "~/api/contracts";
-import { eventFormValues, updateEventFromForm, validateEventForm, type EventFormValues } from "~/calendar/event-form";
+import {
+  eventFormValues,
+  updateEventFromForm,
+  validateEventForm,
+  type EventFormValues,
+} from "~/calendar/event-form";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { RowAction } from "~/ui/Row";
-import { EventPageSettings, validateEventPageContent } from "./EventPageSettings";
+import {
+  EventPageSettings,
+  validateEventPageContent,
+} from "./EventPageSettings";
 import pageStyles from "~/routes/event-page.module.css";
 import styles from "./styles/share-event.module.css";
 
@@ -31,16 +39,53 @@ type Draft = {
   theme: EventPageTheme;
 };
 
-const MODES: Array<{ detail: string; icon: typeof Lock; label: string; value: Mode }> = [
-  { detail: "Only people you share the calendar with can see it", icon: Lock, label: "Private", value: "private" },
-  { detail: "Anyone holding the link can open the page. Search engines cannot.", icon: Link2, label: "Anyone with the link", value: "link" },
-  { detail: "A page you can put anywhere. You choose whether search may list it.", icon: Globe, label: "Public", value: "public" },
+const MODES: Array<{
+  detail: string;
+  icon: typeof Lock;
+  label: string;
+  value: Mode;
+}> = [
+  {
+    detail: "Only people you share the calendar with can see it",
+    icon: Lock,
+    label: "Private",
+    value: "private",
+  },
+  {
+    detail: "Anyone holding the link can open the page. Search engines cannot.",
+    icon: Link2,
+    label: "Anyone with the link",
+    value: "link",
+  },
+  {
+    detail:
+      "A page you can put anywhere. You choose whether search may list it.",
+    icon: Globe,
+    label: "Public",
+    value: "public",
+  },
 ];
 
-const VISIBILITIES: Array<{ detail: string; label: string; value: EventShare["attendeeVisibility"] }> = [
-  { detail: "Readers see how many people are coming", label: "Show how many", value: "counts" },
-  { detail: "Readers see names of people who said yes", label: "Show names", value: "names" },
-  { detail: "Readers learn nothing about who answered", label: "Show nothing", value: "hidden" },
+const VISIBILITIES: Array<{
+  detail: string;
+  label: string;
+  value: EventShare["attendeeVisibility"];
+}> = [
+  {
+    detail: "Readers see how many people are coming",
+    label: "Show how many",
+    value: "counts",
+  },
+  {
+    detail: "Readers see names of people who said yes",
+    label: "Show names",
+    value: "names",
+  },
+  {
+    detail: "Readers learn nothing about who answered",
+    label: "Show nothing",
+    value: "hidden",
+  },
 ];
 
 function draftFrom(current: EventShare | null): Draft {
@@ -71,7 +116,9 @@ export function ShareEventDialog({
   const shareKey = ["event-share", getServerOrigin(), event.id];
   const [copied, setCopied] = useState(false);
   const [draftOverride, setDraftOverride] = useState<Draft>();
-  const [eventDraft, setEventDraft] = useState<EventFormValues>(() => eventFormValues(event));
+  const [eventDraft, setEventDraft] = useState<EventFormValues>(() =>
+    eventFormValues(event),
+  );
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<null | string>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -83,7 +130,8 @@ export function ShareEventDialog({
   const current = share.data ?? null;
   // Keep server settings as the source until first local edit. This avoids an
   // effect that can overwrite a click while the query is resolving.
-  const draft = draftOverride ?? (share.isSuccess ? draftFrom(current) : undefined);
+  const draft =
+    draftOverride ?? (share.isSuccess ? draftFrom(current) : undefined);
   const setDraft = setDraftOverride;
 
   const publish = useMutation({
@@ -133,7 +181,9 @@ export function ShareEventDialog({
       }
       onNotice("Event and page saved.");
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Could not save changes.");
+      setSaveError(
+        error instanceof Error ? error.message : "Could not save changes.",
+      );
     }
   }
 
@@ -167,12 +217,24 @@ export function ShareEventDialog({
         elevated
         footer={
           <div className={styles.footer}>
-            {error ? <p className={styles.footerError} role="alert">{error}</p> : null}
-            <DialogClose><Button variant="secondary">Done</Button></DialogClose>
-            <Button disabled={busy} variant="secondary" onClick={() => setPreviewOpen(true)}>
+            {error ? (
+              <p className={styles.footerError} role="alert">
+                {error}
+              </p>
+            ) : null}
+            <DialogClose>
+              <Button variant="secondary">Done</Button>
+            </DialogClose>
+            <Button
+              disabled={busy}
+              variant="secondary"
+              onClick={() => setPreviewOpen(true)}
+            >
               Preview draft
             </Button>
-            <Button loading={busy} onClick={() => void save()}>Save changes</Button>
+            <Button loading={busy} onClick={() => void save()}>
+              Save changes
+            </Button>
           </div>
         }
         open
@@ -187,7 +249,11 @@ export function ShareEventDialog({
               <h3 id="sharing-title">Sharing</h3>
               <p>Choose who can open this page.</p>
             </div>
-            <div className={styles.modes} role="radiogroup" aria-label="Who can open this page">
+            <div
+              className={styles.modes}
+              role="radiogroup"
+              aria-label="Who can open this page"
+            >
               {MODES.map((option) => {
                 const Icon = option.icon;
                 return (
@@ -205,7 +271,8 @@ export function ShareEventDialog({
                     onClick={() =>
                       setDraft({
                         ...draft,
-                        indexable: option.value === "link" ? false : draft.indexable,
+                        indexable:
+                          option.value === "link" ? false : draft.indexable,
                         mode: option.value,
                       })
                     }
@@ -216,8 +283,14 @@ export function ShareEventDialog({
 
             {draft.mode !== "private" ? (
               <>
-                <div className={styles.sectionHeading}><h4>Guests</h4></div>
-                <div className={styles.modes} role="radiogroup" aria-label="What readers see about who is coming">
+                <div className={styles.sectionHeading}>
+                  <h4>Guests</h4>
+                </div>
+                <div
+                  className={styles.modes}
+                  role="radiogroup"
+                  aria-label="What readers see about who is coming"
+                >
                   {VISIBILITIES.map((option) => (
                     <RowAction
                       aria-checked={draft.attendeeVisibility === option.value}
@@ -228,8 +301,14 @@ export function ShareEventDialog({
                       role="radio"
                       selected={draft.attendeeVisibility === option.value}
                       showChevron={false}
-                      value={draft.attendeeVisibility === option.value ? "Current" : undefined}
-                      onClick={() => setDraft({ ...draft, attendeeVisibility: option.value })}
+                      value={
+                        draft.attendeeVisibility === option.value
+                          ? "Current"
+                          : undefined
+                      }
+                      onClick={() =>
+                        setDraft({ ...draft, attendeeVisibility: option.value })
+                      }
                     />
                   ))}
                 </div>
@@ -238,7 +317,9 @@ export function ShareEventDialog({
                     checked={draft.indexable}
                     disabled={busy}
                     label="Allow search engines to list this page"
-                    onChange={(input) => setDraft({ ...draft, indexable: input.target.checked })}
+                    onChange={(input) =>
+                      setDraft({ ...draft, indexable: input.target.checked })
+                    }
                   />
                 ) : null}
               </>
@@ -246,9 +327,20 @@ export function ShareEventDialog({
 
             {current ? (
               <div className={styles.linkRow}>
-                <input aria-label="Public link" className={styles.linkField} readOnly value={current.url} />
+                <input
+                  aria-label="Public link"
+                  className={styles.linkField}
+                  readOnly
+                  value={current.url}
+                />
                 <Button
-                  icon={copied ? <Check size={15} strokeWidth={1.8} /> : <Copy size={15} strokeWidth={1.6} />}
+                  icon={
+                    copied ? (
+                      <Check size={15} strokeWidth={1.8} />
+                    ) : (
+                      <Copy size={15} strokeWidth={1.6} />
+                    )
+                  }
                   size="compact"
                   variant="secondary"
                   onClick={() => void copyLink(current.url)}
@@ -265,31 +357,103 @@ export function ShareEventDialog({
               <p>Details shown at the top of public page.</p>
             </div>
             <Field label="Event title">
-              <input disabled={busy} value={eventDraft.title} onChange={(input) => setEventDraft({ ...eventDraft, title: input.target.value })} />
+              <input
+                disabled={busy}
+                value={eventDraft.title}
+                onChange={(input) =>
+                  setEventDraft({ ...eventDraft, title: input.target.value })
+                }
+              />
             </Field>
             <div className={styles.dateFields}>
               <Field label="Starts">
-                <input disabled={busy} type="date" value={eventDraft.date} onChange={(input) => setEventDraft({ ...eventDraft, date: input.target.value })} />
+                <input
+                  disabled={busy}
+                  type="date"
+                  value={eventDraft.date}
+                  onChange={(input) =>
+                    setEventDraft({ ...eventDraft, date: input.target.value })
+                  }
+                />
               </Field>
               {!eventDraft.isAllDay ? (
                 <Field label="Start time">
-                  <input disabled={busy} type="time" value={eventDraft.startTime} onChange={(input) => setEventDraft({ ...eventDraft, startTime: input.target.value })} />
+                  <input
+                    disabled={busy}
+                    type="time"
+                    value={eventDraft.startTime}
+                    onChange={(input) =>
+                      setEventDraft({
+                        ...eventDraft,
+                        startTime: input.target.value,
+                      })
+                    }
+                  />
                 </Field>
               ) : null}
               <Field label="Ends">
-                <input disabled={busy} type={eventDraft.isAllDay ? "date" : "time"} value={eventDraft.isAllDay ? eventDraft.endDate : eventDraft.endTime} onChange={(input) => setEventDraft({ ...eventDraft, [eventDraft.isAllDay ? "endDate" : "endTime"]: input.target.value })} />
+                <input
+                  disabled={busy}
+                  type={eventDraft.isAllDay ? "date" : "time"}
+                  value={
+                    eventDraft.isAllDay
+                      ? eventDraft.endDate
+                      : eventDraft.endTime
+                  }
+                  onChange={(input) =>
+                    setEventDraft({
+                      ...eventDraft,
+                      [eventDraft.isAllDay ? "endDate" : "endTime"]:
+                        input.target.value,
+                    })
+                  }
+                />
               </Field>
             </div>
-            <Checkbox checked={eventDraft.isAllDay} disabled={busy} label="All day" onChange={(input) => setEventDraft({ ...eventDraft, isAllDay: input.target.checked })} />
-            <p className={styles.timezoneNote}>Times use your calendar’s timezone.</p>
+            <Checkbox
+              checked={eventDraft.isAllDay}
+              disabled={busy}
+              label="All day"
+              onChange={(input) =>
+                setEventDraft({ ...eventDraft, isAllDay: input.target.checked })
+              }
+            />
+            <p className={styles.timezoneNote}>
+              Times use your calendar’s timezone.
+            </p>
             <Field label="Location">
-              <input disabled={busy} placeholder="Add location" value={eventDraft.location} onChange={(input) => setEventDraft({ ...eventDraft, location: input.target.value })} />
+              <input
+                disabled={busy}
+                placeholder="Add location"
+                value={eventDraft.location}
+                onChange={(input) =>
+                  setEventDraft({ ...eventDraft, location: input.target.value })
+                }
+              />
             </Field>
             <Field label="Event link">
-              <input disabled={busy} placeholder="https://…" type="url" value={eventDraft.url} onChange={(input) => setEventDraft({ ...eventDraft, url: input.target.value })} />
+              <input
+                disabled={busy}
+                placeholder="https://…"
+                type="url"
+                value={eventDraft.url}
+                onChange={(input) =>
+                  setEventDraft({ ...eventDraft, url: input.target.value })
+                }
+              />
             </Field>
             <Field label="Description">
-              <textarea disabled={busy} rows={5} value={eventDraft.description} onChange={(input) => setEventDraft({ ...eventDraft, description: input.target.value })} />
+              <textarea
+                disabled={busy}
+                rows={5}
+                value={eventDraft.description}
+                onChange={(input) =>
+                  setEventDraft({
+                    ...eventDraft,
+                    description: input.target.value,
+                  })
+                }
+              />
             </Field>
           </section>
 
@@ -299,7 +463,9 @@ export function ShareEventDialog({
               content={draft.content}
               coverUrl={current?.coverUrl ?? null}
               theme={draft.theme}
-              onChange={({ content, theme }) => setDraft({ ...draft, content, theme })}
+              onChange={({ content, theme }) =>
+                setDraft({ ...draft, content, theme })
+              }
               onPreviewUrlChange={setCoverPreviewUrl}
               onUpload={async (file) => {
                 await uploadEventCover(event.id, file);
@@ -338,7 +504,11 @@ function DraftPreview({
 }) {
   const focalPosition = `${content.cover.focalX}% ${content.cover.focalY}%`;
   const when = event.isAllDay
-    ? new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", weekday: "short" }).format(event.start)
+    ? new Intl.DateTimeFormat(undefined, {
+        day: "numeric",
+        month: "long",
+        weekday: "short",
+      }).format(event.start)
     : `${new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", weekday: "short" }).format(event.start)} · ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(event.start)}–${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(event.end)}`;
 
   return (
@@ -358,20 +528,48 @@ function DraftPreview({
             className={pageStyles.hero}
             data-cover={theme.cover}
             data-upload={coverUrl ? "" : undefined}
-            style={coverUrl ? { backgroundImage: `url(${coverUrl})`, backgroundPosition: focalPosition } : undefined}
+            style={
+              coverUrl
+                ? {
+                    backgroundImage: `url(${coverUrl})`,
+                    backgroundPosition: focalPosition,
+                    backgroundSize: `${content.cover.zoom * 100}%`,
+                  }
+                : undefined
+            }
           >
             <div className={pageStyles.heroCopy}>
               <div className={pageStyles.heroTitleRow}>
-                <time className={pageStyles.dateBadge} dateTime={event.start.toISOString()}>
-                  <span>{new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(event.start)}</span>
-                  <strong>{new Intl.DateTimeFormat(undefined, { day: "2-digit" }).format(event.start)}</strong>
-                  <span>{new Intl.DateTimeFormat(undefined, { month: "short" }).format(event.start)}</span>
+                <time
+                  className={pageStyles.dateBadge}
+                  dateTime={event.start.toISOString()}
+                >
+                  <span>
+                    {new Intl.DateTimeFormat(undefined, {
+                      weekday: "short",
+                    }).format(event.start)}
+                  </span>
+                  <strong>
+                    {new Intl.DateTimeFormat(undefined, {
+                      day: "2-digit",
+                    }).format(event.start)}
+                  </strong>
+                  <span>
+                    {new Intl.DateTimeFormat(undefined, {
+                      month: "short",
+                    }).format(event.start)}
+                  </span>
                 </time>
                 <div>
                   <h1>{event.title || "Untitled event"}</h1>
                   <div className={pageStyles.heroFacts}>
                     <span>{when}</span>
-                    {event.location ? <span><MapPin aria-hidden="true" size={16} />{event.location}</span> : null}
+                    {event.location ? (
+                      <span>
+                        <MapPin aria-hidden="true" size={16} />
+                        {event.location}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -383,18 +581,48 @@ function DraftPreview({
                 <h2>Organized by</h2>
                 <p>{event.organizer}</p>
               </section>
-              {event.location ? <section className={pageStyles.sideCard}><h2>Location</h2><p>{event.location}</p></section> : null}
+              {event.location ? (
+                <section className={pageStyles.sideCard}>
+                  <h2>Location</h2>
+                  <p>{event.location}</p>
+                </section>
+              ) : null}
             </aside>
             <div className={pageStyles.content}>
-              {event.description || content.tags.length > 0 ? <section className={pageStyles.contentCard}>
-                <h2>About this event</h2>
-                {event.description ? <p className={pageStyles.description}>{event.description}</p> : null}
-                {content.tags.length > 0 ? <ul className={pageStyles.tags} aria-label="Event tags">{content.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul> : null}
-              </section> : null}
-              {content.agenda.length > 0 ? <section className={pageStyles.contentCard}>
-                <h2>Program</h2>
-                <ol className={pageStyles.agenda}>{content.agenda.map((item) => <li key={item.id}><time>{item.time}</time><span aria-hidden="true" /><div><strong>{item.title}</strong>{item.description ? <p>{item.description}</p> : null}</div></li>)}</ol>
-              </section> : null}
+              {event.description || content.tags.length > 0 ? (
+                <section className={pageStyles.contentCard}>
+                  <h2>About this event</h2>
+                  {event.description ? (
+                    <p className={pageStyles.description}>
+                      {event.description}
+                    </p>
+                  ) : null}
+                  {content.tags.length > 0 ? (
+                    <ul className={pageStyles.tags} aria-label="Event tags">
+                      {content.tags.map((tag) => (
+                        <li key={tag}>{tag}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+              ) : null}
+              {content.agenda.length > 0 ? (
+                <section className={pageStyles.contentCard}>
+                  <h2>Program</h2>
+                  <ol className={pageStyles.agenda}>
+                    {content.agenda.map((item) => (
+                      <li key={item.id}>
+                        <time>{item.time}</time>
+                        <span aria-hidden="true" />
+                        <div>
+                          <strong>{item.title}</strong>
+                          {item.description ? <p>{item.description}</p> : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
             </div>
           </div>
         </div>

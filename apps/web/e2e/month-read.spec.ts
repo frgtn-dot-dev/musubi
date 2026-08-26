@@ -6443,7 +6443,9 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	await dialog.getByLabel("Event title").fill("Client call, updated");
 	await dialog.getByRole("button", { name: "Preview draft" }).click();
 	const preview = page.getByRole("dialog", { name: "Draft preview" });
-	await expect(preview.getByRole("heading", { name: "Client call, updated" })).toBeVisible();
+	await expect(
+		preview.getByRole("heading", { name: "Client call, updated" }),
+	).toBeVisible();
 	await preview.getByRole("button", { name: "Close preview" }).click();
 	await dialog.getByRole("button", { name: "Save changes" }).click();
 	await expect(page.getByRole("status")).toContainText("Event and page saved");
@@ -6487,6 +6489,43 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveCount(
 		0,
 	);
+});
+
+test("frames an uploaded event cover in a focused dialog", async ({ page }) => {
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/events/*/share", (route) =>
+		respond(route, {
+			attendeeVisibility: "counts",
+			content: {
+				agenda: [],
+				cover: { focalX: 50, focalY: 50, source: "upload" },
+				tags: [],
+			},
+			coverUrl: "https://example.com/cover.jpg",
+			indexable: false,
+			mode: "link",
+			theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
+			token: SHARE_TOKEN,
+			url: `http://127.0.0.1:3000/e/${SHARE_TOKEN}`,
+		}),
+	);
+
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page.getByRole("button", { name: /Client call/ }).first().click();
+	await page.getByRole("button", { name: "Share event" }).click();
+	await page.getByRole("button", { name: "Edit framing" }).click();
+
+	const framing = page.getByRole("dialog", { name: "Cover framing" });
+	const position = framing.getByRole("group", { name: /Cover position/ });
+	await position.focus();
+	await position.press("ArrowRight");
+	await expect(position).toHaveAttribute("style", /background-position: 52% 50%/);
+	const zoom = framing.getByLabel(/Zoom/);
+	await expect(zoom).toHaveValue("1");
+	await zoom.press("ArrowRight");
+	await expect(zoom).toHaveValue("1.01");
+	await framing.getByRole("button", { name: "Done" }).click();
+	await expect(framing).toHaveCount(0);
 });
 
 test("shows a published event to someone with no account", async ({ page }) => {

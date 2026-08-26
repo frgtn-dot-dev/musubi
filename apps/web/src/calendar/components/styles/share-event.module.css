@@ -1,7 +1,10 @@
 .workspace {
   display: grid;
   min-height: 0;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1fr) minmax(
+      300px,
+      1fr
+    );
   gap: 1px;
   background: var(--border-subtle);
 }
@@ -236,26 +239,45 @@
   white-space: nowrap;
 }
 
-.focalPreview {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 6;
+.coverPreviewRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.coverPreview,
+.framingPreview {
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background-position: center;
   background-size: cover;
-  cursor: crosshair;
 }
 
-.focalPreview span {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 2px solid white;
-  border-radius: 50%;
-  box-shadow: 0 1px 5px rgb(0 0 0 / 65%);
-  transform: translate(-50%, -50%);
+.coverPreview {
+  width: 132px;
+  aspect-ratio: 16 / 6;
+}
+
+.framingDialog {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.framingPreview {
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  cursor: grab;
+  touch-action: none;
+}
+
+.framingPreview:active {
+  cursor: grabbing;
+}
+
+.framingPreview:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
 }
 
 .agendaEditor {

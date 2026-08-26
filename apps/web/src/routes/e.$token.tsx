@@ -165,6 +165,7 @@ function PublicEventRoute() {
               ? {
                   backgroundImage: `url(${event.coverUrl})`,
                   backgroundPosition: focalPosition,
+                  backgroundSize: `${event.content.cover.zoom * 100}%`,
                 }
               : undefined
           }

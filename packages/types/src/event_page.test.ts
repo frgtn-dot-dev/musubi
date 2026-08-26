@@ -3,7 +3,7 @@ import { EventPageContentSchema } from "./event_page";
 
 assert.deepEqual(EventPageContentSchema.parse({}), {
   agenda: [],
-  cover: { focalX: 50, focalY: 50, source: "preset" },
+  cover: { focalX: 50, focalY: 50, source: "preset", zoom: 1 },
   tags: [],
 });
 
@@ -14,8 +14,8 @@ assert.deepEqual(
     ],
     cover: { focalX: 20, focalY: 75, source: "upload" },
     tags: ["Community"],
-  }).tags,
-  ["Community"],
+  }).cover,
+  { focalX: 20, focalY: 75, source: "upload", zoom: 1 },
 );
 
 assert.throws(() =>

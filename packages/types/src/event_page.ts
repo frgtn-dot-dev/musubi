@@ -43,9 +43,10 @@ export const EventPageContentSchema = z
         focalX: z.number().min(0).max(100).default(50),
         focalY: z.number().min(0).max(100).default(50),
         source: z.enum(["preset", "upload"]).default("preset"),
+        zoom: z.number().min(1).max(3).default(1),
       })
       .strict()
-      .default({ focalX: 50, focalY: 50, source: "preset" }),
+      .default({ focalX: 50, focalY: 50, source: "preset", zoom: 1 }),
     tags: z
       .array(z.string().trim().min(1).max(24))
       .max(6)

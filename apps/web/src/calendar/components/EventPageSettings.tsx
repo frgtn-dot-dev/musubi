@@ -5,15 +5,18 @@ import type {
   EventPageTheme,
 } from "@musubi/types";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useEffect, useId, useState, type PointerEvent } from "react";
+import { useEffect, useId, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Button } from "~/ui/Button";
+import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import styles from "./styles/share-event.module.css";
 
 const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const COVER_MAX_BYTES = 5 * 1024 * 1024;
 
-export function validateEventPageContent(content: EventPageContent): string | undefined {
+export function validateEventPageContent(
+  content: EventPageContent,
+): string | undefined {
   if (content.tags.length > 6 || content.tags.some((tag) => tag.length > 24)) {
     return "Use up to 6 tags, each no longer than 24 characters.";
   }
@@ -34,7 +37,10 @@ export function EventPageSettings({
   busy: boolean;
   content: EventPageContent;
   coverUrl: null | string;
-  onChange: (value: { content: EventPageContent; theme: EventPageTheme }) => void;
+  onChange: (value: {
+    content: EventPageContent;
+    theme: EventPageTheme;
+  }) => void;
   onPreviewUrlChange: (url: null | string) => void;
   onUpload: (file: File) => Promise<void>;
   theme: EventPageTheme;
@@ -43,6 +49,7 @@ export function EventPageSettings({
   const [tagText, setTagText] = useState(content.tags.join(", "));
   const [previewUrl, setPreviewUrl] = useState(coverUrl);
   const [uploading, setUploading] = useState(false);
+  const [framingOpen, setFramingOpen] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(
@@ -52,7 +59,9 @@ export function EventPageSettings({
     [previewUrl],
   );
 
-  function change(next: Partial<{ content: EventPageContent; theme: EventPageTheme }>) {
+  function change(
+    next: Partial<{ content: EventPageContent; theme: EventPageTheme }>,
+  ) {
     onChange({ content: next.content ?? content, theme: next.theme ?? theme });
   }
 
@@ -65,6 +74,44 @@ export function EventPageSettings({
         ),
       },
     });
+  }
+
+  function updateFocal(focalX: number, focalY: number) {
+    change({
+      content: {
+        ...content,
+        cover: {
+          ...content.cover,
+          focalX: Math.max(0, Math.min(100, Math.round(focalX))),
+          focalY: Math.max(0, Math.min(100, Math.round(focalY))),
+        },
+      },
+    });
+  }
+
+  function dragFocal(event: PointerEvent<HTMLDivElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    updateFocal(
+      ((event.clientX - bounds.left) / bounds.width) * 100,
+      ((event.clientY - bounds.top) / bounds.height) * 100,
+    );
+  }
+
+  function moveFocalWithKeys(event: KeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 10 : 2;
+    const changes: Record<string, [number, number]> = {
+      ArrowDown: [0, step],
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+    };
+    const changeBy = changes[event.key];
+    if (!changeBy) return;
+    event.preventDefault();
+    updateFocal(
+      content.cover.focalX + changeBy[0],
+      content.cover.focalY + changeBy[1],
+    );
   }
 
   async function upload(file: File) {
@@ -87,6 +134,7 @@ export function EventPageSettings({
       change({
         content: { ...content, cover: { ...content.cover, source: "upload" } },
       });
+      setFramingOpen(true);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -96,20 +144,6 @@ export function EventPageSettings({
     } finally {
       setUploading(false);
     }
-  }
-
-  function chooseFocalPoint(event: PointerEvent<HTMLButtonElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    change({
-      content: {
-        ...content,
-        cover: {
-          ...content.cover,
-          focalX: Math.round(((event.clientX - bounds.left) / bounds.width) * 100),
-          focalY: Math.round(((event.clientY - bounds.top) / bounds.height) * 100),
-        },
-      },
-    });
   }
 
   return (
@@ -135,7 +169,10 @@ export function EventPageSettings({
               type="button"
               onClick={() =>
                 change({
-                  content: { ...content, cover: { ...content.cover, source: "preset" } },
+                  content: {
+                    ...content,
+                    cover: { ...content.cover, source: "preset" },
+                  },
                   theme: { ...theme, cover: cover.id },
                 })
               }
@@ -168,27 +205,25 @@ export function EventPageSettings({
         </div>
 
         {content.cover.source === "upload" && previewUrl ? (
-          <>
-            <button
-              aria-label="Choose the important point of the cover image"
-              className={styles.focalPreview}
+          <div className={styles.coverPreviewRow}>
+            <div
+              aria-hidden="true"
+              className={styles.coverPreview}
               style={{
                 backgroundImage: `url(${previewUrl})`,
                 backgroundPosition: `${content.cover.focalX}% ${content.cover.focalY}%`,
+                backgroundSize: `${content.cover.zoom * 100}%`,
               }}
-              type="button"
-              onPointerDown={chooseFocalPoint}
+            />
+            <Button
+              disabled={busy || uploading}
+              size="compact"
+              variant="secondary"
+              onClick={() => setFramingOpen(true)}
             >
-              <span
-                aria-hidden="true"
-                style={{
-                  left: `${content.cover.focalX}%`,
-                  top: `${content.cover.focalY}%`,
-                }}
-              />
-            </button>
-            <p className={styles.help}>Click the important point.</p>
-          </>
+              Edit framing
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -203,7 +238,14 @@ export function EventPageSettings({
             change({
               content: {
                 ...content,
-                tags: [...new Set(next.split(",").map((tag) => tag.trim()).filter(Boolean))],
+                tags: [
+                  ...new Set(
+                    next
+                      .split(",")
+                      .map((tag) => tag.trim())
+                      .filter(Boolean),
+                  ),
+                ],
               },
             });
           }}
@@ -227,7 +269,12 @@ export function EventPageSettings({
                   ...content,
                   agenda: [
                     ...content.agenda,
-                    { description: "", id: crypto.randomUUID(), time: "18:00", title: "" },
+                    {
+                      description: "",
+                      id: crypto.randomUUID(),
+                      time: "18:00",
+                      title: "",
+                    },
                   ],
                 },
               })
@@ -244,7 +291,9 @@ export function EventPageSettings({
               disabled={busy || uploading}
               type="time"
               value={item.time}
-              onChange={(event) => updateAgenda(item.id, { time: event.target.value })}
+              onChange={(event) =>
+                updateAgenda(item.id, { time: event.target.value })
+              }
             />
             <input
               aria-label="Title"
@@ -252,7 +301,9 @@ export function EventPageSettings({
               maxLength={120}
               placeholder="Doors open"
               value={item.title}
-              onChange={(event) => updateAgenda(item.id, { title: event.target.value })}
+              onChange={(event) =>
+                updateAgenda(item.id, { title: event.target.value })
+              }
             />
             <input
               aria-label="Description"
@@ -260,7 +311,9 @@ export function EventPageSettings({
               maxLength={240}
               placeholder="Optional note"
               value={item.description}
-              onChange={(event) => updateAgenda(item.id, { description: event.target.value })}
+              onChange={(event) =>
+                updateAgenda(item.id, { description: event.target.value })
+              }
             />
             <button
               aria-label={`Remove ${item.title || "agenda item"}`}
@@ -271,7 +324,9 @@ export function EventPageSettings({
                 change({
                   content: {
                     ...content,
-                    agenda: content.agenda.filter((entry) => entry.id !== item.id),
+                    agenda: content.agenda.filter(
+                      (entry) => entry.id !== item.id,
+                    ),
                   },
                 })
               }
@@ -282,7 +337,70 @@ export function EventPageSettings({
         ))}
       </div>
 
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {previewUrl ? (
+        <Dialog
+          closeLabel="Close cover framing"
+          description="Position image inside public event header. Original image stays unchanged."
+          elevated
+          footer={
+            <DialogClose>
+              <Button>Done</Button>
+            </DialogClose>
+          }
+          open={framingOpen}
+          size="compact"
+          title="Cover framing"
+          onOpenChange={setFramingOpen}
+        >
+          <div className={styles.framingDialog}>
+            <div
+              aria-label="Cover position. Drag image or use arrow keys."
+              className={styles.framingPreview}
+              role="group"
+              style={{
+                backgroundImage: `url(${previewUrl})`,
+                backgroundPosition: `${content.cover.focalX}% ${content.cover.focalY}%`,
+                backgroundSize: `${content.cover.zoom * 100}%`,
+              }}
+              tabIndex={0}
+              onKeyDown={moveFocalWithKeys}
+              onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                dragFocal(event);
+              }}
+              onPointerMove={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  dragFocal(event);
+                }
+              }}
+            />
+            <p className={styles.help}>Drag image to position it. Arrow keys nudge it.</p>
+            <Field label={`Zoom · ${Math.round(content.cover.zoom * 100)}%`}>
+              <input
+                max="3"
+                min="1"
+                step="0.01"
+                type="range"
+                value={content.cover.zoom}
+                onChange={(event) =>
+                  change({
+                    content: {
+                      ...content,
+                      cover: { ...content.cover, zoom: Number(event.target.value) },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+        </Dialog>
+      ) : null}
     </section>
   );
 }
