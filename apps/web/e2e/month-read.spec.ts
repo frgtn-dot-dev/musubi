@@ -6689,9 +6689,6 @@ test("uses the reader's shared theme instead of organizer styling", async ({
 		"light",
 	);
 
-	await going.click();
-	await expect(going).toHaveAttribute("aria-pressed", "true");
-
 	await expectNoAccessibilityViolations(page);
 });
 

@@ -51,7 +51,12 @@ export function RsvpBlock({
   });
 
   const mine = summary.data?.mine;
-  const needsName = signedIn && !identified && !session.data?.user.name?.trim();
+  const needsName =
+    signedIn &&
+    !identified &&
+    !identifying &&
+    !pending &&
+    !session.data?.user.name?.trim();
 
   if (summary.data?.isOrganizer) {
     return (
