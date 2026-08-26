@@ -6516,7 +6516,9 @@ test("frames an uploaded event cover in a focused dialog", async ({ page }) => {
 		.first()
 		.click();
 	await page.getByRole("button", { name: "Share event" }).click();
-	await page.getByRole("button", { name: "Edit uploaded cover framing" }).click();
+	await page
+		.getByRole("button", { name: "Edit uploaded cover framing" })
+		.click();
 
 	const framing = page.getByRole("dialog", { name: "Cover framing" });
 	await expect(framing.getByText("Change file", { exact: true })).toBeVisible();

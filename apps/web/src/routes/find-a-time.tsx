@@ -59,8 +59,8 @@ function FindATimeRoute() {
           <h1>Find a time everyone can make</h1>
           <p className={styles.lead}>
             Offer a few days, send one link, and watch the answers land in a
-            grid. The people you ask confirm an email and never hand over
-            their calendar — only the answers they type.
+            grid. The people you ask confirm an email and never hand over their
+            calendar — only the answers they type.
           </p>
         </header>
 
@@ -70,8 +70,8 @@ function FindATimeRoute() {
           <EmailIdentity
             disclosure={
               <p className={styles.lead}>
-                Confirm your email first. Existing accounts keep their saved name;
-                new accounts need one name for the people you invite.
+                Confirm your email first. Existing accounts keep their saved
+                name; new accounts need one name for the people you invite.
               </p>
             }
             onIdentified={() => {
@@ -97,8 +97,8 @@ function FindATimeRoute() {
       <p className={styles.footer}>
         {/* "/" resolves the default page for whoever is signed in, so this one
             link works for a brand-new account and an old one alike. */}
-        <Link to="/">Open your calendar</Link>{" "}
-        · Musubi is open source and self-hostable
+        <Link to="/">Open your calendar</Link> · Musubi is open source and
+        self-hostable
       </p>
     </main>
   );
@@ -121,8 +121,8 @@ function Created({
         ready
       </h2>
       <p className={styles.lead}>
-        Send this link to the people you need. Answers appear as they arrive, and
-        you pick the time when you have enough of them.
+        Send this link to the people you need. Answers appear as they arrive,
+        and you pick the time when you have enough of them.
       </p>
       <div className={styles.linkRow}>
         <input

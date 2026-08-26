@@ -1,9 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import {
-  type ReactElement,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { type ReactElement, type ReactNode, type RefObject } from "react";
 import { IconButton } from "./Button";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
@@ -110,9 +106,7 @@ export function Dialog({
               <DialogPrimitive.Title className={styles.dialogTitle}>
                 {title}
               </DialogPrimitive.Title>
-              <DialogPrimitive.Description
-                className={styles.dialogDescription}
-              >
+              <DialogPrimitive.Description className={styles.dialogDescription}>
                 {description}
               </DialogPrimitive.Description>
             </div>

@@ -1307,9 +1307,17 @@
 }
 
 .dialog_fullscreen {
-	width: calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter));
+	width: calc(
+		100vw -
+		var(--layer-viewport-gutter) -
+		var(--layer-viewport-gutter)
+	);
 	max-width: 1440px;
-	max-height: calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter));
+	max-height: calc(
+		100dvh -
+		var(--layer-viewport-gutter) -
+		var(--layer-viewport-gutter)
+	);
 }
 
 .dialogHeader {

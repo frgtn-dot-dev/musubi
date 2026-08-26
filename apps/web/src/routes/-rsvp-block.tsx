@@ -191,7 +191,11 @@ function Attending({ summary }: { summary?: RsvpSummary }) {
             <ul className={styles.attendeeList}>
               {attendees.map((attendee) => (
                 <li key={`${attendee.name}-${attendee.avatarUrl}`}>
-                  <Avatar image={attendee.avatarUrl} name={attendee.name} size={32} />
+                  <Avatar
+                    image={attendee.avatarUrl}
+                    name={attendee.name}
+                    size={32}
+                  />
                   <span>{attendee.name}</span>
                 </li>
               ))}

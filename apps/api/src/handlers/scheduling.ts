@@ -185,9 +185,7 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 
 	if (!title) throw new BadRequestError("A poll needs a title...");
 	if (slots.length === 0) {
-		throw new BadRequestError(
-			"A poll needs at least one day to choose from...",
-		);
+		throw new BadRequestError("A poll needs at least one day to choose from...");
 	}
 	if (slots.length > MAX_SLOTS) {
 		throw new BadRequestError(`A poll can offer at most ${MAX_SLOTS} days...`);
@@ -263,8 +261,7 @@ export function pollCalendarProjection(
 		if (poll.chosenSlotID && role === "organizer") return [];
 
 		const pollVotes = votes.filter((vote) => vote.pollID === poll.id);
-		const respondents = new Set(pollVotes.map((vote) => vote.participantID))
-			.size;
+		const respondents = new Set(pollVotes.map((vote) => vote.participantID)).size;
 		return [
 			{
 				...pollSummary(poll),
@@ -275,15 +272,12 @@ export function pollCalendarProjection(
 							(!poll.chosenSlotID || slot.id === poll.chosenSlotID),
 					)
 					.map((slot) => {
-						const slotVotes = pollVotes.filter(
-							(vote) => vote.slotID === slot.id,
-						);
+						const slotVotes = pollVotes.filter((vote) => vote.slotID === slot.id);
 						return {
 							date: slot.start.toISOString().slice(0, 10),
 							end: slot.end,
 							id: slot.id,
-							ifNeeded: slotVotes.filter((vote) => vote.value === "if-needed")
-								.length,
+							ifNeeded: slotVotes.filter((vote) => vote.value === "if-needed").length,
 							no: slotVotes.filter((vote) => vote.value === "no").length,
 							start: slot.start,
 							yes: slotVotes.filter((vote) => vote.value === "yes").length,
@@ -511,13 +505,9 @@ export async function handlerVotePoll(req: Request, res: Response) {
 	// means nothing left behind. Withdrawing is still possible — with an
 	// explicitly empty list, which says so.
 	if (votes.length > 0) {
-		const slots = new Set(
-			(await listPollSlots(poll.id)).map((slot) => slot.id),
-		);
+		const slots = new Set((await listPollSlots(poll.id)).map((slot) => slot.id));
 		if (
-			!votes.some((vote: { slotID?: string }) =>
-				slots.has(String(vote?.slotID)),
-			)
+			!votes.some((vote: { slotID?: string }) => slots.has(String(vote?.slotID)))
 		) {
 			throw new BadRequestError("None of those times are on this poll...");
 		}
@@ -583,9 +573,7 @@ export async function handlerDecidePoll(req: Request, res: Response) {
 		throw new BadRequestError("This poll is already decided...");
 
 	const slotID = String(req.body?.slotId ?? "");
-	const slot = (await listPollSlots(poll.id)).find(
-		(item) => item.id === slotID,
-	);
+	const slot = (await listPollSlots(poll.id)).find((item) => item.id === slotID);
 	if (!slot) throw new BadRequestError("That time is not on this poll...");
 
 	// What the caller asked for, then what the poll was created with, then their own
@@ -681,7 +669,10 @@ async function announcePollDecision(
 			);
 		}
 	} catch (error) {
-		logger.error("scheduling.decided_announce_failed", { error, pollID: poll.id });
+		logger.error("scheduling.decided_announce_failed", {
+			error,
+			pollID: poll.id,
+		});
 	}
 }
 
@@ -696,8 +687,7 @@ export async function handlerClosePoll(req: Request, res: Response) {
 	const poll = await getPollById(String(req.params.pollId));
 	if (!poll) throw new NotFoundError("Poll not found...");
 	await assertPollOwner(poll, req);
-	if (poll.closedAt)
-		throw new BadRequestError("This poll is already closed...");
+	if (poll.closedAt) throw new BadRequestError("This poll is already closed...");
 
 	if (!(await closePoll(poll.id))) {
 		throw new BadRequestError("This poll is already closed...");

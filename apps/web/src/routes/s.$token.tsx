@@ -61,7 +61,6 @@ function PollRoute() {
 		if (sessionUserID) void refetchPoll();
 	}, [refetchPoll, sessionUserID]);
 
-
 	const vote = useMutation({
 		mutationFn: (input: {
 			email?: string;
@@ -115,7 +114,6 @@ function PollRoute() {
 		session.data?.user.name?.trim() ||
 		"";
 	const unsaved = Object.keys(draft).length > 0;
-
 
 	function pick(slotID: string, value: null | VoteValue) {
 		setDraft((current) => ({ ...current, [slotID]: value }));
@@ -212,11 +210,7 @@ function PollRoute() {
 
 					{data.closed ? null : authenticatedViewer && !identifying ? (
 						<div className={pollStyles.send}>
-							<Button
-								disabled={!unsaved}
-								loading={vote.isPending}
-								onClick={send}
-							>
+							<Button disabled={!unsaved} loading={vote.isPending} onClick={send}>
 								{unsaved ? "Send my answers" : "Answers saved"}
 							</Button>
 							{vote.error ? (
@@ -230,8 +224,8 @@ function PollRoute() {
 							disclosure={
 								<p className={pollStyles.disclosure}>
 									<Info aria-hidden="true" size={14} strokeWidth={1.7} />
-									Confirm your email to add your answers. Your email stays private
-									and your calendar is never read.
+									Confirm your email to add your answers. Your email stays private and
+									your calendar is never read.
 								</p>
 							}
 							onIdentified={() => {
