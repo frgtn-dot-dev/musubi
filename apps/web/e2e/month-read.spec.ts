@@ -1540,11 +1540,9 @@ test("saves revisioned settings and applies display preferences", async ({
 	// Timed and all-day events are asked about separately: an offset cannot
 	// answer for a birthday, and the control must not pretend it can.
 	// `SettingsSection` is a labelled <section>, which is a region.
-	const remindersSection = settingsDialog
-		.getByRole("region")
-		.filter({
-			has: page.getByRole("heading", { exact: true, name: "Reminders" }),
-		});
+	const remindersSection = settingsDialog.getByRole("region").filter({
+		has: page.getByRole("heading", { exact: true, name: "Reminders" }),
+	});
 	await expect(
 		remindersSection.getByRole("radiogroup", { name: "Timed events" }),
 	).toBeVisible();
