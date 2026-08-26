@@ -13,28 +13,34 @@ import styles from "./styles/share-event.module.css";
 const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const COVER_MAX_BYTES = 5 * 1024 * 1024;
 
-type PageSettingsValue = {
-  content: EventPageContent;
-  theme: EventPageTheme;
-};
+export function validateEventPageContent(content: EventPageContent): string | undefined {
+  if (content.tags.length > 6 || content.tags.some((tag) => tag.length > 24)) {
+    return "Use up to 6 tags, each no longer than 24 characters.";
+  }
+  if (content.agenda.some((item) => !item.title.trim() || !item.time)) {
+    return "Every agenda item needs a time and title.";
+  }
+}
 
 export function EventPageSettings({
   busy,
+  content,
   coverUrl,
-  initial,
-  onSave,
+  onChange,
+  onPreviewUrlChange,
   onUpload,
+  theme,
 }: {
   busy: boolean;
+  content: EventPageContent;
   coverUrl: null | string;
-  initial: PageSettingsValue;
-  onSave: (value: PageSettingsValue) => Promise<void>;
+  onChange: (value: { content: EventPageContent; theme: EventPageTheme }) => void;
+  onPreviewUrlChange: (url: null | string) => void;
   onUpload: (file: File) => Promise<void>;
+  theme: EventPageTheme;
 }) {
   const uploadId = useId();
-  const [content, setContent] = useState(initial.content);
-  const [theme, setTheme] = useState(initial.theme);
-  const [tagText, setTagText] = useState(initial.content.tags.join(", "));
+  const [tagText, setTagText] = useState(content.tags.join(", "));
   const [previewUrl, setPreviewUrl] = useState(coverUrl);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -46,13 +52,20 @@ export function EventPageSettings({
     [previewUrl],
   );
 
-  const updateAgenda = (id: string, patch: Partial<EventPageAgendaItem>) =>
-    setContent({
-      ...content,
-      agenda: content.agenda.map((item) =>
-        item.id === id ? { ...item, ...patch } : item,
-      ),
+  function change(next: Partial<{ content: EventPageContent; theme: EventPageTheme }>) {
+    onChange({ content: next.content ?? content, theme: next.theme ?? theme });
+  }
+
+  function updateAgenda(id: string, patch: Partial<EventPageAgendaItem>) {
+    change({
+      content: {
+        ...content,
+        agenda: content.agenda.map((item) =>
+          item.id === id ? { ...item, ...patch } : item,
+        ),
+      },
     });
+  }
 
   async function upload(file: File) {
     if (!COVER_TYPES.has(file.type)) {
@@ -68,10 +81,11 @@ export function EventPageSettings({
     setUploading(true);
     try {
       await onUpload(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setContent({
-        ...content,
-        cover: { ...content.cover, source: "upload" },
+      const nextUrl = URL.createObjectURL(file);
+      setPreviewUrl(nextUrl);
+      onPreviewUrlChange(nextUrl);
+      change({
+        content: { ...content, cover: { ...content.cover, source: "upload" } },
       });
     } catch (uploadError) {
       setError(
@@ -86,50 +100,16 @@ export function EventPageSettings({
 
   function chooseFocalPoint(event: PointerEvent<HTMLButtonElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
-    setContent({
-      ...content,
-      cover: {
-        ...content.cover,
-        focalX: Math.round(
-          ((event.clientX - bounds.left) / bounds.width) * 100,
-        ),
-        focalY: Math.round(
-          ((event.clientY - bounds.top) / bounds.height) * 100,
-        ),
+    change({
+      content: {
+        ...content,
+        cover: {
+          ...content.cover,
+          focalX: Math.round(((event.clientX - bounds.left) / bounds.width) * 100),
+          focalY: Math.round(((event.clientY - bounds.top) / bounds.height) * 100),
+        },
       },
     });
-  }
-
-  async function save() {
-    const tags = [
-      ...new Set(
-        tagText
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-      ),
-    ];
-    if (tags.length > 6 || tags.some((tag) => tag.length > 24)) {
-      setError("Use up to 6 tags, each no longer than 24 characters.");
-      return;
-    }
-    if (content.agenda.some((item) => !item.title.trim() || !item.time)) {
-      setError("Every agenda item needs a time and title.");
-      return;
-    }
-
-    setError("");
-    const next = { ...content, tags };
-    setContent(next);
-    try {
-      await onSave({ content: next, theme });
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Could not save the event page.",
-      );
-    }
   }
 
   return (
@@ -139,14 +119,6 @@ export function EventPageSettings({
           <h3 id="page-design-title">Event page</h3>
           <p>Choose the public page’s cover, tags, and schedule.</p>
         </div>
-        <Button
-          disabled={busy || uploading}
-          loading={busy}
-          size="compact"
-          onClick={() => void save()}
-        >
-          Save page
-        </Button>
       </div>
 
       <div className={styles.editorSection}>
@@ -158,15 +130,15 @@ export function EventPageSettings({
                 content.cover.source === "preset" && theme.cover === cover.id
               }
               data-cover={cover.id}
+              disabled={busy || uploading}
               key={cover.id}
               type="button"
-              onClick={() => {
-                setTheme({ ...theme, cover: cover.id });
-                setContent({
-                  ...content,
-                  cover: { ...content.cover, source: "preset" },
-                });
-              }}
+              onClick={() =>
+                change({
+                  content: { ...content, cover: { ...content.cover, source: "preset" } },
+                  theme: { ...theme, cover: cover.id },
+                })
+              }
             >
               <span aria-hidden="true" />
               {cover.label}
@@ -215,19 +187,26 @@ export function EventPageSettings({
                 }}
               />
             </button>
-            <p className={styles.help}>
-              Click the important point. Musubi keeps it visible on desktop and
-              mobile.
-            </p>
+            <p className={styles.help}>Click the important point.</p>
           </>
         ) : null}
       </div>
 
       <Field description="Comma-separated, up to 6. Display only." label="Tags">
         <input
+          disabled={busy || uploading}
           placeholder="Community, Workshop"
           value={tagText}
-          onChange={(event) => setTagText(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setTagText(next);
+            change({
+              content: {
+                ...content,
+                tags: [...new Set(next.split(",").map((tag) => tag.trim()).filter(Boolean))],
+              },
+            });
+          }}
         />
       </Field>
 
@@ -238,21 +217,19 @@ export function EventPageSettings({
             <p>Simple timeline shown below the event description.</p>
           </div>
           <Button
+            disabled={busy || uploading}
             icon={<Plus size={14} />}
             size="compact"
             variant="secondary"
             onClick={() =>
-              setContent({
-                ...content,
-                agenda: [
-                  ...content.agenda,
-                  {
-                    description: "",
-                    id: crypto.randomUUID(),
-                    time: "18:00",
-                    title: "",
-                  },
-                ],
+              change({
+                content: {
+                  ...content,
+                  agenda: [
+                    ...content.agenda,
+                    { description: "", id: crypto.randomUUID(), time: "18:00", title: "" },
+                  ],
+                },
               })
             }
           >
@@ -264,40 +241,38 @@ export function EventPageSettings({
           <div className={styles.agendaEditor} key={item.id}>
             <input
               aria-label="Time"
+              disabled={busy || uploading}
               type="time"
               value={item.time}
-              onChange={(event) =>
-                updateAgenda(item.id, { time: event.target.value })
-              }
+              onChange={(event) => updateAgenda(item.id, { time: event.target.value })}
             />
             <input
               aria-label="Title"
+              disabled={busy || uploading}
               maxLength={120}
               placeholder="Doors open"
               value={item.title}
-              onChange={(event) =>
-                updateAgenda(item.id, { title: event.target.value })
-              }
+              onChange={(event) => updateAgenda(item.id, { title: event.target.value })}
             />
             <input
               aria-label="Description"
+              disabled={busy || uploading}
               maxLength={240}
               placeholder="Optional note"
               value={item.description}
-              onChange={(event) =>
-                updateAgenda(item.id, { description: event.target.value })
-              }
+              onChange={(event) => updateAgenda(item.id, { description: event.target.value })}
             />
             <button
               aria-label={`Remove ${item.title || "agenda item"}`}
               className={styles.removeAgenda}
+              disabled={busy || uploading}
               type="button"
               onClick={() =>
-                setContent({
-                  ...content,
-                  agenda: content.agenda.filter(
-                    (entry) => entry.id !== item.id,
-                  ),
+                change({
+                  content: {
+                    ...content,
+                    agenda: content.agenda.filter((entry) => entry.id !== item.id),
+                  },
                 })
               }
             >
@@ -307,11 +282,7 @@ export function EventPageSettings({
         ))}
       </div>
 
-      {error ? (
-        <p className={styles.error} role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </section>
   );
 }

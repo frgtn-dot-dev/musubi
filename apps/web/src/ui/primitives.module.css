@@ -1295,6 +1295,23 @@
 	);
 }
 
+.dialog_workspace {
+	width: min(
+		1440px,
+		calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+	max-height: min(
+		900px,
+		calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+}
+
+.dialog_fullscreen {
+	width: calc(100vw - var(--layer-viewport-gutter) - var(--layer-viewport-gutter));
+	max-width: 1440px;
+	max-height: calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter));
+}
+
 .dialogHeader {
 	display: flex;
 	flex: none;
@@ -2028,8 +2045,10 @@
 
 	.dialog,
 	.dialog_compact,
+	.dialog_fullscreen,
 	.dialog_spacious,
-	.dialog_wide {
+	.dialog_wide,
+	.dialog_workspace {
 		top: auto;
 		bottom: 0;
 		left: 0;

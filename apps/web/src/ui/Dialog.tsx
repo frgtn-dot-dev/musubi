@@ -8,7 +8,13 @@ import { IconButton } from "./Button";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
 
-export type DialogSize = "compact" | "default" | "spacious" | "wide";
+export type DialogSize =
+  | "compact"
+  | "default"
+  | "fullscreen"
+  | "spacious"
+  | "wide"
+  | "workspace";
 export type DialogBodyLayout = "flush" | "padded";
 
 export type DialogProps = {

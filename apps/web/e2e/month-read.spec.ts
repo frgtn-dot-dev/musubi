@@ -6434,25 +6434,30 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	);
 
 	await dialog.getByRole("radio", { name: "Anyone with the link" }).click();
+	// Choices are draft-only until the one save action below.
+	expect(share).toBeNull();
+
+	await dialog.getByLabel("Tags").fill("Workshop, Community");
+	await dialog.getByRole("button", { name: "Add item" }).click();
+	await dialog.getByLabel("Title", { exact: true }).fill("Doors open");
+	await dialog.getByLabel("Event title").fill("Client call, updated");
+	await dialog.getByRole("button", { name: "Preview draft" }).click();
+	const preview = page.getByRole("dialog", { name: "Draft preview" });
+	await expect(preview.getByRole("heading", { name: "Client call, updated" })).toBeVisible();
+	await preview.getByRole("button", { name: "Close preview" }).click();
+	await dialog.getByRole("button", { name: "Save changes" }).click();
+	await expect(page.getByRole("status")).toContainText("Event and page saved");
 	await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveValue(
 		new RegExp(SHARE_TOKEN),
 	);
 	expect(share).toMatchObject({
 		attendeeVisibility: "counts",
-		indexable: false,
-		mode: "link",
-	});
-
-	await dialog.getByLabel("Tags").fill("Workshop, Community");
-	await dialog.getByRole("button", { name: "Add item" }).click();
-	await dialog.getByLabel("Title").fill("Doors open");
-	await dialog.getByRole("button", { name: "Save page" }).click();
-	await expect(page.getByRole("status")).toContainText("Event page updated");
-	expect(share).toMatchObject({
 		content: {
 			agenda: [expect.objectContaining({ time: "18:00", title: "Doors open" })],
 			tags: ["Workshop", "Community"],
 		},
+		indexable: false,
+		mode: "link",
 	});
 	// The link mode's promise is that it stays out of search, so it must not even
 	// offer the indexing choice.
@@ -6462,12 +6467,11 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 
 	await dialog.getByRole("radio", { name: "Show names" }).click();
 	await dialog.getByRole("radio", { name: "Public" }).click();
-	// Clicking the label, not the input: the visible box sits over the 1px input,
-	// which is exactly how a person toggles it too.
 	await dialog.getByText("Allow search engines to list this page").click();
 	await expect(
 		dialog.getByRole("checkbox", { name: /search engines/ }),
 	).toBeChecked();
+	await dialog.getByRole("button", { name: "Save changes" }).click();
 	expect(share).toMatchObject({
 		attendeeVisibility: "names",
 		indexable: true,
@@ -6477,10 +6481,9 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	await expectNoAccessibilityViolations(page);
 
 	await dialog.getByRole("radio", { name: "Show nothing" }).click();
-	expect(share).toMatchObject({ attendeeVisibility: "hidden" });
-
 	await dialog.getByRole("radio", { name: /Private/ }).click();
-	await expect(page.getByRole("status")).toContainText("no longer opens");
+	await dialog.getByRole("button", { name: "Save changes" }).click();
+	await expect(page.getByRole("status")).toContainText("Event and page saved");
 	await expect(dialog.getByRole("textbox", { name: "Public link" })).toHaveCount(
 		0,
 	);

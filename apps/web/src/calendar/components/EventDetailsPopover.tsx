@@ -1102,9 +1102,9 @@ export function EventDetailsPopover({
 				<ShareEventDialog
 					/* The master, like every other write here: an occurrence is addressed
              as "<uuid>_<timestamp>" and only the master exists as a row. */
-					eventId={master.id}
-					eventTitle={event.title}
+					event={master}
 					onNotice={onNotice}
+					onSaveEvent={onUpdateEvent}
 					onOpenChange={(open) => {
 						if (!open) setSharing(false);
 					}}
