@@ -83,8 +83,10 @@ export function EventPageSettings({
   const drag = useRef<
     { mode: "move" | "resize"; offsetX: number; offsetY: number } | undefined
   >(undefined);
+  const cropDraft = useRef<Crop | undefined>(undefined);
+  const [cropFrame, setCropFrame] = useState<Crop>();
   const [error, setError] = useState("");
-  const crop = cropForCover(content.cover, imageAspect);
+  const crop = cropFrame ?? cropForCover(content.cover, imageAspect);
 
   useEffect(
     () => () => {
@@ -110,12 +112,20 @@ export function EventPageSettings({
     });
   }
 
-  function updateCrop(next: Crop) {
+  function normalizeCrop(next: Crop): Crop {
     const maxWidth = Math.min(1, HERO_ASPECT / imageAspect);
     const width = clamp(next.width, 1 / 3, maxWidth);
     const height = (width * imageAspect) / HERO_ASPECT;
-    const x = clamp(next.x, 0, 1 - width);
-    const y = clamp(next.y, 0, 1 - height);
+    return {
+      height,
+      width,
+      x: clamp(next.x, 0, 1 - width),
+      y: clamp(next.y, 0, 1 - height),
+    };
+  }
+
+  function updateCrop(next: Crop) {
+    const { height, width, x, y } = normalizeCrop(next);
     change({
       content: {
         ...content,
@@ -127,6 +137,25 @@ export function EventPageSettings({
         },
       },
     });
+  }
+
+  function previewCrop(next: Crop) {
+    const normalized = normalizeCrop(next);
+    cropDraft.current = normalized;
+    setCropFrame(normalized);
+  }
+
+  function commitCrop() {
+    const next = cropDraft.current;
+    cropDraft.current = undefined;
+    setCropFrame(undefined);
+    if (next) updateCrop(next);
+  }
+
+  function endCrop() {
+    if (!drag.current) return;
+    drag.current = undefined;
+    commitCrop();
   }
 
   function imagePosition(event: PointerEvent<HTMLElement>) {
@@ -142,12 +171,13 @@ export function EventPageSettings({
     const position = imagePosition(event);
     const action = drag.current;
     if (!position || !action) return;
+    const activeCrop = cropDraft.current ?? crop;
     if (action.mode === "resize") {
-      updateCrop({ ...crop, width: position.x - crop.x });
+      previewCrop({ ...activeCrop, width: position.x - activeCrop.x });
       return;
     }
-    updateCrop({
-      ...crop,
+    previewCrop({
+      ...activeCrop,
       x: position.x - action.offsetX,
       y: position.y - action.offsetY,
     });
@@ -408,7 +438,10 @@ export function EventPageSettings({
             <div className={styles.framingFooter}>
               <label
                 aria-disabled={busy || uploading || undefined}
-                className={buttonClassName({ size: "compact", variant: "secondary" })}
+                className={buttonClassName({
+                  size: "compact",
+                  variant: "secondary",
+                })}
                 htmlFor={busy || uploading ? undefined : uploadId}
               >
                 Change file
@@ -430,12 +463,14 @@ export function EventPageSettings({
                 className={styles.cropImage}
                 ref={imageRef}
                 src={previewUrl}
-                onLoad={(event) =>
+                onLoad={(event) => {
+                  cropDraft.current = undefined;
+                  setCropFrame(undefined);
                   setImageAspect(
                     event.currentTarget.naturalWidth /
                       event.currentTarget.naturalHeight,
-                  )
-                }
+                  );
+                }}
               />
               <div
                 aria-label="Crop area. Drag to move; use arrow keys to nudge."
@@ -463,9 +498,8 @@ export function EventPageSettings({
                   if (event.currentTarget.hasPointerCapture(event.pointerId))
                     moveCrop(event);
                 }}
-                onPointerUp={() => {
-                  drag.current = undefined;
-                }}
+                onPointerCancel={endCrop}
+                onPointerUp={endCrop}
               >
                 <span
                   aria-hidden="true"
@@ -479,9 +513,8 @@ export function EventPageSettings({
                     if (event.currentTarget.hasPointerCapture(event.pointerId))
                       moveCrop(event);
                   }}
-                  onPointerUp={() => {
-                    drag.current = undefined;
-                  }}
+                  onPointerCancel={endCrop}
+                  onPointerUp={endCrop}
                 />
               </div>
             </div>
