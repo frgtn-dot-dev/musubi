@@ -48,7 +48,7 @@ export async function handlerDisconnectAccount(req: Request, res: Response) {
       // tokens/scope: sync stops, but the login account survives.
       try {
         await auth.api.unlinkAccount({
-          body: { accountId },
+          body: { providerId: provider, accountId },
           headers: new Headers(req.headers as Record<string, string>),
         });
       } catch {
