@@ -12,6 +12,7 @@
   --page-muted: var(--text-secondary);
   --page-raised: var(--surface-raised);
   --page-surface: var(--surface-panel);
+  --page-text: var(--text-primary);
 }
 
 .page a {
@@ -26,12 +27,16 @@
 
 .themeToggle {
   position: absolute;
-  z-index: 3;
-  top: clamp(24px, 4vw, 48px);
-  right: max(clamp(24px, 4vw, 48px), calc((100% - 1180px) / 2 + 28px));
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-control);
-  background: var(--surface-overlay);
+  z-index: 2;
+  top: clamp(18px, 3vw, 28px);
+  right: clamp(18px, 3vw, 30px);
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--page-surface) 84%, transparent);
+  color: var(--page-text);
   backdrop-filter: blur(10px);
 }
 
@@ -43,6 +48,7 @@
   border: 1px solid var(--page-border);
   border-radius: clamp(18px, 3vw, 30px);
   background: var(--page-surface);
+  background-clip: padding-box;
   background-position: center;
   background-size: cover;
   isolation: isolate;
@@ -56,7 +62,7 @@
     180deg,
     transparent 18%,
     color-mix(in srgb, var(--page-background) 18%, transparent) 42%,
-    color-mix(in srgb, var(--page-background) 94%, transparent) 100%
+    var(--page-background) 100%
   );
   content: "";
 }
@@ -67,6 +73,7 @@
     color-mix(in srgb, var(--page-accent) 78%, white),
     var(--page-surface) 72%
   );
+  background-repeat: no-repeat;
 }
 
 .hero[data-cover="grid"] {
@@ -122,7 +129,7 @@
   display: grid;
   align-content: end;
   width: 100%;
-  padding: clamp(24px, 5vw, 58px);
+  padding: clamp(24px, 5vw, 58px) clamp(18px, 3vw, 30px);
 }
 
 .heroTitleRow {
@@ -262,6 +269,11 @@
   white-space: pre-wrap;
 }
 
+.description a {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -389,6 +401,11 @@
   background: var(--surface-raised);
 }
 
+.answers button[aria-pressed="false"]:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  background: var(--surface-sunken);
+}
+
 .rsvpForm {
   display: grid;
   gap: var(--space-3);
@@ -454,10 +471,6 @@
     padding: 0 0 var(--space-5);
   }
 
-  .themeToggle {
-    top: var(--space-3);
-    right: var(--space-3);
-  }
 
   .hero {
     min-height: 420px;

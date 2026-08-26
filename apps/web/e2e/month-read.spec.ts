@@ -6490,7 +6490,11 @@ test("shows a published event to someone with no account", async ({ page }) => {
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
 		respond(
 			route,
-			publicEvent({ url: "https://example.com/studio-open-day" }),
+			publicEvent({
+				description:
+					"Details at https://events.example.com/studio/open-day/very-long-path",
+				url: "https://example.com/studio-open-day",
+			}),
 		),
 	);
 
@@ -6506,6 +6510,10 @@ test("shows a published event to someone with no account", async ({ page }) => {
 	const hero = page.locator("header");
 	await expect(hero.getByText("Brno")).toBeVisible();
 	await expect(hero.getByRole("link", { name: "Event link" })).toBeVisible();
+	const noteLink = page.getByRole("link", {
+		name: "Open https://events.example.com/studio/open-day/very-long-path",
+	});
+	await expect(noteLink).toHaveText("events.example.com");
 	const sidebar = page.locator("aside");
 	await expect(
 		sidebar.getByRole("heading", { name: "Keep the date" }),
@@ -6535,10 +6543,18 @@ test("shows a published event to someone with no account", async ({ page }) => {
 test("uses the reader's shared theme instead of organizer styling", async ({
 	page,
 }) => {
+	await page.emulateMedia({ colorScheme: "light" });
+	await page.addInitScript(() => localStorage.setItem("musubi-theme", "light"));
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
 		respond(
 			route,
 			publicEvent({
+				content: {
+					agenda: [],
+					cover: { focalX: 50, focalY: 50, source: "upload" },
+					tags: [],
+				},
+				coverUrl: "https://example.com/cover.jpg",
 				description: "Presses running.",
 				theme: { cover: "grid", font: "sans", layout: "poster", palette: "ink" },
 			}),
@@ -6549,14 +6565,53 @@ test("uses the reader's shared theme instead of organizer styling", async ({
 	const main = page.getByRole("main");
 	await expect(main).not.toHaveAttribute("data-font");
 	await expect(main).not.toHaveAttribute("data-layout");
-	await expect(page.locator("header[data-cover='grid']")).toBeVisible();
+	const hero = page.locator("header[data-cover='grid']");
+	await expect(hero).toBeVisible();
+	const brand = hero.locator('svg[aria-label="Musubi"]').locator("..");
+	const date = hero.locator("time");
+	const toggle = hero.getByRole("button", { name: /Use dark theme/ }).locator("..");
+	const [heroBox, brandBox, dateBox, toggleBox] = await Promise.all([
+		hero.boundingBox(),
+		brand.boundingBox(),
+		date.boundingBox(),
+		toggle.boundingBox(),
+	]);
+	expect(Math.abs(dateBox!.x - brandBox!.x)).toBeLessThanOrEqual(1);
+	expect(
+		Math.abs(
+			brandBox!.y + brandBox!.height / 2 -
+				(toggleBox!.y + toggleBox!.height / 2),
+		),
+	).toBeLessThanOrEqual(1);
+	expect(
+		Math.abs(
+			brandBox!.x - heroBox!.x -
+				(heroBox!.x + heroBox!.width - toggleBox!.x - toggleBox!.width),
+		),
+	).toBeLessThanOrEqual(1);
+	expect(await date.locator("strong").evaluate((node) => getComputedStyle(node).color)).toBe(
+		"rgb(28, 27, 24)",
+	);
+	expect(
+		await brand.locator("path").first().evaluate((node) => getComputedStyle(node).fill),
+	).toBe("rgb(28, 27, 24)");
 
 	const going = page.getByRole("button", { name: "Going" });
+	const idleBackground = await going.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+	await going.hover();
+	await going.evaluate((element) =>
+		Promise.all(element.getAnimations().map((animation) => animation.finished)),
+	);
 	expect(
 		await going.evaluate((element) => getComputedStyle(element).backgroundColor),
-	).not.toBe("rgba(0, 0, 0, 0)");
+	).not.toBe(idleBackground);
 	await page.getByRole("button", { name: /Use dark theme/ }).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+	expect(await page.evaluate(() => localStorage.getItem("musubi-theme"))).toBe(
+		"light",
+	);
 
 	await going.click();
 	await expect(going).toHaveAttribute("aria-pressed", "true");

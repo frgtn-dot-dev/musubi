@@ -132,9 +132,9 @@ function NewEventRoute() {
 					</span>
 					<h1>Make an event page</h1>
 					<p className={styles.lead}>
-						When, where, and a link you can paste anywhere. People can say
-						whether they are coming without installing anything, and it lands in
-						your own calendar at the same time.
+						When, where, and a link you can paste anywhere. People can say whether
+						they are coming without installing anything, and it lands in your own
+						calendar at the same time.
 					</p>
 				</header>
 
@@ -145,8 +145,8 @@ function NewEventRoute() {
 							{draft.title.trim()}” is live
 						</h2>
 						<p className={styles.lead}>
-							Send this link to whoever should come. The page shows the time in
-							each reader's own timezone and collects their answers.
+							Send this link to whoever should come. The page shows the time in each
+							reader's own timezone and collects their answers.
 						</p>
 						<div className={styles.linkRow}>
 							<input
@@ -168,8 +168,8 @@ function NewEventRoute() {
 							</Button>
 						</div>
 						<p className={styles.lead}>
-							The event is in your calendar too, where you can change the
-							details or take the page down again.
+							The event is in your calendar too, where you can change the details or
+							take the page down again.
 						</p>
 					</section>
 				) : asked && !session.data ? (
@@ -203,9 +203,8 @@ function NewEventRoute() {
 							disclosure={
 								<p className={styles.disclosure}>
 									<Info aria-hidden="true" size={14} strokeWidth={1.7} />
-									Confirming the code makes you a Musubi account with no
-									password. Your name appears on the page as the organizer; your
-									address does not.
+									Confirming the code makes you a Musubi account with no password. Your
+									name appears on the page as the organizer; your address does not.
 								</p>
 							}
 							onIdentified={(name) => publish.mutate(name)}
@@ -229,9 +228,7 @@ function NewEventRoute() {
 							<input
 								placeholder="Studio opening"
 								value={draft.title}
-								onChange={(event) =>
-									setDraft({ ...draft, title: event.target.value })
-								}
+								onChange={(event) => setDraft({ ...draft, title: event.target.value })}
 							/>
 						</Field>
 
@@ -294,9 +291,7 @@ function NewEventRoute() {
 								placeholder="Doors at six, bring something to drink."
 								rows={3}
 								value={draft.notes}
-								onChange={(event) =>
-									setDraft({ ...draft, notes: event.target.value })
-								}
+								onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
 							/>
 						</Field>
 

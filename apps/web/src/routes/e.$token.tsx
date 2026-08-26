@@ -1,4 +1,4 @@
-import { expandRecurringEvents } from "@musubi/calendar";
+import { expandRecurringEvents, noteParts } from "@musubi/calendar";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -10,10 +10,11 @@ import {
   Repeat2,
   Share2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
-import { ThemeToggle } from "~/calendar/components/ThemeToggle";
+import { ThemeToggleButton } from "~/calendar/components/ThemeToggle";
+import type { AppliedTheme } from "~/design/theme";
 import { BrandMark } from "~/components/BrandMark";
 import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
@@ -22,6 +23,17 @@ import { RsvpBlock } from "./-rsvp-block";
 import styles from "./event-page.module.css";
 
 const NEXT_OCCURRENCE_WINDOW_MS = 365 * 24 * 60 * 60 * 1_000;
+const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
+
+function subscribeToSystemTheme(callback: () => void) {
+  const media = window.matchMedia(DARK_MEDIA_QUERY);
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+function getSystemTheme(): AppliedTheme {
+  return window.matchMedia(DARK_MEDIA_QUERY).matches ? "dark" : "light";
+}
 
 export const Route = createFileRoute("/e/$token")({
   component: PublicEventRoute,
@@ -29,6 +41,34 @@ export const Route = createFileRoute("/e/$token")({
     meta: [{ content: "noindex, nofollow", name: "robots" }],
   }),
 });
+
+function EventThemeToggle() {
+  const systemTheme = useSyncExternalStore(
+    subscribeToSystemTheme,
+    getSystemTheme,
+    (): AppliedTheme => "light",
+  );
+  const [override, setOverride] = useState<AppliedTheme>();
+  const theme = override ?? systemTheme;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.dataset.theme;
+    root.dataset.theme = theme;
+
+    return () => {
+      if (previous) root.dataset.theme = previous;
+      else delete root.dataset.theme;
+    };
+  }, [theme]);
+
+  return (
+    <ThemeToggleButton
+      theme={theme}
+      onToggle={() => setOverride(theme === "dark" ? "light" : "dark")}
+    />
+  );
+}
 
 function PublicEventRoute() {
   const { token } = Route.useParams();
@@ -84,9 +124,7 @@ function PublicEventRoute() {
   const keepDate = (
     <section className={styles.sideCard}>
       <h2>Keep the date</h2>
-      <p className={styles.timezone}>
-        Times shown in {localTimezoneLabel()}.
-      </p>
+      <p className={styles.timezone}>Times shown in {localTimezoneLabel()}.</p>
       <div className={styles.actions}>
         <Button
           icon={<CalendarPlus size={16} strokeWidth={1.6} />}
@@ -117,10 +155,6 @@ function PublicEventRoute() {
     <main className={styles.page} id="main-content" tabIndex={-1}>
       {event.indexable ? <meta content="index, follow" name="robots" /> : null}
 
-      <div className={styles.themeToggle}>
-        <ThemeToggle />
-      </div>
-
       <div className={styles.shell}>
         <header
           className={styles.hero}
@@ -135,6 +169,9 @@ function PublicEventRoute() {
               : undefined
           }
         >
+          <div className={styles.themeToggle}>
+            <EventThemeToggle />
+          </div>
           <span aria-hidden="true" className={styles.heroBrand}>
             <BrandMark focusable="false" />
           </span>
@@ -231,7 +268,24 @@ function PublicEventRoute() {
               <section className={styles.contentCard}>
                 <h2>About this event</h2>
                 {event.description ? (
-                  <p className={styles.description}>{event.description}</p>
+                  <p className={styles.description}>
+                    {noteParts(event.description).map((part, index) =>
+                      part.href ? (
+                        <a
+                          aria-label={`Open ${part.href}`}
+                          href={part.href}
+                          key={`${part.href}-${index}`}
+                          rel="noopener noreferrer nofollow"
+                          target="_blank"
+                          title={part.href}
+                        >
+                          {part.text}
+                        </a>
+                      ) : (
+                        part.text
+                      ),
+                    )}
+                  </p>
                 ) : null}
                 {event.content.tags.length > 0 ? (
                   <ul className={styles.tags} aria-label="Event tags">

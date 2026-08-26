@@ -223,7 +223,6 @@ export function EventPageSettings({
         ) : null}
       </div>
 
-
       <Field description="Comma-separated, up to 6. Display only." label="Tags">
         <input
           placeholder="Community, Workshop"
