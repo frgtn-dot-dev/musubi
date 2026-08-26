@@ -6498,7 +6498,7 @@ test("frames an uploaded event cover in a focused dialog", async ({ page }) => {
 			attendeeVisibility: "counts",
 			content: {
 				agenda: [],
-				cover: { focalX: 50, focalY: 50, source: "upload" },
+				cover: { focalX: 50, focalY: 50, source: "upload", zoom: 1.5 },
 				tags: [],
 			},
 			coverUrl: "https://example.com/cover.jpg",
@@ -6511,19 +6511,20 @@ test("frames an uploaded event cover in a focused dialog", async ({ page }) => {
 	);
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { name: /Client call/ }).first().click();
+	await page
+		.getByRole("button", { name: /Client call/ })
+		.first()
+		.click();
 	await page.getByRole("button", { name: "Share event" }).click();
 	await page.getByRole("button", { name: "Edit framing" }).click();
 
 	const framing = page.getByRole("dialog", { name: "Cover framing" });
-	const position = framing.getByRole("group", { name: /Cover position/ });
-	await position.focus();
-	await position.press("ArrowRight");
-	await expect(position).toHaveAttribute("style", /background-position: 52% 50%/);
-	const zoom = framing.getByLabel(/Zoom/);
-	await expect(zoom).toHaveValue("1");
-	await zoom.press("ArrowRight");
-	await expect(zoom).toHaveValue("1.01");
+	const crop = framing.getByRole("group", { name: /Crop area/ });
+	const before = await crop.getAttribute("style");
+	await crop.focus();
+	await crop.press("ArrowRight");
+	await expect(crop).not.toHaveAttribute("style", before ?? "");
+	await expect(framing.locator('[class*="cropHandle"]')).toBeVisible();
 	await framing.getByRole("button", { name: "Done" }).click();
 	await expect(framing).toHaveCount(0);
 });

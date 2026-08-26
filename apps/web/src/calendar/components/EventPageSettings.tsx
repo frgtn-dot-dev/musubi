@@ -5,7 +5,14 @@ import type {
   EventPageTheme,
 } from "@musubi/types";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useEffect, useId, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import { Button } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
@@ -13,6 +20,27 @@ import styles from "./styles/share-event.module.css";
 
 const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const COVER_MAX_BYTES = 5 * 1024 * 1024;
+const HERO_ASPECT = 16 / 6;
+
+type Crop = { height: number; width: number; x: number; y: number };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function cropForCover(
+  cover: EventPageContent["cover"],
+  imageAspect: number,
+): Crop {
+  const width = Math.min(1 / cover.zoom, 1, HERO_ASPECT / imageAspect);
+  const height = width * imageAspect / HERO_ASPECT;
+  return {
+    height,
+    width,
+    x: (1 - width) * cover.focalX / 100,
+    y: (1 - height) * cover.focalY / 100,
+  };
+}
 
 export function validateEventPageContent(
   content: EventPageContent,
@@ -50,7 +78,13 @@ export function EventPageSettings({
   const [previewUrl, setPreviewUrl] = useState(coverUrl);
   const [uploading, setUploading] = useState(false);
   const [framingOpen, setFramingOpen] = useState(false);
+  const [imageAspect, setImageAspect] = useState(HERO_ASPECT);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const drag = useRef<
+    { mode: "move" | "resize"; offsetX: number; offsetY: number } | undefined
+  >(undefined);
   const [error, setError] = useState("");
+  const crop = cropForCover(content.cover, imageAspect);
 
   useEffect(
     () => () => {
@@ -76,29 +110,51 @@ export function EventPageSettings({
     });
   }
 
-  function updateFocal(focalX: number, focalY: number) {
+  function updateCrop(next: Crop) {
+    const maxWidth = Math.min(1, HERO_ASPECT / imageAspect);
+    const width = clamp(next.width, 1 / 3, maxWidth);
+    const height = width * imageAspect / HERO_ASPECT;
+    const x = clamp(next.x, 0, 1 - width);
+    const y = clamp(next.y, 0, 1 - height);
     change({
       content: {
         ...content,
         cover: {
           ...content.cover,
-          focalX: Math.max(0, Math.min(100, Math.round(focalX))),
-          focalY: Math.max(0, Math.min(100, Math.round(focalY))),
+          focalX: width === 1 ? 50 : (x / (1 - width)) * 100,
+          focalY: height === 1 ? 50 : (y / (1 - height)) * 100,
+          zoom: 1 / width,
         },
       },
     });
   }
 
-  function dragFocal(event: PointerEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    updateFocal(
-      ((event.clientX - bounds.left) / bounds.width) * 100,
-      ((event.clientY - bounds.top) / bounds.height) * 100,
-    );
+  function imagePosition(event: PointerEvent<HTMLElement>) {
+    const bounds = imageRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    return {
+      x: (event.clientX - bounds.left) / bounds.width,
+      y: (event.clientY - bounds.top) / bounds.height,
+    };
   }
 
-  function moveFocalWithKeys(event: KeyboardEvent<HTMLDivElement>) {
-    const step = event.shiftKey ? 10 : 2;
+  function moveCrop(event: PointerEvent<HTMLElement>) {
+    const position = imagePosition(event);
+    const action = drag.current;
+    if (!position || !action) return;
+    if (action.mode === "resize") {
+      updateCrop({ ...crop, width: position.x - crop.x });
+      return;
+    }
+    updateCrop({
+      ...crop,
+      x: position.x - action.offsetX,
+      y: position.y - action.offsetY,
+    });
+  }
+
+  function nudgeCrop(event: KeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 0.1 : 0.02;
     const changes: Record<string, [number, number]> = {
       ArrowDown: [0, step],
       ArrowLeft: [-step, 0],
@@ -108,10 +164,11 @@ export function EventPageSettings({
     const changeBy = changes[event.key];
     if (!changeBy) return;
     event.preventDefault();
-    updateFocal(
-      content.cover.focalX + changeBy[0],
-      content.cover.focalY + changeBy[1],
-    );
+    updateCrop({
+      ...crop,
+      x: crop.x + changeBy[0],
+      y: crop.y + changeBy[1],
+    });
   }
 
   async function upload(file: File) {
@@ -359,45 +416,67 @@ export function EventPageSettings({
           onOpenChange={setFramingOpen}
         >
           <div className={styles.framingDialog}>
-            <div
-              aria-label="Cover position. Drag image or use arrow keys."
-              className={styles.framingPreview}
-              role="group"
-              style={{
-                backgroundImage: `url(${previewUrl})`,
-                backgroundPosition: `${content.cover.focalX}% ${content.cover.focalY}%`,
-                backgroundSize: `${content.cover.zoom * 100}%`,
-              }}
-              tabIndex={0}
-              onKeyDown={moveFocalWithKeys}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                dragFocal(event);
-              }}
-              onPointerMove={(event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                  dragFocal(event);
-                }
-              }}
-            />
-            <p className={styles.help}>Drag image to position it. Arrow keys nudge it.</p>
-            <Field label={`Zoom · ${Math.round(content.cover.zoom * 100)}%`}>
-              <input
-                max="3"
-                min="1"
-                step="0.01"
-                type="range"
-                value={content.cover.zoom}
-                onChange={(event) =>
-                  change({
-                    content: {
-                      ...content,
-                      cover: { ...content.cover, zoom: Number(event.target.value) },
-                    },
-                  })
+            <div className={styles.cropStage}>
+              <img
+                alt=""
+                className={styles.cropImage}
+                ref={imageRef}
+                src={previewUrl}
+                onLoad={(event) =>
+                  setImageAspect(
+                    event.currentTarget.naturalWidth / event.currentTarget.naturalHeight,
+                  )
                 }
               />
-            </Field>
+              <div
+                aria-label="Crop area. Drag to move; use arrow keys to nudge."
+                className={styles.cropFrame}
+                role="group"
+                style={{
+                  height: `${crop.height * 100}%`,
+                  left: `${crop.x * 100}%`,
+                  top: `${crop.y * 100}%`,
+                  width: `${crop.width * 100}%`,
+                }}
+                tabIndex={0}
+                onKeyDown={nudgeCrop}
+                onPointerDown={(event) => {
+                  const position = imagePosition(event);
+                  if (!position) return;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  drag.current = {
+                    mode: "move",
+                    offsetX: position.x - crop.x,
+                    offsetY: position.y - crop.y,
+                  };
+                }}
+                onPointerMove={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) moveCrop(event);
+                }}
+                onPointerUp={() => {
+                  drag.current = undefined;
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className={styles.cropHandle}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    drag.current = { mode: "resize", offsetX: 0, offsetY: 0 };
+                  }}
+                  onPointerMove={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) moveCrop(event);
+                  }}
+                  onPointerUp={() => {
+                    drag.current = undefined;
+                  }}
+                />
+              </div>
+            </div>
+            <p className={styles.help}>
+              Move frame to choose visible area. Drag corner to zoom.
+            </p>
           </div>
         </Dialog>
       ) : null}

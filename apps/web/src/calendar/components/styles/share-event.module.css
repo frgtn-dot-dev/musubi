@@ -245,8 +245,9 @@
   gap: var(--space-3);
 }
 
-.coverPreview,
-.framingPreview {
+.coverPreview {
+  width: 132px;
+  aspect-ratio: 16 / 6;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -254,30 +255,60 @@
   background-size: cover;
 }
 
-.coverPreview {
-  width: 132px;
-  aspect-ratio: 16 / 6;
-}
-
 .framingDialog {
   display: grid;
   gap: var(--space-4);
 }
 
-.framingPreview {
+.cropStage {
+  display: grid;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.cropImage,
+.cropFrame {
+  grid-area: 1 / 1;
+}
+
+.cropImage {
+  display: block;
   width: 100%;
-  aspect-ratio: 16 / 6;
+  height: auto;
+}
+
+.cropFrame {
+  position: relative;
+  align-self: start;
+  justify-self: start;
+  box-sizing: border-box;
+  border: 2px solid white;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 45%);
   cursor: grab;
   touch-action: none;
 }
 
-.framingPreview:active {
+.cropFrame:active {
   cursor: grabbing;
 }
 
-.framingPreview:focus-visible {
+.cropFrame:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 3px;
+}
+
+.cropHandle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--surface-canvas);
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: nwse-resize;
 }
 
 .agendaEditor {
