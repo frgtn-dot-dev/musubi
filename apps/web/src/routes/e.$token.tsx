@@ -1,8 +1,4 @@
 import { expandRecurringEvents } from "@musubi/calendar";
-import {
-  eventPagePalette,
-  eventPagePaletteVariables,
-} from "@musubi/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -14,9 +10,10 @@ import {
   Repeat2,
   Share2,
 } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import type { PublicEvent } from "~/api/contracts";
 import { getPublicEvent } from "~/api/resources";
+import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { BrandMark } from "~/components/BrandMark";
 import { Avatar } from "~/ui/Avatar";
 import { Button } from "~/ui/Button";
@@ -64,8 +61,6 @@ function PublicEventRoute() {
 
   const event = page.data;
   const occurrence = nextOccurrence(event);
-  const palette = eventPagePalette(event.theme.palette);
-  const pageStyle = eventPagePaletteVariables(palette) as CSSProperties;
   const focalPosition = `${event.content.cover.focalX}% ${event.content.cover.focalY}%`;
 
   async function share() {
@@ -86,16 +81,45 @@ function PublicEventRoute() {
     }
   }
 
+  const keepDate = (
+    <section className={styles.sideCard}>
+      <h2>Keep the date</h2>
+      <p className={styles.timezone}>
+        Times shown in {localTimezoneLabel()}.
+      </p>
+      <div className={styles.actions}>
+        <Button
+          icon={<CalendarPlus size={16} strokeWidth={1.6} />}
+          onClick={() => downloadIcs(event, occurrence)}
+        >
+          Add to calendar
+        </Button>
+        <a
+          className={styles.secondaryAction}
+          href={googleCalendarUrl(event, occurrence)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          Google Calendar
+        </a>
+        <Button
+          icon={<Share2 size={15} />}
+          variant="secondary"
+          onClick={() => void share()}
+        >
+          {copied ? "Link copied" : "Share"}
+        </Button>
+      </div>
+    </section>
+  );
+
   return (
-    <main
-      className={styles.page}
-      data-font={event.theme.font}
-      data-layout={event.theme.layout}
-      id="main-content"
-      style={pageStyle}
-      tabIndex={-1}
-    >
+    <main className={styles.page} id="main-content" tabIndex={-1}>
       {event.indexable ? <meta content="index, follow" name="robots" /> : null}
+
+      <div className={styles.themeToggle}>
+        <ThemeToggle />
+      </div>
 
       <div className={styles.shell}>
         <header
@@ -142,6 +166,16 @@ function PublicEventRoute() {
                       <Repeat2 aria-hidden="true" size={15} /> Repeats
                     </span>
                   ) : null}
+                  {event.url ? (
+                    <a
+                      className={styles.eventLink}
+                      href={event.url}
+                      rel="noopener noreferrer nofollow"
+                      target="_blank"
+                    >
+                      <LinkIcon aria-hidden="true" size={14} /> Event link
+                    </a>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -150,7 +184,11 @@ function PublicEventRoute() {
 
         <div className={styles.layout}>
           <aside className={styles.sidebar}>
-            {event.isCanceled ? null : <RsvpBlock token={token} />}
+            {event.isCanceled ? (
+              keepDate
+            ) : (
+              <RsvpBlock token={token}>{keepDate}</RsvpBlock>
+            )}
 
             <section className={styles.sideCard}>
               <h2>Organized by</h2>
@@ -186,17 +224,6 @@ function PublicEventRoute() {
                 </a>
               </section>
             ) : null}
-
-            <section className={styles.sideCard}>
-              <h2>Share this event</h2>
-              <Button
-                icon={<Share2 size={15} />}
-                variant="secondary"
-                onClick={() => void share()}
-              >
-                {copied ? "Link copied" : "Share"}
-              </Button>
-            </section>
           </aside>
 
           <div className={styles.content}>
@@ -233,39 +260,6 @@ function PublicEventRoute() {
                 </ol>
               </section>
             ) : null}
-
-            <section className={styles.contentCard}>
-              <h2>Keep the date</h2>
-              <p className={styles.timezone}>
-                Times shown in {localTimezoneLabel()}.
-              </p>
-              <div className={styles.actions}>
-                <Button
-                  icon={<CalendarPlus size={16} strokeWidth={1.6} />}
-                  onClick={() => downloadIcs(event, occurrence)}
-                >
-                  Add to calendar
-                </Button>
-                <a
-                  className={styles.secondaryAction}
-                  href={googleCalendarUrl(event, occurrence)}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  Google Calendar
-                </a>
-              </div>
-              {event.url ? (
-                <a
-                  className={styles.eventLink}
-                  href={event.url}
-                  rel="noopener noreferrer nofollow"
-                  target="_blank"
-                >
-                  <LinkIcon aria-hidden="true" size={14} /> Event link
-                </a>
-              ) : null}
-            </section>
           </div>
         </div>
 

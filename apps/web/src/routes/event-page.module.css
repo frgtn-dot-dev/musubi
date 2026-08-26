@@ -1,18 +1,17 @@
 .page {
+  position: relative;
   min-height: 100dvh;
   padding: clamp(12px, 3vw, 36px);
-  background: var(--page-background);
-  color: var(--page-text);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
 
-  --accent-primary: var(--page-accent);
-  --accent-on-primary: var(--page-accent-text);
-  --border-subtle: var(--page-border);
-  --surface-canvas: var(--page-background);
-  --surface-panel: var(--page-surface);
-  --surface-raised: var(--page-raised);
-  --text-primary: var(--page-text);
-  --text-secondary: var(--page-muted);
-  --text-muted: var(--page-muted);
+  --page-accent: var(--accent-primary);
+  --page-accent-text: var(--accent-on-primary);
+  --page-background: var(--surface-canvas);
+  --page-border: var(--border-subtle);
+  --page-muted: var(--text-secondary);
+  --page-raised: var(--surface-raised);
+  --page-surface: var(--surface-panel);
 }
 
 .page a {
@@ -23,6 +22,17 @@
 .shell {
   width: min(100%, 1180px);
   margin: 0 auto;
+}
+
+.themeToggle {
+  position: absolute;
+  z-index: 3;
+  top: clamp(24px, 4vw, 48px);
+  right: max(clamp(24px, 4vw, 48px), calc((100% - 1180px) / 2 + 28px));
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-control);
+  background: var(--surface-overlay);
+  backdrop-filter: blur(10px);
 }
 
 .hero {
@@ -130,23 +140,6 @@
   letter-spacing: -0.045em;
   line-height: 0.98;
   text-wrap: balance;
-}
-
-.page[data-font="sans"] .hero h1 {
-  font-family: var(--font-sans);
-  font-weight: 650;
-}
-
-.page[data-layout="poster"] .heroCopy {
-  text-align: center;
-}
-
-.page[data-layout="poster"] .heroTitleRow {
-  justify-content: center;
-}
-
-.page[data-layout="poster"] .heroFacts {
-  justify-content: center;
 }
 
 .heroFacts {
@@ -261,10 +254,6 @@
   font-size: clamp(1.25rem, 2vw, 1.55rem);
 }
 
-.page[data-font="sans"] .contentCard h2 {
-  font-family: var(--font-sans);
-}
-
 .description {
   margin: 0;
   color: var(--page-muted);
@@ -366,7 +355,6 @@
 }
 
 .secondaryAction,
-.eventLink,
 .sideCard a {
   display: inline-flex;
   align-items: center;
@@ -378,7 +366,11 @@
 }
 
 .eventLink {
-  margin-top: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: currentColor;
+  font-weight: 600;
 }
 
 .answers {
@@ -390,6 +382,11 @@
 .answers button {
   min-width: 0;
   padding-inline: 8px;
+}
+
+.answers button[aria-pressed="false"] {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
 }
 
 .rsvpForm {
@@ -455,6 +452,11 @@
 @media (max-width: 820px) {
   .page {
     padding: 0 0 var(--space-5);
+  }
+
+  .themeToggle {
+    top: var(--space-3);
+    right: var(--space-3);
   }
 
   .hero {

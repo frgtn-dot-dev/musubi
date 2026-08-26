@@ -102,8 +102,7 @@ function NewEventRoute() {
 				indexable: false,
 				mode: "link",
 				name: name || undefined,
-				// The default look. Changing it is a decision for the app, where the
-				// palettes can be seen next to each other.
+				// Kept for API compatibility; the public page follows its reader's theme.
 				theme: {
 					cover: "wash",
 					font: "serif",

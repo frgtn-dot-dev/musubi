@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import type { RsvpStatus, RsvpSummary } from "~/api/contracts";
 import { answerEvent, getEventRsvp } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
@@ -22,7 +22,13 @@ const ANSWERS: Array<{ label: string; value: RsvpStatus }> = [
  * there is deliberately no half-answered row in the database, so a count is
  * always a count of confirmed people.
  */
-export function RsvpBlock({ token }: { token: string }) {
+export function RsvpBlock({
+  children,
+  token,
+}: {
+  children?: ReactNode;
+  token: string;
+}) {
   const queryClient = useQueryClient();
   const session = authClient.useSession();
   const signedIn = Boolean(session.data);
@@ -212,6 +218,7 @@ export function RsvpBlock({ token }: { token: string }) {
           </form>
         ) : null}
       </section>
+      {children}
       <Attending summary={summary.data} />
     </>
   );

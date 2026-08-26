@@ -1,8 +1,4 @@
-import {
-  eventPageCovers,
-  eventPageFonts,
-  eventPagePalettes,
-} from "@musubi/design-system";
+import { eventPageCovers } from "@musubi/design-system";
 import type {
   EventPageAgendaItem,
   EventPageContent,
@@ -141,7 +137,7 @@ export function EventPageSettings({
       <div className={styles.editorHeading}>
         <div>
           <h3 id="page-design-title">Event page</h3>
-          <p>Choose the public page’s cover, look, tags, and schedule.</p>
+          <p>Choose the public page’s cover, tags, and schedule.</p>
         </div>
         <Button
           disabled={busy || uploading}
@@ -227,42 +223,6 @@ export function EventPageSettings({
         ) : null}
       </div>
 
-      <div className={styles.editorGrid}>
-        <Field label="Palette">
-          <select
-            value={theme.palette}
-            onChange={(event) =>
-              setTheme({
-                ...theme,
-                palette: event.target.value as EventPageTheme["palette"],
-              })
-            }
-          >
-            {eventPagePalettes.map((palette) => (
-              <option key={palette.id} value={palette.id}>
-                {palette.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Typography">
-          <select
-            value={theme.font}
-            onChange={(event) =>
-              setTheme({
-                ...theme,
-                font: event.target.value as EventPageTheme["font"],
-              })
-            }
-          >
-            {eventPageFonts.map((font) => (
-              <option key={font.id} value={font.id}>
-                {font.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
 
       <Field description="Comma-separated, up to 6. Display only." label="Tags">
         <input

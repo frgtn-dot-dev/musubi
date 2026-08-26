@@ -6421,6 +6421,8 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 	await page.getByRole("button", { name: "Share event" }).click();
 
 	const dialog = page.getByRole("dialog", { name: "Share event" });
+	await expect(dialog.getByLabel("Palette")).toHaveCount(0);
+	await expect(dialog.getByLabel("Typography")).toHaveCount(0);
 	// Private until somebody says otherwise — an event is not published by
 	// existing, and the dialog has to open on that truth.
 	await expect(dialog.getByRole("radio", { name: /Private/ })).toHaveAttribute(
@@ -6486,7 +6488,10 @@ test("publishes an event as a page and can take it back", async ({ page }) => {
 
 test("shows a published event to someone with no account", async ({ page }) => {
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
-		respond(route, publicEvent()),
+		respond(
+			route,
+			publicEvent({ url: "https://example.com/studio-open-day" }),
+		),
 	);
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
@@ -6498,7 +6503,14 @@ test("shows a published event to someone with no account", async ({ page }) => {
 		page.getByRole("heading", { name: "Organized by" }),
 	).toBeVisible();
 	await expect(page.getByText("Mika", { exact: true })).toBeVisible();
-	await expect(page.locator("header").getByText("Brno")).toBeVisible();
+	const hero = page.locator("header");
+	await expect(hero.getByText("Brno")).toBeVisible();
+	await expect(hero.getByRole("link", { name: "Event link" })).toBeVisible();
+	const sidebar = page.locator("aside");
+	await expect(
+		sidebar.getByRole("heading", { name: "Keep the date" }),
+	).toBeVisible();
+	await expect(sidebar.getByRole("button", { name: "Share" })).toBeVisible();
 	// The reader's timezone, spelled out: the organizer is often somewhere else,
 	// and a bare "3 pm" is a trap.
 	await expect(page.getByText("Europe/Prague")).toBeVisible();
@@ -6520,7 +6532,7 @@ test("shows a published event to someone with no account", async ({ page }) => {
 	await expectNoAccessibilityViolations(page);
 });
 
-test("wears the look the organizer chose, without breaking what is fixed", async ({
+test("uses the reader's shared theme instead of organizer styling", async ({
 	page,
 }) => {
 	await page.route(`**/api/v1/public/events/${SHARE_TOKEN}`, (route) =>
@@ -6535,25 +6547,19 @@ test("wears the look the organizer chose, without breaking what is fixed", async
 
 	await page.goto(`/e/${SHARE_TOKEN}`);
 	const main = page.getByRole("main");
-	await expect(main).toHaveAttribute("data-font", "sans");
-	await expect(main).toHaveAttribute("data-layout", "poster");
+	await expect(main).not.toHaveAttribute("data-font");
+	await expect(main).not.toHaveAttribute("data-layout");
 	await expect(page.locator("header[data-cover='grid']")).toBeVisible();
 
-	// The palette arrives as custom properties, which is what the page paints
-	// from — a chosen look, not a stylesheet the organizer can write.
+	const going = page.getByRole("button", { name: "Going" });
 	expect(
-		await main.evaluate((element) =>
-			getComputedStyle(element).getPropertyValue("--page-accent").trim(),
-		),
-	).toBe("#c96f4a");
+		await going.evaluate((element) => getComputedStyle(element).backgroundColor),
+	).not.toBe("rgba(0, 0, 0, 0)");
+	await page.getByRole("button", { name: /Use dark theme/ }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-	// And everything on the fixed side of the PRD still works on a dark palette:
-	// the answer reads as chosen, and the form that follows is usable.
-	await page.getByRole("button", { name: "Going" }).click();
-	await expect(page.getByRole("button", { name: "Going" })).toHaveAttribute(
-		"aria-pressed",
-		"true",
-	);
+	await going.click();
+	await expect(going).toHaveAttribute("aria-pressed", "true");
 	await expect(page.getByLabel("Email")).toBeVisible();
 
 	await expectNoAccessibilityViolations(page);
