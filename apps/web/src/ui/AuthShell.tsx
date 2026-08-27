@@ -117,6 +117,35 @@ export function AuthProviders({ children }: { children: ReactNode }) {
   return <div className={styles.authProviders}>{children}</div>;
 }
 
+/** The line above the providers, saying what the second column is for. */
+export function AuthAsideLead({
+  children,
+  className,
+  ...leadProps
+}: HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p {...leadProps} className={classNames(styles.authAsideLead, className)}>
+      {children}
+    </p>
+  );
+}
+
+/**
+ * A quiet aside under a field — a way out, or what just happened. Trailing, so
+ * it reads as a footnote to the control above rather than a new instruction.
+ */
+export function AuthHint({
+  children,
+  className,
+  ...hintProps
+}: HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p {...hintProps} className={classNames(styles.authHint, className)}>
+      {children}
+    </p>
+  );
+}
+
 export function AuthSubmit({ className, ...props }: ButtonProps) {
   return (
     <Button

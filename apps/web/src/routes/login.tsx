@@ -8,7 +8,9 @@ import { getServerCapabilities } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import {
+  AuthAsideLead,
   AuthForm,
+  AuthHint,
   AuthMessage,
   AuthProviders,
   AuthShell,
@@ -19,7 +21,6 @@ import { Button } from "~/ui/Button";
 import { ProviderGlyph } from "~/ui/ProviderGlyph";
 import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
-import styles from "~/ui/primitives.module.css";
 
 const loginSearchSchema = z.object({
   // Better Auth sends the browser back here when a provider round trip fails —
@@ -288,9 +289,9 @@ function LoginRoute() {
       aside={
         providers.length > 0 ? (
           <>
-            <p className={styles.authAsideLead}>
+            <AuthAsideLead>
               You can also continue with an account you already have.
-            </p>
+            </AuthAsideLead>
             <AuthProviders>
               {providers.map((provider) => (
                 <Button
@@ -363,12 +364,12 @@ function LoginRoute() {
           />
         </Field>
         {signingUp ? null : resetSent ? (
-          <p className={styles.authHint}>
+          <AuthHint>
             If that address has an account, a link to set a new passphrase is on
             its way.
-          </p>
+          </AuthHint>
         ) : (
-          <p className={styles.authHint}>
+          <AuthHint>
             <Button
               disabled={submitting}
               size="compact"
@@ -377,7 +378,7 @@ function LoginRoute() {
             >
               Forgotten your passphrase?
             </Button>
-          </p>
+          </AuthHint>
         )}
         {signingUp ? (
           <Field label="Confirm passphrase" variant="plain">
