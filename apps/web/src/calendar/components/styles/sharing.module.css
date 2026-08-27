@@ -46,16 +46,26 @@
   padding: 4px 8px;
 }
 
-.memberList,
+.memberList {
+  display: grid;
+  margin: 0;
+  padding: 0 0 var(--space-3);
+  list-style: none;
+}
+
+/* Row owns the anatomy; the member list only asks for one line per member,
+   because a long name beside three controls has nowhere to wrap to. */
+.memberList :is([data-slot="label"], [data-slot="detail"]) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inviteOptions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: 0 var(--layer-inline) var(--space-3);
-}
-
-.memberList {
-  align-items: center;
 }
 
 .inviteOptions {
@@ -113,47 +123,6 @@
   padding: 0;
   border-top: 1px solid var(--border-subtle);
   list-style: none;
-}
-
-.memberRow {
-  display: grid;
-  min-height: var(--row-min-height);
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--layer-inline);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.memberIdentity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.memberCopy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.memberCopy strong,
-.memberCopy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memberCopy strong {
-  color: var(--text-primary);
-  font-size: var(--text-14);
-  font-weight: 500;
-}
-
-.memberCopy span {
-  color: var(--text-secondary);
-  font-size: var(--text-11);
 }
 
 .memberActions {
@@ -262,9 +231,14 @@
   }
 
   .memberRow {
-    grid-template-columns: minmax(0, 1fr);
+    flex-wrap: wrap;
     gap: var(--space-2);
     padding-block: var(--space-3);
+  }
+
+  .memberRow [data-slot="trailing"] {
+    flex-basis: 100%;
+    place-content: start;
   }
 
   .memberActions {

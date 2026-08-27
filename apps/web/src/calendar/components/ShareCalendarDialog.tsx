@@ -19,6 +19,7 @@ import {
 import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { InlineError } from "~/ui/InlineError";
+import { Row } from "~/ui/Row";
 import { Segmented } from "~/ui/Segmented";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
@@ -227,71 +228,72 @@ export function ShareCalendarDialog({
                     member.role === "editor" ? "editor" : "viewer";
 
                   return (
-                    <li className={styles.memberRow} key={member.id}>
-                      <div className={styles.memberIdentity}>
-                        <Avatar
-                          image={member.image}
-                          name={member.name}
-                          size={34}
-                        />
-                        <span className={styles.memberCopy}>
-                          <strong>
-                            {member.name}
-                            {member.id === userId ? " (you)" : ""}
-                          </strong>
-                          <span>
-                            {memberIsOwner
-                              ? "Calendar owner"
-                              : access === "editor"
-                                ? "Can change events"
-                                : "Can view events"}
-                          </span>
-                        </span>
-                      </div>
-
-                      {canManage && !memberIsOwner ? (
-                        <div className={styles.memberActions}>
-                          <Segmented
-                            className={styles.roleControl}
-                            disabled={busy}
-                            label={`${member.name} role`}
-                            options={MEMBER_ACCESS_OPTIONS}
-                            value={access}
-                            onChange={(role) => void changeRole(member, role)}
+                    <li key={member.id}>
+                      <Row
+                        className={styles.memberRow}
+                        detail={
+                          memberIsOwner
+                            ? "Calendar owner"
+                            : access === "editor"
+                              ? "Can change events"
+                              : "Can view events"
+                        }
+                        icon={
+                          <Avatar
+                            image={member.image}
+                            name={member.name}
+                            size={34}
                           />
-                          {canTransfer ? (
-                            <Button
-                              className={styles.transferButton}
-                              disabled={busy}
-                              size="compact"
-                              variant="secondary"
-                              onClick={(event) => {
-                                transferReturnFocusRef.current =
-                                  event.currentTarget;
-                                setError("");
-                                setTransferMember(member);
-                              }}
-                            >
-                              Make owner
-                            </Button>
-                          ) : null}
-                          {removable ? (
-                            <IconButton
-                              className={styles.removeButton}
-                              disabled={busy}
-                              label={`Remove ${member.name}`}
-                              size="compact"
-                              onClick={() => void removeMember(member)}
-                            >
-                              <Trash2 size={15} strokeWidth={1.7} />
-                            </IconButton>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className={styles.roleBadge}>
-                          {memberIsOwner ? "Owner" : access}
-                        </span>
-                      )}
+                        }
+                        label={`${member.name}${
+                          member.id === userId ? " (you)" : ""
+                        }`}
+                        trailing={
+                          canManage && !memberIsOwner ? (
+                            <div className={styles.memberActions}>
+                              <Segmented
+                                className={styles.roleControl}
+                                disabled={busy}
+                                label={`${member.name} role`}
+                                options={MEMBER_ACCESS_OPTIONS}
+                                value={access}
+                                onChange={(role) => void changeRole(member, role)}
+                              />
+                              {canTransfer ? (
+                                <Button
+                                  className={styles.transferButton}
+                                  disabled={busy}
+                                  size="compact"
+                                  variant="secondary"
+                                  onClick={(event) => {
+                                    transferReturnFocusRef.current =
+                                      event.currentTarget;
+                                    setError("");
+                                    setTransferMember(member);
+                                  }}
+                                >
+                                  Make owner
+                                </Button>
+                              ) : null}
+                              {removable ? (
+                                <IconButton
+                                  className={styles.removeButton}
+                                  disabled={busy}
+                                  label={`Remove ${member.name}`}
+                                  size="compact"
+                                  onClick={() => void removeMember(member)}
+                                >
+                                  <Trash2 size={15} strokeWidth={1.7} />
+                                </IconButton>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className={styles.roleBadge}>
+                              {memberIsOwner ? "Owner" : access}
+                            </span>
+                          )
+                        }
+                      />
                     </li>
                   );
                 })}

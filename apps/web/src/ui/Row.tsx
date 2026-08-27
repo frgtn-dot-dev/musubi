@@ -30,16 +30,30 @@ function RowContent({
   return (
     <>
       {icon ? (
-        <span className={styles.rowIcon} aria-hidden="true">
+        <span className={styles.rowIcon} aria-hidden="true" data-slot="icon">
           {icon}
         </span>
       ) : null}
-      <span className={styles.rowCopy}>
-        <span className={styles.rowLabel}>{label}</span>
-        {detail ? <span className={styles.rowDetail}>{detail}</span> : null}
+      <span className={styles.rowCopy} data-slot="copy">
+        <span className={styles.rowLabel} data-slot="label">
+          {label}
+        </span>
+        {detail ? (
+          <span className={styles.rowDetail} data-slot="detail">
+            {detail}
+          </span>
+        ) : null}
       </span>
-      {value ? <span className={styles.rowValue}>{value}</span> : null}
-      {trailing ? <span className={styles.rowTrailing}>{trailing}</span> : null}
+      {value ? (
+        <span className={styles.rowValue} data-slot="value">
+          {value}
+        </span>
+      ) : null}
+      {trailing ? (
+        <span className={styles.rowTrailing} data-slot="trailing">
+          {trailing}
+        </span>
+      ) : null}
     </>
   );
 }
