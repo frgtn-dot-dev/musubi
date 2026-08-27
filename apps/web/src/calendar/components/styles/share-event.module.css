@@ -311,23 +311,6 @@
   align-items: center;
 }
 
-.removeAgenda {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.removeAgenda:hover {
-  background: var(--surface-raised);
-  color: var(--accent-primary);
-}
-
 @media (min-width: 900px) {
   .workspace {
     height: 100%;

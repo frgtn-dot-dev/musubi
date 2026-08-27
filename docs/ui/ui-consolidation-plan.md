@@ -47,14 +47,48 @@ component package, generic card system, or broad restyle is needed.
 
 No new shared API should be needed for these changes.
 
-- [ ] Replace hand-built search result buttons in
+- [x] Replace hand-built search result buttons in
   `calendar/components/SearchDialog.tsx` with `RowAction`; use `SectionLabel`
   for result groups. Preserve command-search keyboard behavior and focus.
-- [ ] Replace the icon-only agenda removal button in
+
+  `SectionLabel` replaced the group headings and `.results h2` went with it —
+  the two rules were identical. **`RowAction` did not happen**, and the result
+  button stays domain-owned. Measured against `RowAction size="compact"`:
+
+  | | `.result` | `RowAction` compact |
+  | --- | --- | --- |
+  | padding | 8px / 12px | 4px / 8px |
+  | label | 16px, `--text-primary` | 13px, `--text-secondary` |
+  | trailing `small` | 11px | unstyled, 13.3px |
+  | icon | full opacity | `--text-muted` |
+  | hover | `--surface-raised` | 55% of it |
+
+  Six properties, so it is a restyle rather than a swap. It also has a
+  functional edge: `.result` draws its focus ring inward at
+  `outline-offset: -2px` because the results list scrolls, and `.rowAction` has
+  no focus rule of its own — the inward ring exists only as
+  `.settingsSectionRows .rowAction:focus-visible`. Under the global
+  `:focus-visible` at `+3px` the first and last result could clip their ring.
+  Give `.rowAction` its own inward ring before reopening this; it belongs with
+  the row anatomy work in P1.2.
+
+- [x] Replace the icon-only agenda removal button in
   `calendar/components/EventPageSettings.tsx` with `IconButton`.
-- [ ] Re-evaluate the quiet back action in `routes/new-event.tsx` against
+
+  It was a fixed 34×34 target, below the minimum on touch; `size="compact"`
+  scales to 38px regular and 44px touch. The local accent-coloured hover is
+  gone deliberately: `.button_ghost:hover:not(:disabled)` outranks a feature
+  override, and one hover treatment across every ghost icon button is worth
+  more than a per-button signal the trash glyph already carries.
+
+- [x] Re-evaluate the quiet back action in `routes/new-event.tsx` against
   `Button variant="ghost"`. Change it only if markup and appearance remain
   equivalent; otherwise leave it domain-owned.
+
+  **Left domain-owned.** `.back` is an underlined 12px text link with no
+  padding and no control height. `Button variant="ghost"` is a 44px control
+  with `--space-4` inline padding, 13px, weight 500, no underline. Different
+  affordance, not different pixels.
 
 Done when obsolete feature CSS is removed and existing interaction tests still
 cover the same behavior.

@@ -13,7 +13,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { Button, buttonClassName } from "~/ui/Button";
+import { Button, buttonClassName, IconButton } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import styles from "./styles/share-event.module.css";
@@ -401,11 +401,11 @@ export function EventPageSettings({
                 updateAgenda(item.id, { description: event.target.value })
               }
             />
-            <button
-              aria-label={`Remove ${item.title || "agenda item"}`}
+            <IconButton
               className={styles.removeAgenda}
               disabled={busy || uploading}
-              type="button"
+              label={`Remove ${item.title || "agenda item"}`}
+              size="compact"
               onClick={() =>
                 change({
                   content: {
@@ -417,8 +417,8 @@ export function EventPageSettings({
                 })
               }
             >
-              <Trash2 aria-hidden="true" size={15} />
-            </button>
+              <Trash2 size={15} />
+            </IconButton>
           </div>
         ))}
       </div>
