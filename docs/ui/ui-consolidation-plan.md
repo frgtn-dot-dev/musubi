@@ -1,7 +1,8 @@
 # Web UI consolidation plan
 
-- Status: **active plan; P0, P1 and P2 done apart from `RowGroup`, which still
-  has one consumer; P3 open**
+- Status: **worked through. Two items stay open on their own conditions:
+  `RowGroup` still has one consumer, and the `Dialog` size rule only applies to
+  whoever adds the next variant.**
 - Scope: `apps/web`
 - Excluded: Scheduler, polls, `find-a-time`, `SchedulingDialog`, `Poll*`, poll CSS
 - Previous restructure:
@@ -328,11 +329,42 @@ migration proves the need.
 - [ ] Before adding another `Dialog` size variant, express exceptional width or
   max-height through documented CSS custom properties while retaining compact,
   default, and wide semantic presets.
-- [ ] Review arbitrary numeric `Avatar` sizes after all consumers are visible.
+
+  Not triggered: nothing in this pass wanted a seventh size. The condition
+  stands for whoever does.
+
+- [x] Review arbitrary numeric `Avatar` sizes after all consumers are visible.
   Prefer a small named scale; retain an escape hatch only for real optical
   exceptions.
-- [ ] Delete compatibility selectors, dead feature CSS, and obsolete exports
+
+  Eight call sites used 26, 32 (four times), 34, 42 and 64, against a `36`
+  default no consumer ever took — and the story documented 28/36/52, three sizes
+  nothing used. The 32 and the 34 were row avatars sitting two pixels apart for
+  no reason.
+
+  `compact` (26), `default` (32) and `profile` (64) cover seven of the eight,
+  named by role the way `RowSize` and `DialogSize` are rather than as `sm`/`md`.
+  The organizer card on the public event page keeps `size={42}` with a comment:
+  that page runs its own scale, and one measured exception is what the numeric
+  hatch is for.
+
+- [x] Delete compatibility selectors, dead feature CSS, and obsolete exports
   created by completed migrations.
+
+  Seven unreachable rules: `.calendarList`, `.calendarDot` and
+  `.calendarVisibilityRow` in `workspace.module.css`, `.indexRow` and `.note` in
+  `share-event.module.css`, and `.rsvpForm` and `.rsvpError` on the event page.
+  Two lived inside shared selectors, so only the dead member went.
+
+  None of it came from this pass — it was already unreachable. Worth saying
+  because the detector had to distinguish real deaths from dynamic keys:
+  `dialog_compact`, `field_plain` and friends look unused but are reached
+  through `` styles[`dialog_${size}`] ``.
+
+  One thing left standing: `.calendarDot` is defined five times across
+  `calendars`, `event-details`, `event-editor`, `scheduling` and `workspace`. Only
+  the `workspace` copy was dead. It is a 7px circle written out five times, but
+  `scheduling` is out of scope and no plan item covers it.
 
 ## Explicitly deferred
 
