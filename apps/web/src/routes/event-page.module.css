@@ -424,53 +424,19 @@
   background: var(--surface-sunken);
 }
 
-.rsvpForm {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--page-border);
-  border-radius: var(--radius-md);
-  background: var(--page-raised);
-}
-
-.rsvpExplainer,
-.rsvpError {
+.rsvpExplainer {
   margin: 0;
   color: var(--page-muted);
   font-size: var(--text-12);
   line-height: 1.5;
 }
 
-.rsvpError {
-  color: var(--page-accent);
-}
-
+/* The page carries its own palette, so the stack only needs the three colours
+   that separate its circles from what is behind them. */
 .facepile {
-  display: flex;
-  align-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-}
-
-.facepile > * {
-  border: 2px solid var(--page-raised);
-}
-
-.facepile > * + * {
-  margin-left: -10px;
-}
-
-.facepileMore {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-content: center;
-  border-radius: var(--radius-pill);
-  background: var(--page-surface);
-  color: var(--page-muted);
-  font-size: var(--text-11);
+  --avatar-stack-more-fill: var(--page-surface);
+  --avatar-stack-more-text: var(--page-muted);
+  --avatar-stack-ring: var(--page-raised);
 }
 
 .attendeeList {

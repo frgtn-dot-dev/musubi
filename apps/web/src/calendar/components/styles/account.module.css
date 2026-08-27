@@ -94,25 +94,6 @@
   text-decoration: underline;
 }
 
-.error,
-.dialogError {
-  border: 1px solid
-    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
-  border-radius: var(--radius-md);
-  background: color-mix(
-    in srgb,
-    var(--accent-primary) 7%,
-    var(--surface-raised)
-  );
-  color: color-mix(
-    in srgb,
-    var(--accent-primary) 72%,
-    var(--text-primary)
-  );
-  font-size: var(--text-12);
-  line-height: 1.45;
-}
-
 .dialogForm {
   display: grid;
   gap: var(--space-5);
@@ -120,33 +101,15 @@
 
 .error {
   margin: var(--space-4) var(--layer-inline) 0;
-  padding: var(--space-3);
-}
-
-.dialogError {
-  margin: 0;
-  padding: var(--space-3);
-}
-
-.error p,
-.dialogError p {
-  margin: 0;
 }
 
 .visuallyHidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+  composes: visuallyHidden from "../../../ui/primitives.module.css";
 }
 
 @media (max-width: 599px) {
   .content {
-    padding-bottom: calc(
-      var(--space-4) + env(safe-area-inset-bottom)
-    );
+    padding-bottom: var(--space-4);
   }
 
   .identity {

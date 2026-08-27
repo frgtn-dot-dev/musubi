@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { createTimeGeometry } from "~/calendar/time-geometry";
 import { classNames } from "./class-names";
 import { Popover, PopoverAnchor, PopoverContent } from "./Popover";
+import { Segmented } from "./Segmented";
 import styles from "./primitives.module.css";
 
 const TIME_PATTERN = /^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i;
@@ -14,6 +15,25 @@ const SNAPPED_TIMES = Array.from(
   { length: MINUTES_PER_DAY / SNAP_MINUTES },
   (_, index) => minutesToTime(index * SNAP_MINUTES),
 );
+const HOURS_24 = Array.from({ length: 24 }, (_, hour) => hour);
+/** 12 first, the way a clock face reads. */
+const HOURS_12 = [12, ...Array.from({ length: 11 }, (_, index) => index + 1)];
+/** Every minute, not the grid's snap steps: the column scrolls either way, and
+    a meeting at :07 is a real thing to have to type today. */
+const MINUTES = Array.from({ length: 60 }, (_, index) => index);
+
+type Period = "AM" | "PM";
+type Column = "hour" | "minute";
+
+/** The hour a 12-hour dial means once the period is known. */
+function hourFromDial(dialHour: number, period: Period): number {
+  if (period === "AM") return dialHour === 12 ? 0 : dialHour;
+  return dialHour === 12 ? 12 : dialHour + 12;
+}
+
+function dialFromHour(hour: number): number {
+  return hour % 12 || 12;
+}
 
 export type TimePickerProps = {
   className?: string;
@@ -23,7 +43,6 @@ export type TimePickerProps = {
   min?: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  relativeTo?: string;
   timeFormat: Settings["timeFormat"];
   value: string;
 };
@@ -103,15 +122,6 @@ export function formatTimeValue(
   return `${displayHours}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
-function durationLabel(duration: number) {
-  const hours = Math.floor(duration / 60);
-  const minutes = duration % 60;
-
-  if (hours === 0) return `+${minutes}m`;
-  if (minutes === 0) return `+${hours}h`;
-  return `+${hours}h ${minutes}m`;
-}
-
 function isAvailable(value: string, min?: string, max?: string) {
   return (
     timeToMinutes(value) !== null &&
@@ -132,14 +142,16 @@ export function TimePicker({
   min,
   onChange,
   placeholder = "Select time",
-  relativeTo,
   timeFormat,
   value,
 }: TimePickerProps) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef(new Map<string, HTMLButtonElement>());
-  const [activeValue, setActiveValue] = useState(value);
+  const [column, setColumn] = useState<Column>("hour");
+  /** Set only once somebody flips it; otherwise the value decides. */
+  const [period, setPeriod] = useState<Period>();
   const [draft, setDraft] = useState(() =>
     formatTimeValue(value, timeFormat),
   );
@@ -149,39 +161,75 @@ export function TimePicker({
   const draftValid = Boolean(
     parsedDraft && isAvailable(parsedDraft, min, max),
   );
-  const relativeMinutes = relativeTo
-    ? timeToMinutes(relativeTo)
-    : null;
 
-  const optionSet = new Set(
-    SNAPPED_TIMES.filter((time) => isAvailable(time, min, max)),
-  );
-  if (isAvailable(value, min, max)) optionSet.add(value);
-  const options = [...optionSet].sort(
-    (left, right) =>
-      (timeToMinutes(left) ?? 0) - (timeToMinutes(right) ?? 0),
-  );
+  const firstAvailable =
+    SNAPPED_TIMES.find((time) => isAvailable(time, min, max)) ?? "00:00";
+  /** What the two columns are standing on: the typed draft while it parses,
+      otherwise the committed value, otherwise the first time on offer. */
+  const pending =
+    (parsedDraft && isAvailable(parsedDraft, min, max) ? parsedDraft : null) ??
+    (isAvailable(value, min, max) ? value : firstAvailable);
+  const pendingMinutes = timeToMinutes(pending) ?? 0;
+  const pendingHour = Math.floor(pendingMinutes / 60);
+  const pendingMinute = pendingMinutes - pendingHour * 60;
 
-  function initialOption() {
-    if (options.includes(value)) return value;
-    return options.find((time) => time >= value) ?? options.at(-1) ?? "";
+  /** An hour is on offer only if at least one of its steps is. */
+  function hourAvailable(hour: number) {
+    return MINUTES.some((minute) =>
+      isAvailable(minutesToTime(hour * 60 + minute), min, max),
+    );
   }
 
-  function revealOption(nextValue: string) {
+  const periodInUse: Period = period ?? (pendingHour < 12 ? "AM" : "PM");
+  const hourOptions =
+    timeFormat === "24h"
+      ? HOURS_24.filter(hourAvailable)
+      : HOURS_12.map((dial) => hourFromDial(dial, periodInUse)).filter(
+          hourAvailable,
+        );
+  const minuteOptions = MINUTES.filter((minute) =>
+    isAvailable(minutesToTime(pendingHour * 60 + minute), min, max),
+  );
+  const periodAvailable = (candidate: Period) =>
+    HOURS_12.some((dial) => hourAvailable(hourFromDial(dial, candidate)));
+
+  const activeHour = hourOptions.includes(pendingHour)
+    ? pendingHour
+    : (hourOptions[0] ?? pendingHour);
+  const activeMinute = minuteOptions.includes(pendingMinute)
+    ? pendingMinute
+    : (minuteOptions[0] ?? pendingMinute);
+  const activeId =
+    column === "hour"
+      ? `${id}-hour-${activeHour}`
+      : `${id}-minute-${activeMinute}`;
+
+  function revealOption(key: string) {
     requestAnimationFrame(() => {
-      optionRefs.current
-        .get(nextValue)
-        ?.scrollIntoView?.({ block: "center" });
+      optionRefs.current.get(key)?.scrollIntoView?.({ block: "center" });
     });
   }
 
   function openList() {
-    const nextActive = initialOption();
     setDraft(formatTimeValue(value, timeFormat));
     setDirty(false);
-    setActiveValue(nextActive);
+    setColumn("hour");
+    setPeriod(undefined);
     setOpen(true);
-    revealOption(nextActive);
+    revealOption(`hour-${Math.floor((timeToMinutes(value) ?? 0) / 60)}`);
+  }
+
+  /** Moves the columns without committing, so the draft stays the source. */
+  function moveTo(hour: number, minute: number) {
+    const nextMinutes = MINUTES.some(
+      (step) => step === minute && isAvailable(minutesToTime(hour * 60 + step), min, max),
+    )
+      ? minute
+      : (MINUTES.find((step) =>
+          isAvailable(minutesToTime(hour * 60 + step), min, max),
+        ) ?? minute);
+    setDraft(formatTimeValue(minutesToTime(hour * 60 + nextMinutes), timeFormat));
+    setDirty(false);
   }
 
   function choose(
@@ -192,7 +240,6 @@ export function TimePicker({
     onChange(nextValue);
     setDraft(formatTimeValue(nextValue, timeFormat));
     setDirty(false);
-    setActiveValue(nextValue);
     setOpen(false);
     if (returnFocus) {
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -211,22 +258,25 @@ export function TimePicker({
   }
 
   function moveActive(direction: -1 | 1) {
-    if (options.length === 0) return;
-    const currentIndex = options.indexOf(activeValue);
-    const nextIndex =
-      currentIndex < 0
-        ? direction > 0
-          ? 0
-          : options.length - 1
-        : Math.max(
-            0,
-            Math.min(options.length - 1, currentIndex + direction),
-          );
-    const nextValue = options[nextIndex]!;
-    setActiveValue(nextValue);
-    setDraft(formatTimeValue(nextValue, timeFormat));
-    setDirty(false);
-    revealOption(nextValue);
+    const steps = column === "hour" ? hourOptions : minuteOptions;
+    if (steps.length === 0) return;
+    const current = column === "hour" ? activeHour : activeMinute;
+    const index = steps.indexOf(current);
+    const next =
+      steps[
+        Math.max(
+          0,
+          Math.min(steps.length - 1, (index < 0 ? 0 : index) + direction),
+        )
+      ]!;
+
+    if (column === "hour") {
+      moveTo(next, activeMinute);
+      revealOption(`hour-${next}`);
+    } else {
+      moveTo(activeHour, next);
+      revealOption(`minute-${next}`);
+    }
   }
 
   const invalid = dirty && !draftValid;
@@ -251,13 +301,9 @@ export function TimePicker({
       <PopoverAnchor asChild>
         <div className={classNames(styles.timePicker, className)}>
           <input
-            aria-activedescendant={
-              open && activeValue
-                ? `${id}-option-${activeValue.replace(":", "-")}`
-                : undefined
-            }
+            aria-activedescendant={open ? activeId : undefined}
             aria-autocomplete="list"
-            aria-controls={`${id}-listbox`}
+            aria-controls={`${id}-hours ${id}-minutes`}
             aria-describedby={`${id}-hint`}
             aria-expanded={open}
             aria-haspopup="listbox"
@@ -274,8 +320,7 @@ export function TimePicker({
             onBlur={(event) => {
               if (
                 event.relatedTarget instanceof Node &&
-                [...optionRefs.current.values()]
-                  .some((option) => option.contains(event.relatedTarget))
+                contentRef.current?.contains(event.relatedTarget)
               ) {
                 return;
               }
@@ -291,11 +336,8 @@ export function TimePicker({
               setDraft(nextDraft);
               setDirty(true);
               setOpen(true);
-              if (parsed && options.includes(parsed)) {
-                setActiveValue(parsed);
-                revealOption(parsed);
-              } else {
-                setActiveValue("");
+              if (parsed && isAvailable(parsed, min, max)) {
+                revealOption(`hour-${Math.floor((timeToMinutes(parsed) ?? 0) / 60)}`);
               }
             }}
             onClick={() => {
@@ -313,28 +355,35 @@ export function TimePicker({
                 event.preventDefault();
                 if (!open) openList();
                 else moveActive(-1);
-              } else if (event.key === "Home" && open && !dirty) {
+              } else if (
+                (event.key === "ArrowRight" || event.key === "ArrowLeft") &&
+                open &&
+                !dirty
+              ) {
+                // Left and right change which column the arrows walk. Only
+                // while nothing is typed: in a text field they are the caret.
                 event.preventDefault();
-                const first = options[0];
-                if (first) {
-                  setActiveValue(first);
-                  setDraft(formatTimeValue(first, timeFormat));
-                  revealOption(first);
-                }
-              } else if (event.key === "End" && open && !dirty) {
+                setColumn(event.key === "ArrowRight" ? "minute" : "hour");
+              } else if (
+                (event.key === "Home" || event.key === "End") &&
+                open &&
+                !dirty
+              ) {
                 event.preventDefault();
-                const last = options.at(-1);
-                if (last) {
-                  setActiveValue(last);
-                  setDraft(formatTimeValue(last, timeFormat));
-                  revealOption(last);
+                const steps = column === "hour" ? hourOptions : minuteOptions;
+                const step =
+                  event.key === "Home" ? steps[0] : steps.at(-1);
+                if (step !== undefined) {
+                  if (column === "hour") moveTo(step, activeMinute);
+                  else moveTo(activeHour, step);
+                  revealOption(`${column}-${step}`);
                 }
               } else if (event.key === "Enter" && open) {
                 event.preventDefault();
                 if (dirty) {
                   commitDraft();
-                } else if (activeValue) {
-                  choose(activeValue);
+                } else {
+                  choose(minutesToTime(activeHour * 60 + activeMinute));
                 }
               } else if (event.key === "Escape" && open) {
                 event.preventDefault();
@@ -361,6 +410,7 @@ export function TimePicker({
           align="start"
           aria-label={`Choose ${label.toLocaleLowerCase()}`}
           className={styles.timePickerPopover}
+          ref={contentRef}
           side="bottom"
           sideOffset={6}
           onCloseAutoFocus={(event) => event.preventDefault()}
@@ -374,52 +424,103 @@ export function TimePicker({
           <h2 className={styles.timePickerSheetTitle}>
             Choose {label.toLocaleLowerCase()}
           </h2>
-          <div
-            aria-label={`${label} options`}
-            className={styles.timePickerList}
-            id={`${id}-listbox`}
-            role="listbox"
-            onWheel={(event) => {
-              event.currentTarget.scrollTop += event.deltaY;
-              event.preventDefault();
-            }}
-          >
-            {options.map((time) => {
-              const minutes = timeToMinutes(time);
-              const duration =
-                minutes !== null &&
-                relativeMinutes !== null &&
-                minutes > relativeMinutes
-                  ? durationLabel(minutes - relativeMinutes)
-                  : null;
-              const display = formatTimeValue(time, timeFormat);
+          {timeFormat === "12h" ? (
+            <Segmented
+              className={styles.timePickerPeriod}
+              label={`${label} before or after noon`}
+              options={(["AM", "PM"] as const).map((option) => ({
+                disabled: !periodAvailable(option),
+                label: option,
+                value: option,
+              }))}
+              size="compact"
+              value={periodInUse}
+              onChange={(next) => {
+                setPeriod(next);
+                moveTo(
+                  hourFromDial(dialFromHour(pendingHour), next),
+                  pendingMinute,
+                );
+              }}
+            />
+          ) : null}
+          <div className={styles.timePickerColumns}>
+            {(
+              [
+                { key: "hour", label: "Hour", steps: hourOptions },
+                { key: "minute", label: "Minute", steps: minuteOptions },
+              ] as const
+            ).map((axis) => (
+              <div
+                aria-label={`${label} ${axis.label.toLocaleLowerCase()}`}
+                className={styles.timePickerList}
+                id={`${id}-${axis.key}s`}
+                key={axis.key}
+                role="listbox"
+                onWheel={(event) => {
+                  event.currentTarget.scrollTop += event.deltaY;
+                  event.preventDefault();
+                }}
+              >
+                {axis.steps.map((step) => {
+                  const hour = axis.key === "hour" ? step : activeHour;
+                  const minute = axis.key === "hour" ? activeMinute : step;
+                  const time = minutesToTime(hour * 60 + minute);
+                  const display =
+                    axis.key === "hour"
+                      ? String(
+                          timeFormat === "24h"
+                            ? step
+                            : dialFromHour(step),
+                        ).padStart(timeFormat === "24h" ? 2 : 1, "0")
+                      : String(step).padStart(2, "0");
+                  const active =
+                    axis.key === "hour"
+                      ? step === activeHour
+                      : step === activeMinute;
 
-              return (
-                <button
-                  aria-label={
-                    duration ? `${display}, ${duration}` : display
-                  }
-                  aria-selected={time === value}
-                  className={styles.timePickerOption}
-                  data-active={time === activeValue ? "" : undefined}
-                  id={`${id}-option-${time.replace(":", "-")}`}
-                  key={time}
-                  ref={(node) => {
-                    if (node) optionRefs.current.set(time, node);
-                    else optionRefs.current.delete(time);
-                  }}
-                  role="option"
-                  tabIndex={-1}
-                  type="button"
-                  onClick={() => choose(time)}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onPointerMove={() => setActiveValue(time)}
-                >
-                  <span>{display}</span>
-                  {duration ? <small>{duration}</small> : null}
-                </button>
-              );
-            })}
+                  return (
+                    <button
+                      aria-label={display}
+                      aria-selected={
+                        axis.key === "hour"
+                          ? step === Math.floor((timeToMinutes(value) ?? -1) / 60)
+                          : step === (timeToMinutes(value) ?? -1) % 60
+                      }
+                      className={styles.timePickerOption}
+                      data-active={
+                        active && column === axis.key ? "" : undefined
+                      }
+                      id={`${id}-${axis.key}-${step}`}
+                      key={step}
+                      ref={(node) => {
+                        const mapKey = `${axis.key}-${step}`;
+                        if (node) optionRefs.current.set(mapKey, node);
+                        else optionRefs.current.delete(mapKey);
+                      }}
+                      role="option"
+                      tabIndex={-1}
+                      type="button"
+                      /* The hour narrows, the minute decides. Committing on
+                         the hour would close the list before the column beside
+                         it could be used. */
+                      onClick={() => {
+                        if (axis.key === "hour") {
+                          moveTo(step, activeMinute);
+                          setColumn("minute");
+                        } else {
+                          choose(time);
+                        }
+                      }}
+                      onPointerDown={(event) => event.preventDefault()}
+                      onPointerMove={() => setColumn(axis.key)}
+                    >
+                      <span>{display}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
           <p
             className={styles.timePickerHint}
@@ -427,7 +528,7 @@ export function TimePicker({
           >
             {invalid
               ? error
-              : "Type a time, or use ↑ and ↓ to choose."}
+              : "Type a time, or use the arrow keys to choose."}
           </p>
         </PopoverContent>
       ) : null}

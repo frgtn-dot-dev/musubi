@@ -20,6 +20,7 @@ import {
 	type FormEvent,
 	type KeyboardEvent,
 	type RefCallback,
+	type RefObject,
 	useId,
 	useState,
 } from "react";
@@ -41,6 +42,7 @@ import {
 } from "../federation-routing";
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { createTimeGeometry } from "../time-geometry";
+import { CalendarDot } from "./CalendarDot";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./styles/event-editor.module.css";
 
@@ -91,6 +93,12 @@ type EventEditorFormProps = {
 	/** Full-page editors use the viewport as a workspace instead of a long card. */
 	layout?: "page" | "popover";
 	/**
+	 * The title field, for a shell that owns its own opening focus. `autoFocus`
+	 * is enough on a page; inside a dialog the shell moves focus after mount and
+	 * would take it away again.
+	 */
+	titleRef?: RefObject<HTMLInputElement | null>;
+	/**
 	 * A new "when" from outside the form — the draft block being dragged on the
 	 * grid while this is open. Only these fields are replaced, so a title that is
 	 * already typed survives the move.
@@ -126,6 +134,7 @@ export function EventEditorForm({
 	submitLabel,
 	submitRef,
 	timeFormat,
+	titleRef,
 	weekStartsOn,
 	when,
 }: EventEditorFormProps) {
@@ -280,6 +289,7 @@ export function EventEditorForm({
 					autoFocus
 					disabled={saving}
 					placeholder="Event title"
+					ref={titleRef}
 					value={values.title}
 					onChange={(event) => patch({ title: event.target.value })}
 				/>
@@ -340,7 +350,6 @@ export function EventEditorForm({
 									(timeToMinutes(values.startTime) ?? 0) + TIME_SNAP_MINUTES,
 								),
 							)}
-							relativeTo={values.startTime}
 							timeFormat={timeFormat}
 							value={values.endTime}
 							onChange={(endTime) => patch({ endTime })}
@@ -494,13 +503,8 @@ export function EventEditorForm({
 						type="button"
 						onClick={() => setCalendarPickerOpen((current) => !current)}
 					>
-						<span
-							aria-hidden="true"
-							className={styles.calendarDot}
-							style={{
-								backgroundColor:
-									selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
-							}}
+						<CalendarDot
+							color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR}
 						/>
 						<span className={styles.calendarSummaryCopy}>
 							<strong>{selectedCalendar?.name ?? "Choose a calendar"}</strong>
@@ -538,7 +542,7 @@ export function EventEditorForm({
 						data-ui="calendar-placement"
 						id={`${id}-calendar-list`}
 					>
-						<legend className={styles.srOnly}>Calendars for this event</legend>
+						<legend className={styles.visuallyHidden}>Calendars for this event</legend>
 						<div aria-hidden="true" className={styles.calendarPlacementHeader}>
 							<span>Appears in</span>
 							<span>Home</span>
@@ -600,11 +604,7 @@ export function EventEditorForm({
 															<Check size={12} strokeWidth={2.2} />
 														) : null}
 													</span>
-													<span
-														aria-hidden="true"
-														className={styles.calendarDot}
-														style={{ backgroundColor: calendar.color }}
-													/>
+													<CalendarDot color={calendar.color} />
 													<span className={styles.calendarPlacementCopy}>
 														<strong>{calendar.name}</strong>
 														<span>{detail}</span>
@@ -615,7 +615,7 @@ export function EventEditorForm({
 													isHome ? (
 														<span
 															aria-label="Home calendar"
-															className={styles.homeBadge}
+															className={styles.homeMark}
 															role="img"
 														>
 															<House
@@ -645,7 +645,7 @@ export function EventEditorForm({
 														<span aria-hidden="true">
 															<House size={14} strokeWidth={1.7} />
 														</span>
-														<span className={styles.srOnly}>
+														<span className={styles.visuallyHidden}>
 															{isHome ? "Home" : "Make home"}
 														</span>
 													</label>
@@ -660,7 +660,7 @@ export function EventEditorForm({
 				) : null}
 
 				{placementMessage ? (
-					<span aria-live="polite" className={styles.srOnly} role="status">
+					<span aria-live="polite" className={styles.visuallyHidden} role="status">
 						{placementMessage}
 					</span>
 				) : null}

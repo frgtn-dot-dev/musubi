@@ -1,7 +1,12 @@
-import type { Event, EventPageContent, EventPageTheme } from "@musubi/types";
+import type {
+  Event,
+  EventPageContent,
+  EventPageTheme,
+  Settings,
+} from "@musubi/types";
 import { defaultEventPageContent, defaultEventPageTheme } from "@musubi/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Globe, Link2, Lock, MapPin } from "lucide-react";
+import { Globe, Link2, Lock, MapPin } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { getServerOrigin } from "~/api/query-keys";
 import {
@@ -19,6 +24,7 @@ import {
 } from "~/calendar/event-form";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
+import { CopyField } from "~/ui/CopyField";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { RowAction } from "~/ui/Row";
@@ -105,16 +111,17 @@ export function ShareEventDialog({
   onOpenChange,
   onSaveEvent,
   returnFocus,
+  timeFormat,
 }: {
   event: Event;
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   onSaveEvent: (event: Event) => Promise<unknown>;
   returnFocus: RefObject<HTMLElement | null>;
+  timeFormat: Settings["timeFormat"];
 }) {
   const queryClient = useQueryClient();
   const shareKey = ["event-share", getServerOrigin(), event.id];
-  const [copied, setCopied] = useState(false);
   const [draftOverride, setDraftOverride] = useState<Draft>();
   const [eventDraft, setEventDraft] = useState<EventFormValues>(() =>
     eventFormValues(event),
@@ -152,16 +159,6 @@ export function ShareEventDialog({
   });
   const busy = publish.isPending || unpublish.isPending;
 
-  async function copyLink(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2_000);
-    } catch {
-      onNotice("Could not copy — select the link and copy it yourself.");
-    }
-  }
-
   async function save() {
     if (!draft) return;
     const eventError = validateEventForm(eventDraft);
@@ -192,7 +189,6 @@ export function ShareEventDialog({
       <Dialog
         closeLabel="Close sharing"
         description={`Preparing “${event.title}”.`}
-        elevated
         open
         returnFocus={returnFocus}
         size="workspace"
@@ -214,7 +210,6 @@ export function ShareEventDialog({
         bodyScroll="panels"
         closeLabel="Close sharing"
         description="Edit what readers see, then save every change together."
-        elevated
         footer={
           <div className={styles.footer}>
             {error ? (
@@ -326,28 +321,7 @@ export function ShareEventDialog({
             ) : null}
 
             {current ? (
-              <div className={styles.linkRow}>
-                <input
-                  aria-label="Public link"
-                  className={styles.linkField}
-                  readOnly
-                  value={current.url}
-                />
-                <Button
-                  icon={
-                    copied ? (
-                      <Check size={15} strokeWidth={1.8} />
-                    ) : (
-                      <Copy size={15} strokeWidth={1.6} />
-                    )
-                  }
-                  size="compact"
-                  variant="secondary"
-                  onClick={() => void copyLink(current.url)}
-                >
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-              </div>
+              <CopyField label="Public link" value={current.url} />
             ) : null}
           </section>
 
@@ -463,6 +437,7 @@ export function ShareEventDialog({
               content={draft.content}
               coverUrl={current?.coverUrl ?? null}
               theme={draft.theme}
+              timeFormat={timeFormat}
               onChange={({ content, theme }) =>
                 setDraft({ ...draft, content, theme })
               }

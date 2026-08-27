@@ -58,7 +58,7 @@
   line-height: 1.2;
 }
 
-.recurrenceBadge {
+.recurrenceMark {
   display: inline-flex;
   width: fit-content;
   align-items: center;
@@ -168,14 +168,6 @@
   margin-left: -1px;
 }
 
-.calendarDot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border: 1px solid rgb(0 0 0 / 12%);
-  border-radius: var(--radius-pill);
-}
-
 .notes,
 .attendeeSection,
 .calendarActions {
@@ -274,36 +266,6 @@
   text-transform: uppercase;
 }
 
-.facepile {
-  display: flex;
-  align-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-}
-
-/* A ring in the canvas colour is what separates the overlapping circles. */
-.facepile > * {
-  border: 2px solid var(--surface-canvas);
-}
-
-.facepile > * + * {
-  margin-left: -10px;
-}
-
-.facepileMore {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: none;
-  place-content: center;
-  border-radius: var(--radius-pill);
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-size: var(--text-11);
-}
-
 .attendeeList {
   display: grid;
   max-height: 216px;
@@ -382,29 +344,7 @@
 }
 
 .actionError {
-  display: grid;
-  gap: var(--space-1);
   margin: var(--space-3) var(--space-5);
-  padding: var(--space-3);
-  border: 1px solid
-    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
-  border-radius: var(--radius-md);
-  background: color-mix(
-    in srgb,
-    var(--accent-primary) 7%,
-    var(--surface-raised)
-  );
-  color: var(--accent-primary);
-  font-size: var(--text-12);
-}
-
-.actionError p {
-  margin: 0;
-}
-
-.actionError span {
-  color: var(--text-muted);
-  font-size: var(--text-10);
 }
 
 /* One row of equal cells, however many actions the event has (one to four). Four
@@ -419,8 +359,7 @@
   grid-auto-columns: minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4)
-    calc(var(--space-3) + env(safe-area-inset-bottom));
+  padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-canvas);
 }

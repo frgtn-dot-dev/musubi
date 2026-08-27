@@ -121,13 +121,6 @@
 	max-width: 11rem;
 }
 
-.calendarDot {
-	width: 9px;
-	height: 9px;
-	border: 1px solid rgb(0 0 0 / 10%);
-	border-radius: var(--radius-pill);
-}
-
 .groups {
 	display: grid;
 }
@@ -215,7 +208,7 @@
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-pill);
 	color: var(--text-secondary);
-	font-size: 0.58rem;
+	font-size: var(--text-10);
 	font-weight: 500;
 	letter-spacing: 0.04em;
 	line-height: 1.3;
@@ -383,50 +376,16 @@
 	border-bottom: 0;
 }
 
-.error p,
-.compactError p {
-	margin: 0;
-}
-
-.error,
-.compactError {
-	border: 1px solid
-		color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
-	border-radius: var(--radius-md);
-	background: color-mix(
-		in srgb,
-		var(--accent-primary) 7%,
-		var(--surface-raised)
-	);
-	color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
-	font-size: var(--text-12);
-	line-height: 1.45;
-}
-
 .error {
 	margin: 0 var(--layer-inline);
-	padding: var(--space-3);
 }
 
 .compactError {
 	margin: var(--space-4);
-	padding: var(--space-3);
-}
-
-.error span,
-.compactError span {
-	display: block;
-	margin-top: 2px;
-	font-size: var(--text-10);
 }
 
 .visuallyHidden {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
+	composes: visuallyHidden from "../../../ui/primitives.module.css";
 }
 
 @media (max-width: 599px) {

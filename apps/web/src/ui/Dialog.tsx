@@ -86,6 +86,7 @@ export function Dialog({
             className,
           )}
           data-body-layout={bodyLayout}
+          data-has-footer={footer ? "" : undefined}
           onOpenAutoFocus={(event) => {
             if (!initialFocus?.current) return;
             event.preventDefault();

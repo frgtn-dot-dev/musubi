@@ -4,6 +4,7 @@ import type { RsvpStatus, RsvpSummary } from "~/api/contracts";
 import { answerEvent, getEventRsvp } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { Avatar } from "~/ui/Avatar";
+import { AvatarStack } from "~/ui/AvatarStack";
 import { Button } from "~/ui/Button";
 import { Field } from "~/ui/Field";
 import { EmailIdentity } from "~/components/EmailIdentity";
@@ -165,26 +166,17 @@ function Attending({ summary }: { summary?: RsvpSummary }) {
       </p>
       {summary.visibility === "names" && attendees.length > 0 ? (
         <>
-          <button
-            aria-label={`Show ${attendees.length} guests`}
+          <AvatarStack
             className={styles.facepile}
-            type="button"
+            label={`Show ${attendees.length} guests`}
+            limit={4}
+            people={attendees.map((attendee) => ({
+              id: `${attendee.name}-${attendee.avatarUrl}`,
+              image: attendee.avatarUrl,
+              name: attendee.name,
+            }))}
             onClick={() => setOpen(true)}
-          >
-            {attendees.slice(0, 4).map((attendee) => (
-              <Avatar
-                image={attendee.avatarUrl}
-                key={`${attendee.name}-${attendee.avatarUrl}`}
-                name={attendee.name}
-                size={32}
-              />
-            ))}
-            {attendees.length > 4 ? (
-              <span aria-hidden="true" className={styles.facepileMore}>
-                +{attendees.length - 4}
-              </span>
-            ) : null}
-          </button>
+          />
           <Dialog
             closeLabel="Close guests"
             description={`${counts.going} going${counts.maybe > 0 ? ` · ${counts.maybe} maybe` : ""}`}
@@ -199,7 +191,7 @@ function Attending({ summary }: { summary?: RsvpSummary }) {
                   <Avatar
                     image={attendee.avatarUrl}
                     name={attendee.name}
-                    size={32}
+                    size="default"
                   />
                   <span>{attendee.name}</span>
                 </li>

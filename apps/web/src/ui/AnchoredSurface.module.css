@@ -44,7 +44,7 @@
   .surface[data-mobile-surface="sheet"] {
     width: 100%;
     max-height: calc(100dvh - var(--space-5));
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--layer-safe-bottom);
     border-right: 0;
     border-bottom: 0;
     border-left: 0;

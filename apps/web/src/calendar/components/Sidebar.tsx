@@ -324,7 +324,7 @@ export function Sidebar({
             {/* Announces a keyboard move. A live region rather than role="status":
                 the toast already owns that role, and two of them would make
                 "the status message" ambiguous for both readers and tests. */}
-            <span aria-live="polite" className={styles.srOnly}>
+            <span aria-live="polite" className={styles.visuallyHidden}>
               {reorderMessage}
             </span>
           </nav>
@@ -398,7 +398,7 @@ export function Sidebar({
               className={styles.profileMain}
               aria-label="Manage account"
               detail={<span className={styles.profileEmail}>{user.email}</span>}
-              icon={<Avatar image={user.image} name={user.name} size={32} />}
+              icon={<Avatar image={user.image} name={user.name} size="default" />}
               label={user.name}
               showChevron={false}
               onClick={onManageAccount}

@@ -234,6 +234,8 @@ function PublicEventRoute() {
                 <Avatar
                   image={event.organizer.avatarUrl}
                   name={event.organizer.name}
+                  /* Between the row step and the account photo: this card is
+                     the page's own scale, not the app's. */
                   size={42}
                 />
                 <strong>{event.organizer.name}</strong>

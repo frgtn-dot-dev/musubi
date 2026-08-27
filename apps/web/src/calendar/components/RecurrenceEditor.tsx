@@ -312,7 +312,7 @@ export function RecurrenceEditor({
 						/>
 						{advanced.endType === "count" ? (
 							<label className={styles.recurrenceCount}>
-								<span className={styles.srOnly}>Occurrence count</span>
+								<span className={styles.visuallyHidden}>Occurrence count</span>
 								<input
 									aria-label="Occurrence count"
 									disabled={disabled}

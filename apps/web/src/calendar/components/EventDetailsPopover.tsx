@@ -40,11 +40,11 @@ import {
 } from "../attendance";
 import { getEventAttendees } from "~/api/resources";
 import { Avatar } from "~/ui/Avatar";
+import { AvatarStack } from "~/ui/AvatarStack";
 import { Button, IconButton } from "~/ui/Button";
 import {
 	ConfirmationDialog,
 	ConfirmationNotice,
-	DialogError,
 } from "~/ui/ConfirmationDialog";
 import {
 	Menu,
@@ -60,6 +60,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "~/ui/Popover";
+import { InlineError } from "~/ui/InlineError";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
@@ -91,6 +92,7 @@ import {
 	withAllDay,
 	withTimed,
 } from "@musubi/types";
+import { CalendarDot } from "./CalendarDot";
 import { EventEditorForm } from "./EventEditorForm";
 import { ShareEventDialog } from "./ShareEventDialog";
 
@@ -625,7 +627,7 @@ export function EventDetailsPopover({
 								<div className={styles.titleBlock}>
 									<h2 id={titleId}>{event.title}</h2>
 									{event.recurrence ? (
-										<span className={styles.recurrenceBadge}>
+										<span className={styles.recurrenceMark}>
 											<Repeat2 aria-hidden="true" size={13} />
 											Recurring
 										</span>
@@ -696,22 +698,14 @@ export function EventDetailsPopover({
 														style={{ color: item.color }}
 													/>
 												) : (
-													<span
-														aria-hidden="true"
-														className={styles.calendarDot}
-														style={{ backgroundColor: item.color }}
-													/>
+													<CalendarDot color={item.color} />
 												)}
 												{item.name}
 											</li>
 										))
 									) : (
 										<li className={styles.calendarPill}>
-											<span
-												aria-hidden="true"
-												className={styles.calendarDot}
-												style={{ backgroundColor: accentColor }}
-											/>
+											<CalendarDot color={accentColor} />
 											Calendar
 										</li>
 									)}
@@ -911,7 +905,7 @@ export function EventDetailsPopover({
 														<ul className={styles.attendeeList}>
 															{group.items.map((item) => (
 																<li key={item.id}>
-																	<Avatar image={item.image} name={item.name} size={32} />
+																	<Avatar image={item.image} name={item.name} size="default" />
 																	<span>{item.name}</span>
 																</li>
 															))}
@@ -920,26 +914,12 @@ export function EventDetailsPopover({
 												))}
 											</ul>
 										) : (
-											<button
-												aria-label="Show every answer"
-												className={styles.facepile}
-												type="button"
+											<AvatarStack
+												label="Show every answer"
+												limit={FACEPILE_LIMIT}
+												people={going}
 												onClick={() => setAttendeesOpen(true)}
-											>
-												{going.slice(0, FACEPILE_LIMIT).map((item) => (
-													<Avatar
-														image={item.image}
-														key={item.id}
-														name={item.name}
-														size={32}
-													/>
-												))}
-												{going.length > FACEPILE_LIMIT ? (
-													<span aria-hidden="true" className={styles.facepileMore}>
-														+{going.length - FACEPILE_LIMIT}
-													</span>
-												) : null}
-											</button>
+											/>
 										)}
 									</section>
 								) : null}
@@ -988,12 +968,7 @@ export function EventDetailsPopover({
 															className={styles.targetCalendar}
 															detail={targetCalendarDetail(item)}
 															disabled={Boolean(busyAction)}
-															icon={
-																<span
-																	className={styles.calendarDot}
-																	style={{ backgroundColor: item.color }}
-																/>
-															}
+															icon={<CalendarDot color={item.color} />}
 															key={item.id}
 															label={item.name}
 															showChevron={false}
@@ -1010,20 +985,24 @@ export function EventDetailsPopover({
 												})}
 											</div>
 											{actionError ? (
-												<ActionError
-													message={actionError.message}
+												<InlineError
+													className={styles.actionError}
 													requestId={actionError.requestId}
-												/>
+												>
+													{actionError.message}
+												</InlineError>
 											) : null}
 										</>
 									</section>
 								) : null}
 
 								{actionError && !targetAction ? (
-									<ActionError
-										message={actionError.message}
+									<InlineError
+										className={styles.actionError}
 										requestId={actionError.requestId}
-									/>
+									>
+										{actionError.message}
+									</InlineError>
 								) : null}
 							</div>
 
@@ -1109,22 +1088,14 @@ export function EventDetailsPopover({
 						if (!open) setSharing(false);
 					}}
 					returnFocus={shareActionRef}
+					timeFormat={timeFormat}
 				/>
 			) : null}
 
 			{pendingEdit ? (
 				<RecurrenceScopeDialog
 					busyScope={pendingEditScope}
-					error={
-						actionError ? (
-							<>
-								<p>{actionError.message}</p>
-								{actionError.requestId ? (
-									<span>Request ID: {actionError.requestId}</span>
-								) : null}
-							</>
-						) : undefined
-					}
+					error={actionError}
 					onResolve={(scope) => {
 						if (scope) {
 							void applyScopedEdit(pendingEdit, scope);
@@ -1150,16 +1121,7 @@ export function EventDetailsPopover({
 					action="delete"
 					busyScope={pendingDeleteScope}
 					consequence={deleteConsequence}
-					error={
-						actionError ? (
-							<>
-								<p>{actionError.message}</p>
-								{actionError.requestId ? (
-									<span>Request ID: {actionError.requestId}</span>
-								) : null}
-							</>
-						) : undefined
-					}
+					error={actionError}
 					onResolve={(scope) => {
 						if (scope) {
 							void handleDelete(scope);
@@ -1187,9 +1149,9 @@ export function EventDetailsPopover({
 					<p>{deleteConsequence}</p>
 				</ConfirmationNotice>
 				{actionError ? (
-					<DialogError requestId={actionError.requestId}>
+					<InlineError requestId={actionError.requestId}>
 						{actionError.message}
-					</DialogError>
+					</InlineError>
 				) : null}
 			</ConfirmationDialog>
 		</>
@@ -1225,21 +1187,6 @@ function DetailRow({
 			</span>
 			<dt>{label}</dt>
 			<dd>{value}</dd>
-		</div>
-	);
-}
-
-function ActionError({
-	message,
-	requestId,
-}: {
-	message: string;
-	requestId?: string;
-}) {
-	return (
-		<div className={styles.actionError} role="alert">
-			<p>{message}</p>
-			{requestId ? <span>Request ID: {requestId}</span> : null}
 		</div>
 	);
 }

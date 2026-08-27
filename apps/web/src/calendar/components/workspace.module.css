@@ -73,7 +73,7 @@
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-pill);
 	color: var(--text-muted);
-	font-size: 0.58rem;
+	font-size: var(--text-10);
 	letter-spacing: 0.08em;
 }
 
@@ -177,18 +177,12 @@
 }
 
 .pageList,
-.calendarList {
-	display: grid;
-	gap: 3px;
-}
-
 /* Inline padding only: the space under it is the section's gap now. */
 .sidebarSectionLabel {
 	padding: 0 8px;
 }
 
-.sidebarRow,
-.calendarVisibilityRow {
+.sidebarRow {
 	flex: none;
 }
 
@@ -314,14 +308,6 @@
 	.pageRowEdit {
 		transition: none;
 	}
-}
-
-.calendarDot {
-	display: inline-block;
-	width: 7px;
-	height: 7px;
-	flex: 0 0 auto;
-	border-radius: 50%;
 }
 
 .sidebarFooter {
@@ -1841,16 +1827,8 @@
 	--toast-left: calc(50% + var(--sidebar-width) / 2);
 }
 
-.srOnly {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	padding: 0;
-	border: 0;
-	margin: -1px;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
+.visuallyHidden {
+	composes: visuallyHidden from "../../ui/primitives.module.css";
 }
 
 @media (max-width: 1439px) {
@@ -2203,7 +2181,7 @@
 		position: fixed;
 		z-index: 40;
 		right: 16px;
-		bottom: calc(16px + env(safe-area-inset-bottom));
+		bottom: calc(16px + var(--layer-safe-bottom));
 		width: 54px;
 		height: 54px;
 		padding: 0;
@@ -2220,7 +2198,7 @@
 
 	.workspaceToast {
 		/* Above the create button, which owns the bottom-right corner. */
-		--toast-bottom: calc(82px + env(safe-area-inset-bottom));
+		--toast-bottom: calc(82px + var(--layer-safe-bottom));
 		width: calc(100vw - 24px);
 	}
 }

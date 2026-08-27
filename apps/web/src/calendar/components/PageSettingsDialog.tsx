@@ -12,10 +12,10 @@ import { Checkbox } from "~/ui/Checkbox";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
-  DialogError,
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
+import { InlineError } from "~/ui/InlineError";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { Select } from "~/ui/Select";
@@ -549,7 +549,7 @@ export function PageSettingsDialog({
         <strong>This cannot be undone.</strong>
         <p>The server has no way to restore a deleted Page.</p>
       </ConfirmationNotice>
-      {deleteError ? <DialogError>{deleteError}</DialogError> : null}
+      {deleteError ? <InlineError>{deleteError}</InlineError> : null}
     </ConfirmationDialog>
     </>
   );

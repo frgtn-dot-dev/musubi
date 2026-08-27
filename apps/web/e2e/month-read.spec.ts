@@ -1225,18 +1225,26 @@ test("chooses an event time and duration from the time pickers", async ({
 	const start = page.getByRole("combobox", { name: "Start time" });
 	const end = page.getByRole("combobox", { name: "End time" });
 	await start.click();
-	const startOptions = page.getByRole("listbox", {
-		name: "Start time options",
-	});
 	await expectNoAccessibilityViolations(page);
-	await startOptions.getByRole("option", { name: "13:15", exact: true }).click();
+	await page
+		.getByRole("listbox", { name: "Start time hour" })
+		.getByRole("option", { name: "13", exact: true })
+		.click();
+	await page
+		.getByRole("listbox", { name: "Start time minute" })
+		.getByRole("option", { name: "15", exact: true })
+		.click();
 	await expect(start).toHaveValue("13:15");
 	await expect(end).toHaveValue("14:15");
 
 	await end.click();
 	await page
-		.getByRole("listbox", { name: "End time options" })
-		.getByRole("option", { name: "13:45, +30m", exact: true })
+		.getByRole("listbox", { name: "End time hour" })
+		.getByRole("option", { name: "13", exact: true })
+		.click();
+	await page
+		.getByRole("listbox", { name: "End time minute" })
+		.getByRole("option", { name: "45", exact: true })
 		.click();
 	await expect(end).toHaveValue("13:45");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -4868,9 +4876,9 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	await page.getByRole("button", { exact: true, name: "Event" }).click();
 	await page.getByRole("button", { name: "More options" }).click();
 
-	const editor = page.locator("[data-event-editor-page]");
-	const surface = page.locator("[data-event-editor-surface]");
-	const form = surface.locator('form[data-layout="page"]');
+	const editor = page.getByRole("dialog", { name: "New event" });
+	const surface = editor.locator("header + div");
+	const form = editor.locator('form[data-layout="page"]');
 	const when = form.locator('[data-editor-section="when"]');
 	const details = form.locator('[data-editor-section="details"]');
 	const calendarSection = form.locator('[data-editor-section="calendars"]');
@@ -4897,6 +4905,16 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 			vertical: element.scrollHeight - element.clientHeight,
 		})),
 	).toEqual({ horizontal: 0, vertical: 0 });
+	// The dialog clips, so its own scrollHeight can never report an overflow.
+	// The invariant worth pinning is the pair below: the layer stays inside the
+	// viewport, and at this height the three columns fit without the body
+	// needing to scroll at all.
+	const body = editor.locator("header + div");
+	const editorBox = (await editor.boundingBox())!;
+	expect(editorBox.y + editorBox.height).toBeLessThanOrEqual(801);
+	expect(
+		await body.evaluate((element) => element.scrollHeight - element.clientHeight),
+	).toBe(0);
 	expect(
 		await form
 			.locator('[data-ui="calendar-placement"]')
@@ -4923,7 +4941,9 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	expect(compactSurfaceBox).not.toBeNull();
 	expect(compactActionsBox).not.toBeNull();
 	expect(compactWhenBox).not.toBeNull();
-	expect(compactSurfaceBox!.x).toBeGreaterThanOrEqual(28);
+	// The editor is a layer now, so its inset is the shared viewport gutter
+	// (--layer-viewport-gutter, 24px here) rather than a page's own padding.
+	expect(compactSurfaceBox!.x).toBeGreaterThanOrEqual(24);
 	expect(
 		Math.abs(
 			compactSurfaceBox!.x -
@@ -4940,6 +4960,17 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 				(compactSurfaceBox!.x + compactSurfaceBox!.width - 12),
 		),
 	).toBeLessThanOrEqual(2);
+
+	// Too short for the form's own minimum. `scrollHeight` cannot tell scrolling
+	// from clipping — both report an overflow — so the check is the one thing the
+	// person filling the form needs: the bottom of it is still reachable.
+	await page.setViewportSize({ height: 620, width: 1280 });
+	const shortEditorBox = (await editor.boundingBox())!;
+	expect(shortEditorBox.y + shortEditorBox.height).toBeLessThanOrEqual(621);
+	const submit = page.getByRole("button", { exact: true, name: "Create" });
+	await submit.scrollIntoViewIfNeeded();
+	await expect(submit).toBeInViewport();
+	await page.setViewportSize({ height: 800, width: 1280 });
 
 	const [dateBox, startTimeBox, repeatBox] = await Promise.all([
 		form.getByRole("button", { name: /^Date:/ }).boundingBox(),
@@ -4987,9 +5018,6 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	await expect(page).toHaveURL(/\/event\/new\?/);
 	await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
-	await expect(
-		page.getByRole("navigation", { name: "Event editor" }),
-	).toBeVisible();
 	await expect(page.getByRole("heading", { name: "When" })).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Details" })).toBeVisible();
 	await expect(
@@ -5008,21 +5036,21 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	});
 	await create.scrollIntoViewIfNeeded();
 	await expect(create).toBeVisible();
-	await page.getByRole("button", { name: "Back to calendar" }).click();
+	await page.getByRole("button", { name: "Close event editor" }).click();
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 	expect(runtimeErrors).toEqual([]);
 });
 
-test("leaving the full editor page keeps the calendar where it was", async ({
+test("leaving the full event editor keeps the calendar where it was", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await page.locator('[data-day-key="2026-07-15"]').click();
 	await page.getByRole("button", { name: "More options" }).click();
-	await expect(page).toHaveURL(/\/event\/new\?/);
+	await expect(page).toHaveURL(/\/month\/event\/new\?/);
 
-	await page.getByRole("button", { name: "Back to calendar" }).click();
+	await page.getByRole("button", { name: "Close event editor" }).click();
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 });
 
@@ -8334,7 +8362,7 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	await expect(approximateStart).toHaveAttribute("placeholder", "Select time");
 	await approximateStart.click();
 	const timeOptions = page.getByRole("listbox", {
-		name: "Approximate start time options",
+		name: "Approximate start time hour",
 	});
 	await timeOptions.hover();
 	await page.mouse.wheel(0, 240);
@@ -8987,4 +9015,109 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
 		Promise.all(document.getAnimations().map((animation) => animation.finished)),
 	);
 	await expectNoAccessibilityViolations(page);
+});
+
+test("scrolls the calendar list inside the editor layer, not the layer", async ({
+	page,
+}) => {
+	await page.setViewportSize({ height: 962, width: 1890 });
+	await mockAuthenticatedReads(page);
+	// More calendars than the column has room for: the point of the test is what
+	// gives way when they do not fit.
+	await page.route("**/api/v1/calendars", (route) =>
+		route.request().method() === "GET"
+			? respond(
+					route,
+					Array.from({ length: 16 }, (_, index) => ({
+						color: "#b3492f",
+						creatorID: "user-web-qa",
+						id: index === 0 ? "personal" : `extra-${index}`,
+						isDefault: index === 0,
+						members: [],
+						name: `Calendar ${index + 1}`,
+						role: "owner" as const,
+					})),
+				)
+			: route.fallback(),
+	);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-07`);
+	await page.getByRole("button", { exact: true, name: "Event" }).click();
+	await page.getByRole("button", { name: "More options" }).click();
+
+	const dialog = page.getByRole("dialog", { name: "New event" });
+	const body = dialog.locator("header + div");
+	const form = dialog.locator('form[data-layout="page"]');
+	const placement = form.locator('[data-ui="calendar-placement"]');
+	const overflow = (locator: typeof body) =>
+		locator.evaluate((element) => element.scrollHeight - element.clientHeight);
+
+	const [bodyBox, formBox] = await Promise.all([
+		body.boundingBox(),
+		form.boundingBox(),
+	]);
+	// The form takes the body's height rather than its content's. Without that the
+	// row holding the calendars grows to fit all of them, and the form leaves the
+	// bottom of the layer.
+	expect(formBox!.height).toBeLessThanOrEqual(bodyBox!.height + 1);
+	expect(await overflow(body)).toBe(0);
+	expect(await overflow(placement)).toBeGreaterThan(0);
+
+	// Only the calendars move: the "Appears in" header belongs to the column.
+	// Measured against the scrollport rather than the viewport: the layer is
+	// vertically centred, so its own position settles by a pixel or two.
+	const headerOffset = () =>
+		placement.evaluate((element) => {
+			const header = element.querySelector("div")!;
+			return (
+				header.getBoundingClientRect().top -
+				element.getBoundingClientRect().top
+			);
+		});
+
+	const before = await headerOffset();
+	await placement.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	expect(await headerOffset()).toBeCloseTo(before, 0);
+	await expect(placement.getByText("Calendar 16")).toBeInViewport();
+});
+
+test("opens a picker inside the sharing dialog on top of it", async ({
+	page,
+}) => {
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/events/*/share", (route) => respond(route, null));
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page.getByRole("button", { name: /Client call/ }).first().click();
+	await page.getByRole("button", { name: "Share event" }).click();
+
+	const dialog = page.getByRole("dialog", { name: "Share event" });
+	await dialog.getByRole("button", { name: "Add item" }).click();
+
+	const time = dialog.getByRole("combobox", { name: "Time" });
+	await time.click();
+
+	const list = page.getByRole("listbox", { name: "Time hour" });
+	await expect(list).toHaveCount(1);
+	// Being in the DOM is not being usable: a layer painted under the dialog
+	// still reports itself visible, so ask what is actually on top.
+	expect(
+		await list.evaluate((element) => {
+			const box = element.getBoundingClientRect();
+			return element.contains(
+				document.elementFromPoint(
+					Math.round(box.x + box.width / 2),
+					Math.round(box.y + box.height / 2),
+				),
+			);
+		}),
+	).toBe(true);
+
+	// The hour narrows and the minute commits, so a usable menu needs both.
+	await list.getByRole("option", { name: "09", exact: true }).click();
+	await page
+		.getByRole("listbox", { name: "Time minute" })
+		.getByRole("option", { name: "30", exact: true })
+		.click();
+	await expect(time).toHaveValue("09:30");
 });

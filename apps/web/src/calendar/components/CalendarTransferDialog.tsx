@@ -37,15 +37,16 @@ import { ColorPicker } from "~/ui/ColorPicker";
 import {
 	ConfirmationDialog,
 	ConfirmationNotice,
-	DialogError,
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
+import { InlineError } from "~/ui/InlineError";
 import { Row, RowOptions } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { Select } from "~/ui/Select";
 import type { ReminderControl } from "~/calendar/reminder-control";
 import { connectionOfCalendar } from "../federation-routing";
+import { CalendarDot } from "./CalendarDot";
 import { AccountMark } from "./ProviderIcon";
 import styles from "./styles/calendars.module.css";
 
@@ -508,12 +509,7 @@ export function CalendarTransferDialog({
 									disabled={Boolean(busy)}
 									label="Calendar to export"
 									options={calendars.map((calendar) => ({
-										icon: (
-											<span
-												className={styles.calendarDot}
-												style={{ backgroundColor: calendar.color }}
-											/>
-										),
+										icon: <CalendarDot color={calendar.color} />,
 										label: calendar.name,
 										value: calendar.id,
 									}))}
@@ -973,7 +969,7 @@ function DeleteCalendarDialog({
 				</p>
 			</ConfirmationNotice>
 			{error ? (
-				<DialogError requestId={error.requestId}>{error.message}</DialogError>
+				<InlineError requestId={error.requestId}>{error.message}</InlineError>
 			) : null}
 		</ConfirmationDialog>
 	);
@@ -1016,7 +1012,7 @@ function DisconnectExternalCalendarDialog({
 				</p>
 			</ConfirmationNotice>
 			{error ? (
-				<DialogError requestId={error.requestId}>{error.message}</DialogError>
+				<InlineError requestId={error.requestId}>{error.message}</InlineError>
 			) : null}
 		</ConfirmationDialog>
 	);
@@ -1030,9 +1026,11 @@ function ErrorMessage({
 	error: TransferError;
 }) {
 	return (
-		<div className={compact ? styles.compactError : styles.error} role="alert">
-			<p>{error.message}</p>
-			{error.requestId ? <span>Request ID: {error.requestId}</span> : null}
-		</div>
+		<InlineError
+			className={compact ? styles.compactError : styles.error}
+			requestId={error.requestId}
+		>
+			{error.message}
+		</InlineError>
 	);
 }

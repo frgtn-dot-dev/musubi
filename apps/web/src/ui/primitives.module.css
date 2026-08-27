@@ -1,3 +1,17 @@
+/* Text for a screen reader only. Lives at the top of the file because rules
+   below compose it, and same-file `composes` cannot look forward. */
+.visuallyHidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	padding: 0;
+	border: 0;
+	margin: -1px;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+}
+
 .button,
 .iconButton {
 	position: relative;
@@ -237,7 +251,9 @@
 .fieldControl > textarea {
 	min-height: 96px;
 	padding-block: var(--space-3);
-	resize: vertical;
+	/* The field owns its height. Dragging a handle inside a dialog, a popover or a
+     column pushes a layer that already decided how tall it is. */
+	resize: none;
 }
 
 .fieldControl > :is(input, select, textarea, button):focus-visible {
@@ -860,7 +876,7 @@
 
 .checkboxInput:focus-visible + .checkboxBox {
 	outline: var(--focus-ring);
-	outline-offset: 3px;
+	outline-offset: -3px;
 }
 
 .checkboxCopy {
@@ -953,15 +969,7 @@
 }
 
 .selectSheetTitle {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	padding: 0;
-	border: 0;
-	margin: -1px;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
+	composes: visuallyHidden;
 }
 
 .selectList {
@@ -1065,6 +1073,13 @@
 	cursor: pointer;
 }
 
+/* Inward: a row is full-bleed inside something that clips or scrolls — a
+   settings group, the sidebar, a dialog body — so a ring drawn outside it is
+   cut off or starts a scrollbar. */
+.rowAction:focus-visible {
+	outline-offset: -3px;
+}
+
 .rowAction:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
@@ -1107,9 +1122,12 @@
 	color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
+/* A floor, not a width: a glyph gets the 22px column, while an avatar handed to
+   the same slot keeps its own size instead of spilling 5px into the row's
+   padding and eating the gap before the label. */
 .rowIcon {
 	display: grid;
-	width: 22px;
+	min-width: 22px;
 	flex: none;
 	place-content: center;
 	color: var(--text-muted);
@@ -1179,10 +1197,6 @@
 	max-width: none;
 }
 
-.settingsSectionRows .rowAction:focus-visible {
-	outline-offset: -3px;
-}
-
 .settingsSectionRows .segmented {
 	background: var(--surface-canvas);
 }
@@ -1196,7 +1210,7 @@
 }
 
 .row_compact .rowIcon {
-	width: 20px;
+	min-width: 20px;
 }
 
 .row_compact .rowLabel {
@@ -1415,7 +1429,17 @@
 	justify-content: flex-end;
 	gap: var(--space-2);
 	padding: 0 var(--layer-inline)
-		calc(var(--layer-footer-block) + env(safe-area-inset-bottom));
+		calc(var(--layer-footer-block) + var(--layer-safe-bottom));
+}
+
+/* With no footer the body is the last thing above the home indicator, so the
+   shell pays the inset here instead of each dialog paying it again. */
+.dialog:not([data-has-footer]) .dialogBody_padded {
+	padding-bottom: calc(var(--layer-body-block) + var(--layer-safe-bottom));
+}
+
+.dialog:not([data-has-footer]) .dialogBody_flush {
+	padding-bottom: var(--layer-safe-bottom);
 }
 
 .dialog[data-body-layout="flush"] .dialogHeader {
@@ -1425,7 +1449,7 @@
 
 .dialog[data-body-layout="flush"] .dialogFooter {
 	padding-top: var(--layer-footer-block);
-	padding-bottom: calc(var(--layer-footer-block) + env(safe-area-inset-bottom));
+	padding-bottom: calc(var(--layer-footer-block) + var(--layer-safe-bottom));
 	border-top: 1px solid var(--border-subtle);
 	background: var(--surface-panel);
 }
@@ -1463,7 +1487,7 @@
 	font-weight: 600;
 }
 
-.dialogError {
+.inlineError {
 	padding: var(--space-3);
 	border: 1px solid
 		color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
@@ -1478,14 +1502,68 @@
 	line-height: 1.45;
 }
 
-.dialogError p {
+.inlineError p {
 	margin: 0;
 }
 
-.dialogError span {
+.inlineError span {
 	display: block;
 	margin-top: 2px;
 	font-size: var(--text-10);
+}
+
+.avatarStack {
+	display: flex;
+	align-items: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+/* A ring in the colour behind the stack is what separates the overlapping
+   circles, so it is the one thing a consumer on its own palette overrides. */
+.avatarStack > * {
+	border: 2px solid var(--avatar-stack-ring, var(--surface-canvas));
+}
+
+.avatarStack > * + * {
+	margin-left: -10px;
+}
+
+/* Same box as a face: the ring is inside the 32px, so a larger chip would sit
+   a couple of pixels above and below the row it belongs to. */
+.avatarStackMore {
+	display: grid;
+	width: 32px;
+	height: 32px;
+	flex: none;
+	place-content: center;
+	border-radius: var(--radius-pill);
+	background: var(--avatar-stack-more-fill, var(--surface-raised));
+	color: var(--avatar-stack-more-text, var(--text-secondary));
+	font-size: var(--text-11);
+}
+
+.copyField {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+/* 9/11 rather than a spacing step: the value is monospace at 12px, and the
+   control has to end up the same height as the compact button beside it. */
+.copyFieldValue {
+	min-width: 0;
+	flex: 1;
+	padding: 9px 11px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+	font-family: var(--font-mono);
+	font-size: var(--text-12);
 }
 
 .toastRegion {
@@ -1493,7 +1571,7 @@
 	z-index: 160;
 	bottom: var(
 		--toast-bottom,
-		calc(var(--space-5) + env(safe-area-inset-bottom))
+		calc(var(--space-5) + var(--layer-safe-bottom))
 	);
 	left: var(--toast-left, 50%);
 	display: flex;
@@ -1703,14 +1781,30 @@
 }
 
 .timePickerPopover {
-	width: 252px;
+	width: 208px;
+}
+
+/* Block-level flex, not the primitive's inline-flex: it fills the menu instead
+   of hugging its two labels, and the two stay on one row. */
+.timePickerPeriod {
+	display: flex;
+	margin: var(--space-2) var(--space-1) 0;
+}
+
+/* Two axes rather than one list of every quarter hour: the hour is the coarse
+   choice and the minute the fine one, so each gets a column. */
+.timePickerColumns {
+	display: grid;
+	gap: var(--space-1);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	padding: var(--space-1);
 }
 
 .timePickerList {
 	max-height: 284px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	padding: var(--space-2);
+	padding: var(--space-1);
 	scrollbar-width: thin;
 }
 
@@ -2016,18 +2110,6 @@
 	}
 }
 
-.visuallyHidden {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	padding: 0;
-	border: 0;
-	margin: -1px;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-}
-
 @media (max-width: 599px) {
 	.field_inline {
 		grid-template-columns: minmax(0, 1fr);
@@ -2093,7 +2175,7 @@
 	.toastRegion {
 		bottom: var(
 			--toast-bottom,
-			calc(var(--space-3) + env(safe-area-inset-bottom))
+			calc(var(--space-3) + var(--layer-safe-bottom))
 		);
 	}
 
@@ -2128,7 +2210,7 @@
 	.selectList {
 		max-height: calc(100dvh - 8rem);
 		padding: var(--space-2);
-		padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+		padding-bottom: calc(var(--space-3) + var(--layer-safe-bottom));
 	}
 
 	.selectListScrollable {

@@ -1,7 +1,7 @@
 import type { Event } from "@musubi/types";
 import { useMutation } from "@tanstack/react-query";
 import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Copy, Info } from "lucide-react";
+import { Check, Info } from "lucide-react";
 import { useState } from "react";
 import { createEvent, getCalendars, publishEvent } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
@@ -10,6 +10,7 @@ import { toDateKey } from "~/calendar/date-key";
 import { BrandMark } from "~/components/BrandMark";
 import { EmailIdentity } from "~/components/EmailIdentity";
 import { Button } from "~/ui/Button";
+import { CopyField } from "~/ui/CopyField";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { TimePicker } from "~/ui/TimePicker";
@@ -64,7 +65,6 @@ function NewEventRoute() {
 	});
 	const [asked, setAsked] = useState(false);
 	const [url, setUrl] = useState<string>();
-	const [copied, setCopied] = useState(false);
 
 	const publish = useMutation({
 		mutationFn: async (name: string) => {
@@ -148,25 +148,7 @@ function NewEventRoute() {
 							Send this link to whoever should come. The page shows the time in each
 							reader's own timezone and collects their answers.
 						</p>
-						<div className={styles.linkRow}>
-							<input
-								aria-label="Event link"
-								className={styles.linkField}
-								readOnly
-								value={url}
-								onFocus={(event) => event.currentTarget.select()}
-							/>
-							<Button
-								icon={<Copy size={14} strokeWidth={1.8} />}
-								variant="secondary"
-								onClick={() => {
-									void navigator.clipboard?.writeText(url);
-									setCopied(true);
-								}}
-							>
-								{copied ? "Copied" : "Copy"}
-							</Button>
-						</div>
+						<CopyField label="Event link" value={url} />
 						<p className={styles.lead}>
 							The event is in your calendar too, where you can change the details or
 							take the page down again.
@@ -232,9 +214,13 @@ function NewEventRoute() {
 						</Field>
 
 						{/* Labelled above, not only through the control's accessible name:
-                this page is read by people who have never seen the app. */}
+                this page is read by people who have never seen the app. The
+                label is hidden from assistive tech because the picker's own
+                aria-label already says the same thing. */}
 						<div className={styles.field}>
-							<span className={styles.fieldLabel}>Date</span>
+							<span aria-hidden="true" className={styles.fieldLabel}>
+								Date
+							</span>
 							<ClientOnly>
 								<DatePicker
 									label="Date"
@@ -247,7 +233,9 @@ function NewEventRoute() {
 
 						<div className={styles.times}>
 							<div className={styles.field}>
-								<span className={styles.fieldLabel}>From</span>
+								<span aria-hidden="true" className={styles.fieldLabel}>
+									From
+								</span>
 								<TimePicker
 									label="From"
 									timeFormat="24h"
@@ -264,7 +252,9 @@ function NewEventRoute() {
 								/>
 							</div>
 							<div className={styles.field}>
-								<span className={styles.fieldLabel}>To</span>
+								<span aria-hidden="true" className={styles.fieldLabel}>
+									To
+								</span>
 								<TimePicker
 									label="To"
 									min={draft.start}

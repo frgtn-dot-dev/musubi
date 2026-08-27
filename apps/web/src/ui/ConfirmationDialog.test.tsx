@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
-  DialogError,
 } from "./ConfirmationDialog";
+import { InlineError } from "./InlineError";
 
 function ConfirmationHarness({ onConfirm }: { onConfirm: () => void }) {
   const [open, setOpen] = useState(false);
@@ -28,7 +28,7 @@ function ConfirmationHarness({ onConfirm }: { onConfirm: () => void }) {
         <ConfirmationNotice icon={<span>!</span>}>
           This can’t be undone.
         </ConfirmationNotice>
-        <DialogError requestId="request-42">Deletion failed.</DialogError>
+        <InlineError requestId="request-42">Deletion failed.</InlineError>
       </ConfirmationDialog>
     </>
   );

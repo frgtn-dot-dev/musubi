@@ -5,7 +5,9 @@ import { MOBILE_MODES } from "../../.storybook/modes";
 import { Button } from "./Button";
 import { Field } from "./Field";
 import {
+  AuthAsideLead,
   AuthForm,
+  AuthHint,
   AuthMessage,
   AuthProviders,
   AuthShell,
@@ -27,7 +29,9 @@ function SignInExample({ initialError = "" }: { initialError?: string }) {
     <AuthShell
       aside={
         <>
-          <p>You can also continue with an account you already have.</p>
+          <AuthAsideLead>
+            You can also continue with an account you already have.
+          </AuthAsideLead>
           <AuthProviders>
             <Button variant="secondary">Continue with Google</Button>
             <Button variant="secondary">Continue with Microsoft</Button>
@@ -59,6 +63,11 @@ function SignInExample({ initialError = "" }: { initialError?: string }) {
         <Field label="Password" variant="plain">
           <input defaultValue="correct horse battery staple" type="password" />
         </Field>
+        <AuthHint>
+          <Button size="compact" variant="secondary">
+            Forgotten your passphrase?
+          </Button>
+        </AuthHint>
         {error ? <AuthMessage>{error}</AuthMessage> : null}
         <AuthSubmit loading={pending} type="submit">
           Sign in

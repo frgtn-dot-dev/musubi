@@ -58,6 +58,8 @@ export function useWorkspaceQueries(
     enabled,
     queryFn: ({ signal }) => getSettings(signal),
     queryKey: queryKeys.settings(origin, userId),
+    // A restored pre-mutation snapshot must not resurrect onboarding online.
+    staleTime: 0,
   });
   const pages = useQuery({
     enabled,

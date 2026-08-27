@@ -2,6 +2,7 @@ import type { Event } from "@musubi/types";
 import { ArrowRight, CalendarDays, Search } from "lucide-react";
 import type { KeyboardEvent, RefObject } from "react";
 import { Dialog } from "~/ui/Dialog";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { offeredViews, type CalendarViewId } from "../view-registry";
 import styles from "./styles/search-dialog.module.css";
 
@@ -125,7 +126,7 @@ export function SearchDialog({
 			<div className={styles.results} onKeyDown={moveResultFocus}>
 				{actions.length > 0 ? (
 					<section aria-labelledby="search-actions-title">
-						<h2 id="search-actions-title">Actions</h2>
+						<SectionLabel id="search-actions-title">Actions</SectionLabel>
 						<div className={styles.resultList}>
 							{actions.map((action) => (
 								<button
@@ -148,7 +149,7 @@ export function SearchDialog({
 
 				{normalized ? (
 					<section aria-labelledby="search-events-title">
-						<h2 id="search-events-title">Events</h2>
+						<SectionLabel id="search-events-title">Events</SectionLabel>
 						{matches.length > 0 ? (
 							<div className={styles.resultList}>
 								{matches.map((event) => (
