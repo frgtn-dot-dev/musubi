@@ -24,6 +24,8 @@ import { Route as STokenRouteImport } from './routes/s.$token'
 import { Route as AppPPageIdViewRouteImport } from './routes/app/p.$pageId.$view'
 import { Route as AppPPageIdEventEventIdRouteImport } from './routes/app/p.$pageId.event.$eventId'
 import { Route as AppPPageIdEventNewRouteImport } from './routes/app/p.$pageId.event.new'
+import { Route as AppPPageIdViewEventEventIdRouteImport } from './routes/app/p.$pageId.$view.event.$eventId'
+import { Route as AppPPageIdViewEventNewRouteImport } from './routes/app/p.$pageId.$view.event.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -100,6 +102,17 @@ const AppPPageIdEventNewRoute = AppPPageIdEventNewRouteImport.update({
   path: '/p/$pageId/event/new',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPPageIdViewEventEventIdRoute =
+  AppPPageIdViewEventEventIdRouteImport.update({
+    id: '/event/$eventId',
+    path: '/event/$eventId',
+    getParentRoute: () => AppPPageIdViewRoute,
+  } as any)
+const AppPPageIdViewEventNewRoute = AppPPageIdViewEventNewRouteImport.update({
+  id: '/event/new',
+  path: '/event/new',
+  getParentRoute: () => AppPPageIdViewRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -114,9 +127,11 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/s/$token': typeof STokenRoute
   '/app/': typeof AppIndexRoute
-  '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
+  '/app/p/$pageId/$view': typeof AppPPageIdViewRouteWithChildren
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
   '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
+  '/app/p/$pageId/$view/event/$eventId': typeof AppPPageIdViewEventEventIdRoute
+  '/app/p/$pageId/$view/event/new': typeof AppPPageIdViewEventNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -130,9 +145,11 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/s/$token': typeof STokenRoute
   '/app': typeof AppIndexRoute
-  '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
+  '/app/p/$pageId/$view': typeof AppPPageIdViewRouteWithChildren
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
   '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
+  '/app/p/$pageId/$view/event/$eventId': typeof AppPPageIdViewEventEventIdRoute
+  '/app/p/$pageId/$view/event/new': typeof AppPPageIdViewEventNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -148,9 +165,11 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/s/$token': typeof STokenRoute
   '/app/': typeof AppIndexRoute
-  '/app/p/$pageId/$view': typeof AppPPageIdViewRoute
+  '/app/p/$pageId/$view': typeof AppPPageIdViewRouteWithChildren
   '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
   '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
+  '/app/p/$pageId/$view/event/$eventId': typeof AppPPageIdViewEventEventIdRoute
+  '/app/p/$pageId/$view/event/new': typeof AppPPageIdViewEventNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -170,6 +189,8 @@ export interface FileRouteTypes {
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
     | '/app/p/$pageId/event/new'
+    | '/app/p/$pageId/$view/event/$eventId'
+    | '/app/p/$pageId/$view/event/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -186,6 +207,8 @@ export interface FileRouteTypes {
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
     | '/app/p/$pageId/event/new'
+    | '/app/p/$pageId/$view/event/$eventId'
+    | '/app/p/$pageId/$view/event/new'
   id:
     | '__root__'
     | '/'
@@ -203,6 +226,8 @@ export interface FileRouteTypes {
     | '/app/p/$pageId/$view'
     | '/app/p/$pageId/event/$eventId'
     | '/app/p/$pageId/event/new'
+    | '/app/p/$pageId/$view/event/$eventId'
+    | '/app/p/$pageId/$view/event/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -325,13 +350,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPPageIdEventNewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/p/$pageId/$view/event/$eventId': {
+      id: '/app/p/$pageId/$view/event/$eventId'
+      path: '/event/$eventId'
+      fullPath: '/app/p/$pageId/$view/event/$eventId'
+      preLoaderRoute: typeof AppPPageIdViewEventEventIdRouteImport
+      parentRoute: typeof AppPPageIdViewRoute
+    }
+    '/app/p/$pageId/$view/event/new': {
+      id: '/app/p/$pageId/$view/event/new'
+      path: '/event/new'
+      fullPath: '/app/p/$pageId/$view/event/new'
+      preLoaderRoute: typeof AppPPageIdViewEventNewRouteImport
+      parentRoute: typeof AppPPageIdViewRoute
+    }
   }
 }
+
+interface AppPPageIdViewRouteChildren {
+  AppPPageIdViewEventEventIdRoute: typeof AppPPageIdViewEventEventIdRoute
+  AppPPageIdViewEventNewRoute: typeof AppPPageIdViewEventNewRoute
+}
+
+const AppPPageIdViewRouteChildren: AppPPageIdViewRouteChildren = {
+  AppPPageIdViewEventEventIdRoute: AppPPageIdViewEventEventIdRoute,
+  AppPPageIdViewEventNewRoute: AppPPageIdViewEventNewRoute,
+}
+
+const AppPPageIdViewRouteWithChildren = AppPPageIdViewRoute._addFileChildren(
+  AppPPageIdViewRouteChildren,
+)
 
 interface AppRouteChildren {
   AppSwDotjsRoute: typeof AppSwDotjsRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppPPageIdViewRoute: typeof AppPPageIdViewRoute
+  AppPPageIdViewRoute: typeof AppPPageIdViewRouteWithChildren
   AppPPageIdEventEventIdRoute: typeof AppPPageIdEventEventIdRoute
   AppPPageIdEventNewRoute: typeof AppPPageIdEventNewRoute
 }
@@ -339,7 +392,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppSwDotjsRoute: AppSwDotjsRoute,
   AppIndexRoute: AppIndexRoute,
-  AppPPageIdViewRoute: AppPPageIdViewRoute,
+  AppPPageIdViewRoute: AppPPageIdViewRouteWithChildren,
   AppPPageIdEventEventIdRoute: AppPPageIdEventEventIdRoute,
   AppPPageIdEventNewRoute: AppPPageIdEventNewRoute,
 }

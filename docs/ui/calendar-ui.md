@@ -407,11 +407,20 @@ tažený chip vidět vůbec.
   otevírací animace** — animace s `fill-mode: both` drží svůj poslední keyframe
   a přebíjí inline transform, takže by okno zůstalo stát na místě.
 
-**B7 — More options je stránka: HOTOVO** (2026-07-28)
+**B7 — More options je vrstva nad kalendářem: HOTOVO** (2026-07-28, přepsáno
+2026-08-27)
 
-- Nová route `/app/p/$pageId/event/new` je full editor jako **stránka**, ne
-  rozbalený popover. Kalendářový chrome tam není — ta vrstva je o detailech
-  eventu, ne o kalendáři.
+- Full editor byl nejprve **stránka** na `/app/p/$pageId/event/new`. Teď je to
+  **modal** ve velikosti `workspace` (stejná vrstva jako share dialog) na
+  `/app/p/$pageId/$view/event/new`, protože „odejít z editoru" nikdy nebyla
+  navigace jinam — byl to návrat k tomu, co je za ním.
+- Kvůli tomu je editor **dítě view routy**: rodič zůstane namountovaný, takže
+  kalendář za modalem nezmizí a nepřekresluje se. Dřív se odmountoval celý.
+- Staré URL bez view segmentu **redirectují** — tvar draftu v search se nemění,
+  takže i link napsaný před tou změnou editor otevře.
+- Dokud je editor otevřený, **kanonizace Page id v rodiči se vypíná**
+  (`useChildMatches`). Jinak by stará Page id v odkazu editor rovnou zavřela:
+  redirect na `/$view` by tu vrstvu shodil s sebou.
 - **Draft cestuje v URL**, ne v paměti: stránka jde reloadnout i nalinkovat a
   rozdělaný event se neztratí (`title`, `date`, `startTime`, `endTime`,
   `endDate`, `allDay`, `location`, `description`, `url`, `recurrence`,
@@ -421,9 +430,8 @@ tažený chip vidět vůbec.
 - `EventEditorForm.onExpand` rozhoduje, kam „More options" vede. Když ho nikdo
   nepředá (unit testy, embedding bez routeru), formulář se rozbalí na místě —
   jedna komponenta, dvě umístění, ne dva formuláře.
-- **Editace existujícího eventu zůstává v popoveru.** Stránka je zatím jen pro
-  tvorbu: edit by potřeboval načtení eventu podle id (endpoint pro jeden event
-  nemáme) a rozhodnutí o rozsahu série ještě před otevřením.
+- **Editace má vlastní vrstvu** na `/app/p/$pageId/$view/event/$eventId`; rychlá
+  editace zůstává v popoveru a „More options" ji předá modalu.
 
 **B6 — Quick create je konečně quick: HOTOVO** (2026-07-28)
 

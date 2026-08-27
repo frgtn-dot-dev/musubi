@@ -1,4 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  useChildMatches,
+} from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -42,6 +46,22 @@ export const Route = createFileRoute("/app/p/$pageId/$view")({
 });
 
 function WorkspaceRoute() {
+  /* The event editor is a layer above this screen rather than a page of its
+     own. While it is open the address bar belongs to it, so the canonical-page
+     redirect inside the screen has to keep its hands off — otherwise opening
+     the editor from a stale Page id would send the URL back to the calendar and
+     close the editor with it. */
+  const editorOpen = useChildMatches().length > 0;
+
+  return (
+    <>
+      <CalendarScreen editorOpen={editorOpen} />
+      <Outlet />
+    </>
+  );
+}
+
+function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const { pageId, view } = Route.useParams();
   const { date } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -121,6 +141,7 @@ function WorkspaceRoute() {
   // renders the month, so leaving `/schedule` in the URL means the page, the view
   // picker and the link someone copies all disagree.
   useEffect(() => {
+    if (editorOpen) return;
     if (!fallbackPageId && view === activeView) return;
     void navigate({
       params: { pageId: fallbackPageId ?? pageId, view: activeView },
@@ -128,7 +149,7 @@ function WorkspaceRoute() {
       search: { date },
       to: "/app/p/$pageId/$view",
     });
-  }, [activeView, date, fallbackPageId, navigate, pageId, view]);
+  }, [activeView, date, editorOpen, fallbackPageId, navigate, pageId, view]);
 
   if (pending) {
     return (
@@ -293,15 +314,15 @@ function WorkspaceRoute() {
 
         if (event) {
           void navigate({
-            params: { eventId: event.id, pageId },
+            params: { eventId: event.id, pageId, view: activeView },
             search,
-            to: "/app/p/$pageId/event/$eventId",
+            to: "/app/p/$pageId/$view/event/$eventId",
           });
         } else {
           void navigate({
-            params: { pageId },
+            params: { pageId, view: activeView },
             search,
-            to: "/app/p/$pageId/event/new",
+            to: "/app/p/$pageId/$view/event/new",
           });
         }
       }}

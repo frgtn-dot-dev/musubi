@@ -4868,9 +4868,9 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	await page.getByRole("button", { exact: true, name: "Event" }).click();
 	await page.getByRole("button", { name: "More options" }).click();
 
-	const editor = page.locator("[data-event-editor-page]");
-	const surface = page.locator("[data-event-editor-surface]");
-	const form = surface.locator('form[data-layout="page"]');
+	const editor = page.getByRole("dialog", { name: "New event" });
+	const surface = editor.locator("header + div");
+	const form = editor.locator('form[data-layout="page"]');
 	const when = form.locator('[data-editor-section="when"]');
 	const details = form.locator('[data-editor-section="details"]');
 	const calendarSection = form.locator('[data-editor-section="calendars"]');
@@ -4923,7 +4923,9 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	expect(compactSurfaceBox).not.toBeNull();
 	expect(compactActionsBox).not.toBeNull();
 	expect(compactWhenBox).not.toBeNull();
-	expect(compactSurfaceBox!.x).toBeGreaterThanOrEqual(28);
+	// The editor is a layer now, so its inset is the shared viewport gutter
+	// (--layer-viewport-gutter, 24px here) rather than a page's own padding.
+	expect(compactSurfaceBox!.x).toBeGreaterThanOrEqual(24);
 	expect(
 		Math.abs(
 			compactSurfaceBox!.x -
@@ -4987,9 +4989,6 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	await expect(page).toHaveURL(/\/event\/new\?/);
 	await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
-	await expect(
-		page.getByRole("navigation", { name: "Event editor" }),
-	).toBeVisible();
 	await expect(page.getByRole("heading", { name: "When" })).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Details" })).toBeVisible();
 	await expect(
@@ -5008,21 +5007,21 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	});
 	await create.scrollIntoViewIfNeeded();
 	await expect(create).toBeVisible();
-	await page.getByRole("button", { name: "Back to calendar" }).click();
+	await page.getByRole("button", { name: "Close event editor" }).click();
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 	expect(runtimeErrors).toEqual([]);
 });
 
-test("leaving the full editor page keeps the calendar where it was", async ({
+test("leaving the full event editor keeps the calendar where it was", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await page.locator('[data-day-key="2026-07-15"]').click();
 	await page.getByRole("button", { name: "More options" }).click();
-	await expect(page).toHaveURL(/\/event\/new\?/);
+	await expect(page).toHaveURL(/\/month\/event\/new\?/);
 
-	await page.getByRole("button", { name: "Back to calendar" }).click();
+	await page.getByRole("button", { name: "Close event editor" }).click();
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 });
 
