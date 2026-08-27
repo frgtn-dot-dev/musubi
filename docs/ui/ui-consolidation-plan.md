@@ -366,6 +366,30 @@ migration proves the need.
   the `workspace` copy was dead. It is a 7px circle written out five times, but
   `scheduling` is out of scope and no plan item covers it.
 
+## Found on the way
+
+Three duplications this plan never listed, closed with it.
+
+- **`CalendarDot`.** The 9px colour mark was written out four times — in
+  `calendars`, `event-details`, `event-editor` and `scheduling` — once at 8px
+  with a heavier hairline, and every one of the seven call sites paired it with
+  the same `style={{ backgroundColor }}`. It is a component in
+  `calendar/components` rather than a shared primitive: a calendar's colour is
+  domain, and the anatomy travels with it. `scheduling` keeps its copy for
+  `PollForm`, which is out of scope.
+
+- **`0.58rem`.** Seven raw uses, no reason recorded anywhere, and no token that
+  small — `--text-10` is `0.625rem`. Two were chips, `calendars .badge` and
+  `workspace .brandStage`, and they are on the scale now. The other five are
+  calendar geometry — event meta, the today label, the narrow poll chip — which
+  the skill keeps feature-owned, so they stay.
+
+- **Two names.** `.recurrenceBadge` and `.homeBadge` claim a badge without a
+  border, a radius or a fill; both are icon-and-word marks, and they are
+  `.recurrenceMark` and `.homeMark` now, matching `.homePillMark` next door.
+  `.defaultStatus` was wrongly listed with them earlier: it reports a state and
+  never claimed to be a badge.
+
 ## Explicitly deferred
 
 - Universal `Card` component. Similar borders and radii do not prove shared
