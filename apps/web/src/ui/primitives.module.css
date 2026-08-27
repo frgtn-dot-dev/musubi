@@ -251,7 +251,9 @@
 .fieldControl > textarea {
 	min-height: 96px;
 	padding-block: var(--space-3);
-	resize: vertical;
+	/* The field owns its height. Dragging a handle inside a dialog, a popover or a
+     column pushes a layer that already decided how tall it is. */
+	resize: none;
 }
 
 .fieldControl > :is(input, select, textarea, button):focus-visible {

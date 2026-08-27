@@ -625,10 +625,8 @@
 	}
 
 	.form[data-layout="page"] .descriptionField textarea {
-		/* Fills the column, so dragging a resize handle has nothing left to give. */
 		height: 100%;
 		min-height: 0;
-		resize: none;
 	}
 
 	.form[data-layout="page"] .calendarSection {

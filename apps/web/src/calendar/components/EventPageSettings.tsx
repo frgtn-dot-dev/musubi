@@ -3,6 +3,7 @@ import type {
   EventPageAgendaItem,
   EventPageContent,
   EventPageTheme,
+  Settings,
 } from "@musubi/types";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import {
@@ -16,6 +17,7 @@ import {
 import { Button, buttonClassName, IconButton } from "~/ui/Button";
 import { Dialog, DialogClose } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
+import { TimePicker } from "~/ui/TimePicker";
 import styles from "./styles/share-event.module.css";
 
 const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -61,6 +63,7 @@ export function EventPageSettings({
   onPreviewUrlChange,
   onUpload,
   theme,
+  timeFormat,
 }: {
   busy: boolean;
   content: EventPageContent;
@@ -72,6 +75,7 @@ export function EventPageSettings({
   onPreviewUrlChange: (url: null | string) => void;
   onUpload: (file: File) => Promise<void>;
   theme: EventPageTheme;
+  timeFormat: Settings["timeFormat"];
 }) {
   const uploadId = useId();
   const [tagText, setTagText] = useState(content.tags.join(", "));
@@ -372,14 +376,13 @@ export function EventPageSettings({
 
         {content.agenda.map((item) => (
           <div className={styles.agendaEditor} key={item.id}>
-            <input
-              aria-label="Time"
+            <TimePicker
+              className={styles.agendaTime}
               disabled={busy || uploading}
-              type="time"
+              label="Time"
+              timeFormat={timeFormat}
               value={item.time}
-              onChange={(event) =>
-                updateAgenda(item.id, { time: event.target.value })
-              }
+              onChange={(time) => updateAgenda(item.id, { time })}
             />
             <input
               aria-label="Title"

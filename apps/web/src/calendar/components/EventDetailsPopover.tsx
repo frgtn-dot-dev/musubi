@@ -1088,6 +1088,7 @@ export function EventDetailsPopover({
 						if (!open) setSharing(false);
 					}}
 					returnFocus={shareActionRef}
+					timeFormat={timeFormat}
 				/>
 			) : null}
 

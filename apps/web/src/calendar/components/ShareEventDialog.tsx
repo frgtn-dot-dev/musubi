@@ -1,4 +1,9 @@
-import type { Event, EventPageContent, EventPageTheme } from "@musubi/types";
+import type {
+  Event,
+  EventPageContent,
+  EventPageTheme,
+  Settings,
+} from "@musubi/types";
 import { defaultEventPageContent, defaultEventPageTheme } from "@musubi/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Link2, Lock, MapPin } from "lucide-react";
@@ -106,12 +111,14 @@ export function ShareEventDialog({
   onOpenChange,
   onSaveEvent,
   returnFocus,
+  timeFormat,
 }: {
   event: Event;
   onNotice: (message: string) => void;
   onOpenChange: (open: boolean) => void;
   onSaveEvent: (event: Event) => Promise<unknown>;
   returnFocus: RefObject<HTMLElement | null>;
+  timeFormat: Settings["timeFormat"];
 }) {
   const queryClient = useQueryClient();
   const shareKey = ["event-share", getServerOrigin(), event.id];
@@ -432,6 +439,7 @@ export function ShareEventDialog({
               content={draft.content}
               coverUrl={current?.coverUrl ?? null}
               theme={draft.theme}
+              timeFormat={timeFormat}
               onChange={({ content, theme }) =>
                 setDraft({ ...draft, content, theme })
               }
