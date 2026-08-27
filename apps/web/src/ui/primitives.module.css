@@ -874,7 +874,7 @@
 
 .checkboxInput:focus-visible + .checkboxBox {
 	outline: var(--focus-ring);
-	outline-offset: 3px;
+	outline-offset: -3px;
 }
 
 .checkboxCopy {
@@ -1071,6 +1071,13 @@
 	cursor: pointer;
 }
 
+/* Inward: a row is full-bleed inside something that clips or scrolls — a
+   settings group, the sidebar, a dialog body — so a ring drawn outside it is
+   cut off or starts a scrollbar. */
+.rowAction:focus-visible {
+	outline-offset: -3px;
+}
+
 .rowAction:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
@@ -1183,10 +1190,6 @@
 .row[data-row-options="stacked"] .rowOptions {
 	width: 100%;
 	max-width: none;
-}
-
-.settingsSectionRows .rowAction:focus-visible {
-	outline-offset: -3px;
 }
 
 .settingsSectionRows .segmented {

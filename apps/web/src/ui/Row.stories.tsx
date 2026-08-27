@@ -7,6 +7,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
+import { expect, userEvent, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { Row, RowAction, RowOptions, RowToggle } from "./Row";
 import { SettingsSection } from "./SettingsSection";
@@ -37,6 +38,12 @@ function InteractiveRows() {
           onChange={setTheme}
           options={THEME_OPTIONS}
           value={theme}
+        />
+        <RowAction
+          detail="Removes every calendar you own"
+          icon={<Trash2 size={18} />}
+          label="Delete account"
+          tone="destructive"
         />
       </SettingsSection>
     </div>
@@ -137,6 +144,19 @@ export const States: Story = {
 };
 
 export const Interactive: Story = {
+  /* The ring has to sit inside the row: every consumer puts rows in something
+     that clips or scrolls. */
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const row = canvas.getByRole("button", { name: /Delete account/ });
+
+    await userEvent.tab();
+    row.focus();
+
+    await expect(
+      Number.parseFloat(getComputedStyle(row).outlineOffset),
+    ).toBeLessThan(0);
+  },
   render: () => <InteractiveRows />,
 };
 
