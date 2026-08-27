@@ -1120,9 +1120,12 @@
 	color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
+/* A floor, not a width: a glyph gets the 22px column, while an avatar handed to
+   the same slot keeps its own size instead of spilling 5px into the row's
+   padding and eating the gap before the label. */
 .rowIcon {
 	display: grid;
-	width: 22px;
+	min-width: 22px;
 	flex: none;
 	place-content: center;
 	color: var(--text-muted);
@@ -1205,7 +1208,7 @@
 }
 
 .row_compact .rowIcon {
-	width: 20px;
+	min-width: 20px;
 }
 
 .row_compact .rowLabel {

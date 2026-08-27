@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
+import { Avatar } from "./Avatar";
 import { Row, RowAction, RowOptions, RowToggle } from "./Row";
 import { SettingsSection } from "./SettingsSection";
 
@@ -38,6 +39,13 @@ function InteractiveRows() {
           onChange={setTheme}
           options={THEME_OPTIONS}
           value={theme}
+        />
+        <RowAction
+          data-testid="profile-row"
+          detail="haruki@example.com"
+          icon={<Avatar name="Haruki Tanaka" size={32} />}
+          label="Haruki Tanaka"
+          showChevron={false}
         />
         <RowAction
           detail="Removes every calendar you own"
@@ -156,6 +164,17 @@ export const Interactive: Story = {
     await expect(
       Number.parseFloat(getComputedStyle(row).outlineOffset),
     ).toBeLessThan(0);
+
+    /* An avatar is bigger than the glyph column, and it must widen its slot
+       rather than spill out of it. */
+    const slot = canvas
+      .getByTestId("profile-row")
+      .querySelector<HTMLElement>("[class*=rowIcon]")!;
+    const avatar = slot.firstElementChild!;
+
+    await expect(
+      slot.getBoundingClientRect().left,
+    ).toBeLessThanOrEqual(avatar.getBoundingClientRect().left);
   },
   render: () => <InteractiveRows />,
 };
