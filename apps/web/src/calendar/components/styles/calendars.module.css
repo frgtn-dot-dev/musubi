@@ -121,13 +121,6 @@
 	max-width: 11rem;
 }
 
-.calendarDot {
-	width: 9px;
-	height: 9px;
-	border: 1px solid rgb(0 0 0 / 10%);
-	border-radius: var(--radius-pill);
-}
-
 .groups {
 	display: grid;
 }
@@ -215,7 +208,7 @@
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-pill);
 	color: var(--text-secondary);
-	font-size: 0.58rem;
+	font-size: var(--text-10);
 	font-weight: 500;
 	letter-spacing: 0.04em;
 	line-height: 1.3;

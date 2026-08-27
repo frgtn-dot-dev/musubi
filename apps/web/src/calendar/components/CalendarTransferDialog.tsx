@@ -46,6 +46,7 @@ import { SectionLabel } from "~/ui/SectionLabel";
 import { Select } from "~/ui/Select";
 import type { ReminderControl } from "~/calendar/reminder-control";
 import { connectionOfCalendar } from "../federation-routing";
+import { CalendarDot } from "./CalendarDot";
 import { AccountMark } from "./ProviderIcon";
 import styles from "./styles/calendars.module.css";
 
@@ -508,12 +509,7 @@ export function CalendarTransferDialog({
 									disabled={Boolean(busy)}
 									label="Calendar to export"
 									options={calendars.map((calendar) => ({
-										icon: (
-											<span
-												className={styles.calendarDot}
-												style={{ backgroundColor: calendar.color }}
-											/>
-										),
+										icon: <CalendarDot color={calendar.color} />,
 										label: calendar.name,
 										value: calendar.id,
 									}))}

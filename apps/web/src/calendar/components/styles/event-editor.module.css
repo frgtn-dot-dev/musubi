@@ -228,14 +228,6 @@
 	justify-self: start;
 }
 
-.calendarDot {
-	width: 9px;
-	height: 9px;
-	flex: none;
-	border: 1px solid rgb(0 0 0 / 10%);
-	border-radius: var(--radius-pill);
-}
-
 .calendarSummary {
 	display: grid;
 	width: 100%;
@@ -427,7 +419,7 @@
 }
 
 .homeChoice,
-.homeBadge {
+.homeMark {
 	display: inline-grid;
 	align-self: center;
 	justify-self: center;
@@ -484,7 +476,7 @@
 	opacity: 0.5;
 }
 
-.homeBadge {
+.homeMark {
 	gap: 2px;
 	font-size: var(--text-10);
 }

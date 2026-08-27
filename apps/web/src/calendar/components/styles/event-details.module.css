@@ -58,7 +58,7 @@
   line-height: 1.2;
 }
 
-.recurrenceBadge {
+.recurrenceMark {
   display: inline-flex;
   width: fit-content;
   align-items: center;
@@ -166,14 +166,6 @@
 .homePillMark {
   flex: none;
   margin-left: -1px;
-}
-
-.calendarDot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border: 1px solid rgb(0 0 0 / 12%);
-  border-radius: var(--radius-pill);
 }
 
 .notes,

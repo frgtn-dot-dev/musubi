@@ -92,6 +92,7 @@ import {
 	withAllDay,
 	withTimed,
 } from "@musubi/types";
+import { CalendarDot } from "./CalendarDot";
 import { EventEditorForm } from "./EventEditorForm";
 import { ShareEventDialog } from "./ShareEventDialog";
 
@@ -626,7 +627,7 @@ export function EventDetailsPopover({
 								<div className={styles.titleBlock}>
 									<h2 id={titleId}>{event.title}</h2>
 									{event.recurrence ? (
-										<span className={styles.recurrenceBadge}>
+										<span className={styles.recurrenceMark}>
 											<Repeat2 aria-hidden="true" size={13} />
 											Recurring
 										</span>
@@ -697,22 +698,14 @@ export function EventDetailsPopover({
 														style={{ color: item.color }}
 													/>
 												) : (
-													<span
-														aria-hidden="true"
-														className={styles.calendarDot}
-														style={{ backgroundColor: item.color }}
-													/>
+													<CalendarDot color={item.color} />
 												)}
 												{item.name}
 											</li>
 										))
 									) : (
 										<li className={styles.calendarPill}>
-											<span
-												aria-hidden="true"
-												className={styles.calendarDot}
-												style={{ backgroundColor: accentColor }}
-											/>
+											<CalendarDot color={accentColor} />
 											Calendar
 										</li>
 									)}
@@ -975,12 +968,7 @@ export function EventDetailsPopover({
 															className={styles.targetCalendar}
 															detail={targetCalendarDetail(item)}
 															disabled={Boolean(busyAction)}
-															icon={
-																<span
-																	className={styles.calendarDot}
-																	style={{ backgroundColor: item.color }}
-																/>
-															}
+															icon={<CalendarDot color={item.color} />}
 															key={item.id}
 															label={item.name}
 															showChevron={false}

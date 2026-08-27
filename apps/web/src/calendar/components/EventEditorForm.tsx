@@ -41,6 +41,7 @@ import {
 } from "../federation-routing";
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { createTimeGeometry } from "../time-geometry";
+import { CalendarDot } from "./CalendarDot";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./styles/event-editor.module.css";
 
@@ -494,13 +495,8 @@ export function EventEditorForm({
 						type="button"
 						onClick={() => setCalendarPickerOpen((current) => !current)}
 					>
-						<span
-							aria-hidden="true"
-							className={styles.calendarDot}
-							style={{
-								backgroundColor:
-									selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
-							}}
+						<CalendarDot
+							color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR}
 						/>
 						<span className={styles.calendarSummaryCopy}>
 							<strong>{selectedCalendar?.name ?? "Choose a calendar"}</strong>
@@ -600,11 +596,7 @@ export function EventEditorForm({
 															<Check size={12} strokeWidth={2.2} />
 														) : null}
 													</span>
-													<span
-														aria-hidden="true"
-														className={styles.calendarDot}
-														style={{ backgroundColor: calendar.color }}
-													/>
+													<CalendarDot color={calendar.color} />
 													<span className={styles.calendarPlacementCopy}>
 														<strong>{calendar.name}</strong>
 														<span>{detail}</span>
@@ -615,7 +607,7 @@ export function EventEditorForm({
 													isHome ? (
 														<span
 															aria-label="Home calendar"
-															className={styles.homeBadge}
+															className={styles.homeMark}
 															role="img"
 														>
 															<House

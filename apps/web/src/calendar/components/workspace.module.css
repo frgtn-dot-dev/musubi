@@ -73,7 +73,7 @@
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-pill);
 	color: var(--text-muted);
-	font-size: 0.58rem;
+	font-size: var(--text-10);
 	letter-spacing: 0.08em;
 }
 
