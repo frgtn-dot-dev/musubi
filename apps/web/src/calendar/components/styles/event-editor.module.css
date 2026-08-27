@@ -489,16 +489,8 @@
 	font-size: var(--text-10);
 }
 
-.srOnly {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	padding: 0;
-	border: 0;
-	margin: -1px;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
+.visuallyHidden {
+	composes: visuallyHidden from "../../../ui/primitives.module.css";
 }
 
 .formError {
@@ -535,6 +527,8 @@
 	min-width: 112px;
 }
 
+/* The hidden recipe spelled out rather than composed: `composes` only works on a
+   rule whose selector is a single class, and this one is compound. */
 .form[data-compact] .sectionLabel {
 	position: absolute;
 	width: 1px;

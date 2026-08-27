@@ -538,7 +538,7 @@ export function EventEditorForm({
 						data-ui="calendar-placement"
 						id={`${id}-calendar-list`}
 					>
-						<legend className={styles.srOnly}>Calendars for this event</legend>
+						<legend className={styles.visuallyHidden}>Calendars for this event</legend>
 						<div aria-hidden="true" className={styles.calendarPlacementHeader}>
 							<span>Appears in</span>
 							<span>Home</span>
@@ -645,7 +645,7 @@ export function EventEditorForm({
 														<span aria-hidden="true">
 															<House size={14} strokeWidth={1.7} />
 														</span>
-														<span className={styles.srOnly}>
+														<span className={styles.visuallyHidden}>
 															{isHome ? "Home" : "Make home"}
 														</span>
 													</label>
@@ -660,7 +660,7 @@ export function EventEditorForm({
 				) : null}
 
 				{placementMessage ? (
-					<span aria-live="polite" className={styles.srOnly} role="status">
+					<span aria-live="polite" className={styles.visuallyHidden} role="status">
 						{placementMessage}
 					</span>
 				) : null}

@@ -1,3 +1,17 @@
+/* Text for a screen reader only. Lives at the top of the file because rules
+   below compose it, and same-file `composes` cannot look forward. */
+.visuallyHidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	padding: 0;
+	border: 0;
+	margin: -1px;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+}
+
 .button,
 .iconButton {
 	position: relative;
@@ -953,15 +967,7 @@
 }
 
 .selectSheetTitle {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	padding: 0;
-	border: 0;
-	margin: -1px;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
+	composes: visuallyHidden;
 }
 
 .selectList {
@@ -2014,18 +2020,6 @@
 		opacity: 0;
 		transform: translateY(6px);
 	}
-}
-
-.visuallyHidden {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	padding: 0;
-	border: 0;
-	margin: -1px;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
 }
 
 @media (max-width: 599px) {

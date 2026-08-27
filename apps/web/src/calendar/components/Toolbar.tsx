@@ -53,7 +53,7 @@ export function Toolbar({
     <header className={styles.toolbar}>
       {/* The page name lives in the sidebar, its settings in the page dialog and
           the theme in Settings, so the toolbar carries no page strip at all. */}
-      <h1 className={styles.srOnly}>{pageTitle}</h1>
+      <h1 className={styles.visuallyHidden}>{pageTitle}</h1>
 
       <div className={styles.toolbarControls}>
         <div className={styles.dateControls}>

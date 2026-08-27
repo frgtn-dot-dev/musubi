@@ -102,12 +102,7 @@
 }
 
 .visuallyHidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+  composes: visuallyHidden from "../../../ui/primitives.module.css";
 }
 
 @media (max-width: 599px) {

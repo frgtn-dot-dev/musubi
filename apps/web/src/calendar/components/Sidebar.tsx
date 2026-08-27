@@ -324,7 +324,7 @@ export function Sidebar({
             {/* Announces a keyboard move. A live region rather than role="status":
                 the toast already owns that role, and two of them would make
                 "the status message" ambiguous for both readers and tests. */}
-            <span aria-live="polite" className={styles.srOnly}>
+            <span aria-live="polite" className={styles.visuallyHidden}>
               {reorderMessage}
             </span>
           </nav>
