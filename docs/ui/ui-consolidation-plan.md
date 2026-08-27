@@ -1,6 +1,7 @@
 # Web UI consolidation plan
 
-- Status: **active plan; P1.1, P1.4 and the visually-hidden item are done**
+- Status: **active plan; P0, P1 and P2 done apart from `RowGroup`, which still
+  has one consumer; P3 open**
 - Scope: `apps/web`
 - Excluded: Scheduler, polls, `find-a-time`, `SchedulingDialog`, `Poll*`, poll CSS
 - Previous restructure:
@@ -251,16 +252,73 @@ code in the same change.
   `composes` cannot look forward. `Select`'s sheet title composes it and is
   un-hidden again below 600px, which now has a story that fails if the hidden
   recipe ever wins there.
-- [ ] Extract the duplicated readonly copy-link control used by
+- [x] Extract the duplicated readonly copy-link control used by
   `ShareEventDialog` and `routes/new-event.tsx` as a small `CopyField` only if
   label, value, copy action, and feedback share one contract.
-- [ ] Consolidate the repeated interactive attendee facepile as `AvatarStack`
+
+  Four call sites, four behaviours. `ShareEventDialog` awaited the write and
+  reset after two seconds; `SchedulingDialog` reported both outcomes as a
+  toast; `routes/new-event.tsx` and `routes/find-a-time.tsx` called
+  `navigator.clipboard?.writeText` without awaiting it, set `copied` and never
+  reset — so outside a secure context the button said "Copied" while nothing had
+  been copied, permanently. `CopyField` awaits, says "Copy failed" when it
+  fails, and leaves the value selected so copying by hand takes one keystroke.
+
+  `.linkField` was byte-identical across the modules and `.linkRow` differed
+  only by `width: 100%`. Two call sites still carry local copies —
+  `SchedulingDialog` and `routes/find-a-time.tsx` — because both are out of
+  scope; migrating them is a two-line change whenever that exclusion lifts, and
+  `find-a-time` still has the misleading-success bug.
+- [x] Consolidate the repeated interactive attendee facepile as `AvatarStack`
   or a calendar feature component. Keep it outside `apps/web/src/ui` if its
   behavior remains attendee-specific.
-- [ ] Inventory passive status/role/count chips. Add a shared badge only when at
+
+  It went to `apps/web/src/ui`: the behaviour is a button that opens a list, and
+  nothing in it is attendee-specific — the semantics stay with the two
+  consumers, `EventDetailsPopover` and `routes/-rsvp-block.tsx`. Both had the
+  same button, the same 2px ring between the circles and the same overflow
+  count, differing only in palette, which now travels through
+  `--avatar-stack-ring` and the two `--avatar-stack-more-*` properties.
+
+  The overflow chip was 36px in the popover while its faces were 32px. The ring
+  is inside the box, so the chip stood two pixels above and below the row; it is
+  32px now.
+- [x] Inventory passive status/role/count chips. Add a shared badge only when at
   least two consumers share semantics and anatomy, not merely rounded CSS.
-- [ ] Remove `routes/login.tsx` imports of private `primitives.module.css` rules
+
+  **No shared badge.** Five outlined pills exist and no two match:
+
+  | Class | Border | Padding | Size | Then |
+  | --- | --- | --- | --- | --- |
+  | `sharing .count` | `--border-medium` | 4/8 | `--text-10` | panel fill, capitalize |
+  | `sharing .roleBadge` | `--border-medium` | 5/9 | `--text-10` | panel fill, capitalize |
+  | `calendars .badge` | `--border-subtle` | 2/6 | `0.58rem` | uppercase, 500, `0.04em` |
+  | `connections .status` | `--border-subtle` | 2/7 | `--text-10` | a dot child and `data-tone` |
+  | `workspace .brandStage` | `--border-subtle` | 1/5 | `0.58rem` | `--text-muted`, `0.08em` |
+
+  Three paddings, two border colours, two font sizes, three letter-spacings. The
+  semantics differ as much as the anatomy: a quantity, a role, a calendar kind, a
+  connection state with a tone, a release stage. The only pair that shares both
+  is `.count` and `.roleBadge`, and they already share one rule in one file, so
+  there is nothing to extract.
+
+  Two things the inventory did turn up, neither of them this item's work:
+
+  - `.recurrenceBadge`, `.defaultStatus` and `.homeBadge` are named as badges but
+    are plain text-and-icon rows with no border and no radius. The names mislead.
+  - `0.58rem` appears seven times as a raw value across `calendars.module.css`
+    and `workspace.module.css` — a de-facto step below the smallest token,
+    `--text-10` at `0.625rem`. Four of the seven are calendar geometry and stay
+    feature-owned, but two are chips inventing the same unnamed size
+    independently.
+- [x] Remove `routes/login.tsx` imports of private `primitives.module.css` rules
   by exposing the missing semantic composition through `AuthShell`.
+
+  It used exactly two rules, `.authAsideLead` and `.authHint`, which are now
+  `AuthAsideLead` and `AuthHint` beside the `AuthForm`/`AuthMessage` family. No
+  file outside `apps/web/src/ui` imports the private stylesheet any more. The
+  story had been rendering a bare paragraph where production had the styled one,
+  so it drifts no longer.
 
 ### P3 — API cleanup after migrations
 
