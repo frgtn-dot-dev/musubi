@@ -4897,6 +4897,16 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 			vertical: element.scrollHeight - element.clientHeight,
 		})),
 	).toEqual({ horizontal: 0, vertical: 0 });
+	// The dialog clips, so its own scrollHeight can never report an overflow.
+	// The invariant worth pinning is the pair below: the layer stays inside the
+	// viewport, and at this height the three columns fit without the body
+	// needing to scroll at all.
+	const body = editor.locator("header + div");
+	const editorBox = (await editor.boundingBox())!;
+	expect(editorBox.y + editorBox.height).toBeLessThanOrEqual(801);
+	expect(
+		await body.evaluate((element) => element.scrollHeight - element.clientHeight),
+	).toBe(0);
 	expect(
 		await form
 			.locator('[data-ui="calendar-placement"]')
@@ -4942,6 +4952,17 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 				(compactSurfaceBox!.x + compactSurfaceBox!.width - 12),
 		),
 	).toBeLessThanOrEqual(2);
+
+	// Too short for the form's own minimum. `scrollHeight` cannot tell scrolling
+	// from clipping — both report an overflow — so the check is the one thing the
+	// person filling the form needs: the bottom of it is still reachable.
+	await page.setViewportSize({ height: 620, width: 1280 });
+	const shortEditorBox = (await editor.boundingBox())!;
+	expect(shortEditorBox.y + shortEditorBox.height).toBeLessThanOrEqual(621);
+	const submit = page.getByRole("button", { exact: true, name: "Create" });
+	await submit.scrollIntoViewIfNeeded();
+	await expect(submit).toBeInViewport();
+	await page.setViewportSize({ height: 800, width: 1280 });
 
 	const [dateBox, startTimeBox, repeatBox] = await Promise.all([
 		form.getByRole("button", { name: /^Date:/ }).boundingBox(),
@@ -8986,4 +9007,69 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
 		Promise.all(document.getAnimations().map((animation) => animation.finished)),
 	);
 	await expectNoAccessibilityViolations(page);
+});
+
+test("scrolls the calendar list inside the editor layer, not the layer", async ({
+	page,
+}) => {
+	await page.setViewportSize({ height: 962, width: 1890 });
+	await mockAuthenticatedReads(page);
+	// More calendars than the column has room for: the point of the test is what
+	// gives way when they do not fit.
+	await page.route("**/api/v1/calendars", (route) =>
+		route.request().method() === "GET"
+			? respond(
+					route,
+					Array.from({ length: 16 }, (_, index) => ({
+						color: "#b3492f",
+						creatorID: "user-web-qa",
+						id: index === 0 ? "personal" : `extra-${index}`,
+						isDefault: index === 0,
+						members: [],
+						name: `Calendar ${index + 1}`,
+						role: "owner" as const,
+					})),
+				)
+			: route.fallback(),
+	);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-07`);
+	await page.getByRole("button", { exact: true, name: "Event" }).click();
+	await page.getByRole("button", { name: "More options" }).click();
+
+	const dialog = page.getByRole("dialog", { name: "New event" });
+	const body = dialog.locator("header + div");
+	const form = dialog.locator('form[data-layout="page"]');
+	const placement = form.locator('[data-ui="calendar-placement"]');
+	const overflow = (locator: typeof body) =>
+		locator.evaluate((element) => element.scrollHeight - element.clientHeight);
+
+	const [bodyBox, formBox] = await Promise.all([
+		body.boundingBox(),
+		form.boundingBox(),
+	]);
+	// The form takes the body's height rather than its content's. Without that the
+	// row holding the calendars grows to fit all of them, and the form leaves the
+	// bottom of the layer.
+	expect(formBox!.height).toBeLessThanOrEqual(bodyBox!.height + 1);
+	expect(await overflow(body)).toBe(0);
+	expect(await overflow(placement)).toBeGreaterThan(0);
+
+	// Only the calendars move: the "Appears in" header belongs to the column.
+	// Measured against the scrollport rather than the viewport: the layer is
+	// vertically centred, so its own position settles by a pixel or two.
+	const headerOffset = () =>
+		placement.evaluate((element) => {
+			const header = element.querySelector("div")!;
+			return (
+				header.getBoundingClientRect().top -
+				element.getBoundingClientRect().top
+			);
+		});
+
+	const before = await headerOffset();
+	await placement.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	expect(await headerOffset()).toBeCloseTo(before, 0);
+	await expect(placement.getByText("Calendar 16")).toBeInViewport();
 });

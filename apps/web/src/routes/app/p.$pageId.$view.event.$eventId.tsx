@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef } from "react";
 import { useSessionUser } from "~/auth/use-session-user";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
+// The class that fits the page layout into a dialog body lives with the form.
+import editorStyles from "~/calendar/components/styles/event-editor.module.css";
 import { toDateKey } from "~/calendar/date-key";
 import {
   applyEventEditorSearch,
@@ -68,8 +70,8 @@ function EditEventRoute() {
 
   return (
     <Dialog
+      bodyClassName={editorStyles.dialogFit}
       bodyLayout="flush"
-      bodyScroll="panels"
       closeLabel="Close event editor"
       initialFocus={titleRef}
       description={

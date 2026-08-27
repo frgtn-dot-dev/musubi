@@ -568,6 +568,17 @@
 	box-shadow: 0 -1px var(--border-subtle);
 }
 
+/* Fitting the page layout into a dialog body.
+   `height: 100%` inside the form cannot do it: the body's height comes from
+   `flex-grow`, which is an indefinite height, so the percentage resolves to auto
+   and the form grows to its content instead. One stretched grid row gives the
+   form a definite height without a percentage, which is what lets the calendar
+   list scroll rather than push the form out of the layer. */
+.dialogFit {
+	display: grid;
+	grid-template-rows: minmax(0, 1fr);
+}
+
 @media (min-width: 900px) {
 	.form[data-layout="page"] {
 		height: 100%;

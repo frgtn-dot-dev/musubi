@@ -3,6 +3,8 @@ import { type RefObject, useRef } from "react";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import { useSessionUser } from "~/auth/use-session-user";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
+// The class that fits the page layout into a dialog body lives with the form.
+import editorStyles from "~/calendar/components/styles/event-editor.module.css";
 import { toDateKey } from "~/calendar/date-key";
 import {
   applyEventEditorSearch,
@@ -57,8 +59,8 @@ function NewEventRoute() {
 
   return (
     <Dialog
+      bodyClassName={editorStyles.dialogFit}
       bodyLayout="flush"
-      bodyScroll="panels"
       closeLabel="Close event editor"
       description="Every detail of the event, on one surface."
       initialFocus={titleRef}
