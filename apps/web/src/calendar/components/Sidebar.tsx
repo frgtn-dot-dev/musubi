@@ -398,7 +398,7 @@ export function Sidebar({
               className={styles.profileMain}
               aria-label="Manage account"
               detail={<span className={styles.profileEmail}>{user.email}</span>}
-              icon={<Avatar image={user.image} name={user.name} size={32} />}
+              icon={<Avatar image={user.image} name={user.name} size="default" />}
               label={user.name}
               showChevron={false}
               onClick={onManageAccount}

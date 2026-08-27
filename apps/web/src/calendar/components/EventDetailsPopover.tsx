@@ -912,7 +912,7 @@ export function EventDetailsPopover({
 														<ul className={styles.attendeeList}>
 															{group.items.map((item) => (
 																<li key={item.id}>
-																	<Avatar image={item.image} name={item.name} size={32} />
+																	<Avatar image={item.image} name={item.name} size="default" />
 																	<span>{item.name}</span>
 																</li>
 															))}

@@ -175,7 +175,7 @@ function InviteRoute() {
           <ul aria-label="People on this calendar" className={styles.people}>
             {calendar.members.slice(0, 6).map((member) => (
               <li className={styles.person} key={member.id}>
-                <Avatar image={member.image} name={member.name} size={26} />
+                <Avatar image={member.image} name={member.name} size="compact" />
                 <span>{member.name}</span>
               </li>
             ))}

@@ -242,7 +242,7 @@ export function ShareCalendarDialog({
                           <Avatar
                             image={member.image}
                             name={member.name}
-                            size={34}
+                            size="default"
                           />
                         }
                         label={`${member.name}${

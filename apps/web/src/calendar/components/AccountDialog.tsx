@@ -147,7 +147,7 @@ export function AccountDialog({
               <Avatar
                 image={user?.image}
                 name={user?.name ?? "Musubi"}
-                size={64}
+                size="profile"
               />
               <span className={styles.cameraBadge} aria-hidden="true">
                 <Camera size={13} strokeWidth={2} />

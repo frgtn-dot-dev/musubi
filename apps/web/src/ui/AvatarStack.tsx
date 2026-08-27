@@ -20,7 +20,6 @@ export type AvatarStackProps = Omit<
 };
 
 const DEFAULT_LIMIT = 7;
-const FACE_SIZE = 32;
 
 /**
  * Overlapping faces that open the full list.
@@ -52,7 +51,6 @@ export function AvatarStack({
           image={person.image}
           key={person.id}
           name={person.name}
-          size={FACE_SIZE}
         />
       ))}
       {hidden > 0 ? (

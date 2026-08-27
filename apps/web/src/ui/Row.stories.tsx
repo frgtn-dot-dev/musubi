@@ -43,7 +43,7 @@ function InteractiveRows() {
         <RowAction
           data-testid="profile-row"
           detail="haruki@example.com"
-          icon={<Avatar name="Haruki Tanaka" size={32} />}
+          icon={<Avatar name="Haruki Tanaka" size="default" />}
           label="Haruki Tanaka"
           showChevron={false}
         />

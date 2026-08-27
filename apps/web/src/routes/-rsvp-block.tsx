@@ -191,7 +191,7 @@ function Attending({ summary }: { summary?: RsvpSummary }) {
                   <Avatar
                     image={attendee.avatarUrl}
                     name={attendee.name}
-                    size={32}
+                    size="default"
                   />
                   <span>{attendee.name}</span>
                 </li>
