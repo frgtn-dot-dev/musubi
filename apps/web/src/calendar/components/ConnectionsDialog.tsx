@@ -32,6 +32,7 @@ import { Button, IconButton } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
+import { InlineError } from "~/ui/InlineError";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
@@ -608,9 +609,7 @@ export function ConnectionsDialog({
         ) : null}
 
         {error ? (
-          <div className={styles.error} role="alert">
-            <p>{error}</p>
-          </div>
+          <InlineError className={styles.error}>{error}</InlineError>
         ) : null}
       </div>
     </Dialog>

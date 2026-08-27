@@ -44,7 +44,6 @@ import { Button, IconButton } from "~/ui/Button";
 import {
 	ConfirmationDialog,
 	ConfirmationNotice,
-	DialogError,
 } from "~/ui/ConfirmationDialog";
 import {
 	Menu,
@@ -60,6 +59,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "~/ui/Popover";
+import { InlineError } from "~/ui/InlineError";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
@@ -1187,9 +1187,9 @@ export function EventDetailsPopover({
 					<p>{deleteConsequence}</p>
 				</ConfirmationNotice>
 				{actionError ? (
-					<DialogError requestId={actionError.requestId}>
+					<InlineError requestId={actionError.requestId}>
 						{actionError.message}
-					</DialogError>
+					</InlineError>
 				) : null}
 			</ConfirmationDialog>
 		</>

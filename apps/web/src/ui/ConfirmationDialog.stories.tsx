@@ -7,9 +7,9 @@ import { Button } from "./Button";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
-  DialogError,
 } from "./ConfirmationDialog";
 import { Field } from "./Field";
+import { InlineError } from "./InlineError";
 
 function DeleteCalendarExample({ withError = false }: { withError?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -37,9 +37,9 @@ function DeleteCalendarExample({ withError = false }: { withError?: boolean }) {
           </p>
         </ConfirmationNotice>
         {withError ? (
-          <DialogError requestId="request-8f21">
+          <InlineError requestId="request-8f21">
             The calendar could not be deleted.
-          </DialogError>
+          </InlineError>
         ) : null}
       </ConfirmationDialog>
     </>

@@ -20,10 +20,10 @@ import { Button } from "~/ui/Button";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
-  DialogError,
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
+import { InlineError } from "~/ui/InlineError";
 import { RowAction } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
 import { useAsyncAction } from "~/ui/useAsyncAction";
@@ -222,9 +222,7 @@ export function AccountDialog({
           </SettingsSection>
 
           {error ? (
-            <div className={styles.error} role="alert">
-              <p>{error}</p>
-            </div>
+            <InlineError className={styles.error}>{error}</InlineError>
           ) : null}
         </div>
       </Dialog>
@@ -350,9 +348,7 @@ function EditNameDialog({
           />
         </Field>
         {error ? (
-          <div className={styles.dialogError} role="alert">
-            <p>{error}</p>
-          </div>
+          <InlineError>{error}</InlineError>
         ) : null}
       </form>
     </Dialog>
@@ -423,7 +419,7 @@ function DeleteAccountDialog({
             onChange={(event) => setConfirmation(event.target.value)}
           />
         </Field>
-        {error ? <DialogError>{error}</DialogError> : null}
+        {error ? <InlineError>{error}</InlineError> : null}
       </form>
     </ConfirmationDialog>
   );

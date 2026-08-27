@@ -107,17 +107,3 @@ export function ConfirmationNotice({
   );
 }
 
-export function DialogError({
-  children,
-  requestId,
-}: {
-  children: ReactNode;
-  requestId?: string;
-}) {
-  return (
-    <div className={styles.dialogError} role="alert">
-      <p>{children}</p>
-      {requestId ? <span>Request ID: {requestId}</span> : null}
-    </div>
-  );
-}

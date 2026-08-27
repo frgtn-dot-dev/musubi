@@ -1469,7 +1469,7 @@
 	font-weight: 600;
 }
 
-.dialogError {
+.inlineError {
 	padding: var(--space-3);
 	border: 1px solid
 		color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
@@ -1484,11 +1484,11 @@
 	line-height: 1.45;
 }
 
-.dialogError p {
+.inlineError p {
 	margin: 0;
 }
 
-.dialogError span {
+.inlineError span {
 	display: block;
 	margin-top: 2px;
 	font-size: var(--text-10);

@@ -15,10 +15,10 @@ import { Button, IconButton } from "~/ui/Button";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
-  DialogError,
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
+import { InlineError } from "~/ui/InlineError";
 import { Segmented } from "~/ui/Segmented";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
@@ -450,9 +450,7 @@ export function ShareCalendarDialog({
           ) : null}
 
           {error ? (
-            <div className={styles.error} role="alert">
-              <p>{error}</p>
-            </div>
+            <InlineError className={styles.error}>{error}</InlineError>
           ) : null}
         </div>
       </Dialog>
@@ -523,7 +521,7 @@ function TransferOwnershipDialog({
           calendar settings. This change takes effect immediately.
         </p>
       </ConfirmationNotice>
-      {error ? <DialogError>{error}</DialogError> : null}
+      {error ? <InlineError>{error}</InlineError> : null}
     </ConfirmationDialog>
   );
 }
