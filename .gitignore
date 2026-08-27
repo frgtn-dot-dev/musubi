@@ -62,8 +62,10 @@ dist
 storybook-static/
 
 # AI tooling
-.claude/
-.superdesign/tmp/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/musubi-ui
 
 # Local notes
 TODO.md
