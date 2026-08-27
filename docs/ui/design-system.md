@@ -17,9 +17,9 @@ on washi paper, muted pigments, Inter Tight for working UI, Noto Serif for
 orientation and meaningful emphasis, and calm geometry without extra decoration.
 
 The design evolves rather than resets: preserve the recognizable character and
-make hierarchy, rhythm, states, and consistency more precise. Superdesign is the
-safe place to explore variants; Storybook is the catalog of components that are
-actually implemented.
+make hierarchy, rhythm, states, and consistency more precise. Storybook is the
+review surface for variants and the catalog of components that are actually
+implemented; `ui-catalog/` captures complete screen and layer baselines.
 
 ## 2. Architecture
 
@@ -49,6 +49,23 @@ parallel replacement solely to satisfy a new directory structure.
 
 A feature may own domain content and its layout. It must not own a new generic
 button, field, menu, modal, popover, sheet, or toast.
+
+### Shared CSS reuse
+
+Web styling is CSS Modules. A rule that already exists in
+`apps/web/src/ui/primitives.module.css` is reused through `composes` rather
+than declared a second time — `composes: <name> from "…/ui/primitives.module.css";`
+from a feature module, or `composes: <name>;` within the same file.
+
+Three constraints decide where this works:
+
+- `composes` applies only to a rule whose selector is a single class. A compound
+  selector that needs a shared recipe spells it out and records why in a comment.
+- It must be the first declaration in the rule, and cannot appear inside a media
+  query.
+- A same-file `composes` cannot look forward. A rule that others compose belongs
+  above them in the file, and a media query that deliberately overrides a
+  composed rule must still come after it.
 
 ## 3. Tokens
 
@@ -94,7 +111,7 @@ Spacing expresses relationships. It is not selected independently for each
 screen. Use the existing 4 px ladder through the following roles:
 
 | Relationship | Value | Use |
-|---|---:|---|
+| --- | ---: | --- |
 | Adjacent | 4 px | title to description, label to supporting text |
 | Related | 8 px | icon to label, actions in one group |
 | Control group | 12 px | tightly related controls or choices |
@@ -114,7 +131,7 @@ may change application architecture, but do not silently change the internal
 rhythm of a dialog, popover, or menu.
 
 | Contract | Regular, ≥600 px | Touch, ≤599 px |
-|---|---:|---:|
+| --- | ---: | ---: |
 | Minimum viewport gutter around a modal | 24 px | sheet is edge-to-edge |
 | Dialog/sheet inline inset | 24 px | 20 px |
 | Dialog body block inset | 20 px | 20 px |
@@ -135,6 +152,11 @@ insets belong to the outermost region.
   variant, and their readable content still aligns to the same axis.
 - Nested components own only their internal rhythm. A `Field` inside a padded
   dialog must not add a second outer inset.
+- The shell pays the bottom safe-area inset: the dialog footer where there is
+  one, otherwise the dialog body. Feature content neither adds it back nor adds
+  it again inside a sheet that has already paid it. `--layer-safe-bottom` stands
+  in front of `env(safe-area-inset-bottom)`, which cannot be assigned and so
+  cannot otherwise be shown in a story.
 - Whitespace establishes regions first. Header and footer separators are used
   only when a scrolling body or repeated rows need a persistent boundary; a
   short dialog must not become three bordered slabs.
@@ -185,8 +207,8 @@ feature name. A one-off domain composition remains with its feature.
 Dialog, sheet, popover, menu, and toast are not one component:
 
 | Layer | Use | Behavior |
-|---|---|---|
-| Dialog | consequential decision or longer editing | modality, focus trap, explicit ending |
+| --- | --- | --- |
+| Dialog | consequential editing | modality, focus trap, explicit ending |
 | Sheet | narrow viewport or native detail | modality, thumb reachability |
 | Popover | local lightweight action or preview | anchored, preserves context |
 | Menu | short command list | keyboard navigation, immediate choice |
@@ -365,8 +387,8 @@ the editor or discard an unrelated draft.
 
 1. Check the existing primitive and the rules in `calendar-ui.md`.
 2. If a general contract is missing, design it in Storybook with real content.
-3. For a substantial visual change, reproduce the current state in Superdesign
-   first, then compare variants; implementation starts after direction approval.
+3. For a substantial visual change, reproduce the current state in Storybook
+   first, then compare variants; production use starts after direction approval.
 4. Implement one component or pattern and migrate a bounded set of consumers.
 5. Verify typecheck, lint, unit tests, Storybook build, and relevant a11y checks.
 6. Update this document when a change introduces a new rule.
@@ -391,10 +413,11 @@ the editor or discard an unrelated draft.
 - using different names for the same role on web and mobile;
 - a central stories directory detached from component source;
 - a universal cross-platform React component full of `isWeb` branches;
-- presenting a Superdesign draft as implemented truth;
+- changing production UI before a substantial visual direction is approved;
 - adding a token without a role or a magic number without a named constant.
 - applying different inline padding to a layer header, body, and footer;
 - removing shell padding in a story and rebuilding it inside feature content;
+- re-declaring a shared CSS recipe in a feature module instead of composing it;
 - using dividers to compensate for weak spacing hierarchy.
 - opening a menu for a single command instead of invoking that command directly;
 
