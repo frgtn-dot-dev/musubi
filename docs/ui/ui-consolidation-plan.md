@@ -131,15 +131,44 @@ alert anatomy belongs to the shared component.
 `Row` already owns useful content slots, but consumers cannot target its
 internal anatomy without brittle descendant selectors.
 
-- [ ] Add stable `data-slot` hooks for icon, copy, label, detail, value, and
+- [x] Add stable `data-slot` hooks for icon, copy, label, detail, value, and
   trailing content. Do not add styling props for each slot.
-- [ ] Migrate `ShareCalendarDialog` member rows to `Row` once its current
+- [x] Migrate `ShareCalendarDialog` member rows to `Row` once its current
   identity/actions layout can be expressed through those hooks.
 - [ ] Extract a small `RowGroup` only while migrating at least two identical
   bordered list shells. It may own surface, border, radius, clipping, and row
   dividers; it must not own feature headings or business state.
-- [ ] Keep `SettingsSection` as the canonical titled settings composition; do
+
+  Still one consumer. `.settingsSectionRows` is the only bordered list shell —
+  the member list draws its dividers from each row's own `border-bottom`, so
+  there is nothing to share yet.
+
+- [x] Keep `SettingsSection` as the canonical titled settings composition; do
   not duplicate it with another settings-specific wrapper.
+
+The migration was blocked on two defects in `Row` rather than on the hooks, and
+both were worth fixing on their own:
+
+- `.rowIcon` was a fixed `width: 22px`, and `Sidebar` already handed it a 32px
+  avatar. Measured, the avatar spilled 5px into the row's padding and left 7px
+  before the label instead of 14px. The slot now treats 22px as a floor, which
+  also let the member row keep its 34px avatar.
+- The inward focus ring existed only as
+  `.settingsSectionRows .rowAction:focus-visible`, so a row in the sidebar or a
+  dialog body took the global outward ring at `+3px` and had it clipped by the
+  container that scrolls it. `.rowAction` owns the ring now.
+
+The member list itself was worse than the plan assumed. `.memberList` shared a
+rule with `.inviteOptions` that made it `display: flex; flex-wrap: wrap`, so
+rows were content-width flex items: two members with short names and no manage
+controls sat side by side, each under its own divider. Measured at a 462px
+content box, two 187px rows shared a line. It is a grid list now, and the rows
+are full width.
+
+The hooks earn their place at exactly one point: the member label and detail
+must stay on one line, which `.rowLabel` and `.rowDetail` do not do — and
+should not, since a settings detail wraps by design. The narrow stacked layout
+travels through `className` on `Row`, not through new props.
 
 #### 3. Field and picker wiring
 
