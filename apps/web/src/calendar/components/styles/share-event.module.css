@@ -77,26 +77,8 @@
   background: color-mix(in srgb, var(--control-fill) 18%, transparent);
 }
 
-.linkRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 /* Readonly, not disabled: the link has to stay selectable when the clipboard
    refuses — an insecure origin or a browser that asks first. */
-.linkField {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: var(--text-12);
-}
-
 .indexRow {
   display: flex;
   align-items: center;

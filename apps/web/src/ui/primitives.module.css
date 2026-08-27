@@ -1510,6 +1510,27 @@
 	font-size: var(--text-10);
 }
 
+.copyField {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+/* 9/11 rather than a spacing step: the value is monospace at 12px, and the
+   control has to end up the same height as the compact button beside it. */
+.copyFieldValue {
+	min-width: 0;
+	flex: 1;
+	padding: 9px 11px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+	color: var(--text-secondary);
+	font-family: var(--font-mono);
+	font-size: var(--text-12);
+}
+
 .toastRegion {
 	position: fixed;
 	z-index: 160;
