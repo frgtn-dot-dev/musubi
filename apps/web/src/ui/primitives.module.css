@@ -1510,6 +1510,39 @@
 	font-size: var(--text-10);
 }
 
+.avatarStack {
+	display: flex;
+	align-items: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+/* A ring in the colour behind the stack is what separates the overlapping
+   circles, so it is the one thing a consumer on its own palette overrides. */
+.avatarStack > * {
+	border: 2px solid var(--avatar-stack-ring, var(--surface-canvas));
+}
+
+.avatarStack > * + * {
+	margin-left: -10px;
+}
+
+/* Same box as a face: the ring is inside the 32px, so a larger chip would sit
+   a couple of pixels above and below the row it belongs to. */
+.avatarStackMore {
+	display: grid;
+	width: 32px;
+	height: 32px;
+	flex: none;
+	place-content: center;
+	border-radius: var(--radius-pill);
+	background: var(--avatar-stack-more-fill, var(--surface-raised));
+	color: var(--avatar-stack-more-text, var(--text-secondary));
+	font-size: var(--text-11);
+}
+
 .copyField {
 	display: flex;
 	width: 100%;

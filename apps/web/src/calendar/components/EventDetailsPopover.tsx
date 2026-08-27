@@ -40,6 +40,7 @@ import {
 } from "../attendance";
 import { getEventAttendees } from "~/api/resources";
 import { Avatar } from "~/ui/Avatar";
+import { AvatarStack } from "~/ui/AvatarStack";
 import { Button, IconButton } from "~/ui/Button";
 import {
 	ConfirmationDialog,
@@ -920,26 +921,12 @@ export function EventDetailsPopover({
 												))}
 											</ul>
 										) : (
-											<button
-												aria-label="Show every answer"
-												className={styles.facepile}
-												type="button"
+											<AvatarStack
+												label="Show every answer"
+												limit={FACEPILE_LIMIT}
+												people={going}
 												onClick={() => setAttendeesOpen(true)}
-											>
-												{going.slice(0, FACEPILE_LIMIT).map((item) => (
-													<Avatar
-														image={item.image}
-														key={item.id}
-														name={item.name}
-														size={32}
-													/>
-												))}
-												{going.length > FACEPILE_LIMIT ? (
-													<span aria-hidden="true" className={styles.facepileMore}>
-														+{going.length - FACEPILE_LIMIT}
-													</span>
-												) : null}
-											</button>
+											/>
 										)}
 									</section>
 								) : null}
