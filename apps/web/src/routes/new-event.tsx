@@ -232,9 +232,13 @@ function NewEventRoute() {
 						</Field>
 
 						{/* Labelled above, not only through the control's accessible name:
-                this page is read by people who have never seen the app. */}
+                this page is read by people who have never seen the app. The
+                label is hidden from assistive tech because the picker's own
+                aria-label already says the same thing. */}
 						<div className={styles.field}>
-							<span className={styles.fieldLabel}>Date</span>
+							<span aria-hidden="true" className={styles.fieldLabel}>
+								Date
+							</span>
 							<ClientOnly>
 								<DatePicker
 									label="Date"
@@ -247,7 +251,9 @@ function NewEventRoute() {
 
 						<div className={styles.times}>
 							<div className={styles.field}>
-								<span className={styles.fieldLabel}>From</span>
+								<span aria-hidden="true" className={styles.fieldLabel}>
+									From
+								</span>
 								<TimePicker
 									label="From"
 									timeFormat="24h"
@@ -264,7 +270,9 @@ function NewEventRoute() {
 								/>
 							</div>
 							<div className={styles.field}>
-								<span className={styles.fieldLabel}>To</span>
+								<span aria-hidden="true" className={styles.fieldLabel}>
+									To
+								</span>
 								<TimePicker
 									label="To"
 									min={draft.start}
