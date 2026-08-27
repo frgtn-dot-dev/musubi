@@ -9073,3 +9073,40 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 	expect(await headerOffset()).toBeCloseTo(before, 0);
 	await expect(placement.getByText("Calendar 16")).toBeInViewport();
 });
+
+test("opens a picker inside the sharing dialog on top of it", async ({
+	page,
+}) => {
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/events/*/share", (route) => respond(route, null));
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page.getByRole("button", { name: /Client call/ }).first().click();
+	await page.getByRole("button", { name: "Share event" }).click();
+
+	const dialog = page.getByRole("dialog", { name: "Share event" });
+	await dialog.getByRole("button", { name: "Add item" }).click();
+
+	const time = dialog.getByRole("combobox", { name: "Time" });
+	await time.click();
+
+	const list = page.getByRole("listbox", { name: "Time options" });
+	await expect(list).toHaveCount(1);
+	// Being in the DOM is not being usable: a layer painted under the dialog
+	// still reports itself visible, so ask what is actually on top.
+	expect(
+		await list.evaluate((element) => {
+			const box = element.getBoundingClientRect();
+			return element.contains(
+				document.elementFromPoint(
+					Math.round(box.x + box.width / 2),
+					Math.round(box.y + box.height / 2),
+				),
+			);
+		}),
+	).toBe(true);
+
+	const option = list.getByRole("option").first();
+	const chosen = (await option.textContent())!.trim();
+	await option.click();
+	await expect(time).toHaveValue(chosen);
+});

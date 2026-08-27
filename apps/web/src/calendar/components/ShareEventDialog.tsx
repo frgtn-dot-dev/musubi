@@ -189,7 +189,6 @@ export function ShareEventDialog({
       <Dialog
         closeLabel="Close sharing"
         description={`Preparing “${event.title}”.`}
-        elevated
         open
         returnFocus={returnFocus}
         size="workspace"
@@ -211,7 +210,6 @@ export function ShareEventDialog({
         bodyScroll="panels"
         closeLabel="Close sharing"
         description="Edit what readers see, then save every change together."
-        elevated
         footer={
           <div className={styles.footer}>
             {error ? (
