@@ -51,6 +51,9 @@
   --layer-inline: var(--space-6);
   --layer-body-block: var(--space-5);
   --layer-footer-block: var(--space-4);
+  /* Indirection on purpose: env() cannot be set, so a story cannot show what a
+     notch does to a shell. Overriding this can. */
+  --layer-safe-bottom: env(safe-area-inset-bottom);
   /* One hour of the time grid. TimeGridView overrides it per density; the CSS
      grid and the JS geometry must derive from the same number or the cursor
      drifts against the time it points at. */

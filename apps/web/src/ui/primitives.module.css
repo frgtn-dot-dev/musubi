@@ -1421,7 +1421,17 @@
 	justify-content: flex-end;
 	gap: var(--space-2);
 	padding: 0 var(--layer-inline)
-		calc(var(--layer-footer-block) + env(safe-area-inset-bottom));
+		calc(var(--layer-footer-block) + var(--layer-safe-bottom));
+}
+
+/* With no footer the body is the last thing above the home indicator, so the
+   shell pays the inset here instead of each dialog paying it again. */
+.dialog:not([data-has-footer]) .dialogBody_padded {
+	padding-bottom: calc(var(--layer-body-block) + var(--layer-safe-bottom));
+}
+
+.dialog:not([data-has-footer]) .dialogBody_flush {
+	padding-bottom: var(--layer-safe-bottom);
 }
 
 .dialog[data-body-layout="flush"] .dialogHeader {
@@ -1431,7 +1441,7 @@
 
 .dialog[data-body-layout="flush"] .dialogFooter {
 	padding-top: var(--layer-footer-block);
-	padding-bottom: calc(var(--layer-footer-block) + env(safe-area-inset-bottom));
+	padding-bottom: calc(var(--layer-footer-block) + var(--layer-safe-bottom));
 	border-top: 1px solid var(--border-subtle);
 	background: var(--surface-panel);
 }
@@ -1499,7 +1509,7 @@
 	z-index: 160;
 	bottom: var(
 		--toast-bottom,
-		calc(var(--space-5) + env(safe-area-inset-bottom))
+		calc(var(--space-5) + var(--layer-safe-bottom))
 	);
 	left: var(--toast-left, 50%);
 	display: flex;
@@ -2087,7 +2097,7 @@
 	.toastRegion {
 		bottom: var(
 			--toast-bottom,
-			calc(var(--space-3) + env(safe-area-inset-bottom))
+			calc(var(--space-3) + var(--layer-safe-bottom))
 		);
 	}
 
@@ -2122,7 +2132,7 @@
 	.selectList {
 		max-height: calc(100dvh - 8rem);
 		padding: var(--space-2);
-		padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+		padding-bottom: calc(var(--space-3) + var(--layer-safe-bottom));
 	}
 
 	.selectListScrollable {

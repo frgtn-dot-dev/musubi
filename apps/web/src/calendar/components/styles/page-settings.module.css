@@ -153,10 +153,6 @@
 }
 
 @media (max-width: 599px) {
-	.form {
-		padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
-	}
-
 	.sectionHeading {
 		padding-top: var(--space-4);
 	}

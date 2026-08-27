@@ -317,10 +317,6 @@
 }
 
 @media (max-width: 599px) {
-	.body {
-		padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
-	}
-
 	.sectionHeading {
 		padding: var(--space-4) var(--layer-inline) var(--space-3);
 	}

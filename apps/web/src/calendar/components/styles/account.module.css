@@ -109,9 +109,7 @@
 
 @media (max-width: 599px) {
   .content {
-    padding-bottom: calc(
-      var(--space-4) + env(safe-area-inset-bottom)
-    );
+    padding-bottom: var(--space-4);
   }
 
   .identity {

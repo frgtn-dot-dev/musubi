@@ -2195,7 +2195,7 @@
 		position: fixed;
 		z-index: 40;
 		right: 16px;
-		bottom: calc(16px + env(safe-area-inset-bottom));
+		bottom: calc(16px + var(--layer-safe-bottom));
 		width: 54px;
 		height: 54px;
 		padding: 0;
@@ -2212,7 +2212,7 @@
 
 	.workspaceToast {
 		/* Above the create button, which owns the bottom-right corner. */
-		--toast-bottom: calc(82px + env(safe-area-inset-bottom));
+		--toast-bottom: calc(82px + var(--layer-safe-bottom));
 		width: calc(100vw - 24px);
 	}
 }
