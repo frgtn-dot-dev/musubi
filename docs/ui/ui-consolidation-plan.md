@@ -266,10 +266,16 @@ code in the same change.
   fails, and leaves the value selected so copying by hand takes one keystroke.
 
   `.linkField` was byte-identical across the modules and `.linkRow` differed
-  only by `width: 100%`. Two call sites still carry local copies —
-  `SchedulingDialog` and `routes/find-a-time.tsx` — because both are out of
-  scope; migrating them is a two-line change whenever that exclusion lifts, and
-  `find-a-time` still has the misleading-success bug.
+  only by `width: 100%`. `routes/find-a-time.tsx` was migrated too, on a later
+  decision to lift its exclusion for this — it had the same misleading-success
+  bug, and its copy state was threaded through two props that the shared control
+  now keeps to itself. With both public pages on `CopyField`, the
+  `public-page.module.css` copies went as well.
+
+  `SchedulingDialog` keeps its own. It is the one call site with no bug — it
+  reports success and failure as a toast — so migrating it would remove the
+  "Link copied." confirmation rather than fix anything, and the scheduler UI is
+  due to be reworked anyway.
 - [x] Consolidate the repeated interactive attendee facepile as `AvatarStack`
   or a calendar feature component. Keep it outside `apps/web/src/ui` if its
   behavior remains attendee-specific.

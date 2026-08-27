@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Check, Copy } from "lucide-react";
+import { Check } from "lucide-react";
 import { useState } from "react";
 import type { PollSummary } from "~/api/contracts";
 import { createPoll } from "~/api/resources";
@@ -9,7 +9,7 @@ import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { PollForm } from "~/calendar/components/PollForm";
 import { BrandMark } from "~/components/BrandMark";
 import { EmailIdentity } from "~/components/EmailIdentity";
-import { Button } from "~/ui/Button";
+import { CopyField } from "~/ui/CopyField";
 import styles from "~/components/public-page.module.css";
 
 const TITLE = "Find a time everyone can make — Musubi";
@@ -36,7 +36,6 @@ export const Route = createFileRoute("/find-a-time")({
 function FindATimeRoute() {
   const session = authClient.useSession();
   const [poll, setPoll] = useState<PollSummary>();
-  const [copied, setCopied] = useState(false);
   const [identified, setIdentified] = useState(false);
   const [identifying, setIdentifying] = useState(false);
 
@@ -65,7 +64,7 @@ function FindATimeRoute() {
         </header>
 
         {poll ? (
-          <Created poll={poll} copied={copied} onCopied={setCopied} />
+          <Created poll={poll} />
         ) : (!session.data && !identified) || identifying ? (
           <EmailIdentity
             disclosure={
@@ -105,15 +104,7 @@ function FindATimeRoute() {
 }
 
 /** The link, which is the whole product of this page. */
-function Created({
-  copied,
-  onCopied,
-  poll,
-}: {
-  copied: boolean;
-  onCopied: (copied: boolean) => void;
-  poll: PollSummary;
-}) {
+function Created({ poll }: { poll: PollSummary }) {
   return (
     <section className={styles.step}>
       <h2>
@@ -124,25 +115,7 @@ function Created({
         Send this link to the people you need. Answers appear as they arrive,
         and you pick the time when you have enough of them.
       </p>
-      <div className={styles.linkRow}>
-        <input
-          aria-label="Poll link"
-          className={styles.linkField}
-          readOnly
-          value={poll.url}
-          onFocus={(event) => event.currentTarget.select()}
-        />
-        <Button
-          icon={<Copy size={14} strokeWidth={1.8} />}
-          variant="secondary"
-          onClick={() => {
-            void navigator.clipboard?.writeText(poll.url);
-            onCopied(true);
-          }}
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
+      <CopyField label="Poll link" value={poll.url} />
       <p className={styles.lead}>
         It is also in your calendar under “Find a time”, together with any other
         polls you make.
