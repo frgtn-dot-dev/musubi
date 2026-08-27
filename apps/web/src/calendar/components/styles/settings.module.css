@@ -48,10 +48,6 @@
 
 .loading p,
 .loadFailure p,
-.error p {
-  margin: 0;
-}
-
 @keyframes settings-spin {
   to {
     transform: rotate(1turn);
@@ -87,18 +83,6 @@
 
 .error {
   margin: var(--space-4) var(--layer-inline) 0;
-  padding: var(--space-3);
-  border: 1px solid
-    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
-  border-radius: var(--radius-md);
-  background: color-mix(
-    in srgb,
-    var(--accent-primary) 7%,
-    var(--surface-raised)
-  );
-  color: var(--accent-primary);
-  font-size: var(--text-12);
-  line-height: 1.45;
 }
 
 .visuallyHidden {

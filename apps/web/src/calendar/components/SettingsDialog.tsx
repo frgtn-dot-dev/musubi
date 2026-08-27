@@ -16,6 +16,7 @@ import { ApiError } from "~/api/http";
 import { applyTheme } from "~/design/theme";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
+import { InlineError } from "~/ui/InlineError";
 import {
   Row,
   RowAction,
@@ -473,9 +474,7 @@ export function SettingsDialog({
           </SettingsSection>
 
           {error ? (
-            <div className={styles.error} role="alert">
-              <p>{error}</p>
-            </div>
+            <InlineError className={styles.error}>{error}</InlineError>
           ) : null}
         </div>
       ) : (

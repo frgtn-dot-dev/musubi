@@ -1010,20 +1010,24 @@ export function EventDetailsPopover({
 												})}
 											</div>
 											{actionError ? (
-												<ActionError
-													message={actionError.message}
+												<InlineError
+													className={styles.actionError}
 													requestId={actionError.requestId}
-												/>
+												>
+													{actionError.message}
+												</InlineError>
 											) : null}
 										</>
 									</section>
 								) : null}
 
 								{actionError && !targetAction ? (
-									<ActionError
-										message={actionError.message}
+									<InlineError
+										className={styles.actionError}
 										requestId={actionError.requestId}
-									/>
+									>
+										{actionError.message}
+									</InlineError>
 								) : null}
 							</div>
 
@@ -1225,21 +1229,6 @@ function DetailRow({
 			</span>
 			<dt>{label}</dt>
 			<dd>{value}</dd>
-		</div>
-	);
-}
-
-function ActionError({
-	message,
-	requestId,
-}: {
-	message: string;
-	requestId?: string;
-}) {
-	return (
-		<div className={styles.actionError} role="alert">
-			<p>{message}</p>
-			{requestId ? <span>Request ID: {requestId}</span> : null}
 		</div>
 	);
 }

@@ -382,29 +382,7 @@
 }
 
 .actionError {
-  display: grid;
-  gap: var(--space-1);
   margin: var(--space-3) var(--space-5);
-  padding: var(--space-3);
-  border: 1px solid
-    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
-  border-radius: var(--radius-md);
-  background: color-mix(
-    in srgb,
-    var(--accent-primary) 7%,
-    var(--surface-raised)
-  );
-  color: var(--accent-primary);
-  font-size: var(--text-12);
-}
-
-.actionError p {
-  margin: 0;
-}
-
-.actionError span {
-  color: var(--text-muted);
-  font-size: var(--text-10);
 }
 
 /* One row of equal cells, however many actions the event has (one to four). Four
