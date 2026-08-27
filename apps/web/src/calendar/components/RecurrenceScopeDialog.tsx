@@ -1,7 +1,7 @@
 import type { EditScope } from "@musubi/calendar";
-import type { ReactNode } from "react";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
+import { InlineError } from "~/ui/InlineError";
 import styles from "./styles/recurrence-scope.module.css";
 
 const OPTION_LABELS: Record<
@@ -41,7 +41,7 @@ export function RecurrenceScopeDialog({
   action?: "change" | "delete";
   busyScope?: EditScope;
   consequence?: string;
-  error?: ReactNode;
+  error?: { message: string; requestId?: string };
   /** The chosen scope, or undefined when dismissed. */
   onResolve: (scope: EditScope | undefined) => void;
   /**
@@ -84,9 +84,7 @@ export function RecurrenceScopeDialog({
         <p className={styles.consequence}>{consequence}</p>
       ) : null}
       {error ? (
-        <div className={styles.error} role="alert">
-          {error}
-        </div>
+        <InlineError requestId={error.requestId}>{error.message}</InlineError>
       ) : null}
       <div className={styles.scopeOptions}>
         {OPTION_LABELS[action].map((option) => (

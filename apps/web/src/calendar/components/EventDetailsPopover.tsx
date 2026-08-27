@@ -1119,16 +1119,7 @@ export function EventDetailsPopover({
 			{pendingEdit ? (
 				<RecurrenceScopeDialog
 					busyScope={pendingEditScope}
-					error={
-						actionError ? (
-							<>
-								<p>{actionError.message}</p>
-								{actionError.requestId ? (
-									<span>Request ID: {actionError.requestId}</span>
-								) : null}
-							</>
-						) : undefined
-					}
+					error={actionError}
 					onResolve={(scope) => {
 						if (scope) {
 							void applyScopedEdit(pendingEdit, scope);
@@ -1154,16 +1145,7 @@ export function EventDetailsPopover({
 					action="delete"
 					busyScope={pendingDeleteScope}
 					consequence={deleteConsequence}
-					error={
-						actionError ? (
-							<>
-								<p>{actionError.message}</p>
-								{actionError.requestId ? (
-									<span>Request ID: {actionError.requestId}</span>
-								) : null}
-							</>
-						) : undefined
-					}
+					error={actionError}
 					onResolve={(scope) => {
 						if (scope) {
 							void handleDelete(scope);

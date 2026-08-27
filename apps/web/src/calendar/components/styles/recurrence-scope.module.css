@@ -12,28 +12,6 @@
   padding: 0;
 }
 
-.error {
-  margin: 0;
-  padding: var(--space-3);
-  border: 1px solid
-    color-mix(in srgb, var(--accent-primary) 38%, var(--border-medium));
-  border-radius: var(--radius-md);
-  color: var(--accent-primary);
-  font-size: var(--text-12);
-  line-height: 1.45;
-}
-
-.error p {
-  margin: 0;
-}
-
-.error span {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--text-muted);
-  font-size: var(--text-10);
-}
-
 .scopeOption {
   width: 100%;
   justify-content: flex-start;
