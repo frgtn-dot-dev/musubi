@@ -79,23 +79,10 @@
 
 /* Readonly, not disabled: the link has to stay selectable when the clipboard
    refuses — an insecure origin or a browser that asks first. */
-.indexRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 .error {
   margin: 0;
   color: var(--accent-primary);
   font-size: var(--text-12);
-}
-
-.note {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
-  line-height: 1.5;
 }
 
 .footer {

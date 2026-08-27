@@ -177,18 +177,12 @@
 }
 
 .pageList,
-.calendarList {
-	display: grid;
-	gap: 3px;
-}
-
 /* Inline padding only: the space under it is the section's gap now. */
 .sidebarSectionLabel {
 	padding: 0 8px;
 }
 
-.sidebarRow,
-.calendarVisibilityRow {
+.sidebarRow {
 	flex: none;
 }
 
@@ -314,14 +308,6 @@
 	.pageRowEdit {
 		transition: none;
 	}
-}
-
-.calendarDot {
-	display: inline-block;
-	width: 7px;
-	height: 7px;
-	flex: 0 0 auto;
-	border-radius: 50%;
 }
 
 .sidebarFooter {
