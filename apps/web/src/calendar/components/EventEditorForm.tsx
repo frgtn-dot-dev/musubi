@@ -350,7 +350,6 @@ export function EventEditorForm({
 									(timeToMinutes(values.startTime) ?? 0) + TIME_SNAP_MINUTES,
 								),
 							)}
-							relativeTo={values.startTime}
 							timeFormat={timeFormat}
 							value={values.endTime}
 							onChange={(endTime) => patch({ endTime })}

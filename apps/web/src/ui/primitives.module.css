@@ -1781,14 +1781,30 @@
 }
 
 .timePickerPopover {
-	width: 252px;
+	width: 208px;
+}
+
+/* Block-level flex, not the primitive's inline-flex: it fills the menu instead
+   of hugging its two labels, and the two stay on one row. */
+.timePickerPeriod {
+	display: flex;
+	margin: var(--space-2) var(--space-1) 0;
+}
+
+/* Two axes rather than one list of every quarter hour: the hour is the coarse
+   choice and the minute the fine one, so each gets a column. */
+.timePickerColumns {
+	display: grid;
+	gap: var(--space-1);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	padding: var(--space-1);
 }
 
 .timePickerList {
 	max-height: 284px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	padding: var(--space-2);
+	padding: var(--space-1);
 	scrollbar-width: thin;
 }
 

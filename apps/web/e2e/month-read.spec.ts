@@ -1225,18 +1225,26 @@ test("chooses an event time and duration from the time pickers", async ({
 	const start = page.getByRole("combobox", { name: "Start time" });
 	const end = page.getByRole("combobox", { name: "End time" });
 	await start.click();
-	const startOptions = page.getByRole("listbox", {
-		name: "Start time options",
-	});
 	await expectNoAccessibilityViolations(page);
-	await startOptions.getByRole("option", { name: "13:15", exact: true }).click();
+	await page
+		.getByRole("listbox", { name: "Start time hour" })
+		.getByRole("option", { name: "13", exact: true })
+		.click();
+	await page
+		.getByRole("listbox", { name: "Start time minute" })
+		.getByRole("option", { name: "15", exact: true })
+		.click();
 	await expect(start).toHaveValue("13:15");
 	await expect(end).toHaveValue("14:15");
 
 	await end.click();
 	await page
-		.getByRole("listbox", { name: "End time options" })
-		.getByRole("option", { name: "13:45, +30m", exact: true })
+		.getByRole("listbox", { name: "End time hour" })
+		.getByRole("option", { name: "13", exact: true })
+		.click();
+	await page
+		.getByRole("listbox", { name: "End time minute" })
+		.getByRole("option", { name: "45", exact: true })
 		.click();
 	await expect(end).toHaveValue("13:45");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -8354,7 +8362,7 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	await expect(approximateStart).toHaveAttribute("placeholder", "Select time");
 	await approximateStart.click();
 	const timeOptions = page.getByRole("listbox", {
-		name: "Approximate start time options",
+		name: "Approximate start time hour",
 	});
 	await timeOptions.hover();
 	await page.mouse.wheel(0, 240);
@@ -9089,7 +9097,7 @@ test("opens a picker inside the sharing dialog on top of it", async ({
 	const time = dialog.getByRole("combobox", { name: "Time" });
 	await time.click();
 
-	const list = page.getByRole("listbox", { name: "Time options" });
+	const list = page.getByRole("listbox", { name: "Time hour" });
 	await expect(list).toHaveCount(1);
 	// Being in the DOM is not being usable: a layer painted under the dialog
 	// still reports itself visible, so ask what is actually on top.
@@ -9105,8 +9113,11 @@ test("opens a picker inside the sharing dialog on top of it", async ({
 		}),
 	).toBe(true);
 
-	const option = list.getByRole("option").first();
-	const chosen = (await option.textContent())!.trim();
-	await option.click();
-	await expect(time).toHaveValue(chosen);
+	// The hour narrows and the minute commits, so a usable menu needs both.
+	await list.getByRole("option", { name: "09", exact: true }).click();
+	await page
+		.getByRole("listbox", { name: "Time minute" })
+		.getByRole("option", { name: "30", exact: true })
+		.click();
+	await expect(time).toHaveValue("09:30");
 });

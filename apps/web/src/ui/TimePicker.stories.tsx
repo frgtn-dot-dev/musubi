@@ -1,5 +1,6 @@
 import type { Settings } from "@musubi/types";
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
+import { expect, waitFor } from "storybook/test";
 import { useState } from "react";
 import styles from "./PickerStories.module.css";
 import { TimePicker } from "./TimePicker";
@@ -11,7 +12,6 @@ type TimePickerExampleProps = {
   format: Settings["timeFormat"];
   max?: string;
   min?: string;
-  relativeTo?: string;
   title: string;
 };
 
@@ -20,7 +20,6 @@ function TimePickerExample({
   format,
   max,
   min,
-  relativeTo,
   title,
 }: TimePickerExampleProps) {
   const [value, setValue] = useState(INITIAL_TIME);
@@ -39,7 +38,6 @@ function TimePickerExample({
           max={max}
           min={min}
           onChange={setValue}
-          relativeTo={relativeTo}
           timeFormat={format}
           value={value}
         />
@@ -65,6 +63,29 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Formats: Story = {
+  /* The 12-hour list carries a period switch, which belongs on one row across
+     the menu — the primitive is inline-flex on its own, so the class that
+     stretches it must not change the axis. */
+  play: async () => {
+    const twelveHour = document.querySelectorAll(
+      "input[role=combobox]",
+    )[1] as HTMLInputElement;
+    twelveHour.click();
+
+    const group = await waitFor(() => {
+      const found = document.querySelector("[role=radiogroup]");
+      if (!found) throw new Error("period switch not rendered");
+      return found;
+    });
+    const [am, pm] = [...group.querySelectorAll("button")].map((button) =>
+      button.getBoundingClientRect(),
+    );
+
+    await expect(am!.y).toBeCloseTo(pm!.y, 0);
+    await expect(am!.width + pm!.width).toBeGreaterThan(
+      group.getBoundingClientRect().width - 12,
+    );
+  },
   render: () => (
     <div className={styles.grid}>
       <TimePickerExample format="24h" title="24-hour" />
@@ -79,7 +100,6 @@ export const RangeAndDuration: Story = {
       format="24h"
       max="18:00"
       min="09:00"
-      relativeTo="08:30"
       title="Bounded end time"
     />
   ),
