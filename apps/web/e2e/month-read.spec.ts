@@ -7974,19 +7974,19 @@ test("lets the poll organizer answer from the calendar", async ({ page }) => {
 
 	// The same authenticated identity owns the row on the public link too.
 	await page.goto(`/s/${POLL_TOKEN}`);
-	await expect(page.getByText("You created this poll.")).toBeVisible();
-	const ownAnswer = page.getByRole("button", {
-		name: /10 Aug.*you answered yes/,
+	const ownAvailability = page.getByRole("group", {
+		name: "Availability for Monday 10 August, All day",
 	});
-	await ownAnswer.click();
-	await page
-		.getByRole("dialog", { name: /Your answer for/ })
-		.getByRole("button", { exact: true, name: "No" })
-		.click();
-	await page.getByRole("button", { name: "Send my answers" }).click();
-	expect(savedVotes[1]).toEqual({
-		votes: [{ slotID: "owner-slot", value: "no" }],
-	});
+	await expect(
+		ownAvailability.getByRole("button", { exact: true, name: "Yes" }),
+	).toHaveAttribute("aria-pressed", "true");
+	await ownAvailability.getByRole("button", { exact: true, name: "No" }).click();
+	await page.getByRole("button", { name: "Save changes" }).click();
+	await expect
+		.poll(() => savedVotes[1])
+		.toEqual({
+			votes: [{ slotID: "owner-slot", value: "no" }],
+		});
 });
 
 test("closes and deletes a poll", async ({ page }) => {
