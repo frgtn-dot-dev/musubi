@@ -415,9 +415,8 @@ export function PollResults({
       <div className={styles.footer}>
         <div className={styles.footerGroup}>
           <Button
-            className={styles.deletePoll}
             loading={remove.isPending}
-            variant="secondary"
+            variant="destructive"
             onClick={() => setConfirmingDelete(true)}
           >
             Delete poll

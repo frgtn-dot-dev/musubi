@@ -5,8 +5,10 @@ mark them up freely, they are rebuilt from scratch each run.
 
 ```
 cd apps/web
-UI_SHOTS=../ui-catalog pnpm exec playwright test -g "ui catalogue|onboarding once"
-UI_SHOTS=../ui-catalog UI_SHOTS_THEME=dark pnpm exec playwright test -g "ui catalogue|onboarding once"
+UI_SHOTS=../../ui-catalog pnpm exec playwright test \
+  -g "ui catalogue|onboarding once"
+UI_SHOTS=../../ui-catalog UI_SHOTS_THEME=dark pnpm exec playwright test \
+  -g "ui catalogue|onboarding once"
 ```
 
 The source is the `ui catalogue` test in `apps/web/e2e/month-read.spec.ts`, which
@@ -22,8 +24,8 @@ rest of the suite uses, so the data in the shots is the suite's fixture calendar
 | 04 | Make an event page — public | `routes/new-event.tsx` |
 | 05 | Calendar invitation | `routes/invite.$token.tsx` |
 | 06 | Published event page | `routes/e.$token.tsx` |
-| 07 | Poll — the answer grid | `routes/s.$token.tsx` |
-| 08 | Poll — one cell's answer menu | `routes/s.$token.tsx` |
+| 07 | Poll — public scheduler page | `routes/s.$token.tsx` |
+| 08 | Poll — identity step after choosing availability | `routes/s.$token.tsx`, `components/EmailIdentity.tsx` |
 | 09 | Poll — link no longer valid | `ui/RouteState.tsx` |
 | 10–13 | Month, Week, Day, Agenda | `MonthCalendar`, `TimeGridView`, `AgendaView` |
 | 14 | Event preview | `calendar/components/EventDetailsPopover.tsx` |

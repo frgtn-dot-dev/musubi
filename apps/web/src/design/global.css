@@ -1,40 +1,60 @@
 * {
-  box-sizing: border-box;
+ box-sizing: border-box;
+}
+
+/* Scheduling answers are domain colours rather than foundation tokens. They live
+   at the root because answer controls can render through a portal. */
+:root {
+ --answer-yes: #1f5c39;
+ --answer-yes-fill: rgba(47, 125, 79, 0.18);
+ --answer-maybe: #7a5406;
+ --answer-maybe-fill: rgba(176, 125, 26, 0.2);
+ --answer-no: #8c2f21;
+ --answer-no-fill: rgba(179, 64, 47, 0.16);
+}
+
+:root[data-theme="dark"] {
+ --answer-yes: #7fd6a2;
+ --answer-yes-fill: rgba(127, 214, 162, 0.16);
+ --answer-maybe: #e8c266;
+ --answer-maybe-fill: rgba(230, 194, 102, 0.16);
+ --answer-no: #f0958a;
+ --answer-no-fill: rgba(240, 149, 138, 0.16);
 }
 
 html {
-  min-width: 320px;
-  background: var(--surface-canvas);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
+ min-width: 320px;
+ background: var(--surface-canvas);
+ color: var(--text-primary);
+ font-family: var(--font-sans);
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--surface-canvas);
+ margin: 0;
+ min-height: 100vh;
+ background: var(--surface-canvas);
 }
 
 button,
 input,
 select,
 textarea {
-  color: inherit;
-  font: inherit;
+ color: inherit;
+ font: inherit;
 }
 
 button,
 a {
-  -webkit-tap-highlight-color: transparent;
+ -webkit-tap-highlight-color: transparent;
 }
 
 button {
-  cursor: pointer;
+ cursor: pointer;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 3px;
+ outline: 2px solid var(--accent-primary);
+ outline-offset: 3px;
 }
 
 /* Focus rings belong to keyboard use. Until a key arms them (see focus-mode.ts)
@@ -42,86 +62,86 @@ button {
    returning to a trigger — can't flash an outline at someone using a mouse.
    Outlines don't affect layout, so nothing moves when they light up. */
 :root:not([data-focus-mode="keyboard"]) :focus-visible {
-  outline-color: transparent;
+ outline-color: transparent;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+ background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
 }
 
 .skip-link {
-  position: fixed;
-  z-index: 1000;
-  top: 12px;
-  left: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--control-fill);
-  color: var(--control-on-fill);
-  text-decoration: none;
-  transform: translateY(-160%);
+ position: fixed;
+ z-index: 1000;
+ top: 12px;
+ left: 12px;
+ padding: 10px 14px;
+ border-radius: var(--radius-md);
+ background: var(--control-fill);
+ color: var(--control-on-fill);
+ text-decoration: none;
+ transform: translateY(-160%);
 }
 
 .skip-link:focus {
-  transform: translateY(0);
+ transform: translateY(0);
 }
 
 .foundation {
-  display: grid;
-  min-height: 100vh;
-  place-content: center;
-  padding: 32px;
-  text-align: center;
+ display: grid;
+ min-height: 100vh;
+ place-content: center;
+ padding: 32px;
+ text-align: center;
 }
 
 .foundation h1 {
-  max-width: 720px;
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: clamp(2rem, 5vw, 4rem);
-  font-weight: 400;
-  line-height: 1.08;
+ max-width: 720px;
+ margin: 0;
+ font-family: var(--font-serif);
+ font-size: clamp(2rem, 5vw, 4rem);
+ font-weight: 400;
+ line-height: 1.08;
 }
 
 .foundation p {
-  max-width: 580px;
-  margin: 0 auto;
-  color: var(--text-secondary);
-  line-height: 1.6;
+ max-width: 580px;
+ margin: 0 auto;
+ color: var(--text-secondary);
+ line-height: 1.6;
 }
 
 .foundation > p:first-of-type {
-  color: var(--accent-primary);
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+ color: var(--accent-primary);
+ font-size: 0.72rem;
+ letter-spacing: 0.2em;
+ text-transform: uppercase;
 }
 
 .foundation {
-  position: relative;
-  gap: 18px;
-  overflow: hidden;
+ position: relative;
+ gap: 18px;
+ overflow: hidden;
 }
 
 .foundation__mark {
-  position: absolute;
-  right: -0.05em;
-  bottom: -0.36em;
-  color: var(--text-primary);
-  font-family: var(--font-kanji);
-  font-size: min(42vw, 36rem);
-  line-height: 1;
-  opacity: 0.035;
-  pointer-events: none;
+ position: absolute;
+ right: -0.05em;
+ bottom: -0.36em;
+ color: var(--text-primary);
+ font-family: var(--font-kanji);
+ font-size: min(42vw, 36rem);
+ line-height: 1;
+ opacity: 0.035;
+ pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
+ *,
+ *::before,
+ *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+ }
 }

@@ -190,14 +190,14 @@
 
 /* Trailing controls read as one column: the value sits beside its own chevron at
    the row's right edge instead of drifting to the far left of the control. */
-.timeInput {
+.optionInput {
 	width: 9rem;
 }
 
 /* On the input itself: a text input does not inherit `text-align` from its
    wrapper, so setting it a level up did nothing. The padding on the right is the
    chevron's room, so the value lands just left of it. */
-.timeInput input {
+.optionInput input {
 	text-align: right;
 }
 
@@ -339,13 +339,4 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
-}
-
-.deletePoll {
-	color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
-}
-
-.deletePoll:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-	color: var(--accent-primary);
 }

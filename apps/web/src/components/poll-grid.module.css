@@ -1,24 +1,3 @@
-/* Answer colours. Not tokens, because nothing else in the app means "yes" in
-   green. On the root and not on the page, because the answer menu is portalled
-   to the end of the body and would otherwise inherit none of them. */
-:global(:root) {
-  --answer-yes: #1f5c39;
-  --answer-yes-fill: rgba(47, 125, 79, 0.18);
-  --answer-maybe: #7a5406;
-  --answer-maybe-fill: rgba(176, 125, 26, 0.2);
-  --answer-no: #8c2f21;
-  --answer-no-fill: rgba(179, 64, 47, 0.16);
-}
-
-:global(:root[data-theme="dark"]) {
-  --answer-yes: #7fd6a2;
-  --answer-yes-fill: rgba(127, 214, 162, 0.16);
-  --answer-maybe: #e6c266;
-  --answer-maybe-fill: rgba(230, 194, 102, 0.16);
-  --answer-no: #f0958a;
-  --answer-no-fill: rgba(240, 149, 138, 0.16);
-}
-
 /* One grid, both sides of a poll: the participant page and the organizer's
    dialog. It scrolls sideways inside its own box and takes nothing with it — the
    name column stays put, because a row of ticks with no name is nothing. */
@@ -27,144 +6,144 @@
    stays put, because a row of ticks with no name is nothing. */
 
 .box {
-  overflow: hidden;
-  /* A grid item is `min-width: auto` by default, so a forty-column table pushes
+ overflow: hidden;
+ /* A grid item is `min-width: auto` by default, so a forty-column table pushes
      this box — and the card, and the document — wider than the screen instead of
      scrolling inside it. Zero is what makes the scroller below actually scroll. */
-  min-width: 0;
-  max-width: 100%;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-canvas);
+ min-width: 0;
+ max-width: 100%;
+ border: 1px solid var(--border-subtle);
+ border-radius: var(--radius-md);
+ background: var(--surface-canvas);
 }
 
 /* Only the table scrolls, so the scrollbar sits directly under it rather than
    under the caption as well. */
 .scroller {
-  overflow-x: auto;
-  min-width: 0;
+ overflow-x: auto;
+ min-width: 0;
 }
 
 .grid {
-  /* Separate, not collapsed: Chrome paints collapsed borders on the table rather
+ /* Separate, not collapsed: Chrome paints collapsed borders on the table rather
      than the cell, and a sticky cell then wobbles a pixel each way as you scroll
      and lets the grid show through the seam. */
-  border-collapse: separate;
-  border-spacing: 0;
-  /* max-content, not 100%: at 100% a table squeezes its columns to fit the box, so
+ border-collapse: separate;
+ border-spacing: 0;
+ /* max-content, not 100%: at 100% a table squeezes its columns to fit the box, so
      three weeks of days came out unreadably narrow and the scroller had nothing
      left to scroll. The min-width keeps a two-day poll filling the box. */
-  width: max-content;
-  min-width: 100%;
-  font-size: var(--text-12);
+ width: max-content;
+ min-width: 100%;
+ font-size: var(--text-12);
 }
 
 .caption {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-12);
+ margin: 0;
+ padding: var(--space-2) var(--space-3);
+ border-bottom: 1px solid var(--border-subtle);
+ color: var(--text-secondary);
+ font-size: var(--text-12);
 }
 
 .grid th,
 .grid td {
-  padding: 7px 10px;
-  border-right: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: center;
-  white-space: nowrap;
+ padding: 7px 10px;
+ border-right: 1px solid var(--border-subtle);
+ border-bottom: 1px solid var(--border-subtle);
+ text-align: center;
+ white-space: nowrap;
 }
 
 .grid th:last-child,
 .grid td:last-child {
-  border-right: 0;
+ border-right: 0;
 }
 
 .grid tr:last-child th,
 .grid tr:last-child td {
-  border-bottom: 0;
+ border-bottom: 0;
 }
 
 .grid tbody tr {
-  height: 44px;
+ height: 44px;
 }
 
 .corner,
 .rowHead {
-  position: sticky;
-  left: 0;
-  /* Above every scrolling cell, and opaque, or the times slide through it. */
-  z-index: 2;
-  min-width: 8rem;
-  max-width: 12rem;
-  overflow: hidden;
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  font-weight: 500;
-  text-align: center;
-  text-overflow: ellipsis;
+ position: sticky;
+ left: 0;
+ /* Above every scrolling cell, and opaque, or the times slide through it. */
+ z-index: 2;
+ min-width: 8rem;
+ max-width: 12rem;
+ overflow: hidden;
+ background: var(--surface-raised);
+ color: var(--text-primary);
+ font-weight: 500;
+ text-align: center;
+ text-overflow: ellipsis;
 }
 
 .personRow {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: var(--space-1);
+ display: grid;
+ grid-template-columns: 1fr auto 1fr;
+ align-items: center;
+ gap: var(--space-1);
 }
 
 .personName {
-  grid-column: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
+ grid-column: 2;
+ overflow: hidden;
+ text-overflow: ellipsis;
 }
 
 .personRow > :last-child:not(.personName) {
-  justify-self: end;
+ justify-self: end;
 }
 
 .corner {
-  /* Spans the rows below it, so the label sits in the middle of the block rather
+ /* Spans the rows below it, so the label sits in the middle of the block rather
      than at the top of its first row. */
-  vertical-align: middle;
-  color: var(--text-secondary);
-  font-size: var(--text-11);
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+ vertical-align: middle;
+ color: var(--text-secondary);
+ font-size: var(--text-11);
+ font-weight: 400;
+ letter-spacing: 0.06em;
+ text-transform: uppercase;
 }
 
 .dayHead {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  font-weight: 600;
+ background: var(--surface-raised);
+ color: var(--text-primary);
+ font-weight: 600;
 }
 
 .timeHead {
-  color: var(--text-secondary);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
+ color: var(--text-secondary);
+ font-weight: 400;
+ font-variant-numeric: tabular-nums;
 }
 
 /* Header row without a header cell: the corner beside it spans down instead. */
 .countRow td {
-  background: var(--surface-raised);
+ background: var(--surface-raised);
 }
 
 .count {
-  color: var(--text-primary);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+ color: var(--text-primary);
+ font-weight: 600;
+ font-variant-numeric: tabular-nums;
 }
 
 .countIfNeeded {
-  margin-left: 3px;
-  color: var(--text-secondary);
-  font-weight: 400;
+ margin-left: 3px;
+ color: var(--text-secondary);
+ font-weight: 400;
 }
 
 .grid .cell {
-  padding: 0;
+ padding: 0;
 }
 
 /* Your own row, marked so it is findable in a tall grid. Mixed with the surface
@@ -172,97 +151,105 @@
    sticky cell shows the times sliding along underneath it. */
 .yourRow th,
 .yourRow td {
-  background: color-mix(in oklab, var(--accent-primary) 8%, var(--surface-canvas));
+ background: color-mix(
+  in oklab,
+  var(--accent-primary) 8%,
+  var(--surface-canvas)
+ );
 }
 
 .yourRow .rowHead {
-  background: color-mix(in oklab, var(--accent-primary) 8%, var(--surface-raised));
+ background: color-mix(
+  in oklab,
+  var(--accent-primary) 8%,
+  var(--surface-raised)
+ );
 }
 
 .cellButton {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  min-width: 3rem;
-  min-height: 2.25rem;
-  border: 0;
-  background: none;
-  cursor: pointer;
+ display: grid;
+ place-items: center;
+ width: 100%;
+ min-width: 3rem;
+ min-height: 2.25rem;
+ border: 0;
+ background: none;
+ cursor: pointer;
 }
 
 .cellButton:hover,
 .cellButton[data-state="open"] {
-  background: color-mix(in oklab, var(--accent-primary) 16%, transparent);
+ background: color-mix(in oklab, var(--accent-primary) 16%, transparent);
 }
 
 /* The answer menu for one cell. */
 .picker {
-  display: grid;
-  gap: 2px;
-  padding: 4px;
+ display: grid;
+ gap: 2px;
+ padding: 4px;
 }
 
 .pick {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-primary);
-  font-size: var(--text-13);
-  text-align: left;
-  cursor: pointer;
+ display: flex;
+ align-items: center;
+ gap: var(--space-2);
+ padding: 6px 8px;
+ border: 0;
+ border-radius: var(--radius-sm);
+ background: none;
+ color: var(--text-primary);
+ font-size: var(--text-13);
+ text-align: left;
+ cursor: pointer;
 }
 
 .pick:hover,
 .pick[aria-pressed="true"] {
-  background: var(--surface-raised);
+ background: var(--surface-raised);
 }
 
 .mark {
-  display: inline-grid;
-  place-items: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-12);
-  font-weight: 700;
-  line-height: 1;
+ display: inline-grid;
+ place-items: center;
+ width: 1.35rem;
+ height: 1.35rem;
+ border-radius: var(--radius-sm);
+ font-size: var(--text-12);
+ font-weight: 700;
+ line-height: 1;
 }
 
 /* Shape and letter carry the meaning; colour only reinforces it. */
 .mark[data-value="yes"] {
-  background: var(--answer-yes-fill);
-  color: var(--answer-yes);
+ background: var(--answer-yes-fill);
+ color: var(--answer-yes);
 }
 
 .mark[data-value="if-needed"] {
-  background: var(--answer-maybe-fill);
-  color: var(--answer-maybe);
+ background: var(--answer-maybe-fill);
+ color: var(--answer-maybe);
 }
 
 .mark[data-value="no"] {
-  background: var(--answer-no-fill);
-  color: var(--answer-no);
+ background: var(--answer-no-fill);
+ color: var(--answer-no);
 }
 
 .markNone {
-  display: inline-grid;
-  place-items: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
+ display: inline-grid;
+ place-items: center;
+ width: 1.35rem;
+ height: 1.35rem;
+ border: 1px dashed var(--border-strong);
+ border-radius: var(--radius-sm);
+ color: var(--text-muted);
 }
 
 /* In your own row the empty box is a target, so it says so. */
 .cellButton .markNone::after {
-  content: "+";
-  font-size: var(--text-12);
-  line-height: 1;
+ content: "+";
+ font-size: var(--text-12);
+ line-height: 1;
 }
 
 /* Deliberately not `position: absolute`, the usual recipe for this: with no
@@ -271,71 +258,70 @@
    document scroll sideways. In flow it is a 1px box inside a fixed-size mark and
    changes nothing. */
 .visuallyHidden {
-  display: block;
-  overflow: hidden;
-  clip-path: inset(50%);
-  width: 1px;
-  height: 1px;
-  white-space: nowrap;
+ display: block;
+ overflow: hidden;
+ clip-path: inset(50%);
+ width: 1px;
+ height: 1px;
+ white-space: nowrap;
 }
 
 .nameInput {
-  width: 100%;
-  min-width: 0;
-  height: 30px;
-  padding: 4px 6px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-canvas);
-  color: var(--text-primary);
-  font: inherit;
+ width: 100%;
+ min-width: 0;
+ height: 30px;
+ padding: 4px 6px;
+ border: 1px dashed var(--border-strong);
+ border-radius: var(--radius-sm);
+ background: var(--surface-canvas);
+ color: var(--text-primary);
+ font: inherit;
 }
 
 /* The shared event-page error colour is the accent, which as 12px text misses AA
    in the dark scheme. The "no" colour is contrast-checked in both. */
 
 .legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-12);
+ display: flex;
+ flex-wrap: wrap;
+ gap: var(--space-3);
+ margin: 0;
+ color: var(--text-secondary);
+ font-size: var(--text-12);
 }
 
 .legendItem {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+ display: flex;
+ align-items: center;
+ gap: 5px;
 }
 
 /* At the end of the row, away from the marks it is not part of. */
 .legendScroll {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
+ display: flex;
+ align-items: center;
+ gap: 2px;
+ margin-left: auto;
 }
-
 
 /* The organizer's row of "pick this", under the column each one belongs to. */
 .actionRow th,
 .actionRow td {
-  background: var(--surface-raised);
+ background: var(--surface-raised);
 }
 
 .actionCell {
-  padding: 6px;
+ padding: 6px;
 }
 
 .timeHead[data-leading],
 .count[data-leading] {
-  background: color-mix(in oklab, var(--answer-yes-fill) 60%, transparent);
+ background: color-mix(in oklab, var(--answer-yes-fill) 60%, transparent);
 }
 
 .timeHead[data-chosen],
 .count[data-chosen] {
-  background: var(--answer-yes-fill);
-  color: var(--answer-yes);
-  font-weight: 600;
+ background: var(--answer-yes-fill);
+ color: var(--answer-yes);
+ font-weight: 600;
 }

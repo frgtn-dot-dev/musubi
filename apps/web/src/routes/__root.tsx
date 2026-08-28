@@ -89,7 +89,7 @@ function FocusMode() {
 function SkipLink() {
   return (
     <a className="skip-link" href="#main-content">
-      Skip to calendar
+      Skip to content
     </a>
   );
 }

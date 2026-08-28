@@ -3642,7 +3642,7 @@ test("joins a calendar from a pasted cross-server invite link", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
-	const token = "0f9c1d2e3a4b5c6d7e8f9a0b1c2d3e4f";
+	const token = "0f9c1d2e3a4b5c6d7e8f9a0b1c2d3e4f"; // gitleaks:allow -- deterministic test token
 	let previewQuery: string | undefined;
 	let connectBody: unknown;
 
@@ -3716,7 +3716,7 @@ test("joins a calendar from an invite link on this server", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
-	const token = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d";
+	const token = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"; // gitleaks:allow -- deterministic test token
 	let joinedCalendarId: string | undefined;
 
 	await page.route(`**/api/v1/calendars/tokens/${token}`, (route) =>
@@ -6131,7 +6131,7 @@ test("says so when the import fails instead of showing an empty list", async ({
 	);
 });
 
-const INVITE_TOKEN = "8f14e45fceea167a5a36dedd4bea2543";
+const INVITE_TOKEN = "8f14e45fceea167a5a36dedd4bea2543"; // gitleaks:allow -- deterministic test token
 
 function invitePreview() {
 	return {
@@ -6369,7 +6369,7 @@ test("opens the same event popover from a week block", async ({ page }) => {
 	).toBeVisible();
 });
 
-const SHARE_TOKEN = "c89f06867c4b99bddc0fe7fd83244b11";
+const SHARE_TOKEN = "c89f06867c4b99bddc0fe7fd83244b11"; // gitleaks:allow -- deterministic test token
 
 function publicEvent(overrides: Record<string, unknown> = {}) {
 	return {
@@ -7145,8 +7145,9 @@ test("ui catalogue", async ({ browser, page }) => {
 	await page.goto(`/s/${POLL_TOKEN}`);
 	await page.waitForLoadState("networkidle");
 	await shot("public-poll-grid");
-	await page.getByRole("button", { name: /11 Aug, 15:00/ }).click();
-	await shot("public-poll-answer-menu", page.getByRole("dialog").first());
+	await page.getByRole("button", { name: "Yes" }).first().click();
+	await page.getByRole("button", { name: "Send availability" }).click();
+	await shot("public-poll-identity");
 
 	await page.goto("/s/deadbeefdeadbeefdeadbeefdeadbeef");
 	await page.waitForLoadState("networkidle");
@@ -7886,8 +7887,13 @@ test("refreshes an SSR-anonymous poll after the browser session resolves", async
 	});
 
 	await page.goto(`/s/${POLL_TOKEN}`);
-	await expect(page.getByText("You created this poll.")).toBeVisible();
-	await expect(page.getByRole("row", { name: /^Web QA/ })).toBeVisible();
+	await expect(page.getByText("Organized by")).toBeVisible();
+	await page.getByRole("button", { name: "View 1 participants" }).click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Participants" })
+			.getByText("You", { exact: true }),
+	).toBeVisible();
 	expect(pollReads).toBeGreaterThanOrEqual(2);
 });
 
@@ -8268,7 +8274,7 @@ test("walks a new account through onboarding once", async ({ page }) => {
 	await expect(page.getByRole("img", { name: "Step 1 of 3" })).toHaveCount(0);
 });
 
-const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2";
+const POLL_TOKEN = "192372d03aed90c2f5b0f0a5f8f0c1d2"; // gitleaks:allow -- deterministic test token
 type MockPollSlot = {
 	end: string;
 	id: string;
@@ -8358,11 +8364,18 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	const dialog = page.getByRole("dialog", { name: "Find a time" });
 
 	await dialog.getByLabel("What is it about").fill("Studio planning");
-	const approximateStart = dialog.getByLabel("Approximate start time");
+	await dialog
+		.getByLabel("Organizer note")
+		.fill("Bring the latest studio references.");
+	await chooseSelectOption(page, "Duration", "1 hour");
+	await expect(
+		dialog.getByRole("button", { name: "Create the poll" }),
+	).toBeDisabled();
+	const approximateStart = dialog.getByLabel("Start time");
 	await expect(approximateStart).toHaveAttribute("placeholder", "Select time");
 	await approximateStart.click();
 	const timeOptions = page.getByRole("listbox", {
-		name: "Approximate start time hour",
+		name: "Start time hour",
 	});
 	await timeOptions.hover();
 	await page.mouse.wheel(0, 240);
@@ -8391,19 +8404,20 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	).toBeVisible();
 	expect(created).toMatchObject({
 		approximateStartTime: "15:00",
+		description: "Bring the latest studio references.",
+		durationMinutes: 60,
 		title: "Studio planning",
 	});
-	expect(created).not.toHaveProperty("durationMinutes");
 	const sent = (
 		created as {
 			slots: Array<{ date: string; start: string }>;
 		}
 	).slots;
 	expect(sent).toHaveLength(2);
-	// Date is the semantic value; UTC noon is only a timezone-stable carrier.
+	// Browser-local wall time becomes the wire instant (Europe/Prague in tests).
 	expect(sent).toEqual([
-		{ date: "2026-08-18", start: "2026-08-18T12:00:00.000Z" },
-		{ date: "2026-08-19", start: "2026-08-19T12:00:00.000Z" },
+		{ date: "2026-08-18", start: "2026-08-18T13:00:00.000Z" },
+		{ date: "2026-08-19", start: "2026-08-19T13:00:00.000Z" },
 	]);
 
 	// The same grid the participants answered on, so the person deciding reads the
@@ -8574,6 +8588,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	let created:
 		| {
 				approximateStartTime?: string;
+				durationMinutes: number;
 				email?: string;
 				name?: string;
 				slots: Array<{ start: string }>;
@@ -8606,7 +8621,7 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 			{
 				closedAt: null,
 				createdAt: "2026-08-03T09:00:00.000Z",
-				durationMinutes: 45,
+				durationMinutes: 24 * 60,
 				id: "poll-1",
 				title: "Studio planning",
 				token: POLL_TOKEN,
@@ -8650,16 +8665,20 @@ test("makes a poll from the public page with no account", async ({ page }) => {
 	expect(created).not.toHaveProperty("email");
 	expect(created).not.toHaveProperty("name");
 	expect(created).not.toHaveProperty("approximateStartTime");
-	expect(created!.slots).toHaveLength(2);
+	expect(created).toMatchObject({ durationMinutes: 24 * 60 });
+	expect(created!.slots).toEqual([
+		{ date: "2026-08-10", start: "2026-08-10T12:00:00.000Z" },
+		{ date: "2026-08-11", start: "2026-08-11T12:00:00.000Z" },
+	]);
 	expect(hydrationErrors).toEqual([]);
 
 	await expectNoAccessibilityViolations(page);
 });
 
-test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
+test("keeps a long public scheduler inside its viewport", async ({ page }) => {
 	await page.route("**/api/auth/get-session", (route) => respond(route, null));
 	const slots: MockPollSlot[] = [];
-	for (let day = 3; day <= 24; day += 1) {
+	for (let day = 3; day <= 6; day += 1) {
 		for (const hour of [13, 17]) {
 			slots.push({
 				end: `2026-08-${String(day).padStart(2, "0")}T${hour + 1}:00:00.000Z`,
@@ -8686,49 +8705,32 @@ test("keeps a wide poll grid inside its own scroller", async ({ page }) => {
 	);
 
 	await page.goto(`/s/${POLL_TOKEN}`);
-	const title = page.getByRole("heading", { name: "Studio planning" });
-	await expect(title).toBeVisible();
-	const pollCard = title.locator("xpath=ancestor::article");
-	const alignment = await pollCard.evaluate(
-		(card, heading) => {
-			const cardBox = card.getBoundingClientRect();
-			const titleBox = (heading as HTMLElement).getBoundingClientRect();
-			return {
-				centerDelta: Math.abs(
-					cardBox.left + cardBox.width / 2 - (titleBox.left + titleBox.width / 2),
-				),
-				pageCenterX: Math.abs(cardBox.left + cardBox.width / 2 - innerWidth / 2),
-				textAlign: getComputedStyle(heading as HTMLElement).textAlign,
-			};
-		},
-		await title.elementHandle(),
-	);
-	expect(alignment.centerDelta).toBeLessThanOrEqual(1);
-	expect(alignment.pageCenterX).toBeLessThanOrEqual(1);
-	expect(alignment.textAlign).toBe("center");
-
-	// Forty-four columns: the table has to scroll inside its box and take nothing
-	// else with it. A grid item's `min-width: auto` is what lets wide content push
-	// its own container wider, and then the document scrolls sideways instead.
-	const scroller = page.locator("[class*=scroller]");
-	expect(
-		await scroller.evaluate((node) => node.scrollWidth > node.clientWidth),
-	).toBe(true);
-	const documentWidth = await page.evaluate(() => ({
-		client: window.document.documentElement.clientWidth,
-		scroll: window.document.documentElement.scrollWidth,
-	}));
-	expect(documentWidth.scroll).toBeLessThanOrEqual(documentWidth.client);
+	await expect(
+		page.getByRole("heading", { name: "Studio planning" }),
+	).toBeVisible();
+	const firstChoice = page.getByRole("button", { name: "Yes" }).first();
+	await expect(firstChoice).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(() => ({
+				client: document.documentElement.clientWidth,
+				scroll: document.documentElement.scrollWidth,
+			})),
+		)
+		.toMatchObject({ client: 1280, scroll: 1280 });
 
 	await page.setViewportSize({ height: 844, width: 390 });
-	const themeBox = await page
-		.getByRole("button", { name: /theme/ })
-		.boundingBox();
-	const mobileCardBox = await pollCard.boundingBox();
-	expect(themeBox!.y + themeBox!.height).toBeLessThanOrEqual(mobileCardBox!.y);
-	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
-		390,
-	);
+	await expect(firstChoice).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					document.documentElement.scrollWidth <=
+					document.documentElement.clientWidth,
+			),
+		)
+		.toBe(true);
+	await expectNoAccessibilityViolations(page);
 });
 
 test("answers a poll as somebody with no account", async ({ page }) => {
@@ -8820,61 +8822,30 @@ test("answers a poll as somebody with no account", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "Studio planning" }),
 	).toBeVisible();
-	// Somebody else's row is readable before you have said who you are — the
-	// whole point of the grid is seeing who can make what.
-	const mika = page.getByRole("row", { name: /^Mika/ });
-	await expect(mika).toContainText("✓");
-	await expect(mika).toContainText("✕");
+	await expect(page.getByText("Results stay private for now")).toBeVisible();
+	await expect(page.getByText("Mika")).toHaveCount(0);
 
-	// Email comes before a personal row becomes editable.
-	await expect(page.getByText(/calendar is never read/)).toBeVisible();
+	await page.getByRole("button", { name: "Yes" }).first().click();
+	await page.getByRole("button", { name: "Send availability" }).click();
 	await page.getByLabel("Email").fill("z@example.com");
 	await page.getByRole("button", { name: "Send me a code" }).click();
 	await page.getByLabel("Code from your email").fill("123456");
 	await page.getByRole("button", { name: "Confirm" }).click();
-	await expect(page.getByLabel("Your name")).toHaveCount(0);
 
-	// A cell opens a menu; the menu sets the answer.
-	await page.getByRole("button", { name: /18 Aug.*have not answered/ }).click();
-	await page.getByRole("button", { name: "Yes", exact: true }).click();
-	await page.getByRole("button", { name: "Send my answers" }).click();
-	const savedButton = page.getByRole("button", { name: "Answers saved" });
-	await expect(savedButton).toBeDisabled();
-	expect(voteAttempts).toEqual([
-		{ votes: [{ slotID: "slot-tue", value: "yes" }] },
-	]);
-	const zoe = page.getByRole("row", { name: /^Zoe/ });
-	await expect(zoe).toBeVisible();
-
-	const rowHeights = await Promise.all(
-		[mika, zoe].map(async (row) => (await row.boundingBox())!.height),
-	);
-	expect(Math.max(...rowHeights) - Math.min(...rowHeights)).toBeLessThanOrEqual(
-		0.5,
-	);
-	for (const row of [mika, zoe]) {
-		expect(
-			await row.locator("th").evaluate((cell) => getComputedStyle(cell).textAlign),
-		).toBe("center");
-	}
-
-	const legend = savedButton.locator("xpath=../preceding-sibling::p[1]");
-	const legendBox = await legend.boundingBox();
-	const buttonBox = await savedButton.boundingBox();
-	expect(
-		Math.abs(
-			legendBox!.y +
-				legendBox!.height / 2 -
-				(buttonBox!.y + buttonBox!.height / 2),
-		),
-	).toBeLessThanOrEqual(1);
-	expect(legendBox!.x).toBeLessThan(buttonBox!.x);
-
-	// A table of coloured marks is exactly where contrast and headers go wrong.
+	await expect
+		.poll(() => voteAttempts)
+		.toEqual([{ votes: [{ slotID: "slot-tue", value: "yes" }] }]);
+	await expect(
+		page.getByRole("button", { name: "Save changes" }),
+	).toBeDisabled();
+	await page.getByRole("button", { name: "View 2 participants" }).click();
+	const participants = page.getByRole("dialog", { name: "Participants" });
+	await expect(participants.getByText("Mika")).toBeVisible();
+	await expect(participants.getByText("You", { exact: true })).toBeVisible();
 	await expectNoAccessibilityViolations(page);
 });
 
-test("tapping from one poll cell to the next keeps the new menu open", async ({
+test("tapping direct poll choices keeps each row independent", async ({
 	browser,
 }) => {
 	// A touch context on purpose: with a mouse the old menu dismissed on
@@ -8913,18 +8884,25 @@ test("tapping from one poll cell to the next keeps the new menu open", async ({
 	);
 
 	await page.goto(`/s/${POLL_TOKEN}`);
-	await page.getByRole("button", { name: /18 Aug/ }).tap();
-	await expect(page.getByRole("dialog", { name: /18 Aug/ })).toBeVisible();
-	await page.getByRole("button", { name: /19 Aug/ }).tap();
-	// Settled, not sampled: a retrying assertion would happily catch the flash.
-	await page.waitForTimeout(600);
-	await expect(page.getByRole("dialog", { name: /19 Aug/ })).toBeVisible();
-	await expect(page.getByRole("dialog", { name: /18 Aug/ })).toHaveCount(0);
+	const yes = page.getByRole("button", { name: "Yes" });
+	const maybe = page.getByRole("button", { name: "If needed" });
 
+	await yes.first().tap();
+	await expect(yes.first()).toHaveAttribute("aria-pressed", "true");
+	await expect(yes.nth(1)).toHaveAttribute("aria-pressed", "false");
+
+	await maybe.nth(1).tap();
+	await expect(yes.first()).toHaveAttribute("aria-pressed", "true");
+	await expect(maybe.nth(1)).toHaveAttribute("aria-pressed", "true");
+
+	await yes.first().tap();
+	await expect(yes.first()).toHaveAttribute("aria-pressed", "false");
 	await context.close();
 });
 
-test("sets and clears a poll answer from the cell menu", async ({ page }) => {
+test("sets, clears, hovers, and retries a direct poll answer", async ({
+	page,
+}) => {
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(route, {
 			session: { id: "s" },
@@ -8972,43 +8950,30 @@ test("sets and clears a poll answer from the cell menu", async ({ page }) => {
 	});
 
 	await page.goto(`/s/${POLL_TOKEN}`);
-	const cell = () => page.getByRole("button", { name: /18 Aug/ });
-	const choose = async (answer: string) => {
-		await cell().click();
-		// Scoped to this cell's own menu: a menu that is animating out is still in
-		// the document for a moment, so "the Yes button" is briefly ambiguous.
-		await page
-			.getByRole("dialog", { name: /18 Aug/ })
-			.getByRole("button", { exact: true, name: answer })
-			.click();
-	};
+	const maybe = page.getByRole("button", { name: "If needed" }).first();
+	const yes = page.getByRole("button", { name: "Yes" }).first();
 
-	await choose("If needed");
-	await expect(cell()).toHaveAttribute("aria-label", /you answered if needed/);
-	await choose("No");
-	await expect(cell()).toHaveAttribute("aria-label", /you answered no/);
+	await maybe.click();
+	await expect(maybe).toHaveAttribute("aria-pressed", "true");
+	await maybe.click();
+	await expect(maybe).toHaveAttribute("aria-pressed", "false");
+	await yes.click();
+	await expect(yes).toHaveAttribute("aria-pressed", "true");
+	await page.mouse.move(0, 0);
+	const selectedBackground = await yes.evaluate(
+		(node) => getComputedStyle(node).backgroundColor,
+	);
+	await yes.hover();
+	await expect
+		.poll(() => yes.evaluate((node) => getComputedStyle(node).backgroundColor))
+		.not.toBe(selectedBackground);
 
-	// Clearing exists, and only once there is something to clear — a wrong click
-	// must be undoable, not merely overwritable.
-	await choose("Clear");
-	await expect(cell()).toHaveAttribute("aria-label", /have not answered/);
-	await cell().click();
-	await expect(
-		page
-			.getByRole("dialog", { name: /18 Aug/ })
-			.getByRole("button", { exact: true, name: "Clear" }),
-	).toHaveCount(0);
-	await page.keyboard.press("Escape");
-
-	await choose("Yes");
-	const submit = page.getByRole("button", { name: "Send my answers" });
+	const submit = page.getByRole("button", { name: "Send availability" });
 	await submit.click();
 	await expect(page.getByRole("alert")).toBeVisible();
 	await expect(submit).toBeEnabled();
 	expect(sentVotes?.votes).toEqual([{ slotID: "slot-tue", value: "yes" }]);
 
-	// The page follows the reader's theme, and a grid of tinted marks is exactly
-	// where a dark scheme goes quietly unreadable.
 	await page.getByRole("button", { name: /Use dark theme/ }).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 	await page.evaluate(() =>
@@ -9069,8 +9034,7 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 		placement.evaluate((element) => {
 			const header = element.querySelector("div")!;
 			return (
-				header.getBoundingClientRect().top -
-				element.getBoundingClientRect().top
+				header.getBoundingClientRect().top - element.getBoundingClientRect().top
 			);
 		});
 
@@ -9088,7 +9052,10 @@ test("opens a picker inside the sharing dialog on top of it", async ({
 	await mockAuthenticatedReads(page);
 	await page.route("**/api/v1/events/*/share", (route) => respond(route, null));
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { name: /Client call/ }).first().click();
+	await page
+		.getByRole("button", { name: /Client call/ })
+		.first()
+		.click();
 	await page.getByRole("button", { name: "Share event" }).click();
 
 	const dialog = page.getByRole("dialog", { name: "Share event" });

@@ -42,6 +42,9 @@ const VOTE_VALUES = new Set(["if-needed", "no", "yes"]);
  */
 const MAX_SLOTS = 60;
 const MAX_TITLE = 120;
+const MAX_DESCRIPTION = 2000;
+const MIN_TIMED_DURATION_MINUTES = 15;
+const MAX_TIMED_DURATION_MINUTES = 12 * 60;
 const ALL_DAY_DURATION_MINUTES = 24 * 60;
 
 /**
@@ -150,20 +153,43 @@ export function parseApproximateStartTime(value: unknown) {
 	return time;
 }
 
-export function parsePollSlot(slot: { date?: string; start?: string }) {
+export function parsePollDuration(value: unknown) {
+	if (value == null || value === "") return ALL_DAY_DURATION_MINUTES;
+	const duration = Number(value);
+	if (
+		!Number.isInteger(duration) ||
+		duration < MIN_TIMED_DURATION_MINUTES ||
+		(duration > MAX_TIMED_DURATION_MINUTES &&
+			duration !== ALL_DAY_DURATION_MINUTES)
+	) {
+		throw new BadRequestError(
+			"durationMinutes must be 15–720 minutes or all-day...",
+		);
+	}
+	return duration;
+}
+
+export function parsePollSlot(
+	slot: { date?: string; start?: string },
+	durationMinutes = ALL_DAY_DURATION_MINUTES,
+) {
 	const date = String(slot?.date ?? "");
 	const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+	const suppliedStart = String(slot?.start ?? "");
+	if (durationMinutes !== ALL_DAY_DURATION_MINUTES && !suppliedStart) {
+		throw new BadRequestError("Every timed slot needs an exact start...");
+	}
 	const start = new Date(
-		hasDate ? `${date}T12:00:00.000Z` : String(slot?.start),
+		suppliedStart || (hasDate ? `${date}T12:00:00.000Z` : ""),
 	);
 	if (
 		Number.isNaN(start.getTime()) ||
-		(hasDate && start.toISOString().slice(0, 10) !== date)
+		(!suppliedStart && hasDate && start.toISOString().slice(0, 10) !== date)
 	) {
 		throw new BadRequestError("Every slot needs a valid start...");
 	}
 	return {
-		end: new Date(start.getTime() + ALL_DAY_DURATION_MINUTES * 60_000),
+		end: new Date(start.getTime() + durationMinutes * 60_000),
 		start,
 	};
 }
@@ -176,10 +202,21 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 	const title = String(req.body?.title ?? "")
 		.trim()
 		.slice(0, MAX_TITLE);
-	const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
+	const slots: Array<{ date?: string; start?: string }> = Array.isArray(
+		req.body?.slots,
+	)
+		? req.body.slots
+		: [];
 	const approximateStartTime = parseApproximateStartTime(
 		req.body?.approximateStartTime,
 	);
+	const durationMinutes = parsePollDuration(req.body?.durationMinutes);
+	if (durationMinutes !== ALL_DAY_DURATION_MINUTES && !approximateStartTime) {
+		throw new BadRequestError("A timed poll needs a start time...");
+	}
+	const description = String(req.body?.description ?? "")
+		.trim()
+		.slice(0, MAX_DESCRIPTION);
 	const ownerEmail = emailIdentity(user.email);
 	const ownerName = identityName(user.name);
 
@@ -191,7 +228,7 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 		throw new BadRequestError(`A poll can offer at most ${MAX_SLOTS} days...`);
 	}
 
-	const parsed = slots.map(parsePollSlot);
+	const parsed = slots.map((slot) => parsePollSlot(slot, durationMinutes));
 	// Chosen when the question is written, used when a day is picked — days apart,
 	// so it travels with the poll. Absent on the public page, which has no
 	// calendars to offer.
@@ -203,10 +240,8 @@ export async function handlerCreatePoll(req: Request, res: Response) {
 			approximateStartTime,
 			calendarID,
 			deadline: req.body?.deadline ? new Date(String(req.body.deadline)) : null,
-			description: String(req.body?.description ?? "").trim() || null,
-			// Kept in storage and projections for older clients; new polls become
-			// all-day events and no longer ask the organizer for a duration.
-			durationMinutes: ALL_DAY_DURATION_MINUTES,
+			description: description || null,
+			durationMinutes,
 			ownerEmail,
 			ownerID: req.user?.id,
 			ownerName,
@@ -554,7 +589,18 @@ export async function handlerVotePoll(req: Request, res: Response) {
  * cannot disagree about what was decided, and so everyone who answered can be
  * told by looking at the poll again.
  */
-export function pollSlotEventTiming(slotStart: Date) {
+export function pollSlotEventTiming(
+	slotStart: Date,
+	slotEnd?: Date,
+	durationMinutes = ALL_DAY_DURATION_MINUTES,
+) {
+	if (durationMinutes !== ALL_DAY_DURATION_MINUTES) {
+		return {
+			end: slotEnd ?? new Date(slotStart.getTime() + durationMinutes * 60_000),
+			isAllDay: false,
+			start: slotStart,
+		};
+	}
 	const date = new Date(
 		Date.UTC(
 			slotStart.getUTCFullYear(),
@@ -593,7 +639,7 @@ export async function handlerDecidePoll(req: Request, res: Response) {
 		event: {
 			color: "#c8553d",
 			creatorID: req.user!.id,
-			...pollSlotEventTiming(slot.start),
+			...pollSlotEventTiming(slot.start, slot.end, poll.durationMinutes),
 			id: crypto.randomUUID(),
 			isCanceled: false,
 			organizer: req.user!.id,

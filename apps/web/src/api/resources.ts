@@ -498,13 +498,14 @@ export function getPollCalendar(signal?: AbortSignal) {
 }
 
 export function createPoll(input: {
-  /** Informational wall-clock hint; decided events remain all-day. */
+  /** Exact start for timed polls; optional context for all-day polls. */
   approximateStartTime?: string;
   /** Where the decided event lands. Absent when the creator has no calendars. */
   calendarId?: string;
   /** When answers stop being taken, if the organizer set a date. */
   deadline?: string;
   description?: string;
+  durationMinutes: number;
   /** Private organizer identity for account-free creation. */
   email?: string;
   /** Public organizer label for account-free creation. */
@@ -528,15 +529,11 @@ export function getPoll(token: string, signal?: AbortSignal) {
 }
 
 export function votePoll(input: {
-  /** Private identity; first answers do not require proving the inbox. */
-  email?: string;
-  /** Public label shown in the poll grid. */
-  name?: string;
   token: string;
   votes: Array<{ slotID: string; value: VoteValue }>;
 }) {
   return apiRequest(`/api/v1/public/polls/${input.token}/votes`, {
-    body: { email: input.email, name: input.name, votes: input.votes },
+    body: { votes: input.votes },
     method: "PUT",
     responseSchema: PollSchema,
   });
