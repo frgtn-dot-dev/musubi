@@ -69,7 +69,7 @@ export function SchedulingDialog({
       onOpenChange={onOpenChange}
       open
       returnFocus={returnFocus}
-      size="spacious"
+      size="workspace"
       title={openPoll ? openPoll.title : "Find a time"}
     >
       {openPoll ? (

@@ -4,10 +4,9 @@
 	padding: var(--space-4) var(--layer-inline);
 }
 
-/* The poll being written on one side, the polls already out on the other — and
-   only the list scrolls, so the form never moves under the cursor. Stacked, the
-   list was below the fold of the dialog's own scroller, which is a strange place
-   to keep the thing you came back to check. */
+/* The poll being written on one side, the polls already out on the other. Each
+   pane owns its scroll on desktop so long forms and long lists remain reachable
+   without moving the other side. */
 @media (min-width: 900px) {
 	.content {
 		/* A rail, not a half. The list holds one row per poll, and at 2fr it took
@@ -20,19 +19,17 @@
 		padding: var(--space-4) 0 0;
 	}
 
-	.content > * {
+.content > * {
 		min-width: 0;
+		min-height: 0;
 		padding: 0 var(--layer-inline) var(--space-4);
 	}
 
-	.content > :last-child {
+.content > :last-child {
 		align-content: start;
-		min-height: 0;
 		height: 100%;
-		overflow-y: auto;
-		overscroll-behavior: contain;
 		border-left: 1px solid var(--border-subtle);
-	}
+}
 }
 
 .section {
@@ -255,12 +252,15 @@
    scrolling and each panel owns its own overflow. This view is one panel: without
    this, a poll with a month of days had rows below the fold and no way down. */
 @media (min-width: 900px) {
+	.content > * {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
 	.results {
 		align-content: start;
 		min-height: 0;
 		height: 100%;
-		overflow-y: auto;
-		overscroll-behavior: contain;
 	}
 }
 

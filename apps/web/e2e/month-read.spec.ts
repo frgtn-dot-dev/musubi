@@ -8287,6 +8287,7 @@ type MockPollSlot = {
 test("creates a poll, collects answers and turns one into an event", async ({
 	page,
 }) => {
+	await page.setViewportSize({ height: 962, width: 1890 });
 	await mockAuthenticatedReads(page);
 	let created: unknown;
 	let decided: unknown;
@@ -8362,15 +8363,19 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await page.getByRole("button", { name: "Find a time" }).click();
 	const dialog = page.getByRole("dialog", { name: "Find a time" });
+	const dialogBounds = await dialog.boundingBox();
+	expect(dialogBounds?.width).toBeGreaterThan(1300);
+	const createButton = dialog.getByRole("button", { name: "Create the poll" });
+	await dialog.getByLabel("Organizer note").hover();
+	await page.mouse.wheel(0, 1600);
+	await expect(createButton).toBeInViewport();
 
 	await dialog.getByLabel("What is it about").fill("Studio planning");
 	await dialog
 		.getByLabel("Organizer note")
 		.fill("Bring the latest studio references.");
 	await chooseSelectOption(page, "Duration", "1 hour");
-	await expect(
-		dialog.getByRole("button", { name: "Create the poll" }),
-	).toBeDisabled();
+	await expect(createButton).toBeDisabled();
 	const approximateStart = dialog.getByLabel("Start time");
 	await expect(approximateStart).toHaveAttribute("placeholder", "Select time");
 	await approximateStart.click();
@@ -8393,7 +8398,7 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	expect((await firstDay.boundingBox())?.y).toBe(dayY);
 	await dialog.getByRole("button", { exact: true, name: "19" }).click();
 	await expect(dialog.getByText("2 days", { exact: true })).toBeVisible();
-	await dialog.getByRole("button", { name: "Create the poll" }).click();
+	await createButton.click();
 
 	// The organizer types a wall clock where they are; the wire carries instants.
 	// The dialog renames itself to the poll once it opens the results, so the
