@@ -19,17 +19,17 @@
 		padding: var(--space-4) 0 0;
 	}
 
-.content > * {
+	.content > * {
 		min-width: 0;
 		min-height: 0;
 		padding: 0 var(--layer-inline) var(--space-4);
 	}
 
-.content > :last-child {
+	.content > :last-child {
 		align-content: start;
 		height: 100%;
 		border-left: 1px solid var(--border-subtle);
-}
+	}
 }
 
 .section {
@@ -75,13 +75,6 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2);
-}
-
-.fieldLabel {
-	color: var(--text-muted);
-	font-size: var(--text-11);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 }
 
 .picker {
@@ -183,6 +176,21 @@
 
 .optionRows > :last-child {
 	border-bottom: 0;
+}
+
+@media (min-width: 1200px) {
+	.optionRows {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.optionRows > :first-child {
+		border-right: 1px solid var(--border-subtle);
+	}
+
+	.optionRows > :last-child {
+		grid-column: 1 / -1;
+	}
 }
 
 /* Trailing controls read as one column: the value sits beside its own chevron at

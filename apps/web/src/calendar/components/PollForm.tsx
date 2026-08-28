@@ -175,7 +175,6 @@ export function PollForm({
 
 			<div className={styles.field}>
 				<div className={styles.fieldHeader}>
-					<span className={styles.fieldLabel}>Which days</span>
 					{days.length > 0 ? (
 						<button
 							className={styles.clear}
@@ -197,10 +196,7 @@ export function PollForm({
 
 			<section className={styles.optionalSection}>
 				<SectionLabel level={3}>Optional details</SectionLabel>
-				<Field
-					description="Shown to everyone above the proposed dates."
-					label="Organizer note"
-				>
+				<Field label="Organizer note" labelHidden>
 					<textarea
 						maxLength={2000}
 						placeholder="What should participants know?"

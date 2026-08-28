@@ -8366,9 +8366,23 @@ test("creates a poll, collects answers and turns one into an event", async ({
 	const dialogBounds = await dialog.boundingBox();
 	expect(dialogBounds?.width).toBeGreaterThan(1300);
 	const createButton = dialog.getByRole("button", { name: "Create the poll" });
-	await dialog.getByLabel("Organizer note").hover();
-	await page.mouse.wheel(0, 1600);
 	await expect(createButton).toBeInViewport();
+	await expect(dialog.getByText("Which days", { exact: true })).toHaveCount(0);
+	await expect(
+		dialog.getByText("Shown to everyone above the proposed dates.", {
+			exact: true,
+		}),
+	).toHaveCount(0);
+	const durationPosition = await dialog
+		.getByText("Duration", { exact: true })
+		.boundingBox();
+	const startPosition = await dialog
+		.getByText("Approximate start", { exact: true })
+		.boundingBox();
+	expect(Math.abs(durationPosition!.y - startPosition!.y)).toBeLessThanOrEqual(
+		1,
+	);
+	expect(startPosition!.x).toBeGreaterThan(durationPosition!.x);
 
 	await dialog.getByLabel("What is it about").fill("Studio planning");
 	await dialog
