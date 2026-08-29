@@ -470,3 +470,120 @@ export async function requestEventNotificationPermission() {
   // system prompt. The event itself is still saved normally.
   return requested.status === "granted";
 }
+
+// ---------------------------------------------------------------------------
+// Diagnostics
+//
+// Everything above fails quietly by design: a reminder that cannot be delivered
+// is not worth an error dialog, and the reconcile below returns early rather
+// than complaining when it has nothing to work from. That is right for the
+// product and useless when somebody says "no notification has ever arrived",
+// because every one of those silences looks identical from the outside.
+//
+// This reads the state back out so the debug screen can say which silence it is.
+// ---------------------------------------------------------------------------
+
+export type ReminderDiagnostics = {
+  /** OS permission, and whether the system prompt can still be shown. */
+  permission: string;
+  canAskAgain: boolean;
+  /** Android channels this app has created, with their importance named. */
+  channels: { id: string; importance: string }[];
+  /** What the OS is currently holding for us. */
+  scheduled: number;
+  /** The soonest few, as ISO strings, so "scheduled" can be sanity-checked. */
+  nextScheduled: string[];
+  /** Rows in the local receipts table — what this device thinks it scheduled. */
+  receipts: number;
+  /**
+   * Whether the rules the reconcile needs are loaded.
+   *
+   * `false` is the second silent failure: `syncScheduledReminders` returns
+   * immediately without them, so nothing is ever handed to the OS.
+   */
+  rulesLoaded: boolean;
+};
+
+/**
+ * Android importance as its name.
+ *
+ * The raw value is an enum index — a channel at MAX reports 7 — and a report
+ * meant to be read by a person should not need the enum next to it.
+ */
+function importanceName(value: number) {
+  const name = Notifications.AndroidImportance[value];
+  return typeof name === "string" ? `${name} (${value})` : String(value);
+}
+
+/** A scheduled notification's fire time, whatever trigger shape it uses. */
+function triggerDate(trigger: unknown): string | null {
+  if (!trigger || typeof trigger !== "object") return null;
+  const value = (trigger as { date?: unknown; value?: unknown }).date
+    ?? (trigger as { value?: unknown }).value;
+  if (typeof value === "number") return new Date(value).toISOString();
+  if (typeof value === "string") return new Date(value).toISOString();
+  return null;
+}
+
+export async function reminderDiagnostics(): Promise<ReminderDiagnostics> {
+  const permission = await Notifications.getPermissionsAsync().catch(() => null);
+  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+  const channels = Platform.OS === "android"
+    ? await Notifications.getNotificationChannelsAsync().catch(() => [])
+    : [];
+  const receipts = await db.select().from(notificationsTable).catch(() => []);
+
+  const upcoming = pending
+    .map((item) => triggerDate(item.trigger))
+    .filter((date): date is string => date !== null)
+    .sort();
+
+  return {
+    canAskAgain: permission?.canAskAgain ?? false,
+    channels: channels.map((channel) => ({
+      id: channel.id,
+      importance: importanceName(channel.importance),
+    })),
+    nextScheduled: upcoming.slice(0, 5),
+    permission: permission?.status ?? "unknown",
+    receipts: receipts.length,
+    rulesLoaded: rules !== null,
+    scheduled: pending.length,
+  };
+}
+
+/**
+ * Put one notification in front of the user, a few seconds out.
+ *
+ * Deliberately the same path a real reminder takes — same channel, same
+ * category — so a test that arrives proves the delivery chain and not just that
+ * `scheduleNotificationAsync` resolved. It goes through the timed channel
+ * because that is the one a missed meeting would have used.
+ *
+ * Returns why it will not arrive, or null when it is on its way.
+ */
+export async function sendTestReminder(afterSeconds = 5): Promise<string | null> {
+  const granted = await requestEventNotificationPermission();
+  if (!granted) {
+    return "This device has not granted notification permission, so nothing can be delivered. Grant it in system settings and try again.";
+  }
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        body: `If this arrives, delivery works. Sent ${new Date().toLocaleTimeString()}.`,
+        categoryIdentifier: REMINDER_CATEGORY_ID,
+        interruptionLevel: "timeSensitive",
+        title: "Musubi test reminder",
+      },
+      trigger: {
+        channelId: REMINDER_CHANNELS.timed.id,
+        seconds: afterSeconds,
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      },
+    });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
