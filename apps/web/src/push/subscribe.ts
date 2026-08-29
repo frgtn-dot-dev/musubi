@@ -91,6 +91,37 @@ export async function subscribeToPush(publicKey: string) {
   }
 }
 
+/**
+ * Tell the server about a subscription this browser is already holding.
+ *
+ * The server drops a subscription the moment a push comes back 404 or 410, and
+ * the browser is never told. Its `PushSubscription` object survives, so
+ * `currentSubscription()` still answers — and the tab, seeing itself as pushed
+ * to, declines to arm its own timers. The server will not push because the row
+ * is gone; the tab will not schedule because it believes the server will. Both
+ * paths off, no error anywhere, until something remounts the app.
+ *
+ * `subscribePush` upserts on the endpoint, so saying it again is free when the
+ * row is still there and restores it when it is not.
+ *
+ * Best-effort on purpose: a failure here leaves things exactly as they were,
+ * which is what they would have been without this call.
+ */
+export async function reregisterPush(subscription: PushSubscription) {
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.auth || !json.keys?.p256dh) return false;
+
+  try {
+    await subscribePush({
+      endpoint: json.endpoint,
+      keys: { auth: json.keys.auth, p256dh: json.keys.p256dh },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Come off the list, on this browser, and tell the server so it stops sending. */
 export async function unsubscribeFromPush() {
   const subscription = await currentSubscription();

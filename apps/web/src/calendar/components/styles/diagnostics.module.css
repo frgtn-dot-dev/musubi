@@ -1,0 +1,91 @@
+/* The verdict, before the list that produced it. */
+.summary {
+	display: flex;
+	gap: var(--space-2);
+	align-items: center;
+	margin: 0;
+	padding: var(--space-3);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+	color: var(--text-primary);
+	font-size: var(--text-13);
+}
+
+/* Only a genuine failure spends the accent. A warning is worth noticing and not
+   worth alarming about, and a pass should read as the quiet default. */
+.summary[data-status="fail"] {
+	border-color: color-mix(
+		in srgb,
+		var(--accent-primary) 38%,
+		var(--border-medium)
+	);
+	background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-raised));
+}
+
+.status {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.status[data-status="fail"] {
+	color: var(--accent-primary);
+}
+
+.status[data-status="warn"] {
+	color: var(--text-secondary);
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	padding-top: var(--space-2);
+}
+
+.fold {
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+}
+
+.foldSummary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	align-items: baseline;
+	padding: var(--space-3);
+	color: var(--text-secondary);
+	font-size: var(--text-13);
+	cursor: pointer;
+}
+
+.foldSummary:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: -2px;
+	border-radius: var(--radius-md);
+}
+
+.foldHint {
+	color: var(--text-faint);
+	font-size: var(--text-11);
+}
+
+/* Evidence: monospace so timestamps and JSON line up, and its own scroller so a
+   long request log cannot stretch the dialog. */
+.report {
+	max-height: 16rem;
+	margin: 0;
+	padding: 0 var(--space-3);
+	overflow: auto;
+	color: var(--text-muted);
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: var(--text-11);
+	line-height: 1.5;
+	white-space: pre;
+	tab-size: 2;
+}
+
+.fold > :global(button) {
+	margin: var(--space-3);
+}
