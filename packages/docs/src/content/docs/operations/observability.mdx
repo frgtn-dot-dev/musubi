@@ -119,6 +119,30 @@ join key between client reports and server activity.
 Import dashboard JSON through Grafana's **Dashboards → New → Import**. Select the
 Prometheus/Loki data sources requested by the template variables.
 
+### These assets are checked against the code
+
+Observability fails quietly by nature. A panel whose metric was renamed draws an
+empty graph, which looks exactly like a healthy system; an alert whose metric was
+renamed simply never fires, and a rule that never matches is indistinguishable
+from a rule that never had cause to. Both are discovered during the incident they
+existed to catch.
+
+So the files above are read as a contract in CI, under the **Observability** job:
+
+- `apps/api/src/metrics.test.ts` fails if any series a dashboard panel or an
+  alert rule reads is missing from the registry, and if an alert has no
+  `severity` label or `summary` annotation — one nothing can route, the other a
+  page that says only the rule's name. It also pins the `route` label to
+  registered Express patterns, which is what keeps label cardinality finite and
+  invite tokens out of the metric store.
+- `packages/config/src/logger.test.ts` covers the properties that make the logs
+  usable: one JSON object per line, warnings and errors on stderr, and the
+  redaction that makes `logger.error("failed", { error })` safe to write without
+  first inspecting what the object carries.
+- `promtool check rules` loads `musubi-alerts.yml` the way Prometheus would.
+
+Renaming a metric is allowed. Renaming it without updating `ops/` is not.
+
 Useful queries:
 
 ```text

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { compareWireContract, type WireBreak } from "./wire_contract";
 import { wireSnapshot, type WireSnapshot } from "./wire";
-import { PRODUCT_VERSION } from "./version";
+import { compareVersions, MIN_CLIENT_VERSION, PRODUCT_VERSION } from "./version";
 
 const promised = JSON.parse(
   readFileSync(new URL("../contracts/wire.json", import.meta.url), "utf8"),
@@ -46,6 +46,33 @@ const [x = 0, y = 0, z = 0] = rank(PRODUCT_VERSION);
 assert.ok(
   !(a > x || (a === x && (b > y || (b === y && c > z)))),
   `the promised contract claims ${promised.version}, ahead of the product at ${PRODUCT_VERSION}`,
+);
+
+// The re-baseline and the floor move together, or the re-baseline was a way of
+// making a red test green.
+//
+// A snapshot dated V says the shape changed at V, so every build older than V
+// was compiled against something this server no longer promises. Those installs
+// are still out there and cannot be patched; the only thing that keeps them from
+// meeting the new shape is `MIN_CLIENT_VERSION`. `docs/releasing.md` says to
+// raise it first and re-baseline second — this is what makes that an order
+// rather than a suggestion.
+assert.ok(
+  compareVersions(MIN_CLIENT_VERSION, promised.version) >= 0,
+  [
+    "",
+    `The wire contract was re-baselined at ${promised.version}, but`,
+    `MIN_CLIENT_VERSION is still ${MIN_CLIENT_VERSION}.`,
+    "",
+    "Re-baselining records that a document changed shape in a way an older",
+    `build cannot survive. Every install below ${promised.version} is still`,
+    "allowed to connect and will meet that change.",
+    "",
+    `Raise MIN_CLIENT_VERSION to ${promised.version} in`,
+    "packages/types/src/version.ts — or, if the break was not deliberate,",
+    "restore the shape and revert the snapshot. See docs/releasing.md.",
+    "",
+  ].join("\n"),
 );
 
 // ---------------------------------------------------------------------------

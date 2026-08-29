@@ -35,7 +35,9 @@ deploy order.
 
 ## What the machine checks
 
-`pnpm check` runs both of these; nothing below needs remembering.
+`pnpm check` runs all of these; nothing below needs remembering. In CI they are
+also their own job — **Old client compatibility** — so a break says what it is
+without anyone opening a log.
 
 ### The wire contract
 
@@ -67,7 +69,40 @@ was, and you:
 2. run `pnpm wire:snapshot` to re-baseline.
 
 Do not re-baseline to make a red test green. The snapshot is a promise to
-software you cannot reach.
+software you cannot reach. Step 1 is not optional either, and the test now says
+so: a snapshot dated *V* while `MIN_CLIENT_VERSION` is below *V* means builds
+that cannot survive the change are still being let in.
+
+### The addresses, not just the shapes
+
+`scripts/check-routes.mjs` reads every `/api/…` URL that production code in
+`apps/client` and `apps/web` builds, and fails if one does not resolve to a route
+registered in `apps/api/src/index.ts`.
+
+The wire contract guards what a document looks like. Nothing guarded where it is
+sent — a path is a string on one side and a string on the other, so renaming
+`/api/v1/calendars/:id/export` type-checks, passes every schema test, and is a
+404 on every phone already installed.
+
+A route may gain a sibling. It may not lose its name. If a path genuinely has to
+move, register both and retire the old one a release after `MIN_CLIENT_VERSION`
+passes it.
+
+### The live-update frames
+
+`scripts/check-realtime.mjs` compares the frame types the server emits over
+`/api/stream` against the ones `apps/web/src/api/realtime.ts` and
+`apps/client/hooks/useEventsStream.ts` handle, in both directions.
+
+`type` is a bare string on both ends, so a rename compiles and deploys and then
+fails invisibly: the socket stays open, frames keep arriving, none of them match
+a case, and the calendar simply stops updating until the app is restarted.
+
+The direction that matters most is **handled but no longer emitted** — a shipped
+build listening for a name the server stopped sending. The phone frames the web
+has no equivalent for are listed as `PHONE_MAY_IGNORE` in the script, with the
+reason; the list is itself checked, so an exemption for a frame that no longer
+exists fails too.
 
 ### What the phone does with a response
 
