@@ -1,4 +1,5 @@
-// The hidden diagnostics screen, reached by tapping the version row ten times.
+// The diagnostics screen, reached from the row that appears after ten taps on
+// the version.
 //
 // It exists because every way this app fails to notify somebody is silent. A
 // reminder that never arrives could be a permission nobody asked for, rules
@@ -7,11 +8,20 @@
 // nothing happening. There is no way to attach a debugger to a build from the
 // store, so the build has to be able to answer the question itself.
 //
-// It runs its checks on open rather than waiting to be asked, because the first
-// thing anybody wants is the verdict, not a form.
+// The layout follows that: the verdict first and whole, then the things to try,
+// then the evidence folded away. Somebody opening this wants to know whether
+// something is wrong before they want to read a request log.
 
 import { useCallback, useEffect, useState } from "react";
-import { Platform, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, styles } from "@/constants/theme";
@@ -45,31 +55,27 @@ const STATUS_COLOR: Record<CheckStatus, string> = {
   warn: "#C08A2E",
 };
 
-function StatusDot({ status }: { status: CheckStatus }) {
-  return (
-    <View
-      style={{
-        backgroundColor: STATUS_COLOR[status],
-        borderRadius: 5,
-        height: 10,
-        marginTop: 4,
-        width: 10,
-      }}
-      // The dot is decoration; the row's text already carries the verdict, so
-      // a screen reader that announced both would say everything twice.
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    />
-  );
+// Shape as well as colour. Red/green is the commonest colour blindness there
+// is, and a column of dots that differ only in hue says nothing to those
+// readers — which would leave this screen unable to report its own verdict.
+const STATUS_ICON: Record<CheckStatus, keyof typeof Feather.glyphMap> = {
+  fail: "x-circle",
+  pass: "check-circle",
+  warn: "alert-triangle",
+};
+
+/** The summary reads as a heading here, not as the middle of a sentence. */
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The worst thing in the run — what the summary is coloured by. */
+function worst(statuses: CheckStatus[]): CheckStatus {
+  if (statuses.includes("fail")) return "fail";
+  if (statuses.includes("warn")) return "warn";
+  return "pass";
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <>
-      <Text style={[styles.sectionLabel, local.heading]}>{title}</Text>
-      <View style={local.section}>{children}</View>
-    </>
-  );
+function SectionLabel({ children }: { children: string }) {
+  return <Text style={[styles.sectionLabel, local.heading]}>{children}</Text>;
 }
 
 /** A label and its value, wrapping rather than truncating — this is evidence. */
@@ -80,6 +86,48 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text style={[local.rowValue, { color: colors.fg2 }]} selectable>
         {value}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * A detail section that stays folded until it is asked for.
+ *
+ * The header carries a one-line summary, so the common case — glancing to see
+ * whether the server answered, or how many reminders are scheduled — never
+ * needs a tap. Opening it is for when that line is not enough.
+ */
+function Fold({
+  title,
+  summary,
+  children,
+}: {
+  title: string;
+  summary: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={[local.fold, { borderColor: colors.line }]}>
+      <Tap
+        onPress={() => setOpen((current) => !current)}
+        scaleTo={1}
+        style={local.foldHeader}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}. ${summary}`}
+        accessibilityState={{ expanded: open }}
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[local.foldTitle, { color: colors.fg2 }]}>{title}</Text>
+          <Text style={[local.rowLabel, { color: colors.fg4 }]}>{summary}</Text>
+        </View>
+        <Feather
+          name={open ? "chevron-up" : "chevron-down"}
+          size={16}
+          color={colors.fg4}
+        />
+      </Tap>
+      {open ? <View style={local.foldBody}>{children}</View> : null}
     </View>
   );
 }
@@ -134,12 +182,10 @@ export default function DebugScreen() {
     }
   };
 
-  const share = () => {
-    if (!snapshot) return;
-    void Share.share({ message: buildReport(snapshot) });
-  };
-
-  const failing = snapshot?.checks.filter((check) => check.status === "fail") ?? [];
+  const checks = snapshot?.checks ?? [];
+  const overall = worst(checks.map((check) => check.status));
+  const probe = snapshot?.server.probe;
+  const reminders = snapshot?.reminders;
 
   return (
     <View style={{ backgroundColor: colors.bg, flex: 1 }}>
@@ -156,157 +202,220 @@ export default function DebugScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
-        <Section title={running ? "Checking…" : summarise(snapshot?.checks ?? [])}>
-          {(snapshot?.checks ?? []).map((check) => (
+        {/* The verdict, before anything else and in plain words. */}
+        <View style={local.section}>
+          <View
+            style={[
+              local.summary,
+              {
+                backgroundColor: colors.bg2,
+                borderColor: running ? colors.line : STATUS_COLOR[overall],
+              },
+            ]}
+          >
+            {running ? (
+              // A spinner rather than a static "loader" glyph, which reads as a
+              // broken icon when it does not turn.
+              <ActivityIndicator size="small" color={colors.fg4} />
+            ) : (
+              <Feather
+                name={STATUS_ICON[overall]}
+                size={18}
+                color={STATUS_COLOR[overall]}
+              />
+            )}
+            <Text style={[local.summaryText, { color: colors.fg }]}>
+              {running ? "Checking…" : sentence(summarise(checks))}
+            </Text>
+          </View>
+
+          {checks.map((check) => (
             <View key={check.id} style={local.check}>
-              <StatusDot status={check.status} />
+              <Feather
+                name={STATUS_ICON[check.status]}
+                size={14}
+                color={STATUS_COLOR[check.status]}
+                style={{ marginTop: 2 }}
+              />
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={[local.checkLabel, { color: colors.fg2 }]}>{check.label}</Text>
-                <Text style={[local.checkDetail, { color: colors.fg4 }]}>{check.detail}</Text>
+                <Text style={[local.checkLabel, { color: colors.fg2 }]}>
+                  {check.label}
+                </Text>
+                <Text style={[local.checkDetail, { color: colors.fg4 }]}>
+                  {check.detail}
+                </Text>
               </View>
             </View>
           ))}
-          {!running && failing.length === 0 ? (
-            <Text style={[local.checkDetail, { color: colors.fg4 }]}>
-              Nothing here explains a missing notification. If one still has not
-              arrived, send a test reminder below and share the report.
-            </Text>
-          ) : null}
-        </Section>
+        </View>
 
-        <Section title="Try it">
-          <View style={local.buttons}>
-            <Btn
-              label="Send a test reminder"
-              loading={busy === "test"}
-              onPress={() =>
-                void act("test", async () => {
-                  const problem = await sendTestReminder();
-                  return (
-                    problem ??
-                    "Scheduled. It should arrive in about five seconds — leave this screen to see it."
-                  );
-                })
-              }
-            />
-            <Btn
-              label="Ask for notification permission"
-              variant="secondary"
-              loading={busy === "permission"}
-              onPress={() =>
-                void act("permission", async () => {
-                  const granted = await requestEventNotificationPermission();
-                  return granted
-                    ? "Granted."
-                    : "Not granted. If the system did not ask, it has been refused before — grant it in system settings.";
-                })
-              }
-            />
-            <Btn
-              label="Re-schedule reminders"
-              variant="secondary"
-              loading={busy === "reschedule"}
-              onPress={() =>
-                void act("reschedule", async () => {
-                  await syncScheduledReminders(useEventsStore.getState().events);
-                  return "Reconciled against the events this device holds.";
-                })
-              }
-            />
-            <Btn
-              label="Refresh from the server"
-              variant="secondary"
-              loading={busy === "refresh"}
-              onPress={() =>
-                void act("refresh", async () => {
-                  await refresh({ full: true });
-                  return "Refreshed.";
-                })
-              }
-            />
-            <Btn label="Re-run checks" variant="secondary" onPress={() => void run()} />
-          </View>
-        </Section>
-
-        <Section title="Server">
-          <Row label="URL" value={snapshot?.server.url ?? "—"} />
-          <Row
-            label="Status"
-            value={
-              snapshot
-                ? `${snapshot.server.probe.status ?? "no answer"} in ${snapshot.server.probe.ms} ms`
-                : "—"
+        <SectionLabel>Try it</SectionLabel>
+        <View style={[local.section, local.buttons]}>
+          <Btn
+            label="Send a test reminder"
+            loading={busy === "test"}
+            onPress={() =>
+              void act("test", async () => {
+                const problem = await sendTestReminder();
+                return (
+                  problem ??
+                  "Scheduled. It should arrive in about five seconds — leave this screen to see it."
+                );
+              })
             }
           />
-          {snapshot?.server.probe.error ? (
-            <Row label="Error" value={snapshot.server.probe.error} />
-          ) : null}
-          <Text style={[local.rowLabel, { color: colors.fg4 }]}>Answered</Text>
-          <ScrollView horizontal style={[local.code, { backgroundColor: colors.bg2 }]}>
-            <Text style={[local.codeText, { color: colors.fg3 }]} selectable>
-              {JSON.stringify(snapshot?.server.probe.body ?? null, null, 2)}
-            </Text>
-          </ScrollView>
-        </Section>
+          <Btn
+            label="Ask for notification permission"
+            variant="secondary"
+            loading={busy === "permission"}
+            onPress={() =>
+              void act("permission", async () => {
+                const granted = await requestEventNotificationPermission();
+                return granted
+                  ? "Granted."
+                  : "Not granted. If the system did not ask, it has been refused before — grant it in system settings.";
+              })
+            }
+          />
+          <Btn
+            label="Re-schedule reminders"
+            variant="secondary"
+            loading={busy === "reschedule"}
+            onPress={() =>
+              void act("reschedule", async () => {
+                await syncScheduledReminders(useEventsStore.getState().events);
+                return "Reconciled against the events this device holds.";
+              })
+            }
+          />
+          <Btn
+            label="Refresh from the server"
+            variant="secondary"
+            loading={busy === "refresh"}
+            onPress={() =>
+              void act("refresh", async () => {
+                await refresh({ full: true });
+                return "Refreshed.";
+              })
+            }
+          />
+          <Btn
+            label="Run the checks again"
+            variant="secondary"
+            loading={running}
+            onPress={() => void run()}
+          />
+        </View>
 
-        <Section title="Reminders">
-          <Row label="Permission" value={snapshot?.reminders?.permission ?? "—"} />
-          <Row
-            label="Held by the OS"
-            value={String(snapshot?.reminders?.scheduled ?? "—")}
-          />
-          <Row
-            label="Recorded here"
-            value={String(snapshot?.reminders?.receipts ?? "—")}
-          />
-          <Row
-            label="Rules"
-            value={snapshot?.reminders?.rulesLoaded ? "loaded" : "not loaded"}
-          />
-          <Row
-            label="Next"
-            value={snapshot?.reminders?.nextScheduled.join("\n") || "nothing scheduled"}
-          />
-          {snapshot?.reminders?.channels.length ? (
+        <SectionLabel>Details</SectionLabel>
+        <View style={local.section}>
+          <Fold
+            title="Server"
+            summary={
+              probe
+                ? `${snapshot?.server.url} · ${probe.status ?? "no answer"} in ${probe.ms} ms`
+                : "—"
+            }
+          >
+            {probe?.error ? <Row label="Error" value={probe.error} /> : null}
+            <Text style={[local.rowLabel, { color: colors.fg4 }]}>Answered</Text>
+            <ScrollView
+              horizontal
+              style={[local.code, { backgroundColor: colors.bg3 }]}
+            >
+              <Text style={[local.codeText, { color: colors.fg3 }]} selectable>
+                {JSON.stringify(probe?.body ?? null, null, 2)}
+              </Text>
+            </ScrollView>
+          </Fold>
+
+          <Fold
+            title="Reminders"
+            summary={
+              reminders
+                ? `${reminders.permission} · ${reminders.scheduled} scheduled`
+                : "—"
+            }
+          >
+            <Row label="Permission" value={reminders?.permission ?? "—"} />
             <Row
-              label="Channels"
-              value={snapshot.reminders.channels
-                .map((channel) => `${channel.id} — ${channel.importance}`)
-                .join("\n")}
+              label="Held by the OS"
+              value={String(reminders?.scheduled ?? "—")}
             />
-          ) : null}
-        </Section>
+            <Row
+              label="Recorded here"
+              value={String(reminders?.receipts ?? "—")}
+            />
+            <Row
+              label="Rules"
+              value={reminders?.rulesLoaded ? "loaded" : "not loaded"}
+            />
+            <Row
+              label="Next"
+              value={reminders?.nextScheduled.join("\n") || "nothing scheduled"}
+            />
+            {reminders?.channels.length ? (
+              <Row
+                label="Android channels"
+                value={reminders.channels
+                  .map((channel) => `${channel.id} — ${channel.importance}`)
+                  .join("\n")}
+              />
+            ) : null}
+          </Fold>
 
-        <Section title="On this device">
-          <Row label="App" value={`${snapshot?.app.version} (${snapshot?.app.build})`} />
-          <Row label="Platform" value={snapshot?.app.platform ?? "—"} />
-          <Row
-            label="Signed in"
-            value={snapshot?.session.signedIn ? (snapshot.session.userId ?? "yes") : "no"}
+          <Fold
+            title="This device"
+            summary={`${snapshot?.app.version ?? "—"} (${snapshot?.app.build ?? "—"}) · ${snapshot?.app.platform ?? "—"}`}
+          >
+            <Row
+              label="Signed in"
+              value={
+                snapshot?.session.signedIn
+                  ? (snapshot.session.userId ?? "yes")
+                  : "no"
+              }
+            />
+            <Row
+              label="Events cached"
+              value={String(snapshot?.local.events ?? "—")}
+            />
+            <Row
+              label="Calendars cached"
+              value={String(snapshot?.local.calendars ?? "—")}
+            />
+            <Row label="Last sync" value={snapshot?.local.lastSync ?? "never"} />
+            {snapshot?.local.error ? (
+              <Row label="Database error" value={snapshot.local.error} />
+            ) : null}
+          </Fold>
+
+          <Fold
+            title="Recent requests"
+            summary={`${snapshot?.requests.split("\n").length ?? 0} lines`}
+          >
+            <ScrollView
+              horizontal
+              style={[local.code, { backgroundColor: colors.bg3 }]}
+            >
+              <Text style={[local.codeText, { color: colors.fg3 }]} selectable>
+                {snapshot?.requests ?? "—"}
+              </Text>
+            </ScrollView>
+          </Fold>
+        </View>
+
+        <View style={[local.section, local.buttons, { paddingTop: 12 }]}>
+          <Btn
+            label="Share this report"
+            onPress={() => {
+              if (snapshot) void Share.share({ message: buildReport(snapshot) });
+            }}
           />
-          <Row label="Events cached" value={String(snapshot?.local.events ?? "—")} />
-          <Row label="Calendars cached" value={String(snapshot?.local.calendars ?? "—")} />
-          <Row label="Last sync" value={snapshot?.local.lastSync ?? "never"} />
-          {snapshot?.local.error ? (
-            <Row label="Database error" value={snapshot.local.error} />
-          ) : null}
-        </Section>
+        </View>
 
-        <Section title="Recent requests">
-          <ScrollView horizontal style={[local.code, { backgroundColor: colors.bg2 }]}>
-            <Text style={[local.codeText, { color: colors.fg3 }]} selectable>
-              {snapshot?.requests ?? "—"}
-            </Text>
-          </ScrollView>
-        </Section>
-
-        <Section title="Report">
-          <View style={local.buttons}>
-            <Btn label="Share this report" onPress={share} />
-          </View>
-        </Section>
-
-        <Section title="Reset">
+        <SectionLabel>Reset</SectionLabel>
+        <View style={local.section}>
           <Text style={[local.checkDetail, { color: colors.fg4 }]}>
             These throw away local state. Nothing on the server is touched, and
             everything is fetched again on the next refresh.
@@ -340,7 +449,8 @@ export default function DebugScreen() {
                 confirm(
                   {
                     confirmLabel: "Reset",
-                    message: "The onboarding flow starts again from the beginning.",
+                    message:
+                      "The onboarding flow starts again from the beginning.",
                     title: "Reset onboarding?",
                   },
                   () => {
@@ -351,7 +461,7 @@ export default function DebugScreen() {
               }
             />
           </View>
-        </Section>
+        </View>
       </ScrollView>
     </View>
   );
@@ -365,11 +475,20 @@ const local = StyleSheet.create({
   check: { flexDirection: "row", gap: 10, paddingVertical: 7 },
   checkDetail: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   checkLabel: { fontFamily: fonts.sansMedium, fontSize: 14 },
-  code: { borderRadius: 8, marginTop: 6, maxHeight: 220, padding: 10 },
+  code: { borderRadius: 6, marginTop: 6, maxHeight: 220, padding: 10 },
   codeText: {
     fontFamily: Platform.select({ android: "monospace", default: "Menlo" }),
     fontSize: 11,
   },
+  fold: { borderRadius: 10, borderWidth: 1, marginBottom: 8 },
+  foldBody: { paddingBottom: 12, paddingHorizontal: 12 },
+  foldHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    padding: 12,
+  },
+  foldTitle: { fontFamily: fonts.sansMedium, fontSize: 14 },
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -378,10 +497,20 @@ const local = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 56,
   },
-  heading: { paddingHorizontal: 16 },
+  heading: { paddingBottom: 8, paddingHorizontal: 16, paddingTop: 20 },
   row: { gap: 2, paddingVertical: 5 },
   rowLabel: { fontFamily: fonts.sans, fontSize: 11 },
   rowValue: { fontFamily: fonts.sans, fontSize: 13 },
-  section: { paddingBottom: 12, paddingHorizontal: 16 },
+  section: { paddingHorizontal: 16 },
+  summary: {
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 8,
+    padding: 14,
+  },
+  summaryText: { fontFamily: fonts.sansMedium, fontSize: 15 },
   title: { fontFamily: fonts.serif, fontSize: 20 },
 });

@@ -35,6 +35,8 @@ import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
 import { requestEventNotificationPermission } from "@/services/notifications";
 import { buildReport, collectDebugSnapshot } from "@/services/debugReport";
+import { developerModeEnabled, setDeveloperMode } from "@/services/developerMode";
+import { registerTap, type TapState } from "@/lib/developerMode";
 import { formatChecks, summarise } from "@/lib/healthChecks";
 import { router } from "expo-router";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
@@ -292,20 +294,35 @@ export default function SettingsTab() {
   };
 
   /**
-   * Ten taps on the version row opens diagnostics.
+   * Ten taps on the version row show the diagnostics row; ten more hide it.
    *
-   * Hidden rather than absent: the failures worth diagnosing happen on builds
-   * from the store, where there is no debugger to attach, and a visible
-   * "Debug" row in a calendar app is a row that everybody has to read past.
-   * Nothing is persisted — the gesture is cheap to repeat.
+   * A toggle rather than a shortcut straight into the screen, because the
+   * screen is somewhere you go back to — once a report is being gathered, the
+   * gesture stops being a way in and starts being an obstacle. Hidden by
+   * default all the same: a "Diagnostics" row in a calendar app is a row every
+   * user has to read past forever, for a screen almost none of them want.
+   *
+   * Read synchronously from the local blob so the row is already in its right
+   * state on the first frame.
    */
-  const versionTaps = useRef(0);
-  const openDiagnostics = () => {
-    versionTaps.current += 1;
-    if (versionTaps.current < 10) return;
-    versionTaps.current = 0;
+  const [developer, setDeveloper] = useState(developerModeEnabled);
+  const taps = useRef<TapState>({ count: 0, lastAt: 0 });
+
+  const tapVersion = () => {
+    const next = registerTap(taps.current, Date.now(), developer);
+    taps.current = { count: next.count, lastAt: next.lastAt };
+    if (next.toggled === null) return;
+
     success();
-    router.push("/debug");
+    setDeveloper(next.toggled);
+    void setDeveloperMode(next.toggled).catch((e) => {
+      console.warn("Developer mode could not be saved:", e);
+    });
+    showToast({
+      message: next.toggled
+        ? "Developer mode on. Diagnostics is below."
+        : "Developer mode off.",
+    });
   };
 
   const save = (patch: SettingsPatch) => {
@@ -518,9 +535,16 @@ export default function SettingsTab() {
         <SettingRowAction
           label="Version"
           value={`${appVersion} (${appBuild})`}
-          onPress={openDiagnostics}
+          onPress={tapVersion}
           secret
         />
+        {developer ? (
+          <SettingRowAction
+            label="Diagnostics"
+            detail="Checks this device, this server, and reminder delivery"
+            onPress={() => router.push("/debug")}
+          />
+        ) : null}
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
