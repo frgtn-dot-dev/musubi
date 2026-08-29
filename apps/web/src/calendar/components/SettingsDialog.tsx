@@ -10,7 +10,7 @@ import {
   LifeBuoy,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import musubiPackage from "../../../../../package.json";
 import { ApiError } from "~/api/http";
 import { applyTheme } from "~/design/theme";
@@ -18,12 +18,18 @@ import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import { InlineError } from "~/ui/InlineError";
 import {
-  Row,
   RowAction,
   RowOptions,
   RowToggle,
 } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import { DiagnosticsSection } from "./DiagnosticsSection";
+import {
+  developerModeEnabled,
+  registerClick,
+  setDeveloperMode,
+  type ClickState,
+} from "~/diagnostics/developer-mode";
 import type { ReminderControl } from "~/calendar/reminder-control";
 import {
   allDayValue,
@@ -131,6 +137,26 @@ export function SettingsDialog({
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState("");
   const [error, setError] = useState("");
+
+  /**
+   * Ten clicks on the version row show the diagnostics section; ten more hide
+   * it. Hidden by default because a Diagnostics group in a calendar app is a
+   * group every user reads past forever, for a screen almost none of them want.
+   *
+   * The row is a real button — a div with a click handler is a control no
+   * keyboard can reach — but it loses the chevron and the hover tint, which are
+   * what would give the gesture away. Its focus ring stays.
+   */
+  const [developer, setDeveloper] = useState(developerModeEnabled);
+  const clicks = useRef<ClickState>({ count: 0, lastAt: 0 });
+
+  const clickVersion = () => {
+    const next = registerClick(clicks.current, Date.now(), developer);
+    clicks.current = { count: next.count, lastAt: next.lastAt };
+    if (next.toggled === null) return;
+    setDeveloper(next.toggled);
+    setDeveloperMode(next.toggled);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -458,11 +484,18 @@ export function SettingsDialog({
               trailing={<ExternalLink aria-hidden="true" size={15} />}
               onClick={() => openExternal(TERMS_URL)}
             />
-            <Row
+            <RowAction
+              className={styles.secretRow}
               label="Version"
+              onClick={clickVersion}
+              showChevron={false}
               value={musubiPackage.version}
             />
           </SettingsSection>
+
+          {developer ? (
+            <DiagnosticsSection remindersLoaded={Boolean(reminders)} />
+          ) : null}
 
           <SettingsSection title="Account">
             <RowAction

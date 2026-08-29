@@ -102,3 +102,15 @@
     flex-direction: column;
   }
 }
+
+/* The version row opens diagnostics after ten clicks, and must not look like it
+   does anything. A real button all the same — the alternative is a div with a
+   click handler, which no keyboard reaches — so it keeps its focus ring and
+   loses only the pointer affordance that would give the gesture away. */
+.secretRow:hover:not(:disabled) {
+	background: transparent;
+}
+
+.secretRow {
+	cursor: default;
+}

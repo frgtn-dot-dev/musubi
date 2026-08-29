@@ -20,6 +20,7 @@ import type { ReminderControl } from "./reminder-control";
 import {
   currentSubscription,
   pushSupported,
+  reregisterPush,
   subscribeToPush,
   unsubscribeFromPush,
 } from "~/push/subscribe";
@@ -81,7 +82,13 @@ export function useReminders(userId: string) {
   useEffect(() => {
     let live = true;
     void currentSubscription().then((subscription) => {
-      if (live) setPushing(Boolean(subscription));
+      if (!live) return;
+      setPushing(Boolean(subscription));
+      // Say it again on every load. The server drops a subscription silently
+      // when a push 410s, and this browser would go on believing it is being
+      // pushed to — so it would not schedule for itself either. One idempotent
+      // write puts the row back rather than waiting for someone to notice.
+      if (subscription) void reregisterPush(subscription);
     });
     return () => {
       live = false;
