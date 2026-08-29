@@ -222,6 +222,28 @@ async function run() {
     assert.equal(updatedWith.minVersion, null);
   }
 
+  // --- Oprava: prázdný řetězec ve `minVersion` se ukládá jako NULL stejně
+  // jako chybějící pole — formulářové políčko ponechané prázdné se pošle
+  // jako "", ne jako chybějící klíč, a tenhle vstup je proto ten, který
+  // od klienta skutečně přijde. ---
+  {
+    let updatedWith: any;
+    await createUpdateAnnouncementHandler({
+      update: async (id: string, values: any) => {
+        updatedWith = values;
+        return { id, ...values, createdAt: new Date(), updatedAt: new Date() };
+      },
+    })(
+      {
+        params: { id: "2026-08-20" },
+        body: { title: "Fixed", body: "Body", minVersion: "" },
+        user: { id: "user-1", email: "owner@example.com" },
+      } as unknown as Request,
+      responseRecorder().response,
+    );
+    assert.equal(updatedWith.minVersion, null);
+  }
+
   // --- Oprava neexistujícího id: 404, ne tichý úspěch ---
   {
     const recorder = responseRecorder();
