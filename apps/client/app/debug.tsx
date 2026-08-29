@@ -188,17 +188,19 @@ export default function DebugScreen() {
   const reminders = snapshot?.reminders;
 
   return (
-    <View style={{ backgroundColor: colors.bg, flex: 1 }}>
-      <View style={local.header}>
+    <View style={styles.screen}>
+      {/* The shared screen header. The root layout already wraps everything in
+          a SafeAreaView, so anything added here for the status bar is doubled. */}
+      <View style={[styles.header, local.header]}>
         <Tap
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Back"
-          style={{ padding: 4 }}
+          style={{ marginLeft: -6, padding: 6 }}
         >
           <Feather name="chevron-left" size={22} color={colors.fg2} />
         </Tap>
-        <Text style={[local.title, { color: colors.fg }]}>Diagnostics</Text>
+        <Text style={styles.screenTitle}>Diagnostics</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
@@ -416,7 +418,9 @@ export default function DebugScreen() {
 
         <SectionLabel>Reset</SectionLabel>
         <View style={local.section}>
-          <Text style={[local.checkDetail, { color: colors.fg4 }]}>
+          <Text
+            style={[local.checkDetail, local.resetNote, { color: colors.fg4 }]}
+          >
             These throw away local state. Nothing on the server is touched, and
             everything is fetched again on the next refresh.
           </Text>
@@ -489,15 +493,10 @@ const local = StyleSheet.create({
     padding: 12,
   },
   foldTitle: { fontFamily: fonts.sansMedium, fontSize: 14 },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 6,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-    paddingTop: 56,
-  },
+  // Only what the shared header does not say: the back chevron beside the title.
+  header: { alignItems: "center", flexDirection: "row", gap: 4 },
   heading: { paddingBottom: 8, paddingHorizontal: 16, paddingTop: 20 },
+  resetNote: { paddingBottom: 10, lineHeight: 18 },
   row: { gap: 2, paddingVertical: 5 },
   rowLabel: { fontFamily: fonts.sans, fontSize: 11 },
   rowValue: { fontFamily: fonts.sans, fontSize: 13 },
@@ -512,5 +511,4 @@ const local = StyleSheet.create({
     padding: 14,
   },
   summaryText: { fontFamily: fonts.sansMedium, fontSize: 15 },
-  title: { fontFamily: fonts.serif, fontSize: 20 },
 });
