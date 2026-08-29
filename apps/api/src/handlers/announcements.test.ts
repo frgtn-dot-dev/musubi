@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import type { Request, Response } from "express";
 import {
   createCreateAnnouncementHandler,
+  createDeleteAnnouncementHandler,
   createGetAnnouncementsHandler,
+  createUpdateAnnouncementHandler,
 } from "./announcements";
 
 function responseRecorder() {
@@ -184,6 +186,122 @@ async function run() {
         error instanceof Error &&
         error.message === "Announcement needs a title and a body.",
     );
+  }
+
+  // --- Oprava: vrací wire tvar, žádné časy ---
+  {
+    let updatedWith: any;
+    const recorder = responseRecorder();
+    await createUpdateAnnouncementHandler({
+      update: async (id: string, values: any) => {
+        updatedWith = values;
+        return { id, ...values, createdAt: new Date(), updatedAt: new Date() };
+      },
+    })(
+      {
+        params: { id: "2026-08-20" },
+        body: { title: "Fixed", body: "Body" },
+        user: { id: "user-1", email: "owner@example.com" },
+      } as unknown as Request,
+      recorder.response,
+    );
+
+    const { payload, statusCode } = recorder.result();
+    assert.equal(statusCode, 200);
+    assert.deepEqual(payload, {
+      id: "2026-08-20",
+      title: "Fixed",
+      body: "Body",
+      minVersion: null,
+    });
+    assert.equal("createdAt" in payload, false);
+    assert.equal(updatedWith.title, "Fixed");
+    assert.equal(updatedWith.body, "Body");
+    // Nevyplněná verze se ukládá jako NULL, ne jako prázdný řetězec — stejné
+    // pravidlo jako u vytváření.
+    assert.equal(updatedWith.minVersion, null);
+  }
+
+  // --- Oprava neexistujícího id: 404, ne tichý úspěch ---
+  {
+    const recorder = responseRecorder();
+    await assert.rejects(
+      () =>
+        createUpdateAnnouncementHandler({
+          update: async () => undefined,
+        })(
+          {
+            params: { id: "no-such-id" },
+            body: { title: "Fixed", body: "Body" },
+            user: { id: "user-1", email: "owner@example.com" },
+          } as unknown as Request,
+          recorder.response,
+        ),
+      (error: unknown) =>
+        error instanceof Error && error.message === "No such announcement.",
+    );
+    // Chyba se propaguje k `wrap`/error handleru — handler sám nic neposílá.
+    assert.equal(recorder.result().statusCode, 0);
+  }
+
+  // --- Oprava s nevalidním vstupem je odmítnutá, update se nevolá ---
+  {
+    await assert.rejects(
+      () =>
+        createUpdateAnnouncementHandler({
+          update: async () => {
+            throw new Error("must not be called");
+          },
+        })(
+          {
+            params: { id: "2026-08-20" },
+            body: { title: "", body: "Body" },
+            user: { id: "user-1", email: "owner@example.com" },
+          } as unknown as Request,
+          responseRecorder().response,
+        ),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message === "Announcement needs a title and a body.",
+    );
+  }
+
+  // --- Smazání: vrací potvrzení ---
+  {
+    const recorder = responseRecorder();
+    await createDeleteAnnouncementHandler({
+      remove: async () => true,
+    })(
+      {
+        params: { id: "2026-08-20" },
+        user: { id: "user-1", email: "owner@example.com" },
+      } as unknown as Request,
+      recorder.response,
+    );
+
+    const { payload, statusCode } = recorder.result();
+    assert.equal(statusCode, 200);
+    assert.deepEqual(payload, { deleted: true });
+  }
+
+  // --- Smazání neexistujícího id: 404, ne tichý úspěch ---
+  {
+    const recorder = responseRecorder();
+    await assert.rejects(
+      () =>
+        createDeleteAnnouncementHandler({
+          remove: async () => false,
+        })(
+          {
+            params: { id: "no-such-id" },
+            user: { id: "user-1", email: "owner@example.com" },
+          } as unknown as Request,
+          recorder.response,
+        ),
+      (error: unknown) =>
+        error instanceof Error && error.message === "No such announcement.",
+    );
+    assert.equal(recorder.result().statusCode, 0);
   }
 
   console.log("announcements handler tests passed");
