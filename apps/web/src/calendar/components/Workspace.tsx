@@ -91,6 +91,8 @@ type WorkspaceProps = {
   calendars: Calendar[];
   date: string;
   events: Event[];
+  /** Whether this signed-in account may write announcements on this server. */
+  isAdmin?: boolean;
   isRefreshing: boolean;
   /**
    * The server could not be reached, so what is on screen came from the local
@@ -164,6 +166,8 @@ type WorkspaceProps = {
    * which is what router-less embeddings use.
    */
   onOpenFullEditor?: (values: EventFormValues, event?: Event) => void;
+  /** Navigate to the admin panel. Absent when no route can host it (tests/stories). */
+  onOpenAdmin?: () => void;
   onSignOut: () => void;
   /** State of a provider link that finished while the browser was away. */
   providerLink?: {
@@ -249,6 +253,7 @@ const unavailablePageDefault = async (): Promise<void> => {
 };
 
 const ignoreSettings = () => undefined;
+const ignoreAdmin = () => undefined;
 
 export function Workspace({
   activeView,
@@ -256,6 +261,7 @@ export function Workspace({
   calendars,
   date,
   events,
+  isAdmin = false,
   isRefreshing,
   newerServer,
   offline = false,
@@ -284,6 +290,7 @@ export function Workspace({
   onPageDraftsChange,
   onRemoveEvent,
   onOpenFullEditor,
+  onOpenAdmin = ignoreAdmin,
   onSetAttendance = unavailableAttendance,
   reminders,
   onSignOut,
@@ -885,6 +892,7 @@ export function Workspace({
         activePageId={pageId}
         anchor={anchor}
         pages={pages}
+        isAdmin={isAdmin}
         isOpen={sidebarOpen}
         onClose={closeSidebar}
         onCreatePage={() => setNewPageOpen(true)}
@@ -903,6 +911,10 @@ export function Workspace({
         onManageConnections={() => {
           setSidebarOpen(false);
           setConnectionsOpen(true);
+        }}
+        onOpenAdmin={() => {
+          setSidebarOpen(false);
+          onOpenAdmin();
         }}
         onOpenScheduling={() => {
           setSidebarOpen(false);

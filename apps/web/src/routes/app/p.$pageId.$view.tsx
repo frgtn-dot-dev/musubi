@@ -9,7 +9,7 @@ import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useNewerServer } from "~/api/use-newer-server";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import { getPollCalendar } from "~/api/resources";
+import { getAnnouncements, getPollCalendar } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
 import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
@@ -99,6 +99,14 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     queryKey: queryKeys.pollCalendar(getServerOrigin(), userId),
     refetchInterval: 30_000,
   });
+  // Same query the announcement modal makes, so this costs no extra request —
+  // just reads whether the shared cache says this account is a server admin.
+  const announcements = useQuery({
+    enabled: Boolean(user?.id),
+    queryFn: ({ signal }) => getAnnouncements(signal),
+    queryKey: queryKeys.announcements(getServerOrigin(), user?.id ?? ""),
+  });
+  const isAdmin = announcements.data?.isAdmin === true;
   const eventMutations = useEventMutations(userId);
   const calendarTransfers = useCalendarTransfers(userId);
   const settingsMutations = useSettingsMutations(userId);
@@ -242,6 +250,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       pollsError={pollEnabled && Boolean(pollCalendar.error)}
       date={date}
       events={workspace.mergedEvents?.events ?? []}
+      isAdmin={isAdmin}
       isRefreshing={
         queries.some((query) => query.isFetching) ||
         (pollEnabled && pollCalendar.isFetching)
@@ -282,6 +291,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           search: { date: nextDate },
         })
       }
+      onOpenAdmin={() => void navigate({ to: "/app/admin" })}
       onPageChange={(nextPageId, nextView) =>
         void navigate({
           params: { pageId: nextPageId, view: nextView },

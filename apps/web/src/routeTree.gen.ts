@@ -17,6 +17,7 @@ import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NewEventRouteImport } from './routes/new-event'
 import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppSwDotjsRouteImport } from './routes/app/sw[.]js'
 import { Route as ETokenRouteImport } from './routes/e.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
@@ -65,6 +66,11 @@ const NewEventRoute = NewEventRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSwDotjsRoute = AppSwDotjsRouteImport.update({
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/new-event': typeof NewEventRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/sw.js': typeof AppSwDotjsRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/new-event': typeof NewEventRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/sw.js': typeof AppSwDotjsRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/new-event': typeof NewEventRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/sw.js': typeof AppSwDotjsRoute
   '/e/$token': typeof ETokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/login'
     | '/new-event'
+    | '/app/admin'
     | '/app/sw.js'
     | '/e/$token'
     | '/invite/$token'
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/login'
     | '/new-event'
+    | '/app/admin'
     | '/app/sw.js'
     | '/e/$token'
     | '/invite/$token'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/login'
     | '/new-event'
+    | '/app/admin'
     | '/app/sw.js'
     | '/e/$token'
     | '/invite/$token'
@@ -301,6 +313,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/admin': {
+      id: '/app/admin'
+      path: '/admin'
+      fullPath: '/app/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/sw.js': {
       id: '/app/sw.js'
       path: '/sw.js'
@@ -382,6 +401,7 @@ const AppPPageIdViewRouteWithChildren = AppPPageIdViewRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRoute
   AppSwDotjsRoute: typeof AppSwDotjsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppPPageIdViewRoute: typeof AppPPageIdViewRouteWithChildren
@@ -390,6 +410,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRoute,
   AppSwDotjsRoute: AppSwDotjsRoute,
   AppIndexRoute: AppIndexRoute,
   AppPPageIdViewRoute: AppPPageIdViewRouteWithChildren,
