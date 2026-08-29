@@ -123,7 +123,7 @@ async function run() {
         asked.push(userID);
         return [
           { endpoint: ENDPOINT, lastSeenAt: seen },
-          { endpoint: `${ENDPOINT}-other`, lastSeenAt: null },
+          { endpoint: `${ENDPOINT}-other`, lastSeenAt: seen },
         ];
       },
     });
@@ -135,10 +135,13 @@ async function run() {
     assert.equal(listed.statusCode(), 200);
     assert.deepEqual(listed.body(), {
       subscriptions: [
-        { fingerprint: fingerprintEndpoint(ENDPOINT), lastSeenAt: seen.toISOString() },
+        {
+          fingerprint: fingerprintEndpoint(ENDPOINT),
+          lastSeenAt: seen.toISOString(),
+        },
         {
           fingerprint: fingerprintEndpoint(`${ENDPOINT}-other`),
-          lastSeenAt: null,
+          lastSeenAt: seen.toISOString(),
         },
       ],
     });

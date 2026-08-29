@@ -259,7 +259,9 @@ export const PushSubscriptionsSchema = z
         z
           .object({
             fingerprint: z.string(),
-            lastSeenAt: z.string().nullable(),
+            // Set on every successful send, and never null: the column is
+            // NOT NULL with a default.
+            lastSeenAt: z.string(),
           })
           .strict(),
       )

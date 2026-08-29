@@ -86,7 +86,7 @@ export function createPushHandlers(
       res.status(200).json({
         subscriptions: rows.map((row) => ({
           fingerprint: fingerprintEndpoint(row.endpoint),
-          lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+          lastSeenAt: row.lastSeenAt.toISOString(),
         })),
       });
     },
