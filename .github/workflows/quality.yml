@@ -175,7 +175,11 @@ jobs:
       # A throwaway key for the CalDAV password encryption the federation
       # gateway suite exercises. Never a real one — this database is deleted
       # with the runner.
-      CALDAV_ENC_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      #
+      # Quoted, and not all zeroes, because YAML reads a bare run of digits as a
+      # number: `0000…0` reaches the process as the string "0" and the 64-hex
+      # check refuses it.
+      CALDAV_ENC_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
       # The gateway suite stands up a fake peer on 127.0.0.1, which the SSRF
       # guard refuses by default. Opting in is what the guard is designed for.
       FEDERATION_ALLOW_PRIVATE_HOSTS: "true"
