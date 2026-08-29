@@ -271,7 +271,7 @@ export default function DebugScreen() {
             <Row
               label="Channels"
               value={snapshot.reminders.channels
-                .map((channel) => `${channel.id} (importance ${channel.importance})`)
+                .map((channel) => `${channel.id} — ${channel.importance}`)
                 .join("\n")}
             />
           ) : null}

@@ -263,7 +263,7 @@ export function buildReport(snapshot: DebugSnapshot) {
     ...(reminders?.channels.length
       ? [
           `  channels: ${reminders.channels
-            .map((channel) => `${channel.id}(${channel.importance})`)
+            .map((channel) => `${channel.id} — ${channel.importance}`)
             .join(", ")}`,
         ]
       : []),

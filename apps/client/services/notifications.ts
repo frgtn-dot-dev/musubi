@@ -487,8 +487,8 @@ export type ReminderDiagnostics = {
   /** OS permission, and whether the system prompt can still be shown. */
   permission: string;
   canAskAgain: boolean;
-  /** Android channels this app has created, with their importance. */
-  channels: { id: string; importance: number }[];
+  /** Android channels this app has created, with their importance named. */
+  channels: { id: string; importance: string }[];
   /** What the OS is currently holding for us. */
   scheduled: number;
   /** The soonest few, as ISO strings, so "scheduled" can be sanity-checked. */
@@ -503,6 +503,17 @@ export type ReminderDiagnostics = {
    */
   rulesLoaded: boolean;
 };
+
+/**
+ * Android importance as its name.
+ *
+ * The raw value is an enum index — a channel at MAX reports 7 — and a report
+ * meant to be read by a person should not need the enum next to it.
+ */
+function importanceName(value: number) {
+  const name = Notifications.AndroidImportance[value];
+  return typeof name === "string" ? `${name} (${value})` : String(value);
+}
 
 /** A scheduled notification's fire time, whatever trigger shape it uses. */
 function triggerDate(trigger: unknown): string | null {
@@ -531,7 +542,7 @@ export async function reminderDiagnostics(): Promise<ReminderDiagnostics> {
     canAskAgain: permission?.canAskAgain ?? false,
     channels: channels.map((channel) => ({
       id: channel.id,
-      importance: channel.importance,
+      importance: importanceName(channel.importance),
     })),
     nextScheduled: upcoming.slice(0, 5),
     permission: permission?.status ?? "unknown",

@@ -1,5 +1,5 @@
 import { colors, fonts } from "@/constants/theme";
-import { Switch, View, Text } from "react-native";
+import { Pressable, Switch, View, Text } from "react-native";
 import { Mode } from "@musubi/calendar";
 import { Tap } from "@/components/ui/Tap";
 import { Feather } from "@expo/vector-icons";
@@ -32,6 +32,16 @@ type ActionProps = {
   value?: string;
   external?: boolean;
   onPress?: () => void;
+  /**
+   * Tappable without looking or announcing it.
+   *
+   * For the version row, where ten taps open diagnostics. A chevron and a
+   * button role would advertise a door meant to be found only by someone who
+   * was told about it, and would put a control in the accessibility tree that
+   * does nothing on nine activations out of ten. The row keeps the plain
+   * appearance it has always had; its text is still read normally.
+   */
+  secret?: boolean;
 }
 
 // Border color applied inline at usage — the theme can swap at runtime.
@@ -143,7 +153,7 @@ export function SettingRowOptions({
   );
 }
 
-export function SettingRowAction({ label, detail, value, external, onPress }: ActionProps) {
+export function SettingRowAction({ label, detail, value, external, onPress, secret }: ActionProps) {
   const content = (
     <>
       <View style={{ flex: 1, gap: 2 }}>
@@ -179,19 +189,25 @@ export function SettingRowAction({ label, detail, value, external, onPress }: Ac
           {value}
         </Text>
       ) : null}
-      {onPress ? (
+      {onPress && !secret ? (
         <Feather name={external ? "external-link" : "chevron-right"} size={15} color={colors.fg4} />
       ) : null}
     </>
   );
 
-  if (!onPress) {
-    return (
-      <View style={[rowStyle, { borderColor: colors.line, gap: spacing[3] }]}>
-        {content}
-      </View>
-    );
-  }
+  const plain = (
+    <View style={[rowStyle, { borderColor: colors.line, gap: spacing[3] }]}>
+      {content}
+    </View>
+  );
+
+  if (!onPress) return plain;
+
+  // A secret row is the plain row that happens to answer a press: no chevron,
+  // no dim, no scale, no button role. `Tap` cannot express that — it gives
+  // every pressable the app's press feel and infers the role from `onPress` —
+  // and all three of those would advertise the door.
+  if (secret) return <Pressable onPress={onPress}>{plain}</Pressable>;
 
   return (
     <Tap

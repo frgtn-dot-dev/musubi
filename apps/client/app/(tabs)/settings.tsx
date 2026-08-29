@@ -519,6 +519,7 @@ export default function SettingsTab() {
           label="Version"
           value={`${appVersion} (${appBuild})`}
           onPress={openDiagnostics}
+          secret
         />
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
