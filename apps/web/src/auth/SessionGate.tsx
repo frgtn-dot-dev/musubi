@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { AnnouncementGate } from "~/calendar/components/AnnouncementDialog";
 import { signOutAndReset } from "~/offline/sign-out";
 import { RouteState } from "~/ui/RouteState";
 import { AUTH_EXPIRED_EVENT, authClient } from "./auth-client";
@@ -99,5 +100,10 @@ export function SessionGate() {
     );
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <AnnouncementGate />
+      <Outlet />
+    </>
+  );
 }
