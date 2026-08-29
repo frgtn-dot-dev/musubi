@@ -11,6 +11,7 @@ assert.equal(isAdminEmailIn(admins, " owner@example.com "), true);
 assert.equal(isAdminEmailIn(admins, "someone@example.com"), false);
 assert.equal(isAdminEmailIn(admins, undefined), false);
 assert.equal(isAdminEmailIn(admins, null), false);
+assert.equal(isAdminEmailIn(admins, ""), false);
 // Server bez adminů neuzná nikoho — prázdný seznam nesmí znamenat "všichni".
 assert.equal(isAdminEmailIn([], "owner@example.com"), false);
 
