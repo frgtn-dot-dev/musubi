@@ -1381,8 +1381,6 @@ Doplň `AnnouncementSchema` a `AnnouncementsResponseSchema` do importu
 z `@musubi/types` a přidej:
 
 ```ts
-export const AnnouncementsResponse = AnnouncementsResponseSchema;
-
 // Admin seznam je jiný dokument: nese i zprávy, které volající už viděl, a
 // nikdy nenese isAdmin (na tuhle cestu se ne-admin nedostane).
 export const AdminAnnouncementsResponseSchema = z.object({
@@ -1390,10 +1388,9 @@ export const AdminAnnouncementsResponseSchema = z.object({
 });
 ```
 
-Pozn.: `AnnouncementsResponseSchema` se dá importovat rovnou v `resources.ts`
-z `@musubi/types`; alias výše je jen pro souběh se stylem souboru. Pokud ti
-přijde čistší alias vynechat a importovat přímo, udělej to — hlavně ať existuje
-jen jedna definice.
+Odpověď `/api/v1/announcements` sem **nepřidávej** v žádné podobě, ani jako
+alias. `resources.ts` si `AnnouncementsResponseSchema` importuje rovnou
+z `@musubi/types` (viz Step 2) — jedna definice, jedno místo, kde se mění.
 
 - [ ] **Step 2: Přidat funkce pro volání API**
 
@@ -1570,7 +1567,7 @@ import {
   pendingAnnouncements,
 } from "@musubi/types";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import musubiPackage from "../../../../../package.json";
 import { getAnnouncements } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -1656,12 +1653,19 @@ export function AnnouncementGate() {
 
   // První pohled: nic se neukazuje, jen se posune značka. Bez toho by nový účet
   // (a v den nasazení každý stávající) dostal celou historii produktu naráz.
-  if (data?.markTo && !dismissed) {
-    setDismissed(true);
-    void mark(data.markTo);
-  }
+  //
+  // V efektu, ne při renderu: patch je vedlejší efekt, a při renderu by ho
+  // StrictMode vyvolal dvakrát a opakoval při každém dalším renderu.
+  const markTo = data?.markTo;
+  useEffect(() => {
+    if (markTo) void mark(markTo);
+    // `mark` se mění s každým renderem (uzavírá mutace), a značka se má poslat
+    // právě jednou na hodnotu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markTo]);
 
-  const pending = data ? pendingAnnouncements(data.announcements, BUILD_VERSION) : [];
+  const pending =
+    data && !markTo ? pendingAnnouncements(data.announcements, BUILD_VERSION) : [];
   if (dismissed || pending.length === 0) return null;
 
   function close() {
@@ -2046,8 +2050,9 @@ buď `onConfirm`, nebo `confirmForm` — nikdy obojí
 (`apps/web/src/ui/ConfirmationDialog.tsx:8-29`). `RouteState` má povinné
 `eyebrow` a `title` (`apps/web/src/ui/RouteState.tsx:10-15`). `Row` přijímá
 `label`, `detail`, `icon`, `value` a `trailing` (`apps/web/src/ui/Row.tsx:61-64`).
-`Button`ovy `variant` a `size` ověř podle `apps/web/src/ui/Button.tsx:9-15` —
-pokud `"secondary"` mezi variantami není, použij tu, která tam je.
+`Button` má varianty `"primary" | "secondary" | "destructive" | "ghost"` a
+velikosti `"control" | "compact"` (`apps/web/src/ui/Button.tsx:9-15`), takže
+`variant="secondary"` i `size="compact"` výše sedí.
 
 - [ ] **Step 3: Ověřit, že route strom prošel regenerací**
 
