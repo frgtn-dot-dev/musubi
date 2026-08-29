@@ -92,6 +92,32 @@ export async function subscribeToPush(publicKey: string) {
 }
 
 /**
+ * The same digest the server publishes for its own rows.
+ *
+ * SHA-256 of the endpoint, hex. Lets a browser find itself in a list that
+ * carries no endpoints — which is the only safe way to answer "does the server
+ * still have me?", since an endpoint is a capability URL.
+ *
+ * Null where `crypto.subtle` is missing. It needs a secure context, and so does
+ * push itself, so the two are absent together and the check says "unknown"
+ * rather than inventing an answer.
+ */
+export async function fingerprintEndpoint(endpoint: string) {
+  if (typeof crypto === "undefined" || !crypto.subtle) return null;
+  try {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(endpoint),
+    );
+    return [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Tell the server about a subscription this browser is already holding.
  *
  * The server drops a subscription the moment a push comes back 404 or 410, and

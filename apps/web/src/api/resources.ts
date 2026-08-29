@@ -14,6 +14,7 @@ import {
   PollSchema,
   PollSummarySchema,
   PublicEventSchema,
+  PushSubscriptionsSchema,
   RemindersResponseSchema,
   RemoveEventResponseSchema,
   RsvpSummarySchema,
@@ -169,6 +170,20 @@ export function subscribePush(subscription: {
     body: subscription,
     method: "POST",
     responseSchema: z.void(),
+  });
+}
+
+/**
+ * Which subscriptions this server still holds for the reader.
+ *
+ * Only diagnostics asks. It answers the one question a browser cannot settle on
+ * its own: the server drops a subscription the moment a send comes back 410,
+ * and never tells the browser, whose own object survives either way.
+ */
+export function getPushSubscriptions(signal?: AbortSignal) {
+  return apiRequest("/api/v1/push/subscriptions", {
+    responseSchema: PushSubscriptionsSchema,
+    signal,
   });
 }
 

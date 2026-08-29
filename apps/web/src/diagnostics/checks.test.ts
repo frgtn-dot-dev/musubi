@@ -7,6 +7,7 @@ import {
   pushVerdict,
   reachabilityVerdict,
   reminderRulesVerdict,
+  serverKnowsBrowserVerdict,
   serviceWorkerVerdict,
   summarise,
   worstStatus,
@@ -113,6 +114,73 @@ describe("pushVerdict", () => {
     for (const missing of ["serverCapable", "subscribed", "supported"] as const) {
       expect(pushVerdict({ ...state, [missing]: false }).status).toBe("warn");
     }
+  });
+});
+
+describe("serverKnowsBrowserVerdict", () => {
+  const MINE = "a".repeat(64);
+  const THEIRS = "b".repeat(64);
+
+  it("passes when the server's list contains this browser", () => {
+    const result = serverKnowsBrowserVerdict({
+      fingerprint: MINE,
+      serverFingerprints: [MINE],
+      subscribed: true,
+    });
+    expect(result.status).toBe("pass");
+  });
+
+  it("counts the other devices without naming them", () => {
+    const result = serverKnowsBrowserVerdict({
+      fingerprint: MINE,
+      serverFingerprints: [THEIRS, MINE],
+      subscribed: true,
+    });
+    expect(result.detail).toContain("1 other");
+  });
+
+  // The whole reason this check exists. A send came back 410, the server
+  // dropped the row, and nothing told the browser — which goes on believing it
+  // is covered and therefore does not schedule for itself either.
+  it("fails when this browser is subscribed and the server is not", () => {
+    const result = serverKnowsBrowserVerdict({
+      fingerprint: MINE,
+      serverFingerprints: [THEIRS],
+      subscribed: true,
+    });
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("dropped after a failed push");
+  });
+
+  it("fails on an empty server list just the same", () => {
+    expect(
+      serverKnowsBrowserVerdict({
+        fingerprint: MINE,
+        serverFingerprints: [],
+        subscribed: true,
+      }).status,
+    ).toBe("fail");
+  });
+
+  // An answer nobody could obtain must never read as a good one.
+  it("does not pass when the question could not be asked", () => {
+    for (const unknown of [
+      { fingerprint: MINE, serverFingerprints: null, subscribed: true },
+      { fingerprint: null, serverFingerprints: [MINE], subscribed: true },
+      { fingerprint: null, serverFingerprints: null, subscribed: true },
+    ]) {
+      expect(serverKnowsBrowserVerdict(unknown).status).toBe("warn");
+    }
+  });
+
+  it("has nothing to match when this browser holds no subscription", () => {
+    const result = serverKnowsBrowserVerdict({
+      fingerprint: null,
+      serverFingerprints: [THEIRS],
+      subscribed: false,
+    });
+    expect(result.status).toBe("warn");
+    expect(result.detail).toContain("nothing to match");
   });
 });
 

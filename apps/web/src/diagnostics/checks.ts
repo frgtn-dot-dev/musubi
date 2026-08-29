@@ -250,6 +250,62 @@ export function serviceWorkerVerdict(
   return { ...base, detail: `Registered for ${scope}.`, status: "pass" };
 }
 
+/**
+ * What the server holds against what this browser holds.
+ *
+ * `null` for either side means the question could not be asked — the read
+ * failed, or `crypto.subtle` is unavailable — and an unknown answer must not
+ * read as a good one.
+ *
+ * The state this exists for is the last branch: a browser holding a
+ * subscription the server does not have. It happens whenever a send comes back
+ * 410 and the row is dropped, which the browser is never told about. Until this
+ * check there was nothing anywhere that could see it.
+ */
+export function serverKnowsBrowserVerdict(input: {
+  fingerprint: string | null;
+  serverFingerprints: string[] | null;
+  subscribed: boolean;
+}): CheckResult {
+  const base = { id: "push-registration", label: "Server registration" } as const;
+
+  if (!input.subscribed) {
+    return {
+      ...base,
+      detail: "This browser holds no subscription, so there is nothing to match.",
+      status: "warn",
+    };
+  }
+  if (!input.serverFingerprints) {
+    return {
+      ...base,
+      detail: "The server's list could not be read, so this is unknown.",
+      status: "warn",
+    };
+  }
+  if (!input.fingerprint) {
+    return {
+      ...base,
+      detail:
+        "This browser cannot hash its endpoint, so it cannot find itself in the list.",
+      status: "warn",
+    };
+  }
+  if (input.serverFingerprints.includes(input.fingerprint)) {
+    return {
+      ...base,
+      detail: `The server has this browser${input.serverFingerprints.length > 1 ? `, and ${input.serverFingerprints.length - 1} other` : ""}.`,
+      status: "pass",
+    };
+  }
+  return {
+    ...base,
+    detail:
+      "This browser is subscribed but the server has no matching registration — it was dropped after a failed push. Turn reminders off and on again in Settings.",
+    status: "fail",
+  };
+}
+
 /** Without rules nothing resolves, so no reminder is ever due. */
 export function reminderRulesVerdict(loaded: boolean): CheckResult {
   return {

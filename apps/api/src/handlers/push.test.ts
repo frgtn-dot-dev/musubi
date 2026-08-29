@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { Request, Response } from "express";
-import { createPushHandlers } from "./push";
+import { createPushHandlers, fingerprintEndpoint } from "./push";
 
 // A push endpoint is a URL this server will later make requests to, and it
 // arrives from a browser. That makes the schema a trust boundary, not a
@@ -13,9 +13,14 @@ const KEYS = { auth: "auth-secret", p256dh: "public-key" };
 function recorder() {
   let statusCode = 0;
   let ended = false;
+  let body: unknown;
   const response = {
     end() {
       ended = true;
+      return response;
+    },
+    json(value: unknown) {
+      body = value;
       return response;
     },
     status(code: number) {
@@ -23,7 +28,12 @@ function recorder() {
       return response;
     },
   } as unknown as Response;
-  return { ended: () => ended, response, statusCode: () => statusCode };
+  return {
+    body: () => body,
+    ended: () => ended,
+    response,
+    statusCode: () => statusCode,
+  };
 }
 
 const request = (body: unknown) =>
@@ -99,6 +109,63 @@ async function run() {
     await assert.rejects(
       handlers.unsubscribe(request({}), recorder().response),
       /Body must be/,
+    );
+  }
+
+  {
+    // Listing exists to answer "does the server still know about this browser?"
+    // — the question that had no way to be asked, and the reason a subscription
+    // dropped on a 410 could go unnoticed forever.
+    const seen = new Date("2026-08-20T10:00:00.000Z");
+    const asked: string[] = [];
+    const handlers = createPushHandlers({
+      list: async (userID) => {
+        asked.push(userID);
+        return [
+          { endpoint: ENDPOINT, lastSeenAt: seen },
+          { endpoint: `${ENDPOINT}-other`, lastSeenAt: null },
+        ];
+      },
+    });
+
+    const listed = recorder();
+    await handlers.listSubscriptions(request(undefined), listed.response);
+
+    assert.deepEqual(asked, ["user-1"], "scoped to the caller");
+    assert.equal(listed.statusCode(), 200);
+    assert.deepEqual(listed.body(), {
+      subscriptions: [
+        { fingerprint: fingerprintEndpoint(ENDPOINT), lastSeenAt: seen.toISOString() },
+        {
+          fingerprint: fingerprintEndpoint(`${ENDPOINT}-other`),
+          lastSeenAt: null,
+        },
+      ],
+    });
+
+    // The whole point of the digest. An endpoint is a capability URL — anyone
+    // holding it can make that device buzz — so a read that returned them would
+    // turn diagnostics into a way to collect them.
+    const serialised = JSON.stringify(listed.body());
+    assert.ok(
+      !serialised.includes(ENDPOINT),
+      "the endpoint itself must never leave the server",
+    );
+    assert.ok(
+      !serialised.includes("fcm.googleapis.com"),
+      "not even the push service host",
+    );
+
+    // A browser can still find itself: it hashes the endpoint it already holds.
+    assert.equal(
+      fingerprintEndpoint(ENDPOINT),
+      fingerprintEndpoint(ENDPOINT),
+      "the digest is stable",
+    );
+    assert.notEqual(
+      fingerprintEndpoint(ENDPOINT),
+      fingerprintEndpoint(`${ENDPOINT}-other`),
+      "and it distinguishes two endpoints",
     );
   }
 
