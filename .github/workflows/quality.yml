@@ -10,7 +10,104 @@ on:
 permissions:
   contents: read
 
+# Jobs are split by the question they answer, not by how fast they are. A red
+# tick that says "Old client compatibility" names the problem; one that says
+# "verify" means reading a log to find out what broke.
+
 jobs:
+  compat:
+    name: Old client compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Three checks, one question: can a phone build that shipped months ago
+      # still talk to this server? It cannot be patched — there is no OTA
+      # channel — so a break here is permanent for everyone who has not updated.
+      #
+      # They run inside `pnpm check` too. Duplicated here on purpose: they take
+      # seconds, and a job with this name turns "something is red" into "you
+      # broke the released app" without anyone opening a log.
+
+      # The shape of every document that crosses the wire, against the shape
+      # promised in packages/types/contracts/wire.json.
+      - name: Wire contract
+        run: pnpm --filter @musubi/types test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musubi
+          ENVIRONMENT: test
+          BETTER_AUTH_URL: http://localhost:7531
+
+      # The addresses those documents travel to. A renamed route is invisible to
+      # every schema check and to the type system, and is a 404 on every phone.
+      - name: Route contract
+        run: node scripts/check-routes.mjs
+
+      # And the live-update frames. `type` is a bare string on both ends, so a
+      # rename compiles, deploys, and silently stops the calendar updating.
+      - name: Realtime frame contract
+        run: node scripts/check-realtime.mjs
+
+  observability:
+    name: Observability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Observability fails quietly by nature: a dashboard whose metric was
+      # renamed draws an empty graph that looks like a healthy system, and an
+      # alert whose metric was renamed simply never fires. Both are discovered
+      # during the incident they existed to catch.
+
+      # Every series ops/grafana and ops/prometheus read still exists, and the
+      # HTTP labels stay bounded and free of tokens.
+      - name: Metrics read by dashboards and alerts still exist
+        run: pnpm --filter @musubi/api exec tsx src/metrics.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musubi
+          ENVIRONMENT: test
+          BETTER_AUTH_URL: http://localhost:7531
+
+      # Structured logs are the other half. Redaction is the property that makes
+      # `logger.error("failed", { error })` safe to write without inspecting
+      # what the object carries.
+      - name: Logs stay parseable and redact credentials
+        run: pnpm --filter @musubi/config exec tsx src/logger.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musubi
+          ENVIRONMENT: test
+          BETTER_AUTH_URL: http://localhost:7531
+
+      # A rule Prometheus refuses to load pages nobody, and the only place that
+      # would surface is the reload log on a server nobody is reading either.
+      #
+      # `--entrypoint`: the image runs the prometheus binary by default, which
+      # takes `promtool` as an argument it does not recognise.
+      - name: Alert rules load
+        run: >-
+          docker run --rm -v "$PWD/ops/prometheus:/rules:ro"
+          --entrypoint /bin/promtool
+          prom/prometheus:v3.7.3
+          check rules /rules/musubi-alerts.yml
+
   verify:
     name: Typecheck, test, lint, docs, and migrations
     runs-on: ubuntu-latest
@@ -48,6 +145,65 @@ jobs:
             exit 1
           fi
 
+  integration:
+    name: Database integration
+    runs-on: ubuntu-latest
+
+    # The suites below are the ones that talk to a real Postgres: advisory
+    # locks, poll race conditions, federation token rotation. None of them can
+    # run inside `pnpm check`, which is why they had no CI job at all and were
+    # only ever run by hand.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: musubi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d musubi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musubi
+      ENVIRONMENT: test
+      BETTER_AUTH_URL: http://localhost:7531
+      # A throwaway key for the CalDAV password encryption the federation
+      # gateway suite exercises. Never a real one — this database is deleted
+      # with the runner.
+      #
+      # Quoted, and not all zeroes, because YAML reads a bare run of digits as a
+      # number: `0000…0` reaches the process as the string "0" and the 64-hex
+      # check refuses it.
+      CALDAV_ENC_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      # The gateway suite stands up a fake peer on 127.0.0.1, which the SSRF
+      # guard refuses by default. Opting in is what the guard is designed for.
+      FEDERATION_ALLOW_PRIVATE_HOSTS: "true"
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Applying every committed migration to an empty database is itself the
+      # check the release notes ask for: it is the only place the whole chain
+      # runs forward from nothing.
+      - name: Apply migrations to an empty database
+        run: pnpm db:migrate
+
+      - run: pnpm test:db
+
   e2e:
     name: Web end-to-end
     runs-on: ubuntu-latest
@@ -79,6 +235,34 @@ jobs:
           name: playwright-report
           path: apps/web/test-results
           retention-days: 7
+
+  storybook:
+    name: Component interaction and accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: >-
+          pnpm --filter @musubi/web exec playwright install --with-deps chromium
+
+      # Every story rendered in a real browser, with its play function run and
+      # the a11y addon asserting against it. CLAUDE.md requires keyboard
+      # behaviour, focus return, accessible names and contrast to survive every
+      # change; this is the only place that is checked automatically.
+      #
+      # The runner exits 0 when it cannot launch a browser, so the step above is
+      # what makes this job mean anything.
+      - run: pnpm storybook:web:test
 
   bundle:
     name: Client bundle secret scan
@@ -134,3 +318,97 @@ jobs:
           push: false
           cache-from: type=gha,scope=${{ matrix.scope }}
           cache-to: type=gha,scope=${{ matrix.scope }},mode=max
+
+  smoke:
+    name: API container boots and serves
+    runs-on: ubuntu-latest
+    needs: docker
+
+    # Building the image proves it compiles. It does not prove the thing starts:
+    # migrations run at boot, a singleton advisory lock is taken, and the metrics
+    # server binds a second port — none of which a build exercises, and all of
+    # which fail in production rather than in CI.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: musubi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d musubi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: >-
+          docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      # Reuses the layers the `docker` job just pushed to the cache, so this
+      # costs the load rather than a second build.
+      - uses: >-
+          docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          load: true
+          tags: musubi-api:smoke
+          cache-from: type=gha,scope=api
+
+      # ENVIRONMENT=prod on purpose: it is the mode real installs run, and the
+      # one that enforces the auth secret. The secret is generated here and dies
+      # with the runner — nothing committed, nothing that could be mistaken for
+      # a real one.
+      - name: Start the API
+        run: |
+          docker run -d --name musubi-api --network host \
+            -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/musubi \
+            -e ENVIRONMENT=prod \
+            -e BETTER_AUTH_URL=http://localhost:7531 \
+            -e BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+            -e API_SERVER_PORT=7531 \
+            musubi-api:smoke
+
+      # The image declares its own HEALTHCHECK, so wait on that rather than
+      # inventing a second definition of "ready" that could disagree with it.
+      - name: Wait for the container to report healthy
+        run: |
+          for _ in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' musubi-api)" = healthy ]; then
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' musubi-api)" != true ]; then
+              echo "::error::The API container exited during startup"
+              docker logs musubi-api
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::The API container never became healthy"
+          docker logs musubi-api
+          exit 1
+
+      # The document every client reads first. A phone decides whether it is too
+      # old from `minClientVersion` here, and a browser tab decides whether to
+      # offer a reload from `version` — so an install that answers this wrongly
+      # is one that locks people out or nags them forever.
+      - name: Serves its identity to clients
+        run: |
+          body=$(curl -fsS --max-time 10 http://localhost:7531/api/v1/server)
+          echo "$body"
+          echo "$body" | jq -e '.version and .minClientVersion' >/dev/null
+
+      # Its own port, its own HTTP server, started separately from the API — so
+      # a scrape target that silently never came up is a real failure mode.
+      - name: Exposes metrics on the scrape port
+        run: |
+          curl -fsS --max-time 10 http://localhost:9464/metrics \
+            | grep -q '^musubi_http_requests_total'
+
+      - if: failure()
+        run: docker logs musubi-api

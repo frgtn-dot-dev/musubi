@@ -265,7 +265,7 @@ function metricMethod(method: string) {
   return KNOWN_HTTP_METHODS.has(method) ? method : "OTHER";
 }
 
-function metricRoute(req: Request) {
+export function metricRoute(req: Request) {
   // Registered patterns keep cardinality bounded and prevent identifiers or
   // invite/auth tokens from becoming metric labels.
   return typeof req.route?.path === "string" ? req.route.path : "<unmatched>";
