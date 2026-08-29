@@ -98,11 +98,15 @@ jobs:
 
       # A rule Prometheus refuses to load pages nobody, and the only place that
       # would surface is the reload log on a server nobody is reading either.
+      #
+      # `--entrypoint`: the image runs the prometheus binary by default, which
+      # takes `promtool` as an argument it does not recognise.
       - name: Alert rules load
         run: >-
           docker run --rm -v "$PWD/ops/prometheus:/rules:ro"
+          --entrypoint /bin/promtool
           prom/prometheus:v3.7.3
-          promtool check rules /rules/musubi-alerts.yml
+          check rules /rules/musubi-alerts.yml
 
   verify:
     name: Typecheck, test, lint, docs, and migrations
