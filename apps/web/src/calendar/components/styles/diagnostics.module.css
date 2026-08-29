@@ -12,28 +12,34 @@
 	font-size: var(--text-13);
 }
 
-/* Only a genuine failure spends the accent. A warning is worth noticing and not
-   worth alarming about, and a pass should read as the quiet default. */
-.summary[data-status="fail"] {
-	border-color: color-mix(
-		in srgb,
-		var(--accent-primary) 38%,
-		var(--border-medium)
-	);
-	background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-raised));
+.summary[data-status="pass"] {
+	border-color: color-mix(in srgb, var(--status-pass) 34%, var(--border-medium));
+	background: var(--status-pass-fill);
 }
 
+.summary[data-status="warn"] {
+	border-color: color-mix(in srgb, var(--status-warn) 34%, var(--border-medium));
+	background: var(--status-warn-fill);
+}
+
+.summary[data-status="fail"] {
+	border-color: color-mix(in srgb, var(--status-fail) 38%, var(--border-medium));
+	background: color-mix(in srgb, var(--status-fail) 7%, var(--surface-raised));
+}
+
+/* The icon's shape is what says which verdict this is; the colour agrees with
+   it. Nothing here depends on the reader telling green from amber from red. */
 .status {
 	display: inline-flex;
-	color: var(--text-muted);
-}
-
-.status[data-status="fail"] {
-	color: var(--accent-primary);
+	color: var(--status-pass);
 }
 
 .status[data-status="warn"] {
-	color: var(--text-secondary);
+	color: var(--status-warn);
+}
+
+.status[data-status="fail"] {
+	color: var(--status-fail);
 }
 
 .actions {

@@ -18,7 +18,6 @@ import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import { InlineError } from "~/ui/InlineError";
 import {
-  Row,
   RowAction,
   RowOptions,
   RowToggle,
@@ -144,10 +143,9 @@ export function SettingsDialog({
    * it. Hidden by default because a Diagnostics group in a calendar app is a
    * group every user reads past forever, for a screen almost none of them want.
    *
-   * The row stays a plain row: no chevron, no button role, no focus ring. It is
-   * an easter egg, and advertising it would defeat the point — so the flag is
-   * also readable from `localStorage`, which is the path for anyone who cannot
-   * click ten times.
+   * The row is a real button — a div with a click handler is a control no
+   * keyboard can reach — but it loses the chevron and the hover tint, which are
+   * what would give the gesture away. Its focus ring stays.
    */
   const [developer, setDeveloper] = useState(developerModeEnabled);
   const clicks = useRef<ClickState>({ count: 0, lastAt: 0 });
@@ -486,9 +484,11 @@ export function SettingsDialog({
               trailing={<ExternalLink aria-hidden="true" size={15} />}
               onClick={() => openExternal(TERMS_URL)}
             />
-            <Row
+            <RowAction
+              className={styles.secretRow}
               label="Version"
               onClick={clickVersion}
+              showChevron={false}
               value={musubiPackage.version}
             />
           </SettingsSection>
