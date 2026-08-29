@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AnnouncementsResponseSchema } from "./announcement";
 import { CalendarInvitePreviewSchema, CalendarSchema } from "./calendar";
 import { EventSchema } from "./event";
 import { InviteSchema } from "./invite";
@@ -29,6 +30,10 @@ export const WIRE_CONTRACT: Record<
   string,
   { direction: WireDirection; schema: z.ZodType }
 > = {
+  AnnouncementsResponse: {
+    direction: "read",
+    schema: AnnouncementsResponseSchema,
+  },
   Calendar: { direction: "read", schema: CalendarSchema },
   CalendarInvitePreview: {
     direction: "read",

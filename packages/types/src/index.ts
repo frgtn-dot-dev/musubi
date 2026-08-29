@@ -5,6 +5,7 @@ export * from "./event";
 export * from "./invite";
 export * from "./event_page";
 export * from "./settings";
+export * from "./announcement";
 export * from "./reminder";
 export * from "./reminder_options";
 export * from "./pages";
