@@ -198,6 +198,10 @@ export const userSettings = pgTable("user_settings", {
     .$type<NotificationEmails>()
     .notNull()
     .default(DEFAULT_NOTIFICATION_EMAILS),
+  // Nejnovější zpráva o novinkách, kterou uživatel viděl. NOT NULL s prázdným
+  // výchozím řetězcem, ne nullable: "" a NULL by znamenaly totéž, a jedna
+  // podoba prázdna se zpracovává líp než dvě.
+  lastSeenAnnouncement: text("last_seen_announcement").notNull().default(""),
 });
 
 export type NewSettings = typeof userSettings.$inferInsert;

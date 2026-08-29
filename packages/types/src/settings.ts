@@ -48,6 +48,12 @@ export const SettingsSchema = z.object({
   // Emails about what other people did. Optional so an older client saving the
   // whole document cannot silence them by not knowing about them.
   notificationEmails: NotificationEmailsSchema.optional(),
+  // Nejnovější zpráva o novinkách, kterou uživatel viděl. Prázdný řetězec =
+  // ještě žádnou; klient v tom případě modal NEUKÁŽE a jen si značku nastaví,
+  // aby nový účet (a v den nasazení každý stávající) nedostal celou historii
+  // produktu naráz. Volitelné, aby ji starší klient ukládající celý dokument
+  // nemohl shodit zpátky.
+  lastSeenAnnouncement: z.string().max(64).optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -58,6 +64,7 @@ export const SettingsPatchSchema = z
     dateFormat: z.enum(["dmy", "mdy", "ymd"]).optional(),
     defaultCalendarView: CalendarViewSchema.optional(),
     defaultReminder: ReminderRuleSchema.optional(),
+    lastSeenAnnouncement: z.string().max(64).optional(),
     notificationEmails: NotificationEmailsSchema.optional(),
     notificationsOnByDefault: z.boolean().optional(),
     onboarded: z.boolean().optional(),
