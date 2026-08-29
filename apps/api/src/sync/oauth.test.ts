@@ -40,7 +40,7 @@ async function main() {
 
   // --- token-at-rest encryption interop with Better Auth (tokenCrypto) ---
   const { symmetricEncrypt, symmetricDecrypt } = await import("better-auth/crypto");
-  const secret = "test-secret-0123456789abcdefABCDEF";
+  const secret = "test-secret-0123456789abcdefABCDEF"; // gitleaks:allow -- deterministic test secret
 
   // Round-trips with a plain string key — the single-secret setup Musubi uses,
   // where Better Auth's secretConfig IS the secret string.
@@ -54,7 +54,7 @@ async function main() {
   const likelyEncrypted = (t: string) => t.startsWith("$ba$") || (t.length % 2 === 0 && /^[0-9a-f]+$/i.test(t));
   assert.equal(likelyEncrypted(ciphertext), true);
   assert.equal(likelyEncrypted("1//0gL9-refresh_token.value"), false);
-  assert.equal(likelyEncrypted("ya29.a0AfB_xyz-token"), false);
+  assert.equal(likelyEncrypted("oauth.token_with/slash-"), false);
 
   console.log("oauth revoke + token-crypto self-check: OK");
 }

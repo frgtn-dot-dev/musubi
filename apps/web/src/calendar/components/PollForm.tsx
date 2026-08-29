@@ -17,14 +17,26 @@ import styles from "./styles/scheduling.module.css";
  * survey — and the grid people have to answer stops fitting on a phone.
  */
 const MAX_POLL_SLOTS = 60;
+const ALL_DAY_DURATION_MINUTES = 24 * 60;
+
+const DURATION_OPTIONS = [
+	{ label: "All day", textValue: "All day", value: "1440" },
+	{ label: "30 minutes", textValue: "30 minutes", value: "30" },
+	{ label: "45 minutes", textValue: "45 minutes", value: "45" },
+	{ label: "1 hour", textValue: "1 hour", value: "60" },
+	{ label: "1.5 hours", textValue: "1.5 hours", value: "90" },
+	{ label: "2 hours", textValue: "2 hours", value: "120" },
+] as const;
 
 export type PollDraft = {
-	/** Informational wall-clock hint only; the resulting event stays all-day. */
+	/** Exact start for timed polls; optional context for all-day polls. */
 	approximateStartTime?: string;
 	/** Where the decided event lands. Absent when there is nothing to choose from. */
 	calendarId?: string;
 	/** End of the chosen day, in the organizer's own zone. Absent means no limit. */
 	deadline?: string;
+	description?: string;
+	durationMinutes: number;
 	email?: string;
 	name?: string;
 	slots: Array<{ date: string; start: string }>;
@@ -63,35 +75,46 @@ export function PollForm({
 	timeFormat: Settings["timeFormat"];
 	weekStartsOn: Settings["weekStartsOn"];
 }) {
-	const writable = calendars.filter((calendar) => can(calendar.role, "editEvents"));
+	const writable = calendars.filter((calendar) =>
+		can(calendar.role, "editEvents"),
+	);
 	const [title, setTitle] = useState("");
 	// Their own calendar first: a poll usually decides into the same place their
 	// other events live, so the common answer is the one already filled in.
 	const [calendarId, setCalendarId] = useState(
 		() =>
-			writable.find((calendar) => calendar.isDefault)?.id ??
-			writable[0]?.id ??
-			"",
+			writable.find((calendar) => calendar.isDefault)?.id ?? writable[0]?.id ?? "",
 	);
 	const [email, setEmail] = useState("");
 	const [name, setName] = useState("");
 	const [days, setDays] = useState<string[]>([]);
 	const [approximateStartTime, setApproximateStartTime] = useState("");
+	const [description, setDescription] = useState("");
+	const [durationMinutes, setDurationMinutes] = useState(
+		ALL_DAY_DURATION_MINUTES,
+	);
 	// Empty by default: most polls are answered in a day or two and a deadline
 	// nobody asked for is one more decision at the point of writing the question.
 	const [deadline, setDeadline] = useState("");
 
-	// One option per day. Noon is only a stable internal date carrier; the optional
-	// approximate time is stored separately and never controls the all-day event.
+	const timed = durationMinutes !== ALL_DAY_DURATION_MINUTES;
 	const slots = days.map((day) => ({
 		date: day,
-		start: new Date(`${day}T12:00:00.000Z`).toISOString(),
+		start: new Date(
+			timed && approximateStartTime
+				? `${day}T${approximateStartTime}:00`
+				: `${day}T12:00:00.000Z`,
+		).toISOString(),
 	}));
 	const tooMany = slots.length > MAX_POLL_SLOTS;
 	const identityReady =
 		!collectIdentity || (name.trim().length > 0 && email.trim().length > 0);
 	const ready =
-		title.trim().length > 0 && slots.length > 0 && !tooMany && identityReady;
+		title.trim().length > 0 &&
+		slots.length > 0 &&
+		!tooMany &&
+		identityReady &&
+		(!timed || approximateStartTime.length > 0);
 
 	return (
 		<div className={styles.form}>
@@ -152,7 +175,6 @@ export function PollForm({
 
 			<div className={styles.field}>
 				<div className={styles.fieldHeader}>
-					<span className={styles.fieldLabel}>Which days</span>
 					{days.length > 0 ? (
 						<button
 							className={styles.clear}
@@ -174,14 +196,44 @@ export function PollForm({
 
 			<section className={styles.optionalSection}>
 				<SectionLabel level={3}>Optional details</SectionLabel>
+				<Field label="Organizer note" labelHidden>
+					<textarea
+						maxLength={2000}
+						placeholder="What should participants know?"
+						value={description}
+						onChange={(event) => setDescription(event.target.value)}
+					/>
+				</Field>
 				<div className={styles.optionRows}>
 					<Row
-						detail="Shown as context; the calendar event remains all-day."
-						label="Approximate start"
+						detail={
+							timed
+								? "Length of the decided calendar event."
+								: "The decided event stays all-day."
+						}
+						label="Duration"
+						trailing={
+							<Select
+								className={styles.optionInput}
+								label="Duration"
+								onChange={(value) => setDurationMinutes(Number(value))}
+								options={DURATION_OPTIONS}
+								size="compact"
+								value={String(durationMinutes)}
+							/>
+						}
+					/>
+					<Row
+						detail={
+							timed
+								? "Required for a timed event."
+								: "Optional context for an all-day event."
+						}
+						label={timed ? "Starts at" : "Approximate start"}
 						trailing={
 							<TimePicker
-								className={styles.timeInput}
-								label="Approximate start time"
+								className={styles.optionInput}
+								label={timed ? "Start time" : "Approximate start time"}
 								timeFormat={timeFormat}
 								value={approximateStartTime}
 								onChange={setApproximateStartTime}
@@ -212,13 +264,11 @@ export function PollForm({
 
 			<div className={styles.formActions}>
 				<p className={tooMany ? styles.error : styles.summary}>
-				{slots.length === 0
-					? "Pick at least one day."
-					: `${slots.length} ${slots.length === 1 ? "day" : "days"}${
-							tooMany
-								? ` — ${MAX_POLL_SLOTS} is the most a poll can ask about`
-								: ""
-						}`}
+					{slots.length === 0
+						? "Pick at least one day."
+						: `${slots.length} ${slots.length === 1 ? "day" : "days"}${
+								tooMany ? ` — ${MAX_POLL_SLOTS} is the most a poll can ask about` : ""
+							}`}
 				</p>
 				<Button
 					disabled={!ready}
@@ -226,9 +276,11 @@ export function PollForm({
 					onClick={() =>
 						onSubmit({
 							...(approximateStartTime ? { approximateStartTime } : {}),
+							...(description.trim() ? { description: description.trim() } : {}),
 							...(collectIdentity
 								? { email: email.trim().toLowerCase(), name: name.trim() }
 								: {}),
+							durationMinutes,
 							slots,
 							title: title.trim(),
 							// The end of that day where the organizer is, not midnight UTC: a

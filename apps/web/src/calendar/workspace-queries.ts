@@ -5,7 +5,12 @@ import { useMemo } from "react";
 import { useFederatedWorkspace } from "./federated-workspace";
 import { parseDateKey } from "./calendar-math";
 import { viewDefinition, type CalendarViewId } from "./view-registry";
-import { getCalendars, getEvents, getPages, getSettings } from "~/api/resources";
+import {
+  getCalendars,
+  getEvents,
+  getPages,
+  getSettings,
+} from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 
 export function getVisibleMonthRange(date: string) {
@@ -33,10 +38,7 @@ export function expandForView(
   );
 
   return expandsRecurringOnly
-    ? [
-        ...activeEvents.filter((event) => !event.recurrence),
-        ...recurringEvents,
-      ]
+    ? [...activeEvents.filter((event) => !event.recurrence), ...recurringEvents]
     : recurringEvents;
 }
 
@@ -87,9 +89,7 @@ export function useWorkspaceQueries(
       userId,
     }),
     select: (response) => {
-      const activeEvents = response.events.filter(
-        (event) => !event.isCanceled,
-      );
+      const activeEvents = response.events.filter((event) => !event.isCanceled);
 
       return {
         ...response,

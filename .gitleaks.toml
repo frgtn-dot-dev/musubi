@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Gitignored local and generated artifacts"
+paths = [
+  '''(?:^|[/\\])\.env$''',
+  '''(?:^|[/\\])apps[/\\]client[/\\]\.expo[/\\]''',
+  '''(?:^|[/\\])apps[/\\]client[/\\]dist[/\\]''',
+  '''(?:^|[/\\])apps[/\\]client[/\\]google-services\.json$''',
+  '''(?:^|[/\\])apps[/\\]web[/\\]storybook-static[/\\]''',
+  '''(?:^|[/\\])packages[/\\]docs[/\\]dist[/\\]''',
+]

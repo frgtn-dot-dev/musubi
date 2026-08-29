@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseInviteLink } from "@musubi/types";
 
 const HOME = "https://home.example";
-const TOKEN = "0f9c1d2e3a4b5c6d7e8f9a0b1c2d3e4f";
+const TOKEN = "0f9c1d2e3a4b5c6d7e8f9a0b1c2d3e4f"; // gitleaks:allow -- deterministic test token
 
 describe("parseInviteLink", () => {
   it("treats a link from this server as a native join", () => {

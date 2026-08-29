@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   bestSlots,
   parseApproximateStartTime,
+  parsePollDuration,
   parsePollSlot,
   pollCalendarProjection,
   pollProjection,
@@ -17,6 +18,15 @@ assert.deepEqual(parsePollSlot({ date: "2026-08-18" }), {
   start: new Date("2026-08-18T12:00:00.000Z"),
 });
 assert.throws(() => parsePollSlot({ date: "2026-02-31" }));
+assert.equal(parsePollDuration(undefined), 24 * 60);
+assert.equal(parsePollDuration("60"), 60);
+assert.throws(() => parsePollDuration(10));
+assert.throws(() => parsePollDuration(721));
+assert.throws(() => parsePollSlot({ date: "2026-08-18" }, 60));
+assert.deepEqual(parsePollSlot({ start: "2026-08-18T13:00:00.000Z" }, 60), {
+  end: new Date("2026-08-18T14:00:00.000Z"),
+  start: new Date("2026-08-18T13:00:00.000Z"),
+});
 
 const POLL = {
   approximateStartTime: "18:30",
@@ -85,12 +95,21 @@ const SLOTS = [
 
 // A decided slot becomes one inclusive all-day date; its meeting time and old
 // duration never leak into the event.
+assert.deepEqual(pollSlotEventTiming(new Date("2026-08-18T13:00:00.000Z")), {
+  end: new Date("2026-08-18T00:00:00.000Z"),
+  isAllDay: true,
+  start: new Date("2026-08-18T00:00:00.000Z"),
+});
 assert.deepEqual(
-  pollSlotEventTiming(new Date("2026-08-18T13:00:00.000Z")),
+  pollSlotEventTiming(
+    new Date("2026-08-18T13:00:00.000Z"),
+    new Date("2026-08-18T14:00:00.000Z"),
+    60,
+  ),
   {
-    end: new Date("2026-08-18T00:00:00.000Z"),
-    isAllDay: true,
-    start: new Date("2026-08-18T00:00:00.000Z"),
+    end: new Date("2026-08-18T14:00:00.000Z"),
+    isAllDay: false,
+    start: new Date("2026-08-18T13:00:00.000Z"),
   },
 );
 
@@ -113,11 +132,41 @@ assert.deepEqual(
 // participant's own browser and only the answers are ever sent.
 {
   const votes = [
-    { email: "zoe@example.com", name: "Zoe", participantID: "p1", slotID: "slot-tue", value: "yes" },
-    { email: "adam@example.com", name: "Adam", participantID: "p2", slotID: "slot-tue", value: "if-needed" },
-    { email: "guest@example.com", name: "", participantID: "p3", slotID: "slot-tue", value: "no" },
-    { email: "zoe@example.com", name: "Zoe", participantID: "p1", slotID: "slot-wed", value: "yes" },
-    { email: "adam@example.com", name: "Adam", participantID: "p2", slotID: "slot-wed", value: "yes" },
+    {
+      email: "zoe@example.com",
+      name: "Zoe",
+      participantID: "p1",
+      slotID: "slot-tue",
+      value: "yes",
+    },
+    {
+      email: "adam@example.com",
+      name: "Adam",
+      participantID: "p2",
+      slotID: "slot-tue",
+      value: "if-needed",
+    },
+    {
+      email: "guest@example.com",
+      name: "",
+      participantID: "p3",
+      slotID: "slot-tue",
+      value: "no",
+    },
+    {
+      email: "zoe@example.com",
+      name: "Zoe",
+      participantID: "p1",
+      slotID: "slot-wed",
+      value: "yes",
+    },
+    {
+      email: "adam@example.com",
+      name: "Adam",
+      participantID: "p2",
+      slotID: "slot-wed",
+      value: "yes",
+    },
   ];
   const projection = pollProjection(POLL, SLOTS, votes);
 
@@ -211,8 +260,20 @@ assert.deepEqual(
   // Two people with one name stay two rows — a poll of Jans is still a poll of
   // people, and merging them would lose an answer.
   const jans = pollProjection(POLL, SLOTS, [
-    { email: "a@example.com", name: "Jan", participantID: "a", slotID: "slot-tue", value: "yes" },
-    { email: "b@example.com", name: "Jan", participantID: "b", slotID: "slot-tue", value: "no" },
+    {
+      email: "a@example.com",
+      name: "Jan",
+      participantID: "a",
+      slotID: "slot-tue",
+      value: "yes",
+    },
+    {
+      email: "b@example.com",
+      name: "Jan",
+      participantID: "b",
+      slotID: "slot-tue",
+      value: "no",
+    },
   ]);
   assert.equal(jans.people.length, 2);
   assert.deepEqual(
@@ -240,7 +301,12 @@ assert.deepEqual(
     { participantID: "p1", pollID: poll.id, slotID: "slot-tue", value: "yes" },
     { participantID: "p2", pollID: poll.id, slotID: "slot-tue", value: "no" },
     { participantID: "p1", pollID: poll.id, slotID: "slot-wed", value: "yes" },
-    { participantID: "p2", pollID: poll.id, slotID: "slot-wed", value: "if-needed" },
+    {
+      participantID: "p2",
+      pollID: poll.id,
+      slotID: "slot-wed",
+      value: "if-needed",
+    },
   ];
 
   const [projection] = pollCalendarProjection([poll], slots, votes, {
@@ -315,13 +381,13 @@ assert.deepEqual(
     { id: "a", ifNeeded: [], yes: ["x"] },
     { id: "b", ifNeeded: [], yes: ["y"] },
   ]);
-  assert.deepEqual(tied.map((slot) => slot.id), ["a", "b"]);
+  assert.deepEqual(
+    tied.map((slot) => slot.id),
+    ["a", "b"],
+  );
 }
 
 // Nobody has answered yet: no slot leads, and the UI must not crown one.
-assert.deepEqual(
-  bestSlots([{ id: "a", ifNeeded: [], yes: [] }]),
-  [],
-);
+assert.deepEqual(bestSlots([{ id: "a", ifNeeded: [], yes: [] }]), []);
 
 console.log("scheduling poll self-check: OK");

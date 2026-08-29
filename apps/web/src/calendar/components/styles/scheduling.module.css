@@ -4,10 +4,9 @@
 	padding: var(--space-4) var(--layer-inline);
 }
 
-/* The poll being written on one side, the polls already out on the other — and
-   only the list scrolls, so the form never moves under the cursor. Stacked, the
-   list was below the fold of the dialog's own scroller, which is a strange place
-   to keep the thing you came back to check. */
+/* The poll being written on one side, the polls already out on the other. Each
+   pane owns its scroll on desktop so long forms and long lists remain reachable
+   without moving the other side. */
 @media (min-width: 900px) {
 	.content {
 		/* A rail, not a half. The list holds one row per poll, and at 2fr it took
@@ -22,15 +21,13 @@
 
 	.content > * {
 		min-width: 0;
+		min-height: 0;
 		padding: 0 var(--layer-inline) var(--space-4);
 	}
 
 	.content > :last-child {
 		align-content: start;
-		min-height: 0;
 		height: 100%;
-		overflow-y: auto;
-		overscroll-behavior: contain;
 		border-left: 1px solid var(--border-subtle);
 	}
 }
@@ -78,13 +75,6 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2);
-}
-
-.fieldLabel {
-	color: var(--text-muted);
-	font-size: var(--text-11);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 }
 
 .picker {
@@ -188,16 +178,31 @@
 	border-bottom: 0;
 }
 
+@media (min-width: 1200px) {
+	.optionRows {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.optionRows > :first-child {
+		border-right: 1px solid var(--border-subtle);
+	}
+
+	.optionRows > :last-child {
+		grid-column: 1 / -1;
+	}
+}
+
 /* Trailing controls read as one column: the value sits beside its own chevron at
    the row's right edge instead of drifting to the far left of the control. */
-.timeInput {
+.optionInput {
 	width: 9rem;
 }
 
 /* On the input itself: a text input does not inherit `text-align` from its
    wrapper, so setting it a level up did nothing. The padding on the right is the
    chevron's room, so the value lands just left of it. */
-.timeInput input {
+.optionInput input {
 	text-align: right;
 }
 
@@ -255,12 +260,15 @@
    scrolling and each panel owns its own overflow. This view is one panel: without
    this, a poll with a month of days had rows below the fold and no way down. */
 @media (min-width: 900px) {
+	.content > * {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
 	.results {
 		align-content: start;
 		min-height: 0;
 		height: 100%;
-		overflow-y: auto;
-		overscroll-behavior: contain;
 	}
 }
 
@@ -339,13 +347,4 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
-}
-
-.deletePoll {
-	color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
-}
-
-.deletePoll:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-	color: var(--accent-primary);
 }
