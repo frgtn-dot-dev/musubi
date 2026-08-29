@@ -96,6 +96,28 @@ export async function getPushSubscriptionsByUser() {
 }
 
 /**
+ * The subscriptions this server holds for one person.
+ *
+ * For answering "does the server still know about this browser?" — the question
+ * nothing could ask before. The server drops a subscription silently when a
+ * push comes back 410, and the browser keeps its own object either way, so the
+ * two can disagree with nobody the wiser.
+ *
+ * `lastSeenAt` is the other half of the answer: a row that exists but has not
+ * been delivered to in weeks is a different problem from one that is missing.
+ */
+export async function listPushSubscriptions(userID: string) {
+  return db
+    .select({
+      endpoint: pushSubscriptions.endpoint,
+      lastSeenAt: pushSubscriptions.lastSeenAt,
+    })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userID, userID))
+    .orderBy(pushSubscriptions.createdAt);
+}
+
+/**
  * How far the reminder dispatcher has already looked.
  *
  * One cursor for the whole server, not one per user: it answers "which slice of

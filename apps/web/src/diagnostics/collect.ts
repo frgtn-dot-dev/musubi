@@ -7,7 +7,12 @@
 
 import musubiPackage from "../../../../package.json";
 import { authClient } from "~/auth/auth-client";
-import { currentSubscription, pushSupported } from "~/push/subscribe";
+import { getPushSubscriptions } from "~/api/resources";
+import {
+  currentSubscription,
+  fingerprintEndpoint,
+  pushSupported,
+} from "~/push/subscribe";
 import {
   bundleVersionVerdict,
   clockSkewVerdict,
@@ -16,6 +21,7 @@ import {
   pushVerdict,
   reachabilityVerdict,
   reminderRulesVerdict,
+  serverKnowsBrowserVerdict,
   serviceWorkerVerdict,
   summarise,
   type CheckResult,
@@ -49,6 +55,10 @@ export type Snapshot = {
     subscribed: boolean;
     endpointHost: string | null;
     serviceWorkerScope: string | null;
+    /** How many registrations the server holds, or null when it could not say. */
+    serverRegistrations: number | null;
+    /** Whether the server's list contains this browser. Null when unknown. */
+    serverKnowsThisBrowser: boolean | null;
   };
 };
 
@@ -174,6 +184,18 @@ export async function collectSnapshot(input: {
   const served =
     typeof capabilities.version === "string" ? capabilities.version : null;
 
+  // Only worth asking when this browser holds something to match, and only
+  // when signed in — the route needs a session.
+  const serverFingerprints =
+    subscription && session.signedIn
+      ? await getPushSubscriptions()
+          .then((answer) => answer.subscriptions.map((row) => row.fingerprint))
+          .catch(() => null)
+      : null;
+  const fingerprint = subscription
+    ? await fingerprintEndpoint(subscription.endpoint)
+    : null;
+
   const notifications: Snapshot["notifications"] = {
     endpointHost: endpointHost(subscription?.endpoint),
     permission:
@@ -182,6 +204,11 @@ export async function collectSnapshot(input: {
         : Notification.permission,
     pushSupported: supported,
     serverCapable,
+    serverKnowsThisBrowser:
+      serverFingerprints && fingerprint
+        ? serverFingerprints.includes(fingerprint)
+        : null,
+    serverRegistrations: serverFingerprints?.length ?? null,
     serviceWorkerScope: await serviceWorkerScope(),
     subscribed: Boolean(subscription),
   };
@@ -201,6 +228,11 @@ export async function collectSnapshot(input: {
     bundleVersionVerdict(BUILD_VERSION, probe.ok ? served : null),
     permissionVerdict(notifications.permission),
     pushVerdict({ serverCapable, subscribed: Boolean(subscription), supported }),
+    serverKnowsBrowserVerdict({
+      fingerprint,
+      serverFingerprints,
+      subscribed: Boolean(subscription),
+    }),
     serviceWorkerVerdict(notifications.serviceWorkerScope, supported),
     reminderRulesVerdict(input.remindersLoaded),
   ];
@@ -244,6 +276,7 @@ export function buildReport(snapshot: Snapshot) {
     // Host only — the full endpoint is a capability URL and this text gets
     // pasted into issues.
     `  push service: ${notifications.endpointHost ?? "none"}`,
+    `  server registrations: ${notifications.serverRegistrations ?? "unknown"}, this browser among them: ${notifications.serverKnowsThisBrowser ?? "unknown"}`,
     `  service worker: ${notifications.serviceWorkerScope ?? "not registered"}`,
   ].join("\n");
 }

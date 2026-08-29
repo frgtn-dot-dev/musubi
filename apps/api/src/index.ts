@@ -75,7 +75,11 @@ import {
   handlerSendCalendarInvite,
 } from "./handlers/invites";
 import { handlerStream } from "./handlers/stream";
-import { handlerSubscribePush, handlerUnsubscribePush } from "./handlers/push";
+import {
+  handlerListPushSubscriptions,
+  handlerSubscribePush,
+  handlerUnsubscribePush,
+} from "./handlers/push";
 import {
   handlerDeleteEventReminder,
   handlerGetReminders,
@@ -538,6 +542,11 @@ app.delete(
 // Web push. The public VAPID key rides on /api/v1/server with the rest of the
 // capabilities — a client that has to ask a second question to find out whether
 // push exists will ask it on every load.
+app.get(
+  "/api/v1/push/subscriptions",
+  requireAuth,
+  wrap(handlerListPushSubscriptions),
+);
 app.post("/api/v1/push/subscriptions", requireAuth, wrap(handlerSubscribePush));
 app.delete(
   "/api/v1/push/subscriptions",

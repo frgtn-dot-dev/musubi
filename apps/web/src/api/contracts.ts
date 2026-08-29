@@ -246,6 +246,29 @@ export const PollCalendarSchema = PollSummarySchema.extend({
 export type PollCalendar = z.infer<typeof PollCalendarSchema>;
 export type PollCalendarDay = z.infer<typeof PollCalendarDaySchema>;
 
+/**
+ * What the server can push to, for the signed-in reader alone.
+ *
+ * Fingerprints, never endpoints: a push endpoint is a capability URL, and a
+ * browser identifies itself here by hashing the one it already holds.
+ */
+export const PushSubscriptionsSchema = z
+  .object({
+    subscriptions: z
+      .array(
+        z
+          .object({
+            fingerprint: z.string(),
+            // Set on every successful send, and never null: the column is
+            // NOT NULL with a default.
+            lastSeenAt: z.string(),
+          })
+          .strict(),
+      )
+      .default([]),
+  })
+  .strict();
+
 export const ServerCapabilitiesSchema = z
   .object({
     email: z.boolean().default(false),

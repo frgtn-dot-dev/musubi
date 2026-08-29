@@ -1,6 +1,11 @@
-import { deletePushSubscription, savePushSubscription } from "@musubi/db";
+import {
+  deletePushSubscription,
+  listPushSubscriptions,
+  savePushSubscription,
+} from "@musubi/db";
 import { BadRequestError } from "@musubi/types";
 import type { Request, Response } from "express";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 // A subscription is an address the browser vendor's push service handed out,
@@ -27,12 +32,26 @@ const UnsubscribeSchema = z
   .object({ endpoint: z.string().url().max(2048) })
   .strict();
 
+/**
+ * An endpoint reduced to something safe to hand back.
+ *
+ * A push endpoint is a capability URL: anyone holding it can make that device
+ * buzz. Listing them would turn a diagnostics read into a way to harvest them,
+ * so what goes out is a digest. A browser can hash the endpoint it already
+ * holds and find itself in the list; nobody else can work backwards to one.
+ */
+export function fingerprintEndpoint(endpoint: string) {
+  return createHash("sha256").update(endpoint).digest("hex");
+}
+
 export function createPushHandlers(
   dependencies: {
+    list?: typeof listPushSubscriptions;
     remove?: typeof deletePushSubscription;
     save?: typeof savePushSubscription;
   } = {},
 ) {
+  const list = dependencies.list ?? listPushSubscriptions;
   const remove = dependencies.remove ?? deletePushSubscription;
   const save = dependencies.save ?? savePushSubscription;
 
@@ -55,6 +74,23 @@ export function createPushHandlers(
       res.status(204).end();
     },
 
+    /**
+     * What this server thinks it can push to, for the caller alone.
+     *
+     * The check it exists for: a browser holding a subscription the server no
+     * longer has. That happens whenever a send comes back 410 — the row goes,
+     * the browser is never told, and it goes on believing it is covered.
+     */
+    async listSubscriptions(req: Request, res: Response) {
+      const rows = await list(req.user!.id);
+      res.status(200).json({
+        subscriptions: rows.map((row) => ({
+          fingerprint: fingerprintEndpoint(row.endpoint),
+          lastSeenAt: row.lastSeenAt.toISOString(),
+        })),
+      });
+    },
+
     async unsubscribe(req: Request, res: Response) {
       const parsed = UnsubscribeSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -69,5 +105,6 @@ export function createPushHandlers(
 
 const handlers = createPushHandlers();
 
+export const handlerListPushSubscriptions = handlers.listSubscriptions;
 export const handlerSubscribePush = handlers.subscribe;
 export const handlerUnsubscribePush = handlers.unsubscribe;
