@@ -112,6 +112,11 @@ function requestPaths(raw) {
   // Anything before /api/ is an origin; anything from ? or # on is not a path.
   const path = raw.slice(start).split(/[?#]/, 1)[0];
 
+  // A URL has no spaces in it, so a path followed by words is a sentence that
+  // mentions one — a log line, a comment, an error message. Reading those as
+  // requests is how this check reports a route nobody is calling.
+  if (/\s/.test(path)) return [];
+
   let candidates = [[]];
   for (const segment of path.split("/").slice(1)) {
     const enumerated =

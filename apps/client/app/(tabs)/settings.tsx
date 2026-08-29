@@ -10,6 +10,7 @@ import {
   optionsFor,
   ReminderRule,
   SettingsPatch,
+  isSilentRule,
   timedValue,
   withAllDay,
   withTimed,
@@ -17,8 +18,8 @@ import {
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { useEffect, useState } from "react";
-import { View, Text, ScrollView, RefreshControl, StyleSheet, Linking, Platform } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, ScrollView, RefreshControl, Share, StyleSheet, Linking, Platform } from "react-native";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { Btn } from "@/components/ui/Btn";
 import { Tap } from "@/components/ui/Tap";
@@ -32,6 +33,10 @@ import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import Constants from "expo-constants";
 import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
+import { requestEventNotificationPermission } from "@/services/notifications";
+import { buildReport, collectDebugSnapshot } from "@/services/debugReport";
+import { formatChecks, summarise } from "@/lib/healthChecks";
+import { router } from "expo-router";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { OptionPicker, type PickerOption } from "@/components/ui/OptionPicker";
 
@@ -96,24 +101,66 @@ export default function SettingsTab() {
     }
   };
 
-  const openProblemReport = () => {
-    const subject = "Musubi problem report";
-    const intro = "What happened, and what did you expect instead?";
-    const diagnostics = [
-      `Musubi ${appVersion} (${appBuild})`,
-      `${Platform.OS} ${String(Platform.Version)}`,
-      `Server: ${apiUrl ?? "unknown"}`,
+  /**
+   * Hand the whole report to the share sheet.
+   *
+   * It used to be a `mailto:` with the diagnostics in the body, and a body is
+   * part of a URL — clients truncate long ones without saying so, which is the
+   * worst possible failure for a bug report: it arrives, it looks complete, and
+   * the half that named the problem is gone.
+   *
+   * The share sheet has no length limit, shows the person exactly what they are
+   * sending before it leaves the device, and lets them pick where it goes. Mail
+   * is still one of those choices, with our address offered below it.
+   *
+   * The check verdicts lead, because they are the part that says which of the
+   * silent failures this is.
+   */
+  const openProblemReport = async () => {
+    const snapshot = await collectDebugSnapshot({
+      apiUrl,
+      getSession: () => authClient.getSession(),
+    }).catch(() => null);
+
+    const report = [
+      "What happened, and what did you expect instead?",
+      "",
+      "",
+      "---",
+      ...(snapshot
+        ? [
+            `Checks: ${summarise(snapshot.checks)}`,
+            "",
+            formatChecks(snapshot.checks),
+            "",
+            buildReport(snapshot),
+          ]
+        : [
+            // A report that cannot be filed because the checks failed is worse
+            // than one without them.
+            "Checks: could not be run.",
+            `Musubi ${appVersion} (${appBuild})`,
+            `${Platform.OS} ${String(Platform.Version)}`,
+            `Server: ${apiUrl ?? "unknown"}`,
+            "Requests:",
+            getServerDiagnostics(),
+          ]),
+      "",
       `Calendars: ${calendars.length}`,
-      ...calendars.map((calendar) =>
-        `- ${calendar.name}: ${calendar.serverUrl ?? "home"} (${calendar.provider ?? "musubi"})`),
-      "Requests:",
-      getServerDiagnostics(),
+      ...calendars.map(
+        (calendar) =>
+          `- ${calendar.name}: ${calendar.serverUrl ?? "home"} (${calendar.provider ?? "musubi"})`,
+      ),
+      "",
+      `Send to ${SUPPORT_EMAIL}`,
     ].join("\n");
-    const body = `${intro}\n\n\n---\n${diagnostics}`;
-    void openExternal(
-      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-      `Email us at ${SUPPORT_EMAIL}.`,
-    );
+
+    try {
+      await Share.share({ message: report, title: "Musubi problem report" });
+    } catch {
+      warn();
+      showToast({ message: `Could not open sharing. Email us at ${SUPPORT_EMAIL}.` });
+    }
   };
 
   const changeAvatar = async () => {
@@ -221,8 +268,44 @@ export default function SettingsTab() {
     setPicker({ apply, choices, title, value });
   };
 
+  /**
+   * Save the rule, and make sure the OS will actually let it ring.
+   *
+   * Permission used to be asked for in exactly one place — saving an event with
+   * a reminder in the event form. Someone who set their reminders here and
+   * never opened that form was never asked, so every reminder this rule
+   * produced was scheduled, recorded, and then dropped by the OS in silence.
+   *
+   * Setting a rule is the honest moment to ask: it is the user saying they want
+   * to be reminded. A silent rule asks for nothing, because it will never ring.
+   */
   const saveDefaultReminder = (rule: ReminderRule) => {
     save({ defaultReminder: rule });
+    if (isSilentRule(rule)) return;
+    void requestEventNotificationPermission().then((granted) => {
+      if (granted) return;
+      showToast({
+        message:
+          "Reminders are saved, but this device blocks notifications for Musubi. Turn them on in system settings.",
+      });
+    });
+  };
+
+  /**
+   * Ten taps on the version row opens diagnostics.
+   *
+   * Hidden rather than absent: the failures worth diagnosing happen on builds
+   * from the store, where there is no debugger to attach, and a visible
+   * "Debug" row in a calendar app is a row that everybody has to read past.
+   * Nothing is persisted — the gesture is cheap to repeat.
+   */
+  const versionTaps = useRef(0);
+  const openDiagnostics = () => {
+    versionTaps.current += 1;
+    if (versionTaps.current < 10) return;
+    versionTaps.current = 0;
+    success();
+    router.push("/debug");
   };
 
   const save = (patch: SettingsPatch) => {
@@ -413,8 +496,8 @@ export default function SettingsTab() {
         />
         <SettingRowAction
           label="Report a Problem"
-          detail="Includes app, device, and server details"
-          onPress={openProblemReport}
+          detail="Shows you the diagnostics, then you choose where to send them"
+          onPress={() => void openProblemReport()}
         />
         <SettingRowAction
           label="Support Us"
@@ -432,7 +515,11 @@ export default function SettingsTab() {
           external
           onPress={() => void openExternal(TERMS_URL, "Terms are available at musubi.pro/terms.")}
         />
-        <SettingRowAction label="Version" value={`${appVersion} (${appBuild})`} />
+        <SettingRowAction
+          label="Version"
+          value={`${appVersion} (${appBuild})`}
+          onPress={openDiagnostics}
+        />
 
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>

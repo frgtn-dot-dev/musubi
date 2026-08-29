@@ -2,6 +2,7 @@ import { useEventsStore } from "@/store/useEventsStore";
 import { useEffect, useRef } from "react";
 import EventSource from "react-native-sse";
 import * as Network from "expo-network";
+import { recordServerDiagnostic } from "@/lib/serverDiagnostics";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useAttendeesStore } from "@/store/useAttendeesStore";
 import { useServer } from "@/contexts/ServerContext";
@@ -117,8 +118,15 @@ export function useConnectToEventStream() {
       // ponytail: full home snapshot; add link tombstones if this becomes costly.
       let opened = false;
       let disconnected = false;
-      sse.addEventListener("error", () => { disconnected = true; });
+      // Written into the same ring buffer the request log reads. A stream that
+      // opens and never delivers looks exactly like a quiet calendar, and the
+      // diagnostics screen had no way to tell those apart.
+      sse.addEventListener("error", () => {
+        if (!disconnected) recordServerDiagnostic("× SSE /api/stream");
+        disconnected = true;
+      });
       sse.addEventListener("open", () => {
+        recordServerDiagnostic("← SSE /api/stream");
         if (opened || disconnected) silentRefresh(true);
         opened = true;
         disconnected = false;
