@@ -37,6 +37,13 @@ export type DialogProps = {
   open: boolean;
   returnFocus?: HTMLElement | RefObject<HTMLElement | null> | null;
   size?: DialogSize;
+  /**
+   * Hold a working height even when the content is short. For a dialog whose
+   * body is a standing layout — columns, a nav beside a panel — which otherwise
+   * collapses to a letterbox while it loads. A dialog that is genuinely short
+   * should stay short.
+   */
+  tall?: boolean;
   title: ReactNode;
   trigger?: ReactElement;
 };
@@ -63,6 +70,7 @@ export function Dialog({
   open,
   returnFocus,
   size = "default",
+  tall = false,
   title,
   trigger,
 }: DialogProps) {
@@ -73,6 +81,9 @@ export function Dialog({
       ) : null}
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
+          /* Names the backdrop for hit-tests that walk the layer stack, so a
+             calendar gesture can tell it is buried rather than on the grid. */
+          data-dialog-overlay=""
           className={classNames(
             styles.dialogOverlay,
             elevated && styles.dialogOverlay_elevated,
@@ -85,6 +96,7 @@ export function Dialog({
           className={classNames(
             styles.dialog,
             styles[`dialog_${size}`],
+            tall && styles.dialog_tall,
             elevated && styles.dialog_elevated,
             className,
           )}

@@ -45,16 +45,6 @@
 	gap: var(--space-3);
 }
 
-/* Matches the Field label above it — one label voice per form. */
-.iconsLegend {
-	padding: 0;
-	color: var(--text-primary);
-	font-size: var(--text-10);
-	font-weight: 500;
-	letter-spacing: 0.15em;
-	text-transform: uppercase;
-}
-
 /* Six across, so twelve icons stay in two even rows while each choice shares
    the available width instead of bunching up at the start of the field. */
 .iconGrid {

@@ -4,12 +4,11 @@ import type {
   SettingsDocument,
   SettingsPatch,
 } from "@musubi/types";
-import { DEFAULT_NOTIFICATION_EMAILS, DEFAULT_REMINDER_RULE } from "@musubi/types";
 import {
-  ExternalLink,
-  LifeBuoy,
-  UserRound,
-} from "lucide-react";
+  DEFAULT_NOTIFICATION_EMAILS,
+  DEFAULT_REMINDER_RULE,
+} from "@musubi/types";
+import { ExternalLink, LifeBuoy, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import musubiPackage from "../../../../../package.json";
 import { ApiError } from "~/api/http";
@@ -17,12 +16,9 @@ import { applyTheme } from "~/design/theme";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import { InlineError } from "~/ui/InlineError";
-import {
-  RowAction,
-  RowOptions,
-  RowToggle,
-} from "~/ui/Row";
+import { RowAction, RowOptions, RowToggle } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import { AdminSettings } from "./AdminSettings";
 import { DiagnosticsSection } from "./DiagnosticsSection";
 import {
   developerModeEnabled,
@@ -77,6 +73,7 @@ const DATE_FORMAT_OPTIONS = [
 type SettingsDialogProps = {
   /** Only for the push toggle here — a calendar's own rule lives on the calendar. */
   reminders?: ReminderControl;
+  isAdmin?: boolean;
   onAdopt: (document: SettingsDocument) => void;
   onLoad: (signal?: AbortSignal) => Promise<SettingsDocument>;
   onManageAccount: () => void;
@@ -88,6 +85,38 @@ type SettingsDialogProps = {
   }) => Promise<SettingsDocument>;
   open: boolean;
 };
+
+type SettingsPageId =
+  | "appearance"
+  | "reminders"
+  | "notifications"
+  | "about"
+  | "account"
+  | "diagnostics"
+  | "announcements";
+
+type SettingsPage = { id: SettingsPageId; label: string };
+
+const SETTINGS_PAGES: ReadonlyArray<SettingsPage> = [
+  { id: "appearance", label: "Appearance" },
+  { id: "reminders", label: "Reminders" },
+  { id: "notifications", label: "Email notifications" },
+  { id: "about", label: "Help & About" },
+  { id: "account", label: "Account" },
+];
+
+/**
+ * The nav's lower group: what only some people get, below the divider. Two
+ * different keys open it — a server admin sees the first, developer mode the
+ * second — so the group is built from whichever apply.
+ */
+const ADMIN_PAGES: ReadonlyArray<SettingsPage> = [
+  { id: "announcements", label: "Announcements" },
+];
+
+const DEVELOPER_PAGES: ReadonlyArray<SettingsPage> = [
+  { id: "diagnostics", label: "Diagnostics" },
+];
 
 function sameValue(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -123,6 +152,7 @@ function withRequestId(message: string, error: unknown) {
 
 export function SettingsDialog({
   reminders,
+  isAdmin = false,
   onAdopt,
   onLoad,
   onManageAccount,
@@ -132,6 +162,7 @@ export function SettingsDialog({
   open,
 }: SettingsDialogProps) {
   const [settings, setSettings] = useState<SettingsDocument>();
+  const [activePage, setActivePage] = useState<SettingsPageId>("appearance");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -148,6 +179,10 @@ export function SettingsDialog({
    * what would give the gesture away. Its focus ring stays.
    */
   const [developer, setDeveloper] = useState(developerModeEnabled);
+  const lowerPages = [
+    ...(isAdmin ? ADMIN_PAGES : []),
+    ...(developer ? DEVELOPER_PAGES : []),
+  ];
   const clicks = useRef<ClickState>({ count: 0, lastAt: 0 });
 
   const clickVersion = () => {
@@ -186,6 +221,7 @@ export function SettingsDialog({
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
+      setActivePage("appearance");
       setError("");
       setSettings(undefined);
     }
@@ -200,7 +236,8 @@ export function SettingsDialog({
 
   // The bottom of the reminder chain is always a concrete rule, so a settings
   // document that predates the field still gives the control something to show.
-  const defaultReminder = settings?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+  const defaultReminder =
+    settings?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
   const notificationEmails =
     settings?.value.notificationEmails ?? DEFAULT_NOTIFICATION_EMAILS;
 
@@ -252,10 +289,7 @@ export function SettingsDialog({
           const current = await onLoad();
           const sameFieldChanged = Object.keys(patch).some((key) => {
             const field = key as keyof Settings;
-            return !sameValue(
-              base.value[field],
-              current.value[field],
-            );
+            return !sameValue(base.value[field], current.value[field]);
           });
 
           if (!sameFieldChanged) {
@@ -312,203 +346,239 @@ export function SettingsDialog({
       title="Settings"
     >
       {!settings && !error ? (
-        <div
-          aria-live="polite"
-          className={styles.loading}
-          role="status"
-        >
+        <div aria-live="polite" className={styles.loading} role="status">
           <span aria-hidden="true" />
           <p>Loading settings…</p>
         </div>
       ) : settings ? (
-        <div
-          aria-busy={saving || undefined}
-          className={styles.settingsContent}
-        >
-          <span
-            className={styles.visuallyHidden}
-            role="status"
-          >
+        <div aria-busy={saving || undefined} className={styles.settingsContent}>
+          <span className={styles.visuallyHidden} role="status">
             {saving ? "Saving settings…" : ""}
           </span>
 
-          <SettingsSection title="Appearance">
-            <RowOptions
-              disabled={saving}
-              label="Theme"
-              onChange={(theme) => void save({ theme })}
-              options={THEME_OPTIONS}
-              value={settings.value.theme}
-            />
-            <RowToggle
-              checked={settings.value.tabBarLabels ?? true}
-              detail="Show labels in the mobile navigation"
-              disabled={saving}
-              label="Tab labels"
-              onCheckedChange={(tabBarLabels) =>
-                void save({ tabBarLabels })
-              }
-            />
-            <RowOptions
-              disabled={saving}
-              label="Default view"
-              onChange={(defaultCalendarView) =>
-                void save({ defaultCalendarView })
-              }
-              options={VIEW_OPTIONS}
-              value={settings.value.defaultCalendarView}
-            />
-            <RowOptions
-              disabled={saving}
-              label="Week starts on"
-              onChange={(weekStartsOn) =>
-                void save({ weekStartsOn })
-              }
-              options={WEEK_START_OPTIONS}
-              value={settings.value.weekStartsOn}
-            />
-            <RowOptions
-              disabled={saving}
-              label="Time format"
-              onChange={(timeFormat) => void save({ timeFormat })}
-              options={TIME_FORMAT_OPTIONS}
-              value={settings.value.timeFormat}
-            />
-            <RowOptions
-              disabled={saving}
-              label="Date format"
-              onChange={(dateFormat) => void save({ dateFormat })}
-              options={DATE_FORMAT_OPTIONS}
-              value={settings.value.dateFormat}
-            />
-          </SettingsSection>
+          <div className={styles.settingsLayout}>
+            <nav aria-label="Settings sections" className={styles.settingsNav}>
+              <div className={styles.settingsNavPrimary}>
+                {SETTINGS_PAGES.map((page) => (
+                  <Button
+                    aria-current={activePage === page.id ? "page" : undefined}
+                    className={styles.settingsNavButton}
+                    key={page.id}
+                    onClick={() => setActivePage(page.id)}
+                    size="compact"
+                    variant="ghost"
+                  >
+                    {page.label}
+                  </Button>
+                ))}
+              </div>
+              {/* Administration is a category, but the divider and the bottom
+                  of the nav already say so; a 10px uppercase heading over one
+                  button is louder than what it separates. */}
+              {lowerPages.length ? (
+                <div className={styles.settingsNavAdmin}>
+                  {lowerPages.map((page) => (
+                    <Button
+                      aria-current={activePage === page.id ? "page" : undefined}
+                      className={styles.settingsNavButton}
+                      key={page.id}
+                      onClick={() => setActivePage(page.id)}
+                      size="compact"
+                      variant="ghost"
+                    >
+                      {page.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+            </nav>
 
-          <SettingsSection
-            // What every calendar falls back to. A calendar can overrule it and
-            // a single event can overrule that, so this is the answer for
-            // everything nobody has said anything about.
-            description="The reminder an event gets when neither it nor its calendar says otherwise. The phone rings on its own; this browser only while a tab is open."
-            title="Reminders"
-          >
-            <RowOptions
-              detail="Meetings and anything with a time"
-              disabled={saving}
-              label="Timed events"
-              onChange={(value) => void saveDefaultReminder(withTimed(defaultReminder, value))}
-              options={optionsFor(defaultReminder, "timed")}
-              value={timedValue(defaultReminder)}
-            />
-            <RowOptions
-              detail="Birthdays, holidays, anything without a time"
-              disabled={saving}
-              label="All-day events"
-              onChange={(value) => void saveDefaultReminder(withAllDay(defaultReminder, value))}
-              options={optionsFor(defaultReminder, "allDay")}
-              value={allDayValue(defaultReminder)}
-            />
-            {reminders?.push.available ? (
-              <RowToggle
-                checked={reminders.push.enabled}
-                detail={
-                  pushMessage ||
-                  "Without this, reminders only appear while a Musubi tab is open"
-                }
-                disabled={saving || pushBusy}
-                label="Notify me when this browser is closed"
-                onCheckedChange={(wanted) => void togglePush(wanted)}
-              />
-            ) : null}
-          </SettingsSection>
+            <section className={styles.settingsPanel}>
+              {activePage === "appearance" ? (
+                <SettingsSection title="Appearance">
+                  <RowOptions
+                    disabled={saving}
+                    label="Theme"
+                    onChange={(theme) => void save({ theme })}
+                    options={THEME_OPTIONS}
+                    value={settings.value.theme}
+                  />
+                  <RowOptions
+                    disabled={saving}
+                    label="Default view"
+                    onChange={(defaultCalendarView) =>
+                      void save({ defaultCalendarView })
+                    }
+                    options={VIEW_OPTIONS}
+                    value={settings.value.defaultCalendarView}
+                  />
+                  <RowOptions
+                    disabled={saving}
+                    label="Week starts on"
+                    onChange={(weekStartsOn) => void save({ weekStartsOn })}
+                    options={WEEK_START_OPTIONS}
+                    value={settings.value.weekStartsOn}
+                  />
+                  <RowOptions
+                    disabled={saving}
+                    label="Time format"
+                    onChange={(timeFormat) => void save({ timeFormat })}
+                    options={TIME_FORMAT_OPTIONS}
+                    value={settings.value.timeFormat}
+                  />
+                  <RowOptions
+                    disabled={saving}
+                    label="Date format"
+                    onChange={(dateFormat) => void save({ dateFormat })}
+                    options={DATE_FORMAT_OPTIONS}
+                    value={settings.value.dateFormat}
+                  />
+                </SettingsSection>
+              ) : null}
 
-          <SettingsSection
-            // Not reminders: those are a promise you made about your own
-            // calendar. These arrive because somebody else did something.
-            description="Only when a person does something that affects you. Nothing here is a digest or a summary."
-            title="Email me when"
-          >
-            <RowToggle
-              checked={notificationEmails.eventChanged}
-              detail="Only the time changing or the event being called off — not every edit"
-              disabled={saving}
-              label="An event I'm attending moves or is cancelled"
-              onCheckedChange={(eventChanged) =>
-                void save({
-                  notificationEmails: { ...notificationEmails, eventChanged },
-                })
-              }
-            />
-            <RowToggle
-              checked={notificationEmails.pollDecided}
-              detail="The one moment a poll actually has an answer"
-              disabled={saving}
-              label="A poll I answered gets a time"
-              onCheckedChange={(pollDecided) =>
-                void save({
-                  notificationEmails: { ...notificationEmails, pollDecided },
-                })
-              }
-            />
-          </SettingsSection>
+              {activePage === "reminders" ? (
+                <SettingsSection title="Reminders">
+                  <RowOptions
+                    detail="Meetings and anything with a time"
+                    disabled={saving}
+                    label="Timed events"
+                    onChange={(value) =>
+                      void saveDefaultReminder(
+                        withTimed(defaultReminder, value),
+                      )
+                    }
+                    options={optionsFor(defaultReminder, "timed")}
+                    value={timedValue(defaultReminder)}
+                  />
+                  <RowOptions
+                    detail="Birthdays, holidays, anything without a time"
+                    disabled={saving}
+                    label="All-day events"
+                    onChange={(value) =>
+                      void saveDefaultReminder(
+                        withAllDay(defaultReminder, value),
+                      )
+                    }
+                    options={optionsFor(defaultReminder, "allDay")}
+                    value={allDayValue(defaultReminder)}
+                  />
+                  {reminders?.push.available ? (
+                    <RowToggle
+                      checked={reminders.push.enabled}
+                      detail={
+                        pushMessage ||
+                        "Without this, reminders only appear while a Musubi tab is open"
+                      }
+                      disabled={saving || pushBusy}
+                      label="Notify me when this browser is closed"
+                      onCheckedChange={(wanted) => void togglePush(wanted)}
+                    />
+                  ) : null}
+                </SettingsSection>
+              ) : null}
 
-          <SettingsSection title="Help & About">
-            <RowAction
-              detail="Suggest ideas, vote, and see what is planned"
-              label="Feedback & Roadmap"
-              showChevron={false}
-              trailing={<ExternalLink aria-hidden="true" size={15} />}
-              onClick={() => openExternal(FEEDBACK_URL)}
-            />
-            <RowAction
-              detail="Includes browser and server details"
-              label="Report a problem"
-              showChevron={false}
-              trailing={<LifeBuoy aria-hidden="true" size={16} />}
-              onClick={openProblemReport}
-            />
-            <RowAction
-              detail="Buy us a coffee on Ko-fi"
-              label="Support us"
-              showChevron={false}
-              trailing={<ExternalLink aria-hidden="true" size={15} />}
-              onClick={() => openExternal(KOFI_URL)}
-            />
-            <RowAction
-              label="Privacy Policy"
-              showChevron={false}
-              trailing={<ExternalLink aria-hidden="true" size={15} />}
-              onClick={() => openExternal(PRIVACY_URL)}
-            />
-            <RowAction
-              label="Terms of Service"
-              showChevron={false}
-              trailing={<ExternalLink aria-hidden="true" size={15} />}
-              onClick={() => openExternal(TERMS_URL)}
-            />
-            <RowAction
-              className={styles.secretRow}
-              label="Version"
-              onClick={clickVersion}
-              showChevron={false}
-              value={musubiPackage.version}
-            />
-          </SettingsSection>
+              {activePage === "notifications" ? (
+                <SettingsSection title="Email notifications">
+                  <RowToggle
+                    checked={notificationEmails.eventChanged}
+                    detail="Only the time changing or the event being called off — not every edit"
+                    disabled={saving}
+                    label="An event I'm attending moves or is cancelled"
+                    onCheckedChange={(eventChanged) =>
+                      void save({
+                        notificationEmails: {
+                          ...notificationEmails,
+                          eventChanged,
+                        },
+                      })
+                    }
+                  />
+                  <RowToggle
+                    checked={notificationEmails.pollDecided}
+                    detail="The one moment a poll actually has an answer"
+                    disabled={saving}
+                    label="A poll I answered gets a time"
+                    onCheckedChange={(pollDecided) =>
+                      void save({
+                        notificationEmails: {
+                          ...notificationEmails,
+                          pollDecided,
+                        },
+                      })
+                    }
+                  />
+                </SettingsSection>
+              ) : null}
 
-          {developer ? (
-            <DiagnosticsSection remindersLoaded={Boolean(reminders)} />
-          ) : null}
+              {activePage === "about" ? (
+                <SettingsSection title="Help & About">
+                  <RowAction
+                    detail="Suggest ideas, vote, and see what is planned"
+                    label="Feedback & Roadmap"
+                    showChevron={false}
+                    trailing={<ExternalLink aria-hidden="true" size={15} />}
+                    onClick={() => openExternal(FEEDBACK_URL)}
+                  />
+                  <RowAction
+                    detail="Includes browser and server details"
+                    label="Report a problem"
+                    showChevron={false}
+                    trailing={<LifeBuoy aria-hidden="true" size={16} />}
+                    onClick={openProblemReport}
+                  />
+                  <RowAction
+                    detail="Buy us a coffee on Ko-fi"
+                    label="Support us"
+                    showChevron={false}
+                    trailing={<ExternalLink aria-hidden="true" size={15} />}
+                    onClick={() => openExternal(KOFI_URL)}
+                  />
+                  <RowAction
+                    label="Privacy Policy"
+                    showChevron={false}
+                    trailing={<ExternalLink aria-hidden="true" size={15} />}
+                    onClick={() => openExternal(PRIVACY_URL)}
+                  />
+                  <RowAction
+                    label="Terms of Service"
+                    showChevron={false}
+                    trailing={<ExternalLink aria-hidden="true" size={15} />}
+                    onClick={() => openExternal(TERMS_URL)}
+                  />
+                  <RowAction
+                    className={styles.secretRow}
+                    label="Version"
+                    onClick={clickVersion}
+                    showChevron={false}
+                    value={musubiPackage.version}
+                  />
+                </SettingsSection>
+              ) : null}
 
-          <SettingsSection title="Account">
-            <RowAction
-              detail="Profile, avatar, and account deletion"
-              icon={<UserRound size={18} strokeWidth={1.6} />}
-              label="Manage account"
-              onClick={onManageAccount}
-            />
-          </SettingsSection>
+              {activePage === "account" ? (
+                <SettingsSection title="Account">
+                  <RowAction
+                    detail="Profile, avatar, and account deletion"
+                    icon={<UserRound size={18} strokeWidth={1.6} />}
+                    label="Manage account"
+                    onClick={onManageAccount}
+                  />
+                </SettingsSection>
+              ) : null}
 
-          {error ? (
-            <InlineError className={styles.error}>{error}</InlineError>
-          ) : null}
+              {activePage === "diagnostics" && developer ? (
+                <DiagnosticsSection remindersLoaded={Boolean(reminders)} />
+              ) : null}
+
+              {activePage === "announcements" && isAdmin ? (
+                <AdminSettings />
+              ) : null}
+
+              {error ? (
+                <InlineError className={styles.error}>{error}</InlineError>
+              ) : null}
+            </section>
+          </div>
         </div>
       ) : (
         <div className={styles.loadFailure} role="alert">

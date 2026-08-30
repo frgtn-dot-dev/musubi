@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "~/ui/Button";
+import { Disclosure } from "~/ui/Disclosure";
 import { InlineError } from "~/ui/InlineError";
 import { Row } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
@@ -118,80 +119,89 @@ export function DiagnosticsSection({
   const overall = worstStatus(checks);
 
   return (
-    <SettingsSection
-      description="Checks this browser, this server, and how reminders reach you. Nothing here leaves the page until you copy it."
-      title="Diagnostics"
-    >
-      <p className={styles.summary} data-status={running ? undefined : overall}>
-        {running ? (
-          "Checking…"
-        ) : (
-          <>
-            <StatusIcon status={overall} />
-            {summarise(checks)}
-          </>
-        )}
-      </p>
-
-      {checks.map((check) => (
+    <>
+      <SettingsSection title="Diagnostics">
         <Row
-          detail={check.detail}
-          icon={<StatusIcon status={check.status} />}
-          key={check.id}
-          label={check.label}
-        />
-      ))}
-
-      {action.error ? <InlineError>{action.error}</InlineError> : null}
-
-      <div className={styles.actions}>
-        <Button
-          disabled={action.busy}
-          onClick={() =>
-            act("The test notification could not be shown.", showTestNotification)
+          detail={
+            running ? "Checking this browser and server…" : summarise(checks)
           }
-          variant="secondary"
-        >
-          Show a test notification
-        </Button>
-        <Button disabled={running} onClick={rerun} variant="secondary">
-          Run the checks again
-        </Button>
-      </div>
+          icon={running ? undefined : <StatusIcon status={overall} />}
+          label="System status"
+          trailing={
+            <Button
+              disabled={running}
+              onClick={rerun}
+              size="compact"
+              variant="secondary"
+            >
+              Run checks
+            </Button>
+          }
+        />
 
-      {/* Native disclosure: keyboard and screen-reader behaviour for free, and
-          the long evidence stays out of the way until it is wanted. */}
-      <details className={styles.fold}>
-        <summary className={styles.foldSummary}>
-          Full report
-          <span className={styles.foldHint}>
-            {snapshot ? "server, browser, and notification state" : "gathering…"}
-          </span>
-        </summary>
-        <pre className={styles.report}>
-          {snapshot ? buildReport(snapshot) : ""}
-        </pre>
-        <Button
-          disabled={!snapshot}
-          onClick={() => {
-            if (!snapshot) return;
-            void navigator.clipboard
-              .writeText(buildReport(snapshot))
-              .then(() => setCopied(true))
-              // A refused clipboard is not worth an error: the report is on the
-              // page and selectable, which is the way out anyway.
-              .catch(() => setCopied(false));
-          }}
-          variant="secondary"
-        >
-          {copied ? "Copied" : "Copy report"}
-        </Button>
-      </details>
+        {checks.map((check) => (
+          <Row
+            detail={check.detail}
+            icon={<StatusIcon status={check.status} />}
+            key={check.id}
+            label={check.label}
+          />
+        ))}
 
-      <Row
-        detail="Ten more clicks on Version hides this section again."
-        label="Developer mode is on"
-      />
-    </SettingsSection>
+        {action.error ? <InlineError>{action.error}</InlineError> : null}
+
+        <Row
+          detail="Confirm that this browser can show reminder notifications"
+          label="Test notification"
+          trailing={
+            <Button
+              disabled={action.busy}
+              onClick={() =>
+                act(
+                  "The test notification could not be shown.",
+                  showTestNotification,
+                )
+              }
+              size="compact"
+              variant="secondary"
+            >
+              Show
+            </Button>
+          }
+        />
+      </SettingsSection>
+
+      {/* Its own group: the evidence is a different kind of thing from the
+          verdicts above it, and the checks read as one list only while nothing
+          else shares their card. */}
+      <SettingsSection title="Full report">
+        <Disclosure
+          detail="Nothing here leaves the page until you copy it"
+          label={
+            snapshot ? "Server, browser, and notification state" : "Gathering…"
+          }
+        >
+          <pre className={styles.report}>
+            {snapshot ? buildReport(snapshot) : ""}
+          </pre>
+          <Button
+            disabled={!snapshot}
+            onClick={() => {
+              if (!snapshot) return;
+              void navigator.clipboard
+                .writeText(buildReport(snapshot))
+                .then(() => setCopied(true))
+                // A refused clipboard is not worth an error: the report is on
+                // the page and selectable, which is the way out anyway.
+                .catch(() => setCopied(false));
+            }}
+            size="compact"
+            variant="secondary"
+          >
+            {copied ? "Copied" : "Copy report"}
+          </Button>
+        </Disclosure>
+      </SettingsSection>
+    </>
   );
 }

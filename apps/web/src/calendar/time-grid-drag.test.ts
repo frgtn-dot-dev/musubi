@@ -7,6 +7,7 @@ import {
   movePreviewRange,
   nextDragTimes,
 } from "./time-grid-drag";
+import { coveredByLayer } from "./use-time-grid-drag";
 
 const geometry = createTimeGeometry("comfortable"); // 64px/h, snap 15
 
@@ -163,5 +164,55 @@ describe("movePreviewRange", () => {
       originTo: "2026-07-22",
       to: "2026-07-22",
     });
+  });
+});
+
+describe("coveredByLayer", () => {
+  function stack(...elements: Element[]) {
+    const original = document.elementsFromPoint;
+    document.elementsFromPoint = () => elements as never;
+    return () => {
+      document.elementsFromPoint = original;
+    };
+  }
+
+  function element(attribute?: string) {
+    const node = document.createElement("div");
+    if (attribute) node.setAttribute(attribute, "");
+    return node;
+  }
+
+  it("reports the grid when nothing is over it", () => {
+    const restore = stack(element("data-day-key"));
+    expect(coveredByLayer(10, 10)).toBe(false);
+    restore();
+  });
+
+  /**
+   * The bug this exists for: `elementsFromPoint` walks the whole stack, so a
+   * day cell stays "under the pointer" through an open dialog. A drag inside
+   * that dialog was reaching the month grid and shoving events aside.
+   */
+  it("reports a cover when a dialog is painted over the grid", () => {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    const restore = stack(dialog, element("data-day-key"));
+    expect(coveredByLayer(10, 10)).toBe(true);
+    restore();
+  });
+
+  it("reports a cover for the dialog backdrop above a cell", () => {
+    const restore = stack(element("data-dialog-overlay"), element("data-day-key"));
+    expect(coveredByLayer(10, 10)).toBe(true);
+    restore();
+  });
+
+  it("reports a cover for a popover or menu above a cell", () => {
+    const restore = stack(
+      element("data-radix-popper-content-wrapper"),
+      element("data-day-key"),
+    );
+    expect(coveredByLayer(10, 10)).toBe(true);
+    restore();
   });
 });

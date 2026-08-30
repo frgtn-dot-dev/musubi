@@ -1,7 +1,7 @@
 import { CalendarClock, Check, Clock3, UsersRound } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { BrandMark } from "~/components/BrandMark";
-import { ThemeToggle } from "~/calendar/components/ThemeToggle";
+import { PageThemeToggle } from "~/calendar/components/ThemeToggle";
 import { Avatar } from "~/ui/Avatar";
 import { AvatarStack, type AvatarStackPerson } from "~/ui/AvatarStack";
 import { Button, buttonClassName } from "~/ui/Button";
@@ -87,7 +87,7 @@ export function PublicPollPage({
           <BrandMark className={styles.brandMark} />
           <span>Musubi</span>
         </a>
-        <ThemeToggle />
+        <PageThemeToggle />
       </header>
 
       <main className={styles.main} id="main-content" tabIndex={-1}>

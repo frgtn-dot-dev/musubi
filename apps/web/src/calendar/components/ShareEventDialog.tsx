@@ -192,6 +192,7 @@ export function ShareEventDialog({
         open
         returnFocus={returnFocus}
         size="workspace"
+        tall
         title="Share event"
         onOpenChange={onOpenChange}
       >
@@ -235,6 +236,7 @@ export function ShareEventDialog({
         open
         returnFocus={returnFocus}
         size="workspace"
+        tall
         title="Share event"
         onOpenChange={onOpenChange}
       >
@@ -431,7 +433,7 @@ export function ShareEventDialog({
             </Field>
           </section>
 
-          <section className={styles.column} aria-label="Event page settings">
+          <section className={styles.column} aria-labelledby="page-design-title">
             <EventPageSettings
               busy={busy}
               content={draft.content}

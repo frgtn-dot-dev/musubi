@@ -13,7 +13,7 @@
   background-image: repeating-linear-gradient(
     135deg,
     transparent 0 5px,
-    color-mix(in srgb, var(--poll-foreground) 16%, transparent) 5px 8px
+    color-mix(in srgb, var(--poll-foreground) 9%, transparent) 5px 8px
   );
   color: var(--poll-foreground);
   font-family: inherit;

@@ -956,6 +956,9 @@
 	text-align: left;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	/* The same lift the chips and timeline blocks carry: a poll bar sits in this
+     row beside them and has to read as the same kind of object. */
+	box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
 }
 
 .timeGridAllDayEvent:hover,
@@ -1241,7 +1244,7 @@
 	text-align: left;
 	/* A soft drop, so two blocks of the same colour touching still read as two
      cards rather than one taller one. */
-	box-shadow: 0 1px 4px rgb(0 0 0 / 26%);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
 	transition:
 		filter var(--motion-fast) ease,
 		transform var(--motion-fast) ease;
@@ -1253,7 +1256,7 @@
 .timelineEvent[data-overlapping] {
 	box-shadow:
 		0 0 0 2px var(--surface-canvas),
-		0 2px 8px rgb(0 0 0 / 28%);
+		0 1px 3px rgb(0 0 0 / 18%);
 }
 
 .timelineEvent:hover,
@@ -1525,7 +1528,7 @@
 	background: var(--event-color);
 	color: var(--event-foreground);
 	text-align: left;
-	box-shadow: 0 1px 4px rgb(0 0 0 / 26%);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
 	transition:
 		filter var(--motion-fast) ease,
 		transform var(--motion-fast) ease;

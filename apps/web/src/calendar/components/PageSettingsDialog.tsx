@@ -574,7 +574,10 @@ function IconField({
 }) {
   return (
     <fieldset className={styles.icons} disabled={disabled}>
-      <legend className={styles.iconsLegend}>Icon</legend>
+      {/* The twelve glyphs say what this is; a 10px uppercase label over
+          them is a word the eye has to step past every time. The group keeps
+          its name for anyone who cannot see the glyphs. */}
+      <legend className={styles.visuallyHidden}>Icon</legend>
       <div className={styles.iconGrid}>
         {pageIconChoices.map((choice) => {
           const Icon = pageIconComponent(choice.icon);

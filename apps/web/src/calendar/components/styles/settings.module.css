@@ -1,30 +1,5 @@
 .settingsContent {
   position: relative;
-  display: grid;
-  padding-bottom: var(--space-4);
-}
-
-/* Two columns once there is room for them. Settings is a list of unrelated
-   switches, not a sequence — reading it top to bottom buys nothing, and as one
-   column half of it was below the fold of its own scroller. */
-@media (min-width: 900px) {
-  .settingsContent {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
-
-  /* Appearance is most of this dialog, so it takes a column of its own and the
-     three short sections stack beside it. Balanced that way the whole of settings
-     fits a laptop window, which is the point: there is no order to read these in,
-     so scrolling past half of them buys nothing. */
-  .settingsContent > section:first-of-type {
-    grid-area: 1 / 1 / span 3 / auto;
-  }
-
-  .settingsContent > section:not(:first-of-type) {
-    grid-column: 2;
-    border-left: 1px solid var(--border-subtle);
-  }
 }
 
 .loading {
@@ -108,9 +83,96 @@
    click handler, which no keyboard reaches — so it keeps its focus ring and
    loses only the pointer affordance that would give the gesture away. */
 .secretRow:hover:not(:disabled) {
-	background: transparent;
+  background: transparent;
 }
 
 .secretRow {
-	cursor: default;
+  cursor: default;
+}
+
+.settingsLayout {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  /* The row has to be bounded, the way the narrow layout below already bounds
+     its second one. Left implicit it is `auto`, which grows to the tallest
+     child: the panel then gets the height of its own content, its `overflow-y`
+     never engages, and a long page pushes past the dialog instead of scrolling
+     inside it. */
+  grid-template-rows: minmax(0, 1fr);
+  height: 34rem;
+  max-height: calc(100dvh - 10rem);
+  overflow: hidden;
+}
+
+.settingsNav {
+  overflow-y: auto;
+  background: var(--layer-body-block);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+}
+
+.settingsNavPrimary,
+.settingsNavAdmin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settingsNavAdmin {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: auto;
+  padding-top: var(--space-3);
+}
+
+.settingsNavButton {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.settingsNavButton[aria-current="page"] {
+  background: var(--layer-inline);
+  color: var(--text-primary);
+}
+
+.settingsPanel {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+@media (max-width: 599px) {
+  .settingsLayout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settingsNav {
+    border-bottom: 1px solid var(--border-subtle);
+    border-right: 0;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: var(--space-3);
+  }
+
+  .settingsNavPrimary,
+  .settingsNavAdmin {
+    flex-direction: row;
+    flex-shrink: 0;
+  }
+
+  .settingsNavAdmin {
+    border-left: 1px solid var(--border-subtle);
+    border-top: 0;
+    margin: 0;
+    padding-left: var(--space-3);
+    padding-top: 0;
+  }
+
+  .settingsNavButton {
+    width: auto;
+  }
 }
