@@ -56,10 +56,18 @@ export function createGetAnnouncementsHandler(
     // novinkami za celou historii produktu, ke kterým se nemá jak vztáhnout.
     if (!seen) {
       const [newest] = await listNewest();
+      // An empty table (deploy day, before the admin has written anything)
+      // still needs a truthy `markTo`: omitting it here would leave every
+      // user's mark at `""`, still first-sight, so the FIRST announcement
+      // ever published would also hit this branch and get silently marked
+      // seen instead of shown. "0000-00-00" sorts below every real
+      // `YYYY-MM-DD[-N]` id, so it satisfies `gt(id, afterId)` in
+      // listAnnouncementsAfter (any real id compares greater) and fits
+      // `z.string().max(64)` in SettingsSchema/SettingsPatchSchema.
       res.status(200).json({
         announcements: [],
         isAdmin,
-        ...(newest ? { markTo: newest.id } : {}),
+        markTo: newest?.id ?? "0000-00-00",
       });
       return;
     }

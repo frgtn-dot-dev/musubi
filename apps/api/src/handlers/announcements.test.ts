@@ -103,7 +103,9 @@ async function run() {
     assert.equal(payload.markTo, "2026-08-20");
   }
 
-  // --- Prázdný server: první pohled bez jediné zprávy neposílá značku ---
+  // --- Prázdný server: první pohled bez jediné zprávy pošle sentinel značku ---
+  // Bez ní by první publikovaná zpráva potkala účet pořád na první pohled a
+  // byla by tiše přeskočena — nikdo by ji nikdy neviděl.
   {
     const recorder = responseRecorder();
     await createGetAnnouncementsHandler({
@@ -115,7 +117,7 @@ async function run() {
       { user: { id: "user-4", email: "new@example.com" } } as Request,
       recorder.response,
     );
-    assert.equal(recorder.result().payload.markTo, undefined);
+    assert.equal(recorder.result().payload.markTo, "0000-00-00");
   }
 
   // --- Vytvoření: id se razí z dnešního data ---
