@@ -22,6 +22,7 @@ import {
 import type { Request, Response } from "express";
 import { config } from "@musubi/config";
 import { assertCanEditEvent } from "../permissions";
+import { requireVerifiedEmail } from "../verified_email";
 import { notifyAttendanceChanged } from "./events";
 
 // `link` — anyone holding the URL. `public` — the same, and the page may say a
@@ -253,9 +254,7 @@ const RSVP_STATUSES = new Set(["declined", "going", "maybe"]);
 export function requireVerifiedRsvpUser(
   user: { emailVerified?: boolean } | undefined,
 ) {
-  if (!user?.emailVerified) {
-    throw new ForbiddenError("Verify your email before answering this event.");
-  }
+  requireVerifiedEmail(user, "Verify your email before answering this event.");
 }
 
 /**
