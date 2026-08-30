@@ -9,7 +9,7 @@ import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useNewerServer } from "~/api/use-newer-server";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import { getAnnouncements, getPollCalendar } from "~/api/resources";
+import { getPollCalendar } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
 import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
@@ -21,6 +21,7 @@ import {
   Workspace,
   type PageWorkingDraft,
 } from "~/calendar/components/Workspace";
+import { useAnnouncementsQuery } from "~/calendar/components/AnnouncementDialog";
 import { useEventMutations } from "~/calendar/event-mutations";
 import { usePageMutations } from "~/calendar/page-editor";
 import { useCalendarTransfers } from "~/calendar/calendar-transfers";
@@ -99,13 +100,10 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     queryKey: queryKeys.pollCalendar(getServerOrigin(), userId),
     refetchInterval: 30_000,
   });
-  // Same query the announcement modal makes, so this costs no extra request —
-  // just reads whether the shared cache says this account is a server admin.
-  const announcements = useQuery({
-    enabled: Boolean(user?.id),
-    queryFn: ({ signal }) => getAnnouncements(signal),
-    queryKey: queryKeys.announcements(getServerOrigin(), user?.id ?? ""),
-  });
+  // Same query (and same staleTime/refetchOnWindowFocus) the announcement
+  // modal makes, so this costs no extra request and cannot revive the modal
+  // on a focus refetch — see useAnnouncementsQuery's comment.
+  const announcements = useAnnouncementsQuery();
   const isAdmin = announcements.data?.isAdmin === true;
   const eventMutations = useEventMutations(userId);
   const calendarTransfers = useCalendarTransfers(userId);

@@ -1,17 +1,17 @@
 import type { Announcement } from "@musubi/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import {
   createAnnouncement,
-  getAnnouncements,
   listAdminAnnouncements,
   removeAnnouncement,
   updateAnnouncement,
 } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { useSessionUser } from "~/auth/use-session-user";
+import { useAnnouncementsQuery } from "~/calendar/components/AnnouncementDialog";
 import { Button } from "~/ui/Button";
 import {
   ConfirmationDialog,
@@ -29,19 +29,20 @@ export const Route = createFileRoute("/app/admin")({
 });
 
 const EMPTY = { body: "", minVersion: "", title: "" };
+// Same acknowledgement window Workspace uses for its own Toast — the parent
+// owns timing (Toast.tsx's contract), so a failed publish/edit/delete does
+// not sit on screen forever.
+const TOAST_ACKNOWLEDGEMENT_MS = 3_500;
 
 function AdminRoute() {
   const { user } = useSessionUser();
   const origin = getServerOrigin();
   const queryClient = useQueryClient();
 
-  // Tentýž dotaz, jaký si stáhne modal — sdílená cache, takže odpověď navíc
-  // tahle stránka nestojí.
-  const { data: mine } = useQuery({
-    enabled: Boolean(user?.id),
-    queryFn: ({ signal }) => getAnnouncements(signal),
-    queryKey: queryKeys.announcements(origin, user?.id ?? ""),
-  });
+  // Tentýž dotaz (a tytéž staleTime/refetchOnWindowFocus), jaký si stáhne
+  // modal — sdílená cache, takže odpověď navíc tahle stránka nestojí, a
+  // refokusování stránky nemůže modal probudit uprostřed rozepsaného textu.
+  const { data: mine, isPending: minePending } = useAnnouncementsQuery();
 
   const { data, isPending } = useQuery({
     enabled: mine?.isAdmin === true,
@@ -105,6 +106,25 @@ function AdminRoute() {
       await refresh();
     },
   });
+
+  // Toast's contract: the parent owns timing. Without this an error from a
+  // failed save/delete would sit on screen forever, waiting for the next
+  // success to clear it.
+  useEffect(() => {
+    if (!error) return;
+    const timeout = window.setTimeout(
+      () => setError(null),
+      TOAST_ACKNOWLEDGEMENT_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [error]);
+
+  // Dotaz na isAdmin ještě neodpověděl — bez téhle větve by formulář na
+  // okamžik probliknul, než přijde odpověď. Kosmetické: ochranu dělá server,
+  // ne tahle podmínka.
+  if (minePending) {
+    return <RouteState busy eyebrow="Server admin" title="Loading…" />;
+  }
 
   // Slušnost UI, ne ochrana. Ta je na serveru: každá admin cesta běží za
   // `requireAdmin` a odmítne i toho, kdo si sem zadá URL ručně.

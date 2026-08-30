@@ -19,6 +19,31 @@ import styles from "./AnnouncementDialog.module.css";
 const BUILD_VERSION = musubiPackage.version;
 
 /**
+ * Ten samý dotaz pro každého, kdo se ptá "co je nového" — stejný klíč, stejné
+ * `staleTime`/`refetchOnWindowFocus`. Cache je sdílená, ale `staleTime` je
+ * per-observer: kdyby některé volání použilo defaulty routeru
+ * (`staleTime: 30_000`, refetch při focusu), refokusování by přineslo čerstvá
+ * data a modal by se probudil uprostřed práce — přesně to, co komentář v
+ * `AnnouncementGate` popisuje jako nežádoucí. Proto jeden hook pro všechny tři
+ * volající místa (`AnnouncementGate`, sidebar v `p.$pageId.$view.tsx`, admin
+ * route), místo opakování téhle dvojice voleb na třech místech.
+ */
+export function useAnnouncementsQuery() {
+  const { user } = useSessionUser();
+  const userId = user?.id;
+
+  return useQuery({
+    enabled: Boolean(userId),
+    queryFn: ({ signal }) => getAnnouncements(signal),
+    queryKey: queryKeys.announcements(getServerOrigin(), userId ?? ""),
+    // Jednou za načtení aplikace. Novinka, která dorazí uprostřed práce, počká
+    // na příští spuštění — vyskočit lidem pod rukama je horší než počkat.
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
+}
+
+/**
  * Text zprávy: odstavce, a odkazy jako odkazy.
  *
  * Exportované zvlášť, protože to je jediná část s pravidly, která stojí za test
@@ -111,15 +136,7 @@ export function AnnouncementGate() {
   const userId = user?.id;
   const [dismissed, setDismissed] = useState(false);
 
-  const { data } = useQuery({
-    enabled: Boolean(userId),
-    queryFn: ({ signal }) => getAnnouncements(signal),
-    queryKey: queryKeys.announcements(getServerOrigin(), userId ?? ""),
-    // Jednou za načtení aplikace. Novinka, která dorazí uprostřed práce, počká
-    // na příští spuštění — vyskočit lidem pod rukama je horší než počkat.
-    refetchOnWindowFocus: false,
-    staleTime: Infinity,
-  });
+  const { data } = useAnnouncementsQuery();
 
   const { getSettingsDocument, patchSettings } = useSettingsMutations(
     userId ?? "",
