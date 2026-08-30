@@ -1114,7 +1114,11 @@
 }
 
 .rowAction[data-tone="destructive"]:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
+	background: color-mix(
+		in srgb,
+		var(--accent-primary) 7%,
+		var(--surface-panel)
+	);
 }
 
 .rowAction[data-tone="destructive"] .rowLabel,
@@ -1244,6 +1248,14 @@
 	backdrop-filter: none;
 }
 
+/* …and hand over in one frame. The rule above drops the older backdrop the
+   instant the newer one mounts, so fading the newer one in over 220ms leaves a
+   fifth of a second where neither dims and the page behind flashes back. The
+   two backdrops are identical, so there is nothing to animate between them. */
+.dialogOverlay[data-state="open"] ~ .dialogOverlay {
+	animation: none;
+}
+
 .dialog {
 	position: fixed;
 	z-index: 121;
@@ -1320,6 +1332,33 @@
 	);
 }
 
+/* A floor, for the dialogs whose content is a standing layout — columns, a nav
+   beside a panel — rather than one block as long as it happens to be. Those
+   shrink to a letterbox while their content loads, and back again when a tab
+   holds one short group. A dialog that is simply short does not want this: an
+   empty half under a two-line poll is the same complaint the other way up.
+   Clamped by the same viewport expression as each cap, so the two never cross. */
+.dialog_tall.dialog_wide {
+	min-height: min(
+		380px,
+		calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+}
+
+.dialog_tall.dialog_spacious {
+	min-height: min(
+		560px,
+		calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+}
+
+.dialog_tall.dialog_workspace {
+	min-height: min(
+		620px,
+		calc(100dvh - var(--layer-viewport-gutter) - var(--layer-viewport-gutter))
+	);
+}
+
 .dialog_fullscreen {
 	width: calc(
 		100vw -
@@ -1384,6 +1423,12 @@
 }
 
 .dialogBody {
+	/* Takes the shell's spare height rather than leaving it under the content:
+     the size floors above give a wide dialog a shape before it has anything in
+     it, and dead space below the body would only move the squash down a level.
+     `auto` basis, not 0 — a dialog with no floor is still sized by what it
+     holds. */
+	flex: 1 1 auto;
 	min-height: 0;
 	overflow-x: hidden;
 	overflow-y: auto;
@@ -1569,10 +1614,7 @@
 .toastRegion {
 	position: fixed;
 	z-index: 160;
-	bottom: var(
-		--toast-bottom,
-		calc(var(--space-5) + var(--layer-safe-bottom))
-	);
+	bottom: var(--toast-bottom, calc(var(--space-5) + var(--layer-safe-bottom)));
 	left: var(--toast-left, 50%);
 	display: flex;
 	width: min(390px, calc(100vw - var(--space-6)));
@@ -2336,4 +2378,43 @@
 .staleBannerAction:focus-visible {
 	outline: var(--focus-ring);
 	outline-offset: 1px;
+}
+
+/* A settings row that unfolds. The summary is a Row, so it needs nothing here
+   beyond what `<details>` itself gets wrong: the marker, the pointer, and a
+   focus ring that survives the group's clipping. */
+.disclosureSummary {
+	cursor: pointer;
+	list-style: none;
+}
+
+.disclosureSummary::-webkit-details-marker {
+	display: none;
+}
+
+.disclosureSummary:hover {
+	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+}
+
+.disclosureSummary:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: -3px;
+}
+
+/* The group's own border ends the card; a row line here would double it. */
+.disclosureRow {
+	border-bottom: 0;
+}
+
+.disclosure[open] .disclosureChevron {
+	transform: rotate(90deg);
+}
+
+/* Aligned to the row's inline padding, so the folded content sits under the
+   label rather than against the card's edge. */
+.disclosureBody {
+	display: grid;
+	justify-items: start;
+	gap: var(--space-3);
+	padding: 0 var(--space-4) var(--space-4);
 }

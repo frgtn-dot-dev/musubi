@@ -238,16 +238,16 @@ export function EventPageSettings({
   }
 
   return (
-    <section className={styles.pageEditor} aria-labelledby="page-design-title">
-      <div className={styles.editorHeading}>
-        <div>
-          <h3 id="page-design-title">Event page</h3>
-          <p>Choose the public page’s cover, tags, and schedule.</p>
-        </div>
+    <>
+      <div className={styles.columnHeading}>
+        <h3 id="page-design-title">Event page</h3>
+        <p>Choose the public page’s cover, tags, and schedule.</p>
       </div>
 
       <div className={styles.editorSection}>
-        <strong>Cover</strong>
+        <div className={styles.sectionHeading}>
+          <h4>Cover</h4>
+        </div>
         <div className={styles.coverChoices}>
           {eventPageCovers.map((cover) => (
             <button
@@ -343,9 +343,9 @@ export function EventPageSettings({
       </Field>
 
       <div className={styles.editorSection}>
-        <div className={styles.editorHeading}>
+        <div className={styles.sectionHeading} data-with-action>
           <div>
-            <strong>Program</strong>
+            <h4>Program</h4>
             <p>Simple timeline shown below the event description.</p>
           </div>
           <Button
@@ -527,6 +527,6 @@ export function EventPageSettings({
           </div>
         </Dialog>
       ) : null}
-    </section>
+    </>
   );
 }

@@ -364,6 +364,14 @@ export function PollLegend({
 }) {
   const [scrollable, setScrollable] = useState(false);
 
+  // No dependency array on purpose. The scroller is a sibling that can arrive
+  // after this row: on a cold open the answers are still loading, the grid is
+  // not rendered yet, and the ref is empty. Keyed on the ref object — which
+  // never changes — the effect gave up once and never learned the table had
+  // appeared, so the arrows only showed the second time the poll was opened.
+  // Re-binding each render also re-reaches the table after the loading
+  // placeholder it replaced. `measure` sets the same boolean it already holds
+  // in the settled case, and React drops that update, so this does not spin.
   useEffect(() => {
     const scroller = scrollerRef?.current;
     if (!scroller) return;
@@ -376,7 +384,7 @@ export function PollLegend({
     observer.observe(scroller);
     if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
     return () => observer.disconnect();
-  }, [scrollerRef]);
+  });
 
   function page(direction: -1 | 1) {
     const scroller = scrollerRef?.current;

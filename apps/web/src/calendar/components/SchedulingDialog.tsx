@@ -25,7 +25,6 @@ import {
 } from "~/components/PollGrid";
 import { PollForm } from "./PollForm";
 import { RowAction } from "~/ui/Row";
-import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/scheduling.module.css";
 
 /**
@@ -70,6 +69,7 @@ export function SchedulingDialog({
       open
       returnFocus={returnFocus}
       size="workspace"
+      tall
       title={openPoll ? openPoll.title : "Find a time"}
     >
       {openPoll ? (
@@ -114,8 +114,10 @@ export function SchedulingDialog({
             weekStartsOn={weekStartsOn}
           />
 
-          <section className={styles.section}>
-            <SectionLabel level={3}>Your polls</SectionLabel>
+          {/* The rail is the only list in here and the rows say what they are;
+              a 10px uppercase heading over them is a word to step past. The
+              name stays for anyone who cannot see the layout. */}
+          <section aria-label="Your polls" className={styles.section}>
             {polls.data?.length ? (
               <div className={styles.list}>
                 {polls.data.map((poll) => (

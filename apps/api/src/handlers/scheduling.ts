@@ -28,6 +28,7 @@ import {
 	NotFoundError,
 } from "@musubi/types";
 import { config, logger } from "@musubi/config";
+import { requireVerifiedEmail } from "../verified_email";
 import { canSendEmail, getPollDecidedHtml, sendEmail } from "@musubi/emails";
 import type { Request, Response } from "express";
 import { assertCan } from "../permissions";
@@ -195,10 +196,10 @@ export function parsePollSlot(
 }
 
 export async function handlerCreatePoll(req: Request, res: Response) {
-	const user = req.user;
-	if (!user?.emailVerified) {
-		throw new ForbiddenError("Confirm your email before creating a poll...");
-	}
+	const user = requireVerifiedEmail(
+		req.user,
+		"Confirm your email before creating a poll...",
+	);
 	const title = String(req.body?.title ?? "")
 		.trim()
 		.slice(0, MAX_TITLE);
@@ -515,10 +516,10 @@ export function bestSlots<T extends { ifNeeded: unknown[]; yes: unknown[] }>(
 }
 
 export async function handlerVotePoll(req: Request, res: Response) {
-	const user = req.user;
-	if (!user?.emailVerified) {
-		throw new ForbiddenError("Confirm your email before answering a poll...");
-	}
+	const user = requireVerifiedEmail(
+		req.user,
+		"Confirm your email before answering a poll...",
+	);
 	const poll = await getPollByToken(String(req.params.token));
 	if (!poll) throw new NotFoundError("This poll is not available...");
 	if (poll.closedAt) {

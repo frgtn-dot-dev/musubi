@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { config } from "@musubi/config";
 import {
   publicEventProjection,
   requireVerifiedRsvpUser,
@@ -6,11 +7,26 @@ import {
   type SharedEventRow,
 } from "./event_shares";
 
+// A server that can send confirmations holds people to them.
+config.security.requireEmailVerification = true;
 assert.throws(
   () => requireVerifiedRsvpUser({ emailVerified: false }),
   (error: any) => error?.kind === "Forbidden",
 );
 assert.doesNotThrow(() => requireVerifiedRsvpUser({ emailVerified: true }));
+
+// A server that cannot does not: REQUIRE_EMAIL_VERIFICATION refuses to turn on
+// without SMTP, so every account on a mail-less install is unverified and
+// gating on the column alone would lock all of them out for good.
+config.security.requireEmailVerification = false;
+assert.doesNotThrow(() => requireVerifiedRsvpUser({ emailVerified: false }));
+assert.doesNotThrow(() => requireVerifiedRsvpUser({ emailVerified: true }));
+
+// A missing session stays refused either way — that is not an address question.
+assert.throws(
+  () => requireVerifiedRsvpUser(undefined),
+  (error: any) => error?.kind === "Forbidden",
+);
 
 const BASE: SharedEventRow = {
   creatorID: "organizer-1",

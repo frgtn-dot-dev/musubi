@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   Settings,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import type {
@@ -43,8 +42,6 @@ type SidebarProps = {
   activePageId: string;
   /** The date the main view is on, so the mini calendar can mark it. */
   anchor: Date;
-  /** Whether this signed-in account may write announcements on this server. */
-  isAdmin: boolean;
   isOpen: boolean;
   onClose: () => void;
   onCreatePage: () => void;
@@ -53,7 +50,6 @@ type SidebarProps = {
   onManageAccount: () => void;
   onManageCalendars: () => void;
   onManageConnections: () => void;
-  onOpenAdmin: () => void;
   onOpenScheduling: () => void;
   onModalStateChange?: (modal: boolean) => void;
   onOpenSettings: () => void;
@@ -73,7 +69,6 @@ type SidebarProps = {
 export function Sidebar({
   activePageId,
   anchor,
-  isAdmin,
   isOpen,
   onClose,
   onCreatePage,
@@ -81,7 +76,6 @@ export function Sidebar({
   onManageAccount,
   onManageCalendars,
   onManageConnections,
-  onOpenAdmin,
   onOpenScheduling,
   onModalStateChange,
   onOpenSettings,
@@ -270,7 +264,10 @@ export function Sidebar({
             weekStartsOn={weekStartsOn}
           />
           <nav className={styles.sidebarSection} aria-labelledby="pages-label">
-            <SectionLabel className={styles.sidebarSectionLabel} id="pages-label">
+            <SectionLabel
+              className={styles.sidebarSectionLabel}
+              id="pages-label"
+            >
               Pages
             </SectionLabel>
             <div
@@ -360,16 +357,6 @@ export function Sidebar({
               size="compact"
               onClick={onOpenScheduling}
             />
-            {isAdmin ? (
-              <RowAction
-                className={styles.sidebarRow}
-                icon={<ShieldCheck size={18} strokeWidth={1.6} />}
-                label="Server admin"
-                showChevron={false}
-                size="compact"
-                onClick={onOpenAdmin}
-              />
-            ) : null}
             <RowAction
               className={styles.sidebarRow}
               icon={<Settings size={18} strokeWidth={1.6} />}
@@ -414,7 +401,9 @@ export function Sidebar({
               className={styles.profileMain}
               aria-label="Manage account"
               detail={<span className={styles.profileEmail}>{user.email}</span>}
-              icon={<Avatar image={user.image} name={user.name} size="default" />}
+              icon={
+                <Avatar image={user.image} name={user.name} size="default" />
+              }
               label={user.name}
               showChevron={false}
               onClick={onManageAccount}

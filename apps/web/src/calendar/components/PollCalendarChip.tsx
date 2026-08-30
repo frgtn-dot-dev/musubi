@@ -76,6 +76,12 @@ export function PollCalendarChip({
           ...style,
           "--poll-color": availability.color,
           "--poll-foreground": getReadableEventTextColor(availability.color),
+          // The chip borrows an event chip's geometry classes, and those rules
+          // reassert `--event-foreground` on hover and for the focus ring. Left
+          // to inherit, a poll whose own text is white flipped to the ambient
+          // black under the pointer. One colour, both vocabularies.
+          "--event-color": availability.color,
+          "--event-foreground": getReadableEventTextColor(availability.color),
         } as CSSProperties
       }
       title={availability.label}

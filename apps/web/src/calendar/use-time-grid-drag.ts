@@ -83,12 +83,36 @@ const AUTO_SCROLL_MS = 16;
  * the cursor would read as "no target at all". The whole stack is searched
  * instead, and the first cell in it wins.
  */
+/* Anything portalled over the calendar. A dialog's own content, a popover or a
+   menu, and the backdrop that dims the grid behind them. */
+const LAYER_ABOVE_GRID =
+  "[role='dialog'], [data-dialog-overlay], [data-radix-popper-content-wrapper]";
+
+/**
+ * The day under the pointer, or nothing when a layer is covering the grid.
+ *
+ * `elementsFromPoint` walks the whole stack rather than stopping at the top, so
+ * a cell stays "under the pointer" through an open dialog. The walk is wanted —
+ * the draft block sits over the cells and would otherwise be the only answer —
+ * but it has to stop at the first surface that belongs to a layer above the
+ * calendar, or a gesture keeps tracking a grid the person can no longer see.
+ */
 function dayKeyAtPoint(x: number, y: number): string | undefined {
   for (const element of document.elementsFromPoint(x, y)) {
     const cell = element.closest<HTMLElement>("[data-day-key]");
     if (cell) return cell.dataset.dayKey;
+    if (element.closest(LAYER_ABOVE_GRID)) return undefined;
   }
   return undefined;
+}
+
+/** Whether a point is buried under a dialog, popover or menu. */
+export function coveredByLayer(x: number, y: number) {
+  for (const element of document.elementsFromPoint(x, y)) {
+    if (element.closest("[data-day-key]")) return false;
+    if (element.closest(LAYER_ABOVE_GRID)) return true;
+  }
+  return false;
 }
 
 /**
@@ -330,6 +354,10 @@ export function useTimeGridDrag<T = Event>({
         finish();
       }
 
+      // Retire any set still attached: a press that never saw its release
+      // would otherwise leave a handler on the window for the rest of the
+      // session, driven by the next gesture's pointer.
+      detachRef.current?.();
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleUp);
       window.addEventListener("pointercancel", finish);
@@ -491,6 +519,10 @@ export function useMonthDrag<T = Event>({
         finish();
       }
 
+      // Retire any set still attached: a press that never saw its release
+      // would otherwise leave a handler on the window for the rest of the
+      // session, driven by the next gesture's pointer.
+      detachRef.current?.();
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleUp);
       window.addEventListener("pointercancel", finish);
@@ -595,9 +627,19 @@ export function useDayRangeCreate({
           return;
         }
 
+        // A layer opened over the grid ends the gesture rather than freezing it
+        // at the anchor: the range would keep re-rendering the month under a
+        // surface the person is actually working in, shoving events aside on
+        // every move.
+        if (coveredByLayer(nativeEvent.clientX, nativeEvent.clientY)) {
+          finish();
+          return;
+        }
+
         nativeEvent.preventDefault();
         const hovered = dayKeyAtPoint(nativeEvent.clientX, nativeEvent.clientY);
         const toKey = hovered ?? rangeRef.current?.toKey ?? press.fromKey;
+        if (rangeRef.current?.toKey === toKey) return;
         const next = { fromKey: press.fromKey, toKey };
         rangeRef.current = next;
         setRange(next);
@@ -624,6 +666,10 @@ export function useDayRangeCreate({
         finish();
       }
 
+      // Retire any set still attached: a press that never saw its release
+      // would otherwise leave a handler on the window for the rest of the
+      // session, driven by the next gesture's pointer.
+      detachRef.current?.();
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleUp);
       window.addEventListener("pointercancel", finish);
@@ -769,6 +815,10 @@ export function useDragToCreate({
         finish();
       }
 
+      // Retire any set still attached: a press that never saw its release
+      // would otherwise leave a handler on the window for the rest of the
+      // session, driven by the next gesture's pointer.
+      detachRef.current?.();
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleUp);
       window.addEventListener("pointercancel", finish);

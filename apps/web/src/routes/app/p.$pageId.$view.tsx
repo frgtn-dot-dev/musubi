@@ -29,10 +29,7 @@ import { useSettingsMutations } from "~/calendar/settings-mutations";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
 import { Onboarding } from "~/onboarding/Onboarding";
-import {
-  isCalendarView,
-  type CalendarViewId,
-} from "~/calendar/view-registry";
+import { isCalendarView, type CalendarViewId } from "~/calendar/view-registry";
 
 const searchSchema = z.object({
   date: z
@@ -84,8 +81,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const reminders = useReminders(userId);
   // Above Workspace: provider return state must survive canonical Page redirects.
   const providerLink = useProviderLinkReturn(userId);
-  const activeView: CalendarViewId =
-    isCalendarView(view) ? view : "month";
+  const activeView: CalendarViewId = isCalendarView(view) ? view : "month";
   const workspace = useWorkspaceQueries(date, userId, activeView);
   const pages = workspace.pages.data;
   const activePage = pages?.find((page) => page.id === pageId);
@@ -289,7 +285,6 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           search: { date: nextDate },
         })
       }
-      onOpenAdmin={() => void navigate({ to: "/app/admin" })}
       onPageChange={(nextPageId, nextView) =>
         void navigate({
           params: { pageId: nextPageId, view: nextView },
@@ -304,9 +299,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           attendees: values.hasAttendees || undefined,
           calendarId: values.calendarId,
           calendarIds:
-            values.calendarIds.length > 1
-              ? values.calendarIds
-              : undefined,
+            values.calendarIds.length > 1 ? values.calendarIds : undefined,
           date: values.date,
           description: values.description || undefined,
           endDate: values.endDate || undefined,

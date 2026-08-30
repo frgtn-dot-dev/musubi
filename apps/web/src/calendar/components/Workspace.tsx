@@ -35,10 +35,7 @@ import {
   multiWeekDays,
   viewDefinition,
 } from "../view-registry";
-import {
-  getEventRangeLabel,
-  parseDateKey,
-} from "../calendar-math";
+import { getEventRangeLabel, parseDateKey } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import type { EventFormValues } from "../event-form";
 import { getEditableCalendars } from "../event-permissions";
@@ -64,10 +61,7 @@ import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { SchedulingDialog } from "./SchedulingDialog";
 import { PollCalendarDialog } from "./PollCalendarDialog";
-import {
-  pollCalendarItems,
-  type PollCalendarItem,
-} from "./PollCalendarChip";
+import { pollCalendarItems, type PollCalendarItem } from "./PollCalendarChip";
 import { MonthCalendar } from "./MonthCalendar";
 import { MultiWeekCalendar } from "./MultiWeekCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
@@ -166,8 +160,6 @@ type WorkspaceProps = {
    * which is what router-less embeddings use.
    */
   onOpenFullEditor?: (values: EventFormValues, event?: Event) => void;
-  /** Navigate to the admin panel. Absent when no route can host it (tests/stories). */
-  onOpenAdmin?: () => void;
   onSignOut: () => void;
   /** State of a provider link that finished while the browser was away. */
   providerLink?: {
@@ -253,7 +245,6 @@ const unavailablePageDefault = async (): Promise<void> => {
 };
 
 const ignoreSettings = () => undefined;
-const ignoreAdmin = () => undefined;
 
 export function Workspace({
   activeView,
@@ -290,7 +281,6 @@ export function Workspace({
   onPageDraftsChange,
   onRemoveEvent,
   onOpenFullEditor,
-  onOpenAdmin = ignoreAdmin,
   onSetAttendance = unavailableAttendance,
   reminders,
   onSignOut,
@@ -521,7 +511,7 @@ export function Workspace({
   const visibleCalendarIds = useMemo(
     () => calendarIdsForVisibility(workingConfig.calendarVisibility, calendars),
     [calendars, workingConfig.calendarVisibility],
-    );
+  );
 
   // Density lives in the Page config, so "this page shows time grids compactly"
   // is saved with the page rather than being a device preference.
@@ -892,7 +882,6 @@ export function Workspace({
         activePageId={pageId}
         anchor={anchor}
         pages={pages}
-        isAdmin={isAdmin}
         isOpen={sidebarOpen}
         onClose={closeSidebar}
         onCreatePage={() => setNewPageOpen(true)}
@@ -911,10 +900,6 @@ export function Workspace({
         onManageConnections={() => {
           setSidebarOpen(false);
           setConnectionsOpen(true);
-        }}
-        onOpenAdmin={() => {
-          setSidebarOpen(false);
-          onOpenAdmin();
         }}
         onOpenScheduling={() => {
           setSidebarOpen(false);
@@ -960,7 +945,13 @@ export function Workspace({
                 ? "Refreshing…"
                 : "Connected to server"
         }
-        syncTone={offline ? "offline" : stale || isRefreshing ? "refreshing" : "connected"}
+        syncTone={
+          offline
+            ? "offline"
+            : stale || isRefreshing
+              ? "refreshing"
+              : "connected"
+        }
         user={user}
         weekStartsOn={settings.weekStartsOn}
       />
@@ -973,7 +964,8 @@ export function Workspace({
       >
         {pollsError ? (
           <div className={styles.pollLayerError} role="status">
-            Scheduling polls could not be loaded. Calendar events are still shown.
+            Scheduling polls could not be loaded. Calendar events are still
+            shown.
           </div>
         ) : null}
         {/* Offline is the one state worth a bar, and only where the sidebar is a
@@ -1056,9 +1048,7 @@ export function Workspace({
           data-calendar-area=""
           // Flick sideways to move a period, like the native client's pager.
           // Agenda is one continuous list, so it has no period to page.
-          onPointerDown={
-            view.swipeable ? swipePeriod.onPointerDown : undefined
-          }
+          onPointerDown={view.swipeable ? swipePeriod.onPointerDown : undefined}
         >
           {activeView === "agenda" ? (
             <AgendaView
@@ -1239,10 +1229,7 @@ export function Workspace({
           setQuery={setSearchQuery}
         />
 
-        <ShortcutsDialog
-          onOpenChange={setShortcutsOpen}
-          open={shortcutsOpen}
-        />
+        <ShortcutsDialog onOpenChange={setShortcutsOpen} open={shortcutsOpen} />
 
         {scopeRequest ? (
           <RecurrenceScopeDialog
@@ -1438,6 +1425,7 @@ export function Workspace({
         />
       ) : null}
       <SettingsDialog
+        isAdmin={isAdmin}
         reminders={reminders}
         onAdopt={onAdoptSettings}
         onLoad={onGetSettingsDocument}
