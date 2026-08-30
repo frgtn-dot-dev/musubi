@@ -372,6 +372,13 @@
       "when": 1788016562570,
       "tag": "0052_chubby_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1788104144061,
+      "tag": "0053_release_0_1_7_announcement",
+      "breakpoints": true
     }
   ]
 }
