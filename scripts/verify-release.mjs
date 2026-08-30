@@ -18,11 +18,15 @@ const rootPackage = readJson("package.json");
 const expectedVersion = process.argv[2];
 
 if (!/^\d+\.\d+\.\d+$/.test(rootPackage.version ?? "")) {
-  fail(`root package.json version must be X.Y.Z, received ${rootPackage.version ?? "nothing"}`);
+  fail(
+    `root package.json version must be X.Y.Z, received ${rootPackage.version ?? "nothing"}`,
+  );
 }
 
 if (expectedVersion && expectedVersion !== rootPackage.version) {
-  fail(`requested ${expectedVersion}, but package.json declares ${rootPackage.version}`);
+  fail(
+    `requested ${expectedVersion}, but package.json declares ${rootPackage.version}`,
+  );
 }
 
 if (!/^pnpm@\d+\.\d+\.\d+$/.test(rootPackage.packageManager ?? "")) {
@@ -42,10 +46,14 @@ for (const workspaceRoot of ["apps", "packages"]) {
       fail(`${relativePath} must be private`);
     }
     if ("version" in manifest) {
-      fail(`${relativePath} must inherit the product version instead of declaring its own`);
+      fail(
+        `${relativePath} must inherit the product version instead of declaring its own`,
+      );
     }
     if ("packageManager" in manifest) {
-      fail(`${relativePath} must inherit packageManager from the repository root`);
+      fail(
+        `${relativePath} must inherit packageManager from the repository root`,
+      );
     }
   }
 }
@@ -64,16 +72,24 @@ for (const relativePath of distributionFiles) {
   }
 }
 
-const appConfig = readFileSync(new URL("apps/client/app.config.ts", root), "utf8");
+const appConfig = readFileSync(
+  new URL("apps/client/app.config.ts", root),
+  "utf8",
+);
 if (!/version:\s*rootPackage\.version/.test(appConfig)) {
-  fail("apps/client/app.config.ts must read the product version from the root manifest");
+  fail(
+    "apps/client/app.config.ts must read the product version from the root manifest",
+  );
 }
 
 // The API ships as a `pnpm deploy` closure with no repository root above it, so
 // it cannot import this manifest the way the client config does — it mirrors
 // the string instead, and this is what keeps the mirror honest. Without it the
 // server spent two releases telling every client it was 0.1.3.
-const wire = readFileSync(new URL("packages/types/src/version.ts", root), "utf8");
+const wire = readFileSync(
+  new URL("packages/types/src/version.ts", root),
+  "utf8",
+);
 const declared = (name) => wire.match(new RegExp(`${name} = "([^"]+)"`))?.[1];
 const productVersion = declared("PRODUCT_VERSION");
 const minClientVersion = declared("MIN_CLIENT_VERSION");
@@ -95,7 +111,9 @@ const ahead = (left, right) => {
 };
 
 if (!minClientVersion || !/^\d+\.\d+\.\d+$/.test(minClientVersion)) {
-  fail("packages/types/src/version.ts must declare MIN_CLIENT_VERSION as X.Y.Z");
+  fail(
+    "packages/types/src/version.ts must declare MIN_CLIENT_VERSION as X.Y.Z",
+  );
 } else if (ahead(minClientVersion, rootPackage.version)) {
   fail(
     `MIN_CLIENT_VERSION ${minClientVersion} is ahead of the product ` +
@@ -114,7 +132,10 @@ if (ahead(contract.version, rootPackage.version)) {
   );
 }
 
-const workspaceConfig = readFileSync(new URL("pnpm-workspace.yaml", root), "utf8");
+const workspaceConfig = readFileSync(
+  new URL("pnpm-workspace.yaml", root),
+  "utf8",
+);
 if (!/^autoInstallPeers:\s+false\s*$/m.test(workspaceConfig)) {
   fail("pnpm-workspace.yaml must keep autoInstallPeers disabled");
 }
@@ -127,7 +148,9 @@ for (const relativePath of [
   const source = readFileSync(new URL(relativePath, root), "utf8");
   const runtimeStage = source.slice(Math.max(0, source.lastIndexOf("\nFROM ")));
   if (/pnpm@\d/.test(source)) {
-    fail(`${relativePath} must inherit pnpm from the root manifest through Corepack`);
+    fail(
+      `${relativePath} must inherit pnpm from the root manifest through Corepack`,
+    );
   }
   if (!source.includes("--frozen-lockfile")) {
     fail(`${relativePath} must install with --frozen-lockfile`);

@@ -36,13 +36,13 @@ export const MIN_PEER_VERSION = "0.1.6";
  * rather than as newer than everything.
  */
 export function compareVersions(left: string, right: string): number {
-  const rank = (version: string) =>
-    version.split(".").map((part) => Number(part) || 0);
-  const a = rank(left);
-  const b = rank(right);
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (a[index] ?? 0) - (b[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return 0;
+ const rank = (version: string) =>
+  version.split(".").map((part) => Number(part) || 0);
+ const a = rank(left);
+ const b = rank(right);
+ for (let index = 0; index < 3; index += 1) {
+  const difference = (a[index] ?? 0) - (b[index] ?? 0);
+  if (difference !== 0) return difference;
+ }
+ return 0;
 }

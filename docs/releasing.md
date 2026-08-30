@@ -204,4 +204,3 @@ column. `0049_drop_show_kanji` did exactly that and got away with it only
 because nothing anywhere read the column — it is the exception, not the model.
 
 ## Things still worth doing
-
