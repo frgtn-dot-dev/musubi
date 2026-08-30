@@ -1,7 +1,7 @@
 import { config } from "@musubi/config";
 import { getOAuthAccountIDs } from "@musubi/db";
-import { Event, nearestMicrosoftCalendarColor } from "@musubi/types";
-import {
+import { type Event, nearestMicrosoftCalendarColor } from "@musubi/types";
+import type {
   CalendarAdapter,
   ExternalCalendarInfo,
   FetchChangesResult,
@@ -246,6 +246,29 @@ export async function fetchMicrosoftChanges(
   };
 }
 
+type GraphCalendar = {
+  id: string;
+  name: string;
+  hexColor?: string | null;
+  canEdit?: boolean;
+};
+
+export function microsoftEventPath(externalCalendarId: string, externalEventId: string) {
+  return `/me/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`;
+}
+
+export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
+  return {
+    externalId: c.id,
+    name: c.name,
+    // Graph must explicitly grant writes. Missing permission data is not a safe
+    // reason to expose actions that can only fail later.
+    readOnly: c.canEdit !== true,
+    // hexColor is "" when the calendar uses the "auto" preset
+    color: c.hexColor || "#0078D4",
+  };
+}
+
 export const microsoftAdapter: CalendarAdapter = {
   provider: "microsoft",
 
@@ -270,20 +293,12 @@ export const microsoftAdapter: CalendarAdapter = {
   async listCalendars(userID: string, accountId: string): Promise<ExternalCalendarInfo[]> {
     const accessToken = await getAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
-    let url: string | null = `${GRAPH}/me/calendars?$top=${PAGE_SIZE}`;
+    let url: string | null = `${GRAPH}/me/calendars?$select=id,name,hexColor,canEdit&$top=${PAGE_SIZE}`;
     while (url) {
       const res = await graphGet(accessToken, url);
       if (!res.ok) throw await graphError(res);
       const data = await res.json();
-      for (const c of data.value ?? []) {
-        calendars.push({
-          externalId: c.id,
-          name: c.name,
-          // hexColor is "" when the calendar uses the "auto" preset
-          color: c.hexColor || "#0078D4",
-          readOnly: c.canEdit === false,
-        });
-      }
+      for (const c of data.value ?? []) calendars.push(toExternalCalendar(c));
       url = data["@odata.nextLink"] ?? null;
     }
     return calendars;
@@ -312,7 +327,7 @@ export const microsoftAdapter: CalendarAdapter = {
   async pushUpdate(userID, accountId, externalCalendarId, externalEventId, event: Event) {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
-      `${GRAPH}/me/events/${encodeURIComponent(externalEventId)}`,
+      `${GRAPH}${microsoftEventPath(externalCalendarId, externalEventId)}`,
       {
         method: "PATCH",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -325,7 +340,7 @@ export const microsoftAdapter: CalendarAdapter = {
   async pushDelete(userID, accountId, externalCalendarId, externalEventId) {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
-      `${GRAPH}/me/events/${encodeURIComponent(externalEventId)}`,
+      `${GRAPH}${microsoftEventPath(externalCalendarId, externalEventId)}`,
       { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
     );
     // 404/410 = already gone = success (idempotent)
