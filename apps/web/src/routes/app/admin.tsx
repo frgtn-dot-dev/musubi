@@ -21,6 +21,7 @@ import { Field } from "~/ui/Field";
 import { RouteState } from "~/ui/RouteState";
 import { Row } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import { Toast } from "~/ui/Toast";
 import styles from "./admin.module.css";
 
 export const Route = createFileRoute("/app/admin")({
@@ -51,14 +52,23 @@ function AdminRoute() {
   const [draft, setDraft] = useState(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Announcement | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // Which Delete button asked, so a cancelled confirmation returns focus there
   // — same convention as CalendarTransferDialog's per-row delete/edit/disconnect.
   const deleteReturnFocusRef = useRef<HTMLButtonElement>(null);
 
-  const refresh = () =>
-    queryClient.invalidateQueries({
+  const refresh = () => {
+    // The admin listing, and the per-user cache `AnnouncementGate` (and this
+    // page's own `isAdmin` check, and the sidebar's) read with `staleTime:
+    // Infinity` — without this half, a publish/edit/delete stays invisible
+    // everywhere else in this tab until a full reload.
+    void queryClient.invalidateQueries({
       queryKey: queryKeys.adminAnnouncements(origin),
     });
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.announcements(origin, user?.id ?? ""),
+    });
+  };
 
   const save = useMutation({
     mutationFn: () => {
@@ -71,7 +81,15 @@ function AdminRoute() {
         ? updateAnnouncement(editing, input)
         : createAnnouncement(input);
     },
+    onError: () => {
+      setError(
+        editing
+          ? "Could not save your changes. Try again."
+          : "Could not publish this announcement. Try again.",
+      );
+    },
     onSuccess: async () => {
+      setError(null);
       setDraft(EMPTY);
       setEditing(null);
       await refresh();
@@ -80,7 +98,9 @@ function AdminRoute() {
 
   const remove = useMutation({
     mutationFn: (id: string) => removeAnnouncement(id),
+    onError: () => setError("Could not delete this announcement. Try again."),
     onSuccess: async () => {
+      setError(null);
       setConfirming(null);
       await refresh();
     },
@@ -99,7 +119,7 @@ function AdminRoute() {
   }
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} id="main-content" tabIndex={-1}>
       <SettingsSection
         description="Everyone signed in to this server sees these once."
         title={editing ? "Edit announcement" : "New announcement"}
@@ -186,6 +206,7 @@ function AdminRoute() {
               trailing={
                 <div className={styles.actions}>
                   <Button
+                    aria-label={`Edit ${announcement.title}`}
                     onClick={() => {
                       setEditing(announcement.id);
                       setDraft({
@@ -200,6 +221,7 @@ function AdminRoute() {
                     Edit
                   </Button>
                   <Button
+                    aria-label={`Delete ${announcement.title}`}
                     onClick={(event) => {
                       deleteReturnFocusRef.current = event.currentTarget;
                       setConfirming(announcement);
@@ -238,6 +260,8 @@ function AdminRoute() {
           </ConfirmationNotice>
         </ConfirmationDialog>
       ) : null}
+
+      {error ? <Toast message={error} tone="error" /> : null}
     </main>
   );
 }
