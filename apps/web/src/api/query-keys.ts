@@ -17,6 +17,12 @@ export const queryKeys = {
   settings: (serverOrigin: string, userId: string) =>
     ["settings", serverOrigin, userId] as const,
 
+  announcements: (serverOrigin: string, userId: string) =>
+    ["announcements", serverOrigin, userId] as const,
+
+  adminAnnouncements: (serverOrigin: string) =>
+    ["admin-announcements", serverOrigin] as const,
+
   calendars: (serverOrigin: string, userId: string) =>
     ["calendars", serverOrigin, userId] as const,
 

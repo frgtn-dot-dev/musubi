@@ -1,5 +1,63 @@
 {
   "documents": {
+    "AnnouncementsResponse": {
+      "direction": "read",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "announcements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}(-\\d+)?$"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "body": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "minVersion": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 32
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "body"
+              ]
+            }
+          },
+          "isAdmin": {
+            "type": "boolean"
+          },
+          "markTo": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "announcements",
+          "isAdmin"
+        ]
+      }
+    },
     "Calendar": {
       "direction": "read",
       "schema": {
@@ -812,6 +870,10 @@
                 ],
                 "additionalProperties": false
               },
+              "lastSeenAnnouncement": {
+                "type": "string",
+                "maxLength": 64
+              },
               "notificationEmails": {
                 "type": "object",
                 "properties": {
@@ -1247,6 +1309,10 @@
               "pollDecided"
             ],
             "additionalProperties": false
+          },
+          "lastSeenAnnouncement": {
+            "type": "string",
+            "maxLength": 64
           }
         },
         "required": [
@@ -1400,6 +1466,10 @@
                   "pollDecided"
                 ],
                 "additionalProperties": false
+              },
+              "lastSeenAnnouncement": {
+                "type": "string",
+                "maxLength": 64
               }
             },
             "required": [
@@ -1455,5 +1525,5 @@
       }
     }
   },
-  "version": "0.1.5"
+  "version": "0.1.6"
 }

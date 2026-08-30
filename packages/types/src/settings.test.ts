@@ -45,4 +45,25 @@ import { SettingsPatchSchema } from "./settings";
   assert.equal(SettingsPatchSchema.safeParse({ timezone: "Mars/Olympus" }).success, false);
 }
 
+{
+  // Značka poslední viděné zprávy. Volitelná ze stejného důvodu jako `onboarded`:
+  // starší klient, který uloží celý dokument, ji nesmí shodit zpátky.
+  assert.equal(
+    SettingsPatchSchema.parse({ lastSeenAnnouncement: "2026-08-29" })
+      .lastSeenAnnouncement,
+    "2026-08-29",
+  );
+
+  // Patch jen s touto značkou je platný patch (není prázdný).
+  assert.doesNotThrow(() =>
+    SettingsPatchSchema.parse({ lastSeenAnnouncement: "2026-08-29-2" }),
+  );
+
+  // Nový uživatel: prázdný řetězec je platná hodnota "nikdy nic neviděl".
+  assert.equal(
+    SettingsPatchSchema.parse({ lastSeenAnnouncement: "" }).lastSeenAnnouncement,
+    "",
+  );
+}
+
 console.log("settings.test.ts ok");

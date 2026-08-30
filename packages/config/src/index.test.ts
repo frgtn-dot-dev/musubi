@@ -6,6 +6,7 @@ process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
   const {
+    parseAdminEmails,
     parseEnvironment,
     parseMediaConfig,
     parseStaticMapUrlTemplate,
@@ -69,6 +70,21 @@ async function main() {
     () => parseStaticMapUrlTemplate("javascript:{location}"),
     /HTTP\(S\)/,
   );
+
+  // Admin serveru je seznam e-mailů v env. Normalizuje se, protože e-mail
+  // z Google sign-inu dorazí v jiném psaní než ho admin napsal do .env.
+  assert.deepEqual(parseAdminEmails("a@example.com,b@example.com"), [
+    "a@example.com",
+    "b@example.com",
+  ]);
+  assert.deepEqual(parseAdminEmails(" A@Example.COM , b@example.com "), [
+    "a@example.com",
+    "b@example.com",
+  ]);
+  // Nenastavené nebo prázdné = tenhle server nemá admina.
+  assert.deepEqual(parseAdminEmails(undefined), []);
+  assert.deepEqual(parseAdminEmails(""), []);
+  assert.deepEqual(parseAdminEmails(",  ,"), []);
 
   console.log("config security self-check: OK");
 }

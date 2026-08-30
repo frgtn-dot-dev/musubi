@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx src/event_page.test.ts && tsx src/reminder_options.test.ts && tsx src/settings.test.ts && tsx src/wire.test.ts"
+    "test": "tsx src/announcement.test.ts && tsx src/event_page.test.ts && tsx src/reminder_options.test.ts && tsx src/settings.test.ts && tsx src/wire.test.ts"
   },
   "keywords": [],
   "author": "frgtn.dev",

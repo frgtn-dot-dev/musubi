@@ -21,6 +21,7 @@ import {
   Workspace,
   type PageWorkingDraft,
 } from "~/calendar/components/Workspace";
+import { useAnnouncementsQuery } from "~/calendar/components/AnnouncementDialog";
 import { useEventMutations } from "~/calendar/event-mutations";
 import { usePageMutations } from "~/calendar/page-editor";
 import { useCalendarTransfers } from "~/calendar/calendar-transfers";
@@ -99,6 +100,11 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     queryKey: queryKeys.pollCalendar(getServerOrigin(), userId),
     refetchInterval: 30_000,
   });
+  // Same query (and same staleTime/refetchOnWindowFocus) the announcement
+  // modal makes, so this costs no extra request and cannot revive the modal
+  // on a focus refetch — see useAnnouncementsQuery's comment.
+  const announcements = useAnnouncementsQuery();
+  const isAdmin = announcements.data?.isAdmin === true;
   const eventMutations = useEventMutations(userId);
   const calendarTransfers = useCalendarTransfers(userId);
   const settingsMutations = useSettingsMutations(userId);
@@ -242,6 +248,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       pollsError={pollEnabled && Boolean(pollCalendar.error)}
       date={date}
       events={workspace.mergedEvents?.events ?? []}
+      isAdmin={isAdmin}
       isRefreshing={
         queries.some((query) => query.isFetching) ||
         (pollEnabled && pollCalendar.isFetching)
@@ -282,6 +289,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           search: { date: nextDate },
         })
       }
+      onOpenAdmin={() => void navigate({ to: "/app/admin" })}
       onPageChange={(nextPageId, nextView) =>
         void navigate({
           params: { pageId: nextPageId, view: nextView },

@@ -198,6 +198,10 @@ export const userSettings = pgTable("user_settings", {
     .$type<NotificationEmails>()
     .notNull()
     .default(DEFAULT_NOTIFICATION_EMAILS),
+  // Nejnovější zpráva o novinkách, kterou uživatel viděl. NOT NULL s prázdným
+  // výchozím řetězcem, ne nullable: "" a NULL by znamenaly totéž, a jedna
+  // podoba prázdna se zpracovává líp než dvě.
+  lastSeenAnnouncement: text("last_seen_announcement").notNull().default(""),
 });
 
 export type NewSettings = typeof userSettings.$inferInsert;
@@ -880,3 +884,26 @@ export const pages = pgTable(
 
 export type NewPage = typeof pages.$inferInsert;
 export type PageRow = typeof pages.$inferSelect;
+
+/**
+ * Zprávy o novinkách, které majitel serveru píše v admin panelu.
+ *
+ * `id` je datum (`2026-08-29`, druhá zpráva téhož dne `2026-08-29-2`) a zároveň
+ * řazení — formát se lexikograficky řadí správně, takže "novější než poslední
+ * viděná" je porovnání řetězců a druhý sloupec na pořadí není potřeba.
+ */
+export const announcements = pgTable("announcements", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  // Nejstarší verze klienta, které se zpráva týká. NULL = všem. Filtruje se
+  // podle ní na klientovi; server neví, jaká verze se ho ptá.
+  minVersion: text("min_version"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export type NewAnnouncement = typeof announcements.$inferInsert;

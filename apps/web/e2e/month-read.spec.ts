@@ -375,6 +375,9 @@ async function mockAuthenticatedReads(
 	await page.route("**/api/auth/get-session", (route) =>
 		respond(route, authenticated ? session : null),
 	);
+	await page.route("**/api/v1/announcements", (route) =>
+		respond(route, { announcements: [], isAdmin: false }),
+	);
 	await page.route("**/api/auth/sign-out", (route) => {
 		authenticated = false;
 		return respond(route, { success: true });

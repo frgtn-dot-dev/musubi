@@ -25,7 +25,7 @@ export type DialogProps = {
   children: ReactNode;
   className?: string;
   closeLabel: string;
-  description: ReactNode;
+  description?: ReactNode;
   /**
    * Paint above anchored surfaces. For a dialog opened *from* a popover, which
    * otherwise sits above it and hides the question it just asked.
@@ -79,6 +79,9 @@ export function Dialog({
           )}
         />
         <DialogPrimitive.Content
+          {...(description === null || description === undefined
+            ? { "aria-describedby": undefined }
+            : {})}
           className={classNames(
             styles.dialog,
             styles[`dialog_${size}`],
@@ -107,9 +110,13 @@ export function Dialog({
               <DialogPrimitive.Title className={styles.dialogTitle}>
                 {title}
               </DialogPrimitive.Title>
-              <DialogPrimitive.Description className={styles.dialogDescription}>
-                {description}
-              </DialogPrimitive.Description>
+              {description === null || description === undefined ? null : (
+                <DialogPrimitive.Description
+                  className={styles.dialogDescription}
+                >
+                  {description}
+                </DialogPrimitive.Description>
+              )}
             </div>
             <DialogPrimitive.Close asChild>
               <IconButton

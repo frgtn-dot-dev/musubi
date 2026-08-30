@@ -17,6 +17,7 @@ import * as SystemUI from 'expo-system-ui';
 import semver from "semver";
 import Constants from "expo-constants";
 import UpdateRequiredModal from "@/components/UpdateRequiredModal";
+import AnnouncementModal from "@/components/AnnouncementModal";
 import { apiVersion } from '@/constants/url';
 import * as Linking from 'expo-linking';
 import { File } from 'expo-file-system';
@@ -148,7 +149,10 @@ function AppContent() {
   }
 
   return (
-    <Stack screenOptions={{ statusBarStyle: activeScheme === 'dark' ? 'light' : 'dark', navigationBarHidden: true, headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+    <>
+      <Stack screenOptions={{ statusBarStyle: activeScheme === 'dark' ? 'light' : 'dark', navigationBarHidden: true, headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+      {session ? <AnnouncementModal /> : null}
+    </>
   );
 }
 
