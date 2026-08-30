@@ -1537,16 +1537,21 @@ test("saves revisioned settings and applies display preferences", async ({
 	await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
 	const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-	const sectionHeadings = ["Appearance", "Reminders", "Help & About", "Account"];
-	const sectionTops = await Promise.all(
-		sectionHeadings.map(
-			async (name) =>
-				(await settingsDialog
-					.getByRole("heading", { exact: true, name })
-					.boundingBox())!.y,
-		),
-	);
-	expect(sectionTops).toEqual([...sectionTops].sort((a, b) => a - b));
+
+	// One page at a time now, so the running order is the nav's rather than the
+	// document's: the sections are reached through it, not scrolled past.
+	const settingsNav = settingsDialog.getByRole("navigation", {
+		name: "Settings sections",
+	});
+	await expect(settingsNav.getByRole("button")).toHaveText([
+		"Appearance",
+		"Reminders",
+		"Email notifications",
+		"Help & About",
+		"Account",
+	]);
+
+	await settingsNav.getByRole("button", { exact: true, name: "Reminders" }).click();
 
 	// Timed and all-day events are asked about separately: an offset cannot
 	// answer for a birthday, and the control must not pretend it can.
@@ -1568,6 +1573,9 @@ test("saves revisioned settings and applies display preferences", async ({
 	// about that calendar, and is asked there.
 	await expect(settingsDialog).not.toContainText("Reminders by calendar");
 
+	await settingsNav
+		.getByRole("button", { exact: true, name: "Appearance" })
+		.click();
 	await expect(
 		settingsDialog.getByRole("radiogroup", { name: "Theme" }),
 	).toBeVisible();
@@ -1644,6 +1652,12 @@ test("keeps settings usable as a mobile sheet", async ({ page }) => {
 	await expect(
 		page.getByRole("status").filter({ hasText: "Settings saved." }),
 	).toBeVisible();
+
+	// Account is its own page in the nav, which lies down into a scrolling row
+	// at this width.
+	const accountTab = sheet.getByRole("button", { exact: true, name: "Account" });
+	await accountTab.scrollIntoViewIfNeeded();
+	await accountTab.click();
 
 	const manageAccount = sheet.getByRole("button", {
 		name: /Manage account/,
