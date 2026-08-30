@@ -8,7 +8,18 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
-  const { parseGraphDate, toNormalized, toGraphEvent, parseCursor } = await import("./microsoft");
+  const { microsoftEventPath, parseGraphDate, toExternalCalendar, toNormalized, toGraphEvent, parseCursor } = await import("./microsoft");
+
+  // Writes stay scoped to their source, including non-default work calendars.
+  assert.equal(
+    microsoftEventPath("work/team", "event #1"),
+    "/me/calendars/work%2Fteam/events/event%20%231",
+  );
+
+  // Calendar writes fail closed: Graph must explicitly grant write access.
+  assert.equal(toExternalCalendar({ id: "w", name: "Writable", canEdit: true }).readOnly, false);
+  assert.equal(toExternalCalendar({ id: "r", name: "Read only", canEdit: false }).readOnly, true);
+  assert.equal(toExternalCalendar({ id: "u", name: "Unknown" }).readOnly, true);
 
   // parseGraphDate: 7-digit fraction, no zone designator → UTC instant
   assert.equal(parseGraphDate("2026-07-18T20:30:00.0000000").toISOString(), "2026-07-18T20:30:00.000Z");

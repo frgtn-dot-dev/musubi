@@ -1069,7 +1069,9 @@ export function EventDetailsPopover({
 								</footer>
 							) : !targetAction ? (
 								<p className={styles.viewOnly}>
-									You have view-only access to this event.
+									{homeCalendar?.provider === "microsoft"
+										? `${providerDisplayName(homeCalendar)} reports this calendar as read-only, so its events can't be changed in Musubi.`
+										: "You have view-only access to this event."}
 								</p>
 							) : null}
 						</>

@@ -960,6 +960,7 @@ describe("Workspace", () => {
     const viewerCalendars = fixtureCalendars.map((calendar) => ({
       ...calendar,
       role: "viewer",
+      provider: "microsoft",
     }));
 
     render(
@@ -976,7 +977,11 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
-    expect(screen.getByText("view-only access", { exact: false })).not.toBeNull();
+    expect(
+      screen.getByText("Outlook reports this calendar as read-only", {
+        exact: false,
+      }),
+    ).not.toBeNull();
   });
 
   it("marks a read-only block in the grid, not only in its popover", () => {
