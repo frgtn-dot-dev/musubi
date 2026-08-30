@@ -44,4 +44,25 @@ assert.throws(
   (error: unknown) => error instanceof Error && error.message === "Admin only",
 );
 
+// Federovaný shadow účet nese e-mail, který je nezaručené tvrzení dodané
+// volajícím při přijetí pozvánky (viz federation.ts) — i kdyby se shodoval se
+// seznamem adminů, nesmí projít. Bez tohohle by kdokoli s odkazem na pozvánku
+// mohl namintovat účet s e-mailem z ADMIN_EMAILS a stát se adminem.
+function callsNextExternal(email: string, adminList: string[]) {
+  let called = false;
+  createRequireAdmin(adminList)(
+    { user: { email, isExternal: true } } as unknown as Request,
+    response,
+    () => {
+      called = true;
+    },
+  );
+  return called;
+}
+
+assert.throws(
+  () => callsNextExternal("owner@example.com", admins),
+  (error: unknown) => error instanceof Error && error.message === "Admin only",
+);
+
 console.log("require_admin tests passed");

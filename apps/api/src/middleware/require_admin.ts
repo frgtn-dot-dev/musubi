@@ -31,7 +31,16 @@ export function createRequireAdmin(adminEmails: readonly string[]) {
     _res: Response,
     next: NextFunction,
   ) {
-    if (!isAdminEmailIn(adminEmails, req.user?.email)) {
+    // Federated shadow users (isExternal, see require_auth.ts's member-token
+    // fallback) carry an email that is a CALLER-SUPPLIED, unverified display
+    // claim — handlerFederationAccept in federation.ts writes it straight from
+    // the invite-accept request body, and that endpoint is public. Anyone
+    // holding an invite link could set that email to match an ADMIN_EMAILS
+    // entry, so a match alone is not proof of adminship: external accounts are
+    // refused outright, no matter what their email says.
+    const external = (req.user as { isExternal?: boolean } | undefined)
+      ?.isExternal;
+    if (external || !isAdminEmailIn(adminEmails, req.user?.email)) {
       throw new ForbiddenError("Admin only");
     }
     next();
