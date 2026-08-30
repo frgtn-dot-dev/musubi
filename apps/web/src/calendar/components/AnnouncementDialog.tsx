@@ -11,7 +11,6 @@ import { getAnnouncements } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { useSessionUser } from "~/auth/use-session-user";
 import { useSettingsMutations } from "~/calendar/settings-mutations";
-import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import styles from "./AnnouncementDialog.module.css";
 
@@ -97,15 +96,13 @@ export function AnnouncementDialogView({
       closeLabel="Close"
       description={
         single
-          ? "A note from this server."
+          ? undefined
           : `${announcements.length} updates since you were last here.`
       }
-      footer={<Button onClick={onClose}>Got it</Button>}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       open
-      size="compact"
       title={single ? announcements[0].title : "What's new"}
     >
       <div className={styles.list}>
@@ -169,7 +166,9 @@ export function AnnouncementGate() {
   }, [markTo]);
 
   const pending =
-    data && !markTo ? pendingAnnouncements(data.announcements, BUILD_VERSION) : [];
+    data && !markTo
+      ? pendingAnnouncements(data.announcements, BUILD_VERSION)
+      : [];
   if (dismissed || pending.length === 0) return null;
 
   function close() {
