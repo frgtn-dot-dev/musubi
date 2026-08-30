@@ -1,4 +1,5 @@
 import {
+  AnnouncementsResponseSchema,
   CalendarInvitePreviewSchema,
   CalendarSchema,
   EventSchema,
@@ -572,6 +573,19 @@ export function useApi() {
       throwOnError(error);
 
       return readWire(SettingsDocumentSchema, data, "PATCH /users/me/settings");
+    },
+
+    async getAnnouncements() {
+      const { error, data } = await authClient.$fetch<unknown>(
+        `${apiUrl}/api/${apiVersion}/announcements`,
+        {},
+      );
+      throwOnError(error);
+      return readWire(
+        AnnouncementsResponseSchema,
+        data,
+        "/api/v1/announcements",
+      );
     },
 
     async deleteUser() {
