@@ -827,7 +827,9 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onCreateEvent={onCreateEvent} />);
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
@@ -856,10 +858,55 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} activeView="tasks" />);
 
     expect(screen.queryByRole("heading", { name: "Tasks" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
 
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
+  });
+
+  it("keeps saved tasks readable but not editable offline", () => {
+    render(
+      <Workspace
+        {...commonProps}
+        activeView="tasks"
+        offline
+        tasks={[
+          {
+            calendarID: "personal",
+            completedAt: null,
+            creatorID: "alex",
+            description: null,
+            due: null,
+            id: "offline-task",
+            isAllDay: false,
+            percentComplete: 0,
+            priority: 0,
+            recurrence: null,
+            relatedTo: null,
+            sequence: 0,
+            start: null,
+            status: "needs-action",
+            title: "Saved offline task",
+            url: null,
+          },
+        ]}
+      />,
+    );
+
+    const tasks = screen.getByRole("region", { name: "Tasks" });
+    expect(tasks.textContent).toContain("Saved offline task");
+    expect(
+      within(tasks)
+        .getByRole("checkbox", {
+          name: "Mark Saved offline task completed",
+        })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(
+      within(tasks).queryByRole("button", { name: /Saved offline task/ }),
+    ).toBeNull();
   });
 
   it("edits and deletes an event when its home calendar is writable", async () => {
@@ -939,7 +986,9 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} />);
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
@@ -965,7 +1014,9 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onOpenFullEditor={onOpenFullEditor} />);
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
@@ -990,7 +1041,9 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} calendars={viewerCalendars} />);
 
-    expect(screen.queryByRole("button", { name: "Create" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Create event or task" }),
+    ).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
@@ -1044,7 +1097,9 @@ describe("Workspace", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),

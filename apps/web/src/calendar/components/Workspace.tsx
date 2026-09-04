@@ -1078,7 +1078,11 @@ export function Workspace({
               )}
               createRequest={taskCreateRequest}
               editableCalendarIds={
-                new Set(editableCalendars.map((calendar) => calendar.id))
+                new Set(
+                  offline
+                    ? []
+                    : editableCalendars.map((calendar) => calendar.id),
+                )
               }
               offline={offline}
               onCreateRequestHandled={consumeTaskCreateRequest}

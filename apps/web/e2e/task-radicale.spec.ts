@@ -115,7 +115,7 @@ test("round-trips a Task Page edit through API, Postgres and Radicale", async ({
 
     await page.getByRole("radio", { name: "Tasks" }).click();
     await expect(page.getByRole("region", { name: "Tasks" })).toBeVisible();
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.getByRole("button", { name: "Create event or task" }).click();
     await page.getByRole("menuitem", { name: "Task" }).click();
 
     const createDialog = page.getByRole("dialog", { name: "New task" });

@@ -149,7 +149,7 @@ export function Toolbar({
               <MenuTrigger asChild>
                 <IconButton
                   className={styles.eventButton}
-                  label="Create"
+                  label="Create event or task"
                   ref={createTriggerRef}
                   size="compact"
                   variant="primary"
@@ -157,7 +157,7 @@ export function Toolbar({
                   <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
                 </IconButton>
               </MenuTrigger>
-              <MenuContent align="end" label="Create">
+              <MenuContent align="end" label="Create" mobileSurface="anchored">
                 <MenuItem
                   disabled={!canCreateEvents}
                   icon={<CalendarPlus size={16} strokeWidth={1.7} />}

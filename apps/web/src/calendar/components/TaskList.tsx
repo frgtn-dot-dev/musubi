@@ -222,15 +222,15 @@ export function TaskList({
 
   return (
     <section aria-label="Tasks" className={styles.tasks}>
-      {offline ? (
+      {tasks.length === 0 ? (
         <Empty
-          description="Reconnect to load and edit the tasks on this Page."
-          title="Tasks are unavailable offline"
-        />
-      ) : tasks.length === 0 ? (
-        <Empty
-          description="Add a task for one of the calendars on this Page."
-          title="No tasks yet"
+          description={
+            offline
+              ? "Reconnect to refresh the tasks saved on this device."
+              : "Add a task for one of the calendars on this Page."
+          }
+          headingLevel={2}
+          title={offline ? "No saved tasks" : "No tasks yet"}
         />
       ) : (
         <>
@@ -294,7 +294,7 @@ function TaskGroup({
   if (!tasks.length) return null;
   return (
     <section className={styles.group}>
-      <h3>{label}</h3>
+      <h2>{label}</h2>
       <ul>
         {tasks.map((task) => {
           const calendar = calendarById.get(task.calendarID);

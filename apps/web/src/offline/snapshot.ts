@@ -6,6 +6,7 @@ import {
  EventsResponseSchema,
  PagesResponseSchema,
  SettingsResponseSchema,
+ TasksResponseSchema,
 } from "~/api/contracts";
 import { CACHE_BUSTER, CACHE_EVENT_RANGE_LIMIT } from "./cache-version";
 
@@ -38,6 +39,7 @@ const CACHEABLE = {
  }),
  pages: PagesResponseSchema,
  settings: SettingsResponseSchema,
+ tasks: TasksResponseSchema,
 } as const;
 
 type CacheableName = keyof typeof CACHEABLE;

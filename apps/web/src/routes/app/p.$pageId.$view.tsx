@@ -98,9 +98,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       pageDrafts.get(pageId)?.config.showPolls ?? activePage?.config.showPolls,
     );
   const tasksQuery = useQuery({
-    // Task data is not in the offline snapshot yet. Do not turn every calendar
-    // Page into a task request or leave this Page in a disabled-query pending
-    // state; its view makes that limitation explicit instead.
+    // Fetch only when the view needs tasks. Once fetched, the snapshot keeps
+    // them readable offline without turning every calendar Page into a request.
     enabled: taskView && !snapshot.offline,
     queryFn: ({ signal }) => getTasks(signal),
     queryKey: queryKeys.tasks(getServerOrigin(), userId),
@@ -125,7 +124,9 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     workspace.events,
     workspace.pages,
     workspace.settings,
-    ...(taskView && !snapshot.offline ? [tasksQuery] : []),
+    ...(taskView && (!snapshot.offline || tasksQuery.data !== undefined)
+      ? [tasksQuery]
+      : []),
   ];
   // One source for "the server did not answer", shared with every form that has
   // to refuse a write (`SnapshotProvider`).
@@ -183,7 +184,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     error ||
     !workspace.calendars.data ||
     !workspace.events.data ||
-    (taskView && !snapshot.offline && !tasksQuery.data) ||
+    (taskView && !tasksQuery.data) ||
     !workspace.pages.data ||
     !workspace.settings.data
   ) {
@@ -274,17 +275,23 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       onCreateEvent={eventMutations.createEvent}
       onCreateTask={async (task) => {
         const created = await createTask(task);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(getServerOrigin(), userId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.tasks(getServerOrigin(), userId),
+        });
         return created;
       }}
       onUpdateTask={async (id, task) => {
         const updated = await updateTask(id, task);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(getServerOrigin(), userId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.tasks(getServerOrigin(), userId),
+        });
         return updated;
       }}
       onRemoveTask={async (task) => {
         await removeTask(task.id);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(getServerOrigin(), userId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.tasks(getServerOrigin(), userId),
+        });
       }}
       onAdoptSettings={settingsMutations.adoptSettings}
       onForkEvent={eventMutations.forkEvent}

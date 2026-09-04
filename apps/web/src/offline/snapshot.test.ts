@@ -1,6 +1,6 @@
 import type { DehydratedState } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { EventsResponseSchema } from "~/api/contracts";
+import { EventsResponseSchema, TasksResponseSchema } from "~/api/contracts";
 
 import { CACHE_BUSTER, cacheNamespace, hashOrigin } from "./cache-version";
 import {
@@ -49,6 +49,29 @@ const eventsPayload = {
   serverTime: "2026-07-20T09:00:00.000Z",
 };
 
+const tasksPayload = {
+  tasks: [
+    {
+      calendarID: "work",
+      completedAt: null,
+      creatorID: "user-1",
+      description: null,
+      due: "2026-07-21T16:00:00.000Z",
+      id: "release",
+      isAllDay: false,
+      percentComplete: 0,
+      priority: 3,
+      recurrence: null,
+      relatedTo: null,
+      sequence: 0,
+      start: "2026-07-21T14:00:00.000Z",
+      status: "needs-action",
+      title: "Prepare release",
+      url: null,
+    },
+  ],
+};
+
 describe("shouldPersistQuery", () => {
   it("keeps the queries a cold start needs", () => {
     for (const name of [
@@ -57,6 +80,7 @@ describe("shouldPersistQuery", () => {
       "federated",
       "pages",
       "settings",
+      "tasks",
     ]) {
       expect(shouldPersistQuery(query([name, "origin", "user"], {}))).toBe(
         true,
@@ -105,6 +129,17 @@ describe("reviveQueries", () => {
     );
     // And the result satisfies the contract the app reads everywhere else.
     expect(EventsResponseSchema.safeParse(data).success).toBe(true);
+  });
+
+  it("revives cached task dates", () => {
+    const [revived] = reviveQueries([query(["tasks", "o", "u"], tasksPayload)]);
+
+    const data = revived!.state.data as {
+      tasks: { due: Date; start: Date }[];
+    };
+    expect(data.tasks[0]!.start).toBeInstanceOf(Date);
+    expect(data.tasks[0]!.due).toBeInstanceOf(Date);
+    expect(TasksResponseSchema.safeParse(data).success).toBe(true);
   });
 
   it("drops an entry the current build cannot parse, and keeps the rest", () => {

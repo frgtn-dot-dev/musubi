@@ -81,6 +81,13 @@ async function chooseSelectOption(page: Page, label: string, option: string) {
 	await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+async function openCreateEvent(page: Page) {
+	await page
+		.getByRole("button", { name: "Create event or task", exact: true })
+		.click();
+	await page.getByRole("menuitem", { name: "Event", exact: true }).click();
+}
+
 function event(
 	id: string,
 	title: string,
@@ -378,6 +385,7 @@ async function mockAuthenticatedReads(
 	await page.route("**/api/v1/announcements", (route) =>
 		respond(route, { announcements: [], isAdmin: false }),
 	);
+	await page.route("**/api/v1/tasks", (route) => respond(route, { tasks: [] }));
 	await page.route("**/api/auth/sign-out", (route) => {
 		authenticated = false;
 		return respond(route, { success: true });
@@ -752,7 +760,7 @@ test("reads, filters and signs out of the authenticated Month", async ({
 		0,
 	);
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await page.keyboard.press("Escape");
 
@@ -1076,7 +1084,7 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
 	await mockAuthenticatedReads(page);
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await page.getByRole("textbox", { name: "Event title" }).fill("Release check");
 	await page.getByRole("button", { name: /^Choose calendars/ }).click();
 	await expect(
@@ -1089,7 +1097,7 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
 			request.method() === "POST" &&
 			new URL(request.url()).pathname === "/api/v1/events",
 	);
-	await page.getByRole("button", { name: "Create" }).click();
+	await page.getByRole("button", { name: "Create", exact: true }).click();
 	const createdEvent = (await createRequest).postDataJSON() as {
 		calendars: string[];
 		originCalendarID: string;
@@ -1148,7 +1156,7 @@ test("creates an event with an exact custom recurrence rule", async ({
 			request.method() === "POST" &&
 			new URL(request.url()).pathname === "/api/v1/events",
 	);
-	await page.getByRole("button", { name: "Create" }).click();
+	await page.getByRole("button", { name: "Create", exact: true }).click();
 
 	expect((await createRequest).postDataJSON().recurrence).toBe(
 		"FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5",
@@ -1170,7 +1178,7 @@ test("chooses an event date from the calendar picker", async ({ page }) => {
 	});
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await page.getByRole("textbox", { name: "Event title" }).fill("Planning day");
 	await page.getByRole("button", { name: /^Date:/ }).click();
 	const picker = page.getByRole("dialog", { name: "Choose date" });
@@ -1220,7 +1228,7 @@ test("chooses an event time and duration from the time pickers", async ({
 	});
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await page
 		.getByRole("textbox", { name: "Event title" })
 		.fill("Portfolio review");
@@ -1264,7 +1272,7 @@ test("keeps the all-day toggle in one place when it is flipped", async ({
 }) => {
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { exact: true, name: "Event" }).click();
+	await openCreateEvent(page);
 
 	const toggle = page.locator('[class*="toggleRow"]');
 	const label = page.getByText("All day", { exact: true });
@@ -1317,7 +1325,7 @@ test("scrolls a long calendar list inside quick create", async ({ page }) => {
 	];
 	await mockAuthenticatedReads(page, events, manyCalendars);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-11`);
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await page.getByRole("button", { name: /Choose calendars/ }).click();
 
 	const calendarList = page.getByRole("group", {
@@ -1357,13 +1365,13 @@ test("keeps provider failures actionable without assuming a write succeeded", as
 	await mockAuthenticatedReads(page, events, providerCalendars, "studio");
 	await page.goto("/app/p/my-calendar/month?date=2026-07-26");
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await page
 		.getByRole("textbox", { name: "Event title" })
 		.fill("Provider check");
 	await page.getByRole("button", { name: /^Choose calendars/ }).click();
 	await page.getByRole("radio", { name: "Studio as home calendar" }).click();
-	await page.getByRole("button", { name: "Create" }).click();
+	await page.getByRole("button", { name: "Create", exact: true }).click();
 
 	await expect(page.getByRole("alert")).toContainText(
 		"Google Calendar did not confirm this change",
@@ -1551,7 +1559,9 @@ test("saves revisioned settings and applies display preferences", async ({
 		"Account",
 	]);
 
-	await settingsNav.getByRole("button", { exact: true, name: "Reminders" }).click();
+	await settingsNav
+		.getByRole("button", { exact: true, name: "Reminders" })
+		.click();
 
 	// Timed and all-day events are asked about separately: an offset cannot
 	// answer for a birthday, and the control must not pretend it can.
@@ -4089,7 +4099,7 @@ test("navigates by keyboard and documents the map behind ?", async ({
 		.getByRole("radiogroup", { name: "Calendar view" })
 		.boundingBox();
 	const eventBox = await page
-		.getByRole("button", { name: "Event", exact: true })
+		.getByRole("button", { name: "Create event or task", exact: true })
 		.boundingBox();
 	expect(
 		eventBox!.x - (switcherBox!.x + switcherBox!.width),
@@ -4245,7 +4255,7 @@ test("blocks the phone web app with a full-screen app download", async ({
 	const box = (await blocker.locator("..").boundingBox())!;
 	expect(box).toMatchObject({ height: 720, width: 390, x: 0, y: 0 });
 	await expect(
-		page.getByRole("button", { name: "Event", exact: true }),
+		page.getByRole("button", { name: "Create event or task", exact: true }),
 	).toHaveCount(0);
 
 	await page.keyboard.press("Escape");
@@ -4262,12 +4272,15 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
 	// Create sits within thumb reach rather than in the toolbar.
-	const create = page.getByRole("button", { name: "Event", exact: true });
+	const create = page.getByRole("button", {
+		exact: true,
+		name: "Create event or task",
+	});
 	const fab = (await create.boundingBox())!;
 	expect(fab.y).toBeGreaterThan(500);
 	expect(Math.round(fab.width)).toBe(Math.round(fab.height));
 
-	await create.click();
+	await openCreateEvent(page);
 	// The popover is a bottom sheet: full width, sitting on the bottom edge.
 	const sheet = page.getByRole("dialog", { name: "Create event" });
 	await sheet.evaluate((element) =>
@@ -4350,7 +4363,7 @@ test("chooses event calendars from an accessible mobile list", async ({
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	const editor = page.getByRole("dialog", { name: "Create event" });
 	const trigger = editor.getByRole("button", {
 		name: /^Choose calendars/,
@@ -4543,9 +4556,9 @@ test("keeps calendar chrome consistent and keyboard operable", async ({
 	await month.focus();
 	await page.keyboard.press("ArrowRight");
 	await expect(page).toHaveURL(
-		`/app/p/${DEFAULT_PAGE_ID}/agenda?date=2026-07-26`,
+		`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`,
 	);
-	await expect(page.getByRole("radio", { name: "Agenda" })).toHaveAttribute(
+	await expect(page.getByRole("radio", { name: "Tasks" })).toHaveAttribute(
 		"aria-checked",
 		"true",
 	);
@@ -4840,7 +4853,7 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-30`);
 
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await page
 		.getByRole("textbox", { name: "Event title" })
 		.fill("Quarterly review");
@@ -4890,7 +4903,7 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	await page.setViewportSize({ height: 800, width: 1280 });
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { exact: true, name: "Event" }).click();
+	await openCreateEvent(page);
 	await page.getByRole("button", { name: "More options" }).click();
 
 	const editor = page.getByRole("dialog", { name: "New event" });
@@ -5026,7 +5039,7 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	await page.setViewportSize({ height: 720, width: 390 });
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { exact: true, name: "Event" }).click();
+	await openCreateEvent(page);
 	await page
 		.getByRole("textbox", { name: "Event title" })
 		.fill("Mobile planning");
@@ -5629,6 +5642,35 @@ function snapshotKeys(page: Page) {
 	);
 }
 
+function snapshotQueryNames(page: Page) {
+	return page.evaluate(
+		() =>
+			new Promise<string[]>((resolve) => {
+				const request = indexedDB.open("musubi-offline");
+				request.onsuccess = () => {
+					const database = request.result;
+					if (![...database.objectStoreNames].includes("query-cache")) {
+						return resolve([]);
+					}
+					const read = database
+						.transaction("query-cache")
+						.objectStore("query-cache")
+						.getAll();
+					read.onsuccess = () =>
+						resolve(
+							read.result.flatMap((snapshot) =>
+								snapshot.state.queries.map((query: { queryKey: unknown[] }) =>
+									String(query.queryKey[0]),
+								),
+							),
+						);
+					read.onerror = () => resolve([]);
+				};
+				request.onerror = () => resolve([]);
+			}),
+	);
+}
+
 test("starts from its snapshot with no server, then catches up", async ({
 	page,
 }) => {
@@ -5686,6 +5728,63 @@ test("starts from its snapshot with no server, then catches up", async ({
 	// being stale.
 	await expect(offlineState).toHaveCount(0, { timeout: 10_000 });
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
+});
+
+test("keeps a previously loaded task list readable offline", async ({
+	page,
+}) => {
+	await mockAuthenticatedReads(page);
+	await page.route("**/api/v1/tasks", (route) =>
+		respond(route, {
+			tasks: [
+				{
+					calendarID: "personal",
+					completedAt: null,
+					creatorID: session.user.id,
+					description: null,
+					due: "2026-07-28T16:00:00.000Z",
+					id: "offline-task",
+					isAllDay: false,
+					percentComplete: 0,
+					priority: 0,
+					recurrence: null,
+					relatedTo: null,
+					sequence: 0,
+					start: null,
+					status: "needs-action",
+					title: "Pack the offline checklist",
+					url: null,
+				},
+			],
+		}),
+	);
+
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`);
+	await expect(
+		page.getByRole("button", {
+			name: "Pack the offline checklist Personal · Due 28/07/2026",
+		}),
+	).toBeVisible();
+	await expect.poll(() => snapshotQueryNames(page)).toContain("tasks");
+
+	const dead = (route: Route) => route.abort();
+	for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+		await page.route(pattern, dead);
+	}
+	await page.reload();
+
+	const tasks = page.getByRole("region", { name: "Tasks" });
+	await expect(
+		tasks.getByText("Pack the offline checklist", { exact: true }),
+	).toBeVisible();
+	await expect(
+		tasks.getByRole("checkbox", {
+			name: "Mark Pack the offline checklist completed",
+		}),
+	).toBeDisabled();
+	await expect(
+		tasks.getByRole("button", { name: /Pack the offline checklist/ }),
+	).toHaveCount(0);
 });
 
 test("leaves nothing of the last account on a shared computer", async ({
@@ -7007,7 +7106,7 @@ test("stays inside its box with twenty calendars", async ({ page }) => {
 	await page.keyboard.press("Escape");
 
 	// And the composer, which lists every writable calendar.
-	await page.getByRole("button", { name: "Event", exact: true }).click();
+	await openCreateEvent(page);
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expectNoSidewaysScroll("quick create");
 });
@@ -8134,18 +8233,16 @@ test("draws the plus on the narrow create button", async ({ page }) => {
 	// Measured, not looked at: the rule that hides the word on a phone used to
 	// match the primitive's content wrapper — the button's only direct span — and
 	// took the icon with it, leaving a plain dark circle with nothing in it.
-	const plus = page
-		.getByRole("button", { exact: true, name: "Event" })
-		.locator("svg");
+	const create = page.getByRole("button", {
+		exact: true,
+		name: "Create event or task",
+	});
+	const plus = create.locator("svg");
 	await expect(plus).toBeVisible();
 	const box = (await plus.boundingBox())!;
 	expect(box.width).toBeGreaterThan(10);
 	expect(box.height).toBeGreaterThan(10);
-	// And the word is still gone, which is what the rule was for. `textContent`
-	// would still read it, so this asks the layout instead.
-	await expect(
-		page.getByRole("button", { name: "Event" }).getByText("Event"),
-	).toBeHidden();
+	await expect(create).toHaveText("");
 });
 
 test("puts an unknown view back in the address bar", async ({ page }) => {
@@ -9042,7 +9139,7 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 			: route.fallback(),
 	);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-07`);
-	await page.getByRole("button", { exact: true, name: "Event" }).click();
+	await openCreateEvent(page);
 	await page.getByRole("button", { name: "More options" }).click();
 
 	const dialog = page.getByRole("dialog", { name: "New event" });
