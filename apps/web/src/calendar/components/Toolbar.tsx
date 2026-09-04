@@ -1,12 +1,15 @@
 import {
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
-  Menu,
+  ListTodo,
+  Menu as MenuIcon,
   Plus,
   Search,
 } from "lucide-react";
-import type { RefObject } from "react";
+import { useRef, type RefObject } from "react";
 import { Button, IconButton } from "~/ui/Button";
+import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/ui/Menu";
 import { Segmented } from "~/ui/Segmented";
 import { Select } from "~/ui/Select";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
@@ -16,8 +19,10 @@ import styles from "./workspace.module.css";
 type ToolbarProps = {
   activeView: CalendarViewId;
   canCreateEvents: boolean;
+  canCreateTasks: boolean;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
+  onCreateTask: () => void;
   onOpenSearch: () => void;
   onOpenSidebar: () => void;
   onPeriodChange: (offset: number) => void;
@@ -33,8 +38,10 @@ type ToolbarProps = {
 export function Toolbar({
   activeView,
   canCreateEvents,
+  canCreateTasks,
   navigationTriggerRef,
   onCreateEvent,
+  onCreateTask,
   onOpenSearch,
   onOpenSidebar,
   onPeriodChange,
@@ -48,6 +55,7 @@ export function Toolbar({
 }: ToolbarProps) {
   // A flick moves the period on touch, so the arrows are desktop furniture.
   const narrow = useNarrowViewport();
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <header className={styles.toolbar}>
@@ -64,7 +72,7 @@ export function Toolbar({
             size="compact"
             onClick={onOpenSidebar}
           >
-            <Menu aria-hidden="true" size={18} strokeWidth={1.6} />
+            <MenuIcon aria-hidden="true" size={18} strokeWidth={1.6} />
           </IconButton>
           <Button
             className={styles.todayButton}
@@ -136,16 +144,39 @@ export function Toolbar({
               onChange={onViewChange}
             />
           )}
-          {canCreateEvents ? (
-            <Button
-              aria-label="Event"
-              className={styles.eventButton}
-              icon={<Plus aria-hidden="true" size={18} strokeWidth={1.7} />}
-              size="compact"
-              onClick={(event) => onCreateEvent(event.currentTarget)}
-            >
-              Event
-            </Button>
+          {canCreateEvents || canCreateTasks ? (
+            <Menu>
+              <MenuTrigger asChild>
+                <IconButton
+                  className={styles.eventButton}
+                  label="Create event or task"
+                  ref={createTriggerRef}
+                  size="compact"
+                  variant="primary"
+                >
+                  <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
+                </IconButton>
+              </MenuTrigger>
+              <MenuContent align="end" label="Create" mobileSurface="anchored">
+                <MenuItem
+                  disabled={!canCreateEvents}
+                  icon={<CalendarPlus size={16} strokeWidth={1.7} />}
+                  onSelect={() => {
+                    const target = createTriggerRef.current;
+                    if (target) onCreateEvent(target);
+                  }}
+                >
+                  Event
+                </MenuItem>
+                <MenuItem
+                  disabled={!canCreateTasks}
+                  icon={<ListTodo size={16} strokeWidth={1.7} />}
+                  onSelect={onCreateTask}
+                >
+                  Task
+                </MenuItem>
+              </MenuContent>
+            </Menu>
           ) : null}
         </div>
       </div>

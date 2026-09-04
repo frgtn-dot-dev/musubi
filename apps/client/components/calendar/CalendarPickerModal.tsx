@@ -25,7 +25,7 @@ export default function CalendarPickerModal({ title, visible, onClose, onSelect,
   const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose);
   const [pending, setPending] = useState<string | null>(null);
 
-  const options = calendars.filter(c => can(c.role, "editEvents") && (!filter || filter(c)));
+  const options = calendars.filter(c => c.supportsEvents !== false && can(c.role, "editEvents") && (!filter || filter(c)));
 
   return (
     <Modal

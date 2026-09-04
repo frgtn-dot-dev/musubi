@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { CALENDAR_SCOPE, createCalendar, db, ensureDefaultPage, getUserSettings, markOAuthAccountActive, schema } from '@musubi/db';
+import { createCalendar, db, ensureDefaultPage, getUserSettings, hasProviderSyncScopes, markOAuthAccountActive, schema } from '@musubi/db';
 import { config, logger } from '@musubi/config';
 import { defaultPageConfig } from '@musubi/types';
 import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml, getChangeEmailHtml, getSignInCodeHtml } from '@musubi/emails';
@@ -166,11 +166,9 @@ export const auth = betterAuth({
           // A successful OAuth relink writes a fresh refresh token to the
           // existing Better Auth account. Re-enable provider sync without
           // requiring the user to delete their mirrored calendars.
-          const calendarScope = CALENDAR_SCOPE[account.providerId];
           if (
-            calendarScope &&
             account.refreshToken &&
-            (account.scope ?? "").includes(calendarScope) &&
+            hasProviderSyncScopes(account.providerId, account.scope ?? "") &&
             account.syncStatus === "reconnect_required"
           ) {
             await markOAuthAccountActive(account.userId, account.providerId, account.accountId);

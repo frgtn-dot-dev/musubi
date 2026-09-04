@@ -101,6 +101,13 @@ const AgendaViewSchema = z
 // count lives on the Page rather than in global settings — a "planning" page
 // wants eight weeks and a "today" page wants one, and that is a property of the
 // page, not of the person.
+const TasksViewSchema = z
+  .object({
+    id: z.literal("tasks"),
+    configVersion: z.literal(1),
+  })
+  .strict();
+
 const MultiWeekViewSchema = z
   .object({
     id: z.literal("multi-week"),
@@ -116,6 +123,7 @@ export const BuiltInViewConfigSchema = z.discriminatedUnion("id", [
   WeekViewSchema,
   MonthViewSchema,
   AgendaViewSchema,
+  TasksViewSchema,
   MultiWeekViewSchema,
 ]);
 
@@ -218,7 +226,9 @@ export function defaultPageConfig(view: PageViewId): PageConfigV1 {
         ? { id: "day", configVersion: 1 }
         : view === "agenda"
           ? { id: "agenda", configVersion: 1 }
-          : view === "multi-week"
+          : view === "tasks"
+            ? { id: "tasks", configVersion: 1 }
+            : view === "multi-week"
             ? { id: "multi-week", configVersion: 1 }
             : { id: "month", configVersion: 1 },
   );

@@ -43,6 +43,13 @@ import {
   handlerSetAttendance,
   handlerUpdateEvent,
 } from "./handlers/events";
+import {
+  handlerCreateTask,
+  handlerGetTask,
+  handlerGetTasks,
+  handlerRemoveTask,
+  handlerUpdateTask,
+} from "./handlers/tasks";
 import { optionalAuth, requireAuth } from "./middleware/require_auth";
 import {
   handlerCreatePoll,
@@ -337,6 +344,14 @@ app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
 app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
 app.put("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
 app.delete("/api/v1/events", requireAuth, wrap(handlerRemoveEvent));
+
+// Tasks
+app.get("/api/v1/tasks", requireAuth, wrap(handlerGetTasks));
+app.get("/api/v1/tasks/:taskId", requireAuth, wrap(handlerGetTask));
+app.post("/api/v1/tasks", requireAuth, wrap(handlerCreateTask));
+app.put("/api/v1/tasks/:taskId", requireAuth, wrap(handlerUpdateTask));
+app.delete("/api/v1/tasks/:taskId", requireAuth, wrap(handlerRemoveTask));
+
 app.post("/api/v1/events/:eventId/link", requireAuth, wrap(handlerLinkEvent));
 app.post("/api/v1/events/:eventId/fork", requireAuth, wrap(handlerForkEvent));
 app.get(

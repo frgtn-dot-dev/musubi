@@ -109,6 +109,15 @@ export const calendarViews: ViewDefinition[] = [
     title: (anchor) => getMonthLabel(anchor),
   },
   {
+    expandsRecurringOnly: false,
+    id: "tasks",
+    label: "Tasks",
+    range: (anchor) => ({ end: addDays(startOfDay(anchor), 1), start: startOfDay(anchor) }),
+    step: (anchor, offset) => addDays(anchor, offset),
+    swipeable: false,
+    title: () => "Tasks",
+  },
+  {
     expandsRecurringOnly: true,
     id: "agenda",
     label: "Agenda",
@@ -202,6 +211,7 @@ export type CalendarViewId =
   | "day"
   | "month"
   | "multi-week"
+  | "tasks"
   | "week";
 
 export function isCalendarView(value: string): value is CalendarViewId {

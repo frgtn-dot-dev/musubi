@@ -19,8 +19,9 @@ export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.calendarlist",
   "https://www.googleapis.com/auth/calendar.calendars",
+  "https://www.googleapis.com/auth/tasks",
 ];
-export const MICROSOFT_CALENDAR_SCOPES = ["Calendars.ReadWrite"];
+export const MICROSOFT_CALENDAR_SCOPES = ["Calendars.ReadWrite", "Tasks.ReadWrite"];
 
 // Linking a provider is a full-page trip to Google or Microsoft and back, so no
 // React state survives it. This marker does — sessionStorage is per tab and
@@ -100,6 +101,9 @@ export function useProviderLinkReturn(userId: string) {
       void queryClient.invalidateQueries({
         queryKey: ["events", origin, userId],
       });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.tasks(origin, userId),
+      });
       setState({ error, importing: false, linked: true });
     };
 
@@ -131,6 +135,9 @@ export function useConnections(userId: string) {
     void queryClient.invalidateQueries({ queryKey: calendarsKey });
     void queryClient.invalidateQueries({
       queryKey: ["events", origin, userId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.tasks(origin, userId),
     });
     void queryClient.invalidateQueries({
       queryKey: queryKeys.federated(origin, userId),

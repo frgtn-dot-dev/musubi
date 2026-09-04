@@ -54,7 +54,8 @@ function* sourceFiles(directory) {
       yield* sourceFiles(full);
       continue;
     }
-    if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) yield full;
+    if (entry.name.endsWith(".ts") && !entry.name.includes(".test."))
+      yield full;
   }
 }
 
@@ -144,9 +145,7 @@ for (const [name, handled] of [
 ]) {
   for (const type of sorted(handled)) {
     if (emitted.has(type)) continue;
-    fail(
-      `${name} listens for "${type}", which nothing in apps/api/src sends`,
-    );
+    fail(`${name} listens for "${type}", which nothing in apps/api/src sends`);
   }
 }
 

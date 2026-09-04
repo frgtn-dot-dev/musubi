@@ -8,6 +8,9 @@ import type {
   Settings,
   SettingsDocument,
   SettingsPatch,
+  Task,
+  TaskCreate,
+  TaskUpdate,
   User,
 } from "@musubi/types";
 import { seriesEditWrites, type EditScope } from "@musubi/calendar";
@@ -38,7 +41,10 @@ import {
 import { getEventRangeLabel, parseDateKey } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import type { EventFormValues } from "../event-form";
-import { getEditableCalendars } from "../event-permissions";
+import {
+  getEditableCalendars,
+  getEditableTaskCalendars,
+} from "../event-permissions";
 import type { Notify } from "../notice";
 import type { ReminderControl } from "../reminder-control";
 
@@ -73,6 +79,7 @@ import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
 import { SettingsDialog } from "./SettingsDialog";
 import { TimeGridView } from "./TimeGridView";
+import { TaskList } from "./TaskList";
 import { Toolbar } from "./Toolbar";
 import styles from "./workspace.module.css";
 
@@ -99,6 +106,10 @@ type WorkspaceProps = {
   /** On screen is snapshot data while a refresh is in flight (`05:295-306`). */
   stale?: boolean;
   onCreateEvent: (event: Event) => Promise<Event>;
+  onCreateTask?: (task: TaskCreate) => Promise<Task>;
+  onUpdateTask?: (id: string, task: TaskUpdate) => Promise<Task>;
+  onRemoveTask?: (task: Task) => Promise<void>;
+  tasks?: Task[];
   onDateChange: (date: string) => void;
   onForkEvent?: (input: {
     calendarId: string;
@@ -245,6 +256,9 @@ const unavailablePageDefault = async (): Promise<void> => {
 };
 
 const ignoreSettings = () => undefined;
+const unavailableTaskWrite = async () => {
+  throw new Error("Task updates are unavailable.");
+};
 
 export function Workspace({
   activeView,
@@ -259,6 +273,10 @@ export function Workspace({
   snapshotAt,
   stale = false,
   onCreateEvent,
+  onCreateTask = unavailableTaskWrite,
+  onUpdateTask = unavailableTaskWrite,
+  onRemoveTask = unavailableTaskWrite,
+  tasks = [],
   onAdoptSettings = ignoreSettings,
   onDateChange,
   onExportCalendar = unavailableExport,
@@ -436,6 +454,11 @@ export function Workspace({
     );
   }
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
+  const [taskCreateRequest, setTaskCreateRequest] = useState(0);
+  const consumeTaskCreateRequest = useCallback(
+    () => setTaskCreateRequest(0),
+    [],
+  );
   const [scopeRequest, setScopeRequest] = useState<{
     resolve: (scope: EditScope | undefined) => void;
     returnFocus: HTMLElement | null;
@@ -464,6 +487,10 @@ export function Workspace({
   const mainRef = useRef<HTMLElement>(null);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
+    [calendars],
+  );
+  const editableTaskCalendars = useMemo(
+    () => getEditableTaskCalendars(calendars),
     [calendars],
   );
   const sourceEvents = baseEvents ?? events;
@@ -825,10 +852,6 @@ export function Workspace({
         event.preventDefault();
         setSearchOpen(true);
         return;
-      case "today":
-        event.preventDefault();
-        onDateChange(toDateKey(new Date()));
-        return;
       case "view":
         event.preventDefault();
         handleViewChange(command.view);
@@ -984,8 +1007,13 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
+          canCreateTasks={!offline && editableTaskCalendars.length > 0}
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
+          onCreateTask={() => {
+            setTaskCreateRequest((request) => request + 1);
+            if (activeView !== "tasks") handleViewChange("tasks");
+          }}
           onOpenSearch={() => setSearchOpen(true)}
           onPeriodChange={changePeriod}
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -993,7 +1021,7 @@ export function Workspace({
           onViewChange={handleViewChange}
           pageTitle={pageTitle}
           periodLabel={periodLabel}
-          periodNavigation={activeView !== "agenda"}
+          periodNavigation={activeView !== "agenda" && activeView !== "tasks"}
           periodName={activeView === "agenda" ? "agenda start" : activeView}
           searchTriggerRef={searchTriggerRef}
         />
@@ -1050,7 +1078,32 @@ export function Workspace({
           // Agenda is one continuous list, so it has no period to page.
           onPointerDown={view.swipeable ? swipePeriod.onPointerDown : undefined}
         >
-          {activeView === "agenda" ? (
+          {activeView === "tasks" ? (
+            <TaskList
+              calendars={calendars.filter(
+                (calendar) =>
+                  calendar.supportsTasks !== false &&
+                  visibleCalendarIds.includes(calendar.id),
+              )}
+              createRequest={taskCreateRequest}
+              editableCalendarIds={
+                new Set(
+                  offline
+                    ? []
+                    : editableTaskCalendars.map((calendar) => calendar.id),
+                )
+              }
+              offline={offline}
+              onCreateRequestHandled={consumeTaskCreateRequest}
+              settings={settings}
+              tasks={tasks.filter((task) =>
+                visibleCalendarIds.includes(task.calendarID),
+              )}
+              onCreate={onCreateTask}
+              onRemove={onRemoveTask}
+              onUpdate={onUpdateTask}
+            />
+          ) : activeView === "agenda" ? (
             <AgendaView
               anchor={anchor}
               calendars={calendars}

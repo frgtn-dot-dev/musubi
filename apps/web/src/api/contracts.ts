@@ -7,6 +7,7 @@ import {
   RemindersDocumentSchema,
   SettingsDocumentSchema,
   SettingsSchema,
+  TaskSchema,
 } from "@musubi/types";
 import {
   defaultEventPageContent,
@@ -35,6 +36,7 @@ export const EventsResponseSchema = z.object({
   events: z.array(EventSchema),
   serverTime: z.string(),
 });
+export const TasksResponseSchema = z.object({ tasks: z.array(TaskSchema) });
 
 export const RemoveEventResponseSchema = z.object({
   calendars: z.array(z.string()),

@@ -1,19 +1,29 @@
 import { and, eq } from "drizzle-orm";
 import { account, db } from "../index";
-import { GoogleCheck } from "@musubi/types";
+import type { GoogleCheck } from "@musubi/types";
 
 // OAuth calendar-provider account status/tokens — operates on the Better Auth
 // `account` table, not the sync tables. (Sync lives in queries/external.ts.)
 // Provider-generic: google and microsoft share the exact same lifecycle
 // (linked → active → reconnect_required → relinked).
 
-// The scope that marks an account as calendar-connected, per provider.
-// Keyed off a scope we always request (checked via `.includes`), so the loose
-// substring match stays unambiguous under Google's granular scopes.
+// Kept for callers that only need to identify calendar-provider grants.
 export const CALENDAR_SCOPE: Record<string, string> = {
   google: "https://www.googleapis.com/auth/calendar.events",
   microsoft: "Calendars.ReadWrite",
 };
+
+// Task APIs use separate consent even though their lists become task-only
+// calendars in Musubi. Existing grants must reconnect before sync resumes.
+export const PROVIDER_SYNC_SCOPES: Record<string, readonly string[]> = {
+  google: [CALENDAR_SCOPE.google, "https://www.googleapis.com/auth/tasks"],
+  microsoft: [CALENDAR_SCOPE.microsoft, "Tasks.ReadWrite"],
+};
+
+export function hasProviderSyncScopes(provider: string, scope = "") {
+  const required = PROVIDER_SYNC_SCOPES[provider];
+  return Boolean(required?.length && required.every(item => scope.split(/\s+/).includes(item)));
+}
 
 export async function oauthConnectionCheck(userID: string, provider: string): Promise<GoogleCheck> {
   const [row] = await db.select()
@@ -25,7 +35,7 @@ export async function oauthConnectionCheck(userID: string, provider: string): Pr
 
   const isLinked = !!row;
   const calendarConnected = row?.syncStatus === "active" && !!row.refreshToken &&
-    (row.scope ?? "").includes(CALENDAR_SCOPE[provider] ?? "");
+    hasProviderSyncScopes(provider, row.scope ?? "");
 
   return { isLinked, calendarConnected }
 }
@@ -45,9 +55,22 @@ export async function getOAuthAccountIDs(userID: string, provider: string): Prom
   // `calendarConnected`. Without it the sync can never mint an access token.
   // reconnect_required is also excluded so a permanently revoked token is
   // logged only once.
+  const missingScope = rows.filter(row =>
+    row.syncStatus === "active" &&
+    !!row.refreshToken &&
+    !hasProviderSyncScopes(provider, row.scope ?? ""),
+  );
+  await Promise.all(missingScope.map(row =>
+    markOAuthAccountReconnectRequired(
+      userID,
+      provider,
+      row.accountId,
+      "insufficient_scope",
+    ),
+  ));
   return rows
-    .filter((r) => r.syncStatus === "active" && !!r.refreshToken && (r.scope ?? "").includes(CALENDAR_SCOPE[provider] ?? ""))
-    .map((r) => r.accountId);
+    .filter(row => row.syncStatus === "active" && !!row.refreshToken && hasProviderSyncScopes(provider, row.scope ?? ""))
+    .map(row => row.accountId);
 }
 
 export async function getOAuthCredentials(userID: string, provider: string, accountID: string) {

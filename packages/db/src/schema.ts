@@ -16,6 +16,7 @@ import {
   DEFAULT_REMINDER_RULE,
   type NotificationEmails,
   type ReminderRule,
+  type TaskStatus,
 } from "@musubi/types";
 
 // drizzle has no built-in bytea — minimal custom type
@@ -232,6 +233,7 @@ export type NewCalendar = typeof calendars.$inferInsert;
 export const calendarsRelations = relations(calendars, ({ many, one }) => ({
   calendarEvents: many(calendarEvents),
   calendarMembers: many(calendarMembers),
+  tasks: many(tasks),
   user: one(user, { fields: [calendars.creatorID], references: [user.id] }),
 }));
 
@@ -276,6 +278,54 @@ export const eventsRelations = relations(events, ({ many, one }) => ({
   eventUsers: many(eventUsers),
   calendarEvents: many(calendarEvents),
   user: one(user, { fields: [events.creatorID], references: [user.id] }),
+}));
+
+// A task belongs to exactly one calendar collection. Calendar membership owns
+// access; external_tasks keeps provider identity and concurrency metadata.
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    creatorID: text("creator_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    calendarID: uuid("calendar_id")
+      .references(() => calendars.id, { onDelete: "cascade" })
+      .notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status")
+      .$type<TaskStatus>()
+      .notNull()
+      .default("needs-action"),
+    start: timestamp("start_at"),
+    due: timestamp("due_at"),
+    isAllDay: boolean("is_all_day").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+    percentComplete: integer("percent_complete").notNull().default(0),
+    priority: integer("priority").notNull().default(0),
+    recurrence: text("recurrence"),
+    relatedTo: text("related_to"),
+    sequence: integer("sequence").notNull().default(0),
+    url: text("url"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("tasks_calendar_updated_at_idx").on(t.calendarID, t.updatedAt)],
+);
+
+export type NewTask = typeof tasks.$inferInsert;
+
+export const tasksRelations = relations(tasks, ({ one }) => ({
+  calendar: one(calendars, {
+    fields: [tasks.calendarID],
+    references: [calendars.id],
+  }),
+  user: one(user, { fields: [tasks.creatorID], references: [user.id] }),
 }));
 
 // A published event page. No row means the event is private, which is every
@@ -748,6 +798,8 @@ export const externalCalendars = pgTable(
     }),
     externalCalendarID: text("external_calendar_id").notNull(),
     cursor: text("cursor"),
+    supportsEvents: boolean("supports_events").notNull().default(true),
+    supportsTasks: boolean("supports_tasks").notNull().default(false),
     disabled: boolean("disabled").notNull().default(false),
   },
   (t) => [
@@ -780,11 +832,45 @@ export const externalEvents = pgTable(
     externalCalendarID: text("external_calendar_id").notNull(),
     externalEventID: text("external_event_id").notNull(),
     etag: text("etag"),
+    // Resource URL addresses the object; iCalendar UID is its stable identity.
+    icalUid: text("ical_uid"),
   },
   (t) => [unique().on(t.provider, t.calendarID, t.externalEventID)],
 );
 
 export type NewExternalEvent = typeof externalEvents.$inferInsert;
+
+export const externalTasks = pgTable(
+  "external_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    provider: text("provider").notNull(),
+    taskID: uuid("task_id")
+      .references(() => tasks.id, { onDelete: "cascade" })
+      .notNull(),
+    calendarID: uuid("calendar_id")
+      .references(() => calendars.id, { onDelete: "cascade" })
+      .notNull(),
+    externalCalendarID: text("external_calendar_id").notNull(),
+    externalTaskID: text("external_task_id").notNull(),
+    etag: text("etag"),
+    icalUid: text("ical_uid"),
+  },
+  (t) => [
+    unique("external_tasks_provider_calendar_external_task_unique").on(
+      t.provider,
+      t.calendarID,
+      t.externalTaskID,
+    ),
+  ],
+);
+
+export type NewExternalTask = typeof externalTasks.$inferInsert;
 
 // CalDAV credentials (Apple/iCloud + generic). Password stored AES-GCM encrypted
 // by the app layer — this table never sees plaintext. Multiple accounts per user.

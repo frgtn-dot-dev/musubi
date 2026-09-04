@@ -7,7 +7,6 @@ export type ShortcutCommand =
   | { kind: "previous" }
   | { kind: "save" }
   | { kind: "search" }
-  | { kind: "today" }
   | { kind: "view"; view: CalendarViewId };
 
 type KeyEvent = {
@@ -22,6 +21,7 @@ const VIEW_KEYS: Record<string, CalendarViewId> = {
   a: "agenda",
   d: "day",
   m: "month",
+  t: "tasks",
   w: "week",
 };
 
@@ -33,7 +33,6 @@ const PLAIN_KEYS: Record<string, ShortcutCommand> = {
   k: { kind: "previous" },
   n: { kind: "next" },
   p: { kind: "previous" },
-  t: { kind: "today" },
 };
 
 /**
@@ -47,7 +46,10 @@ export function shortcutFor(
   event: KeyEvent,
   { typing = false }: { typing?: boolean } = {},
 ): ShortcutCommand | undefined {
-  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "s") {
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    event.key.toLocaleLowerCase() === "s"
+  ) {
     return { kind: "save" };
   }
 
@@ -76,7 +78,6 @@ export const SHORTCUT_GROUPS: Array<{
     items: [
       { action: "Previous period", keys: "P or K" },
       { action: "Next period", keys: "N or J" },
-      { action: "Today", keys: "T" },
       { action: "Move day focus", keys: "Arrows" },
     ],
     title: "Navigate",

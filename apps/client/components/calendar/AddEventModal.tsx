@@ -137,8 +137,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   // Default to a calendar the user can actually write to (personal first) —
   // the first calendar in the list can be a read-only external one.
   const defaultCalSet = () => {
-    const c = calendars.find(c => c.isDefault && can(c.role, "editEvents"))
-      ?? calendars.find(c => can(c.role, "editEvents"))
+    const c = calendars.find(c => c.supportsEvents !== false && c.isDefault && can(c.role, "editEvents"))
+      ?? calendars.find(c => c.supportsEvents !== false && can(c.role, "editEvents"))
       ?? calendars[0];
     return new Set(c ? [c.id] : []);
   };
@@ -588,7 +588,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               Only calendars the user can add events to are offered — no point
               showing one you can't link into. */}
           {sortCalendars(calendars, calendarOrder)
-            .filter((cal) => can(cal.role, "editEvents"))
+            .filter((cal) => cal.supportsEvents !== false && can(cal.role, "editEvents"))
             .map((cal) => {
             const active = selectedCals.has(cal.id);
             const isOrigin = originEffective === cal.id;

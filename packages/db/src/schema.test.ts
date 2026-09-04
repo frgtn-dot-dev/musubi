@@ -5,10 +5,13 @@ import {
   calendarMembers,
   eventReminders,
   eventUsers,
+  externalCalendars,
+  externalTasks,
   pages,
   schedulingParticipants,
   schedulingPolls,
   schedulingVotes,
+  tasks,
   user,
   userSettings,
 } from "./schema";
@@ -30,12 +33,30 @@ assert.equal(
   "user_settings.revision must start at one",
 );
 
-const calendarEventUnique = getTableConfig(calendarEvents).uniqueConstraints.find(
-  (constraint) => constraint.name === "calendar_events_event_id_calendar_id_unique",
+const calendarEventUnique = getTableConfig(
+  calendarEvents,
+).uniqueConstraints.find(
+  (constraint) =>
+    constraint.name === "calendar_events_event_id_calendar_id_unique",
 );
 assert.ok(
   calendarEventUnique,
   "calendar_events must reject duplicate event/calendar links",
+);
+
+assert.equal(tasks.status.default, "needs-action");
+assert.equal(tasks.percentComplete.default, 0);
+assert.equal(tasks.priority.default, 0);
+assert.equal(externalCalendars.supportsEvents.default, true);
+assert.equal(externalCalendars.supportsTasks.default, false);
+
+const externalTaskUnique = getTableConfig(externalTasks).uniqueConstraints.find(
+  (constraint) =>
+    constraint.name === "external_tasks_provider_calendar_external_task_unique",
+);
+assert.ok(
+  externalTaskUnique,
+  "external_tasks must reject duplicate resources within one mirror",
 );
 assert.deepEqual(
   calendarEventUnique.columns.map((column) => column.name),
@@ -88,10 +109,7 @@ assert.equal(
 const pagesPositionIndex = getTableConfig(pages).indexes.find(
   (index) => index.config.name === "pages_user_position_idx",
 );
-assert.ok(
-  pagesPositionIndex,
-  "pages must be orderable per user by position",
-);
+assert.ok(pagesPositionIndex, "pages must be orderable per user by position");
 
 console.log("database schema invariant self-check: OK");
 

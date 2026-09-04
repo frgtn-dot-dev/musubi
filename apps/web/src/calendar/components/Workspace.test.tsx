@@ -77,10 +77,14 @@ describe("Workspace", () => {
 
     expect(screen.queryByRole("button", { name: "Filters" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
     const studio = dialog.getByRole("button", { name: "Studio" });
     await user.click(studio);
-    await user.click(dialog.getByRole("checkbox", { name: "Scheduling polls" }));
+    await user.click(
+      dialog.getByRole("checkbox", { name: "Scheduling polls" }),
+    );
 
     expect(studio.getAttribute("aria-pressed")).toBe("false");
     expect(onSavePage).not.toHaveBeenCalled();
@@ -112,6 +116,8 @@ describe("Workspace", () => {
 
     await user.keyboard("a");
     expect(onViewChange).toHaveBeenCalledWith("agenda");
+    await user.keyboard("t");
+    expect(onViewChange).toHaveBeenCalledWith("tasks");
     expect(
       screen.queryByRole("region", { name: "Unsaved Page changes" }),
     ).toBeNull();
@@ -158,7 +164,10 @@ describe("Workspace", () => {
     const onViewChange = vi.fn();
     const config = {
       ...commonProps.pages[0]!.config,
-      calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" as const },
+      calendarVisibility: {
+        hiddenCalendarIds: ["studio"],
+        mode: "all" as const,
+      },
     };
 
     render(
@@ -167,16 +176,18 @@ describe("Workspace", () => {
         onPageDraftsChange={vi.fn()}
         onSavePage={onSavePage}
         onViewChange={onViewChange}
-        pageDrafts={new Map([
-          [
-            "my-calendar",
-            {
-              config,
-              conflict: false,
-              persisted: commonProps.pages[0]!,
-            },
-          ],
-        ])}
+        pageDrafts={
+          new Map([
+            [
+              "my-calendar",
+              {
+                config,
+                conflict: false,
+                persisted: commonProps.pages[0]!,
+              },
+            ],
+          ])
+        }
       />,
     );
 
@@ -258,7 +269,9 @@ describe("Workspace", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
     await user.click(dialog.getByRole("button", { name: "Studio" }));
     await user.click(dialog.getByRole("button", { name: "Save" }));
 
@@ -298,7 +311,9 @@ describe("Workspace", () => {
 
     await user.click(screen.getByRole("radio", { name: "Agenda" }));
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Focused");
     await user.click(dialog.getByRole("button", { name: "Save" }));
@@ -326,11 +341,15 @@ describe("Workspace", () => {
 
     await user.click(screen.getByRole("radio", { name: "Agenda" }));
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Conflicting");
     await user.click(dialog.getByRole("button", { name: "Save" }));
-    await user.click(dialog.getByRole("button", { name: "Discard my changes" }));
+    await user.click(
+      dialog.getByRole("button", { name: "Discard my changes" }),
+    );
 
     expect(screen.queryByRole("dialog", { name: "Page settings" })).toBeNull();
     expect(
@@ -354,13 +373,13 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Edit My calendar" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
     const dialog = within(screen.getByRole("dialog"));
 
     // Nothing to save until something actually changes.
-    expect(dialog.getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(true);
+    expect(
+      dialog.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
+    ).toBe(true);
 
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Studio only");
@@ -384,12 +403,14 @@ describe("Workspace", () => {
 
   it("creates a page from the current Page filters", async () => {
     const user = userEvent.setup();
-    const onCreatePage = vi.fn(async (request: { config: unknown; name: string }) => ({
-      ...commonProps.pages[0]!,
-      id: "work",
-      isDefault: false,
-      name: request.name,
-    }));
+    const onCreatePage = vi.fn(
+      async (request: { config: unknown; name: string }) => ({
+        ...commonProps.pages[0]!,
+        id: "work",
+        isDefault: false,
+        name: request.name,
+      }),
+    );
     const onPageChange = vi.fn();
     const filteredPage = {
       ...commonProps.pages[0]!,
@@ -413,7 +434,9 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: "New page" }));
     const dialog = within(screen.getByRole("dialog"));
     expect(
-      dialog.getByRole("button", { name: "Create page" }).hasAttribute("disabled"),
+      dialog
+        .getByRole("button", { name: "Create page" })
+        .hasAttribute("disabled"),
     ).toBe(true);
 
     await user.type(dialog.getByLabelText("Page name"), "Work");
@@ -450,9 +473,7 @@ describe("Workspace", () => {
     const single = render(
       <Workspace {...commonProps} onDeletePage={onDeletePage} />,
     );
-    await user.click(
-      screen.getByRole("button", { name: "Edit My calendar" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
     expect(
       within(screen.getByRole("dialog")).queryByRole("button", {
         name: "Delete page",
@@ -474,9 +495,10 @@ describe("Workspace", () => {
       }),
     );
     await user.click(
-      within(
-        screen.getByRole("dialog", { name: "Delete “Work”?" }),
-      ).getByRole("button", { name: "Delete page" }),
+      within(screen.getByRole("dialog", { name: "Delete “Work”?" })).getByRole(
+        "button",
+        { name: "Delete page" },
+      ),
     );
 
     expect(onDeletePage).toHaveBeenCalledWith("work");
@@ -506,15 +528,13 @@ describe("Workspace", () => {
     );
     await user.clear(dialog.getByLabelText("Page name"));
     await user.type(dialog.getByLabelText("Page name"), "Deep work");
-    await user.click(
-      dialog.getByRole("button", { name: "Set as default" }),
-    );
+    await user.click(dialog.getByRole("button", { name: "Set as default" }));
 
     expect(onSetDefaultPage).toHaveBeenCalledWith("work");
     expect(dialog.getByText("Default", { selector: "span" })).not.toBeNull();
-    expect(
-      (dialog.getByLabelText("Page name") as HTMLInputElement).value,
-    ).toBe("Deep work");
+    expect((dialog.getByLabelText("Page name") as HTMLInputElement).value).toBe(
+      "Deep work",
+    );
     expect(
       dialog.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
     ).toBe(false);
@@ -573,12 +593,17 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} onSavePage={onSavePage} />);
     await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
-    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Page settings" }),
+    );
     await user.click(dialog.getByRole("button", { name: "Studio" }));
-    await user.click(dialog.getByRole("button", { name: "Close page settings" }));
     await user.click(
-      within(screen.getByRole("dialog", { name: "Discard page changes?" }))
-        .getByRole("button", { name: "Cancel" }),
+      dialog.getByRole("button", { name: "Close page settings" }),
+    );
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Discard page changes?" }),
+      ).getByRole("button", { name: "Cancel" }),
     );
 
     expect(
@@ -598,14 +623,18 @@ describe("Workspace", () => {
       screen.getByRole("button", { name: "Search events and actions" }),
     );
 
-    const dialog = within(screen.getByRole("dialog", { name: "Search Musubi" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Search Musubi" }),
+    );
     expect(dialog.getByRole("button", { name: "Go to today" })).not.toBeNull();
     await user.type(
       dialog.getByRole("searchbox", { name: "Search events and actions" }),
       "quarterly",
     );
 
-    const quarterly = dialog.getByRole("button", { name: /Quarterly planning/ });
+    const quarterly = dialog.getByRole("button", {
+      name: /Quarterly planning/,
+    });
     expect(quarterly).not.toBeNull();
     expect(dialog.queryByRole("button", { name: /Design review/ })).toBeNull();
     expect(
@@ -618,17 +647,14 @@ describe("Workspace", () => {
 
   it("renders future event days as one continuous Agenda", () => {
     const { container } = render(
-      <Workspace
-        {...commonProps}
-        activeView="agenda"
-      />,
+      <Workspace {...commonProps} activeView="agenda" />,
     );
 
     expect(screen.getByText("From Jul 26, 2026")).not.toBeNull();
     expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(5);
-    expect(container.querySelectorAll('[data-agenda-year="2026"]')).toHaveLength(
-      1,
-    );
+    expect(
+      container.querySelectorAll('[data-agenda-year="2026"]'),
+    ).toHaveLength(1);
     expect(
       container.querySelector('[data-agenda-date="2026-07-26"]'),
     ).toBeNull();
@@ -681,19 +707,23 @@ describe("Workspace", () => {
     };
     const rendered = render(<Workspace {...props} activeView="month" />);
 
-    expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(1);
+    expect(
+      document.querySelectorAll('[data-poll-calendar="poll-1"]'),
+    ).toHaveLength(1);
     for (const activeView of ["day", "week", "multi-week"] as const) {
       rendered.rerender(<Workspace {...props} activeView={activeView} />);
-      expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(1);
+      expect(
+        document.querySelectorAll('[data-poll-calendar="poll-1"]'),
+      ).toHaveLength(1);
     }
 
     // Not the agenda: that view lists what is agreed, and a poll is still a
     // question.
     rendered.rerender(<Workspace {...props} activeView="agenda" />);
-    expect(document.querySelectorAll('[data-poll-calendar="poll-1"]')).toHaveLength(0);
-    rendered.rerender(
-      <Workspace {...props} activeView="month" pollsError />,
-    );
+    expect(
+      document.querySelectorAll('[data-poll-calendar="poll-1"]'),
+    ).toHaveLength(0);
+    rendered.rerender(<Workspace {...props} activeView="month" pollsError />);
     expect(screen.getByRole("status").textContent).toContain(
       "Scheduling polls could not be loaded",
     );
@@ -706,11 +736,7 @@ describe("Workspace", () => {
       token: `token-${index}`,
     }));
     rendered.rerender(
-      <Workspace
-        {...props}
-        activeView="week"
-        polls={crowdedPolls}
-      />,
+      <Workspace {...props} activeView="week" polls={crowdedPolls} />,
     );
     await user.click(
       screen.getByRole("button", { name: "2 more all-day items" }),
@@ -720,11 +746,7 @@ describe("Workspace", () => {
     ).not.toBeNull();
     await user.keyboard("{Escape}");
     rendered.rerender(
-      <Workspace
-        {...props}
-        activeView="multi-week"
-        polls={crowdedPolls}
-      />,
+      <Workspace {...props} activeView="multi-week" polls={crowdedPolls} />,
     );
     await user.click(
       screen.getByRole("button", { name: /2 more all-day items on/ }),
@@ -760,17 +782,11 @@ describe("Workspace", () => {
       };
     });
     const { container } = render(
-      <Workspace
-        {...commonProps}
-        activeView="agenda"
-        events={manyEvents}
-      />,
+      <Workspace {...commonProps} activeView="agenda" events={manyEvents} />,
     );
 
     expect(container.querySelectorAll("[data-agenda-date]")).toHaveLength(14);
-    expect(
-      container.querySelector("[data-agenda-sentinel]"),
-    ).not.toBeNull();
+    expect(container.querySelector("[data-agenda-sentinel]")).not.toBeNull();
   });
 
   it("renders one shared time grid for Day and pages by one day", async () => {
@@ -809,21 +825,22 @@ describe("Workspace", () => {
     const user = userEvent.setup();
     const onCreateEvent = vi.fn(async (event) => event);
 
-    render(
-      <Workspace
-        {...commonProps}
-        onCreateEvent={onCreateEvent}
-      />,
-    );
+    render(<Workspace {...commonProps} onCreateEvent={onCreateEvent} />);
 
     await user.click(
-      screen.getByRole("button", { name: /^Event$/ }),
+      screen.getByRole("button", { name: "Create event or task" }),
     );
+    await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
       "Release check",
     );
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Create event" })).getByRole(
+        "button",
+        { name: "Create" },
+      ),
+    );
 
     expect(onCreateEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -832,9 +849,95 @@ describe("Workspace", () => {
         title: "Release check",
       }),
     );
-    expect(screen.getByRole("status").textContent).toContain(
-      "Event created.",
+    expect(screen.getByRole("status").textContent).toContain("Event created.");
+  });
+
+  it("opens the task editor from the create menu without a duplicate heading", async () => {
+    const user = userEvent.setup();
+
+    render(<Workspace {...commonProps} activeView="tasks" />);
+
+    expect(screen.queryByRole("heading", { name: "Tasks" })).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
     );
+    await user.click(screen.getByRole("menuitem", { name: "Task" }));
+
+    expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
+  });
+
+  it("offers tasks but not events for a task-only calendar", async () => {
+    const user = userEvent.setup();
+    render(
+      <Workspace
+        {...commonProps}
+        activeView="tasks"
+        calendars={[
+          {
+            ...fixtureCalendars[0]!,
+            supportsEvents: false,
+            supportsTasks: true,
+          },
+        ]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
+    expect(
+      screen
+        .getByRole("menuitem", { name: "Event" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("menuitem", { name: "Task" })
+        .getAttribute("aria-disabled"),
+    ).toBeNull();
+  });
+
+  it("keeps saved tasks readable but not editable offline", () => {
+    render(
+      <Workspace
+        {...commonProps}
+        activeView="tasks"
+        offline
+        tasks={[
+          {
+            calendarID: "personal",
+            completedAt: null,
+            creatorID: "alex",
+            description: null,
+            due: null,
+            id: "offline-task",
+            isAllDay: false,
+            percentComplete: 0,
+            priority: 0,
+            recurrence: null,
+            relatedTo: null,
+            sequence: 0,
+            start: null,
+            status: "needs-action",
+            title: "Saved offline task",
+            url: null,
+          },
+        ]}
+      />,
+    );
+
+    const tasks = screen.getByRole("region", { name: "Tasks" });
+    expect(tasks.textContent).toContain("Saved offline task");
+    expect(
+      within(tasks)
+        .getByRole("checkbox", {
+          name: "Mark Saved offline task completed",
+        })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(
+      within(tasks).queryByRole("button", { name: /Saved offline task/ }),
+    ).toBeNull();
   });
 
   it("edits and deletes an event when its home calendar is writable", async () => {
@@ -914,7 +1017,10 @@ describe("Workspace", () => {
 
     render(<Workspace {...commonProps} />);
 
-    await user.click(screen.getByRole("button", { name: /^Event$/ }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
       "Studio time",
@@ -937,11 +1043,12 @@ describe("Workspace", () => {
     const user = userEvent.setup();
     const onOpenFullEditor = vi.fn();
 
-    render(
-      <Workspace {...commonProps} onOpenFullEditor={onOpenFullEditor} />,
-    );
+    render(<Workspace {...commonProps} onOpenFullEditor={onOpenFullEditor} />);
 
-    await user.click(screen.getByRole("button", { name: /^Event$/ }));
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
       "Studio time",
@@ -963,15 +1070,10 @@ describe("Workspace", () => {
       provider: "microsoft",
     }));
 
-    render(
-      <Workspace
-        {...commonProps}
-        calendars={viewerCalendars}
-      />,
-    );
+    render(<Workspace {...commonProps} calendars={viewerCalendars} />);
 
     expect(
-      screen.queryByRole("button", { name: /^Event$/ }),
+      screen.queryByRole("button", { name: "Create event or task" }),
     ).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
@@ -1011,9 +1113,11 @@ describe("Workspace", () => {
       ...fixtureCalendars[0]!,
       provider: "google",
     };
-    const onCreateEvent = vi.fn().mockRejectedValue(
-      new ApiError("Provider unavailable", 502, "provider-request"),
-    );
+    const onCreateEvent = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError("Provider unavailable", 502, "provider-request"),
+      );
 
     render(
       <Workspace
@@ -1025,20 +1129,24 @@ describe("Workspace", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: /^Event$/ }),
+      screen.getByRole("button", { name: "Create event or task" }),
     );
+    await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
       "Provider event",
     );
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Create event" })).getByRole(
+        "button",
+        { name: "Create" },
+      ),
+    );
 
     expect(screen.getByRole("alert").textContent).toContain(
       "Google Calendar did not confirm this change",
     );
-    expect(screen.getByRole("alert").textContent).toContain(
-      "provider-request",
-    );
+    expect(screen.getByRole("alert").textContent).toContain("provider-request");
     expect(
       (
         screen.getByRole("textbox", {

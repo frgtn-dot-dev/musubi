@@ -79,7 +79,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@react-native/metro-config": "0.86.2",
+    "@react-native/metro-config": "0.86.3",
     "@testing-library/dom": "^10.4.1",
     "@types/node": "^25.9.5",
     "@types/react": "~19.2.18",

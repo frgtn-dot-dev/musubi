@@ -18,6 +18,7 @@ export * from './queries/caldav';
 export * from './queries/oauth';
 export * from './queries/federation';
 export * from './queries/announcements';
+export * from './queries/tasks';
 export * from './schema';
 export * as schema from './schema';
 

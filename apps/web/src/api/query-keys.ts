@@ -29,6 +29,9 @@ export const queryKeys = {
   pages: (serverOrigin: string, userId: string) =>
     ["pages", serverOrigin, userId] as const,
 
+  tasks: (serverOrigin: string, userId: string) =>
+    ["tasks", serverOrigin, userId] as const,
+
   reminders: (serverOrigin: string, userId: string) =>
     ["reminders", serverOrigin, userId] as const,
 
@@ -44,11 +47,8 @@ export const queryKeys = {
   invites: (serverOrigin: string, userId: string, calendarId: string) =>
     ["invites", serverOrigin, userId, calendarId] as const,
 
-  attendees: (
-    serverOrigin: string,
-    userId: string,
-    eventId: string,
-  ) => ["attendees", serverOrigin, userId, eventId] as const,
+  attendees: (serverOrigin: string, userId: string, eventId: string) =>
+    ["attendees", serverOrigin, userId, eventId] as const,
 
   eventRange: (input: EventRangeInput) =>
     [

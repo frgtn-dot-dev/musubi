@@ -7,8 +7,16 @@ import {
 import { ApiError, ApiResponseError } from "~/api/http";
 
 export function getEditableCalendars(calendars: Calendar[]) {
-  return calendars.filter((calendar) =>
-    can(calendar.role, "editEvents"),
+  return calendars.filter(
+    (calendar) =>
+      calendar.supportsEvents !== false && can(calendar.role, "editEvents"),
+  );
+}
+
+export function getEditableTaskCalendars(calendars: Calendar[]) {
+  return calendars.filter(
+    (calendar) =>
+      calendar.supportsTasks !== false && can(calendar.role, "editEvents"),
   );
 }
 
