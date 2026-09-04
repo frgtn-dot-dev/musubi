@@ -92,6 +92,8 @@ async function main() {
       null,
     );
     const pulledCreated = findTask(createdPull.changes, created.externalTaskId);
+    assert.ok(createdPull.nextCursor, "Radicale must expose a sync token");
+    assert.equal(createdPull.reset, true);
     assert.equal(pulledCreated?.title, task.title);
     assert.equal(pulledCreated?.icalUid, task.id);
     assert.equal(pulledCreated?.etag, created.etag);
@@ -112,8 +114,9 @@ async function main() {
       userID,
       account.id,
       collectionURL,
-      null,
+      createdPull.nextCursor,
     );
+    assert.equal(updatedPull.reset, false);
     const pulledUpdated = findTask(updatedPull.changes, created.externalTaskId);
     assert.equal(pulledUpdated?.title, updatedTask.title);
     assert.equal(pulledUpdated?.priority, updatedTask.priority);
@@ -130,11 +133,12 @@ async function main() {
       userID,
       account.id,
       collectionURL,
-      null,
+      updatedPull.nextCursor,
     );
+    assert.equal(deletedPull.reset, false);
     assert.equal(
-      findTask(deletedPull.changes, created.externalTaskId),
-      undefined,
+      findTask(deletedPull.changes, created.externalTaskId)?.deleted,
+      true,
     );
 
     console.log("Radicale VTODO create/update/delete interop: OK");

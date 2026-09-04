@@ -1,13 +1,14 @@
 ---
 title: Apple / iCloud and CalDAV
-description: Configure and extend Musubi's encrypted, full-fetch CalDAV integration.
+description: Configure and extend Musubi's encrypted CalDAV event and task sync.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 The adapter at `apps/api/src/sync/adapters/caldav.ts` serves Apple/iCloud,
-Nextcloud, Radicale, Fastmail, and other CalDAV servers. It is two-way, supports
-multiple accounts, and uses Basic authentication rather than OAuth.
+Nextcloud, Radicale, Fastmail, and other CalDAV servers. It synchronizes VEVENT
+and VTODO collections in both directions, supports multiple accounts, and uses
+Basic authentication rather than OAuth.
 
 ## Connect an account
 
@@ -50,19 +51,17 @@ multiple accounts, and uses Basic authentication rather than OAuth.
 `providerFlavor()` labels an `icloud.com` server as Apple for display. The
 underlying sync path remains CalDAV.
 
-## Full-fetch reconciliation
+## Incremental reconciliation
 
-This adapter currently has no delta cursor. Each scheduled pull:
+When supported, the first pull uses WebDAV `sync-collection` without a token to
+fetch the complete collection and obtain its cursor. Later pulls fetch only
+changed resource URLs; deleted URLs become tombstones for both resource kinds so
+the existing mapping is removed safely.
 
-1. fetches a rolling window from one year ago to three years ahead;
-2. maps every resource and records its ETag;
-3. upserts changed items;
-4. treats unchanged live ETags as verified no-ops; and
-5. sweeps local mirror items absent from the reset result.
-
-iCloud returns no `calendar-query` results without a `time-range`, so the window
-is correctness-critical there. WebDAV `sync-collection` is the natural future
-upgrade if full fetches become too expensive.
+An expired token, unsupported report, malformed response, or missing next token
+falls back to a complete depth-one `PROPFIND` listing and calendar multiget.
+This avoids iCloud's `calendar-query` time-range requirement while keeping reset
+sweeps complete. Unchanged ETags remain verified no-ops.
 
 <Aside type="note">
 CalDAV sync status metrics report the connection as active because these
@@ -77,11 +76,16 @@ failures are still exported through sync-failure counters and structured logs.
 | Resource URL | Stable `externalId`; UID alone is not used |
 | DATE `DTSTART` | All-day event at UTC midnight |
 | Exclusive `DTEND` | Subtract one day for inclusive Musubi end |
-| `RRULE` + `EXDATE` | Round-trip recurrence and exceptions |
+| `RRULE`, `EXDATE`, `RDATE`, detached instances | Preserve and project recurrence exceptions |
+| `TZID` + `VTIMEZONE` | Resolve instants and preserve the original zone on update |
+| `VALARM` | Preserve alarm components while editing event or task fields |
+| VTODO | Import and write task fields, UID, and ETag |
 | ETag unchanged | No database write and no `updatedAt` bump |
 
-All-day recurrence exceptions must stay DATE-typed on push. Losing that type can
-make the next full pull overwrite or resurrect exceptions.
+Updates patch the existing calendar resource rather than replacing its complete
+iCalendar payload. This keeps server-owned fields, detached recurrence
+components, timezones, and alarms intact. If the recurrence rule itself changes,
+stale detached instances are removed with the old series.
 
 ## Calendar-level operations
 
@@ -105,8 +109,8 @@ authentication is enabled. Do not enter the normal Apple ID password.
 
 ### Discovery succeeds but no events arrive
 
-Check the calendar query time range, the exact collection URL, and the event
-dates. Events outside the one-year/three-year window are intentionally absent.
+Check the exact collection URL and whether the server permits depth-one
+`PROPFIND`, `calendar-multiget`, or `sync-collection` on that collection.
 
 ### Every poll appears to rewrite everything
 
@@ -127,5 +131,5 @@ rows.
 - cover `207 Multi-Status` and ignored color-property behavior;
 - never log Basic auth values, encrypted payloads, tokens, or full request
   bodies;
-- measure full-fetch cost before expanding the time window; and
+- verify incremental pulls and expired-token fallback; and
 - run `pnpm check` plus a disposable-account round trip.

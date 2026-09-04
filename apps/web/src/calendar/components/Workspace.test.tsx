@@ -866,6 +866,37 @@ describe("Workspace", () => {
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
   });
 
+  it("offers tasks but not events for a task-only calendar", async () => {
+    const user = userEvent.setup();
+    render(
+      <Workspace
+        {...commonProps}
+        activeView="tasks"
+        calendars={[
+          {
+            ...fixtureCalendars[0]!,
+            supportsEvents: false,
+            supportsTasks: true,
+          },
+        ]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Create event or task" }),
+    );
+    expect(
+      screen
+        .getByRole("menuitem", { name: "Event" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("menuitem", { name: "Task" })
+        .getAttribute("aria-disabled"),
+    ).toBeNull();
+  });
+
   it("keeps saved tasks readable but not editable offline", () => {
     render(
       <Workspace

@@ -41,7 +41,10 @@ import {
 import { getEventRangeLabel, parseDateKey } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import type { EventFormValues } from "../event-form";
-import { getEditableCalendars } from "../event-permissions";
+import {
+  getEditableCalendars,
+  getEditableTaskCalendars,
+} from "../event-permissions";
 import type { Notify } from "../notice";
 import type { ReminderControl } from "../reminder-control";
 
@@ -484,6 +487,10 @@ export function Workspace({
   const mainRef = useRef<HTMLElement>(null);
   const editableCalendars = useMemo(
     () => getEditableCalendars(calendars),
+    [calendars],
+  );
+  const editableTaskCalendars = useMemo(
+    () => getEditableTaskCalendars(calendars),
     [calendars],
   );
   const sourceEvents = baseEvents ?? events;
@@ -1000,7 +1007,7 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
-          canCreateTasks={!offline && editableCalendars.length > 0}
+          canCreateTasks={!offline && editableTaskCalendars.length > 0}
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
           onCreateTask={() => {
@@ -1073,15 +1080,17 @@ export function Workspace({
         >
           {activeView === "tasks" ? (
             <TaskList
-              calendars={calendars.filter((calendar) =>
-                visibleCalendarIds.includes(calendar.id),
+              calendars={calendars.filter(
+                (calendar) =>
+                  calendar.supportsTasks !== false &&
+                  visibleCalendarIds.includes(calendar.id),
               )}
               createRequest={taskCreateRequest}
               editableCalendarIds={
                 new Set(
                   offline
                     ? []
-                    : editableCalendars.map((calendar) => calendar.id),
+                    : editableTaskCalendars.map((calendar) => calendar.id),
                 )
               }
               offline={offline}

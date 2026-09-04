@@ -1,17 +1,31 @@
 import { config } from "@musubi/config";
 import { getOAuthAccountIDs } from "@musubi/db";
-import { Event } from "@musubi/types";
-import {
+import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
+import type { Event, Task } from "@musubi/types";
+import type {
   CalendarAdapter,
   ExternalCalendarInfo,
   FetchChangesResult,
   NormalizedChange,
   NormalizedEvent,
+  NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
+const GTASKS = "https://tasks.googleapis.com/tasks/v1";
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+const TASK_LIST_PREFIX = "musubi-google-task-list:";
+
+export function googleTaskListExternalId(taskListId: string) {
+  return `${TASK_LIST_PREFIX}${taskListId}`;
+}
+
+function googleTaskListId(externalCalendarId: string) {
+  return externalCalendarId.startsWith(TASK_LIST_PREFIX)
+    ? externalCalendarId.slice(TASK_LIST_PREFIX.length)
+    : null;
+}
 
 // Error with Google's own message when available ("Cannot delete primary
 // calendar", …) — status text alone is useless to the user.
@@ -226,6 +240,193 @@ function toGoogleEvent(event: Event) {
   };
 }
 
+function googleTaskDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function toNormalizedGoogleTask(item: any): NormalizedTask {
+  const completed = item.status === "completed";
+  return {
+    completedAt: googleTaskDate(item.completed),
+    deleted: item.deleted === true,
+    description: item.notes ?? null,
+    due: googleTaskDate(item.due),
+    etag: item.etag ?? null,
+    externalId: item.id,
+    icalUid: null,
+    isAllDay: Boolean(item.due),
+    percentComplete: completed ? 100 : 0,
+    priority: 0,
+    recurrence: null,
+    relatedTo: item.parent ?? null,
+    sequence: 0,
+    start: null,
+    status: completed ? "completed" : "needs-action",
+    title: item.title ?? "(untitled)",
+    url: item.links?.find((link: any) => link?.link)?.link ?? null,
+  };
+}
+
+export function toGoogleTask(task: Task) {
+  return {
+    due: task.due?.toISOString() ?? null,
+    notes: task.description ?? null,
+    status: task.status === "completed" ? "completed" : "needsAction",
+    title: task.title,
+  };
+}
+
+type GoogleTaskRequestOptions = {
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+};
+
+export async function createGoogleTask(
+  accessToken: string,
+  taskListId: string,
+  task: Task,
+  options: GoogleTaskRequestOptions = {},
+) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = options.baseUrl ?? GTASKS;
+  const res = await fetchImpl(
+    `${baseUrl}/lists/${encodeURIComponent(taskListId)}/tasks`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(toGoogleTask(task)),
+    },
+  );
+  if (!res.ok) throw await googleError(res);
+  const created = await res.json();
+  return {
+    etag: created.etag ?? null,
+    externalTaskId: created.id,
+    icalUid: null,
+  };
+}
+
+export async function updateGoogleTask(
+  accessToken: string,
+  taskListId: string,
+  externalTaskId: string,
+  task: Task,
+  etag: string | null | undefined,
+  options: GoogleTaskRequestOptions = {},
+) {
+  if (!etag) throw new Error("Google task update requires an ETag");
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = options.baseUrl ?? GTASKS;
+  const res = await fetchImpl(
+    `${baseUrl}/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(externalTaskId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "If-Match": etag,
+      },
+      body: JSON.stringify(toGoogleTask(task)),
+    },
+  );
+  if (!res.ok) throw await googleError(res);
+  const updated = await res.json();
+  return { etag: updated.etag ?? null, icalUid: null };
+}
+
+export async function deleteGoogleTask(
+  accessToken: string,
+  taskListId: string,
+  externalTaskId: string,
+  etag: string | null | undefined,
+  options: GoogleTaskRequestOptions = {},
+) {
+  if (!etag) throw new Error("Google task delete requires an ETag");
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = options.baseUrl ?? GTASKS;
+  const res = await fetchImpl(
+    `${baseUrl}/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(externalTaskId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "If-Match": etag,
+      },
+    },
+  );
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw await googleError(res);
+  }
+}
+
+export async function fetchGoogleTaskChanges(
+  accessToken: string,
+  taskListId: string,
+  options: { fetchImpl?: typeof fetch; baseUrl?: string } = {},
+): Promise<FetchChangesResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = options.baseUrl ?? GTASKS;
+  const changes: NormalizedChange[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      maxResults: "100",
+      showCompleted: "true",
+      showDeleted: "true",
+      showHidden: "true",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetchImpl(
+      `${baseUrl}/lists/${encodeURIComponent(taskListId)}/tasks?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok)
+      throw new Error(`Google Tasks ${res.status} ${res.statusText}`);
+    const data = await res.json();
+    for (const item of data.items ?? []) {
+      changes.push({ kind: "task", data: toNormalizedGoogleTask(item) });
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  // Google Tasks has no collection sync token. A complete, paginated read is
+  // the only safe way to notice removals that have aged out of its tombstones.
+  return { changes, nextCursor: null, reset: true };
+}
+
+export function toExternalGoogleTaskList(list: any): ExternalCalendarInfo {
+  return {
+    color: DEFAULT_CALENDAR_COLOR,
+    externalId: googleTaskListExternalId(list.id),
+    name: list.title ?? "Tasks",
+    supportsEvents: false,
+    supportsTasks: true,
+  };
+}
+
+async function listGoogleTaskLists(accessToken: string) {
+  const lists: any[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({ maxResults: "100" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetch(`${GTASKS}/users/@me/lists?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw await googleError(res);
+    const data = await res.json();
+    lists.push(...(data.items ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return lists;
+}
+
 export async function fetchGoogleChanges(
   accessToken: string,
   externalCalendarId: string,
@@ -318,12 +519,16 @@ export const googleAdapter: CalendarAdapter = {
     });
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
     const data = await res.json();
-    return (data.items ?? []).map((c: any) => ({
+    const calendars = (data.items ?? []).map((c: any) => ({
       externalId: c.id,
       name: c.summary,
       color: c.backgroundColor,
       readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
+      supportsEvents: true,
+      supportsTasks: false,
     }));
+    const taskLists = await listGoogleTaskLists(accessToken);
+    return [...calendars, ...taskLists.map(toExternalGoogleTaskList)];
   },
 
   async fetchChanges(
@@ -333,7 +538,10 @@ export const googleAdapter: CalendarAdapter = {
     cursor,
   ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
-    return fetchGoogleChanges(accessToken, externalCalendarId, cursor);
+    const taskListId = googleTaskListId(externalCalendarId);
+    return taskListId
+      ? fetchGoogleTaskChanges(accessToken, taskListId)
+      : fetchGoogleChanges(accessToken, externalCalendarId, cursor);
   },
 
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {
@@ -388,6 +596,52 @@ export const googleAdapter: CalendarAdapter = {
     }
   },
 
+  async pushTaskCreate(userID, accountId, externalCalendarId, task) {
+    const taskListId = googleTaskListId(externalCalendarId);
+    if (!taskListId) throw new Error("Google task write requires a task list");
+    return createGoogleTask(
+      await getAccessToken(userID, accountId),
+      taskListId,
+      task,
+    );
+  },
+
+  async pushTaskUpdate(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalTaskId,
+    task,
+    ref,
+  ) {
+    const taskListId = googleTaskListId(externalCalendarId);
+    if (!taskListId) throw new Error("Google task write requires a task list");
+    return updateGoogleTask(
+      await getAccessToken(userID, accountId),
+      taskListId,
+      externalTaskId,
+      task,
+      ref?.etag,
+    );
+  },
+
+  async pushTaskDelete(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalTaskId,
+    ref,
+  ) {
+    const taskListId = googleTaskListId(externalCalendarId);
+    if (!taskListId) throw new Error("Google task write requires a task list");
+    await deleteGoogleTask(
+      await getAccessToken(userID, accountId),
+      taskListId,
+      externalTaskId,
+      ref?.etag,
+    );
+  },
+
   async createCalendar(userID, accountId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(`${GCAL}/calendars`, {
@@ -406,6 +660,22 @@ export const googleAdapter: CalendarAdapter = {
 
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
+    const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId) {
+      const res = await fetch(
+        `${GTASKS}/users/@me/lists/${encodeURIComponent(taskListId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ title: name }),
+        },
+      );
+      if (!res.ok) throw await googleError(res);
+      return;
+    }
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`,
       {
@@ -423,8 +693,11 @@ export const googleAdapter: CalendarAdapter = {
 
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
+    const taskListId = googleTaskListId(externalCalendarId);
     const res = await fetch(
-      `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`,
+      taskListId
+        ? `${GTASKS}/users/@me/lists/${encodeURIComponent(taskListId)}`
+        : `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${accessToken}` },

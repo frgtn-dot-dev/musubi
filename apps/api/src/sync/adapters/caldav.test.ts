@@ -8,6 +8,8 @@ async function main() {
   const {
     icalToNormalized,
     icalToNormalizedTask,
+    patchEventIcal,
+    patchTaskIcal,
     toCaldavCalendarObject,
     toCaldavTaskObject,
     toVtodo,
@@ -33,6 +35,73 @@ async function main() {
     data,
   });
   assert.equal(imported?.icalUid, "remote-uid@example.com");
+  assert.equal(
+    icalToNormalized({
+      url: "https://dav.example/cal/cancelled.ics",
+      data: data.replace(
+        "SUMMARY:Imported",
+        "STATUS:CANCELLED\r\nSUMMARY:Imported",
+      ),
+    })?.status,
+    "cancelled",
+  );
+
+  const compatibilityData = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "BEGIN:VTIMEZONE",
+    "TZID:Europe/Prague",
+    "BEGIN:STANDARD",
+    "DTSTART:19701025T030000",
+    "TZOFFSETFROM:+0200",
+    "TZOFFSETTO:+0100",
+    "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+    "END:STANDARD",
+    "BEGIN:DAYLIGHT",
+    "DTSTART:19700329T020000",
+    "TZOFFSETFROM:+0100",
+    "TZOFFSETTO:+0200",
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+    "END:DAYLIGHT",
+    "END:VTIMEZONE",
+    "BEGIN:VEVENT",
+    "UID:series@example.com",
+    "DTSTART;TZID=Europe/Prague:20260101T100000",
+    "DTEND;TZID=Europe/Prague:20260101T110000",
+    "RRULE:FREQ=WEEKLY",
+    "SUMMARY:Series",
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    "TRIGGER:-PT15M",
+    "DESCRIPTION:Keep me",
+    "END:VALARM",
+    "END:VEVENT",
+    "BEGIN:VEVENT",
+    "UID:series@example.com",
+    "RECURRENCE-ID;TZID=Europe/Prague:20260108T100000",
+    "DTSTART;TZID=Europe/Prague:20260108T120000",
+    "DTEND;TZID=Europe/Prague:20260108T130000",
+    "SUMMARY:Moved occurrence",
+    "END:VEVENT",
+    "BEGIN:VEVENT",
+    "UID:series@example.com",
+    "RECURRENCE-ID;TZID=Europe/Prague:20260115T100000",
+    "DTSTART;TZID=Europe/Prague:20260115T130000",
+    "DTEND;TZID=Europe/Prague:20260115T140000",
+    "SUMMARY:Second moved occurrence",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const compatibleEvent = icalToNormalized({
+    url: "https://dav.example/cal/series.ics",
+    data: compatibilityData,
+  });
+  assert.equal(
+    compatibleEvent?.start.toISOString(),
+    "2026-01-01T09:00:00.000Z",
+  );
+  assert.match(compatibleEvent?.recurrence ?? "", /EXDATE:20260108T090000Z/);
+  assert.match(compatibleEvent?.recurrence ?? "", /RDATE:20260108T110000Z/);
 
   const taskData = [
     "BEGIN:VCALENDAR",
@@ -52,6 +121,11 @@ async function main() {
     "EXDATE;VALUE=DATE:20260208",
     "RELATED-TO:parent-task@example.com",
     "URL:https://example.com/tasks/1",
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    "TRIGGER:-PT30M",
+    "DESCRIPTION:Keep task alarm",
+    "END:VALARM",
     "END:VTODO",
     "END:VCALENDAR",
   ].join("\r\n");
@@ -130,9 +204,23 @@ async function main() {
     hasAttendees: false,
     description: null,
     location: null,
-    recurrence: null,
+    recurrence: compatibleEvent!.recurrence,
     url: null,
   };
+  const patchedEventData = patchEventIcal(
+    compatibilityData,
+    event,
+    "series@example.com",
+  );
+  assert.match(patchedEventData, /BEGIN:VTIMEZONE/);
+  assert.match(patchedEventData, /BEGIN:VALARM/);
+  assert.match(patchedEventData, /DTSTART;TZID=Europe\/Prague:20260101T110000/);
+  assert.equal(
+    patchedEventData.match(/RECURRENCE-ID;TZID=Europe\/Prague/g)?.length,
+    2,
+  );
+  assert.doesNotMatch(patchedEventData, /^RDATE:/m);
+
   assert.throws(
     () => toCaldavCalendarObject("https://dav.example/cal/imported.ics", event),
     /no ETag/,
@@ -156,6 +244,12 @@ async function main() {
     calendarID: "calendar-id",
     ...importedTask,
   };
+  const patchedTaskData = patchTaskIcal(
+    taskData,
+    task,
+    "remote-task@example.com",
+  );
+  assert.match(patchedTaskData, /BEGIN:VALARM/);
   assert.throws(
     () => toCaldavTaskObject("https://dav.example/cal/task.ics", task),
     /no ETag/,

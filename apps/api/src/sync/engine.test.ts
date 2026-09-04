@@ -6,7 +6,7 @@ process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
   const { reconcileExternalChanges } = await import("./engine");
-  const { activeEvent, cancelledEvent, task } = fixtures();
+  const { activeEvent, cancelledEvent, deletedTask, task } = fixtures();
   const calls: string[] = [];
 
   const changed = await reconcileExternalChanges(
@@ -14,11 +14,16 @@ async function main() {
       { kind: "event", data: activeEvent },
       { kind: "event", data: cancelledEvent },
       { kind: "task", data: task },
+      { kind: "task", data: deletedTask },
     ],
     true,
     {
       async deleteEvent(id) {
         calls.push(`delete:${id}`);
+        return true;
+      },
+      async deleteTask(id) {
+        calls.push(`delete-task:${id}`);
         return true;
       },
       async upsertEvent(event) {
@@ -40,11 +45,12 @@ async function main() {
     },
   );
 
-  assert.equal(changed, 5);
+  assert.equal(changed, 6);
   assert.deepEqual(calls, [
     "event:event-1",
     "delete:event-cancelled",
     "task:task-1",
+    "delete-task:task-deleted",
     "sweep-events:event-1",
     "sweep-tasks:task-1",
   ]);
@@ -55,6 +61,9 @@ async function main() {
     await reconcileExternalChanges([{ kind: "task", data: task }], false, {
       async deleteEvent() {
         throw new Error("unexpected event deletion");
+      },
+      async deleteTask() {
+        throw new Error("unexpected task deletion");
       },
       async upsertEvent() {
         throw new Error("unexpected event upsert");
@@ -112,7 +121,8 @@ function fixtures() {
     title: "Task",
     url: null,
   };
-  return { activeEvent, cancelledEvent, task };
+  const deletedTask = { ...task, deleted: true, externalId: "task-deleted" };
+  return { activeEvent, cancelledEvent, deletedTask, task };
 }
 
 main().catch((error) => {

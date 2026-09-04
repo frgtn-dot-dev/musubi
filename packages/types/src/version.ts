@@ -16,7 +16,7 @@ export const PRODUCT_VERSION = "0.1.7";
  * store, so it moves only when a release genuinely cannot serve them — see
  * `docs/releasing.md`.
  */
-export const MIN_CLIENT_VERSION = "0.1.6";
+export const MIN_CLIENT_VERSION = "0.1.7";
 
 /**
  * The oldest Musubi server this one will federate with.

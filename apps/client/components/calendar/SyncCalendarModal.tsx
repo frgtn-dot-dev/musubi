@@ -125,17 +125,17 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
       setLoadingProvider(null);
     }
   };
-  // Narrowest Google scopes for our two-way sync: events R/W, calendarList R/W
-  // (we PATCH entry color), and calendars R/W (create/edit/delete calendars).
+  // Narrowest Google scopes for our two-way event, calendar, and task sync.
   const handleGoogle = () => handleOAuth("google", [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.calendarlist",
     "https://www.googleapis.com/auth/calendar.calendars",
+    "https://www.googleapis.com/auth/tasks",
   ], "Google");
   // Show the data-use disclosure before the first Google authorization; once
   // the user has connected a Google calendar, go straight to OAuth.
   const startGoogle = () => (googleAcked ? handleGoogle() : setStep("google"));
-  const handleMicrosoft = () => handleOAuth("microsoft", ["Calendars.ReadWrite"], "Outlook");
+  const handleMicrosoft = () => handleOAuth("microsoft", ["Calendars.ReadWrite", "Tasks.ReadWrite"], "Outlook");
 
   const openMusubi = async () => {
     setStep("musubi");

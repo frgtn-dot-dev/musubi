@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
-import { type AttendanceStatus, type NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getUserRoleForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
+import { type AttendanceStatus, type NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getExternalLinkForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
 import { BadRequestError, type Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
@@ -27,6 +27,13 @@ function parseEvent(body: unknown, message: string): Event {
   return event;
 }
 
+async function assertEventCapableCalendar(calendarID: string) {
+  const link = await getExternalLinkForCalendar(calendarID);
+  if (link && !link.supportsEvents) {
+    throw new BadRequestError("This external calendar does not support events...");
+  }
+}
+
 export async function handlerCreateEvent(req: Request, res: Response) {
   const event = parseEvent(req.body, "Request is missing valid event data...");
   // Server-side shape guards (don't trust the client): an event needs at least
@@ -42,7 +49,10 @@ export async function handlerCreateEvent(req: Request, res: Response) {
     ...event,
     creatorID: req.user!.id,
   }
-  for (const cal of event.calendars) await assertCan(req.user!.id, cal, "editEvents");
+  for (const cal of event.calendars) {
+    await assertCan(req.user!.id, cal, "editEvents");
+    await assertEventCapableCalendar(cal);
+  }
   const createdEvent = await createEvent(newEvent, event.calendars);
 
   const result = { ...createdEvent, calendars: event.calendars };
@@ -81,6 +91,8 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   const removed = existing.filter(c => !incoming.includes(c));
   const added = incoming.filter(c => !existing.includes(c));
   const kept = incoming.filter(c => existing.includes(c));
+
+  for (const cal of incoming) await assertEventCapableCalendar(cal);
 
   // Adding a link puts the event into someone's calendar — same gate as handlerLinkEvent.
   for (const cal of added) await assertCan(req.user!.id, cal, "editEvents");
@@ -197,6 +209,7 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   if (!(await canDo(req.user!.id, calendarID, "editEvents"))) {
     throw new ForbiddenError("You can't add events to that calendar.");
   }
+  await assertEventCapableCalendar(calendarID);
 
   if (!existing.includes(calendarID)) {
     await linkEventToCalendars(eventID, [calendarID]);
@@ -231,6 +244,7 @@ export async function handlerForkEvent(req: Request, res: Response) {
   if (!(await canDo(req.user!.id, calendarID, "editEvents"))) {
     throw new ForbiddenError("You can't add events to that calendar.");
   }
+  await assertEventCapableCalendar(calendarID);
   if (sourceCalendars.includes(calendarID)) {
     throw new BadRequestError("This event is already in that calendar.");
   }

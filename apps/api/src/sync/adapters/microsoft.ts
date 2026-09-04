@@ -1,16 +1,34 @@
 import { config } from "@musubi/config";
 import { getOAuthAccountIDs } from "@musubi/db";
-import { type Event, nearestMicrosoftCalendarColor } from "@musubi/types";
+import {
+  DEFAULT_CALENDAR_COLOR,
+  type Event,
+  nearestMicrosoftCalendarColor,
+  type Task,
+  type TaskStatus,
+} from "@musubi/types";
 import type {
   CalendarAdapter,
   ExternalCalendarInfo,
   FetchChangesResult,
   NormalizedChange,
   NormalizedEvent,
+  NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+const TASK_LIST_PREFIX = "musubi-microsoft-task-list:";
+
+export function microsoftTaskListExternalId(taskListId: string) {
+  return `${TASK_LIST_PREFIX}${taskListId}`;
+}
+
+function microsoftTaskListId(externalCalendarId: string) {
+  return externalCalendarId.startsWith(TASK_LIST_PREFIX)
+    ? externalCalendarId.slice(TASK_LIST_PREFIX.length)
+    : null;
+}
 
 // ── Sync window tuning ───────────────────────────────────────────────────────
 // Graph's v1.0 event delta only works on a calendarView — a FIXED date range
@@ -40,7 +58,8 @@ function getAccessToken(userID: string, accountId: string) {
     // Microsoft requires the scope again on refresh (and rotates the refresh
     // token — the shared helper persists the new one).
     extraParams: {
-      scope: "openid User.Read Calendars.ReadWrite offline_access",
+      scope:
+        "openid User.Read Calendars.ReadWrite Tasks.ReadWrite offline_access",
     },
     subtypeKey: "suberror",
   });
@@ -61,7 +80,10 @@ async function graphError(res: Response): Promise<Error> {
 // Graph dateTime comes as "2026-07-18T20:30:00.0000000" (no zone designator,
 // zone is UTC via the Prefer header). Trim the 7-digit fraction and pin Z.
 export function parseGraphDate(dateTime: string): Date {
-  return new Date(dateTime.replace(/(\.\d{3})\d*$/, "$1") + "Z");
+  const normalized = dateTime.replace(/(\.\d{3})\d*/, "$1");
+  return new Date(
+    /(?:Z|[+-]\d{2}:\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`,
+  );
 }
 
 // Graph event JSON -> NormalizedEvent. Recurring series arrive pre-expanded by
@@ -139,6 +161,219 @@ export function toGraphEvent(event: Event) {
       timeZone: "UTC",
     },
   };
+}
+
+function graphTaskDate(value: any) {
+  return typeof value?.dateTime === "string"
+    ? parseGraphDate(value.dateTime)
+    : null;
+}
+
+function graphTaskStatus(status: string | undefined): TaskStatus {
+  if (status === "completed") return "completed";
+  if (status === "inProgress") return "in-process";
+  return "needs-action";
+}
+
+export function toNormalizedMicrosoftTask(item: any): NormalizedTask {
+  const status = graphTaskStatus(item.status);
+  return {
+    completedAt: graphTaskDate(item.completedDateTime),
+    deleted: Boolean(item["@removed"]),
+    description: item.body?.content?.trim() || null,
+    due: graphTaskDate(item.dueDateTime),
+    etag: item["@odata.etag"] ?? null,
+    externalId: item.id,
+    icalUid: null,
+    isAllDay: false,
+    percentComplete: status === "completed" ? 100 : 0,
+    priority:
+      item.importance === "high" ? 1 : item.importance === "low" ? 9 : 0,
+    recurrence: null,
+    relatedTo: null,
+    sequence: 0,
+    start: graphTaskDate(item.startDateTime),
+    status,
+    title: item.title ?? "(untitled)",
+    url:
+      item.linkedResources?.find((resource: any) => resource?.webUrl)?.webUrl ??
+      null,
+  };
+}
+
+function toGraphTaskDate(date: Date | null | undefined) {
+  return date
+    ? { dateTime: date.toISOString().replace(/Z$/, ""), timeZone: "UTC" }
+    : null;
+}
+
+function toGraphTask(task: Task) {
+  return {
+    body: { content: task.description ?? "", contentType: "text" },
+    dueDateTime: toGraphTaskDate(task.due),
+    importance:
+      task.priority === 0
+        ? "normal"
+        : task.priority < 5
+          ? "high"
+          : task.priority > 5
+            ? "low"
+            : "normal",
+    startDateTime: toGraphTaskDate(task.start),
+    status:
+      task.status === "completed"
+        ? "completed"
+        : task.status === "in-process"
+          ? "inProgress"
+          : "notStarted",
+    title: task.title,
+  };
+}
+
+type MicrosoftTaskRequestOptions = {
+  fetchImpl?: typeof fetch;
+  graphBase?: string;
+};
+
+function microsoftTaskPath(taskListId: string, taskId?: string) {
+  const list = encodeURIComponent(taskListId);
+  return `/me/todo/lists/${list}/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`;
+}
+
+export async function fetchMicrosoftTaskChanges(
+  accessToken: string,
+  taskListId: string,
+  cursor: string | null,
+  options: MicrosoftTaskRequestOptions = {},
+): Promise<FetchChangesResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const graphBase = options.graphBase ?? GRAPH;
+  const initialUrl = `${graphBase}${microsoftTaskPath(taskListId)}/delta?$top=${PAGE_SIZE}`;
+  const changes: NormalizedChange[] = [];
+  let reset = !cursor;
+  let url = cursor ?? initialUrl;
+  let deltaLink: string | null = null;
+
+  while (!deltaLink) {
+    const res = await graphGet(accessToken, url, fetchImpl);
+    if (res.status === 410 && url !== initialUrl) {
+      changes.length = 0;
+      reset = true;
+      url = initialUrl;
+      continue;
+    }
+    if (!res.ok) throw await graphError(res);
+    const data = await res.json();
+    for (const item of data.value ?? []) {
+      changes.push({ kind: "task", data: toNormalizedMicrosoftTask(item) });
+    }
+    if (data["@odata.nextLink"]) url = data["@odata.nextLink"];
+    else deltaLink = data["@odata.deltaLink"] ?? url;
+  }
+
+  return { changes, nextCursor: deltaLink, reset };
+}
+
+export async function createMicrosoftTask(
+  accessToken: string,
+  taskListId: string,
+  task: Task,
+  options: MicrosoftTaskRequestOptions = {},
+) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const graphBase = options.graphBase ?? GRAPH;
+  const res = await fetchImpl(`${graphBase}${microsoftTaskPath(taskListId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(toGraphTask(task)),
+  });
+  if (!res.ok) throw await graphError(res);
+  const created = await res.json();
+  return {
+    etag: created["@odata.etag"] ?? null,
+    externalTaskId: created.id,
+    icalUid: null,
+  };
+}
+
+export async function updateMicrosoftTask(
+  accessToken: string,
+  taskListId: string,
+  externalTaskId: string,
+  task: Task,
+  etag: string | null | undefined,
+  options: MicrosoftTaskRequestOptions = {},
+) {
+  if (!etag) throw new Error("Microsoft task update requires an ETag");
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const graphBase = options.graphBase ?? GRAPH;
+  const res = await fetchImpl(
+    `${graphBase}${microsoftTaskPath(taskListId, externalTaskId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "If-Match": etag,
+      },
+      body: JSON.stringify(toGraphTask(task)),
+    },
+  );
+  if (!res.ok) throw await graphError(res);
+  const updated = await res.json();
+  return { etag: updated["@odata.etag"] ?? null, icalUid: null };
+}
+
+export async function deleteMicrosoftTask(
+  accessToken: string,
+  taskListId: string,
+  externalTaskId: string,
+  etag: string | null | undefined,
+  options: MicrosoftTaskRequestOptions = {},
+) {
+  if (!etag) throw new Error("Microsoft task delete requires an ETag");
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const graphBase = options.graphBase ?? GRAPH;
+  const res = await fetchImpl(
+    `${graphBase}${microsoftTaskPath(taskListId, externalTaskId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "If-Match": etag,
+      },
+    },
+  );
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw await graphError(res);
+  }
+}
+
+export function toExternalMicrosoftTaskList(list: any): ExternalCalendarInfo {
+  return {
+    color: DEFAULT_CALENDAR_COLOR,
+    externalId: microsoftTaskListExternalId(list.id),
+    name: list.displayName ?? "Tasks",
+    readOnly: list.isOwner !== true,
+    supportsEvents: false,
+    supportsTasks: true,
+  };
+}
+
+async function listMicrosoftTaskLists(accessToken: string) {
+  const lists: any[] = [];
+  let url: string | null = `${GRAPH}/me/todo/lists?$top=${PAGE_SIZE}`;
+  while (url) {
+    const res = await graphGet(accessToken, url);
+    if (!res.ok) throw await graphError(res);
+    const data = await res.json();
+    lists.push(...(data.value ?? []));
+    url = data["@odata.nextLink"] ?? null;
+  }
+  return lists;
 }
 
 // The cursor stores the deltaLink AND the window's future edge so we know when
@@ -291,6 +526,8 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
     readOnly: c.canEdit !== true,
     // hexColor is "" when the calendar uses the "auto" preset
     color: c.hexColor || "#0078D4",
+    supportsEvents: true,
+    supportsTasks: false,
   };
 }
 
@@ -334,7 +571,8 @@ export const microsoftAdapter: CalendarAdapter = {
       for (const c of data.value ?? []) calendars.push(toExternalCalendar(c));
       url = data["@odata.nextLink"] ?? null;
     }
-    return calendars;
+    const taskLists = await listMicrosoftTaskLists(accessToken);
+    return [...calendars, ...taskLists.map(toExternalMicrosoftTaskList)];
   },
 
   async fetchChanges(
@@ -344,7 +582,10 @@ export const microsoftAdapter: CalendarAdapter = {
     cursor,
   ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
-    return fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
+    const taskListId = microsoftTaskListId(externalCalendarId);
+    return taskListId
+      ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
+      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
   },
 
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {
@@ -399,6 +640,55 @@ export const microsoftAdapter: CalendarAdapter = {
     }
   },
 
+  async pushTaskCreate(userID, accountId, externalCalendarId, task) {
+    const taskListId = microsoftTaskListId(externalCalendarId);
+    if (!taskListId)
+      throw new Error("Microsoft task write requires a task list");
+    return createMicrosoftTask(
+      await getAccessToken(userID, accountId),
+      taskListId,
+      task,
+    );
+  },
+
+  async pushTaskUpdate(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalTaskId,
+    task,
+    ref,
+  ) {
+    const taskListId = microsoftTaskListId(externalCalendarId);
+    if (!taskListId)
+      throw new Error("Microsoft task write requires a task list");
+    return updateMicrosoftTask(
+      await getAccessToken(userID, accountId),
+      taskListId,
+      externalTaskId,
+      task,
+      ref?.etag,
+    );
+  },
+
+  async pushTaskDelete(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalTaskId,
+    ref,
+  ) {
+    const taskListId = microsoftTaskListId(externalCalendarId);
+    if (!taskListId)
+      throw new Error("Microsoft task write requires a task list");
+    await deleteMicrosoftTask(
+      await getAccessToken(userID, accountId),
+      taskListId,
+      externalTaskId,
+      ref?.etag,
+    );
+  },
+
   async createCalendar(userID, accountId, { name, color }) {
     // Graph only accepts preset color names (hexColor is read-only) — map to
     // the nearest preset. The client offers exactly these presets for Outlook
@@ -422,6 +712,22 @@ export const microsoftAdapter: CalendarAdapter = {
 
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
+    const taskListId = microsoftTaskListId(externalCalendarId);
+    if (taskListId) {
+      const res = await fetch(
+        `${GRAPH}/me/todo/lists/${encodeURIComponent(taskListId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ displayName: name }),
+        },
+      );
+      if (!res.ok) throw await graphError(res);
+      return;
+    }
     const res = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}`,
       {
@@ -441,8 +747,11 @@ export const microsoftAdapter: CalendarAdapter = {
 
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
+    const taskListId = microsoftTaskListId(externalCalendarId);
     const res = await fetch(
-      `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}`,
+      taskListId
+        ? `${GRAPH}/me/todo/lists/${encodeURIComponent(taskListId)}`
+        : `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${accessToken}` },

@@ -26,8 +26,26 @@ function graphEvent(id: string, extra: Record<string, unknown> = {}) {
   };
 }
 
+function graphTask(id: string, extra: Record<string, unknown> = {}) {
+  return {
+    "@odata.etag": `"${id}-etag"`,
+    body: { content: `${id} notes`, contentType: "text" },
+    id,
+    importance: "normal",
+    status: "notStarted",
+    title: id,
+    ...extra,
+  };
+}
+
 async function main() {
-  const requests: { url: URL; authorization?: string; prefer?: string }[] = [];
+  const requests: {
+    url: URL;
+    authorization?: string;
+    ifMatch?: string;
+    method?: string;
+    prefer?: string;
+  }[] = [];
   let googleRetryAttempts = 0;
   let graphMasterRequests = 0;
   let origin = "";
@@ -37,6 +55,11 @@ async function main() {
     requests.push({
       url,
       authorization: req.headers.authorization,
+      ifMatch:
+        typeof req.headers["if-match"] === "string"
+          ? req.headers["if-match"]
+          : undefined,
+      method: req.method,
       prefer:
         typeof req.headers.prefer === "string" ? req.headers.prefer : undefined,
     });
@@ -49,6 +72,56 @@ async function main() {
       googleRetryAttempts++;
       if (googleRetryAttempts === 1) return json(503, { error: "temporary" });
       return json(200, { items: [], nextSyncToken: "retry-fresh" });
+    }
+    if (url.pathname === "/google-tasks/lists/task-list/tasks") {
+      if (req.method === "POST") {
+        return json(200, { etag: '"task-created-etag"', id: "task-created" });
+      }
+      if (!url.searchParams.get("pageToken")) {
+        return json(200, {
+          items: [
+            {
+              due: "2026-07-25T00:00:00.000Z",
+              etag: '"task-etag-1"',
+              id: "task-1",
+              notes: "Bring the checklist",
+              status: "needsAction",
+              title: "Prepare release",
+            },
+            {
+              deleted: true,
+              etag: '"task-etag-deleted"',
+              id: "task-deleted",
+              status: "needsAction",
+            },
+          ],
+          nextPageToken: "tasks-page-2",
+        });
+      }
+      return json(200, {
+        items: [
+          {
+            completed: "2026-07-24T12:30:00.000Z",
+            etag: '"task-etag-2"',
+            id: "task-2",
+            status: "completed",
+            title: "Ship release",
+          },
+        ],
+      });
+    }
+    if (
+      url.pathname === "/google-tasks/lists/task-list/tasks/task-created" &&
+      req.method === "PATCH"
+    ) {
+      return json(200, { etag: '"task-updated-etag"', id: "task-created" });
+    }
+    if (
+      url.pathname === "/google-tasks/lists/task-list/tasks/task-created" &&
+      req.method === "DELETE"
+    ) {
+      res.writeHead(204);
+      return res.end();
     }
     if (url.pathname.includes("/google/calendars/calendar-1/")) {
       const syncToken = url.searchParams.get("syncToken");
@@ -76,6 +149,69 @@ async function main() {
       }
     }
 
+    if (url.pathname === "/graph-task-expired") {
+      return json(200, {
+        value: [graphTask("discard-task-before-410")],
+        "@odata.nextLink": `${origin}/graph-task-expired-page-2`,
+      });
+    }
+    if (url.pathname === "/graph-task-expired-page-2") {
+      return json(410, { error: { message: "delta expired" } });
+    }
+    if (
+      url.pathname === "/graph/me/todo/lists/task-list/tasks/delta" &&
+      req.method === "GET"
+    ) {
+      return json(200, {
+        value: [
+          graphTask("todo-1", {
+            dueDateTime: {
+              dateTime: "2026-07-27T15:00:00.0000000",
+              timeZone: "UTC",
+            },
+            importance: "high",
+          }),
+          { "@removed": { reason: "deleted" }, id: "todo-deleted" },
+        ],
+        "@odata.nextLink": `${origin}/graph-task-page-2`,
+      });
+    }
+    if (url.pathname === "/graph-task-page-2") {
+      return json(200, {
+        value: [
+          graphTask("todo-2", {
+            completedDateTime: {
+              dateTime: "2026-07-26T12:00:00.0000000",
+              timeZone: "UTC",
+            },
+            status: "completed",
+          }),
+        ],
+        "@odata.deltaLink": `${origin}/graph-task-delta-fresh`,
+      });
+    }
+    if (
+      url.pathname === "/graph/me/todo/lists/task-list/tasks" &&
+      req.method === "POST"
+    ) {
+      return json(201, graphTask("todo-created"));
+    }
+    if (
+      url.pathname === "/graph/me/todo/lists/task-list/tasks/todo-created" &&
+      req.method === "PATCH"
+    ) {
+      return json(
+        200,
+        graphTask("todo-created", { "@odata.etag": '"todo-updated-etag"' }),
+      );
+    }
+    if (
+      url.pathname === "/graph/me/todo/lists/task-list/tasks/todo-created" &&
+      req.method === "DELETE"
+    ) {
+      res.writeHead(204);
+      return res.end();
+    }
     if (url.pathname === "/graph-expired") {
       return json(200, {
         value: [
@@ -147,7 +283,42 @@ async function main() {
   origin = `http://127.0.0.1:${address.port}`;
 
   try {
-    const { fetchGoogleChanges } = await import("./google");
+    const { hasProviderSyncScopes } = await import("@musubi/db");
+    assert.equal(
+      hasProviderSyncScopes(
+        "google",
+        "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks",
+      ),
+      true,
+    );
+    assert.equal(
+      hasProviderSyncScopes(
+        "google",
+        "openid https://www.googleapis.com/auth/calendar.events",
+      ),
+      false,
+    );
+    assert.equal(
+      hasProviderSyncScopes(
+        "microsoft",
+        "openid Calendars.ReadWrite Tasks.ReadWrite offline_access",
+      ),
+      true,
+    );
+    assert.equal(
+      hasProviderSyncScopes("microsoft", "Calendars.ReadWrite"),
+      false,
+    );
+
+    const {
+      createGoogleTask,
+      deleteGoogleTask,
+      fetchGoogleChanges,
+      fetchGoogleTaskChanges,
+      toExternalGoogleTaskList,
+      toGoogleTask,
+      updateGoogleTask,
+    } = await import("./google");
     const google = await fetchGoogleChanges(
       "google-access",
       "calendar-1",
@@ -185,7 +356,137 @@ async function main() {
     assert.equal(retried.nextCursor, "retry-fresh");
     assert.equal(googleRetryAttempts, 2);
 
-    const { fetchMicrosoftChanges, parseCursor } = await import("./microsoft");
+    assert.deepEqual(
+      toExternalGoogleTaskList({ id: "list-1", title: "Work" }),
+      {
+        color: "#B3A48A",
+        externalId: "musubi-google-task-list:list-1",
+        name: "Work",
+        supportsEvents: false,
+        supportsTasks: true,
+      },
+    );
+
+    const googleTasks = await fetchGoogleTaskChanges(
+      "google-access",
+      "task-list",
+      { baseUrl: `${origin}/google-tasks` },
+    );
+    assert.equal(googleTasks.reset, true);
+    assert.equal(googleTasks.nextCursor, null);
+    assert.deepEqual(
+      googleTasks.changes.map(({ data }) => ({
+        completed: data.status === "completed",
+        deleted: "deleted" in data && data.deleted === true,
+        due: "due" in data ? data.due?.toISOString() : undefined,
+        externalId: data.externalId,
+      })),
+      [
+        {
+          completed: false,
+          deleted: false,
+          due: "2026-07-25T00:00:00.000Z",
+          externalId: "task-1",
+        },
+        {
+          completed: false,
+          deleted: true,
+          due: undefined,
+          externalId: "task-deleted",
+        },
+        {
+          completed: true,
+          deleted: false,
+          due: undefined,
+          externalId: "task-2",
+        },
+      ],
+    );
+
+    const localTask = {
+      calendarID: "local-calendar",
+      completedAt: null,
+      creatorID: "user-1",
+      description: "Write test",
+      due: new Date("2026-07-26T00:00:00.000Z"),
+      id: "local-task",
+      isAllDay: true,
+      percentComplete: 0,
+      priority: 0,
+      recurrence: null,
+      relatedTo: null,
+      sequence: 0,
+      start: null,
+      status: "needs-action" as const,
+      title: "Provider write",
+      url: null,
+    };
+    assert.deepEqual(
+      toGoogleTask({ ...localTask, description: null, due: null }),
+      {
+        due: null,
+        notes: null,
+        status: "needsAction",
+        title: "Provider write",
+      },
+    );
+    const createdTask = await createGoogleTask(
+      "google-access",
+      "task-list",
+      localTask,
+      { baseUrl: `${origin}/google-tasks` },
+    );
+    assert.deepEqual(createdTask, {
+      etag: '"task-created-etag"',
+      externalTaskId: "task-created",
+      icalUid: null,
+    });
+    await assert.rejects(
+      updateGoogleTask(
+        "google-access",
+        "task-list",
+        "task-created",
+        localTask,
+        null,
+        { baseUrl: `${origin}/google-tasks` },
+      ),
+      /requires an ETag/,
+    );
+    const updatedTask = await updateGoogleTask(
+      "google-access",
+      "task-list",
+      "task-created",
+      { ...localTask, status: "completed" },
+      createdTask.etag,
+      { baseUrl: `${origin}/google-tasks` },
+    );
+    assert.equal(updatedTask.etag, '"task-updated-etag"');
+    await deleteGoogleTask(
+      "google-access",
+      "task-list",
+      "task-created",
+      updatedTask.etag,
+      { baseUrl: `${origin}/google-tasks` },
+    );
+    assert.deepEqual(
+      requests
+        .filter((request) => request.url.pathname.endsWith("/task-created"))
+        .map(({ ifMatch, method }) => ({ ifMatch, method })),
+      [
+        { ifMatch: '"task-created-etag"', method: "PATCH" },
+        { ifMatch: '"task-updated-etag"', method: "DELETE" },
+      ],
+    );
+
+    const {
+      createMicrosoftTask,
+      deleteMicrosoftTask,
+      fetchMicrosoftChanges,
+      fetchMicrosoftTaskChanges,
+      parseCursor,
+      toExternalMicrosoftTaskList,
+      updateMicrosoftTask,
+    } = await import("./microsoft");
     const now = Date.parse("2026-07-23T12:00:00.000Z");
     const microsoft = await fetchMicrosoftChanges(
       "graph-access",
@@ -224,6 +525,108 @@ async function main() {
       `${origin}/graph-delta-fresh`,
     );
 
+    assert.deepEqual(
+      toExternalMicrosoftTaskList({
+        displayName: "Shared",
+        id: "list-1",
+        isOwner: false,
+      }),
+      {
+        color: "#B3A48A",
+        externalId: "musubi-microsoft-task-list:list-1",
+        name: "Shared",
+        readOnly: true,
+        supportsEvents: false,
+        supportsTasks: true,
+      },
+    );
+
+    const microsoftTasks = await fetchMicrosoftTaskChanges(
+      "graph-access",
+      "task-list",
+      `${origin}/graph-task-expired`,
+      { graphBase: `${origin}/graph` },
+    );
+    assert.equal(microsoftTasks.reset, true);
+    assert.equal(microsoftTasks.nextCursor, `${origin}/graph-task-delta-fresh`);
+    assert.equal(
+      microsoftTasks.changes.some(
+        ({ data }) => data.externalId === "discard-task-before-410",
+      ),
+      false,
+    );
+    assert.deepEqual(
+      microsoftTasks.changes.map(({ data }) => ({
+        deleted: "deleted" in data && data.deleted === true,
+        externalId: data.externalId,
+        priority: "priority" in data ? data.priority : undefined,
+        status: data.status,
+      })),
+      [
+        {
+          deleted: false,
+          externalId: "todo-1",
+          priority: 1,
+          status: "needs-action",
+        },
+        {
+          deleted: true,
+          externalId: "todo-deleted",
+          priority: 0,
+          status: "needs-action",
+        },
+        {
+          deleted: false,
+          externalId: "todo-2",
+          priority: 0,
+          status: "completed",
+        },
+      ],
+    );
+    const createdMicrosoftTask = await createMicrosoftTask(
+      "graph-access",
+      "task-list",
+      localTask,
+      { graphBase: `${origin}/graph` },
+    );
+    assert.equal(createdMicrosoftTask.externalTaskId, "todo-created");
+    await assert.rejects(
+      updateMicrosoftTask(
+        "graph-access",
+        "task-list",
+        "todo-created",
+        localTask,
+        null,
+        { graphBase: `${origin}/graph` },
+      ),
+      /requires an ETag/,
+    );
+    const updatedMicrosoftTask = await updateMicrosoftTask(
+      "graph-access",
+      "task-list",
+      "todo-created",
+      localTask,
+      createdMicrosoftTask.etag,
+      { graphBase: `${origin}/graph` },
+    );
+    assert.equal(updatedMicrosoftTask.etag, '"todo-updated-etag"');
+    await deleteMicrosoftTask(
+      "graph-access",
+      "task-list",
+      "todo-created",
+      updatedMicrosoftTask.etag,
+      { graphBase: `${origin}/graph` },
+    );
+    assert.deepEqual(
+      requests
+        .filter((request) => request.url.pathname.endsWith("/todo-created"))
+        .map(({ ifMatch, method }) => ({ ifMatch, method })),
+      [
+        { ifMatch: '"todo-created-etag"', method: "PATCH" },
+        { ifMatch: '"todo-updated-etag"', method: "DELETE" },
+      ],
+    );
+
     assert.ok(
       requests.every(
         (request) =>
@@ -237,9 +640,9 @@ async function main() {
       request.url.pathname.startsWith("/graph"),
     );
     assert.ok(
-      graphRequests.every((request) =>
-        request.prefer?.includes('outlook.timezone="UTC"'),
-      ),
+      graphRequests
+        .filter((request) => request.method === "GET")
+        .every((request) => request.prefer?.includes('outlook.timezone="UTC"')),
     );
   } finally {
     await new Promise<void>((resolve, reject) =>

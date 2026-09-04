@@ -193,6 +193,26 @@
                 "type": "null"
               }
             ]
+          },
+          "supportsEvents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supportsTasks": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -608,6 +628,24 @@
                         "default": "day",
                         "type": "string",
                         "const": "day"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "configVersion"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "tasks"
+                      },
+                      "configVersion": {
+                        "type": "number",
+                        "const": 1
                       }
                     },
                     "required": [
@@ -1525,5 +1563,5 @@
       }
     }
   },
-  "version": "0.1.6"
+  "version": "0.1.7"
 }

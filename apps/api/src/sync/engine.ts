@@ -2,6 +2,7 @@ import type { Event, Task } from "@musubi/types";
 import { logger } from "@musubi/config";
 import {
   deleteExternalEvent,
+  deleteExternalTask,
   getCalendarMembers,
   getExternalEvent,
   getExternalTask,
@@ -84,6 +85,7 @@ function toTaskValues(task: NormalizedTask) {
 
 type ExternalChangeWriter = {
   deleteEvent(externalID: string): Promise<boolean>;
+  deleteTask(externalID: string): Promise<boolean>;
   upsertEvent(event: NormalizedEvent): Promise<boolean>;
   upsertTask(task: NormalizedTask): Promise<boolean>;
   sweepEvents(seenExternalIDs: string[]): Promise<number>;
@@ -111,6 +113,8 @@ export async function reconcileExternalChanges(
         seenEvents.push(change.data.externalId);
         if (await writer.upsertEvent(change.data)) changed++;
       }
+    } else if (change.data.deleted) {
+      if (await writer.deleteTask(change.data.externalId)) changed++;
     } else {
       seenTasks.push(change.data.externalId);
       if (await writer.upsertTask(change.data)) changed++;
@@ -215,6 +219,8 @@ export async function syncProvider(
     const changed = await reconcileExternalChanges(changes, reset, {
       deleteEvent: (externalID) =>
         deleteExternalEvent(provider, link.calendarID, externalID),
+      deleteTask: (externalID) =>
+        deleteExternalTask(provider, link.calendarID, externalID),
       upsertEvent: (event) =>
         upsertExternalEvent(
           provider,
@@ -335,7 +341,7 @@ export async function pushEventToCalendars(
 ) {
   for (const calendarID of calendarIDs) {
     const link = await getExternalLinkForCalendar(calendarID);
-    if (!link) continue;
+    if (!link?.supportsEvents) continue;
     const adapter = getAdapter(link.provider);
     if (!adapter) continue;
 

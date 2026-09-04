@@ -1,5 +1,6 @@
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
+import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import type { Event, Task, TaskStatus } from "@musubi/types";
 import { logger } from "@musubi/config";
 import { getCaldavAccountById, getCaldavAccountsByUser } from "@musubi/db";
@@ -22,15 +23,6 @@ const TASK_STATUS_BY_ICAL: Record<string, TaskStatus> = {
   COMPLETED: "completed",
   CANCELLED: "cancelled",
 };
-
-const VTODO_FILTER = [
-  {
-    "comp-filter": {
-      _attributes: { name: "VCALENDAR" },
-      "comp-filter": { _attributes: { name: "VTODO" } },
-    },
-  },
-];
 
 async function clientForAccount(accountId: string) {
   const acc = await getCaldavAccountById(accountId);
@@ -80,22 +72,55 @@ function allDayTime(d: Date) {
   });
 }
 
+function recurrenceDate(time: ICAL.Time) {
+  const date = time.isDate ? utcMidnight(time) : time.toJSDate();
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+}
+
 function recurrenceFrom(component: ICAL.Component): string | null {
   const rrule = component.getFirstProperty("rrule")?.getFirstValue();
   if (!rrule) return null;
-  const exdates = component
-    .getAllProperties("exdate")
-    .map((property) => {
-      const time = property.getFirstValue() as ICAL.Time | null;
-      if (!time) return null;
-      const date = time.isDate ? utcMidnight(time) : time.toJSDate();
-      return `EXDATE:${date
-        .toISOString()
-        .replace(/[-:]/g, "")
-        .replace(/\.\d{3}Z$/, "Z")}`;
-    })
-    .filter((line): line is string => line !== null);
-  return [`RRULE:${rrule.toString()}`, ...exdates].join("\n");
+  const lines = new Set<string>([`RRULE:${rrule.toString()}`]);
+  for (const propertyName of ["exdate", "rdate"] as const) {
+    for (const property of component.getAllProperties(propertyName)) {
+      for (const time of property.getValues() as ICAL.Time[]) {
+        lines.add(`${propertyName.toUpperCase()}:${recurrenceDate(time)}`);
+      }
+    }
+  }
+
+  // A CalDAV resource may store detached instances beside its master. Musubi's
+  // recurrence string can represent their schedule as EXDATE + RDATE while the
+  // original components remain untouched on write.
+  const uid = component.getFirstPropertyValue("uid");
+  for (const exception of component.parent?.getAllSubcomponents(
+    component.name,
+  ) ?? []) {
+    if (
+      exception === component ||
+      exception.getFirstPropertyValue("uid") !== uid
+    )
+      continue;
+    const recurrenceId = componentTime(exception, "recurrence-id");
+    if (!recurrenceId) continue;
+    lines.add(`EXDATE:${recurrenceDate(recurrenceId)}`);
+    if (componentString(exception, "status")?.toUpperCase() !== "CANCELLED") {
+      const replacement = componentTime(exception, "dtstart");
+      if (replacement) lines.add(`RDATE:${recurrenceDate(replacement)}`);
+    }
+  }
+  return [...lines].join("\n");
+}
+
+function canonicalRecurrence(value: string | null) {
+  return value
+    ? [...new Set(value.split("\n").filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right))
+        .join("\n")
+    : null;
 }
 
 function addRecurrence(
@@ -110,8 +135,12 @@ function addRecurrence(
         "rrule",
         ICAL.Recur.fromString(line.replace(/^RRULE:/, "")),
       );
-    } else if (line.startsWith("EXDATE:")) {
-      for (const value of line.slice("EXDATE:".length).split(",")) {
+    } else if (/^(EXDATE|RDATE):/.test(line)) {
+      const [propertyName, values] = line.split(":", 2) as [
+        "EXDATE" | "RDATE",
+        string,
+      ];
+      for (const value of values.split(",")) {
         const match = value.match(
           /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/,
         );
@@ -127,7 +156,7 @@ function addRecurrence(
           ),
         );
         component.addPropertyWithValue(
-          "exdate",
+          propertyName.toLowerCase(),
           isAllDay ? allDayTime(date) : ICAL.Time.fromJSDate(date, true),
         );
       }
@@ -190,7 +219,10 @@ export function icalToNormalized(obj: {
 
   return {
     externalId: obj.url, // CalDAV addresses events by resource URL, not UID
-    status: "active",
+    status:
+      componentString(vevent, "status")?.toUpperCase() === "CANCELLED"
+        ? "cancelled"
+        : "active",
     ...fields,
     url: null,
     etag: obj.etag ?? null,
@@ -372,6 +404,114 @@ export function toVtodo(task: IcalTaskFields, uid = task.id): ICAL.Component {
   return vtodo;
 }
 
+function patchProperties(
+  target: ICAL.Component,
+  replacement: ICAL.Component,
+  propertyNames: string[],
+) {
+  for (const name of propertyNames) {
+    target.removeAllProperties(name);
+    for (const property of replacement.getAllProperties(name)) {
+      target.addProperty(new ICAL.Property(property.toJSON()));
+    }
+  }
+}
+
+function preserveTimezones(
+  current: ICAL.Component,
+  replacement: ICAL.Component,
+  propertyNames: string[],
+) {
+  for (const name of propertyNames) {
+    const currentProperty = current.getFirstProperty(name);
+    const replacementProperty = replacement.getFirstProperty(name);
+    if (!currentProperty || !replacementProperty) continue;
+    const tzid = currentProperty.getParameter("tzid");
+    const next = replacementProperty.getFirstValue() as ICAL.Time | undefined;
+    const previous = currentProperty.getFirstValue() as ICAL.Time | undefined;
+    if (!tzid || !next || !previous || next.isDate || previous.isDate) continue;
+    replacementProperty.setValue(
+      ICAL.Time.fromJSDate(next.toJSDate(), true).convertToZone(previous.zone),
+    );
+    replacementProperty.setParameter("tzid", tzid);
+  }
+}
+
+function patchCalendarData(
+  data: string,
+  componentName: "vevent" | "vtodo",
+  uid: string,
+  replacement: ICAL.Component,
+  propertyNames: string[],
+) {
+  const calendar = new ICAL.Component(ICAL.parse(data));
+  const component = calendar
+    .getAllSubcomponents(componentName)
+    .find(
+      (candidate) =>
+        !candidate.getFirstProperty("recurrence-id") &&
+        candidate.getFirstPropertyValue("uid") === uid,
+    );
+  if (!component)
+    throw new Error(`CalDAV ${componentName} master ${uid} not found`);
+
+  preserveTimezones(component, replacement, ["dtstart", "dtend", "due"]);
+  const recurrenceProperties = new Set(["rrule", "exdate", "rdate"]);
+  const recurrenceChanged =
+    canonicalRecurrence(recurrenceFrom(component)) !==
+    canonicalRecurrence(recurrenceFrom(replacement));
+  patchProperties(
+    component,
+    replacement,
+    recurrenceChanged
+      ? propertyNames
+      : propertyNames.filter((name) => !recurrenceProperties.has(name)),
+  );
+  if (recurrenceChanged) {
+    for (const candidate of calendar.getAllSubcomponents(componentName)) {
+      if (
+        candidate !== component &&
+        candidate.getFirstProperty("recurrence-id") &&
+        candidate.getFirstPropertyValue("uid") === uid
+      )
+        calendar.removeSubcomponent(candidate);
+    }
+  }
+  return calendar.toString();
+}
+
+export function patchEventIcal(data: string, event: Event, uid: string) {
+  return patchCalendarData(data, "vevent", uid, toVevent(event, uid), [
+    "summary",
+    "description",
+    "location",
+    "dtstart",
+    "dtend",
+    "rrule",
+    "exdate",
+    "rdate",
+  ]);
+}
+
+export function patchTaskIcal(data: string, task: Task, uid: string) {
+  return patchCalendarData(data, "vtodo", uid, toVtodo(task, uid), [
+    "summary",
+    "description",
+    "status",
+    "dtstart",
+    "due",
+    "completed",
+    "percent-complete",
+    "priority",
+    "sequence",
+    "related-to",
+    "url",
+    "rrule",
+    "exdate",
+    "rdate",
+  ]);
+}
+
 // Musubi Event -> iCal string (single-event VCALENDAR, for CalDAV PUTs)
 function toIcal(event: Event, uid = event.id): string {
   const vcal = new ICAL.Component("vcalendar");
@@ -417,27 +557,181 @@ export function toCaldavTaskObject(
   };
 }
 
-async function uidForWrite(
+async function calendarObjectForUpdate(
   client: Awaited<ReturnType<typeof clientForAccount>>,
   externalCalendarId: string,
   externalObjectId: string,
-  ref: { icalUid?: string | null } | undefined,
+  ref: { etag?: string | null; icalUid?: string | null } | undefined,
+  value: Event | Task,
   kind: "event" | "task",
 ) {
-  if (ref?.icalUid) return ref.icalUid;
-
+  if (!ref?.etag)
+    throw new Error(`CalDAV ${kind} has no ETag; refusing an unsafe update`);
   const [object] = await client.fetchCalendarObjects({
-    calendar: { url: externalCalendarId } as any,
+    calendar: { url: externalCalendarId } as DAVCalendar,
     objectUrls: [externalObjectId],
   });
-  const uid = object
-    ? kind === "event"
+  if (!object?.data)
+    throw new Error(`CalDAV ${kind} resource is missing; refusing an update`);
+  const uid =
+    ref.icalUid ??
+    (kind === "event"
       ? icalToNormalized(object)?.icalUid
-      : icalToNormalizedTask(object)?.icalUid
-    : null;
+      : icalToNormalizedTask(object)?.icalUid);
   if (!uid)
     throw new Error(`CalDAV ${kind} has no UID; refusing an unsafe update`);
-  return uid;
+  return {
+    calendarObject: {
+      url: externalObjectId,
+      data:
+        kind === "event"
+          ? patchEventIcal(object.data, value as Event, uid)
+          : patchTaskIcal(object.data, value as Task, uid),
+      etag: ref.etag,
+    },
+    uid,
+  };
+}
+
+function absoluteDavUrl(href: string, calendarUrl: string) {
+  return new URL(href, calendarUrl).href;
+}
+
+function isIcalUrl(value: string, base?: string) {
+  try {
+    return new URL(value, base).pathname.toLowerCase().endsWith(".ics");
+  } catch {
+    return false;
+  }
+}
+
+function deletedObjectChanges(externalId: string): NormalizedChange[] {
+  return [
+    {
+      kind: "event",
+      data: {
+        description: null,
+        end: new Date(0),
+        externalId,
+        isAllDay: false,
+        location: null,
+        organizer: null,
+        recurrence: null,
+        start: new Date(0),
+        status: "cancelled",
+        title: "",
+        url: null,
+      },
+    },
+    {
+      kind: "task",
+      data: {
+        completedAt: null,
+        deleted: true,
+        description: null,
+        due: null,
+        externalId,
+        isAllDay: false,
+        percentComplete: 0,
+        priority: 0,
+        recurrence: null,
+        relatedTo: null,
+        sequence: 0,
+        start: null,
+        status: "needs-action",
+        title: "",
+        url: null,
+      },
+    },
+  ];
+}
+
+function normalizedObjectChanges(
+  objects: DAVCalendarObject[],
+): NormalizedChange[] {
+  const changes: NormalizedChange[] = [];
+  for (const object of objects) {
+    const event = icalToNormalized(object);
+    const task = icalToNormalizedTask(object);
+    if (!event && !task) {
+      try {
+        const calendar = new ICAL.Component(ICAL.parse(object.data));
+        if (
+          calendar.getFirstSubcomponent("vevent") ||
+          calendar.getFirstSubcomponent("vtodo")
+        )
+          throw new Error(`Invalid calendar resource: ${object.url}`);
+      } catch (error) {
+        throw error instanceof Error
+          ? error
+          : new Error(`Invalid calendar resource: ${object.url}`);
+      }
+    }
+    if (event) changes.push({ kind: "event", data: event });
+    if (task) changes.push({ kind: "task", data: task });
+  }
+  return changes;
+}
+
+function syncTokenFrom(responses: DAVResponse[]) {
+  const token = responses.find((response) => response.raw)?.raw?.multistatus
+    ?.syncToken;
+  return token == null ? null : String(token);
+}
+
+async function incrementalChanges(
+  client: Awaited<ReturnType<typeof clientForAccount>>,
+  calendar: DAVCalendar,
+  cursor: string | null,
+): Promise<FetchChangesResult> {
+  const responses = await client.syncCollection({
+    props: { "d:getetag": {} },
+    syncLevel: 1,
+    syncToken: cursor ?? undefined,
+    url: calendar.url,
+  });
+  const failed = responses.find(
+    (response) => response.status !== 404 && !response.ok,
+  );
+  if (failed) {
+    throw new Error(
+      `CalDAV sync-collection failed: ${failed.status} ${failed.statusText}`,
+    );
+  }
+
+  const objectResponses = responses.filter((response) => {
+    if (!response.href) return false;
+    try {
+      return new URL(response.href, calendar.url).pathname
+        .toLowerCase()
+        .endsWith(".ics");
+    } catch {
+      return false;
+    }
+  });
+  const changedUrls = objectResponses.flatMap((response) =>
+    response.status !== 404 && response.href
+      ? [absoluteDavUrl(response.href, calendar.url)]
+      : [],
+  );
+  const objects = changedUrls.length
+    ? await client.fetchCalendarObjects({
+        calendar,
+        objectUrls: changedUrls,
+      })
+    : [];
+  const changes = normalizedObjectChanges(objects);
+  for (const response of objectResponses) {
+    if (response.status === 404) {
+      changes.push(
+        ...deletedObjectChanges(absoluteDavUrl(response.href!, calendar.url)),
+      );
+    }
+  }
+
+  const nextCursor = syncTokenFrom(responses);
+  if (!nextCursor) throw new Error("CalDAV sync-collection returned no token");
+  return { changes, nextCursor, reset: cursor === null };
 }
 
 async function etagAfterWrite(
@@ -502,6 +796,7 @@ export const caldavAdapter: CalendarAdapter = {
     _userID,
     accountId,
     externalCalendarId,
+    cursor,
   ): Promise<FetchChangesResult> {
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
@@ -520,49 +815,60 @@ export const caldavAdapter: CalendarAdapter = {
       return { changes: [], nextCursor: null };
     }
 
-    // iCloud's calendar-query REPORT returns NOTHING without a time-range filter
-    // (tsdav's default query gets 0 objects). Bound it to a rolling window —
-    // recurring events overlapping it still come back (iCloud returns the master).
-    // ponytail: window, not all-time; widen if someone needs far-past/future events.
-    const now = Date.now();
-    const DAY = 86_400_000;
-    const timeRange = {
-      start: new Date(now - 365 * DAY).toISOString(), // 1 year back
-      end: new Date(now + 3 * 365 * DAY).toISOString(), // 3 years ahead
-    };
-    const eventObjects = await client.fetchCalendarObjects({
-      calendar: cal,
-      timeRange,
+    if (cal.reports?.includes("syncCollection")) {
+      try {
+        return await incrementalChanges(client, cal, cursor);
+      } catch (error) {
+        // An expired/unsupported token must never leave stale objects behind.
+        // A complete query is the compatibility fallback and resets both kinds.
+        logger.warn("caldav.sync_collection_fallback", {
+          accountId,
+          externalCalendarId,
+          error,
+        });
+      }
+    }
+
+    // PROPFIND lists the complete collection without iCloud's calendar-query
+    // time-range requirement, so reset reconciliation never sweeps valid old or
+    // far-future resources merely because they fell outside a query window.
+    const listed = await client.propfind({
+      depth: "1",
+      props: { "d:getetag": {} },
+      url: cal.url,
     });
-    const taskObjects = cal.components?.includes("VTODO")
-      ? await client.fetchCalendarObjects({
-          calendar: cal,
-          // VTODO may have no DTSTART or DUE, so a time-range would lose tasks.
-          filters: VTODO_FILTER,
-        })
+    const failed = listed.find((response) => {
+      if (!response.href || response.ok || response.status === 404)
+        return false;
+      try {
+        return new URL(response.href, cal.url).pathname
+          .toLowerCase()
+          .endsWith(".ics");
+      } catch {
+        return false;
+      }
+    });
+    if (failed)
+      throw new Error(
+        `CalDAV collection listing failed: ${failed.status} ${failed.statusText}`,
+      );
+    const objectUrls = listed.flatMap((response) => {
+      if (!response.ok || !response.href) return [];
+      const url = absoluteDavUrl(response.href, cal.url);
+      return isIcalUrl(url) ? [url] : [];
+    });
+    const objects = objectUrls.length
+      ? await client.fetchCalendarObjects({ calendar: cal, objectUrls })
       : [];
-    const changes: NormalizedChange[] = [];
-    for (const object of eventObjects) {
-      const data = icalToNormalized(object);
-      if (!data) throw new Error(`Invalid VEVENT resource: ${object.url}`);
-      changes.push({ kind: "event", data });
-    }
-    for (const object of taskObjects) {
-      const data = icalToNormalizedTask(object);
-      if (!data) throw new Error(`Invalid VTODO resource: ${object.url}`);
-      changes.push({ kind: "task", data });
-    }
+    const changes = normalizedObjectChanges(objects);
     logger.debug("caldav.objects.fetched", {
       accountId,
       externalCalendarId,
-      eventObjects: eventObjects.length,
-      taskObjects: taskObjects.length,
-      parsedEvents: eventObjects.length,
-      parsedTasks: taskObjects.length,
+      objects: objects.length,
+      parsedEvents: changes.filter((change) => change.kind === "event").length,
+      parsedTasks: changes.filter((change) => change.kind === "task").length,
     });
 
-    // ponytail: full fetch + reset every sync — simple and handles deletions.
-    // Upgrade to WebDAV sync-collection (cursor = syncToken) if calendars grow.
     return { changes, nextCursor: cal.syncToken ?? null, reset: true };
   },
 
@@ -600,20 +906,15 @@ export const caldavAdapter: CalendarAdapter = {
     ref,
   ) {
     const client = await clientForAccount(accountId);
-    const icalUid = await uidForWrite(
+    const { calendarObject, uid: icalUid } = await calendarObjectForUpdate(
       client,
       externalCalendarId,
       externalEventId,
       ref,
+      event,
       "event",
     );
-    const res = await client.updateCalendarObject({
-      calendarObject: toCaldavCalendarObject(externalEventId, event, {
-        externalEventId,
-        etag: ref?.etag,
-        icalUid,
-      }),
-    });
+    const res = await client.updateCalendarObject({ calendarObject });
     if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
     return {
       etag: await etagAfterWrite(
@@ -677,20 +978,15 @@ export const caldavAdapter: CalendarAdapter = {
     ref,
   ) {
     const client = await clientForAccount(accountId);
-    const icalUid = await uidForWrite(
+    const { calendarObject, uid: icalUid } = await calendarObjectForUpdate(
       client,
       externalCalendarId,
       externalTaskId,
       ref,
+      task,
       "task",
     );
-    const res = await client.updateCalendarObject({
-      calendarObject: toCaldavTaskObject(externalTaskId, task, {
-        externalTaskId,
-        etag: ref?.etag,
-        icalUid,
-      }),
-    });
+    const res = await client.updateCalendarObject({ calendarObject });
     if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
     return {
       etag: await etagAfterWrite(

@@ -20,6 +20,7 @@ export type NormalizedEvent = {
 
 export type NormalizedTask = {
   externalId: string;
+  deleted?: boolean;
   status: TaskStatus;
   title: string;
   description: string | null;
