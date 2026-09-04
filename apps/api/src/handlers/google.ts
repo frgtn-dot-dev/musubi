@@ -1,5 +1,6 @@
 import { cleanProviderOAuthTokens, getOAuthRefreshToken, oauthConnectionCheck } from "@musubi/db";
-import { Request, Response } from "express";
+import { BadRequestError } from "@musubi/types";
+import type { Request, Response } from "express";
 import { syncUser } from "../sync/engine";
 import { revokeGoogleToken } from "../sync/oauth";
 import { decryptToken } from "../tokenCrypto";
@@ -20,7 +21,12 @@ export async function handlerRevokeGoogle(req: Request, res: Response) {
 }
 
 export async function handlerGetGoogleCalendars(req: Request, res: Response) {
-  await syncUser(req.user!.id);
+  try {
+    await syncUser(req.user!.id, { provider: "google", throwOnError: true });
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    throw new BadRequestError(`Google connected, but its initial sync failed.${detail}`);
+  }
 
   res.sendStatus(200);
 }
