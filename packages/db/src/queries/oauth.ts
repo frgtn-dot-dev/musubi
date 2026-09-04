@@ -22,7 +22,7 @@ export const PROVIDER_SYNC_SCOPES: Record<string, readonly string[]> = {
 
 export function hasProviderSyncScopes(provider: string, scope = "") {
   const required = PROVIDER_SYNC_SCOPES[provider];
-  return Boolean(required?.length && required.every(item => scope.split(/\s+/).includes(item)));
+  return Boolean(required?.length && required.every(item => scope.split(/[\s,]+/).includes(item)));
 }
 
 export async function oauthConnectionCheck(userID: string, provider: string): Promise<GoogleCheck> {
@@ -48,29 +48,41 @@ export async function getOAuthAccountIDs(userID: string, provider: string): Prom
     scope: account.scope,
     refreshToken: account.refreshToken,
     syncStatus: account.syncStatus,
+    syncErrorCode: account.syncErrorCode,
   })
     .from(account)
     .where(and(eq(account.userId, userID), eq(account.providerId, provider)));
   // Require a refresh token too — same bar as oauthConnectionCheck's
-  // `calendarConnected`. Without it the sync can never mint an access token.
-  // reconnect_required is also excluded so a permanently revoked token is
-  // logged only once.
-  const missingScope = rows.filter(row =>
-    row.syncStatus === "active" &&
-    !!row.refreshToken &&
-    !hasProviderSyncScopes(provider, row.scope ?? ""),
-  );
-  await Promise.all(missingScope.map(row =>
-    markOAuthAccountReconnectRequired(
-      userID,
-      provider,
-      row.accountId,
-      "insufficient_scope",
-    ),
-  ));
-  return rows
-    .filter(row => row.syncStatus === "active" && !!row.refreshToken && hasProviderSyncScopes(provider, row.scope ?? ""))
-    .map(row => row.accountId);
+  // `calendarConnected`. Permanently revoked accounts stay excluded, while an
+  // insufficient-scope status self-heals when the stored grant is actually full.
+  const accountIDs: string[] = [];
+  const statusUpdates: Promise<void>[] = [];
+  for (const row of rows) {
+    if (!row.refreshToken) continue;
+    const hasScopes = hasProviderSyncScopes(provider, row.scope ?? "");
+    if (row.syncStatus === "active") {
+      if (hasScopes) accountIDs.push(row.accountId);
+      else {
+        statusUpdates.push(markOAuthAccountReconnectRequired(
+          userID,
+          provider,
+          row.accountId,
+          "insufficient_scope",
+        ));
+      }
+      continue;
+    }
+    if (
+      hasScopes &&
+      row.syncStatus === "reconnect_required" &&
+      row.syncErrorCode === "insufficient_scope"
+    ) {
+      accountIDs.push(row.accountId);
+      statusUpdates.push(markOAuthAccountActive(userID, provider, row.accountId));
+    }
+  }
+  await Promise.all(statusUpdates);
+  return accountIDs;
 }
 
 export async function getOAuthCredentials(userID: string, provider: string, accountID: string) {

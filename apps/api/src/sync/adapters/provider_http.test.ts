@@ -291,6 +291,14 @@ async function main() {
       ),
       true,
     );
+    // Better Auth persists OAuth scopes as a comma-separated string.
+    assert.equal(
+      hasProviderSyncScopes(
+        "google",
+        "openid,https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/tasks",
+      ),
+      true,
+    );
     assert.equal(
       hasProviderSyncScopes(
         "google",
@@ -302,6 +310,13 @@ async function main() {
       hasProviderSyncScopes(
         "microsoft",
         "openid Calendars.ReadWrite Tasks.ReadWrite offline_access",
+      ),
+      true,
+    );
+    assert.equal(
+      hasProviderSyncScopes(
+        "microsoft",
+        "openid,Calendars.ReadWrite,Tasks.ReadWrite,offline_access",
       ),
       true,
     );
