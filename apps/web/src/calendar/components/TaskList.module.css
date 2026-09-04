@@ -1,0 +1,12 @@
+.tasks { overflow: auto; padding: var(--space-6); }
+.group { margin-bottom: var(--space-7); }
+.group h3 { color: var(--text-secondary); font-size: var(--text-12); margin: 0 0 var(--space-2); text-transform: uppercase; }
+.group ul { background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); list-style: none; margin: 0; padding: 0; }
+.task { align-items: center; display: flex; gap: var(--space-3); min-height: var(--row-min-height); padding: 0 var(--space-4); }
+.task + .task { border-top: 1px solid var(--border-subtle); }
+.taskMain { background: none; border: 0; color: var(--text-primary); cursor: pointer; display: grid; flex: 1; gap: var(--space-1); min-width: 0; padding: var(--space-3) 0; text-align: left; }
+.taskMain small { color: var(--text-secondary); font-size: var(--text-12); }
+.done { color: var(--text-secondary); text-decoration: line-through; }
+.editor { display: grid; gap: var(--space-5); }
+.fields { display: grid; gap: var(--space-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 599px) { .tasks { padding: var(--space-5); } .fields { grid-template-columns: 1fr; } }

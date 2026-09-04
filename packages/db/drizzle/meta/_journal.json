@@ -379,6 +379,20 @@
       "when": 1788104144061,
       "tag": "0053_release_0_1_7_announcement",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788454782326,
+      "tag": "0054_cold_revanche",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788457018773,
+      "tag": "0055_rich_zemo",
+      "breakpoints": true
     }
   ]
 }

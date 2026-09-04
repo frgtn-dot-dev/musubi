@@ -37,7 +37,8 @@ async function main() {
     requests.push({
       url,
       authorization: req.headers.authorization,
-      prefer: typeof req.headers.prefer === "string" ? req.headers.prefer : undefined,
+      prefer:
+        typeof req.headers.prefer === "string" ? req.headers.prefer : undefined,
     });
     const json = (status: number, body: unknown) => {
       res.writeHead(status, { "content-type": "application/json" });
@@ -77,20 +78,26 @@ async function main() {
 
     if (url.pathname === "/graph-expired") {
       return json(200, {
-        value: [{
-          id: "discard-before-410",
-          type: "occurrence",
-          seriesMasterId: "master-1",
-          start: { dateTime: "2026-07-20T09:00:00.0000000", timeZone: "UTC" },
-          end: { dateTime: "2026-07-20T10:00:00.0000000", timeZone: "UTC" },
-        }],
+        value: [
+          {
+            id: "discard-before-410",
+            type: "occurrence",
+            seriesMasterId: "master-1",
+            start: { dateTime: "2026-07-20T09:00:00.0000000", timeZone: "UTC" },
+            end: { dateTime: "2026-07-20T10:00:00.0000000", timeZone: "UTC" },
+          },
+        ],
         "@odata.nextLink": `${origin}/graph-expired-page-2`,
       });
     }
     if (url.pathname === "/graph-expired-page-2") {
       return json(410, { error: { message: "delta expired" } });
     }
-    if (url.pathname.includes("/graph/me/calendars/calendar-graph/calendarView/delta")) {
+    if (
+      url.pathname.includes(
+        "/graph/me/calendars/calendar-graph/calendarView/delta",
+      )
+    ) {
       return json(200, {
         value: [
           graphEvent("master-definition", { type: "seriesMaster" }),
@@ -107,19 +114,25 @@ async function main() {
     }
     if (url.pathname === "/graph/me/events/master-1") {
       graphMasterRequests++;
-      return json(200, graphEvent("master-1", {
-        subject: graphMasterRequests === 1 ? "Stale title" : "Inherited title",
-      }));
+      return json(
+        200,
+        graphEvent("master-1", {
+          subject:
+            graphMasterRequests === 1 ? "Stale title" : "Inherited title",
+        }),
+      );
     }
     if (url.pathname === "/graph-page-2") {
       return json(200, {
-        value: [{
-          id: "occurrence-2",
-          type: "occurrence",
-          seriesMasterId: "master-1",
-          start: { dateTime: "2026-07-25T09:00:00.0000000", timeZone: "UTC" },
-          end: { dateTime: "2026-07-25T10:00:00.0000000", timeZone: "UTC" },
-        }],
+        value: [
+          {
+            id: "occurrence-2",
+            type: "occurrence",
+            seriesMasterId: "master-1",
+            start: { dateTime: "2026-07-25T09:00:00.0000000", timeZone: "UTC" },
+            end: { dateTime: "2026-07-25T10:00:00.0000000", timeZone: "UTC" },
+          },
+        ],
         "@odata.deltaLink": `${origin}/graph-delta-fresh`,
       });
     }
@@ -129,7 +142,8 @@ async function main() {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Fake provider did not bind a TCP port.");
+  if (!address || typeof address === "string")
+    throw new Error("Fake provider did not bind a TCP port.");
   origin = `http://127.0.0.1:${address.port}`;
 
   try {
@@ -143,14 +157,19 @@ async function main() {
     assert.equal(google.reset, true);
     assert.equal(google.nextCursor, "fresh-cursor");
     assert.deepEqual(
-      google.changes.map(({ externalId, status }) => ({ externalId, status })),
+      google.changes.map(({ data: { externalId, status } }) => ({
+        externalId,
+        status,
+      })),
       [
         { externalId: "fresh-event", status: "active" },
         { externalId: "deleted-event", status: "cancelled" },
       ],
     );
     assert.equal(
-      google.changes.some((event) => event.externalId === "discard-before-410"),
+      google.changes.some(
+        ({ data }) => data.externalId === "discard-before-410",
+      ),
       false,
     );
 
@@ -182,14 +201,19 @@ async function main() {
     );
     assert.equal(microsoft.reset, true);
     assert.deepEqual(
-      microsoft.changes.map(({ externalId, title }) => ({ externalId, title })),
+      microsoft.changes.map(({ data: { externalId, title } }) => ({
+        externalId,
+        title,
+      })),
       [
         { externalId: "occurrence-1", title: "Inherited title" },
         { externalId: "occurrence-2", title: "Inherited title" },
       ],
     );
     assert.equal(
-      microsoft.changes.some((event) => event.externalId === "discard-before-410"),
+      microsoft.changes.some(
+        ({ data }) => data.externalId === "discard-before-410",
+      ),
       false,
     );
     // Once during the discarded incremental page, once after reset; occurrence
@@ -200,22 +224,26 @@ async function main() {
       `${origin}/graph-delta-fresh`,
     );
 
-    assert.ok(requests.every((request) =>
-      request.authorization === (
-        request.url.pathname.startsWith("/google")
-          ? "Bearer google-access"
-          : "Bearer graph-access"
+    assert.ok(
+      requests.every(
+        (request) =>
+          request.authorization ===
+          (request.url.pathname.startsWith("/google")
+            ? "Bearer google-access"
+            : "Bearer graph-access"),
       ),
-    ));
+    );
     const graphRequests = requests.filter((request) =>
       request.url.pathname.startsWith("/graph"),
     );
-    assert.ok(graphRequests.every((request) =>
-      request.prefer?.includes('outlook.timezone="UTC"'),
-    ));
+    assert.ok(
+      graphRequests.every((request) =>
+        request.prefer?.includes('outlook.timezone="UTC"'),
+      ),
+    );
   } finally {
     await new Promise<void>((resolve, reject) =>
-      server.close((error) => error ? reject(error) : resolve()),
+      server.close((error) => (error ? reject(error) : resolve())),
     );
   }
 

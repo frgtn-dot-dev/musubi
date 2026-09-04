@@ -9,7 +9,13 @@ import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useNewerServer } from "~/api/use-newer-server";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import { getPollCalendar } from "~/api/resources";
+import {
+  createTask,
+  getPollCalendar,
+  getTasks,
+  removeTask,
+  updateTask,
+} from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
 import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
@@ -82,6 +88,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   // Above Workspace: provider return state must survive canonical Page redirects.
   const providerLink = useProviderLinkReturn(userId);
   const activeView: CalendarViewId = isCalendarView(view) ? view : "month";
+  const taskView = activeView === "tasks";
   const workspace = useWorkspaceQueries(date, userId, activeView);
   const pages = workspace.pages.data;
   const activePage = pages?.find((page) => page.id === pageId);
@@ -90,6 +97,14 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     Boolean(
       pageDrafts.get(pageId)?.config.showPolls ?? activePage?.config.showPolls,
     );
+  const tasksQuery = useQuery({
+    // Task data is not in the offline snapshot yet. Do not turn every calendar
+    // Page into a task request or leave this Page in a disabled-query pending
+    // state; its view makes that limitation explicit instead.
+    enabled: taskView && !snapshot.offline,
+    queryFn: ({ signal }) => getTasks(signal),
+    queryKey: queryKeys.tasks(getServerOrigin(), userId),
+  });
   const pollCalendar = useQuery({
     enabled: pollEnabled,
     queryFn: ({ signal }) => getPollCalendar(signal),
@@ -110,6 +125,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     workspace.events,
     workspace.pages,
     workspace.settings,
+    ...(taskView && !snapshot.offline ? [tasksQuery] : []),
   ];
   // One source for "the server did not answer", shared with every form that has
   // to refuse a write (`SnapshotProvider`).
@@ -167,6 +183,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     error ||
     !workspace.calendars.data ||
     !workspace.events.data ||
+    (taskView && !snapshot.offline && !tasksQuery.data) ||
     !workspace.pages.data ||
     !workspace.settings.data
   ) {
@@ -244,6 +261,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       pollsError={pollEnabled && Boolean(pollCalendar.error)}
       date={date}
       events={workspace.mergedEvents?.events ?? []}
+      tasks={tasksQuery.data?.tasks ?? []}
       isAdmin={isAdmin}
       isRefreshing={
         queries.some((query) => query.isFetching) ||
@@ -254,6 +272,20 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       snapshotAt={snapshot.savedAt}
       stale={stale}
       onCreateEvent={eventMutations.createEvent}
+      onCreateTask={async (task) => {
+        const created = await createTask(task);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(getServerOrigin(), userId) });
+        return created;
+      }}
+      onUpdateTask={async (id, task) => {
+        const updated = await updateTask(id, task);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(getServerOrigin(), userId) });
+        return updated;
+      }}
+      onRemoveTask={async (task) => {
+        await removeTask(task.id);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(getServerOrigin(), userId) });
+      }}
       onAdoptSettings={settingsMutations.adoptSettings}
       onForkEvent={eventMutations.forkEvent}
       onExportCalendar={calendarTransfers.exportCalendar}

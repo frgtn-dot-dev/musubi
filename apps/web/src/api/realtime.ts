@@ -119,6 +119,8 @@ export function useServerStream(userId: string) {
         case "event_updated":
         case "event_removed":
         case "attendance_changed":
+          void queryClient.invalidateQueries({ queryKey: eventsPrefix });
+          break;
         case "external_sync":
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
           break;

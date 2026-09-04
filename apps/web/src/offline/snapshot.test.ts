@@ -1,11 +1,8 @@
 import type { DehydratedState } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { EventsResponseSchema } from "~/api/contracts";
-import {
-  CACHE_BUSTER,
-  cacheNamespace,
-  hashOrigin,
-} from "./cache-version";
+
+import { CACHE_BUSTER, cacheNamespace, hashOrigin } from "./cache-version";
 import {
   capEventRanges,
   isSnapshotUsable,
@@ -54,15 +51,31 @@ const eventsPayload = {
 
 describe("shouldPersistQuery", () => {
   it("keeps the queries a cold start needs", () => {
-    for (const name of ["calendars", "events", "federated", "pages", "settings"]) {
-      expect(shouldPersistQuery(query([name, "origin", "user"], {}))).toBe(true);
+    for (const name of [
+      "calendars",
+      "events",
+      "federated",
+      "pages",
+      "settings",
+    ]) {
+      expect(shouldPersistQuery(query([name, "origin", "user"], {}))).toBe(
+        true,
+      );
     }
   });
 
   it("leaves out what nobody needs offline or must not be stored", () => {
     // Per-dialog detail, a handshake, and Better Auth's own session.
-    for (const name of ["attendees", "members", "invites", "server-capabilities", "session"]) {
-      expect(shouldPersistQuery(query([name, "origin", "user"], {}))).toBe(false);
+    for (const name of [
+      "attendees",
+      "members",
+      "invites",
+      "server-capabilities",
+      "session",
+    ]) {
+      expect(shouldPersistQuery(query([name, "origin", "user"], {}))).toBe(
+        false,
+      );
     }
   });
 
@@ -87,7 +100,9 @@ describe("reviveQueries", () => {
 
     const data = revived!.state.data as { events: { start: Date }[] };
     expect(data.events[0]!.start).toBeInstanceOf(Date);
-    expect(data.events[0]!.start.toISOString()).toBe("2026-07-20T09:00:00.000Z");
+    expect(data.events[0]!.start.toISOString()).toBe(
+      "2026-07-20T09:00:00.000Z",
+    );
     // And the result satisfies the contract the app reads everywhere else.
     expect(EventsResponseSchema.safeParse(data).success).toBe(true);
   });
@@ -112,16 +127,22 @@ describe("capEventRanges", () => {
     const queries = [
       query(["calendars", "o", "u"], []),
       ...[10, 40, 20, 30].map((dataUpdatedAt) =>
-        query(["events", "o", "u", [], `range-${dataUpdatedAt}`], eventsPayload, {
-          dataUpdatedAt,
-        }),
+        query(
+          ["events", "o", "u", [], `range-${dataUpdatedAt}`],
+          eventsPayload,
+          {
+            dataUpdatedAt,
+          },
+        ),
       ),
     ];
 
     const capped = capEventRanges(queries, 2);
 
     // The other cached queries are untouched by the cap.
-    expect(capped.filter((item) => item.queryKey[0] === "calendars")).toHaveLength(1);
+    expect(
+      capped.filter((item) => item.queryKey[0] === "calendars"),
+    ).toHaveLength(1);
     const kept = capped
       .filter((item) => item.queryKey[0] === "events")
       .map((item) => item.state.dataUpdatedAt);
@@ -135,16 +156,20 @@ describe("capEventRanges", () => {
 });
 
 describe("isSnapshotUsable", () => {
-  const snapshot = { buster: CACHE_BUSTER, savedAt: 1_000, state: { mutations: [], queries: [] } };
+  const snapshot = {
+    buster: CACHE_BUSTER,
+    savedAt: 1_000,
+    state: { mutations: [], queries: [] },
+  };
 
   it("accepts its own build inside the age window", () => {
     expect(isSnapshotUsable(snapshot, 500, 1_400)).toBe(true);
   });
 
   it("refuses another build's snapshot", () => {
-    expect(
-      isSnapshotUsable({ ...snapshot, buster: "999.9" }, 500, 1_400),
-    ).toBe(false);
+    expect(isSnapshotUsable({ ...snapshot, buster: "999.9" }, 500, 1_400)).toBe(
+      false,
+    );
   });
 
   it("refuses one that is too old", () => {

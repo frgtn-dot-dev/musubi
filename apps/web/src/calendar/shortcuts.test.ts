@@ -15,7 +15,7 @@ describe("shortcutFor", () => {
   it("maps views, navigation and actions", () => {
     expect(shortcutFor(press("w"))).toEqual({ kind: "view", view: "week" });
     expect(shortcutFor(press("A"))).toEqual({ kind: "view", view: "agenda" });
-    expect(shortcutFor(press("t"))).toEqual({ kind: "today" });
+    expect(shortcutFor(press("t"))).toEqual({ kind: "view", view: "tasks" });
     expect(shortcutFor(press("n"))).toEqual({ kind: "next" });
     expect(shortcutFor(press("k"))).toEqual({ kind: "previous" });
     expect(shortcutFor(press("c"))).toEqual({ kind: "create" });

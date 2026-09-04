@@ -22,6 +22,7 @@ import {
   ServerCapabilitiesSchema,
   SettingsDocumentResponseSchema,
   SettingsResponseSchema,
+  TasksResponseSchema,
 } from "./contracts";
 import {
   AnnouncementSchema,
@@ -29,6 +30,7 @@ import {
   CalendarSchema,
   EventSchema,
   InviteSchema,
+  TaskSchema,
   type AnnouncementInput,
   type Calendar,
   type CreatePageRequest,
@@ -37,6 +39,8 @@ import {
   type ReminderRule,
   type ReorderPagesRequest,
   type SavePageRequest,
+  type TaskCreate,
+  type TaskUpdate,
 } from "@musubi/types";
 import type { EventPageContent, EventPageTheme } from "@musubi/types";
 import type { AttendanceChoice } from "~/calendar/attendance";
@@ -84,6 +88,22 @@ export function getEvents(
     responseSchema: EventsResponseSchema,
     signal,
   });
+}
+
+export function getTasks(signal?: AbortSignal) {
+  return apiRequest("/api/v1/tasks", { responseSchema: TasksResponseSchema, signal });
+}
+
+export function createTask(task: TaskCreate) {
+  return apiRequest("/api/v1/tasks", { body: task, method: "POST", responseSchema: TaskSchema });
+}
+
+export function updateTask(id: string, task: TaskUpdate) {
+  return apiRequest(`/api/v1/tasks/${id}`, { body: task, method: "PUT", responseSchema: TaskSchema });
+}
+
+export function removeTask(id: string) {
+  return apiRequest(`/api/v1/tasks/${id}`, { method: "DELETE", responseSchema: z.undefined() });
 }
 
 export function getPages(signal?: AbortSignal) {

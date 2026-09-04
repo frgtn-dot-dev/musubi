@@ -5,6 +5,7 @@ import {
   CalendarAdapter,
   ExternalCalendarInfo,
   FetchChangesResult,
+  NormalizedChange,
   NormalizedEvent,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
@@ -16,19 +17,33 @@ const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 // calendar", …) — status text alone is useless to the user.
 async function googleError(res: Response): Promise<Error> {
   let detail = res.statusText;
-  try { detail = (await res.json())?.error?.message ?? detail; } catch { /* keep statusText */ }
+  try {
+    detail = (await res.json())?.error?.message ?? detail;
+  } catch {
+    /* keep statusText */
+  }
   return new Error(`Google ${res.status}: ${detail}`);
 }
 
 // Calendar color lives on the per-user calendarList entry, not the calendar
 // resource itself; colorRgbFormat=true accepts plain hex.
-async function patchCalendarColor(accessToken: string, calendarId: string, color: string) {
+async function patchCalendarColor(
+  accessToken: string,
+  calendarId: string,
+  color: string,
+) {
   const res = await fetch(
     `${GCAL}/users/me/calendarList/${encodeURIComponent(calendarId)}?colorRgbFormat=true`,
     {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ backgroundColor: color, foregroundColor: "#000000" }),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        backgroundColor: color,
+        foregroundColor: "#000000",
+      }),
     },
   );
   if (!res.ok) throw await googleError(res);
@@ -46,19 +61,45 @@ function getAccessToken(userID: string, accountId: string) {
 // "What UTC instant is <local wall-clock time> in <tz>?" — via Intl, no tz lib.
 // ponytail: single-iteration approximation; can be 1h off in the hour around a
 // DST transition. Good enough for exception stamps.
-function zonedToUtc(y: number, mo: number, d: number, h: number, mi: number, s: number, tz: string): Date {
+function zonedToUtc(
+  y: number,
+  mo: number,
+  d: number,
+  h: number,
+  mi: number,
+  s: number,
+  tz: string,
+): Date {
   const guess = Date.UTC(y, mo - 1, d, h, mi, s);
   const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
-  const p = Object.fromEntries(dtf.formatToParts(new Date(guess)).map(x => [x.type, x.value]));
-  const wallAtGuess = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  const p = Object.fromEntries(
+    dtf.formatToParts(new Date(guess)).map((x) => [x.type, x.value]),
+  );
+  const wallAtGuess = Date.UTC(
+    +p.year,
+    +p.month - 1,
+    +p.day,
+    +p.hour % 24,
+    +p.minute,
+    +p.second,
+  );
   return new Date(guess - (wallAtGuess - guess));
 }
 
-const toICalUTC = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+const toICalUTC = (d: Date) =>
+  d
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 
 // Normalize Google's recurrence lines into what our expansion (rrule lib)
 // provably handles — verified empirically:
@@ -66,24 +107,36 @@ const toICalUTC = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\
 //  - EXDATE;VALUE=DATE:… → works (all-day, UTC-midnight anchors) → keep
 //  - FREQ=YEARLY;BYMONTHDAY without BYMONTH → RFC expands monthly → anchor month
 function sanitizeRecurrence(recurrence: string, start: Date): string {
-  return recurrence.split("\n").filter(Boolean).map((line) => {
-    if (/^(RRULE:)?FREQ=/.test(line)) {
-      if (/FREQ=YEARLY/.test(line) && /BYMONTHDAY=/.test(line) && !/BYMONTH=/.test(line)) {
-        return `${line};BYMONTH=${start.getUTCMonth() + 1}`;
+  return recurrence
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      if (/^(RRULE:)?FREQ=/.test(line)) {
+        if (
+          /FREQ=YEARLY/.test(line) &&
+          /BYMONTHDAY=/.test(line) &&
+          !/BYMONTH=/.test(line)
+        ) {
+          return `${line};BYMONTH=${start.getUTCMonth() + 1}`;
+        }
+        return line;
+      }
+      const m = line.match(/^EXDATE;TZID=([^:;]+):(.+)$/i);
+      if (m) {
+        const [, tz, vals] = m;
+        const utc = vals.split(",").map((v) => {
+          const t = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
+          return t
+            ? toICalUTC(
+                zonedToUtc(+t[1], +t[2], +t[3], +t[4], +t[5], +t[6], tz),
+              )
+            : v;
+        });
+        return `EXDATE:${utc.join(",")}`;
       }
       return line;
-    }
-    const m = line.match(/^EXDATE;TZID=([^:;]+):(.+)$/i);
-    if (m) {
-      const [, tz, vals] = m;
-      const utc = vals.split(",").map((v) => {
-        const t = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
-        return t ? toICalUTC(zonedToUtc(+t[1], +t[2], +t[3], +t[4], +t[5], +t[6], tz)) : v;
-      });
-      return `EXDATE:${utc.join(",")}`;
-    }
-    return line;
-  }).join("\n");
+    })
+    .join("\n");
 }
 
 // Google event JSON -> NormalizedEvent
@@ -120,7 +173,9 @@ function toNormalized(item: any): NormalizedEvent {
     description: item.description ?? null,
     location: item.location ?? null,
     organizer: item.organizer?.email ?? null,
-    recurrence: item.recurrence ? sanitizeRecurrence(item.recurrence.join("\n"), start) : null,
+    recurrence: item.recurrence
+      ? sanitizeRecurrence(item.recurrence.join("\n"), start)
+      : null,
     // NOT htmlLink — that's just "open in Google Calendar" noise on every event.
     // Meet link / source url are actual event URLs.
     url: item.hangoutLink ?? item.source?.url ?? null,
@@ -131,15 +186,21 @@ function toNormalized(item: any): NormalizedEvent {
 // All-day series use DATE-typed dtstart, so EXDATE/UNTIL must be dates too
 // (RFC 5545: exception/until value type must match DTSTART's).
 function toGoogleRecurrence(recurrence: string, isAllDay: boolean): string[] {
-  return recurrence.split("\n").filter(Boolean).map((line) => {
-    if (!/^(RRULE|EXDATE|RDATE|EXRULE)/.test(line)) line = `RRULE:${line}`;
-    if (!isAllDay) return line;
-    if (/^EXDATE:/.test(line)) {
-      const dates = line.slice("EXDATE:".length).split(",").map((v) => v.slice(0, 8));
-      return `EXDATE;VALUE=DATE:${dates.join(",")}`;
-    }
-    return line.replace(/UNTIL=(\d{8})T\d{6}Z?/, "UNTIL=$1");
-  });
+  return recurrence
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      if (!/^(RRULE|EXDATE|RDATE|EXRULE)/.test(line)) line = `RRULE:${line}`;
+      if (!isAllDay) return line;
+      if (/^EXDATE:/.test(line)) {
+        const dates = line
+          .slice("EXDATE:".length)
+          .split(",")
+          .map((v) => v.slice(0, 8));
+        return `EXDATE;VALUE=DATE:${dates.join(",")}`;
+      }
+      return line.replace(/UNTIL=(\d{8})T\d{6}Z?/, "UNTIL=$1");
+    });
 }
 
 // Musubi Event -> Google event JSON
@@ -149,12 +210,18 @@ function toGoogleEvent(event: Event) {
     description: event.description,
     location: event.location,
     // null (not undefined) so a removed recurrence clears on PATCH.
-    recurrence: event.recurrence ? toGoogleRecurrence(event.recurrence, event.isAllDay) : null,
+    recurrence: event.recurrence
+      ? toGoogleRecurrence(event.recurrence, event.isAllDay)
+      : null,
     start: event.isAllDay
       ? { date: event.start.toISOString().slice(0, 10) }
       : { dateTime: event.start.toISOString() },
     end: event.isAllDay
-      ? { date: new Date(event.end.getTime() + 86400000).toISOString().slice(0, 10) } // +1 day, Google exclusive
+      ? {
+          date: new Date(event.end.getTime() + 86400000)
+            .toISOString()
+            .slice(0, 10),
+        } // +1 day, Google exclusive
       : { dateTime: event.end.toISOString() },
   };
 }
@@ -170,7 +237,7 @@ export async function fetchGoogleChanges(
 ): Promise<FetchChangesResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const baseUrl = options.baseUrl ?? GCAL;
-  const changes: NormalizedEvent[] = [];
+  const changes: NormalizedChange[] = [];
   let currentCursor = cursor;
   let pageToken: string | undefined;
   let nextSyncToken: string | undefined;
@@ -199,7 +266,8 @@ export async function fetchGoogleChanges(
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
 
     const data = await res.json();
-    for (const item of data.items ?? []) changes.push(toNormalized(item));
+    for (const item of data.items ?? [])
+      changes.push({ kind: "event", data: toNormalized(item) });
 
     if (data.nextPageToken) {
       pageToken = data.nextPageToken;
@@ -217,23 +285,33 @@ export const googleAdapter: CalendarAdapter = {
 
   async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
     const ids = await getOAuthAccountIDs(userID, "google");
-    return Promise.all(ids.map(async (id) => {
-      let label = id;
-      try {
-        const accessToken = await getAccessToken(userID, id);
-        const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (res.ok) {
-          const d = await res.json();
-          label = d.email ?? d.name ?? id;
+    return Promise.all(
+      ids.map(async (id) => {
+        let label = id;
+        try {
+          const accessToken = await getAccessToken(userID, id);
+          const res = await fetch(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            },
+          );
+          if (res.ok) {
+            const d = await res.json();
+            label = d.email ?? d.name ?? id;
+          }
+        } catch {
+          /* fall back to id */
         }
-      } catch { /* fall back to id */ }
-      return { id, label };
-    }));
+        return { id, label };
+      }),
+    );
   },
 
-  async listCalendars(userID: string, accountId: string): Promise<ExternalCalendarInfo[]> {
+  async listCalendars(
+    userID: string,
+    accountId: string,
+  ): Promise<ExternalCalendarInfo[]> {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(`${GCAL}/users/me/calendarList`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -248,7 +326,12 @@ export const googleAdapter: CalendarAdapter = {
     }));
   },
 
-  async fetchChanges(userID, accountId, externalCalendarId, cursor): Promise<FetchChangesResult> {
+  async fetchChanges(
+    userID,
+    accountId,
+    externalCalendarId,
+    cursor,
+  ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
     return fetchGoogleChanges(accessToken, externalCalendarId, cursor);
   },
@@ -259,7 +342,10 @@ export const googleAdapter: CalendarAdapter = {
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(toGoogleEvent(event)),
       },
     );
@@ -268,13 +354,22 @@ export const googleAdapter: CalendarAdapter = {
     return { externalEventId: data.id };
   },
 
-  async pushUpdate(userID, accountId, externalCalendarId, externalEventId, event: Event) {
+  async pushUpdate(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalEventId,
+    event: Event,
+  ) {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
       {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(toGoogleEvent(event)),
       },
     );
@@ -297,7 +392,10 @@ export const googleAdapter: CalendarAdapter = {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(`${GCAL}/calendars`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ summary: name }),
     });
     if (!res.ok) throw await googleError(res);
@@ -308,22 +406,32 @@ export const googleAdapter: CalendarAdapter = {
 
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ summary: name }),
-    });
+    const res = await fetch(
+      `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ summary: name }),
+      },
+    );
     if (!res.ok) throw await googleError(res);
     await patchCalendarColor(accessToken!, externalCalendarId, color);
   },
 
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await fetch(
+      `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     // 404/410 = already gone = success; primary calendars come back as 400 and bubble up.
-    if (!res.ok && res.status !== 404 && res.status !== 410) throw await googleError(res);
+    if (!res.ok && res.status !== 404 && res.status !== 410)
+      throw await googleError(res);
   },
 };
