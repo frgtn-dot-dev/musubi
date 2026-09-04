@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
-import { account, cleanOAuthAccountTokens, db, user } from "@musubi/db";
+import { and, inArray } from "drizzle-orm";
+import { account, cleanOAuthAccountTokens, db, getOAuthAccountIDs, user } from "@musubi/db";
 
-const TEST_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const TEST_SCOPE = "https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/tasks";
 
 async function main() {
   if (process.env.ENVIRONMENT !== "test") {
@@ -15,6 +15,7 @@ async function main() {
   const otherUserID = `oauth-other-${suffix}`;
   const targetAccountID = `target-${suffix}`;
   const siblingAccountID = `sibling-${suffix}`;
+  const recoveredAccountID = `recovered-${suffix}`;
   const rows = [
     {
       id: `account-target-${suffix}`,
@@ -39,6 +40,16 @@ async function main() {
       accessToken: "sibling-access",
       refreshToken: "sibling-refresh",
       scope: TEST_SCOPE,
+    },
+    {
+      id: `account-recovered-${suffix}`,
+      accountId: recoveredAccountID,
+      providerId: "google",
+      userId: ownerID,
+      refreshToken: "recovered-refresh",
+      scope: TEST_SCOPE,
+      syncStatus: "reconnect_required",
+      syncErrorCode: "insufficient_scope",
     },
     {
       id: `account-microsoft-${suffix}`,
@@ -69,6 +80,11 @@ async function main() {
     await db.insert(account).values(rows);
     await cleanOAuthAccountTokens(ownerID, "google", targetAccountID);
 
+    assert.deepEqual(
+      new Set(await getOAuthAccountIDs(ownerID, "google")),
+      new Set([siblingAccountID, recoveredAccountID]),
+    );
+
     const stored = await db.select().from(account).where(and(
       inArray(account.userId, [ownerID, otherUserID]),
       inArray(account.id, rows.map((row) => row.id)),
@@ -87,6 +103,8 @@ async function main() {
     assert.equal(target.syncDisabledAt, null);
 
     assert.equal(byID.get(`account-sibling-${suffix}`)?.refreshToken, "sibling-refresh");
+    assert.equal(byID.get(`account-recovered-${suffix}`)?.syncStatus, "active");
+    assert.equal(byID.get(`account-recovered-${suffix}`)?.syncErrorCode, null);
     assert.equal(byID.get(`account-microsoft-${suffix}`)?.refreshToken, "microsoft-refresh");
     assert.equal(byID.get(`account-other-user-${suffix}`)?.refreshToken, "other-refresh");
   } finally {
