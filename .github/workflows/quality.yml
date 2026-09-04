@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-  workflow_call:
+  workflow_call: {}
 
 permissions:
   contents: read
@@ -205,8 +205,12 @@ jobs:
       - run: pnpm test:db
 
   e2e:
-    name: Web end-to-end
+    name: Web end-to-end (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
@@ -219,20 +223,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Its own job, not part of `pnpm check`: the browser download and the dev
-      # server are the slow part, and keeping them off the critical path means
-      # typecheck/lint still report in under a minute.
+      # Four native Playwright shards give each quarter of the suite its own
+      # runner. The browser download and dev server stay off the check job's
+      # critical path.
       - name: Install Playwright browser
         run: >-
           pnpm --filter @musubi/web exec playwright install --with-deps chromium
 
-      - run: pnpm --filter @musubi/web test:e2e
+      - run: >-
+          pnpm --filter @musubi/web test:e2e --shard=${{ matrix.shard }}/4
 
       - if: failure()
         uses: >-
           actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: apps/web/test-results
           retention-days: 7
 
