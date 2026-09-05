@@ -1,8 +1,8 @@
-# Conditional EVENT delivery boundary (K06 stage 1)
+# Conditional EVENT delivery boundary (K06 integrated candidate)
 
-This is **not whole-K06 acceptance or release readiness**. Local CAS, wire/client
-revision contracts, frozen drafts and truthful postcommit API responses still need
-integration. PRODUCT / MIN_CLIENT / MIN_PEER remain 0.1.8. Outlook existing mapped
+This is **not whole-K06 acceptance or release readiness**: independent review and
+parent acceptance remain required. Local CAS, wire/client revision contracts,
+frozen drafts and truthful postcommit API responses are integrated. PRODUCT / MIN_CLIENT / MIN_PEER remain 0.1.8. Outlook existing mapped
 EVENT update/delete remains refused in both preflight and the direct adapter:
 its event-specific conditional enforcement is **unknown**, not proven unsupported.
 Read/create and existing genuinely local unlink remain available. Tasks are not
@@ -83,7 +83,7 @@ parallel delivery framework:
    event, capturedRef, actualPatch)` receives the captured expected validator and
    actual diff. `pushDelete(..., capturedRef)` needs no mapping lookup at delivery.
    Only an explicit known empty/local-only patch can produce no provider write.
-5. `deliver(onlyAction?)` is request-scoped and intended for **sequential** calls.
+5. `deliver(onlyAction?, committedRevision?)` is request-scoped and intended for **sequential** calls.
    It returns `EventDeliveryReceipt[]`. Completed actions are not resent; the first
    failure is latched and rethrown on later calls, leaving later actions unattempted.
    Create/update mapping metadata is persisted through existing scoped DB helpers.
@@ -106,46 +106,47 @@ parallel delivery framework:
   `completed` (including a known no-op), `not-needed` (no mapped remote target),
   `conflict`, `not-written`, or `unconfirmed`. Mapping persistence failure after
   HTTP success is conservatively unconfirmed; this is not a distributed transaction.
-- These are **internal**, not a finished public response schema. Do not blindly
-  serialize internal account/resource IDs or raw provider errors to collaborators.
-  The API writer must authorize/sanitize the wire delivery summary.
+- These remain **internal**. The API publishes only action, status and reason,
+  never internal account/resource IDs or raw provider errors to collaborators.
 
-## Required next integration (not implemented here)
+## Integrated API / CAS / client ordering
 
-- Require frozen expected local revision and actual request patch in shared wire,
-  handlers and both clients. Wire CAS into all update/delete/link/unlink/fork/scope
-  and relevant legacy DB writer paths. A stale local revision must cause **zero
-  remote effects**, even if the submitted fields happen to look like a no-op.
-- Keep known-write-set ACL/provider preflight **before local mutation**, then local
-  CAS commit **before any conditional delivery**, including removed-copy/delete
-  delivery. Current handlers still use unconditional legacy writers and perform
-  delete delivery before local unlink/reconciliation. They are **not deployable**
-  as complete K06. Prepared references now survive unlink to enable that reorder.
-- `patchEventAndCalendarLinks` returns actual `patch`, before/after and link diff.
-  Bind those results to the preflighted captured plan without re-reading/rebasing
-  validators or doing fresh denial-capable preflight only after commit. The current
-  closure clones its inputs at preparation; it does **not** silently replace its
-  event/patch with later CAS results. The API/CAS writer must reconcile these seams
-  (including unchanged-revision, mapping-only inbound races), not assume the stage-1
-  legacy `previous` SELECT is atomic or that postcommit preparation preserves deletes.
-- Existing `setExternalEventSyncData` persists scoped metadata but is not a mapping
-  CAS against intervening imports/unlinks. Integrate its ordering/accepted-version
-  checks with the actual local CAS flow; never use response-only metadata updates
-  to bless unseen content. Missing-validator writes may require authoritative
-  resync/refresh before further writes; no automatic unsafe retry is provided.
-- Handler must catch delivery failure and return truthful `localCommitted`, current
-  authoritative revision/state and sanitized partial/unconfirmed receipt. Today
-  middleware returns generic **500**, including after locally committed updates;
-  it does not yet expose 409/provider-conflict or a delivery receipt to clients.
-  Existing client error rollback/draft/cache behavior is therefore **not UI-complete**.
-  Preserve the original draft and newer inbound cache; do not report rollback or
-  silently advance the draft baseline. Notifications/response sequencing on failed
-  delivery also belongs to this next integration.
-- Complete current no-op handling, frozen browser/native draft and full-editor
-  handoff, revision-less cache refusal and final API/CAS/client/browser gates.
-  Keep all K01–K05 authority/version/scope behavior, old-client/peer refusal and
-  approved Outlook restriction. No K07 outbox/durable retry or K12 atomic scope
-  promise is implied.
+- Shared strict write schemas require positive `expectedRevision` on PATCH, the
+  compatibility PUT alias, delete, unlink, link and fork. Creates start at server
+  revision 1. Optional read revisions exist only for old caches, which cannot save.
+  Scope metadata belongs to request envelopes, never Events, disk, providers or URLs.
+- Handlers freshly authorize and preflight the entire known write intent, then use
+  event-locked transactional CAS before calling conditional delivery. A stale local
+  revision causes no local mutation and **zero remote mutations**, including no-ops.
+  Omission preserves; supported explicit nullable null clears; actual no-ops do not
+  advance revision or timestamp. Link changes and calendar cascades also advance
+  revision under the same event-before-link/map lock order.
+- Fork atomically guards the source revision and creates a fresh independent ID.
+  It retains the established source-preserving endpoint behavior; there is no new
+  implicit unlink/move operation. Existing source unlink/delete remains separately
+  revision-guarded. Multi-request recurrence edits are not an atomic transaction.
+- Prepared provider references survive local unlink. Response mapping writes are
+  guarded by committed event revision and captured mapping identity/validator, so
+  a delayed outbound acknowledgement cannot bless newer inbound content.
+- Precommit conflicts return 409 / `localCommitted:false` and current row/revision.
+  Conditional delivery failures return 409 (conflict) or 502 (unconfirmed), with
+  `localCommitted:true`, current local row/revision and sanitized partial receipts.
+  Local state is not falsely rolled back; notifications announce the local commit.
+- Both clients capture the original occurrence, master, links and revision and
+  submit only intended content changes. Web More-options authority uses a tab-local
+  handoff, not URL metadata; a content-only URL without authority is nonwritable.
+  Native save callbacks await success and return the actual scope boolean; Cancel
+  does not call the API, change reminders or close. Delete also awaits success.
+- Failed drafts retain their baseline and contents. Authoritative receipts refresh
+  cache/reminders without replacing newer inbound rows or advancing the draft.
+  Actual browser SSE invalidation and native SSE callbacks cross frozen composers
+  in regressions. Access-loss removal frames carry a revision; if the source row
+  has already been purged, native requests authoritative full reconciliation.
+- PRODUCT / MIN_CLIENT / MIN_PEER stay 0.1.8, including member-token refusal and
+  documented bootstrap exceptions. The wire snapshot is generated from the actual
+  integrated request schemas. K01–K05 restrictions remain; K07 durable retry/outbox
+  and K12 atomic scopes are explicitly absent. No live-provider certification,
+  production migration, release or push is implied.
 
 ## Regression gates
 
@@ -160,3 +161,12 @@ ordinary nullable/time edits; recurrence boundaries; and delete refs after unlin
 and legacy/validated recurrence-intent coverage. `caldav.test.ts` and
 `caldav_client.test.ts` cover existing task/serializer and guarded transport behavior.
 Run DB gates only against a newly owned disposable test database.
+
+`event_revision.integration.test.ts` adds authenticated HTTP/DB CAS races, stale
+partial drafts, versionless refusal, nullable/no-op behavior, links/fork/cascades
+and tombstones. Provider HTTP tests additionally force a local revision change
+during preflight (zero remote effects), partial target failure after commit and
+stale mapping acknowledgement refusal. Chromium K04/K05/K06 exercises concurrent
+editors, SSE, More-options, overnight preservation and local/remote/network/auth/
+version failures; native composer tests run actual host callbacks, transport,
+store and SSE handling with only native hosts/network/cache boundaries mocked.
