@@ -34,7 +34,7 @@ export function GlobalEventModals() {
         onEdit={async (edited) => {
           // The composer was opened on one occurrence; which occurrences the
           // edit belongs to is the composer's last question, not its first.
-          await applySeriesEdit({
+          return await applySeriesEdit({
             addEvent: (event) => addEvent(event, api),
             edited,
             master: events.find((event) => event.id === edited.id),
