@@ -437,9 +437,9 @@ async function checkUnlinkNotifications(
     const sync = syncProvider(
       {
         ...adapter,
-        listCalendars: async () => [
+        listCalendars: async () => ({ taskListsComplete: true, calendars: [
           { externalId: f.remoteCalendar, name: "Copy", color: "#7A8BA3" },
-        ],
+        ] }),
         fetchChanges: async () => ({
           changes: reset
             ? []

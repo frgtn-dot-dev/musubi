@@ -66,3 +66,17 @@ export function isTransientSyncError(error: unknown): boolean {
   }
   return false;
 }
+
+// Only permission denial and retryable resource failures are optional. In
+// particular, OAuth refresh failures and resource 401s must reach the account
+// fault boundary rather than masquerading as unavailable Tasks data.
+export class TaskScopeMissingError extends Error {
+  constructor() { super("Tasks permission has not been granted"); }
+}
+
+export function isOptionalTaskError(error: unknown): boolean {
+  if (error instanceof ProviderAuthError) return false;
+  return error instanceof TaskScopeMissingError ||
+    (error instanceof Error && /^(Google(?: Tasks)?|Outlook) 403\b/.test(error.message)) ||
+    isTransientSyncError(error);
+}

@@ -1,9 +1,10 @@
-import { config } from "@musubi/config";
-import { getOAuthAccountIDs } from "@musubi/db";
+import { config, logger } from "@musubi/config";
+import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import type { Event, Task } from "@musubi/types";
 import type {
   CalendarAdapter,
+  CalendarDiscoveryResult,
   ExternalCalendarInfo,
   FetchChangesResult,
   NormalizedChange,
@@ -11,6 +12,7 @@ import type {
   NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
+import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 const GTASKS = "https://tasks.googleapis.com/tasks/v1";
@@ -484,7 +486,10 @@ export async function fetchGoogleChanges(
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
 
-  async listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]> {
+  async listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]> {
     const ids = await getOAuthAccountIDs(userID, "google", accountId);
     return Promise.all(
       ids.map(async (id) => {
@@ -512,7 +517,7 @@ export const googleAdapter: CalendarAdapter = {
   async listCalendars(
     userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]> {
+  ): Promise<CalendarDiscoveryResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
     let pageToken: string | undefined;
@@ -525,18 +530,35 @@ export const googleAdapter: CalendarAdapter = {
       });
       if (!res.ok) throw await googleError(res);
       const data = await res.json();
-      for (const c of data.items ?? []) calendars.push({
-        externalId: c.id,
-        name: c.summary,
-        color: c.backgroundColor,
-        readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
-        supportsEvents: true,
-        supportsTasks: false,
-      });
+      for (const c of data.items ?? [])
+        calendars.push({
+          externalId: c.id,
+          name: c.summary,
+          color: c.backgroundColor,
+          readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
+          supportsEvents: true,
+          supportsTasks: false,
+        });
       pageToken = data.nextPageToken;
     } while (pageToken);
-    const taskLists = await listGoogleTaskLists(accessToken);
-    return [...calendars, ...taskLists.map(toExternalGoogleTaskList)];
+    if (!(await hasOAuthTaskScope(userID, "google", accountId))) {
+      return { calendars, taskListsComplete: false };
+    }
+    try {
+      const taskLists = await listGoogleTaskLists(accessToken);
+      return {
+        calendars: [...calendars, ...taskLists.map(toExternalGoogleTaskList)],
+        taskListsComplete: true,
+      };
+    } catch (error) {
+      if (!isOptionalTaskError(error)) throw error;
+      logger.warn("sync.tasks.discovery_unavailable", {
+        provider: "google",
+        userId: userID,
+        accountId,
+      });
+      return { calendars, taskListsComplete: false };
+    }
   },
 
   async fetchChanges(
@@ -547,6 +569,8 @@ export const googleAdapter: CalendarAdapter = {
   ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
       : fetchGoogleChanges(accessToken, externalCalendarId, cursor);
@@ -606,6 +630,8 @@ export const googleAdapter: CalendarAdapter = {
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     if (!taskListId) throw new Error("Google task write requires a task list");
     return createGoogleTask(
       await getAccessToken(userID, accountId),
@@ -623,6 +649,8 @@ export const googleAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     if (!taskListId) throw new Error("Google task write requires a task list");
     return updateGoogleTask(
       await getAccessToken(userID, accountId),
@@ -641,6 +669,8 @@ export const googleAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     if (!taskListId) throw new Error("Google task write requires a task list");
     await deleteGoogleTask(
       await getAccessToken(userID, accountId),
@@ -669,6 +699,8 @@ export const googleAdapter: CalendarAdapter = {
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     if (taskListId) {
       const res = await fetch(
         `${GTASKS}/users/@me/lists/${encodeURIComponent(taskListId)}`,
@@ -702,6 +734,8 @@ export const googleAdapter: CalendarAdapter = {
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     const res = await fetch(
       taskListId
         ? `${GTASKS}/users/@me/lists/${encodeURIComponent(taskListId)}`

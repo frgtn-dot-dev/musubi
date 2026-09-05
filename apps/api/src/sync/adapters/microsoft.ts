@@ -1,5 +1,5 @@
-import { config } from "@musubi/config";
-import { getOAuthAccountIDs } from "@musubi/db";
+import { config, logger } from "@musubi/config";
+import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
 import {
   DEFAULT_CALENDAR_COLOR,
   type Event,
@@ -9,6 +9,7 @@ import {
 } from "@musubi/types";
 import type {
   CalendarAdapter,
+  CalendarDiscoveryResult,
   ExternalCalendarInfo,
   FetchChangesResult,
   NormalizedChange,
@@ -16,6 +17,7 @@ import type {
   NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
+import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TASK_LIST_PREFIX = "musubi-microsoft-task-list:";
@@ -55,12 +57,8 @@ function getAccessToken(userID: string, accountId: string) {
     tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
     clientId: config.social.microsoftClientID,
     clientSecret: config.social.microsoftClientSecret,
-    // Microsoft requires the scope again on refresh (and rotates the refresh
-    // token — the shared helper persists the new one).
-    extraParams: {
-      scope:
-        "openid User.Read Calendars.ReadWrite Tasks.ReadWrite offline_access",
-    },
+    // Omit scope on refresh: Microsoft retains the original grant, including
+    // Tasks when granted, without escalating calendar-only consent.
     subtypeKey: "suberror",
   });
 }
@@ -543,7 +541,10 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 export const microsoftAdapter: CalendarAdapter = {
   provider: "microsoft",
 
-  async listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]> {
+  async listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]> {
     const ids = await getOAuthAccountIDs(userID, "microsoft", accountId);
     return Promise.all(
       ids.map(async (id) => {
@@ -568,7 +569,7 @@ export const microsoftAdapter: CalendarAdapter = {
   async listCalendars(
     userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]> {
+  ): Promise<CalendarDiscoveryResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
     let url: string | null =
@@ -580,8 +581,27 @@ export const microsoftAdapter: CalendarAdapter = {
       for (const c of data.value ?? []) calendars.push(toExternalCalendar(c));
       url = data["@odata.nextLink"] ?? null;
     }
-    const taskLists = await listMicrosoftTaskLists(accessToken);
-    return [...calendars, ...taskLists.map(toExternalMicrosoftTaskList)];
+    if (!(await hasOAuthTaskScope(userID, "microsoft", accountId))) {
+      return { calendars, taskListsComplete: false };
+    }
+    try {
+      const taskLists = await listMicrosoftTaskLists(accessToken);
+      return {
+        calendars: [
+          ...calendars,
+          ...taskLists.map(toExternalMicrosoftTaskList),
+        ],
+        taskListsComplete: true,
+      };
+    } catch (error) {
+      if (!isOptionalTaskError(error)) throw error;
+      logger.warn("sync.tasks.discovery_unavailable", {
+        provider: "microsoft",
+        userId: userID,
+        accountId,
+      });
+      return { calendars, taskListsComplete: false };
+    }
   },
 
   async fetchChanges(
@@ -592,6 +612,11 @@ export const microsoftAdapter: CalendarAdapter = {
   ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
       : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
@@ -651,6 +676,11 @@ export const microsoftAdapter: CalendarAdapter = {
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     return createMicrosoftTask(
@@ -669,6 +699,11 @@ export const microsoftAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     return updateMicrosoftTask(
@@ -688,6 +723,11 @@ export const microsoftAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     await deleteMicrosoftTask(
@@ -722,6 +762,11 @@ export const microsoftAdapter: CalendarAdapter = {
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     if (taskListId) {
       const res = await fetch(
         `${GRAPH}/me/todo/lists/${encodeURIComponent(taskListId)}`,
@@ -757,6 +802,11 @@ export const microsoftAdapter: CalendarAdapter = {
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     const res = await fetch(
       taskListId
         ? `${GRAPH}/me/todo/lists/${encodeURIComponent(taskListId)}`

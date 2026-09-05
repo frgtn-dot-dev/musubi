@@ -65,10 +65,10 @@ async function main() {
     await db.insert(account).values([
       { userId: owner, accountId: "target" },
       // Missing scope would clear this token if scoped discovery inspected siblings.
-      { userId: owner, accountId: "sibling", scope: "Calendars.ReadWrite" },
+      { userId: owner, accountId: "sibling", scope: "User.Read" },
       { userId: other, accountId: "foreign" },
       { userId: scheduled, accountId: "scheduled" },
-      { userId: ineligible, accountId: "ineligible", scope: "Calendars.ReadWrite" },
+      { userId: ineligible, accountId: "ineligible", scope: "User.Read" },
     ].map((row) => ({
       id: randomUUID(), providerId: "microsoft", scope: "Calendars.ReadWrite Tasks.ReadWrite",
       refreshToken: `${row.accountId}-refresh`, accessToken: `${row.accountId}-access`,
@@ -77,7 +77,7 @@ async function main() {
     assert.deepEqual(await calendars(owner, "target"), []);
     const work = await getExternalSyncUserIDs();
     assert.ok(work.includes(owner) && work.includes(scheduled));
-    assert.ok(!work.includes(ineligible), "K03 Tasks eligibility remains unchanged");
+    assert.ok(!work.includes(ineligible), "Identity-only accounts remain ineligible");
     assert.equal((await post({ provider: "microsoft" }, false)).status, 401);
     for (const body of [{ provider: "bogus" }, { accountId: "target" }, { provider: 1 }, { accountId: "" }, { userID: other }, []]) {
       assert.equal((await post(body)).status, 400);

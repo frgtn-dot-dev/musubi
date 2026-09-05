@@ -65,6 +65,13 @@ export type ExternalCalendarInfo = {
   readOnly?: boolean;
 };
 
+export type CalendarDiscoveryResult = {
+  calendars: ExternalCalendarInfo[];
+  // False means optional task-list discovery was omitted or failed. Its absent
+  // mirrors are not evidence of deletion and must not be fetched or swept.
+  taskListsComplete: boolean;
+};
+
 export type FetchChangesResult = {
   changes: NormalizedChange[];
   nextCursor: string | null;
@@ -79,13 +86,16 @@ export type CalendarAdapter = {
   // Connected accounts for this provider (id = Better Auth account.accountId for
   // OAuth / caldav_accounts.id for CalDAV; label = human name e.g. email/username).
   // Empty = provider not connected.
-  listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]>;
+  listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]>;
 
   // Which calendars can this account sync?
   listCalendars(
     userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]>;
+  ): Promise<CalendarDiscoveryResult>;
 
   // Pull changes since `cursor` (null = full sync). Adapter paginates internally
   // and returns the complete change set + the new cursor to persist.

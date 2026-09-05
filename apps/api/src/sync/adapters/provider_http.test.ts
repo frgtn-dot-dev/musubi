@@ -304,7 +304,7 @@ async function main() {
         "google",
         "openid https://www.googleapis.com/auth/calendar.events",
       ),
-      false,
+      true,
     );
     assert.equal(
       hasProviderSyncScopes(
@@ -322,7 +322,7 @@ async function main() {
     );
     assert.equal(
       hasProviderSyncScopes("microsoft", "Calendars.ReadWrite"),
-      false,
+      true,
     );
 
     const {

@@ -74,7 +74,7 @@ async function main() {
     failPageTwo = false;
     pages.length = 0;
     const discovered = await googleAdapter.listCalendars(userID, "account");
-    assert.deepEqual(discovered.map((calendar) => [calendar.externalId, calendar.readOnly]), [["first", false], ["last", true]]);
+    assert.deepEqual(discovered.calendars.map((calendar) => [calendar.externalId, calendar.readOnly]), [["first", false], ["last", true]]);
     assert.deepEqual(pages, [null, "page two/+?", "page-three"], "Follow tokens even through an empty page");
     pages.length = 0;
     await syncProvider(googleAdapter, userID, { id: "account", label: "Fixture" });

@@ -6,7 +6,7 @@ import { logger } from "@musubi/config";
 import { getCaldavAccountById, getCaldavAccountsByUser } from "@musubi/db";
 import type {
   CalendarAdapter,
-  ExternalCalendarInfo,
+  CalendarDiscoveryResult,
   ExternalEventRef,
   ExternalTaskRef,
   FetchChangesResult,
@@ -770,10 +770,10 @@ export const caldavAdapter: CalendarAdapter = {
   async listCalendars(
     _userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]> {
+  ): Promise<CalendarDiscoveryResult> {
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
-    return cals
+    const calendars = cals
       .filter(
         (c) =>
           !c.components ||
@@ -790,6 +790,7 @@ export const caldavAdapter: CalendarAdapter = {
         supportsEvents: c.components?.includes("VEVENT") ?? true,
         supportsTasks: c.components?.includes("VTODO") ?? false,
       }));
+    return { calendars, taskListsComplete: true };
   },
 
   async fetchChanges(

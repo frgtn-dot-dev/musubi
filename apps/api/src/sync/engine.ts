@@ -34,7 +34,11 @@ import type {
 import { googleAdapter } from "./adapters/google";
 import { caldavAdapter } from "./adapters/caldav";
 import { microsoftAdapter } from "./adapters/microsoft";
-import { isTransientSyncError, providerAuthErrorFields } from "./errors";
+import {
+  isOptionalTaskError,
+  isTransientSyncError,
+  providerAuthErrorFields,
+} from "./errors";
 import { recordExternalSyncFailure } from "../metrics";
 import { type ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
 
@@ -131,17 +135,23 @@ export async function reconcileExternalChanges(
 
 // A user who lost their last link is absent from subsequent event deltas.
 // Reuse the existing removal frame so even older clients evict that copy.
-async function notifyExternalEventUnlinks(calendarID: string, eventIDs: string[]) {
+async function notifyExternalEventUnlinks(
+  calendarID: string,
+  eventIDs: string[],
+) {
   if (eventIDs.length === 0) return;
   const previousMembers = await getCalendarMembers(calendarID);
   for (const id of new Set(eventIDs)) {
     const remainingCalendars = await getEventCalendars(id);
     const remainingMembers = new Set<string>();
     for (const calendar of remainingCalendars) {
-      for (const member of await getCalendarMembers(calendar)) remainingMembers.add(member.userID);
+      for (const member of await getCalendarMembers(calendar))
+        remainingMembers.add(member.userID);
     }
     notifyCalendarMembers(
-      previousMembers.filter((member) => !remainingMembers.has(member.userID)).map((member) => member.userID),
+      previousMembers
+        .filter((member) => !remainingMembers.has(member.userID))
+        .map((member) => member.userID),
       "event_removed",
       { id },
     );
@@ -165,7 +175,10 @@ export async function syncProvider(
   await setAccountLabel(provider, userID, accountId, account.label);
 
   // 1. reconcile the calendar list
-  const remote = await adapter.listCalendars(userID, accountId);
+  const { calendars: remote, taskListsComplete } = await adapter.listCalendars(
+    userID,
+    accountId,
+  );
   const remoteIDs = new Set(remote.map((c) => c.externalId));
   logger.debug("sync.account.calendars_discovered", {
     provider,
@@ -180,7 +193,10 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
-    if (!remoteIDs.has(link.externalCalendarID)) {
+    if (
+      !remoteIDs.has(link.externalCalendarID) &&
+      (taskListsComplete || link.supportsEvents || !link.supportsTasks)
+    ) {
       await removeCalendar(link.calendarID);
     }
   }
@@ -228,13 +244,33 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
+    const taskOnly = link.supportsTasks && !link.supportsEvents;
+    if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
-    const { changes, nextCursor, reset } = await adapter.fetchChanges(
-      userID,
-      accountId,
-      link.externalCalendarID,
-      link.cursor,
-    );
+    let fetched;
+    try {
+      fetched = await adapter.fetchChanges(
+        userID,
+        accountId,
+        link.externalCalendarID,
+        link.cursor,
+      );
+    } catch (error) {
+      if (
+        !taskOnly ||
+        (provider !== "google" && provider !== "microsoft") ||
+        !isOptionalTaskError(error)
+      )
+        throw error;
+      logger.warn("sync.tasks.fetch_unavailable", {
+        provider,
+        userId: userID,
+        accountId,
+        calendarId: link.calendarID,
+      });
+      continue;
+    }
+    const { changes, nextCursor, reset } = fetched;
 
     const unlinkedEventIDs: string[] = [];
     const onUnlink = (eventID: string) => {
