@@ -1,4 +1,9 @@
 import {
+	requireEventRevision,
+	editedEvent,
+	EventMutationError,
+} from "@musubi/types";
+import {
 	endSeriesBefore,
 	excludeOccurrence,
 	noteParts,
@@ -98,6 +103,7 @@ import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import styles from "./styles/event-details.module.css";
 
 type TargetMutation = {
+	expectedRevision?: number;
 	calendarId: string;
 	eventId: string;
 };
@@ -182,7 +188,10 @@ export function EventDetailsPopover({
 	user,
 	weekStartsOn,
 }: EventDetailsPopoverProps) {
-	const master = getEventMaster(event);
+	const liveMaster = getEventMaster(event);
+	const [draft, setDraft] = useState<{ event: Event; master: Event }>();
+	const master = draft?.master ?? liveMaster;
+	const occurrence = draft?.event ?? event;
 	const titleId = useId();
 	const notesTitleId = useId();
 	const guestsTitleId = useId();
@@ -278,6 +287,7 @@ export function EventDetailsPopover({
 
 		if (!nextOpen) {
 			setEditing(false);
+			setDraft(undefined);
 			setActionError(undefined);
 			setTargetAction(undefined);
 			setPendingTargetId(undefined);
@@ -289,7 +299,7 @@ export function EventDetailsPopover({
 		// question dragging and deleting one already ask. Answering it before the
 		// write is why the form's own submit hands over rather than saving here.
 		if (master.recurrence && onRestoreEvent) {
-			setPendingEdit(updateEventFromForm(event, values));
+			setPendingEdit(updateEventFromForm(occurrence, values));
 			return;
 		}
 
@@ -308,18 +318,21 @@ export function EventDetailsPopover({
 		setPendingEditScope(scope);
 		setActionError(undefined);
 
-		const { creates, updates } = withSeriesEditIntent(seriesEditWrites({
-			edited,
-			master,
-			occurrence: event,
-			scope,
-		}));
+		const { creates, updates } = withSeriesEditIntent(
+			seriesEditWrites({
+				edited,
+				master,
+				occurrence,
+				scope,
+			}),
+		);
 
+		let savedMaster: Event | undefined;
 		try {
 			// Sequential: the update carries the exclusion that keeps the created
 			// event from briefly showing twice.
 			for (const update of updates) {
-				await onUpdateEvent(update);
+				savedMaster = await onUpdateEvent(update);
 			}
 			const created: Event[] = [];
 			for (const create of creates) {
@@ -337,14 +350,30 @@ export function EventDetailsPopover({
 						for (const event of created) {
 							await onRemoveEvent(event);
 						}
-						await onUpdateEvent(withSeriesEditIntent({ updates: [master], creates: [] }).updates[0]);
+						await onUpdateEvent(
+							withSeriesEditIntent({
+								updates: [editedEvent(savedMaster!, master)],
+								creates: [],
+							}).updates[0],
+						);
 					},
 				},
 			);
 			setPendingEdit(undefined);
 			handleOpenChange(false, true);
 		} catch (error) {
-			setActionError(getEventMutationError(error, "update", homeCalendar));
+			setActionError(
+				getEventMutationError(
+					savedMaster
+						? new EventMutationError(
+								"Part of this recurring edit was saved. Later delivery was not confirmed. Your draft was kept; refresh and reconcile before retrying.",
+								true,
+							)
+						: error,
+					"update",
+					homeCalendar,
+				),
+			);
 		} finally {
 			setBusyAction(undefined);
 			setPendingEditScope(undefined);
@@ -366,15 +395,26 @@ export function EventDetailsPopover({
 					scope === "occurrence"
 						? excludeOccurrence(master.recurrence, event.start)
 						: endSeriesBefore(master.recurrence, event.start);
-				const { updates } = withSeriesEditIntent({ updates: [{ ...master, recurrence }], creates: [] });
-				await onUpdateEvent(updates[0]);
+				const { updates } = withSeriesEditIntent({
+					updates: [{ ...master, recurrence }],
+					creates: [],
+				});
+				const savedMaster = await onUpdateEvent(updates[0]);
 				onNotice(
 					scope === "occurrence"
 						? "Occurrence removed."
 						: "Following occurrences removed.",
 					// Only the rule changed, so putting the old one back restores the
 					// occurrences exactly.
-					{ undo: () => onUpdateEvent(withSeriesEditIntent({ updates: [master], creates: [] }).updates[0]) },
+					{
+						undo: () =>
+							onUpdateEvent(
+								withSeriesEditIntent({
+									updates: [editedEvent(savedMaster, master)],
+									creates: [],
+								}).updates[0],
+							),
+					},
 				);
 			} else {
 				const result = await onRemoveEvent(master);
@@ -414,12 +454,14 @@ export function EventDetailsPopover({
 				await onLinkEvent({
 					calendarId,
 					eventId: master.id,
+					expectedRevision: requireEventRevision(master),
 				});
 				onNotice("Event linked to calendar.");
 			} else {
 				await onForkEvent({
 					calendarId,
 					eventId: master.id,
+					expectedRevision: requireEventRevision(master),
 				});
 				onNotice("Independent event copy created.");
 			}
@@ -598,21 +640,26 @@ export function EventDetailsPopover({
 								calendarLocked
 								calendars={calendars}
 								compact
-								initialValues={eventFormValues(master.recurrence && onRestoreEvent ? event : master)}
+								initialValues={eventFormValues(
+									master.recurrence && onRestoreEvent ? occurrence : master,
+								)}
 								onCancel={() => setEditing(false)}
 								onExpand={
 									onOpenFullEditor
 										? (values) => {
 												// The full editor explicitly edits the master. Carry the
 												// draft's changes, not the occurrence's anchor dates.
-												const draft = master.recurrence && onRestoreEvent
-													? eventFormValues(seriesEditWrites({
-															edited: updateEventFromForm(event, values),
-															master,
-															occurrence: event,
-															scope: "series",
-														}).updates[0]!)
-													: values;
+												const draft =
+													master.recurrence && onRestoreEvent
+														? eventFormValues(
+																seriesEditWrites({
+																	edited: updateEventFromForm(occurrence, values),
+																	master,
+																	occurrence,
+																	scope: "series",
+																}).updates[0]!,
+															)
+														: values;
 												handleOpenChange(false);
 												onOpenFullEditor(draft, master);
 											}
@@ -1004,7 +1051,13 @@ export function EventDetailsPopover({
 											icon={<Pencil size={16} strokeWidth={1.6} />}
 											size="compact"
 											variant="secondary"
-											onClick={() => setEditing(true)}
+											onClick={() => {
+												setDraft({
+													event: structuredClone(event),
+													master: structuredClone(liveMaster),
+												});
+												setEditing(true);
+											}}
 										>
 											{/* Just "Edit": the header already badges this as a
                             series, four labels have to fit one row, and the

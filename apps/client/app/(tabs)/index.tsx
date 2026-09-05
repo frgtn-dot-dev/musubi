@@ -3,18 +3,21 @@ import { AddEventModal, DOCK_PEEK } from "@/components/calendar/AddEventModal";
 import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import CalendarWidgetSettingsModal from "@/components/calendar/CalendarWidgetSettingsModal";
-import { CalendarDrillView, useCalendarDrill } from "@/components/calendar/CalendarDrillView";
-import { Draft, DRILL_OPEN_MIN, minutesToY, Rect } from "@/components/cal/layout";
+import { CalendarDrillView, useCalendarDrill,
+} from "@/components/calendar/CalendarDrillView";
+import { Draft, DRILL_OPEN_MIN, minutesToY, Rect,
+} from "@/components/cal/layout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { BackHandler, Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { expandRecurringEvents, type Mode } from "@musubi/calendar";
 import dayjs from "dayjs";
-import { Event } from "@musubi/types";
+import { editedEvent, type Event } from "@musubi/types";
 import { useEventsStore } from "@/store/useEventsStore";
 import { useImportStore } from "@/store/useImportStore";
-import { presentEventDetail, useEditComposerStore } from "@/store/useEventDetailStore";
+import { presentEventDetail, useEditComposerStore,
+} from "@/store/useEventDetailStore";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useApi } from "@/services/api";
@@ -36,22 +39,26 @@ const IOS_BACK_VELOCITY = 650;
 function getViewRange(mode: CalMode, monthStart: Date): [Date, Date] {
   const m = dayjs(monthStart);
   const span = mode === "month" ? 2 : 1;
-  return [m.subtract(span, "month").toDate(), m.add(span, "month").endOf("month").toDate()];
+  return [m.subtract(span, "month").toDate(), m.add(span, "month").endOf("month").toDate(),
+  ];
 }
 
 export default function MainTab() {
   const api = useApi();
-  const { events, addEvent, updateEvent, localUpdateEvent } = useEventsStore();
+  const { events, addEvent, updateEvent } = useEventsStore();
   const { weekStartsOn, defaultCalendarView } = useSettingsStore();
 
-  const { calendars, activeCals, soloCalId, toggleCal, soloCalendar, syncActiveCals } = useCalendarsStore();
+  const { calendars, activeCals, soloCalId, toggleCal, soloCalendar, syncActiveCals,
+  } = useCalendarsStore();
   useEffect(() => {
     syncActiveCals(calendars);
   }, [calendars]);
 
   // settings' CalendarView still carries a legacy "schedule" value — the agenda tab owns that
-  const normalizeMode = (m: string): CalMode => (m === "week" || m === "day") ? m : "month";
-  const [calMode, setCalMode] = useState<CalMode>(normalizeMode(defaultCalendarView));
+  const normalizeMode = (m: string): CalMode =>
+    m === "week" || m === "day" ? m : "month";
+  const [calMode, setCalMode] = useState<CalMode>(normalizeMode(defaultCalendarView),
+  );
   // `base` = page-0 anchor of the active pager; only changes on mode switch /
   // today, so swipes stay cheap. `anchorDate` follows the visible page (header).
   const [base, setBase] = useState(new Date());
@@ -63,7 +70,8 @@ export default function MainTab() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dockHidden, setDockHidden] = useState(false); // X hides the sheet until the next draft
   const handleDraftChange = useCallback((d: Draft | null) => { setDraft(d); setDockHidden(false); }, []);
-  const scrollPosRef = useRef(Math.max(0, minutesToY(new Date().getHours() * 60 - 60)));
+  const scrollPosRef = useRef(Math.max(0, minutesToY(new Date().getHours() * 60 - 60)),
+  );
   // the drill-in day view has its own scroll memory, always reset to noon on open
   const drillScrollPosRef = useRef(minutesToY(DRILL_OPEN_MIN));
   const {
@@ -97,7 +105,8 @@ export default function MainTab() {
     drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
     beginDrill(date, rect);
     setAnchorDate(date); // header + composer follow the drilled day (and its swipes)
-  }, [beginDrill]);
+  }, [beginDrill],
+  );
 
   const closeDrill = useCallback(() => {
     const sourceHeaderDate = drill?.sourceHeaderDate;
@@ -115,7 +124,8 @@ export default function MainTab() {
     if (!drill) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => { closeDrill(); return true; });
     return () => sub.remove();
-  }, [drill, closeDrill]));
+  }, [drill, closeDrill]),
+  );
 
   // iOS has no global Back action. Recreate the platform's navigation gesture
   // for this local (non-router) drill state, and only from the leading edge so
@@ -126,12 +136,13 @@ export default function MainTab() {
     .activeOffsetX(12)
     .failOffsetY([-16, 16])
     .runOnJS(true)
-    .onEnd(e => {
+    .onEnd((e) => {
       if (
         e.translationX >= IOS_BACK_DISTANCE
         || (e.translationX >= IOS_BACK_EDGE && e.velocityX >= IOS_BACK_VELOCITY)
       ) closeDrill();
-    }), [drill, closeDrill]);
+    }), [drill, closeDrill],
+  );
 
   const switchMode = useCallback((m: Mode) => {
     if (m !== "month" && m !== "week" && m !== "day") return;
@@ -143,7 +154,8 @@ export default function MainTab() {
     }
     setBase(anchorDate);
     setCalMode(m);
-  }, [drill, anchorDate, closeDrill, resetDrill]);
+  }, [drill, anchorDate, closeDrill, resetDrill],
+  );
 
   const onTodayPress = useCallback(() => {
     const now = new Date();
@@ -182,7 +194,7 @@ export default function MainTab() {
   }, []);
 
   // An .ics opened via the OS (parsed in app/_layout) → open the composer prefilled.
-  const importPending = useImportStore(s => s.pending);
+  const importPending = useImportStore((s) => s.pending);
   useEffect(() => {
     if (!importPending) return;
     useEditComposerStore.getState().open({
@@ -198,7 +210,8 @@ export default function MainTab() {
 
   // Store write, not setState — opening the detail must not re-render MainTab
   // (and the whole calendar under it). The modal lives in GlobalEventModals.
-  const openEventDetail = useCallback((event: Event) => presentEventDetail(events, event), [events]);
+  const openEventDetail = useCallback((event: Event) => presentEventDetail(events, event), [events],
+  );
 
   // Snap the expansion anchor to its month; stable across in-month swipes.
   const rangeAnchorMs = useMemo(
@@ -214,16 +227,19 @@ export default function MainTab() {
   // [events, range] only, so toggling a calendar does NOT re-run it.
   const expandedAll = useMemo(
     () => expandRecurringEvents(events, rangeStart, rangeEnd)
-      .sort((a, b) => a.start.getTime() - b.start.getTime()),
+      .sort((a, b) => a.start.getTime() - b.start.getTime(),
+      ),
     [events, rangeStart, rangeEnd],
   );
   const visibleEvents = useMemo(
-    () => expandedAll.filter(e => e.calendars.some(id => activeCals.has(id))),
+    () => expandedAll.filter((e) => e.calendars.some((id) => activeCals.has(id))),
     [expandedAll, activeCals],
   );
 
-  const calendarById = useMemo(() => new Map(calendars.map(c => [c.id, c])), [calendars]);
-  const eventColorOf = useCallback((e: Event) => eventColor(e, calendarById), [calendarById]);
+  const calendarById = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars],
+  );
+  const eventColorOf = useCallback((e: Event) => eventColor(e, calendarById), [calendarById],
+  );
 
   const onPageChange = useCallback((date: Date) => setAnchorDate(date), []);
 
@@ -241,27 +257,35 @@ export default function MainTab() {
       return n;
     };
     const updated = { ...ev, start: shift(ev.start), end: shift(ev.end) };
-    // optimistic (block must not snap back); revert locally if the server rejects
-    const persist = (next: Event, fallback: Event) => {
-      localUpdateEvent(next);
-      api.updateEvent(next)
-        .then(result => localUpdateEvent(result))
-        .catch(err => {
-          console.error("Move failed:", err);
+      void updateEvent(updated, api)
+        .then((saved) => {
+          showToast({ message: `“${ev.title || "Event"}” moved`,
+            actionLabel: "Undo",
+            onAction: () => {
+              void updateEvent(editedEvent(saved, ev), api).catch((err) =>
+                showToast({
+                  message: userFacingError(err, "Move could not be undone."),
+                }),
+              );
+            },
+          });
+        })
+        .catch((err) => {
           warn();
-          localUpdateEvent(fallback);
-          showToast({ message: userFacingError(err, "Event could not be moved.") });
+          showToast({
+            message: userFacingError(err, "Event could not be moved."),
+          });
         });
-    };
-    persist(updated, ev);
-    showToast({ message: `“${ev.title || "Event"}” moved`, actionLabel: "Undo", onAction: () => persist(ev, updated) });
-  }, [api, localUpdateEvent]);
+    },
+    [api, updateEvent],
+  );
   const dockVisible = calMode !== "month" || !!drill;
   // one truth for "is the sheet peeking" — drives the sheet AND the timeline's
   // bottom padding (no dead gap under midnight when the sheet is hidden)
   // A drill reserves the composer's space from frame one; its visual reveal is
   // driven separately by monthTransition, in lockstep with the zoom.
-  const dockPeeking = !!draft || ((calMode === "day" || !!drill) && !dockHidden);
+  const dockPeeking =
+    !!draft || ((calMode === "day" || !!drill) && !dockHidden);
 
   return (
     <GestureDetector gesture={edgeBackGesture}>
@@ -319,9 +343,15 @@ export default function MainTab() {
             anchor={anchorDate}
             startingDate={draft?.start}
             endingDate={draft?.end}
-            onClose={() => { setDraft(null); setDockHidden(true); }}
+            onClose={() => {
+              setDraft(null);
+              setDockHidden(true);
+            }}
             onSave={async (e) => await addEvent(e, api)}
-            onEdit={async (e) => await updateEvent(e, api)}
+            onEdit={async (e) => {
+              await updateEvent(e, api);
+              return true;
+            }}
             calendars={calendars}
           />
         )}
@@ -330,7 +360,6 @@ export default function MainTab() {
           widgetId={calendarWidgetSettingsId}
           onClose={closeCalendarWidgetSettings}
         />
-
       </View>
     </GestureDetector>
   );

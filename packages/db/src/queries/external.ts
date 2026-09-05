@@ -17,7 +17,10 @@ import {
 } from "..";
 import { hasProviderSyncScopes } from "./oauth";
 import { type DbTransaction, removeCalendarInTransaction } from "./calendars";
-import { diffEventContent, type EventContentPatch } from "./events";
+import {
+  createEventInTransaction,
+  diffEventContent, type EventContentPatch,
+} from "./events";
 
 // Column values written to the `events` row for a synced event.
 type EventValues = {
@@ -300,7 +303,9 @@ export async function clearCalendarEvents(calendarID: string) {
   await db
     .update(events)
     .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
-    .where(and(eq(events.originCalendarID, calendarID), isNull(events.deletedAt)));
+    .where(
+      and(eq(events.originCalendarID, calendarID), isNull(events.deletedAt)),
+    );
 }
 
 async function linkEventToCalendarsInTransaction(
@@ -317,28 +322,51 @@ async function linkEventToCalendarsInTransaction(
     });
 }
 
-// Delta sync filters on events.updatedAt, so link/unlink must bump the event row —
-// otherwise offline members never learn the event's calendar membership changed.
-async function touchEvent(tx: DbTransaction, eventID: string) {
-  await tx
-    .update(events)
-    .set({ updatedAt: new Date() })
-    .where(eq(events.id, eventID));
-}
-
-// Link an event into calendars (calendar_events rows). The added diff normally
-// contains only new links; the constraint + conflict handling also absorb
-// retries and concurrent requests. The link set and delta timestamp move
-// together.
+// Administrative/import link writer: lock and diff, so repeated links are no-ops.
 export async function linkEventToCalendars(
   eventID: string,
   calendarIDs: string[],
 ) {
-  if (calendarIDs.length === 0) return;
-  await db.transaction(async (tx) => {
-    // Lock the event before its links, matching provider reconciliation.
-    await touchEvent(tx, eventID);
-    await linkEventToCalendarsInTransaction(tx, eventID, calendarIDs);
+  await reconcileEventLinks(eventID, calendarIDs, [], false);
+}
+
+async function reconcileEventLinks(
+  eventID: string,
+  add: string[],
+  remove: string[],
+  tombstone: boolean,
+) {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID))
+      .for("update");
+    if (!row) return { remaining: [] as string[], removed: true };
+    const links = await tx
+      .select({ id: calendarEvents.calendarID })
+      .from(calendarEvents)
+      .where(eq(calendarEvents.eventID, eventID));
+    const calendars = [
+      ...new Set([
+        ...links.map((link) => link.id).filter((id) => !remove.includes(id)),
+        ...add,
+      ]),
+    ];
+    if (row.deletedAt) return { remaining: calendars, removed: true };
+    const result = await patchEventAndCalendarLinksInTransaction(
+      tx,
+      eventID,
+      row.revision,
+      { calendars },
+      tombstone,
+    );
+    if (result.status !== "saved")
+      throw new Error("Locked event revision changed unexpectedly");
+    return {
+      remaining: result.event.calendars,
+      removed: result.event.deletedAt !== null,
+    };
   });
 }
 
@@ -376,16 +404,15 @@ export async function unlinkEventFromCalendars(
   eventID: string,
   calendarIDs: string[],
 ) {
-  if (calendarIDs.length === 0) return;
-  await db.transaction(async (tx) => {
-    await touchEvent(tx, eventID);
-    await unlinkEventFromCalendarsInTransaction(tx, eventID, calendarIDs);
-  });
+  await reconcileEventLinks(eventID, [], calendarIDs, false);
 }
 
 export type EventRevisionMutationResult =
   | { status: "not_found" }
-  | { status: "conflict"; current: typeof events.$inferSelect & { calendars: string[] } }
+  | {
+      status: "conflict";
+      current: typeof events.$inferSelect & { calendars: string[] };
+    }
   | {
       status: "saved";
       changed: boolean;
@@ -409,65 +436,108 @@ export async function patchEventAndCalendarLinks(
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
     throw new TypeError("A positive expected event revision is required");
   }
-  return db.transaction(async (tx) => {
-    const [current] = await tx.select().from(events)
-      .where(eq(events.id, eventID)).for("update");
-    if (!current) return { status: "not_found" };
-    const links = await tx.select({ id: calendarEvents.calendarID }).from(calendarEvents)
-      .where(eq(calendarEvents.eventID, eventID));
-    const existing = links.map((link) => link.id);
-    const previous = { ...current, calendars: existing };
-    // Even a stale patch that looks empty against newer content is a conflict.
-    if (current.revision !== expectedRevision || current.deletedAt !== null) {
-      return { status: "conflict", current: previous };
-    }
-    const incoming = input.calendars === undefined ? existing : [...new Set(input.calendars)];
-    const addedCalendarIDs = incoming.filter((id) => !existing.includes(id));
-    const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
-    const patch = diffEventContent(current, input);
-    const deletedAt = tombstoneIfOrphaned && incoming.length === 0 ? new Date() : null;
-    const changed = Object.keys(patch).length > 0 || addedCalendarIDs.length > 0 ||
-      removedCalendarIDs.length > 0 || deletedAt !== null;
-    if (!changed) return {
-      status: "saved", changed, previous, event: previous, patch,
-      addedCalendarIDs, removedCalendarIDs,
-    };
-    const [updated] = await tx.update(events).set({
-      ...patch, deletedAt, revision: sql`${events.revision} + 1`,
-    }).where(and(eq(events.id, eventID), eq(events.revision, expectedRevision))).returning();
-    if (!updated) throw new Error("Locked event revision changed unexpectedly");
-    await unlinkEventFromCalendarsInTransaction(tx, eventID, removedCalendarIDs);
-    await linkEventToCalendarsInTransaction(tx, eventID, addedCalendarIDs);
-    return {
-      status: "saved", changed, previous, event: { ...updated, calendars: incoming },
-      patch, addedCalendarIDs, removedCalendarIDs,
-    };
-  });
+  return db.transaction((tx) =>
+    patchEventAndCalendarLinksInTransaction(
+      tx,
+      eventID,
+      expectedRevision,
+      input,
+      tombstoneIfOrphaned,
+    ),
+  );
 }
 
-// Persist an event edit and reconcile every local link/mapping as one unit.
-// Provider deletes happen before this call while their mapping is still present;
-// provider creates/updates happen afterwards and remain best-effort.
-export async function updateEventAndCalendarLinks(
-  event: Partial<NewEvent> & { id: string },
-  addedCalendarIDs: string[],
-  removedCalendarIDs: string[],
-) {
-  return db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(events)
-      .set(event)
-      .where(eq(events.id, event.id))
-      .returning();
-    if (!updated) return undefined;
-
-    await unlinkEventFromCalendarsInTransaction(
-      tx,
-      event.id,
+async function patchEventAndCalendarLinksInTransaction(
+  tx: DbTransaction,
+  eventID: string,
+  expectedRevision: number,
+  input: EventContentPatch & { calendars?: string[] },
+  tombstoneIfOrphaned = false,
+): Promise<EventRevisionMutationResult> {
+  const [current] = await tx
+    .select()
+    .from(events)
+    .where(eq(events.id, eventID))
+    .for("update");
+  if (!current) return { status: "not_found" };
+  const links = await tx
+    .select({ id: calendarEvents.calendarID })
+    .from(calendarEvents)
+    .where(eq(calendarEvents.eventID, eventID));
+  const existing = links.map((link) => link.id);
+  const previous = { ...current, calendars: existing };
+  // Even a stale patch that looks empty against newer content is a conflict.
+  if (current.revision !== expectedRevision || current.deletedAt !== null) {
+    return { status: "conflict", current: previous };
+  }
+  const incoming =
+    input.calendars === undefined ? existing : [...new Set(input.calendars)];
+  const addedCalendarIDs = incoming.filter((id) => !existing.includes(id));
+  const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
+  const patch = diffEventContent(current, input);
+  const deletedAt =
+    tombstoneIfOrphaned && incoming.length === 0 ? new Date() : null;
+  const changed =
+    Object.keys(patch).length > 0 ||
+    addedCalendarIDs.length > 0 ||
+    removedCalendarIDs.length > 0 ||
+    deletedAt !== null;
+  if (!changed)
+    return {
+      status: "saved",
+      changed,
+      previous,
+      event: previous,
+      patch,
+      addedCalendarIDs,
       removedCalendarIDs,
+    };
+  const [updated] = await tx
+    .update(events)
+    .set({
+      ...patch,
+      deletedAt,
+      revision: sql`${events.revision} + 1`,
+    })
+    .where(and(eq(events.id, eventID), eq(events.revision, expectedRevision)))
+    .returning();
+  if (!updated) throw new Error("Locked event revision changed unexpectedly");
+  await unlinkEventFromCalendarsInTransaction(tx, eventID, removedCalendarIDs);
+  await linkEventToCalendarsInTransaction(tx, eventID, addedCalendarIDs);
+  return {
+    status: "saved",
+    changed,
+    previous,
+    event: { ...updated, calendars: incoming },
+    patch,
+    addedCalendarIDs,
+    removedCalendarIDs,
+  };
+}
+
+/** Fork checks the source under the event lock in the same transaction that
+ * creates the independent identity. It never copies the source revision. */
+export async function forkEventAtRevision(
+  sourceID: string,
+  expectedRevision: number,
+  event: NewEvent,
+  calendarIDs: string[],
+) {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+    throw new TypeError("A positive expected event revision is required");
+  return db.transaction(async (tx) => {
+    const checked = await patchEventAndCalendarLinksInTransaction(
+      tx,
+      sourceID,
+      expectedRevision,
+      {},
     );
-    await linkEventToCalendarsInTransaction(tx, event.id, addedCalendarIDs);
-    return updated;
+    if (checked.status !== "saved") return checked;
+    const created = await createEventInTransaction(tx, event, calendarIDs);
+    return {
+      status: "saved" as const,
+      event: { ...created, calendars: calendarIDs },
+    };
   });
 }
 
@@ -477,26 +547,7 @@ export async function unlinkEventAndTombstoneIfOrphaned(
   eventID: string,
   calendarIDs: string[],
 ) {
-  return db.transaction(async (tx) => {
-    await touchEvent(tx, eventID);
-    await unlinkEventFromCalendarsInTransaction(tx, eventID, calendarIDs);
-
-    const rows = await tx
-      .select({ calendarID: calendarEvents.calendarID })
-      .from(calendarEvents)
-      .where(eq(calendarEvents.eventID, eventID));
-    const remaining = rows.map((row) => row.calendarID);
-    const removed = remaining.length === 0;
-
-    if (removed) {
-      await tx
-        .update(events)
-        .set({ deletedAt: new Date() })
-        .where(eq(events.id, eventID));
-    }
-
-    return { remaining, removed };
-  });
+  return reconcileEventLinks(eventID, [], calendarIDs, true);
 }
 
 // Lock shared content before mapping/link rows, just like local mutations.
@@ -586,11 +637,16 @@ export async function upsertExternalEvent(
       // Provider version changes are not necessarily content changes. Persist
       // the accepted validator without waking delta readers for identical polls.
       const patch = diffEventContent(map.event, values);
-      const changed = Object.keys(patch).length > 0 || map.event.deletedAt !== null;
+      const changed =
+        Object.keys(patch).length > 0 || map.event.deletedAt !== null;
       if (changed) {
         await tx
           .update(events)
-          .set({ ...patch, deletedAt: null, revision: sql`${events.revision} + 1` })
+          .set({
+            ...patch,
+            deletedAt: null,
+            revision: sql`${events.revision} + 1`,
+          })
           .where(eq(events.id, map.event.id));
       }
       await tx
@@ -650,7 +706,8 @@ export async function deleteExternalEvent(
       await unlinkEventFromCalendarsInTransaction(tx, mapped.event.id, [
         calendarID,
       ]);
-      await tx.update(events)
+      await tx
+        .update(events)
         .set({ revision: sql`${events.revision} + 1` })
         .where(eq(events.id, mapped.event.id));
       unlinkedEventID = mapped.event.id;
@@ -711,20 +768,31 @@ export async function getExternalSyncUserIDs(): Promise<string[]> {
   const rows = await db
     .selectDistinct({ userID: externalCalendars.userID })
     .from(externalCalendars);
-  const caldav = await db.selectDistinct({ userID: caldavAccounts.userID }).from(caldavAccounts);
-  const oauth = await db.select({
-    userID: account.userId,
-    provider: account.providerId,
-    scope: account.scope,
-    refreshToken: account.refreshToken,
-    syncStatus: account.syncStatus,
-    syncErrorCode: account.syncErrorCode,
-  }).from(account).where(inArray(account.providerId, ["google", "microsoft"]));
-  const eligible = oauth.filter((row) => row.refreshToken &&
-    hasProviderSyncScopes(row.provider, row.scope ?? "") &&
-    (row.syncStatus === "active" ||
-      (row.syncStatus === "reconnect_required" && row.syncErrorCode === "insufficient_scope")));
-  return [...new Set([...rows, ...caldav, ...eligible].map((row) => row.userID))];
+  const caldav = await db
+    .selectDistinct({ userID: caldavAccounts.userID })
+    .from(caldavAccounts);
+  const oauth = await db
+    .select({
+      userID: account.userId,
+      provider: account.providerId,
+      scope: account.scope,
+      refreshToken: account.refreshToken,
+      syncStatus: account.syncStatus,
+      syncErrorCode: account.syncErrorCode,
+    })
+    .from(account)
+    .where(inArray(account.providerId, ["google", "microsoft"]));
+  const eligible = oauth.filter(
+    (row) =>
+      row.refreshToken &&
+      hasProviderSyncScopes(row.provider, row.scope ?? "") &&
+      (row.syncStatus === "active" ||
+        (row.syncStatus === "reconnect_required" &&
+          row.syncErrorCode === "insufficient_scope")),
+  );
+  return [
+    ...new Set([...rows, ...caldav, ...eligible].map((row) => row.userID)),
+  ];
 }
 
 // For push update/delete: find the external id of an already-synced Musubi event.
@@ -883,21 +951,44 @@ export async function setExternalEventSyncData(
   externalCalendarID: string,
   data: { etag: string | null; icalUid: string | null },
   calendarID?: string,
+  guard?: { revision: number; etag: string | null; externalEventID: string },
 ) {
-  await db
-    .update(externalEvents)
-    .set(data)
-    .where(
-      and(
-        eq(externalEvents.provider, provider),
-        eq(externalEvents.eventID, eventID),
-        eq(externalEvents.externalCalendarID, externalCalendarID),
-        calendarID ? eq(externalEvents.calendarID, calendarID) : undefined,
-      ),
-    );
+  return db.transaction(async (tx) => {
+    const [event] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID))
+      .for("update");
+    if (
+      !event ||
+      (guard && (event.revision !== guard.revision || event.deletedAt))
+    )
+      return false;
+    const rows = await tx
+      .update(externalEvents)
+      .set(data)
+      .where(
+        and(
+          eq(externalEvents.provider, provider),
+          eq(externalEvents.eventID, eventID),
+          eq(externalEvents.externalCalendarID, externalCalendarID),
+          calendarID ? eq(externalEvents.calendarID, calendarID) : undefined,
+          guard
+            ? eq(externalEvents.externalEventID, guard.externalEventID)
+            : undefined,
+          guard
+            ? guard.etag === null
+              ? isNull(externalEvents.etag)
+              : eq(externalEvents.etag, guard.etag)
+            : undefined,
+        ),
+      )
+      .returning({ id: externalEvents.id });
+    return rows.length > 0;
+  });
 }
 
-// For push create: store the mapping after the provider returns the new id.
+// A delayed create response cannot restore a mapping after an inbound edit/unlink.
 export async function importExternalEvent(
   provider: string,
   eventID: string,
@@ -906,15 +997,42 @@ export async function importExternalEvent(
   externalEventID: string,
   etag: string | null = null,
   icalUid: string | null = null,
+  expectedRevision?: number,
 ) {
-  await db.insert(externalEvents).values({
-    provider,
-    eventID,
-    calendarID,
-    externalCalendarID,
-    externalEventID,
-    etag,
-    icalUid,
+  return db.transaction(async (tx) => {
+    const [event] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID))
+      .for("update");
+    if (
+      !event ||
+      (expectedRevision !== undefined &&
+        (event.revision !== expectedRevision || event.deletedAt))
+    )
+      return false;
+    const [link] = await tx
+      .select()
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.eventID, eventID),
+          eq(calendarEvents.calendarID, calendarID),
+        ),
+      );
+    if (expectedRevision !== undefined && !link) return false;
+    await tx
+      .insert(externalEvents)
+      .values({
+        provider,
+        eventID,
+        calendarID,
+        externalCalendarID,
+        externalEventID,
+        etag,
+        icalUid,
+      });
+    return true;
   });
 }
 

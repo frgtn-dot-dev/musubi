@@ -1,3 +1,8 @@
+import {
+  eventCreateRequest,
+  eventPatchRequest,
+  type EventWriteRequest,
+} from "@musubi/types";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -6,7 +11,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   account, CALENDAR_SCOPE, calendarEvents, calendarMembers, calendars, createCalendar,
   createEvent, db, events, externalEvents,
-  getExternalEvent, getOAuthCredentials, importExternalCalendar, importExternalEvent,
+  getExternalEvent,
+  getEvent, getOAuthCredentials, importExternalCalendar, importExternalEvent,
   linkEventToCalendars, memberTokens, saveCaldavAccount, setExternalEventSyncData, user,
 } from "@musubi/db";
 import { CLIENT_VERSION_HEADER, EventSchema, PRODUCT_VERSION } from "@musubi/types";
@@ -127,36 +133,136 @@ async function main() {
     assert.ok(["www.googleapis.com", "graph.microsoft.com", "oauth2.googleapis.com", "login.microsoftonline.com"].includes(url.hostname), `No live requests: ${url}`);
     return realFetch(`${fixtureOrigin}${url.pathname}${url.search}`, init);
   };
-  const request = (method: string, body: unknown, path = "/events", bearer = token.raw) => fetch(`${apiOrigin}${path}`, {
-    method, headers: { "content-type": "application/json", authorization: `Bearer ${bearer}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: JSON.stringify(body),
-  });
-  const snapshot = async () => JSON.stringify([
-    await db.select().from(events).orderBy(events.id),
-    await db.select().from(calendarEvents).orderBy(calendarEvents.eventID, calendarEvents.calendarID),
-    await db.select().from(externalEvents).orderBy(externalEvents.id),
-  ]);
-  const refuses = async (run: () => Promise<Response>, reason: string, status = 403) => {
+  // Each capability scenario explicitly starts a fresh draft. Dedicated HTTP CAS
+  // tests hold old revisions instead of rebasing these independent scenarios.
+  const request = async (
+    method: string,
+    body: unknown,
+    path = "/events",
+    bearer = token.raw,
+  ) => {
+    const event = body as EventWriteRequest & {
+      unlinkCalendarID?: string;
+      scopeEditValidated?: boolean;
+    };
+    let wire: unknown = body;
+    if (path === "/events" && method === "POST")
+      wire = eventCreateRequest(event);
+    if (path === "/events" && ["PUT", "DELETE"].includes(method)) {
+      const revision = (await getEvent(event.id)).revision;
+      wire =
+        method === "DELETE"
+          ? {
+              id: event.id,
+              expectedRevision: revision,
+              ...(event.unlinkCalendarID
+                ? { unlinkCalendarID: event.unlinkCalendarID }
+                : {}),
+            }
+          : {
+              ...eventPatchRequest({
+                ...event,
+                revision,
+                ...(event.scopeEdit
+                  ? {
+                      scopeEdit: {
+                        ...event.scopeEdit,
+                        updates: event.scopeEdit.updates.map((update) => ({
+                          ...update,
+                          revision,
+                        })),
+                      },
+                    }
+                  : {}),
+              }),
+              ...(event.scopeEditValidated === undefined
+                ? {}
+                : { scopeEditValidated: event.scopeEditValidated }),
+            };
+    }
+    if (path !== "/events") {
+      const sourceID = path.split("/")[2];
+      wire = {
+        ...(body as object),
+        expectedRevision: (await getEvent(sourceID)).revision,
+      };
+    }
+    return fetch(`${apiOrigin}${path}`, {
+    method, headers: { "content-type": "application/json", authorization: `Bearer ${bearer}`,
+        [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+      },
+      body: JSON.stringify(wire),
+    });
+  };
+  const snapshot = async () =>
+    JSON.stringify([
+      await db.select().from(events).orderBy(events.id),
+      await db
+        .select()
+        .from(calendarEvents)
+        .orderBy(calendarEvents.eventID, calendarEvents.calendarID),
+      await db.select().from(externalEvents).orderBy(externalEvents.id),
+    ]);
+  const refuses = async (
+    run: () => Promise<Response>,
+    reason: string,
+    status = 403,
+  ) => {
     const before = await snapshot();
     writes.length = 0;
     const response = await run();
     const body = await response.json();
     assert.equal(response.status, status, JSON.stringify(body));
     if (status === 403) assert.equal(body.reason, reason, JSON.stringify(body));
-    assert.equal(writes.length, 0, "No first provider write, even with a later denied target");
-    assert.equal(await snapshot(), before, "No event/link/mapping mutation on refusal");
+    assert.equal(
+      writes.length,
+      0,
+      "No first provider write, even with a later denied target",
+    );
+    assert.equal(
+      await snapshot(),
+      before,
+      "No event/link/mapping mutation on refusal",
+    );
     return body;
   };
-  const eventIn = (calendarIDs: string[], recurrence: string | null = null) => EventSchema.parse({
-    id: randomUUID(), creatorID: owner, organizer: owner, title: "Before", color: "#7A8BA3",
-    start: "2026-01-01T10:00:00Z", end: "2026-01-01T11:00:00Z", isAllDay: false,
-    isCanceled: false, calendars: calendarIDs, originCalendarID: calendarIDs[0], recurrence,
-  });
-  await db.insert(user).values([owner, viewer].map((id) => ({ id, name: id, email: `${id}@example.test`, isExternal: true })));
+  const eventIn = (calendarIDs: string[], recurrence: string | null = null) =>
+    EventSchema.parse({
+      id: randomUUID(),
+      creatorID: owner,
+      organizer: owner,
+      title: "Before",
+      color: "#7A8BA3",
+      start: "2026-01-01T10:00:00Z",
+      end: "2026-01-01T11:00:00Z",
+      isAllDay: false,
+      isCanceled: false,
+      calendars: calendarIDs,
+      originCalendarID: calendarIDs[0],
+      recurrence,
+    });
+  await db.insert(user).values(
+    [owner, viewer].map((id) => ({
+      id,
+      name: id,
+      email: `${id}@example.test`,
+      isExternal: true,
+    })),
+  );
   try {
-    await db.insert(memberTokens).values([{ userID: owner, tokenHash: token.tokenHash }, { userID: viewer, tokenHash: viewerToken.tokenHash }]);
-    await db.insert(account).values(["google", "microsoft"].flatMap((providerId) => ["primary", "sibling"].map((accountId) => ({
-      id: randomUUID(), userId: owner, providerId, accountId, scope: CALENDAR_SCOPE[providerId],
-      accessToken: `${accountId}-access`, refreshToken: "fixture-refresh", accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+    await db.insert(memberTokens).values([
+      { userID: owner, tokenHash: token.tokenHash },
+      { userID: viewer, tokenHash: viewerToken.tokenHash },
+    ]);
+    await db.insert(account).values(
+      ["google", "microsoft"].flatMap((providerId) =>
+        ["primary", "sibling"].map((accountId) => ({
+          id: randomUUID(),
+          userId: owner,
+          providerId,
+          accountId,
+          scope: CALENDAR_SCOPE[providerId],
+          accessToken: `${accountId}-access`, refreshToken: "fixture-refresh", accessTokenExpiresAt: new Date(Date.now() + 3600_000),
     }))));
     const local = await createCalendar({ creatorID: owner, name: "Local", color: "#7A8BA3" });
     const mirror = (provider: string, externalId: string, accountID = "primary", role = "owner") => importExternalCalendar(provider, owner, accountID, "Fixture", { externalId, name: externalId, color: "#7A8BA3" }, role);
@@ -274,32 +380,72 @@ async function main() {
     await createEvent(legacySeries, legacySeries.calendars);
     const legacyResource = `${fixtureOrigin}/dav/cal/legacy.ics`;
     await importExternalEvent("caldav", legacySeries.id, dav.id, `${fixtureOrigin}/dav/cal/`, legacyResource, '"current"', legacySeries.id);
-    davData = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", `UID:${legacySeries.id}`, "DTSTART:20260101T100000Z", "DTEND:20260101T110000Z", "RRULE:FREQ=WEEKLY", "SUMMARY:Before", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    davData = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", `UID:${legacySeries.id}`,
+      "DTSTART:20260101T100000Z",
+      "DTEND:20260101T110000Z",
+      "RRULE:FREQ=WEEKLY",
+      "SUMMARY:Before",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
     const legacyOriginal = davData;
     resourcePrivileges = ["write-content"];
     for (const recurrence of [
-      excludeOccurrence(legacySeries.recurrence!, new Date("2026-01-08T10:00:00Z")),
-      endSeriesBefore(legacySeries.recurrence!, new Date("2026-01-08T10:00:00Z")),
+      excludeOccurrence(
+        legacySeries.recurrence!,
+        new Date("2026-01-08T10:00:00Z"),
+      ),
+      endSeriesBefore(
+        legacySeries.recurrence!,
+        new Date("2026-01-08T10:00:00Z"),
+      ),
     ]) {
       const update = { ...legacySeries, recurrence };
       for (privileges of [["read"], undefined]) {
         const reason = privileges ? "denied" : "unknown";
-        const error = await refuses(() => request("PUT", { ...update, scopeEditValidated: true }), reason);
-        assert.match(error.error, /without a complete scope edit intent/);
+        const error = await refuses(
+          () => request("PUT", { ...update, scopeEditValidated: true }),
+          reason,
+          400,
+        );
+        assert.match(error.error, /invalid data/);
         assert.equal(davData, legacyOriginal);
-        const split = withSeriesEditIntent({ updates: [update], creates: [eventIn([dav.id])] });
+        const split = withSeriesEditIntent({
+          updates: [update],
+          creates: [eventIn([dav.id])],
+        });
         await refuses(() => request("PUT", split.updates[0]), reason);
       }
       privileges = ["read"];
-      const updateOnly = withSeriesEditIntent({ updates: [update], creates: [] });
-      await refuses(() => request("PUT", { ...updateOnly.updates[0], title: "Mismatched update-only" }), "", 400);
+      const updateOnly = withSeriesEditIntent({
+        updates: [update],
+        creates: [],
+      });
+      await refuses(
+        () =>
+          request("PUT", {
+            ...updateOnly.updates[0],
+            title: "Mismatched update-only",
+          }),
+        "",
+        400,
+      );
       resourcePrivileges = ["read"];
       await refuses(() => request("PUT", updateOnly.updates[0]), "denied");
       resourcePrivileges = ["write-content"];
       writes.length = 0;
-      assert.equal((await request("PUT", updateOnly.updates[0])).status, 200, "Explicit update-only recurrence changes need no bind");
-      assert.deepEqual(writes.map(({ method, path }) => [method, path]), [["PUT", "/dav/cal/legacy.ics"]]);
-      assert.equal(icalToNormalized({ url: legacyResource, data: davData })?.recurrence, recurrence.startsWith("RRULE:") ? recurrence : `RRULE:${recurrence}`);
+      assert.equal(
+        (await request("PUT", updateOnly.updates[0])).status,
+        200,
+        "Explicit update-only recurrence changes need no bind",
+      );
+      assert.deepEqual(
+        writes.map(({ method, path }) => [method, path]),
+        [["PUT", "/dav/cal/legacy.ics"]],
+      );
+      assert.equal(
+        icalToNormalized({ url: legacyResource, data: davData })?.recurrence,
+        recurrence.startsWith("RRULE:") ? recurrence : `RRULE:${recurrence}`);
       assert.ok(!(await snapshot()).includes("scopeEdit"), "Intent is never persisted");
       assert.equal((await request("PUT", withSeriesEditIntent({ updates: [legacySeries], creates: [] }).updates[0])).status, 200, "Update-only undo also needs no bind");
       privileges = ["bind"];

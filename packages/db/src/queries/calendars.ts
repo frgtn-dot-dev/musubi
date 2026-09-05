@@ -96,10 +96,7 @@ export async function joinCalendarFromInvite(userID: string, token: string) {
 }
 
 export async function getCalendar(id: string) {
-	const [result] = await db
-		.select()
-		.from(calendars)
-		.where(eq(calendars.id, id));
+	const [result] = await db.select().from(calendars).where(eq(calendars.id, id));
 
 	if (!result) {
 		throw new NotFoundError("Calendar not found...");
@@ -114,20 +111,31 @@ export async function removeCalendarInTransaction(
 	tx: DbTransaction,
 	calendarID: string,
 ) {
-	// Events HOMED here die with the calendar — including copies linked into
-	// other calendars. Tombstone (not hard-delete) so other members' delta sync
-	// drops them; must run BEFORE the calendar row goes, because the FK would
-	// set originCalendarID to null and hide them from this query.
-	await tx
-		.update(events)
-		.set({ deletedAt: new Date() })
-		.where(eq(events.originCalendarID, calendarID));
-
-	const eIDs = await tx
-		.select({ eventID: calendarEvents.eventID })
-		.from(calendarEvents)
-		.where(eq(calendarEvents.calendarID, calendarID));
-
+	// Lock every affected event BEFORE cascade link/mapping rows. Origin SET NULL
+	// and surviving link removal are real changes even when content is unchanged.
+	const affected = await tx
+		.select({ event: events })
+		.from(events)
+		.where(
+			or(
+				eq(events.originCalendarID, calendarID),
+				sql`${events.id} in (select ${calendarEvents.eventID} from ${calendarEvents} where ${calendarEvents.calendarID} = ${calendarID})`,
+			),
+		)
+		.orderBy(events.id)
+		.for("update");
+	for (const { event } of affected) {
+		await tx
+			.update(events)
+			.set({
+				revision: sql`${events.revision} + 1`,
+				...(event.originCalendarID === calendarID && !event.deletedAt
+					? { deletedAt: new Date() }
+					: {}),
+			})
+			.where(eq(events.id, event.id));
+	}
+	const eIDs = affected.map(({ event }) => ({ eventID: event.id }));
 	const [result] = await tx
 		.delete(calendars)
 		.where(eq(calendars.id, calendarID))

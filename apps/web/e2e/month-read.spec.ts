@@ -98,6 +98,7 @@ function event(
 	extra: Record<string, unknown> = {},
 ) {
 	return {
+		revision: 1,
 		calendars: [calendarId],
 		color,
 		creatorID: "user-web-qa",
@@ -500,8 +501,14 @@ async function mockAuthenticatedReads(
 			});
 		}
 
-		const body = route.request().postDataJSON() as (typeof events.events)[number];
-		const homeCalendarId = body.originCalendarID ?? body.calendars[0];
+		const request = route.request().postDataJSON();
+		const previous = eventState.events.find(item => item.id === request.id);
+		if (["PATCH", "DELETE"].includes(method) && previous?.revision !== request.expectedRevision) return respond(route, {
+			error: "This event changed after editing began. Your draft was kept. Refresh and reconcile before saving again.",
+			code: "event-revision-conflict", localCommitted: false, current: previous, currentRevision: previous?.revision,
+		}, 409);
+		const body = (method === "PATCH" ? { ...previous, ...request.patch, revision: previous!.revision + 1 } : { ...request, revision: 1 }) as (typeof events.events)[number];
+		const homeCalendarId = body.originCalendarID ?? body.calendars?.[0];
 
 		if (failWritesForCalendarId && homeCalendarId === failWritesForCalendarId) {
 			return route.fulfill({
@@ -524,7 +531,7 @@ async function mockAuthenticatedReads(
 			return respond(route, body, 201);
 		}
 
-		if (method === "PUT") {
+		if (method === "PUT" || method === "PATCH") {
 			eventState = {
 				...eventState,
 				events: eventState.events.map((item) =>
@@ -5431,111 +5438,204 @@ test("offers the drawer toggle only where there is a drawer", async ({
 
 for (const [scopeLabel, width] of [["This event", 1280], ["This and following events", 390], ["All events", 1280]] as const) {
   test(`K05 third occurrence title edit: ${scopeLabel}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
-    const master = event("weekly-review", "Weekly review", "personal", "#b3492f", "2026-07-06T09:00:00Z", "2026-07-06T10:30:00Z", { recurrence: "FREQ=WEEKLY;COUNT=6" });
-    await mockAuthenticatedReads(page, { ...events, events: [master] });
-    const writes: Array<{ body: Record<string, unknown>; method: string }> = [];
-    await page.route("**/api/v1/events", async route => {
-      const method = route.request().method();
-      if (method === "PUT" || method === "POST") writes.push({ method, body: route.request().postDataJSON() });
-      return route.fallback();
-    });
-    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
-    await page.getByRole("button", { name: /Weekly review/ }).first().click();
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("July 20");
-    await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("July 20");
-    await page.getByRole("textbox", { name: "Event title" }).fill("Weekly retro");
-    await page.getByRole("textbox", { name: "Event title" }).press("Control+Enter");
-    const scope = page.getByRole("dialog", { name: "Change recurring event" });
-    await expect(scope).toBeVisible();
-    expect(writes).toHaveLength(0);
-    await scope.getByRole("button", { name: "Close change recurring event dialog" }).click();
-    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Weekly retro");
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeFocused();
-    expect(writes).toHaveLength(0);
-    await page.keyboard.press("Enter");
-    await scope.getByRole("button", { name: scopeLabel, exact: true }).focus();
-    await page.keyboard.press("Enter");
-    await expect(scope).toHaveCount(0);
-    expect(writes.map(write => write.method)).toEqual(scopeLabel === "All events" ? ["PUT"] : ["PUT", "POST"]);
-    const { scopeEdit, ...update } = writes[0]!.body;
-    expect(scopeEdit).toEqual({ updates: [update], creates: writes.slice(1).map(write => write.body) });
-    expect(update).toMatchObject({ start: new Date(master.start).toISOString(), end: new Date(master.end).toISOString(), title: scopeLabel === "All events" ? "Weekly retro" : master.title });
-    if (scopeLabel !== "All events") {
-      expect(writes[1]!.body).toMatchObject({ title: "Weekly retro", start: "2026-07-20T09:00:00.000Z", end: "2026-07-20T10:30:00.000Z", recurrence: scopeLabel === "This event" ? null : "FREQ=WEEKLY;COUNT=4" });
-      expect(update.recurrence).toContain(scopeLabel === "This event" ? "EXDATE:20260720T090000Z" : "UNTIL=20260720T085959Z");
-    } else expect(update.recurrence).toBe(master.recurrence);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-  });
+		await page.setViewportSize({ width, height: 844 });
+		const master = event(
+			"weekly-review",
+			"Weekly review",
+			"personal",
+			"#b3492f",
+			"2026-07-06T09:00:00Z",
+			"2026-07-06T10:30:00Z",
+			{ recurrence: "FREQ=WEEKLY;COUNT=6" },
+		);
+		await mockAuthenticatedReads(page, { ...events, events: [master] });
+		const writes: Array<{ body: Record<string, unknown>; method: string }> = [];
+		await page.route("**/api/v1/events", async (route) => {
+			const method = route.request().method();
+			if (method === "PATCH" || method === "POST")
+				writes.push({ method, body: route.request().postDataJSON() });
+			return route.fallback();
+		});
+		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
+		await page
+			.getByRole("button", { name: /Weekly review/ })
+			.first()
+			.click();
+		await page.getByRole("button", { name: "Edit", exact: true }).click();
+		await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+			"July 20",
+		);
+		await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
+			"July 20",
+		);
+		await page.getByRole("textbox", { name: "Event title" }).fill("Weekly retro");
+		await page
+			.getByRole("textbox", { name: "Event title" })
+			.press("Control+Enter");
+		const scope = page.getByRole("dialog", { name: "Change recurring event" });
+		await expect(scope).toBeVisible();
+		expect(writes).toHaveLength(0);
+		await scope
+			.getByRole("button", { name: "Close change recurring event dialog" })
+			.click();
+		await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
+			"Weekly retro",
+		);
+		await expect(
+			page.getByRole("button", { name: "Save", exact: true }),
+		).toBeFocused();
+		expect(writes).toHaveLength(0);
+		await page.keyboard.press("Enter");
+		await scope.getByRole("button", { name: scopeLabel, exact: true }).focus();
+		await page.keyboard.press("Enter");
+		await expect(scope).toHaveCount(0);
+		expect(writes.map((write) => write.method)).toEqual(
+			scopeLabel === "All events" ? ["PATCH"] : ["PATCH", "POST"],
+		);
+		const { scopeEdit, ...update } = writes[0]!.body;
+		expect(scopeEdit).toEqual({
+			updates: [update],
+			creates: writes.slice(1).map((write) => write.body),
+		});
+		expect({ ...master, start: new Date(master.start).toISOString(), end: new Date(master.end).toISOString(), ...(update.patch as object) }).toMatchObject({
+			start: new Date(master.start).toISOString(),
+			end: new Date(master.end).toISOString(),
+			title: scopeLabel === "All events" ? "Weekly retro" : master.title,
+		});
+		if (scopeLabel !== "All events") {
+			expect(writes[1]!.body).toMatchObject({
+				title: "Weekly retro",
+				start: "2026-07-20T09:00:00.000Z",
+				end: "2026-07-20T10:30:00.000Z",
+				recurrence: scopeLabel === "This event" ? null : "FREQ=WEEKLY;COUNT=4",
+			});
+			expect((update.patch as Record<string, unknown>).recurrence).toContain(
+				scopeLabel === "This event"
+					? "EXDATE:20260720T090000Z"
+					: "UNTIL=20260720T085959Z",
+			);
+		} else expect((update.patch as Record<string, unknown>).recurrence).toBeUndefined();
+		expect(
+			await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+		).toBe(false);
+	});
 }
 
 for (const shift of [false, true]) {
-  test(`K05 More options rebases third occurrence draft to master (time change ${shift})`, async ({ page }) => {
-    await mockAuthenticatedReads(page);
-    const writes: Record<string, unknown>[] = [];
-    await page.route("**/api/v1/events", async route => {
-      if (["PUT", "POST"].includes(route.request().method())) writes.push(route.request().postDataJSON());
-      return route.fallback();
-    });
-    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
-    await page.getByRole("button", { name: /Weekly review/ }).first().click();
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("July 20");
-    await page.getByRole("textbox", { name: "Event title" }).fill("Master draft");
-    if (shift) {
-      await page.getByRole("combobox", { name: "Start time" }).fill("13:00");
-      await page.getByRole("combobox", { name: "Start time" }).press("Tab");
-    }
-    await page.getByRole("button", { name: "More options" }).click();
-    await expect(page.getByText("Changes here apply to the recurring series.")).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("July 6");
-    await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("July 6");
-    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Master draft");
-    expect(writes).toHaveLength(0);
-    expect(page.url()).not.toContain("scopeEdit");
-    await page.getByRole("textbox", { name: "Event title" }).press("Control+Enter");
-    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
-    expect(writes).toHaveLength(1);
-    expect(writes[0]).toMatchObject({ title: "Master draft", start: `2026-07-06T${shift ? "11" : "09"}:00:00.000Z`, end: `2026-07-06T${shift ? "12" : "10"}:00:00.000Z` });
-  });
+	test(`K05 More options rebases third occurrence draft to master (time change ${shift})`, async ({
+		page,
+	}) => {
+		await mockAuthenticatedReads(page);
+		const writes: Record<string, unknown>[] = [];
+		await page.route("**/api/v1/events", async (route) => {
+			if (["PATCH", "POST"].includes(route.request().method()))
+				writes.push(route.request().postDataJSON());
+			return route.fallback();
+		});
+		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
+		await page
+			.getByRole("button", { name: /Weekly review/ })
+			.first()
+			.click();
+		await page.getByRole("button", { name: "Edit", exact: true }).click();
+		await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+			"July 20",
+		);
+		await page.getByRole("textbox", { name: "Event title" }).fill("Master draft");
+		if (shift) {
+			await page.getByRole("combobox", { name: "Start time" }).fill("13:00");
+			await page.getByRole("combobox", { name: "Start time" }).press("Tab");
+		}
+		await page.getByRole("button", { name: "More options" }).click();
+		await expect(
+			page.getByText("Changes here apply to the recurring series."),
+		).toBeVisible();
+		await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
+			"July 6",
+		);
+		await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
+			"July 6",
+		);
+		await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
+			"Master draft",
+		);
+		expect(writes).toHaveLength(0);
+		expect(page.url()).not.toContain("scopeEdit");
+		await page
+			.getByRole("textbox", { name: "Event title" })
+			.press("Control+Enter");
+		await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(
+			0,
+		);
+		expect(writes).toHaveLength(1);
+		expect(writes[0]!.expectedRevision).toBe(1);
+        expect(writes[0]!.patch).toEqual({
+          title: "Master draft",
+          ...(shift ? { start: "2026-07-06T11:00:00.000Z", end: "2026-07-06T12:00:00.000Z" } : {}),
+        });
+	});
 }
 
 for (const width of [1280, 390]) {
-  for (const reason of ["unsupported", "denied", "unknown"] as const) {
-    test(`K04 scope refusal ${reason} keeps draft and server reason at ${width}px`, async ({ page }) => {
+	for (const reason of ["unsupported", "denied", "unknown"] as const) {
+		test(`K04 scope refusal ${reason} keeps draft and server reason at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await mockAuthenticatedReads(page);
       const requests: Array<{ method: string; body: Record<string, unknown> }> = [];
       const message = `This recurrence operation is ${reason}. No changes were saved.`;
-      await page.route("**/api/v1/events", async (route) => {
-        const method = route.request().method();
-        if (method !== "PUT" && method !== "POST") return route.fallback();
-        requests.push({ method, body: route.request().postDataJSON() });
-        return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: message, reason, capability: "recurrence" }) });
-      });
-      await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-      await page.getByRole("button", { name: /Weekly review/ }).first().click();
-      await page.getByRole("button", { name: "Edit", exact: true }).click();
-      await page.getByRole("textbox", { name: "Event title" }).fill("Keep this draft");
-      await page.getByRole("button", { name: "Save", exact: true }).click();
-      const scope = page.getByRole("dialog", { name: "Change recurring event" });
-      const occurrence = scope.getByRole("button", { name: "This event", exact: true });
-      await occurrence.focus();
-      await page.keyboard.press("Enter");
-      await expect(scope.getByRole("alert")).toContainText(message);
-      expect(requests.map((request) => request.method)).toEqual(["PUT"]);
-      const intent = requests[0]!.body.scopeEdit as { updates: unknown[]; creates: Array<{ title: string }> };
-      expect(intent.updates).toHaveLength(1);
-      expect(intent.creates[0]!.title).toBe("Keep this draft");
-      await expect(page.getByRole("status").filter({ hasText: "Occurrence updated." })).toHaveCount(0);
-      await scope.getByRole("button", { name: "Close change recurring event dialog" }).click();
-      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Keep this draft");
-      await expect(page.getByRole("button", { name: "Save", exact: true })).toBeFocused();
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-      expect(overflow).toBe(false);
-    });
-  }
+			await page.route("**/api/v1/events", async (route) => {
+				const method = route.request().method();
+				if (method !== "PATCH" && method !== "POST") return route.fallback();
+				requests.push({ method, body: route.request().postDataJSON() });
+				return route.fulfill({
+					status: 403,
+					contentType: "application/json",
+					body: JSON.stringify({ error: message, reason, capability: "recurrence" }),
+				});
+			});
+			await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+			await page
+				.getByRole("button", { name: /Weekly review/ })
+				.first()
+				.click();
+			await page.getByRole("button", { name: "Edit", exact: true }).click();
+			await page
+				.getByRole("textbox", { name: "Event title" })
+				.fill("Keep this draft");
+			await page.getByRole("button", { name: "Save", exact: true }).click();
+			const scope = page.getByRole("dialog", { name: "Change recurring event" });
+			const occurrence = scope.getByRole("button", {
+				name: "This event",
+				exact: true,
+			});
+			await occurrence.focus();
+			await page.keyboard.press("Enter");
+			await expect(scope.getByRole("alert")).toContainText(message);
+			expect(requests.map((request) => request.method)).toEqual(["PATCH"]);
+			const intent = requests[0]!.body.scopeEdit as {
+				updates: unknown[];
+				creates: Array<{ title: string }>;
+			};
+			expect(intent.updates).toHaveLength(1);
+			expect(intent.creates[0]!.title).toBe("Keep this draft");
+			await expect(
+				page.getByRole("status").filter({ hasText: "Occurrence updated." }),
+			).toHaveCount(0);
+			await scope
+				.getByRole("button", { name: "Close change recurring event dialog" })
+				.click();
+			await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
+				"Keep this draft",
+			);
+			await expect(
+				page.getByRole("button", { name: "Save", exact: true }),
+			).toBeFocused();
+			const overflow = await page.evaluate(
+				() => document.documentElement.scrollWidth > window.innerWidth,
+			);
+			expect(overflow).toBe(false);
+		});
+	}
 }
 
 test("edits a whole series without moving it onto one date", async ({
@@ -5896,7 +5996,7 @@ test("carries one session's edit into the other over the stream", async ({
 	// to say, then delivers that frame and ends — the client reconnects on its own.
 	const pending: string[] = [];
 	await context.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") {
+		if (route.request().method() === "PATCH") {
 			pending.push("event_updated");
 		}
 		return route.fallback();
@@ -7425,16 +7525,106 @@ for (const [width, end] of [[1280, "2026-07-09T01:00:00+02:00"], [390, "2026-07-
     await page.setViewportSize({ width, height: 844 });
     const item = event("night", "Night shift", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", end);
     await mockAuthenticatedReads(page, { ...events, events: [item] });
-    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/night?date=2026-07-08`);
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/night?date=2026-07-08`,
+		);
+		const title = page.getByRole("textbox", { name: "Event title" });
+		await expect(title).toBeFocused();
+		await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
+			width === 390 ? "July 11" : "July 9",
+		);
+		await title.fill("Night renamed");
+		const write = page.waitForRequest(
+			(request) =>
+				request.method() === "PATCH" && request.url().endsWith("/api/v1/events"),
+		);
+		await title.press("Control+Enter");
+		const body = (await write).postDataJSON();
+		expect(body).toEqual({ id: item.id, expectedRevision: 1, patch: { title: "Night renamed" } });
+		await expect(title).toHaveCount(0);
+		expect(
+			await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+		).toBe(false);
+	});
+}
+
+for (const editor of ["full", "handoff"] as const) {
+  test(`K06 two real ${editor} drafts keep original revision across SSE and reject stale title without restoring time`, async ({ browser }) => {
+    const context = await browser.newContext({ timezoneId: "Europe/Prague" });
+    const item = event("k06-night", "K06 night", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", "2026-07-10T02:00:00+02:00");
+    await mockAuthenticatedReads(context, { ...events, events: [item] });
+    const first = await context.newPage(); const second = await context.newPage();
+    let changed = false;
+    let readsAfterChange = 0;
+    await second.route("**/api/stream?clientVersion=*", async route => {
+      expect(new URL(route.request().url()).searchParams.get("clientVersion")).toBe(PRODUCT_VERSION);
+      while (!changed) await new Promise(resolve => setTimeout(resolve, 20));
+      await route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"event_updated","payload":{}}\n\n' });
+    });
+    await second.route(/\/api\/v1\/events(?:\?.*)?$/, async route => {
+      if (route.request().method() === "GET" && changed) readsAfterChange++;
+      return route.fallback();
+    });
+    const path = `/app/p/${DEFAULT_PAGE_ID}/month/event/k06-night?date=2026-07-08`;
+    await first.goto(path);
+    if (editor === "full") await second.goto(path);
+    else {
+      await second.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-08`);
+      await second.getByRole("button", { name: /K06 night/ }).first().click();
+      await second.getByRole("button", { name: "Edit", exact: true }).click();
+    }
+    const secondTitle = second.getByRole("textbox", { name: "Event title" });
+    await secondTitle.fill("K06 retained title");
+    const write = first.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith("/api/v1/events"));
+    await first.getByRole("combobox", { name: "Start time" }).fill("22:00");
+    await first.getByRole("combobox", { name: "Start time" }).press("Tab");
+    await first.getByRole("button", { name: "Save", exact: true }).click();
+    const firstResponse = await write; expect(firstResponse.status()).toBe(200);
+    const authoritative = await firstResponse.json(); expect(authoritative.revision).toBe(2);
+    expect(authoritative.start).not.toBe(item.start);
+    changed = true;
+    await expect.poll(() => readsAfterChange).toBeGreaterThan(0);
+    await expect(secondTitle).toHaveValue("K06 retained title");
+    if (editor === "handoff") await second.getByRole("button", { name: "More options" }).click();
+    const stale = second.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith("/api/v1/events"));
+    await second.getByRole("button", { name: "Save", exact: true }).click();
+    const response = await stale;
+    expect(response.request().postDataJSON()).toEqual({ id: item.id, expectedRevision: 1, patch: { title: "K06 retained title" } });
+    expect(response.status()).toBe(409);
+    expect((await response.json()).current.start).toBe(authoritative.start);
+    await expect(secondTitle).toHaveValue("K06 retained title");
+    await expect(second.getByRole("alert")).toContainText("Refresh and reconcile");
+    expect(second.url()).not.toContain("expectedRevision");
+    await context.close();
+  });
+}
+
+for (const code of ["provider-conflict", "401", "426", "network"] as const) {
+  test(`K06 actual full editor retains multiday draft after ${code}`, async ({ page }) => {
+    const item = event("k06-delivery", "Delivery draft", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", "2026-07-10T02:00:00+02:00");
+    await mockAuthenticatedReads(page, { ...events, events: [item] });
+    const requests: unknown[] = [];
+    await page.route("**/api/v1/events", async route => {
+      if (route.request().method() !== "PATCH") return route.fallback();
+      requests.push(route.request().postDataJSON());
+      if (code === "network") return route.abort("failed");
+      return respond(route, code === "provider-conflict" ? {
+        error: "Saved locally, but remote delivery was not confirmed. Your draft was kept. Refresh and reconcile before any retry.",
+        code, localCommitted: true, current: { ...item, title: "Keep delivery draft", revision: 2 }, currentRevision: 2,
+        delivery: { completed: true, status: "conflict" },
+      } : { error: code === "401" ? "Sign in required" : "ClientUpgradeRequired" }, code === "provider-conflict" ? 409 : Number(code));
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/k06-delivery?date=2026-07-08`);
     const title = page.getByRole("textbox", { name: "Event title" });
-    await expect(title).toBeFocused();
-    await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(width === 390 ? "July 11" : "July 9");
-    await title.fill("Night renamed");
-    const write = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/api/v1/events"));
+    await title.fill("Keep delivery draft");
     await title.press("Control+Enter");
-    const body = (await write).postDataJSON();
-    expect(body).toMatchObject({ title: "Night renamed", start: new Date(item.start).toISOString(), end: new Date(item.end).toISOString(), isAllDay: false });
-    await expect(title).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(title).toHaveValue("Keep delivery draft");
+    expect(requests).toEqual([{ id: item.id, expectedRevision: 1, patch: { title: "Keep delivery draft" } }]);
+    if (code === "provider-conflict") {
+      await expect(page.getByRole("alert")).toContainText("Saved locally");
+      await title.press("Control+Enter");
+      await expect.poll(() => requests.length).toBe(2);
+      expect(requests[1]).toEqual(requests[0]);
+    }
   });
 }

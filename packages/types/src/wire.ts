@@ -1,7 +1,16 @@
 import { z } from "zod";
 import { AnnouncementsResponseSchema } from "./announcement";
 import { CalendarInvitePreviewSchema, CalendarSchema } from "./calendar";
-import { EventSchema } from "./event";
+import {
+  EventSchema,
+  EventCreateRequestSchema,
+  EventPatchRequestSchema,
+  EventDeleteRequestSchema,
+  EventUnlinkRequestSchema,
+  EventLinkRequestSchema,
+  EventForkRequestSchema,
+  ScopeEditIntentSchema,
+} from "./event";
 import { InviteSchema } from "./invite";
 import { PageDocumentSchema } from "./pages";
 import {
@@ -40,6 +49,13 @@ export const WIRE_CONTRACT: Record<
     schema: CalendarInvitePreviewSchema,
   },
   Event: { direction: "read", schema: EventSchema },
+  EventCreateRequest: { direction: "write", schema: EventCreateRequestSchema },
+  EventPatchRequest: { direction: "write", schema: EventPatchRequestSchema },
+  EventDeleteRequest: { direction: "write", schema: EventDeleteRequestSchema },
+  EventUnlinkRequest: { direction: "write", schema: EventUnlinkRequestSchema },
+  EventLinkRequest: { direction: "write", schema: EventLinkRequestSchema },
+  EventForkRequest: { direction: "write", schema: EventForkRequestSchema },
+  ScopeEditIntent: { direction: "write", schema: ScopeEditIntentSchema },
   Invite: { direction: "read", schema: InviteSchema },
   PageDocument: { direction: "read", schema: PageDocumentSchema },
   PatchSettingsRequest: {
@@ -79,7 +95,7 @@ export function wireSnapshot(): WireSnapshot {
   return { documents, version: PRODUCT_VERSION };
 }
 
-function describe(schema: z.ZodType): unknown {
+function describe(schema: z.ZodType): z.core.JSONSchema.JSONSchema {
   const json = z.toJSONSchema(schema, {
     io: "input",
     unrepresentable: "any",

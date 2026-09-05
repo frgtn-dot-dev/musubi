@@ -477,7 +477,7 @@ async function checkUnlinkNotifications(
     if (failAfterUnlink) await assert.rejects(sync);
     else await sync;
     assert.equal((await getEvent(id))?.deletedAt, null);
-    const removal = `data: ${JSON.stringify({ type: "event_removed", payload: { id } })}\n\n`;
+    const removal = `data: ${JSON.stringify({ type: "event_removed", payload: { id, revision: (await getEvent(id))?.revision } })}\n\n`;
     assert.ok(
       responses[0].writes.includes(removal),
       "Copy-only viewer must evict the event via the existing SSE frame",

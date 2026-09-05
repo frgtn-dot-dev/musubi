@@ -6,6 +6,7 @@ import {
   diffEventContent,
   getCalendarMembers,
   getEventCalendars,
+  getEvent,
   getExternalEvent,
   getExternalTask,
   getDisabledExternalCalendarIDs,
@@ -138,7 +139,7 @@ export async function reconcileExternalChanges(
 }
 
 // A user who lost their last link is absent from subsequent event deltas.
-// Reuse the existing removal frame so even older clients evict that copy.
+// Include the accepted local revision so a delayed removal cannot evict a newer row.
 async function notifyExternalEventUnlinks(
   calendarID: string,
   eventIDs: string[],
@@ -157,7 +158,7 @@ async function notifyExternalEventUnlinks(
         .filter((member) => !remainingMembers.has(member.userID))
         .map((member) => member.userID),
       "event_removed",
-      { id },
+      { id, revision: (await getEvent(id))?.revision },
     );
   }
 }
@@ -487,7 +488,9 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
     }
   }
   let failure: EventDeliveryError | undefined;
-  return async (onlyAction?: EventWriteOperation["action"]) => {
+  return async (onlyAction?: EventWriteOperation["action"],
+    committedRevision?: number,
+  ) => {
     if (failure) throw failure;
     for (const { operation, calendarID, link, adapter, external, receipt } of prepared) {
       const { action, event } = operation;
@@ -504,7 +507,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             event,
           );
           receipt.externalEventID = external.externalEventId;
-          await importExternalEvent(
+          const accepted = await importExternalEvent(
             link.provider,
             event.id,
             calendarID,
@@ -512,6 +515,12 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             external.externalEventId,
             external.etag ?? null,
             external.icalUid ?? null,
+            committedRevision,
+          );
+          if (!accepted)
+            throw new ProviderEventWriteError(
+              "provider-write-failed",
+              "unconfirmed",
           );
         } else {
           if (!external) { receipt.status = "not-needed"; continue; }
@@ -526,7 +535,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
               operation.patch,
             );
             if (result) {
-              await setExternalEventSyncData(
+              const accepted = await setExternalEventSyncData(
                 link.provider,
                 event.id,
                 link.externalCalendarID,
@@ -535,6 +544,18 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
                   icalUid: result.icalUid ?? external.icalUid ?? null,
                 },
                 calendarID,
+                committedRevision === undefined
+                  ? undefined
+                  : {
+                      revision: committedRevision,
+                      etag: external.etag,
+                      externalEventID: external.externalEventId,
+                    },
+              );
+              if (!accepted)
+                throw new ProviderEventWriteError(
+                  "provider-write-failed",
+                  "unconfirmed",
               );
             }
           } else {

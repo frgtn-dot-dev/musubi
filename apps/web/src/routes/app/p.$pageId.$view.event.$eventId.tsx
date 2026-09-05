@@ -1,5 +1,10 @@
+import type { Event } from "@musubi/types";
+import {
+  eventEditorBaseline,
+  clearEventEditorBaseline,
+} from "~/calendar/event-editor-draft";
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useSessionUser } from "~/auth/use-session-user";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
 // The class that fits the page layout into a dialog body lives with the form.
@@ -42,15 +47,32 @@ function EditEventRoute() {
   const workspace = useWorkspaceQueries(queryDate, userId, search.view);
   const eventMutations = useEventMutations(userId);
   const calendars = workspace.mergedCalendars;
-  const event = workspace.mergedEvents?.baseEvents.find(
+  const currentEvent = workspace.mergedEvents?.baseEvents.find(
     (item) => item.id === eventId,
   );
-  const back = () =>
+  const [event, setEvent] = useState<Event | undefined>(undefined);
+  if (event && event.id !== eventId) setEvent(undefined);
+  if (!event && currentEvent) {
+    const handedOff = eventEditorBaseline(eventId);
+    const urlDraft =
+      search.title !== undefined || search.startTime !== undefined;
+    setEvent(
+      structuredClone(
+        handedOff ?? {
+          ...currentEvent,
+          revision: urlDraft ? undefined : currentEvent.revision,
+        },
+      ),
+    );
+  }
+  const back = () => {
+    clearEventEditorBaseline(eventId);
     void navigate({
       params: { pageId, view },
       search: { date: search.returnDate ?? search.date ?? queryDate },
       to: "/app/p/$pageId/$view",
     });
+  };
 
   const loading =
     workspace.calendars.isPending ||
@@ -86,7 +108,7 @@ function EditEventRoute() {
       size="workspace"
       title={title}
     >
-      {loading ? (
+      {loading && !event ? (
         <Empty
           description="Loading the event and its calendars."
           title="Preparing the editor…"

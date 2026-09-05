@@ -28,7 +28,7 @@
     "test:federation-db": "pnpm --filter @musubi/api exec tsx src/federation.integration.test.ts",
     "test:db:federation-gateway": "pnpm --filter @musubi/api exec tsx src/federation_gateway.integration.test.ts",
     "test:provider-db": "pnpm --filter @musubi/api exec tsx src/sync/oauth.integration.test.ts",
-    "test:db:events": "pnpm --filter @musubi/db exec tsx src/queries/event-revision.integration.test.ts",
+    "test:db:events": "pnpm --filter @musubi/db exec tsx src/queries/event-revision.integration.test.ts && pnpm --filter @musubi/api exec tsx src/handlers/event_revision.integration.test.ts",
     "test:db:sync": "pnpm test:db:events && pnpm --filter @musubi/api exec tsx src/handlers/event_capabilities.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/adapters/provider_event_writes.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/optional_tasks.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/microsoft_hydration.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/google_discovery.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/bootstrap.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/external_tasks.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/external_events.integration.test.ts",
     "test:caldav:radicale": "pnpm --filter @musubi/api exec tsx src/sync/adapters/caldav.radicale.integration.test.ts",
     "test:db": "pnpm test:db:versions && pnpm test:db:oauth && pnpm test:db:pages && pnpm test:federation-db && pnpm test:db:federation-gateway && pnpm test:provider-db && pnpm test:db:sync",

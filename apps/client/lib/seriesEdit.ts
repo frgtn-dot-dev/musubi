@@ -1,5 +1,6 @@
-import { Event } from "@musubi/types";
-import { EditScope, seriesEditWrites, withSeriesEditIntent } from "@musubi/calendar";
+import { EventMutationError, type Event } from "@musubi/types";
+import { EditScope, seriesEditWrites, withSeriesEditIntent,
+} from "@musubi/calendar";
 import { uuidv7 } from "uuidv7";
 import { chooseOption } from "@/lib/confirm";
 import { reminderRules, setEventReminderRule } from "@/services/notifications";
@@ -51,31 +52,41 @@ export async function applySeriesEdit({
   // Backing out of the question is not a decision to discard the edit.
   if (!scope) return false;
 
-  const { creates, updates } = withSeriesEditIntent(seriesEditWrites({
-    edited,
-    master,
-    // React Native has no crypto.randomUUID; the app's own generator also keeps
-    // ids sortable by creation time.
-    newId: uuidv7,
-    occurrence,
-    scope,
-  }));
+  const { creates, updates } = withSeriesEditIntent(
+    seriesEditWrites({
+      edited,
+      master,
+      // React Native has no crypto.randomUUID; the app's own generator also keeps
+      // ids sortable by creation time.
+      newId: uuidv7,
+      occurrence,
+      scope,
+    }),
+  );
 
   // Sequential: the update carries the exclusion that keeps the created event
   // from briefly showing twice.
   for (const update of updates) {
     await updateEvent(update);
   }
-  for (const create of creates) {
-    await addEvent(create);
-    // A split gives the occurrence a new id, so an OVERRIDE on the series does
-    // not follow by itself — the series keeps it and the detached event
-    // silently falls back to whatever its calendar says. Inherited rules need
-    // no copying: the new event is in the same calendars.
-    const override = reminderRules()?.events[master.id];
-    if (override) {
-      await setEventReminderRule(create, override).catch(() => undefined);
+  try {
+    for (const create of creates) {
+      await addEvent(create);
+      // A split gives the occurrence a new id, so an OVERRIDE on the series does
+      // not follow by itself — the series keeps it and the detached event
+      // silently falls back to whatever its calendar says. Inherited rules need
+      // no copying: the new event is in the same calendars.
+      const override = reminderRules()?.events[master.id];
+      if (override) {
+        await setEventReminderRule(create, override).catch(() => undefined);
+      }
     }
+  } catch (error) {
+    throw new EventMutationError(
+      "Part of this recurring edit was saved. Later delivery was not confirmed. Your draft was kept; refresh and reconcile before retrying.",
+      true,
+      error instanceof EventMutationError ? error.current : undefined,
+    );
   }
 
   return true;

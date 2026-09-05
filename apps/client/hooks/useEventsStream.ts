@@ -71,7 +71,11 @@ export function useConnectToEventStream() {
           applyLiveMutation(() => localUpdateEvent(toEvent(data.payload)));
           break;
         case "event_removed":
-          applyLiveMutation(() => localRemoveEvent(toEvent(data.payload)));
+          if (!Number.isSafeInteger(data.payload?.revision) || data.payload.revision < 1) {
+            // An access-loss frame may refer to an already purged row. Reconcile
+            // authoritatively instead of evicting a possibly newer cached event.
+            silentRefresh(true);
+          } else applyLiveMutation(() => localRemoveEvent(toEvent(data.payload)));
           break;
         case "calendar_updated":
           applyLiveMutation(() => { localUpdateCalendar(data.payload); });

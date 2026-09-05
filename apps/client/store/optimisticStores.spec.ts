@@ -12,12 +12,16 @@ vi.mock("@/services/notifications", () => ({
 import { useCalendarsStore } from "./useCalendarsStore";
 import { useEventsStore } from "./useEventsStore";
 
-const event = { id: "e1", calendars: ["c1"], title: "Before" } as any;
+const event = {
+  revision: 1,
+  id: "e1", calendars: ["c1"], title: "Before",
+} as any;
 const calendar = { id: "c1", name: "Before" } as any;
 
 beforeEach(() => {
   useEventsStore.setState({ events: [event] });
-  useCalendarsStore.setState({ calendars: [calendar], activeCals: new Set(["c1"]), soloCalId: null });
+  useCalendarsStore.setState({ calendars: [calendar], activeCals: new Set(["c1"]), soloCalId: null,
+  });
 });
 
 describe("optimistic stores", () => {
@@ -26,8 +30,8 @@ describe("optimistic stores", () => {
     const request = new Promise((_, fail) => { reject = fail; });
     const pending = useEventsStore.getState().updateEvent(
       { ...event, title: "After" },
-      { updateEvent: () => request } as any,
-    );
+      { updateEvent: () => request,
+      } as any);
     expect(useEventsStore.getState().events[0].title).toBe("After");
     reject(new Error("offline"));
     await expect(pending).rejects.toThrow("offline");
@@ -39,8 +43,7 @@ describe("optimistic stores", () => {
     const request = new Promise((_, fail) => { reject = fail; });
     const pending = useCalendarsStore.getState().removeCalendar(
       calendar,
-      { removeCalendar: () => request } as any,
-    );
+      { removeCalendar: () => request } as any);
     expect(useCalendarsStore.getState().calendars).toHaveLength(0);
     reject(new Error("offline"));
     await expect(pending).rejects.toThrow("offline");

@@ -1,4 +1,8 @@
-import type { Event } from "@musubi/types";
+import {
+  EventMutationError,
+  requireEventRevision,
+  type Event,
+} from "@musubi/types";
 import {
   useMutation,
   useQueryClient,
@@ -34,13 +38,18 @@ function eventQueryPrefix(userId: string) {
 function upsertEvent(
   queryClient: QueryClient,
   userId: string,
-  event: Event,
-) {
+  event: Event) {
   queryClient.setQueriesData<EventsResponse>(
     { queryKey: eventQueryPrefix(userId) },
     (current) =>
       current
-        ? {
+        ? current.events.some(
+            (saved) =>
+              saved.id === event.id &&
+              (saved.revision ?? 0) > (event.revision ?? 0),
+          )
+          ? current
+          : {
             ...current,
             deletedIds: current.deletedIds.filter(
               (eventId) => eventId !== event.id,
@@ -65,16 +74,15 @@ function applyRemoval(
   queryClient.setQueriesData<EventsResponse>(
     { queryKey: eventQueryPrefix(userId) },
     (current) => {
-      if (!current) {
-        return current;
-      }
+      if (!current) return current;
+      const cached = current.events.find((item) => item.id === result.id);
+      if ((cached?.revision ?? 0) > (result.revision ?? event.revision ?? 0)) return current;
 
       if (result.removed) {
         return {
           ...current,
           deletedIds: Array.from(
-            new Set([...current.deletedIds, result.id]),
-          ),
+            new Set([...current.deletedIds, result.id])),
           events: current.events.filter(
             (currentEvent) => currentEvent.id !== result.id,
           ),
@@ -85,7 +93,9 @@ function applyRemoval(
         ...current,
         events: current.events.map((currentEvent) =>
           currentEvent.id === result.id
-            ? { ...event, calendars: result.calendars }
+            ? (result.event ?? { ...event,
+                revision: result.revision, calendars: result.calendars,
+              })
             : currentEvent,
         ),
       };
@@ -121,21 +131,36 @@ export function useEventMutations(userId: string) {
     void refreshEvents();
   };
 
+  const reconcileMutationFailure = (error: unknown, connectionId?: string) => {
+    if (error instanceof EventMutationError && error.current && !connectionId) {
+      const current = error.current;
+      if (current.deletedAt) applyRemoval(queryClient, userId, current, {
+        id: current.id, removed: true, calendars: [], revision: current.revision,
+      });
+      else upsertEvent(queryClient, userId, current);
+    }
+    void refreshEvents();
+    void refreshFederated();
+  };
+
   const create = useMutation({
     mutationFn: (event: Event) =>
       createEvent(event, connectionForEvent(connections, event)),
+    onError: (error, input) => reconcileMutationFailure(error, connectionForEvent(connections, input)),
     onSuccess: (event, input) =>
       applyWrite(event, connectionForEvent(connections, input)),
   });
   const update = useMutation({
     mutationFn: (event: Event) =>
       updateEvent(event, connectionForEvent(connections, event)),
+    onError: (error, input) => reconcileMutationFailure(error, connectionForEvent(connections, input)),
     onSuccess: (event, input) =>
       applyWrite(event, connectionForEvent(connections, input)),
   });
   const remove = useMutation({
     mutationFn: (event: Event) =>
       removeEvent(event, connectionForEvent(connections, event)),
+    onError: (error, input) => reconcileMutationFailure(error, connectionForEvent(connections, input)),
     onSuccess: (result, event) => {
       const connectionId = connectionForEvent(connections, event);
       if (connectionId) {
@@ -150,15 +175,19 @@ export function useEventMutations(userId: string) {
     mutationFn: ({
       calendarId,
       eventId,
+      expectedRevision,
     }: {
       calendarId: string;
       eventId: string;
+      expectedRevision?: number;
     }) =>
       linkEvent(
         eventId,
+        requireEventRevision({ revision: expectedRevision }),
         calendarId,
         connectionForCalendar(connections, calendarId),
       ),
+    onError: (error, input) => reconcileMutationFailure(error, connectionForCalendar(connections, input.calendarId)),
     onSuccess: (event, { calendarId }) =>
       applyWrite(event, connectionForCalendar(connections, calendarId)),
   });
@@ -166,15 +195,19 @@ export function useEventMutations(userId: string) {
     mutationFn: ({
       calendarId,
       eventId,
+      expectedRevision,
     }: {
       calendarId: string;
       eventId: string;
+      expectedRevision?: number;
     }) =>
       forkEvent(
         eventId,
+        requireEventRevision({ revision: expectedRevision }),
         calendarId,
         connectionForCalendar(connections, calendarId),
       ),
+    onError: (error, input) => reconcileMutationFailure(error, connectionForCalendar(connections, input.calendarId)),
     onSuccess: (event, { calendarId }) =>
       applyWrite(event, connectionForCalendar(connections, calendarId)),
   });

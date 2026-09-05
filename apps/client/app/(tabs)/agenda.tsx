@@ -33,7 +33,14 @@ const RECURRENCE_HORIZON_YEARS = 2;
 export default function AgendaTab() {
   const api = useApi();
   const { events, addEvent, updateEvent } = useEventsStore();
-  const { calendars, activeCals, soloCalId, toggleCal, soloCalendar, syncActiveCals } = useCalendarsStore();
+  const {
+    calendars,
+    activeCals,
+    soloCalId,
+    toggleCal,
+    soloCalendar,
+    syncActiveCals,
+  } = useCalendarsStore();
   const timeFormat = useSettingsStore((s) => s.timeFormat);
   const { eventId, occurrenceStart } = useLocalSearchParams<{
     eventId?: string;
@@ -43,7 +50,7 @@ export default function AgendaTab() {
     syncActiveCals(calendars);
   }, [calendars]);
 
-  const [createOpen, setCreateOpen] = useState(false);   // docked composer (FAB)
+  const [createOpen, setCreateOpen] = useState(false); // docked composer (FAB)
 
   const [shown, setShown] = useState(PAGE);
   const scrollRef = useRef<ScrollView>(null);
@@ -59,21 +66,26 @@ export default function AgendaTab() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async function runRefresh() {
     setRefreshing(true);
-    try { await refresh(); }
-    catch (e) {
+    try {
+      await refresh();
+    } catch (e) {
       console.error(e);
       showToast({
         message: userFacingError(e, "Could not refresh agenda."),
         actionLabel: "Retry",
-        onAction: () => setTimeout(() => { void runRefresh(); }, 320),
+        onAction: () =>
+          setTimeout(() => {
+            void runRefresh();
+          }, 320),
       });
+    } finally {
+      setRefreshing(false);
     }
-    finally { setRefreshing(false); }
   };
 
   const calendarById = useMemo(
-    () => new Map(calendars.map(c => [c.id, c])),
-    [calendars]
+    () => new Map(calendars.map((c) => [c.id, c])),
+    [calendars],
   );
 
   const currentDay = useCurrentDay();
@@ -83,30 +95,33 @@ export default function AgendaTab() {
     const now = new Date();
     const recurrenceStart = eventDay(now).startOf("day").toDate();
     const recurrenceEnd = new Date(recurrenceStart);
-    recurrenceEnd.setFullYear(recurrenceEnd.getFullYear() + RECURRENCE_HORIZON_YEARS);
+    recurrenceEnd.setFullYear(
+      recurrenceEnd.getFullYear() + RECURRENCE_HORIZON_YEARS,
+    );
 
     // One-off events can remain visible however far away they are. Recurring
     // series need a finite window, so materialize their upcoming occurrences
     // for the next two years before applying the normal agenda filters.
     const agendaEvents = [
-      ...events.filter(event => !event.recurrence),
+      ...events.filter((event) => !event.recurrence),
       ...expandRecurringEvents(
-        events.filter(event => !!event.recurrence),
+        events.filter((event) => !!event.recurrence),
         recurrenceStart,
         recurrenceEnd,
       ),
     ];
 
     const sorted = agendaEvents
-      .filter(e =>
-        (e.isAllDay
-          // all-day: keep today or later by CALENDAR day — its raw UTC-midnight
-          // instant is already "past" by mid-morning, which wrongly hid it.
-          ? !eventDay(e.start, true).isBefore(eventDay(now), 'day')
-          : e.start > now)
-        && e.calendars.some(id => activeCals.has(id)))
+      .filter(
+        (e) =>
+          (e.isAllDay
+            ? // all-day: keep today or later by CALENDAR day — its raw UTC-midnight
+              // instant is already "past" by mid-morning, which wrongly hid it.
+              !eventDay(e.start, true).isBefore(eventDay(now), "day")
+            : e.start > now) && e.calendars.some((id) => activeCals.has(id)),
+      )
       .sort((a, b) => a.start.getTime() - b.start.getTime());
-    const result: { date: Date, items: Event[] }[] = [];
+    const result: { date: Date; items: Event[] }[] = [];
     let lastKey = "";
     for (const e of sorted) {
       // Normalize all-day events (stored as UTC-midnight) to their calendar day in
@@ -127,25 +142,35 @@ export default function AgendaTab() {
 
   // Store write, not setState — opening the detail must not re-render the
   // (long) agenda list. The modal lives in GlobalEventModals.
-  const openEventDetail = useCallback((event: Event) => presentEventDetail(events, event), [events]);
+  const openEventDetail = useCallback(
+    (event: Event) => presentEventDetail(events, event),
+    [events],
+  );
 
-  const openWidgetEvent = useCallback((id: string, startValue?: string): boolean => {
-    const direct = events.find(event => event.id === id);
-    const master = direct ?? events.find(event => event.id === id.replace(/_\d+$/, ""));
-    if (!master) return false;
+  const openWidgetEvent = useCallback(
+    (id: string, startValue?: string): boolean => {
+      const direct = events.find((event) => event.id === id);
+      const master =
+        direct ?? events.find((event) => event.id === id.replace(/_\d+$/, ""));
+      if (!master) return false;
 
-    const startMs = Number(startValue);
-    const selected = !direct && Number.isFinite(startMs)
-      ? {
-          ...master,
-          id,
-          start: new Date(startMs),
-          end: new Date(startMs + master.end.getTime() - master.start.getTime()),
-        }
-      : master;
-    presentEventDetail(events, selected);
-    return true;
-  }, [events]);
+      const startMs = Number(startValue);
+      const selected =
+        !direct && Number.isFinite(startMs)
+          ? {
+              ...master,
+              id,
+              start: new Date(startMs),
+              end: new Date(
+                startMs + master.end.getTime() - master.start.getTime(),
+              ),
+            }
+          : master;
+      presentEventDetail(events, selected);
+      return true;
+    },
+    [events],
+  );
 
   // Query params cover a cold launch. The URL listener also handles tapping
   // the same widget row again while Agenda is already mounted.
@@ -153,7 +178,8 @@ export default function AgendaTab() {
     if (!eventId) return;
     const key = `${eventId}:${occurrenceStart ?? ""}`;
     if (handledWidgetEvent.current === key) return;
-    if (openWidgetEvent(eventId, occurrenceStart)) handledWidgetEvent.current = key;
+    if (openWidgetEvent(eventId, occurrenceStart))
+      handledWidgetEvent.current = key;
   }, [eventId, occurrenceStart, openWidgetEvent]);
 
   useEffect(() => {
@@ -184,18 +210,22 @@ export default function AgendaTab() {
       rows.push(
         <View
           key={`year-${g.date.getFullYear()}`}
-          style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 14, paddingBottom: 2, backgroundColor: colors.bg }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingTop: 14,
+            paddingBottom: 2,
+            backgroundColor: colors.bg,
+          }}
         >
           <YearStamp date={g.date} full />
           <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
-        </View>
+        </View>,
       );
     }
     rows.push(
-      <Animated.View
-        key={g.date.toISOString()}
-        entering={FadeIn.duration(250)}
-      >
+      <Animated.View key={g.date.toISOString()} entering={FadeIn.duration(250)}>
         <View style={styles.timelineRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.timelineDay}>
@@ -206,54 +236,106 @@ export default function AgendaTab() {
             </Text>
           </View>
           <View style={{ flex: 4, justifyContent: "flex-end" }}>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg2 }} >
+            <Text
+              style={{
+                fontFamily: fonts.sans,
+                fontSize: 12,
+                color: colors.fg2,
+              }}
+            >
               {g.date.toLocaleString("en-UK", { weekday: "long" })}
             </Text>
-            {dateKey(g.date) === todayKey &&
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+            {dateKey(g.date) === todayKey && (
+              <Text
+                style={{
+                  fontFamily: fonts.sans,
+                  fontSize: 12,
+                  color: colors.fg3,
+                }}
+              >
                 TODAY
               </Text>
-            }
+            )}
           </View>
         </View>
         <View>
-          {
-            g.items.map(e => (
-              <Tap
-                onPress={() => openEventDetail(e)}
-                key={e.id}
-                accessibilityLabel={e.isAllDay
+          {g.items.map((e) => (
+            <Tap
+              onPress={() => openEventDetail(e)}
+              key={e.id}
+              accessibilityLabel={
+                e.isAllDay
                   ? `All-day event, ${e.title || "Untitled event"}`
-                  : `${e.title || "Untitled event"}, ${formatTime(e.start, timeFormat)} to ${formatTime(e.end, timeFormat)}`}
-                style={styles.timelineRow}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg2 }}>
-                    {formatTime(e.start, timeFormat)}
-                  </Text>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg4 }}>
-                    {formatTime(e.end, timeFormat)}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: "row", flex: 4 }}>
-                  <View style={{ width: 1, backgroundColor: eventColor(e, calendarById), alignSelf: "stretch" }} />
-                  <View style={{ paddingLeft: 16, justifyContent: "center" }}>
-                    <Text style={styles.timelineTitle}>{e.title}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      {e.calendars.map(c => (
-                        <View key={c} style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-                          <View style={[styles.colorDot, { backgroundColor: calendarById.get(c)?.color ?? "" }]} />
-                          <Text style={styles.timelineMeta}>{calendarById.get(c)?.name ?? ""}</Text>
-                        </View>
-                      ))}
-                    </View>
+                  : `${e.title || "Untitled event"}, ${formatTime(e.start, timeFormat)} to ${formatTime(e.end, timeFormat)}`
+              }
+              style={styles.timelineRow}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: fonts.sans,
+                    fontSize: 12,
+                    color: colors.fg2,
+                  }}
+                >
+                  {formatTime(e.start, timeFormat)}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: fonts.sans,
+                    fontSize: 12,
+                    color: colors.fg4,
+                  }}
+                >
+                  {formatTime(e.end, timeFormat)}
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", flex: 4 }}>
+                <View
+                  style={{
+                    width: 1,
+                    backgroundColor: eventColor(e, calendarById),
+                    alignSelf: "stretch",
+                  }}
+                />
+                <View style={{ paddingLeft: 16, justifyContent: "center" }}>
+                  <Text style={styles.timelineTitle}>{e.title}</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    {e.calendars.map((c) => (
+                      <View
+                        key={c}
+                        style={{
+                          flexDirection: "row",
+                          gap: 4,
+                          alignItems: "center",
+                        }}
+                      >
+                        <View
+                          style={[
+                            styles.colorDot,
+                            {
+                              backgroundColor: calendarById.get(c)?.color ?? "",
+                            },
+                          ]}
+                        />
+                        <Text style={styles.timelineMeta}>
+                          {calendarById.get(c)?.name ?? ""}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                 </View>
-              </Tap>
-            ))
-          }
+              </View>
+            </Tap>
+          ))}
         </View>
-      </Animated.View>
+      </Animated.View>,
     );
   });
 
@@ -272,17 +354,25 @@ export default function AgendaTab() {
       <ScrollView
         ref={scrollRef}
         style={{ paddingHorizontal: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={({ nativeEvent }) => {
           const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-          const fromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-          if (fromBottom < 400) setShown(s => Math.min(s + PAGE, groups.length));
+          const fromBottom =
+            contentSize.height - contentOffset.y - layoutMeasurement.height;
+          if (fromBottom < 400)
+            setShown((s) => Math.min(s + PAGE, groups.length));
         }}
         stickyHeaderIndices={stickyIndices}
       >
-        {groups.length === 0 ? <Empty kanji="静" text="No events ahead" /> : rows}
+        {groups.length === 0 ? (
+          <Empty kanji="静" text="No events ahead" />
+        ) : (
+          rows
+        )}
       </ScrollView>
       {/* FAB hides while the docked composer is open (mirrors the home screen). */}
       {!createOpen && (
@@ -293,7 +383,11 @@ export default function AgendaTab() {
             onPress={() => setCreateOpen(true)}
             accessibilityLabel="Create event"
           >
-            <Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text>
+            <Text
+              style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}
+            >
+              +
+            </Text>
           </Tap>
         </Animated.View>
       )}
@@ -306,7 +400,10 @@ export default function AgendaTab() {
         anchor={new Date()}
         onClose={() => setCreateOpen(false)}
         onSave={(e) => addEvent(e, api)}
-        onEdit={(e) => updateEvent(e, api)}
+        onEdit={async (e) => {
+          await updateEvent(e, api);
+          return true;
+        }}
         calendars={calendars}
       />
     </View>

@@ -1,4 +1,9 @@
 import {
+  eventCreateRequest,
+  eventPatchRequest,
+  requireEventRevision,
+} from "@musubi/types";
+import {
   AdminAnnouncementsResponseSchema,
   AttendeesResponseSchema,
   CalendarMembersResponseSchema,
@@ -520,7 +525,7 @@ export function deleteAccount() {
 
 export function createEvent(event: Event, connectionId?: string) {
   return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: event,
+    body: eventCreateRequest(event),
     method: "POST",
     responseSchema: EventSchema,
   });
@@ -528,15 +533,15 @@ export function createEvent(event: Event, connectionId?: string) {
 
 export function updateEvent(event: Event, connectionId?: string) {
   return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: event,
-    method: "PUT",
+    body: eventPatchRequest(event),
+    method: "PATCH",
     responseSchema: EventSchema,
   });
 }
 
 export function removeEvent(event: Event, connectionId?: string) {
   return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: event,
+    body: { id: event.id, expectedRevision: requireEventRevision(event) },
     method: "DELETE",
     responseSchema: RemoveEventResponseSchema,
   });
@@ -544,11 +549,12 @@ export function removeEvent(event: Event, connectionId?: string) {
 
 export function linkEvent(
   eventId: string,
+  expectedRevision: number,
   calendarId: string,
   connectionId?: string,
 ) {
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/link`), {
-    body: { calendarID: calendarId },
+    body: { calendarID: calendarId, expectedRevision },
     method: "POST",
     responseSchema: EventSchema,
   });
@@ -556,11 +562,12 @@ export function linkEvent(
 
 export function forkEvent(
   eventId: string,
+  expectedRevision: number,
   calendarId: string,
   connectionId?: string,
 ) {
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/fork`), {
-    body: { calendarID: calendarId },
+    body: { calendarID: calendarId, expectedRevision },
     method: "POST",
     responseSchema: EventSchema,
   });

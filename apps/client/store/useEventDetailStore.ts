@@ -1,5 +1,6 @@
-import { Event } from "@musubi/types";
+import { snapshotEvent, type Event } from "@musubi/types";
 import { create } from "zustand";
+import { useEventsStore } from "./useEventsStore";
 
 // Event-detail modal state, OUT of MainTab's useState on purpose: opening the
 // detail from the (heavy) calendar must not re-render the whole tab — only the
@@ -24,8 +25,8 @@ export const useEventDetailStore = create<EventDetailStore>((set) => ({
 // times for display — edit/delete then target the full series. Used by every
 // screen that shows events (home, agenda, calendar detail).
 export function presentEventDetail(events: Event[], event: Event) {
-  const original = events.find(e => e.id === event.id)
-    ?? events.find(e => e.id === event.id?.replace(/_\d+$/, ""));
+  const original = events.find((e) => e.id === event.id)
+    ?? events.find((e) => e.id === event.id?.replace(/_\d+$/, ""));
   useEventDetailStore.getState().open(
     original && original.id !== event.id
       ? { ...original, start: event.start, end: event.end }
@@ -37,6 +38,7 @@ export function presentEventDetail(events: Event[], event: Event) {
 // state + one host, so opening "Edit" doesn't re-render the screen underneath.
 type EditComposerStore = {
   prefilled: Event | undefined;
+  master: Event | undefined;
   visible: boolean;
   open: (event?: Event) => void;
   close: () => void;
@@ -44,7 +46,13 @@ type EditComposerStore = {
 
 export const useEditComposerStore = create<EditComposerStore>((set) => ({
   prefilled: undefined,
+  master: undefined,
   visible: false,
-  open: (event) => set({ prefilled: event, visible: true }),
+  open: (event) => set({ prefilled: event && snapshotEvent(event),
+      master: (() => {
+        const master = event && useEventsStore.getState().events.find((e) => e.id === event.id);
+        return master && snapshotEvent(master);
+      })(), visible: true,
+    }),
   close: () => set({ visible: false }),
 }));

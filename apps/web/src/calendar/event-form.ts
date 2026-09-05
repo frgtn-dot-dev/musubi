@@ -1,4 +1,4 @@
-import type { Event } from "@musubi/types";
+import { editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
 import { toDateKey } from "./date-key";
 import {
   spansMultipleServers,
@@ -93,13 +93,9 @@ export function eventFormValues(event: Event): EventFormValues {
   return {
     calendarId: event.originCalendarID ?? event.calendars[0] ?? "",
     calendarIds: event.calendars,
-    date: event.isAllDay
-      ? allDayDateKey(event.start)
-      : toDateKey(event.start),
+    date: event.isAllDay ? allDayDateKey(event.start) : toDateKey(event.start),
     description: event.description ?? "",
-    endDate: event.isAllDay
-      ? allDayDateKey(event.end)
-      : toDateKey(event.end),
+    endDate: event.isAllDay ? allDayDateKey(event.end) : toDateKey(event.end),
     endTime: toTimeInput(event.end),
     hasAttendees: event.hasAttendees,
     isAllDay: event.isAllDay,
@@ -120,10 +116,7 @@ export function validateEventForm(
     return "Add an event title.";
   }
 
-  if (
-    !values.calendarId ||
-    !values.calendarIds.includes(values.calendarId)
-  ) {
+  if (!values.calendarId || !values.calendarIds.includes(values.calendarId)) {
     return "Choose a calendar.";
   }
 
@@ -230,20 +223,31 @@ export function createEventFromForm(
 export function updateEventFromForm(
   event: Event,
   values: EventFormValues,
-): Event {
+): EventWriteRequest {
   const boundaries = eventBoundaries(values);
 
-  return {
+  const original = eventFormValues(event);
+  return editedEvent(event, {
     ...event,
     calendars: values.calendarIds,
     description: values.description.trim() || null,
-    end: boundaries.end,
+    end:
+      values.endDate === original.endDate &&
+      values.endTime === original.endTime &&
+      values.isAllDay === original.isAllDay
+        ? event.end
+        : boundaries.end,
     hasAttendees: values.hasAttendees,
     isAllDay: values.isAllDay,
     location: values.location.trim() || null,
     recurrence: values.recurrence || null,
-    start: boundaries.start,
+    start:
+      values.date === original.date &&
+      values.startTime === original.startTime &&
+      values.isAllDay === original.isAllDay
+        ? event.start
+        : boundaries.start,
     title: values.title.trim(),
     url: values.url.trim() || null,
-  };
+  });
 }

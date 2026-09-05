@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, type EventWriteReason } from "@musubi/types";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION,
+  EventMutationFailureSchema,
+  EventMutationError,
+  type EventWriteReason,
+} from "@musubi/types";
 import { notifyAuthExpired } from "~/auth/auth-client";
 
 const ApiErrorEnvelopeSchema = z.object({
@@ -39,7 +43,8 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly status: number;
 
-  constructor(message: string, status: number, requestId?: string, readonly reason?: EventWriteReason) {
+  constructor(message: string, status: number, requestId?: string, readonly reason?: EventWriteReason,
+  ) {
     super(message);
     this.name = "ApiError";
     this.requestId = requestId;
@@ -84,6 +89,8 @@ async function parseJson(response: Response): Promise<unknown> {
 }
 
 function throwApiError(response: Response, payload: unknown): never {
+  const mutation = EventMutationFailureSchema.safeParse(payload);
+  if (mutation.success) throw EventMutationError.from(mutation.data);
   const correlationId = responseRequestId(response, payload);
   const envelope = ApiErrorEnvelopeSchema.safeParse(payload);
   // Never `response.statusText`: it put "Internal Server Error" into sentences
@@ -98,7 +105,12 @@ function throwApiError(response: Response, payload: unknown): never {
     notifyAuthExpired();
   }
 
-  throw new ApiError(message, response.status, correlationId, envelope.success ? envelope.data.reason : undefined);
+  throw new ApiError(
+    message,
+    response.status,
+    correlationId,
+    envelope.success ? envelope.data.reason : undefined,
+  );
 }
 
 export async function apiRequest<T>(

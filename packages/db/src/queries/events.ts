@@ -15,14 +15,16 @@ export const EVENT_CONTENT_FIELDS = [
 	"title", "color", "start", "end", "isAllDay", "description", "location",
 	"isCanceled", "hasAttendees", "organizer", "recurrence", "url",
 ] as const;
-export type EventContentPatch = Partial<Pick<NewEvent, typeof EVENT_CONTENT_FIELDS[number]>>;
+export type EventContentPatch = Partial<Pick<NewEvent, (typeof EVENT_CONTENT_FIELDS)[number]>>;
 
 /** Only modeled, explicitly supplied changes. Undefined is omission; null clears.
  * Dates compare by instant, recurrence lines by set, not transport spelling.
  */
-export function diffEventContent(current: EventContentPatch, incoming: EventContentPatch): EventContentPatch {
+export function diffEventContent(current: EventContentPatch, incoming: EventContentPatch,
+): EventContentPatch {
 	const diff: EventContentPatch = {};
-	const comparable = (key: typeof EVENT_CONTENT_FIELDS[number], value: unknown) => {
+	const comparable = (key: (typeof EVENT_CONTENT_FIELDS)[number], value: unknown,
+	) => {
 		if (value instanceof Date) return value.getTime();
 		if (key === "recurrence") return typeof value === "string" && value
 			? [...new Set(value.split("\n").filter(Boolean))].sort().join("\n") : null;
@@ -99,15 +101,6 @@ export async function getEventCalendars(eventID: string): Promise<string[]> {
 
 export async function getEvent(id: string) {
 	const [result] = await db.select().from(events).where(eq(events.id, id));
-	return result;
-}
-
-export async function updateEvent(event: Partial<NewEvent> & { id: string }) {
-	const [result] = await db
-		.update(events)
-		.set(event)
-		.where(eq(events.id, event.id!))
-		.returning();
 	return result;
 }
 
@@ -200,16 +193,4 @@ export async function purgeDeletedEvents(before: Date) {
 	await db
 		.delete(events)
 		.where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before)));
-}
-
-export async function removeEvent(eventID: string) {
-	// Soft-delete: keep the row as a tombstone so delta sync can tell clients to
-	// drop it. Bumps updatedAt via $onUpdate → picked up by `since` queries.
-	const [result] = await db
-		.update(events)
-		.set({ deletedAt: new Date() })
-		.where(eq(events.id, eventID))
-		.returning();
-
-	return result;
 }

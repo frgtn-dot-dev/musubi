@@ -37,7 +37,7 @@ export function GlobalEventModals() {
           return await applySeriesEdit({
             addEvent: (event) => addEvent(event, api),
             edited,
-            master: events.find((event) => event.id === edited.id),
+            master: composer.master,
             occurrence: composer.prefilled ?? edited,
             updateEvent: (event) => updateEvent(event, api),
           });

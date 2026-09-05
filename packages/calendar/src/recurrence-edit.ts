@@ -1,4 +1,6 @@
-import { endSeriesBefore, excludeOccurrence, remainderRule } from "./recurrence";
+import { eventContentPatch, EventSchema } from "@musubi/types";
+import { endSeriesBefore, excludeOccurrence, remainderRule,
+} from "./recurrence";
 
 export type EditScope = "occurrence" | "following" | "series";
 
@@ -12,6 +14,7 @@ export type SeriesEditable = {
   id: string;
   recurrence?: string | null;
   start: Date;
+  revision?: number;
 };
 
 export type SeriesEdit<T> = {
@@ -24,11 +27,13 @@ export type SeriesEdit<T> = {
 /** Attach the complete known write-set, including update-only scope operations.
  * This is not atomic execution: each later request still checks current rights.
  */
-export function withSeriesEditIntent<T extends SeriesEditable>(writes: SeriesEdit<T>): SeriesEdit<T> {
+export function withSeriesEditIntent<T extends SeriesEditable>(writes: SeriesEdit<T>,
+): SeriesEdit<T> {
   if (!writes.updates.length) return writes;
   return {
     creates: writes.creates,
-    updates: writes.updates.map((event, index) => index === 0 ? { ...event, scopeEdit: writes } : event),
+    updates: writes.updates.map((event, index) => index === 0 ? { ...event, scopeEdit: writes } : event,
+    ),
   };
 }
 
@@ -42,7 +47,7 @@ export function withSeriesEditIntent<T extends SeriesEditable>(writes: SeriesEdi
  * Kept as data rather than as calls so the caller decides how to run and how to
  * undo them, and so each scope can be checked without a server.
  */
-export function seriesEditWrites<T extends SeriesEditable>({
+function planSeriesEditWrites<T extends SeriesEditable>({
   edited,
   master,
   newId = () => crypto.randomUUID(),
@@ -70,6 +75,8 @@ export function seriesEditWrites<T extends SeriesEditable>({
       updates: [
         {
           ...edited,
+          revision: master.revision,
+          contentPatch: undefined,
           end: new Date(master.end.getTime() + endShift),
           id: master.id,
           start: new Date(master.start.getTime() + startShift),
@@ -84,7 +91,7 @@ export function seriesEditWrites<T extends SeriesEditable>({
     scope === "following" &&
     occurrence.start.getTime() <= master.start.getTime()
   ) {
-    return seriesEditWrites({
+    return planSeriesEditWrites({
       edited,
       master,
       newId,
@@ -93,7 +100,10 @@ export function seriesEditWrites<T extends SeriesEditable>({
     });
   }
 
-  const detached = { ...edited, id: newId() };
+  const detached = { ...edited, id: newId(),
+    revision: undefined,
+    contentPatch: undefined,
+  };
 
   if (scope === "occurrence") {
     return {
@@ -121,8 +131,7 @@ export function seriesEditWrites<T extends SeriesEditable>({
             : remainderRule(
                 master.recurrence,
                 master.start,
-                occurrence.start,
-              ),
+                occurrence.start),
       },
     ],
     updates: [
@@ -131,5 +140,23 @@ export function seriesEditWrites<T extends SeriesEditable>({
         recurrence: endSeriesBefore(master.recurrence, occurrence.start),
       },
     ],
+  };
+}
+
+/** Keep actual changed fields attached to the frozen master revision, never to
+ * an occurrence's shifted coordinates or a later store snapshot. */
+export function seriesEditWrites<T extends SeriesEditable>(
+  input: Parameters<typeof planSeriesEditWrites<T>>[0],
+): SeriesEdit<T> {
+  const writes = planSeriesEditWrites(input);
+  const master = EventSchema.safeParse(input.master);
+  if (!master.success) return writes;
+  return {
+    ...writes,
+    updates: writes.updates.map((update) => ({
+      ...update,
+      revision: master.data.revision,
+      contentPatch: eventContentPatch(master.data, EventSchema.parse(update)),
+    })),
   };
 }

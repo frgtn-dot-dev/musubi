@@ -36,6 +36,8 @@ export const RemoveEventResponseSchema = z.object({
   calendars: z.array(z.string()),
   id: z.string(),
   removed: z.boolean(),
+  revision: z.number().int().positive().optional(),
+  event: EventSchema.optional(),
 });
 
 export const SettingsResponseSchema = SettingsSchema;

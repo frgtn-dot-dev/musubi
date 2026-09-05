@@ -1,5 +1,6 @@
 import {
   can,
+  EventMutationError,
   providerDisplayName,
   type Calendar,
   type Event,
@@ -24,8 +25,7 @@ export function canEditEvent(event: Event, calendars: Calendar[]) {
   if (event.originCalendarID) {
     return can(
       calendars.find(
-        (calendar) => calendar.id === event.originCalendarID,
-      )?.role,
+        (calendar) => calendar.id === event.originCalendarID)?.role,
       "editEvents",
     );
   }
@@ -60,8 +60,7 @@ export function eventHomeCalendarId(event: Event): string | undefined {
 
 export function getEventHomeCalendar(
   event: Event,
-  calendars: Calendar[],
-) {
+  calendars: Calendar[]) {
   const homeId = eventHomeCalendarId(event);
   return calendars.find((calendar) => calendar.id === homeId);
 }
@@ -79,6 +78,7 @@ export function getEventMutationError(
   action: MutationAction,
   calendar?: Calendar,
 ) {
+  if (error instanceof EventMutationError) return { message: error.message };
   const requestId =
     error instanceof ApiError || error instanceof ApiResponseError
       ? error.requestId
@@ -105,10 +105,7 @@ export function getEventMutationError(
     };
   }
 
-  if (
-    error instanceof DOMException ||
-    error instanceof TypeError
-  ) {
+  if (error instanceof DOMException || error instanceof TypeError) {
     return {
       message:
         "Musubi could not be reached. Check your connection and try again.",

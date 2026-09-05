@@ -321,6 +321,8 @@ app.delete(
 // Events
 app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
 app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
+app.patch("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
+// PUT deliberately uses the same strict PATCH contract: no legacy write bypass.
 app.put("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
 app.delete("/api/v1/events", requireAuth, wrap(handlerRemoveEvent));
 
