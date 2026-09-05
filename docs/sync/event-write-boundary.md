@@ -170,3 +170,47 @@ stale mapping acknowledgement refusal. Chromium K04/K05/K06 exercises concurrent
 editors, SSE, More-options, overnight preservation and local/remote/network/auth/
 version failures; native composer tests run actual host callbacks, transport,
 store and SSE handling with only native hosts/network/cache boundaries mocked.
+
+## Final review repairs (locally verified; parent acceptance pending)
+
+- Every Event handler protects notification, cleanup and delivery after commit.
+  A failed or purged latest read cannot erase `localCommitted:true`: `committed`
+  retains transaction snapshots separately from optional `current`/`currentRevision`.
+  `current` content and links are read in one PostgreSQL statement snapshot.
+  Clients do not use `committed` as latest cache authority. Notification failure
+  before delivery is unconfirmed, never invented completion. Existing reminder
+  queue/deletion cleanup remains intentionally logged best-effort; actual DB
+  cleanup rejection is tested and does not imply the mutation rolled back.
+- ICS import retains every successful local receipt and passes each event's proven
+  revision into delivery. Partial local import and partial/unconfirmed provider
+  delivery return sanitized committed receipts without needing a second DB read.
+  Actual delayed HTTP create ACKs across local update and unlink cannot resurrect
+  mappings or acknowledge newer revisions. Empty-calendar preflight remains unchanged.
+- Calendar lifecycle transaction advisory fences precede event row locks: shared
+  admission, exclusive removal, complete deduplicated sets ordered by actual hash
+  key (`musubi:calendar-lifecycle:` namespace). Multi-calendar removal prelocks
+  the union of event rows. User lifecycle fences (`musubi:user-lifecycle:`) precede
+  calendar fences and stabilize new calendars and both ownership-transfer sides.
+  These are local lifecycle fences, not global/recurrence atomicity or permission.
+  No provider network operation runs under them.
+- Confirmed account deletion and the reachable Better Auth native callback retain
+  token/session/account/hook behavior: only the adapter's exact user-ID SQL deletion
+  is delegated to a fenced DB transaction. Unknown/bulk user-delete predicates fail
+  closed. Surviving events affected by FK origin/link cascades advance revision;
+  existing account-deletion FK retention/purge policy is unchanged. DEV-only reset
+  stays DEV-only and uses the same deletion writer.
+- Access-loss SSE uses the unlink transaction's captured revision, not a later relink
+  revision. Web and native mutation receipts are request-fenced across intervening
+  removal/full access-loss reconciliation, including success and committed errors.
+  Later authoritative refresh/revival remains possible. Native commitment handling
+  is independent of optional `current`, and an already-absent row is not optimistically
+  recreated by saving an older draft.
+- All editable URL overrides without a tab-local handoff are nonauthoritative,
+  not only title/start time. Untouched nullable text, empty strings and whitespace
+  survive title-only web PATCH construction; only edited text is normalized.
+
+Fresh local evidence is recorded in `/tmp/musubi-k06-final-logs/`: full owned-PG18
+DB suite (including authenticated fault and account-deletion handlers), root check
+(types/tests/contracts/VERIFY/lint/build), and Chromium K04/K05/K06. Fixtures prove
+local implementation behavior, not live-provider or physical-device certification.
+The independent readonly recheck and final parent acceptance remain outstanding.

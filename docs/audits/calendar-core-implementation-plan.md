@@ -359,3 +359,23 @@ Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestá
 K05 je převzat. **K06 má převzat pouze dílčí checkpoint; K07–K15 zůstávají pending.** Stage 2 tyto wire/API/DB/client/provider cesty nyní integruje; další krok je nezávislá revize produkčního diffu a skutečných regresních důkazů, nikoli další foundation checkpoint. Kompatibilita je rozhodnuta: produkt, minimum klienta i peeru 0.1.8; Outlook update/delete dočasně blokovat podle schválené hranice. K06 dokončit a nezávisle ověřit před jakýmkoli nasazením.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.
+
+**K06 závěrečné review opravy — lokálně ověřeno, čeká na převzetí rodičem:**
+Potvrzené P1 server/client review jsou opraveny: všechny postcommit notifikace a
+reconciliation chyby zachovají `localCommitted` nezávisle na dalším DB čtení;
+`committed` je poslední commit, nikoli potvrzené nejnovější `current`. Běžné selhání
+reminder cleanup již bylo best-effort (review korekce), nyní doloženo skutečným DB
+fault testem. ICS import drží partial receipts a revize pro opožděné create ACK.
+Kalendářové admission/removal a account-delete FK kaskády mají schválené úzké
+transakční lifecycle fences před event locks; multi-calendar removal zamyká union
+řádků, transfer obě identity vlastníků. Auth adapter zachovává původní tokenové
+handlery/hooks/session cleanup a FK retention policy; neznámé/bulk delete predikáty
+neobcházejí ochranu. SSE unlink nese revizi původního commitu přes souběžný relink.
+Oba klienti neobnoví řádek opožděným success/error receiptem po inbound odstranění,
+native nevrací rollback jen kvůli chybějícímu `current`. URL-only description/end/
+recurrence/calendar draft nemá vypůjčenou revizi; title-only web PATCH zachovává
+nedotčené whitespace/empty texty. Regrese běží přes skutečné HTTP/DB/adapter seams,
+query/store callbacky a Chromium, ne živé účty ani fyzická zařízení. Čerstvé logy
+`/tmp/musubi-k06-final-logs/`; přesný commit/isolation/gate report je ve finálním
+managed handoffu. K07/K09/K12 se nerozšiřují, Outlook refusal a 0.1.8 platí dál.
+**Celý K06 stále není převzat ani schválen k nasazení; následuje readonly recheck.**
