@@ -14,7 +14,20 @@ const mocks = vi.hoisted(() => ({
   alert: vi.fn(),
   reminder: vi.fn(),
   reconcile: vi.fn(),
+  streamMessage: undefined as ((event: { data: string }) => void) | undefined,
 }));
+vi.mock("react-native-sse", () => ({
+  default: class {
+    addEventListener(type: string, listener: (event: { data: string }) => void) {
+      if (type === "message") mocks.streamMessage = listener;
+    }
+    close() {}
+  },
+}));
+vi.mock("expo-network", () => ({
+  addNetworkStateListener: () => ({ remove() {} }),
+}));
+vi.mock("@/lib/serverDiagnostics", () => ({ recordServerDiagnostic: vi.fn() }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   useEffect: (effect: () => void) => {
@@ -151,6 +164,7 @@ vi.mock("@/store/useAttendeesStore", () => ({
   useAttendeesStore: () => vi.fn(),
 }));
 const { AddEventModal } = await import("./AddEventModal");
+const { default: CalendarPickerModal } = await import("./CalendarPickerModal");
 vi.mock("./EventDetailModal", () => ({ default: "EventDetailModal" }));
 vi.mock("@/store/useCalendarsStore", async (original) => {
   const actual = await original<typeof import("@/store/useCalendarsStore")>();
@@ -245,6 +259,8 @@ function saveButton(node: ReactNode): Props | undefined {
 }
 const { useApi } = await import("@/services/api");
 const { useRefreshData } = await import("@/hooks/useRefreshData");
+const { useConnectToEventStream } = await import("@/hooks/useEventsStream");
+const { serializeEventRefresh } = await import("@/lib/eventSync");
 const { useCalendarsStore } = await import("@/store/useCalendarsStore");
 const { cacheClearAll, cacheGetAllEvents } = await import("@/services/eventsCache");
 const { db, sqlite } = await import("@/services/db");
@@ -253,6 +269,7 @@ const migrations = (await import("@/drizzle/migrations")).default;
 const calendar = { id: "calendar", creatorID: "owner", role: "owner", name: "Calendar", color: "#7A8BA3", isVisible: true, isDefault: false };
 const apiEvent = { ...master, recurrence: null, revision: 7 };
 let fetched: Event[] = [apiEvent];
+let fetchedCalendars = [calendar];
 let patchResult: () => Promise<unknown>;
 let initialBoot = true;
 
@@ -270,11 +287,13 @@ beforeEach(async () => {
   mocks.reminder.mockResolvedValue(undefined);
   state.index = 0; state.values = []; state.effects = []; state.collectEffects = false;
   fetched = [apiEvent];
+  fetchedCalendars = [calendar];
+  mocks.streamMessage = undefined;
   patchResult = async () => ({ data: { ...apiEvent, title: "Changed from SQLite", revision: 8 }, error: null });
   mocks.request.mockImplementation(async (url, options) => {
     if (options.method === "PATCH") return patchResult();
     if (url.includes("/events")) return { data: { events: fetched, deletedIds: [], serverTime: new Date().toISOString() }, error: null };
-    if (url.includes("/calendars")) return { data: [calendar], error: null };
+    if (url.includes("/calendars")) return { data: fetchedCalendars, error: null };
     if (url.includes("/reminders")) return { data: { default: DEFAULT_REMINDER_RULE, calendars: {}, events: {} }, error: null };
     throw new Error(`Unexpected request: ${url}`);
   });
@@ -443,4 +462,403 @@ it("a newer removal while receipt side effects settle still prevents composer re
   expect(mocks.reminder).not.toHaveBeenCalled();
   expect(mocks.close).not.toHaveBeenCalled();
   expect(useEditComposerStore.getState().master?.revision).toBe(7);
+});
+
+// Drive the production stream listener/serialized apply queue, not a direct
+// store removal. SQLite, refresh, API transport and receipt side effects are real.
+function ReceiptStream() {
+  useConnectToEventStream();
+  return null;
+}
+async function connectReceiptStream() {
+  state.collectEffects = true;
+  ReceiptStream();
+  state.collectEffects = false;
+  const cleanups = state.effects.splice(0).map((effect) => effect());
+  await vi.waitFor(() => expect(mocks.streamMessage).toBeTypeOf("function"));
+  return () =>
+    cleanups.forEach((cleanup) => {
+      if (typeof cleanup === "function") (cleanup as () => void)();
+    });
+}
+async function streamCalendarRemoved(id: string) {
+  mocks.streamMessage!({
+    data: JSON.stringify({ type: "calendar_removed", payload: { id } }),
+  });
+  await serializeEventRefresh(async () => {});
+  expect(useCalendarsStore.getState().calendars.some((c) => c.id === id)).toBe(
+    false,
+  );
+}
+function ReceiptCalendarPicker({
+  action,
+}: {
+  action: "linkEvent" | "forkEvent";
+}) {
+  // Same awaited store callback as EventDetailModal's link/fork pickers. Execute
+  // the actual picker too: rejecting the receipt must prevent its handleClose.
+  const api = useApi();
+  return CalendarPickerModal({
+    title: "Receipt target",
+    visible: true,
+    onClose: () => {},
+    onSelect: async (id) => {
+      await useEventsStore.getState()[action](apiEvent, id, api);
+    },
+  });
+}
+function selectReceiptCalendar(
+  action: "linkEvent" | "forkEvent",
+  target: string,
+) {
+  const tree = ReceiptCalendarPicker({ action });
+  function option(node: ReactNode): Props | undefined {
+    if (Array.isArray(node)) return node.map(option).find(Boolean);
+    if (!isValidElement<Props & { accessibilityLabel?: string }>(node)) return;
+    if (node.props.accessibilityLabel === `${target} calendar`)
+      return node.props;
+    return option(node.props.children);
+  }
+  return option(tree)!.onPress!();
+}
+
+for (const action of ["linkEvent", "forkEvent"] as const) {
+  for (const outcome of ["success", "committed-error"] as const) {
+    for (const reconciliation of [
+      "absent",
+      "stripped",
+      "failed",
+      "calendar-fetch-failed",
+      "target-absent",
+      "rejoined",
+    ] as const) {
+      it(`calendar_removed before ${action} ${outcome} echo reconciles ${reconciliation} with real SQLite/reminders`, async () => {
+        const target = { ...calendar, id: "target", name: "Target" };
+        fetchedCalendars = [calendar, target];
+        await useRefreshData()({ providerSync: false, full: true });
+        const disconnect = await connectReceiptStream();
+        const request = mocks.request.getMockImplementation()!;
+        let finish!: (value: unknown) => void;
+        mocks.request.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        );
+        const completed = vi.fn();
+        const pending = selectReceiptCalendar(action, target.name).then(
+          completed,
+        );
+        const receipt = {
+          ...apiEvent,
+          id: action === "linkEvent" ? apiEvent.id : "server-assigned-fork",
+          revision: action === "linkEvent" ? 8 : 1,
+          calendars:
+            action === "linkEvent" ? [calendar.id, target.id] : [target.id],
+          originCalendarID: action === "linkEvent" ? calendar.id : target.id,
+        };
+        // Neither the linked target nor the server-assigned identity has echoed.
+        expect(useEventsStore.getState().events).toHaveLength(1);
+        expect(useEventsStore.getState().events[0].calendars).toEqual([
+          calendar.id,
+        ]);
+        await streamCalendarRemoved(target.id);
+        mocks.reconcile.mockClear();
+        mocks.request.mockClear();
+        fetchedCalendars =
+          reconciliation === "rejoined" ? [calendar, target] : [calendar];
+        fetched = [
+          "rejoined",
+          "calendar-fetch-failed",
+          "target-absent",
+        ].includes(reconciliation)
+          ? action === "linkEvent"
+            ? [receipt]
+            : [apiEvent, receipt]
+          : reconciliation === "stripped" && action === "linkEvent"
+            ? [{ ...receipt, calendars: [calendar.id] }]
+            : [apiEvent];
+        if (reconciliation === "failed")
+          mocks.request.mockImplementation(async () => {
+            throw new Error("offline reconciliation");
+          });
+        if (reconciliation === "calendar-fetch-failed")
+          mocks.request.mockImplementation(async (url, options) => {
+            if (url.includes("/calendars"))
+              throw new Error("offline calendars");
+            return request(url, options);
+          });
+        const error = {
+          status: 409,
+          code: "provider-conflict",
+          localCommitted: true,
+          current: receipt,
+          error: "Saved locally",
+        };
+        finish(
+          outcome === "success"
+            ? { data: receipt, error: null }
+            : { data: null, error },
+        );
+        if (outcome === "success" && reconciliation === "rejoined") {
+          await pending;
+          expect(completed).toHaveBeenCalledOnce();
+        } else {
+          await expect(pending).rejects.toMatchObject({ localCommitted: true });
+          expect(completed).not.toHaveBeenCalled();
+        }
+        expect(mocks.close).toHaveBeenCalledTimes(
+          outcome === "success" && reconciliation === "rejoined" ? 1 : 0,
+        );
+        expect(
+          mocks.request.mock.calls.some(
+            ([, options]) => options.method === "GET",
+          ),
+        ).toBe(true);
+        for (const events of [
+          useEventsStore.getState().events,
+          await cacheGetAllEvents(),
+        ]) {
+          expect(events.some((e) => e.calendars.includes(target.id))).toBe(
+            reconciliation === "rejoined",
+          );
+          if (action === "forkEvent")
+            expect(events.some((e) => e.id === receipt.id)).toBe(
+              reconciliation === "rejoined",
+            );
+        }
+        expect(
+          mocks.reconcile.mock.calls.every(
+            ([events]) =>
+              reconciliation === "rejoined" ||
+              !events.some((e: Event) => e.calendars.includes(target.id)),
+          ),
+        ).toBe(true);
+        expect(mocks.reminder).not.toHaveBeenCalled();
+
+        // Loss evidence belongs only to requests that witnessed it. An actual
+        // later authoritative rejoin/revival and a new write are not banned.
+        mocks.request.mockImplementation(request);
+        fetchedCalendars = [calendar, target];
+        fetched = action === "linkEvent" ? [receipt] : [apiEvent, receipt];
+        await useRefreshData()({ providerSync: false, full: true });
+        const revived = useEventsStore
+          .getState()
+          .events.find((e) => e.id === receipt.id)!;
+        expect(revived.calendars).toContain(target.id);
+        mocks.request.mockImplementationOnce(async () => ({
+          data: { ...receipt, revision: receipt.revision + 1 },
+          error: null,
+        }));
+        await useEventsStore.getState().updateEvent(revived, useApi());
+        expect(
+          (await cacheGetAllEvents()).find((e) => e.id === receipt.id)
+            ?.revision,
+        ).toBe(receipt.revision + 1);
+        disconnect();
+      });
+    }
+    for (const removal of [
+      "unrelated-calendar",
+      "fork-source-calendar",
+      "fork-source-event",
+    ] as const) {
+      if (action === "linkEvent" && removal !== "unrelated-calendar") continue;
+      it(`${action} ${outcome} stays independent of ${removal} via the actual stream`, async () => {
+        const target = { ...calendar, id: "target", name: "Target" };
+        const unrelated = { ...calendar, id: "unrelated" };
+        fetchedCalendars = [calendar, target, unrelated];
+        await useRefreshData()({ providerSync: false, full: true });
+        const disconnect = await connectReceiptStream();
+        let finish!: (value: unknown) => void;
+        mocks.request.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        );
+        const completed = vi.fn();
+        const pending = selectReceiptCalendar(action, target.name).then(
+          completed,
+        );
+        if (removal === "fork-source-event") {
+          mocks.streamMessage!({
+            data: JSON.stringify({
+              type: "event_removed",
+              payload: { ...apiEvent, revision: 9 },
+            }),
+          });
+          await serializeEventRefresh(async () => {});
+        } else
+          await streamCalendarRemoved(
+            removal === "unrelated-calendar" ? unrelated.id : calendar.id,
+          );
+        mocks.request.mockClear();
+        mocks.reconcile.mockClear();
+        const receipt = {
+          ...apiEvent,
+          id: action === "linkEvent" ? apiEvent.id : "server-assigned-fork",
+          revision: action === "linkEvent" ? 8 : 1,
+          calendars:
+            action === "linkEvent" ? [calendar.id, target.id] : [target.id],
+          originCalendarID: action === "linkEvent" ? calendar.id : target.id,
+        };
+        finish(
+          outcome === "success"
+            ? { data: receipt, error: null }
+            : {
+                data: null,
+                error: {
+                  status: 409,
+                  code: "provider-conflict",
+                  localCommitted: true,
+                  current: receipt,
+                  error: "Saved locally",
+                },
+              },
+        );
+        if (outcome === "success") {
+          await pending;
+          expect(completed).toHaveBeenCalledOnce();
+        } else {
+          await expect(pending).rejects.toMatchObject({ localCommitted: true });
+          expect(completed).not.toHaveBeenCalled();
+        }
+        expect(mocks.close).toHaveBeenCalledTimes(
+          outcome === "success" ? 1 : 0,
+        );
+        expect(mocks.request).not.toHaveBeenCalled(); // no blanket reconciliation
+        expect(
+          (await cacheGetAllEvents()).find((e) => e.id === receipt.id),
+        ).toMatchObject({
+          revision: receipt.revision,
+          calendars: receipt.calendars,
+        });
+        expect(
+          useEventsStore.getState().events.find((e) => e.id === receipt.id)
+            ?.calendars,
+        ).toEqual(receipt.calendars);
+        expect(mocks.reconcile).toHaveBeenCalledWith(
+          [
+            expect.objectContaining({
+              id: receipt.id,
+              calendars: receipt.calendars,
+            }),
+          ],
+          { onlyEventIDs: [receipt.id] },
+        );
+        disconnect();
+      });
+    }
+  }
+}
+
+for (const outcome of ["success", "committed-error"] as const) {
+  for (const failure of ["events", "calendars"] as const) {
+    it(`actual composer retains frozen draft and reminder settings on ${outcome} after calendar loss and failed ${failure} reconciliation`, async () => {
+      const target = { ...calendar, id: "target", name: "Target" };
+      fetchedCalendars = [calendar, target];
+      fetched = [{ ...apiEvent, calendars: [calendar.id, target.id] }];
+      await useRefreshData()({ providerSync: false, full: true });
+      const disconnect = await connectReceiptStream();
+      const baseline = useEventsStore.getState().events[0];
+      useEditComposerStore.getState().open(baseline);
+      titleInput(renderComposer(true))!.onChangeText(
+        "Frozen calendar-loss draft",
+      );
+      let finish!: (value: unknown) => void;
+      patchResult = () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        });
+      const pending = saveButton(renderComposer())!.onPress!();
+      await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+      await streamCalendarRemoved(target.id);
+      const request = mocks.request.getMockImplementation()!;
+      mocks.request.mockImplementation(async (url, options) => {
+        if (url.includes(`/${failure}`))
+          throw new Error("offline reconciliation");
+        return request(url, options);
+      });
+      mocks.reconcile.mockClear();
+      const receipt = {
+        ...baseline,
+        revision: 8,
+        title: "Frozen calendar-loss draft",
+      };
+      fetched = [receipt];
+      finish(
+        outcome === "success"
+          ? { data: receipt, error: null }
+          : {
+              data: null,
+              error: {
+                status: 409,
+                code: "provider-conflict",
+                localCommitted: true,
+                current: receipt,
+                error: "Saved locally",
+              },
+            },
+      );
+      await pending;
+      expect(useEditComposerStore.getState().master).toEqual(baseline);
+      expect(titleInput(renderComposer())!.value).toBe(
+        "Frozen calendar-loss draft",
+      );
+      expect(mocks.close).not.toHaveBeenCalled();
+      expect(mocks.reminder).not.toHaveBeenCalled();
+      expect(mocks.reconcile).not.toHaveBeenCalled();
+      expect(mocks.alert).toHaveBeenLastCalledWith(
+        "Failed to save",
+        expect.stringContaining("Saved locally"),
+      );
+      for (const events of [
+        useEventsStore.getState().events,
+        await cacheGetAllEvents(),
+      ]) {
+        expect(events[0].calendars).toEqual([calendar.id]);
+        expect(events[0].revision).toBe(7);
+      }
+      disconnect();
+    });
+  }
+}
+
+it("membership filtering strips stale target links but preserves unrelated offline federated cache", async () => {
+  await useRefreshData()({ providerSync: false, full: true });
+  const remoteCalendar = {
+    ...calendar,
+    id: "remote-calendar",
+    provider: "musubi" as const,
+    serverUrl: "https://offline-peer.example.test",
+  };
+  const remoteEvent = {
+    ...apiEvent,
+    id: "remote-event",
+    calendars: [remoteCalendar.id],
+    originCalendarID: remoteCalendar.id,
+  };
+  await useEventsStore.getState().localAddEvent(remoteEvent);
+  const { cacheSetCalendars } = await import("@/services/eventsCache");
+  await cacheSetCalendars([calendar as any, remoteCalendar as any]);
+  const { syncFederatedAccounts } = await import("@/services/federation");
+  vi.mocked(syncFederatedAccounts).mockResolvedValueOnce({
+    calendars: [remoteCalendar as any],
+    events: [],
+    syncedServers: new Set(),
+  });
+  fetched = [{ ...apiEvent, revision: 8, calendars: [calendar.id, "target"] }];
+  await useRefreshData()({ providerSync: false, full: true });
+  for (const events of [
+    useEventsStore.getState().events,
+    await cacheGetAllEvents(),
+  ]) {
+    expect(events.find((e) => e.id === apiEvent.id)?.calendars).toEqual([
+      calendar.id,
+    ]);
+    expect(events.find((e) => e.id === remoteEvent.id)).toMatchObject(
+      remoteEvent,
+    );
+  }
 });

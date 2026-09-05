@@ -58,6 +58,10 @@ export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshO
     const { events, deletedIds, serverTime } = await api.getEvents(since);
     const cachedCalendars = await cacheGetCalendars();
     if (!isCurrent()) return;
+    // Membership is required to reconcile these rows. If its read fails, keep
+    // the valid cache intact rather than persisting links we may have lost.
+    const homeCalendars = await api.getCalendars();
+    if (!isCurrent()) return;
     if (since === undefined) {
       const cachedEvents = await cacheGetAllEvents();
       if (!isCurrent()) return;
@@ -71,8 +75,6 @@ export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshO
     }
     if (!isCurrent()) return;
     await setLastSync(serverTime);
-
-    const homeCalendars = await api.getCalendars();
 
     // Pull shared calendars + events from each connected Musubi server through
     // the home gateway (v1: full fetch — no delta). The registry is refreshed

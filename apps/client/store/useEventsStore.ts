@@ -34,6 +34,7 @@ type EventsStore = {
 // are deliberately not conflated.
 type ReceiptFence = {
   removals: Map<string, number | undefined>;
+  removedCalendars: Set<string>;
   full?: Set<string>;
   reset: boolean;
 };
@@ -41,7 +42,11 @@ const pendingReceipts = new Set<ReceiptFence>();
 let eventLifecycle = 0;
 export function getEventLifecycle() { return eventLifecycle; }
 function captureReceiptFence(): ReceiptFence {
-  const fence: ReceiptFence = { removals: new Map(), reset: false };
+  const fence: ReceiptFence = {
+    removals: new Map(),
+    removedCalendars: new Set(),
+    reset: false,
+  };
   pendingReceipts.add(fence);
   return fence;
 }
@@ -54,6 +59,8 @@ function recordRemoval(id: string, revision?: number) {
 }
 function receiptOrder(event: Event, fence: ReceiptFence) {
   if (fence.reset) return "stale";
+  if (event.calendars.some((id) => fence.removedCalendars.has(id)))
+    return "ambiguous";
   if (fence.removals.has(event.id)) {
     const revision = fence.removals.get(event.id);
     if (revision === undefined) return "ambiguous";
@@ -254,6 +261,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   // don't linger until sign-out.
   localRemoveCalendarEvents: async (calendarID) => {
     const lifecycle = eventLifecycle;
+    // A pending link/fork may not have echoed its target calendar or new ID.
+    // Keep access-loss evidence on those requests, not just known event rows.
+    for (const fence of pendingReceipts) fence.removedCalendars.add(calendarID);
     const kept: Event[] = [], dropped: string[] = [], changed: Event[] = [];
     for (const e of get().events) {
       if (!e.calendars?.includes(calendarID)) { kept.push(e); continue; }
@@ -290,7 +300,13 @@ async function acceptServerEvent(event: Event, fence: ReceiptFence, api: ReturnT
       catch { throw supersededReceipt(); }
       if (!fence.reset) {
         const refreshed = useEventsStore.getState().events.find(e => e.id === event.id);
-        if (refreshed && (refreshed.revision ?? 0) >= (event.revision ?? 0)) return refreshed;
+        // Membership reconciliation can strip a link without advancing the
+        // event revision. That is not a confirmed link/fork for its caller.
+        if (refreshed && (refreshed.revision ?? 0) >= (event.revision ?? 0) &&
+          event.calendars.every(
+            (id) =>
+              !fence.removedCalendars.has(id) || refreshed.calendars.includes(id),
+          )) return refreshed;
       }
     }
     throw supersededReceipt();

@@ -402,3 +402,28 @@ root check a Chromium K04/K05/K06 (26/26). Server/shared runtime nebyl měněn;
 předchozí plný DB důkaz je výslovně převzat, nikoli vydáván za nový DB běh.
 Žádná produkční migrace, živý provider, fyzické zařízení, push nebo release.
 **Toto není převzetí celého K06; rodič zvlášť zkontroluje kandidáta i zděděné residue.**
+
+**K06 poslední nativní target-calendar receipt P1 — lokálně ověřeno, čeká na readonly recheck:**
+`calendar_removed` nyní ukládá ID kalendáře do právě čekajících request fences i bez
+známého event řádku/linku. Opožděný link nebo server-assigned fork success/error.current
+odkazující na tento kalendář vyžaduje skutečný autoritativní refresh; selhání nebo
+chybějící cílový link nevrátí falešný success ani neobnoví cache/reminders. Ani stejná
+revize se serverem odstraněným linkem není potvrzením pickeru. Evidence není globální
+ban: unrelated calendar/source odstranění zůstává nezávislé, následný rejoin/revival
+a nový request fungují. Zmrazený draft, localCommitted, per-identity ordering,
+SQLite revize a post-await composer guard zůstávají zachovány. Povinné načtení
+home kalendářů předchází prvnímu cache zápisu refresh: úspěšný GET events a následně
+neúspěšný GET calendars nesmí do SQLite vrátit odebraný link. Autoritativní filtering
+při úspěšném načtení i offline federované řádky zůstávají beze změny.
+Skutečný stream listener, picker/composer, store, transport, refresh a SQLite sdílí
+existující fixture; 37 nových případů (16 target-calendar a 6 partial-refresh RED
+před opravami), nyní native 183/183, web 379/379, root typecheck/contracts/VERIFY/
+lint/check prošly.
+Logy `/tmp/musubi-k06-last-receipt-logs/`; první úspěšný check sestavil web čerstvě,
+finální check převzal oba builds z cache. Jeden nezměněný web all-day test jednou
+selhal; cílený i celý opakovaný běh bez změny zdroje prošel (log chyby zachován).
+Nezměněný PostgreSQL a Chromium důkaz je výslovně převzat z předchozího handoffu;
+žádný nový provider/device důkaz, backend/shared/web runtime změna, verze, push,
+release, K07/K09/K12 ani nové převzetí K01–K05. Všech 52 vstupních residue cest
+zůstává pro samostatnou rodičovskou kontrolu; vlastní delta je oddělená a reverzibilní.
+**Celý K06 není převzat; následuje nezávislá readonly revize a rozhodnutí rodiče.**
