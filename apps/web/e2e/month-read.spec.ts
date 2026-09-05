@@ -7609,10 +7609,12 @@ for (const code of ["provider-conflict", "committed-fallback", "401", "426", "ne
       if (code === "network") return route.abort("failed");
       return respond(route, (code === "provider-conflict" || code === "committed-fallback") ? {
         error: "Saved locally, but remote delivery was not confirmed. Your draft was kept. Refresh and reconcile before any retry.",
-        code, localCommitted: true, ...(code === "committed-fallback"
+        code: code === "committed-fallback" ? "event-delivery-unconfirmed" : code, localCommitted: true, ...(code === "committed-fallback"
           ? { committed: [{ ...item, title: "Keep delivery draft", revision: 2 }] }
           : { current: { ...item, title: "Keep delivery draft", revision: 2 }, currentRevision: 2 }),
-        delivery: { completed: true, status: "conflict" },
+        delivery: code === "committed-fallback"
+          ? { completed: false, status: "unconfirmed" }
+          : { completed: true, status: "conflict" },
       } : { error: code === "401" ? "Sign in required" : "ClientUpgradeRequired" }, code === "provider-conflict" ? 409 : code === "committed-fallback" ? 502 : Number(code));
     });
     await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/k06-delivery?date=2026-07-08`);
