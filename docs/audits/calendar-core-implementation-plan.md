@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K02 implementovány a lokálně ověřeny (2026-09-05). K03–K15 čekají.
+Stav: K01–K02 implementovány a lokálně ověřeny (2026-09-05). K03 implementován a lokálně ověřen; čeká na nezávislou revizi a finální převzetí. K04–K15 čekají.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01 a K02 jsou `completed`, K03–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01 a K02 jsou `completed`. K03 zůstává `pending` do nezávislé revize a finálního převzetí, implementace a lokální gates jsou hotové. K04–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -292,8 +292,21 @@ Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestá
 - Prošly API suite, všech 62 mobilních a 342 webových unit testů, API/mobilní/web typecheck, web lint, types suite a route/realtime contracts. `pnpm test:db` prošel po každém řezu nad čerstvě migrovaným dočasným PostgreSQL 18.6 (Unix socket, port 55432), včetně nezměněné K01 event authority regrese. Nové tři DB testy jsou zapojeny do `test:db:sync`, a tedy `test:db`.
 - Lokální evidence běhu: `/tmp/musubi-k02-logs/` (red/green provider regrese, jednotlivé řezy a finální gates). První full DB běh narazil na chybějící testovací `FEDERATION_ALLOW_PRIVATE_HOSTS`; opakování s existujícím CI nastavením prošlo. Žádné živé providerové volání, produkční migrace, push ani release. Build/full milestone gates a závěrečná LSP kontrola nejsou tímto lokálním ověřením nahrazeny.
 
+## K03 — lokální evidence, čeká na nezávislou revizi a převzetí
+
+- Calendar eligibility, stav připojení, scheduler i skutečný Better Auth relink hook již nevyžadují Tasks scope. Chybějící Tasks grant nemaže použitelné calendar credentials. Historický `insufficient_scope` se smí uzdravit pouze s existujícím refresh tokenem; token smazaný migrací `0056_provider_task_scopes.sql` nelze obnovit odhadem. Migrace se nemění.
+- Stávající `CalendarAdapter.listCalendars` vrací kalendáře a explicitní `taskListsComplete`. Vynechané/selhané Tasks discovery není autoritativní prázdný seznam: task-only zrcadla, mapování, data a cursory zůstanou zachované a nefetchují se. Kompletní prázdný seznam nadále odstraňuje skutečně smazané task lists. CalDAV vrací kompletní discovery beze změny chování.
+- Bez uloženého Tasks scope nevolají oba OAuth adaptéry Tasks endpoints ani při přímém task/list zápisu. Volitelné Tasks 403 a přechodné resource chyby neblokují event import; OAuth refresh chyby a resource 401 nejsou spolknuté jako volitelná chyba. Nové testy ověřují také skutečný `invalid_grant` mezi discovery a task fetchem.
+- Adapterový i Better Auth Microsoft refresh vynechávají `scope`, aby neeskalovaly calendar-only grant ani nezúžily existující calendar+Tasks grant na identity scopes. Skutečně vrácený scope se uloží; vynechaný scope zachová dosavadní grant. Task writes kontrolují oprávnění znovu po refreshi.
+- Schválená UX volba: „Include Tasks (optional)“ je výchozí **ON** kvůli kompatibilitě se stávajícími Tasks uživateli. **OFF** výslovně umožňuje calendar-only v ConnectionsDialog (včetně reconnectu), web Onboarding i native SyncCalendarModal. Všechny tři flow vysvětlují, že OFF nežádá nové Tasks oprávnění, ale neodvolává již udělený souhlas. Backend rozhoduje podle skutečného grantu, nikoli podle checkboxu. Bez odhadování identity účtu před redirectem; Google incremental consent zachovává dřívější granty.
+- `optional_tasks.integration.test.ts` používá skutečné Google/Microsoft adaptéry, lokální HTTP fixture, engine a disposable DB: calendar-only/full grant, chybějící či zúžený Tasks scope, 403/503 při discovery i fetchech, selhání druhé stránky listů i items, zachování zrcadel/mapování/data/cursoru při postupujícím event importu, autoritativní odstranění listu, oba refresh flow, skutečný auth hook a revoked/již smazaný token. Všechny task/list write vstupy bez grantu zůstávají bez providerových volání. Better Auth authorization URL test ověřuje, že defaultní konfigurace při OFF Tasks scope nepřidá. Dočasné obnovení staré mandatory-Tasks eligibility způsobilo očekávané selhání nové regrese.
+- Upravené K02 fixtures používají pro skutečně nezpůsobilý sibling `User.Read`, nikoli nyní platný calendar-only grant; původní assertions account isolation zůstaly. Prošel celý `pnpm test:db`, včetně K01 autority a K02 Google pagination/Graph hydration/bootstrap, na novém PostgreSQL 18.6 clusteru v `/tmp/musubi-k03-pg.*` (Unix socket, port 55432, local trust/host reject).
+- Prošly API/auth suite, 348 webových a 66 mobilních unit testů, `pnpm typecheck`, web lint, types suite a route/realtime contracts. Testy vykonávají skutečné callbacky všech tří UI flow (včetně Google disclosure na mobilu). Čtyři Chromium scénáře prošly bez retry: keyboard ON/OFF + axe v desktop/light a narrow/dark, stávající mobile connections sheet a onboarding.
+- Lokální commity: `5b171e6` (eligibility/discovery/fault boundary), `d0d8cdd` (grant-preserving refresh), `493caf8` (volitelný consent v UI). Logy: `/tmp/musubi-k03-logs/`; souhrnný diff vůči `82c106e`: `/tmp/musubi-k03-implementation.diff`. Dodatečná regrese revokace během task fetch a tato evidence tvoří závěrečný test/documentation commit.
+- Omezení: žádný živý OAuth/provider round-trip, fyzické zařízení, produkční migrace, nové závislosti, push ani release. Shared UI primitives nebyly měněny a redesign neproběhl. Build/milestone gates ani finální nezávislá LSP/reviewer kontrola nejsou nahrazené lokálními testy. Browser probe navíc odhalil již existující nevrácení focusu na Connections trigger po zavření dialogu; totožně reprodukováno na `82c106e`, beze změny focus plumbing v K03 (`browser-baseline-focus.log`).
+
 ## Další konkrétní práce
 
-K02 zde končí. **K03–K15 zůstávají pending**; další implementace vyžaduje navazující zadání. Tasks permission policy se v K02 nemění.
+K03 zde končí a čeká pouze na nezávislou revizi a finální převzetí. **K04–K15 zůstávají pending**; další implementace vyžaduje navazující zadání.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.

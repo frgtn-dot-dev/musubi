@@ -149,6 +149,26 @@ async function main() {
         mode = failure;
         await assert.rejects(run(), /401/, "Resource authentication failure must not be swallowed as optional Tasks");
       }
+      // Revocation between discovery and the task fetch must escape the
+      // optional collection fault boundary. Only inject expiry timing; the
+      // adapter/token HTTP and all preservation checks remain real.
+      mode = "complete";
+      await assert.rejects(syncProvider({
+        ...adapter,
+        fetchChanges: async (...args) => {
+          if (args[2] === taskLink.externalCalendarID) {
+            revoked = true;
+            await update({ accessTokenExpiresAt: new Date(0) });
+          }
+          return adapter.fetchChanges(...args);
+        },
+      }, userID, { id: "account", label: "Fixture" }), (error: unknown) => error instanceof ProviderAuthError && error.reconnectRequired && error.code === "invalid_grant");
+      assert.equal((await getOAuthCredentials(userID, provider, "account"))?.syncStatus, "reconnect_required");
+      assert.deepEqual(await db.select().from(tasks).where(eq(tasks.creatorID, userID)), beforeTasks);
+      assert.deepEqual(await db.select().from(externalTasks).where(eq(externalTasks.calendarID, taskLink.calendarID)), beforeMappings);
+      revoked = false;
+      await update({ refreshToken: "fixture-refresh", syncStatus: "active", syncErrorCode: null });
+
       // A refresh-time scope loss must also stop direct task mutations.
       returnedScope = CALENDAR_SCOPE[provider];
       const callsBeforeNarrowedWrites: number = taskCalls;
