@@ -10,13 +10,20 @@
 export const PRODUCT_VERSION = "0.1.8";
 
 /**
- * The oldest phone build this server will talk to.
+ * The oldest web/native requester this server will serve.
  *
  * Raising it locks every older install out until its owner updates from the
  * store, so it moves only when a release genuinely cannot serve them — see
  * `docs/releasing.md`.
  */
-export const MIN_CLIENT_VERSION = "0.1.7";
+export const MIN_CLIENT_VERSION = "0.1.8";
+export const CLIENT_VERSION_HEADER = "x-musubi-client-version";
+
+export function isCompatibleVersion(value: unknown, minimum: string): value is string {
+ return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value) &&
+  value.split(".").every((part) => Number.isSafeInteger(Number(part))) &&
+  compareVersions(value, minimum) >= 0;
+}
 
 /**
  * The oldest Musubi server this one will federate with.
@@ -26,7 +33,7 @@ export const MIN_CLIENT_VERSION = "0.1.7";
  * connect time, by name, beats a handshake that fails later for reasons nobody
  * can read — see `docs/releasing.md`.
  */
-export const MIN_PEER_VERSION = "0.1.6";
+export const MIN_PEER_VERSION = "0.1.8";
 
 /**
  * Order two X.Y.Z versions. Negative when `left` is older.

@@ -10,8 +10,7 @@ async function main() {
 	);
 
 	await assert.rejects(
-		() =>
-			assertCaldavTarget("http://calendar.example", { allowPrivate: false }),
+		() => assertCaldavTarget("http://calendar.example", { allowPrivate: false }),
 		/must use HTTPS/,
 	);
 	await assert.rejects(
@@ -109,6 +108,33 @@ async function main() {
 		{ body: "secret body", method: "POST" },
 		{ body: undefined, method: "GET" },
 	]);
+
+	let conditionalRedirects = 0;
+	const conditionalRedirect = createGuardedCaldavFetch({
+		allowPrivate: true,
+		fetchPinnedImpl: async () => {
+			conditionalRedirects++;
+			return new Response(null, {
+				status: 303,
+				headers: { location: "http://127.0.0.1/success" },
+			});
+		},
+	});
+	for (const method of ["PUT", "DELETE"]) {
+		await assert.rejects(
+			() =>
+				conditionalRedirect("http://127.0.0.1/resource", {
+					method,
+					headers: { "if-match": '"accepted"' },
+				}),
+			/conditional mutation cannot redirect to GET/,
+		);
+	}
+	assert.equal(
+		conditionalRedirects,
+		2,
+		"No redirected GET can masquerade as a conditional mutation",
+	);
 
 	console.log("CalDAV SSRF self-check: OK");
 }

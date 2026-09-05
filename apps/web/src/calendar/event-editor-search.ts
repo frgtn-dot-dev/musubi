@@ -40,6 +40,12 @@ export const eventEditorSearchSchema = z.object({
 
 export type EventEditorSearch = z.infer<typeof eventEditorSearchSchema>;
 
+/** Navigation coordinates alone are not a restored content draft. */
+export function hasEventEditorContent(search: EventEditorSearch): boolean {
+  return Object.entries(search).some(([key, value]) =>
+    value !== undefined && !["date", "returnDate", "view"].includes(key));
+}
+
 export function applyEventEditorSearch(
   base: EventFormValues,
   search: EventEditorSearch,

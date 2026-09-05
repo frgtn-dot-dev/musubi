@@ -1,26 +1,77 @@
 import "react-native-get-random-values";
-import { allDayValue, Calendar, DEFAULT_REMINDER_RULE, Event, ReminderRule, can, optionsFor, sameRule, timedValue, withAllDay, withTimed } from "@musubi/types";
+import {
+  editedEvent,
+  allDayValue,
+  Calendar,
+  DEFAULT_REMINDER_RULE,
+  Event,
+  ReminderRule,
+  can,
+  optionsFor,
+  sameRule,
+  timedValue,
+  withAllDay,
+  withTimed,
+} from "@musubi/types";
 import { activeScheme, colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
-import Animated, { runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, {
+  runOnJS,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { sortCalendars } from "@/lib/calendarOrder";
 import { formatDateMedium, formatTime } from "@/lib/datetimeFormat";
 import { appColors } from "@/constants/colors";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { DateTimePicker } from '@expo/ui/community/datetime-picker';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { effectiveReminderRule, inheritedReminderRule, requestEventNotificationPermission, setEventReminderRule } from "@/services/notifications";
+import {
+  effectiveReminderRule,
+  inheritedReminderRule,
+  requestEventNotificationPermission,
+  setEventReminderRule,
+} from "@/services/notifications";
 import dayjs from "dayjs";
-import { uuidv7 } from 'uuidv7';
-import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
-import { AdvancedEndType, AdvancedFreq, buildRRule, describeAdvanced, parseAdvanced, parseRRule, rawUnsupportedRecurrence, RecurrenceOption } from "@/lib/rrule";
+import { uuidv7 } from "uuidv7";
+import { joinRecurrence, splitRecurrence } from "@musubi/calendar";
+import {
+  AdvancedEndType,
+  AdvancedFreq,
+  buildRRule,
+  describeAdvanced,
+  parseAdvanced,
+  parseRRule,
+  rawUnsupportedRecurrence,
+  RecurrenceOption,
+} from "@/lib/rrule";
 import { validateEventForm } from "@/lib/eventForm";
 import { remoteForCalendar } from "@/services/federation";
 import { Tap } from "@/components/ui/Tap";
@@ -35,11 +86,11 @@ import { OptionPicker } from "@/components/ui/OptionPicker";
 type Props = {
   visible: boolean;
   startingDate?: Date;
-  endingDate?: Date;    // drag-to-create range end
+  endingDate?: Date; // drag-to-create range end
   /** Docked: always-mounted bottom sheet on the calendar — peek shows title +
    *  quick save, pulling the top edge up reveals the full form. */
   docked?: boolean;
-  anchor?: Date;        // docked: day in view — default times land here
+  anchor?: Date; // docked: day in view — default times land here
   /** Docked only: false slides the sheet fully off-screen (week view waits for
    *  a draft); flipping to true brings it back at peek. */
   peekVisible?: boolean;
@@ -70,41 +121,61 @@ const withHours = (base: Date, hours: number): Date => {
 
 // Display order Mon–Sun; day = JS weekday number
 const WEEKDAYS_DISPLAY = [
-  { label: 'M', day: 1 }, { label: 'T', day: 2 }, { label: 'W', day: 3 },
-  { label: 'T', day: 4 }, { label: 'F', day: 5 }, { label: 'S', day: 6 }, { label: 'S', day: 0 },
+  { label: "M", day: 1 },
+  { label: "T", day: 2 },
+  { label: "W", day: 3 },
+  { label: "T", day: 4 },
+  { label: "F", day: 5 },
+  { label: "S", day: 6 },
+  { label: "S", day: 0 },
 ];
 
-const RECURRENCE_OPTIONS: { value: RecurrenceOption; label: string; icon: string }[] = [
-  { value: 'none', label: 'None', icon: 'slash' },
-  { value: 'daily', label: 'Daily', icon: 'sun' },
-  { value: 'weekly', label: 'Weekly', icon: 'repeat' },
-  { value: 'weekdays', label: 'Weekdays', icon: 'briefcase' },
-  { value: 'monthly', label: 'Monthly', icon: 'calendar' },
-  { value: 'yearly', label: 'Yearly', icon: 'award' },
-  { value: 'custom', label: 'Custom', icon: 'sliders' },
+const RECURRENCE_OPTIONS: {
+  value: RecurrenceOption;
+  label: string;
+  icon: string;
+}[] = [
+  { value: "none", label: "None", icon: "slash" },
+  { value: "daily", label: "Daily", icon: "sun" },
+  { value: "weekly", label: "Weekly", icon: "repeat" },
+  { value: "weekdays", label: "Weekdays", icon: "briefcase" },
+  { value: "monthly", label: "Monthly", icon: "calendar" },
+  { value: "yearly", label: "Yearly", icon: "award" },
+  { value: "custom", label: "Custom", icon: "sliders" },
 ];
 
 // ── Docked sheet tuning ──────────────────────────────────────────────────────
-export const DOCK_PEEK = 172;        // visible sliver of the docked sheet: actions + title
-const DOCK_MAX_H = 620;              // expanded height cap
-const DOCK_HEIGHT_RATIO = 0.8;       // …or this fraction of the window, whichever is smaller
-const DOCK_HIDDEN_EXTRA = 30;        // pushed this far past its height when hidden
-const DOCK_SNAP_VELOCITY = 400;      // fling speed that snaps open/closed regardless of position
-const DOCK_DISMISS_PAST = 60;        // dragged this far past peek = dismiss the sheet entirely
+export const DOCK_PEEK = 172; // visible sliver of the docked sheet: actions + title
+const DOCK_MAX_H = 620; // expanded height cap
+const DOCK_HEIGHT_RATIO = 0.8; // …or this fraction of the window, whichever is smaller
+const DOCK_HIDDEN_EXTRA = 30; // pushed this far past its height when hidden
+const DOCK_SNAP_VELOCITY = 400; // fling speed that snaps open/closed regardless of position
+const DOCK_DISMISS_PAST = 60; // dragged this far past peek = dismiss the sheet entirely
 const DOCK_SPRING = { damping: 28, stiffness: 240, mass: 0.8 };
-const KB_SHOW_MS = 220;              // keyboard lift in/out timings
+const KB_SHOW_MS = 220; // keyboard lift in/out timings
 const KB_HIDE_MS = 180;
 
-export function AddEventModal({ visible, startingDate, endingDate, docked, anchor, peekVisible = true, dockRevealProgress, dockBottomInset, onClose, onSave, onEdit, calendars, event }: Props) {
-  const {
-    timeFormat,
-    dateFormat,
-    calendarOrder,
-    tabBarLabels,
-  } = useSettingsStore();
+export function AddEventModal({
+  visible,
+  startingDate,
+  endingDate,
+  docked,
+  anchor,
+  peekVisible = true,
+  dockRevealProgress,
+  dockBottomInset,
+  onClose,
+  onSave,
+  onEdit,
+  calendars,
+  event,
+}: Props) {
+  const { timeFormat, dateFormat, calendarOrder, tabBarLabels } =
+    useSettingsStore();
 
   const insets = useSafeAreaInsets();
-  const restingBottomInset = dockBottomInset ?? tabBarHeight(insets.bottom, tabBarLabels);
+  const restingBottomInset =
+    dockBottomInset ?? tabBarHeight(insets.bottom, tabBarLabels);
   const { authClient } = useServer();
 
   const [newTitle, setNewTitle] = useState("");
@@ -113,41 +184,55 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
-  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">("start");
-  const [reminderRule, setReminderRule] = useState<ReminderRule>(DEFAULT_REMINDER_RULE);
+  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">(
+    "start",
+  );
+  const [reminderRule, setReminderRule] = useState<ReminderRule>(
+    DEFAULT_REMINDER_RULE,
+  );
   const [reminderPicker, setReminderPicker] = useState(false);
   const [allDayToggle, setAllDayToggle] = useState(false);
   const [attendeesToggle, setAttendeesToggle] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [newUrl, setNewUrl] = useState("");
-  const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>('none');
-  const [unsupportedRecurrence, setUnsupportedRecurrence] = useState<string | null>(null);
+  const recurrenceEdited = useRef(false);
+  const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>("none");
+  const [unsupportedRecurrence, setUnsupportedRecurrence] = useState<
+    string | null
+  >(null);
   // EXDATE/RDATE lines from the stored recurrence — carried through an edit
   // untouched so deleting one occurrence survives a later series edit.
   const [recurrenceExtras, setRecurrenceExtras] = useState<string[]>([]);
   // UNTIL from "end series here" — the editor UI can't express it (only COUNT),
   // so carry it through and re-apply unless the user picks a new ending.
   const [savedUntil, setSavedUntil] = useState<string | null>(null);
-  const [advFreq, setAdvFreq] = useState<AdvancedFreq>('WEEKLY');
+  const [advFreq, setAdvFreq] = useState<AdvancedFreq>("WEEKLY");
   const [advInterval, setAdvInterval] = useState(1);
   const [advDays, setAdvDays] = useState<Set<number>>(new Set([1]));
-  const [advEndType, setAdvEndType] = useState<AdvancedEndType>('never');
+  const [advEndType, setAdvEndType] = useState<AdvancedEndType>("never");
   const [advCount, setAdvCount] = useState(10);
 
   // Default to a calendar the user can actually write to (personal first) —
   // the first calendar in the list can be a read-only external one.
   const defaultCalSet = () => {
-    const c = calendars.find(c => c.supportsEvents !== false && c.isDefault && can(c.role, "editEvents"))
-      ?? calendars.find(c => c.supportsEvents !== false && can(c.role, "editEvents"))
-      ?? calendars[0];
+    const c =
+      calendars.find(
+        (c) =>
+          c.supportsEvents !== false &&
+          c.isDefault &&
+          can(c.role, "editEvents"),
+      ) ??
+      calendars.find(
+        (c) => c.supportsEvents !== false && can(c.role, "editEvents"),
+      ) ??
+      calendars[0];
     return new Set(c ? [c.id] : []);
   };
   const [selectedCals, setSelectedCals] = useState<Set<string>>(defaultCalSet);
   // Explicit origin (home) pick via long-press. Falls back to first selected.
   const [originCal, setOriginCal] = useState<string | null>(null);
-  const originEffective = originCal && selectedCals.has(originCal)
-    ? originCal
-    : [...selectedCals][0];
+  const originEffective =
+    originCal && selectedCals.has(originCal) ? originCal : [...selectedCals][0];
   const [isLoading, setIsLoading] = useState(false);
   const [eventHint, setEventHint] = useState(
     () => EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)],
@@ -183,7 +268,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setKbPad(0);
     onClose();
 
-    setNewTitle('');
+    setNewTitle("");
     setNameError("");
     setNewStart(new Date());
     setStartError("");
@@ -200,26 +285,31 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setUrlError("");
     setDetailsOpen(false);
     setAttendeesToggle(false);
-    setNewRecurrence('none');
+    setNewRecurrence("none");
     setUnsupportedRecurrence(null);
     setRecurrenceExtras([]);
     setSavedUntil(null);
-    setAdvFreq('WEEKLY');
+    setAdvFreq("WEEKLY");
     setAdvInterval(1);
     setAdvDays(new Set([1]));
-    setAdvEndType('never');
+    setAdvEndType("never");
     setAdvCount(10);
     setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
-  }
+  };
 
-  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(!docked && visible, closeSequence);
+  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(
+    !docked && visible,
+    closeSequence,
+  );
 
   // ── Docked mode: fixed-height sheet pinned to the bottom of the calendar.
   // Two snap points — peek (title + quick save) and fully pulled out.
   const win = useWindowDimensions();
   const DOCK_H = Math.min(win.height * DOCK_HEIGHT_RATIO, DOCK_MAX_H);
   const dockRange = DOCK_H - DOCK_PEEK;
-  const dockOff = useSharedValue(peekVisible ? dockRange : DOCK_H + DOCK_HIDDEN_EXTRA);
+  const dockOff = useSharedValue(
+    peekVisible ? dockRange : DOCK_H + DOCK_HIDDEN_EXTRA,
+  );
   const dockShown = useSharedValue(peekVisible);
   const dockStart = useSharedValue(0);
 
@@ -233,18 +323,27 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [kbPad, setKbPad] = useState(0);
   useEffect(() => {
     if (!docked) return;
-    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      e => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
         const containerBottom = win.height - restingBottomInset; // sheet's resting bottom, window coords
         const overlap = Math.max(containerBottom - e.endCoordinates.screenY, 0);
         kbLift.value = withTiming(overlap, { duration: KB_SHOW_MS });
         setKbPad(overlap);
-      });
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => { kbLift.value = withTiming(0, { duration: KB_HIDE_MS }); setKbPad(0); });
-    return () => { show.remove(); hide.remove(); };
+      },
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        kbLift.value = withTiming(0, { duration: KB_HIDE_MS });
+        setKbPad(0);
+      },
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, [docked, win.height, restingBottomInset]);
-
 
   // Hide/show the docked sheet (week view: appears with the first draft).
   // When re-shown it lands at peek, never straight into the expanded state.
@@ -254,7 +353,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     dockShown.set(peekVisible);
     dockOff.value = withSpring(
       peekVisible
-        ? wasShown ? Math.min(dockOff.value, dockRange) : dockRange
+        ? wasShown
+          ? Math.min(dockOff.value, dockRange)
+          : dockRange
         : DOCK_H + DOCK_HIDDEN_EXTRA,
       DOCK_SPRING,
     );
@@ -268,35 +369,55 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     closeSequence();
   };
 
-  const dockGesture = useMemo(() => Gesture.Pan()
-    // need a real vertical drag before we take over — otherwise a still tap on
-    // the X / Save buttons (they live inside this handle) reads as a micro-pan
-    // and the button press is eaten, so the sheet "won't close".
-    .activeOffsetY([-12, 12])
-    .onStart(() => { dockStart.value = dockOff.value; })
-    .onUpdate(e => {
-      if (!dockShown.get()) return;
-      // From PEEK the drag may continue past the dock — that's the dismiss path.
-      // From EXPANDED it stops at peek (two-stage), so collapsing a tall sheet
-      // can't accidentally throw the whole composer away.
-      const maxY = dockStart.value >= dockRange - 1 ? DOCK_H + DOCK_HIDDEN_EXTRA : dockRange;
-      dockOff.value = Math.min(Math.max(dockStart.value + e.translationY, 0), maxY);
-    })
-    .onEnd(e => {
-      if (!dockShown.get()) {
-        dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, DOCK_SPRING);
-        return;
-      }
-      const past = dockOff.value - dockRange;
-      if (past > DOCK_DISMISS_PAST || (past > 0 && e.velocityY > DOCK_SNAP_VELOCITY)) {
-        dockShown.set(false);
-        dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, { ...DOCK_SPRING, velocity: e.velocityY });
-        runOnJS(dismissByGesture)();
-        return;
-      }
-      const expand = e.velocityY < -DOCK_SNAP_VELOCITY || (dockOff.value < dockRange / 2 && e.velocityY < DOCK_SNAP_VELOCITY);
-      dockOff.value = withSpring(expand ? 0 : dockRange, DOCK_SPRING);
-    }), [dockRange, DOCK_H]);
+  const dockGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        // need a real vertical drag before we take over — otherwise a still tap on
+        // the X / Save buttons (they live inside this handle) reads as a micro-pan
+        // and the button press is eaten, so the sheet "won't close".
+        .activeOffsetY([-12, 12])
+        .onStart(() => {
+          dockStart.value = dockOff.value;
+        })
+        .onUpdate((e) => {
+          if (!dockShown.get()) return;
+          // From PEEK the drag may continue past the dock — that's the dismiss path.
+          // From EXPANDED it stops at peek (two-stage), so collapsing a tall sheet
+          // can't accidentally throw the whole composer away.
+          const maxY =
+            dockStart.value >= dockRange - 1
+              ? DOCK_H + DOCK_HIDDEN_EXTRA
+              : dockRange;
+          dockOff.value = Math.min(
+            Math.max(dockStart.value + e.translationY, 0),
+            maxY,
+          );
+        })
+        .onEnd((e) => {
+          if (!dockShown.get()) {
+            dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, DOCK_SPRING);
+            return;
+          }
+          const past = dockOff.value - dockRange;
+          if (
+            past > DOCK_DISMISS_PAST ||
+            (past > 0 && e.velocityY > DOCK_SNAP_VELOCITY)
+          ) {
+            dockShown.set(false);
+            dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, {
+              ...DOCK_SPRING,
+              velocity: e.velocityY,
+            });
+            runOnJS(dismissByGesture)();
+            return;
+          }
+          const expand =
+            e.velocityY < -DOCK_SNAP_VELOCITY ||
+            (dockOff.value < dockRange / 2 && e.velocityY < DOCK_SNAP_VELOCITY);
+          dockOff.value = withSpring(expand ? 0 : dockRange, DOCK_SPRING);
+        }),
+    [dockRange, DOCK_H],
+  );
 
   // Lift caps at 0 — the expanded sheet keeps its top on screen (title lives
   // there), fields further down scroll instead.
@@ -308,7 +429,11 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       ? (1 - dockRevealProgress.value) * (DOCK_PEEK + DOCK_HIDDEN_EXTRA)
       : 0;
     return {
-      transform: [{ translateY: Math.max(dockOff.value - kbLift.value + revealOffset, 0) }],
+      transform: [
+        {
+          translateY: Math.max(dockOff.value - kbLift.value + revealOffset, 0),
+        },
+      ],
     };
   });
 
@@ -351,10 +476,19 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       setNewStart(s);
       setNewEnd(new Date(s.getTime() + 3600_000));
     }
-  }, [docked, startingDate?.getTime(), endingDate?.getTime(), anchor?.getTime()]);
+  }, [
+    docked,
+    startingDate?.getTime(),
+    endingDate?.getTime(),
+    anchor?.getTime(),
+  ]);
+
+  const baseline = useRef<Event | undefined>(event);
 
   useEffect(() => {
     if (visible) {
+      baseline.current = event && { ...event, calendars: [...event.calendars] };
+      recurrenceEdited.current = false;
       setNewTitle(event?.title ?? "");
       // Docked mode owns its own start/end via the anchor effect above (the day
       // in view + a sensible time) — don't clobber it here with `new Date()`.
@@ -362,7 +496,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         setNewStart(event?.start ?? startingDate ?? new Date());
         setNewEnd(event?.end ?? endingDate ?? startingDate ?? new Date());
       }
-      setSelectedCals(new Set(event?.calendars) ?? new Set<string>);
+      setSelectedCals(new Set(event?.calendars) ?? new Set<string>());
       setOriginCal(event?.originCalendarID ?? null);
       setNewDescription(event?.description ?? "");
       setNewLocation(event?.location ?? "");
@@ -376,7 +510,10 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       {
         const rule = event?.id
           ? effectiveReminderRule(event)
-          : inheritedReminderRule({ id: "", calendars: [...(event?.calendars ?? [])] });
+          : inheritedReminderRule({
+              id: "",
+              calendars: [...(event?.calendars ?? [])],
+            });
         setReminderRule(rule);
       }
       const { rrule, extras } = splitRecurrence(event?.recurrence);
@@ -385,7 +522,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       setSavedUntil(rrule.match(/UNTIL=[^;]+/)?.[0] ?? null);
       const option = parseRRule(rrule || null);
       setNewRecurrence(option);
-      if (option === 'custom') {
+      if (option === "custom") {
         const adv = parseAdvanced(rrule);
         setAdvFreq(adv.freq);
         setAdvInterval(adv.interval);
@@ -394,7 +531,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         setAdvCount(adv.count);
       }
     }
-  }, [event, visible]);
+    // A live cache refresh is not a new draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   useEffect(() => {
     const lastStart = new Date(newStart);
@@ -407,21 +546,24 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         setNewStart(newEnd);
       }
     }
-
   }, [newStart, newEnd]);
 
   const reminderKind = allDayToggle ? "allDay" : "timed";
-  const reminderValue = reminderKind === "timed"
-    ? timedValue(reminderRule)
-    : allDayValue(reminderRule);
+  const reminderValue =
+    reminderKind === "timed"
+      ? timedValue(reminderRule)
+      : allDayValue(reminderRule);
   const reminderChoices = optionsFor(reminderRule, reminderKind);
-  const reminderLabel = reminderChoices.find((choice) => choice.value === reminderValue)?.label ?? "Off";
-  const reminderEnabled = reminderKind === "timed"
-    ? reminderRule.minutesBefore !== null
-    : reminderRule.allDay !== null;
+  const reminderLabel =
+    reminderChoices.find((choice) => choice.value === reminderValue)?.label ??
+    "Off";
+  const reminderEnabled =
+    reminderKind === "timed"
+      ? reminderRule.minutesBefore !== null
+      : reminderRule.allDay !== null;
 
   const toggleCal = (id: string) => {
-    setSelectedCals(prev => {
+    setSelectedCals((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -433,7 +575,6 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   };
 
   function roundMinutes(date: Date) {
-
     date.setHours(date.getHours() + Math.round(date.getMinutes() / 60));
     date.setMinutes(0, 0, 0);
 
@@ -441,14 +582,21 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   }
 
   function getDatePickerValue() {
-    const current = datePickerTarget === "start" ? new Date(newStart.getTime()) : new Date(newEnd.getTime());
+    const current =
+      datePickerTarget === "start"
+        ? new Date(newStart.getTime())
+        : new Date(newEnd.getTime());
     const final = datePickerMode === "date" ? current : roundMinutes(current);
     return final;
   }
 
   function setDateFromDatePicker(date: Date) {
-    const minutes = datePickerTarget === "start" ? newStart.getMinutes() : newEnd.getMinutes();
-    const hours = datePickerTarget === "start" ? newStart.getHours() : newEnd.getHours();
+    const minutes =
+      datePickerTarget === "start"
+        ? newStart.getMinutes()
+        : newEnd.getMinutes();
+    const hours =
+      datePickerTarget === "start" ? newStart.getHours() : newEnd.getHours();
 
     if (datePickerMode === "date") {
       const fixed_hours = new Date(date.setHours(hours));
@@ -467,36 +615,63 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     }
   }
 
+  function changeRecurrence<T>(
+    setter: (value: T | ((previous: T) => T)) => void,
+    value: T | ((previous: T) => T),
+  ) {
+    recurrenceEdited.current = true;
+    setter(value);
+  }
+
   const handleSave = async () => {
+    const event = baseline.current;
     const allDayUTC = (d: Date) =>
       new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 
     const eventConstruct: Event = {
+      ...event,
       id: event?.id ?? uuidv7(),
       creatorID: userID!,
-      organizer: userID!,
+      organizer: event?.organizer ?? userID!,
       calendars: [...selectedCals],
       originCalendarID: originEffective,
       title: newTitle,
       // color follows the origin calendar; stored as a sensible default (render derives it live)
-      color: calendars.find(c => c.id === originEffective)?.color ?? appColors[0].color,
+      color:
+        event?.color ??
+        calendars.find((c) => c.id === originEffective)?.color ??
+        appColors[0].color,
       start: allDayToggle ? allDayUTC(newStart) : newStart,
       end: allDayToggle ? allDayUTC(newEnd) : newEnd,
       isAllDay: allDayToggle,
       hasAttendees: attendeesToggle,
-      isCanceled: false,
-      description: newDescription,
-      location: newLocation,
-      recurrence: unsupportedRecurrence ?? (() => {
-        let rule = buildRRule(newRecurrence, newStart, {
-          freq: advFreq, interval: advInterval, days: advDays,
-          endType: advEndType, count: advCount,
-        });
-        if (rule && savedUntil && !/UNTIL=|COUNT=/.test(rule)) rule += `;${savedUntil}`;
-        return joinRecurrence(rule, recurrenceExtras);
-      })(),
-      url: newUrl.toLowerCase()
-    }
+      isCanceled: event?.isCanceled ?? false,
+      description:
+        newDescription === (event?.description ?? "")
+          ? event?.description
+          : newDescription.trim() || null,
+      location:
+        newLocation === (event?.location ?? "")
+          ? event?.location
+          : newLocation.trim() || null,
+      recurrence:
+        event && !recurrenceEdited.current
+          ? event.recurrence
+          : (unsupportedRecurrence ??
+            (() => {
+              let rule = buildRRule(newRecurrence, newStart, {
+                freq: advFreq,
+                interval: advInterval,
+                days: advDays,
+                endType: advEndType,
+                count: advCount,
+              });
+              if (rule && savedUntil && !/UNTIL=|COUNT=/.test(rule))
+                rule += `;${savedUntil}`;
+              return joinRecurrence(rule, recurrenceExtras);
+            })()),
+      url: newUrl === (event?.url ?? "") ? event?.url : newUrl.trim() || null,
+    };
 
     const { ok, errors } = validateEventForm({
       title: newTitle,
@@ -513,9 +688,13 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
 
     // Federation: an event lives on ONE server — its calendars must share an
     // origin (cross-server linking is a future, mirror-based feature).
-    const origins = new Set([...selectedCals].map(id => remoteForCalendar(id)?.server ?? "home"));
+    const origins = new Set(
+      [...selectedCals].map((id) => remoteForCalendar(id)?.server ?? "home"),
+    );
     if (origins.size > 1) {
-      setCalendarsError("These calendars live on different servers — pick calendars from one server.");
+      setCalendarsError(
+        "These calendars live on different servers — pick calendars from one server.",
+      );
       return;
     }
 
@@ -526,21 +705,25 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setIsLoading(true);
 
     try {
+      if (event?.id) {
+        // A recurring edit asks which occurrences it belongs to; backing out of
+        // that question must leave the form as it was, not close it empty.
+        if ((await onEdit(editedEvent(event, eventConstruct))) === false)
+          return;
+      } else {
+        await onSave(eventConstruct);
+      }
+
       // Permission is requested here, in the context of saving a reminder —
       // never on app launch. A denial is a valid choice and must not block the
       // event itself from being created or edited.
       let reminderAllowed = false;
       if (reminderEnabled) {
-        try { reminderAllowed = await requestEventNotificationPermission(); }
-        catch (error) { console.warn("Could not check notification permission:", error); }
-      }
-
-      if (event?.id) {
-        // A recurring edit asks which occurrences it belongs to; backing out of
-        // that question must leave the form as it was, not close it empty.
-        if ((await onEdit(eventConstruct)) === false) return;
-      } else {
-        await onSave(eventConstruct);
+        try {
+          reminderAllowed = await requestEventNotificationPermission();
+        } catch (error) {
+          console.warn("Could not check notification permission:", error);
+        }
       }
 
       try {
@@ -556,12 +739,20 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           );
         }
       } catch (error) {
-        console.warn("Event saved, but its reminder could not be updated:", error);
-        showToast({ message: "Event saved, but the reminder could not be scheduled." });
+        console.warn(
+          "Event saved, but its reminder could not be updated:",
+          error,
+        );
+        showToast({
+          message: "Event saved, but the reminder could not be scheduled.",
+        });
       }
 
       if (reminderEnabled && !reminderAllowed) {
-        showToast({ message: "Event saved without a reminder. Allow notifications in system settings to enable it." });
+        showToast({
+          message:
+            "Event saved without a reminder. Allow notifications in system settings to enable it.",
+        });
       }
       haptics.success();
       if (docked) {
@@ -579,45 +770,69 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
 
   const calendarPicker = (
     <View style={styles.fieldContainer}>
-      <ScrollView
-        horizontal
-
-        showsHorizontalScrollIndicator={false}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.horizontalPillView}>
           {/* Same order as the Calendars tab (incl. the user's drag order).
               Only calendars the user can add events to are offered — no point
               showing one you can't link into. */}
           {sortCalendars(calendars, calendarOrder)
-            .filter((cal) => cal.supportsEvents !== false && can(cal.role, "editEvents"))
+            .filter(
+              (cal) =>
+                cal.supportsEvents !== false && can(cal.role, "editEvents"),
+            )
             .map((cal) => {
-            const active = selectedCals.has(cal.id);
-            const isOrigin = originEffective === cal.id;
-            return (
-              <Tap
-                key={cal.id}
-                haptic="select"
-                onPress={() => toggleCal(cal.id)}
-                onLongPress={() => { // set as home (origin), selecting it if needed
-                  setSelectedCals(prev => new Set(prev).add(cal.id));
-                  setOriginCal(cal.id);
-                }}
-                accessibilityLabel={`${cal.name} calendar`}
-                accessibilityHint="Double tap to include. Long press to make it the primary calendar."
-                accessibilityState={{ selected: active }}
-                style={active ? styles.pillActive : styles.pill}
-              >
-                {isOrigin
-                  ? <Ionicons name="star" size={12} color={cal.color} style={{ opacity: active ? 1 : 0.4 }} />
-                  : <View style={[styles.colorDot, { backgroundColor: cal.color, opacity: active ? 1 : 0.4 }]} />}
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
-                  {cal.name}
-                </Text>
-              </Tap>
-            );
-          })}
+              const active = selectedCals.has(cal.id);
+              const isOrigin = originEffective === cal.id;
+              return (
+                <Tap
+                  key={cal.id}
+                  haptic="select"
+                  onPress={() => toggleCal(cal.id)}
+                  onLongPress={() => {
+                    // set as home (origin), selecting it if needed
+                    setSelectedCals((prev) => new Set(prev).add(cal.id));
+                    setOriginCal(cal.id);
+                  }}
+                  accessibilityLabel={`${cal.name} calendar`}
+                  accessibilityHint="Double tap to include. Long press to make it the primary calendar."
+                  accessibilityState={{ selected: active }}
+                  style={active ? styles.pillActive : styles.pill}
+                >
+                  {isOrigin ? (
+                    <Ionicons
+                      name="star"
+                      size={12}
+                      color={cal.color}
+                      style={{ opacity: active ? 1 : 0.4 }}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.colorDot,
+                        {
+                          backgroundColor: cal.color,
+                          opacity: active ? 1 : 0.4,
+                        },
+                      ]}
+                    />
+                  )}
+                  <Text
+                    style={{
+                      fontFamily: fonts.sans,
+                      fontSize: 12,
+                      color: active ? colors.fg : colors.fg3,
+                    }}
+                  >
+                    {cal.name}
+                  </Text>
+                </Tap>
+              );
+            })}
         </View>
       </ScrollView>
-      {calendarsError ? <Text style={styles.errorText}>{calendarsError}</Text> : null}
+      {calendarsError ? (
+        <Text style={styles.errorText}>{calendarsError}</Text>
+      ) : null}
     </View>
   );
 
@@ -631,8 +846,18 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
           {docked ? (
             <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
               {/* actions live up here — no Cancel/Create row in docked mode */}
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Tap onPress={dockedDismiss} hitSlop={14} accessibilityLabel="Close event editor">
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Tap
+                  onPress={dockedDismiss}
+                  hitSlop={14}
+                  accessibilityLabel="Close event editor"
+                >
                   <Feather name="x" size={20} color={colors.fg2} />
                 </Tap>
                 <Tap
@@ -643,12 +868,28 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                   accessibilityLabel="Save event"
                   accessibilityState={{ disabled: isLoading, busy: isLoading }}
                   style={{
-                  backgroundColor: colors.fill, borderRadius: 999, borderCurve: "continuous",
-                  paddingHorizontal: 20, paddingVertical: 8, minWidth: 68, alignItems: "center",
-                }}>
-                  {isLoading
-                    ? <ActivityIndicator size="small" color={colors.onFill} />
-                    : <Text style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: colors.onFill }}>Save</Text>}
+                    backgroundColor: colors.fill,
+                    borderRadius: 999,
+                    borderCurve: "continuous",
+                    paddingHorizontal: 20,
+                    paddingVertical: 8,
+                    minWidth: 68,
+                    alignItems: "center",
+                  }}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color={colors.onFill} />
+                  ) : (
+                    <Text
+                      style={{
+                        fontFamily: fonts.sansMedium,
+                        fontSize: 13,
+                        color: colors.onFill,
+                      }}
+                    >
+                      Save
+                    </Text>
+                  )}
                 </Tap>
               </View>
               <TextInput
@@ -659,13 +900,20 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                 placeholderTextColor={colors.fg4}
                 returnKeyType="done"
                 onSubmitEditing={handleSave}
-                style={[styles.fieldValueBig, { fontFamily: fonts.sans, paddingVertical: 6, marginTop: 8 }]}
+                style={[
+                  styles.fieldValueBig,
+                  { fontFamily: fonts.sans, paddingVertical: 6, marginTop: 8 },
+                ]}
               />
-              {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+              {nameError ? (
+                <Text style={styles.errorText}>{nameError}</Text>
+              ) : null}
             </View>
           ) : (
             <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>{event ? "Edit Event" : "New Event"}</Text>
+              <Text style={styles.modalTitle}>
+                {event ? "Edit Event" : "New Event"}
+              </Text>
             </View>
           )}
         </View>
@@ -678,11 +926,13 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         keyboardShouldPersistTaps="handled"
         style={docked ? { flex: 1 } : undefined}
         contentContainerStyle={docked ? { paddingBottom: kbPad } : undefined}
-
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         {!docked && (
           <View style={styles.fieldContainer}>
-            <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Title</Text>
+            <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
+              Title
+            </Text>
             <TextInput
               value={newTitle}
               onChangeText={setNewTitle}
@@ -690,9 +940,14 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               placeholderTextColor={colors.fg4}
               multiline={true}
               autoFocus={!event} // creating: pen ready the moment the sheet lands
-              style={[styles.fieldValueBig, { fontFamily: fonts.sans, marginBottom: 0 }]}
+              style={[
+                styles.fieldValueBig,
+                { fontFamily: fonts.sans, marginBottom: 0 },
+              ]}
             />
-            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+            {nameError ? (
+              <Text style={styles.errorText}>{nameError}</Text>
+            ) : null}
           </View>
         )}
 
@@ -702,7 +957,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             renders its own inline compact picker in the rows (see below) — the
             community picker ignores `presentation` on iOS and would otherwise
             render this dialog inline here, up at the top of the sheet. */}
-        {datePickerVisible && Platform.OS !== "ios" &&
+        {datePickerVisible && Platform.OS !== "ios" && (
           <DateTimePicker
             presentation="dialog"
             value={getDatePickerValue()}
@@ -714,19 +969,36 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             onDismiss={() => {
               setDatePickerVisible(false);
             }}
-          />}
+          />
+        )}
 
         {/* One "When" block, platform-calendar style: Starts / Ends rows with
                   date+time chips, all-day inline, quick presets underneath. */}
         <View style={styles.fieldContainer}>
-          {([
+          {[
             ["Starts", newStart, "start", startError] as const,
             ["Ends", newEnd, "end", endError] as const,
-          ]).map(([label, value, target, error]) => (
+          ].map(([label, value, target, error]) => (
             <View key={target}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 }}>
-                <Text style={[styles.fieldValueText, { fontFamily: fonts.sans, color: colors.fg2 }]}>{label}</Text>
-                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 6,
+                }}
+              >
+                <Text
+                  style={[
+                    styles.fieldValueText,
+                    { fontFamily: fonts.sans, color: colors.fg2 },
+                  ]}
+                >
+                  {label}
+                </Text>
+                <View
+                  style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+                >
                   {Platform.OS === "ios" ? (
                     // Native iOS compact picker — shows the date (and time, unless
                     // all-day) inline and opens Apple's own calendar/wheel popover
@@ -760,11 +1032,16 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                         accessibilityLabel={`Choose ${label.toLowerCase()} date`}
                         style={[local.chip, { backgroundColor: colors.bg3 }]}
                       >
-                        <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                        <Text
+                          style={[
+                            styles.fieldValueText,
+                            { fontFamily: fonts.sans },
+                          ]}
+                        >
                           {formatDateMedium(value, dateFormat)}
                         </Text>
                       </Tap>
-                      {!allDayToggle &&
+                      {!allDayToggle && (
                         <Tap
                           onPress={() => {
                             setDatePickerTarget(target);
@@ -775,11 +1052,16 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                           accessibilityLabel={`Choose ${label.toLowerCase()} time`}
                           style={[local.chip, { backgroundColor: colors.bg3 }]}
                         >
-                          <Text style={[styles.fieldValueText, { fontFamily: fonts.sans }]}>
+                          <Text
+                            style={[
+                              styles.fieldValueText,
+                              { fontFamily: fonts.sans },
+                            ]}
+                          >
                             {formatTime(value, timeFormat)}
                           </Text>
                         </Tap>
-                      }
+                      )}
                     </>
                   )}
                 </View>
@@ -788,28 +1070,53 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
             </View>
           ))}
 
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 }}>
-            <Text style={[styles.fieldValueText, { fontFamily: fonts.sans, color: colors.fg2 }]}>All-day</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingVertical: 6,
+            }}
+          >
+            <Text
+              style={[
+                styles.fieldValueText,
+                { fontFamily: fonts.sans, color: colors.fg2 },
+              ]}
+            >
+              All-day
+            </Text>
             <Switch
               thumbColor={allDayToggle ? colors.accent : colors.bg3}
               trackColor={{ false: colors.line, true: colors.line3 }}
               ios_backgroundColor={colors.line}
-              onValueChange={(v) => { setAllDayToggle(v); }}
+              onValueChange={(v) => {
+                setAllDayToggle(v);
+              }}
               value={allDayToggle}
               accessibilityLabel="All-day event"
             />
           </View>
 
-          {!allDayToggle &&
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+          {!allDayToggle && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginTop: 4 }}
+            >
               <View style={styles.horizontalPillView}>
-                {([
-                  ["sunrise", "Morning", 6, 12],
-                  ["sun", "Afternoon", 12, 18],
-                  ["moon", "Evening", 18, 24],
-                ] as const).map(([icon, label, from, to]) => {
-                  const active = newStart.getHours() === from && newEnd.getHours() === (to % 24)
-                    && newStart.getMinutes() === 0 && newEnd.getMinutes() === 0;
+                {(
+                  [
+                    ["sunrise", "Morning", 6, 12],
+                    ["sun", "Afternoon", 12, 18],
+                    ["moon", "Evening", 18, 24],
+                  ] as const
+                ).map(([icon, label, from, to]) => {
+                  const active =
+                    newStart.getHours() === from &&
+                    newEnd.getHours() === to % 24 &&
+                    newStart.getMinutes() === 0 &&
+                    newEnd.getMinutes() === 0;
                   return (
                     <Tap
                       key={label}
@@ -825,7 +1132,13 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                       style={active ? styles.pillActive : styles.pill}
                     >
                       <Feather name={icon} color={colors.fg2} />
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
+                      <Text
+                        style={{
+                          fontFamily: fonts.sans,
+                          fontSize: 12,
+                          color: active ? colors.fg : colors.fg3,
+                        }}
+                      >
                         {label}
                       </Text>
                     </Tap>
@@ -833,7 +1146,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                 })}
               </View>
             </ScrollView>
-          }
+          )}
         </View>
 
         <SettingRowAction
@@ -845,10 +1158,30 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         {/* Attendance toggle — a "kind of event". Non-destructive: switching it
             off keeps event_users rows, re-enabling shows the same people. */}
         <View style={styles.fieldContainer}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.fieldValueText, { fontFamily: fonts.sans, color: colors.fg2 }]}>Attendees</Text>
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg4, marginTop: 2 }}>
+              <Text
+                style={[
+                  styles.fieldValueText,
+                  { fontFamily: fonts.sans, color: colors.fg2 },
+                ]}
+              >
+                Attendees
+              </Text>
+              <Text
+                style={{
+                  fontFamily: fonts.sans,
+                  fontSize: 11,
+                  color: colors.fg4,
+                  marginTop: 2,
+                }}
+              >
                 People can attend and see who&apos;s coming
               </Text>
             </View>
@@ -856,34 +1189,53 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               thumbColor={attendeesToggle ? colors.accent : colors.bg3}
               trackColor={{ false: colors.line, true: colors.line3 }}
               ios_backgroundColor={colors.line}
-              onValueChange={(v) => { setAttendeesToggle(v); }}
+              onValueChange={(v) => {
+                setAttendeesToggle(v);
+              }}
               value={attendeesToggle}
               accessibilityLabel="Allow attendees"
             />
           </View>
         </View>
         <View style={styles.fieldContainer}>
-          <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Repeat</Text>
+          <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
+            Repeat
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.horizontalPillView}>
               {RECURRENCE_OPTIONS.map((opt) => {
                 const active = newRecurrence === opt.value;
-                const isWeekly = opt.value === 'weekly' && active;
-                const weekDay = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][newStart.getDay()];
+                const isWeekly = opt.value === "weekly" && active;
+                const weekDay = [
+                  "Sun",
+                  "Mon",
+                  "Tue",
+                  "Wed",
+                  "Thu",
+                  "Fri",
+                  "Sat",
+                ][newStart.getDay()];
                 return (
                   <Tap
                     key={opt.value}
                     haptic="select"
                     onPress={() => {
-                      setNewRecurrence(opt.value);
-                      if (opt.value !== 'custom') setUnsupportedRecurrence(null);
-                      if (opt.value === 'custom' && newRecurrence !== 'custom') {
+                      changeRecurrence(setNewRecurrence, opt.value);
+                      if (opt.value !== "custom")
                         setUnsupportedRecurrence(null);
-                        setAdvFreq('WEEKLY');
-                        setAdvInterval(1);
-                        setAdvDays(new Set([newStart.getDay() || 1]));
-                        setAdvEndType('never');
-                        setAdvCount(10);
+                      if (
+                        opt.value === "custom" &&
+                        newRecurrence !== "custom"
+                      ) {
+                        setUnsupportedRecurrence(null);
+                        changeRecurrence(setAdvFreq, "WEEKLY");
+                        changeRecurrence(setAdvInterval, 1);
+                        changeRecurrence(
+                          setAdvDays,
+                          new Set([newStart.getDay() || 1]),
+                        );
+                        changeRecurrence(setAdvEndType, "never");
+                        changeRecurrence(setAdvCount, 10);
                       }
                     }}
                     hitSlop={{ top: 6, bottom: 6 }}
@@ -892,8 +1244,18 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                     accessibilityState={{ checked: active }}
                     style={active ? styles.pillActive : styles.pill}
                   >
-                    <Feather name={opt.icon as any} size={12} color={active ? colors.fg : colors.fg3} />
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3 }}>
+                    <Feather
+                      name={opt.icon as any}
+                      size={12}
+                      color={active ? colors.fg : colors.fg3}
+                    />
+                    <Text
+                      style={{
+                        fontFamily: fonts.sans,
+                        fontSize: 12,
+                        color: active ? colors.fg : colors.fg3,
+                      }}
+                    >
                       {isWeekly ? `Weekly (${weekDay})` : opt.label}
                     </Text>
                   </Tap>
@@ -907,28 +1269,55 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               but surprising — say it up front instead of letting users find out. */}
           {(() => {
             const day = newStart.getDate();
-            const monthlyRule = newRecurrence === 'monthly' || (newRecurrence === 'custom' && advFreq === 'MONTHLY');
-            const hint = monthlyRule && day >= 29
-              ? `Repeats on day ${day} — months without it are skipped.`
-              : newRecurrence === 'yearly' && day === 29 && newStart.getMonth() === 1
-                ? "February 29 only exists in leap years — this repeats every 4 years."
-                : null;
-            return hint && (
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg4, marginTop: 8 }}>
-                {hint}
-              </Text>
+            const monthlyRule =
+              newRecurrence === "monthly" ||
+              (newRecurrence === "custom" && advFreq === "MONTHLY");
+            const hint =
+              monthlyRule && day >= 29
+                ? `Repeats on day ${day} — months without it are skipped.`
+                : newRecurrence === "yearly" &&
+                    day === 29 &&
+                    newStart.getMonth() === 1
+                  ? "February 29 only exists in leap years — this repeats every 4 years."
+                  : null;
+            return (
+              hint && (
+                <Text
+                  style={{
+                    fontFamily: fonts.sans,
+                    fontSize: 11,
+                    color: colors.fg4,
+                    marginTop: 8,
+                  }}
+                >
+                  {hint}
+                </Text>
+              )
             );
           })()}
 
-          {newRecurrence === 'custom' && (
-            unsupportedRecurrence ? (
-              <View style={{
-                marginTop: 12, backgroundColor: colors.bg2,
-                borderRadius: 12, padding: 14,
-                borderWidth: 1, borderColor: colors.line, gap: 12,
-              }}>
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
-                  This imported recurrence uses options this editor cannot safely change. It will be kept exactly as it is.
+          {newRecurrence === "custom" &&
+            (unsupportedRecurrence ? (
+              <View
+                style={{
+                  marginTop: 12,
+                  backgroundColor: colors.bg2,
+                  borderRadius: 12,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  gap: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: fonts.sans,
+                    fontSize: 12,
+                    color: colors.fg3,
+                  }}
+                >
+                  This imported recurrence uses options this editor cannot
+                  safely change. It will be kept exactly as it is.
                 </Text>
                 <Tap
                   accessibilityRole="button"
@@ -936,177 +1325,407 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                   onPress={() => {
                     setUnsupportedRecurrence(null);
                     setSavedUntil(null);
-                    setAdvFreq('WEEKLY');
-                    setAdvInterval(1);
-                    setAdvDays(new Set([newStart.getDay()]));
-                    setAdvEndType('never');
-                    setAdvCount(10);
+                    changeRecurrence(setAdvFreq, "WEEKLY");
+                    changeRecurrence(setAdvInterval, 1);
+                    changeRecurrence(setAdvDays, new Set([newStart.getDay()]));
+                    changeRecurrence(setAdvEndType, "never");
+                    changeRecurrence(setAdvCount, 10);
                   }}
                   style={styles.pill}
                 >
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+                  <Text
+                    style={{
+                      fontFamily: fonts.sans,
+                      fontSize: 12,
+                      color: colors.fg3,
+                    }}
+                  >
                     Replace with editable rule
                   </Text>
                 </Tap>
               </View>
             ) : (
-            <View style={{
-              marginTop: 12, backgroundColor: colors.bg2,
-              borderRadius: 12, padding: 14,
-              borderWidth: 1, borderColor: colors.line, gap: 16,
-            }}>
-
-              {/* ── Every N <freq> ── */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3, width: 38 }}>Every</Text>
-
-                {/* stepper */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Tap
-                    onPress={() => setAdvInterval(v => Math.max(1, v - 1))}
-                    disabled={advInterval === 1}
-                    hitSlop={9}
-                    accessibilityLabel="Decrease recurrence interval"
-                    accessibilityState={{ disabled: advInterval === 1 }}
-                    style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
+              <View
+                style={{
+                  marginTop: 12,
+                  backgroundColor: colors.bg2,
+                  borderRadius: 12,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  gap: 16,
+                }}
+              >
+                {/* ── Every N <freq> ── */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: fonts.sans,
+                      fontSize: 12,
+                      color: colors.fg3,
+                      width: 38,
+                    }}
                   >
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>−</Text>
-                  </Tap>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg, minWidth: 22, textAlign: 'center' }}>
-                    {advInterval}
+                    Every
                   </Text>
-                  <Tap
-                    onPress={() => setAdvInterval(v => Math.min(99, v + 1))}
-                    disabled={advInterval === 99}
-                    hitSlop={9}
-                    accessibilityLabel="Increase recurrence interval"
-                    accessibilityState={{ disabled: advInterval === 99 }}
-                    style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>+</Text>
-                  </Tap>
-                </View>
 
-                {/* freq selector */}
-                <View style={{ flexDirection: 'row', gap: 4, flex: 1 }}>
-                  {([['DAILY', 'Day'], ['WEEKLY', 'Week'], ['MONTHLY', 'Month'], ['YEARLY', 'Year']] as const).map(([f, label]) => (
+                  {/* stepper */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
                     <Tap
-                      key={f}
-                      haptic="select"
-                      onPress={() => setAdvFreq(f)}
-                      hitSlop={{ top: 8, bottom: 8 }}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`${label} frequency`}
-                      accessibilityState={{ checked: advFreq === f }}
+                      onPress={() =>
+                        changeRecurrence(setAdvInterval, (v) =>
+                          Math.max(1, v - 1),
+                        )
+                      }
+                      disabled={advInterval === 1}
+                      hitSlop={9}
+                      accessibilityLabel="Decrease recurrence interval"
+                      accessibilityState={{ disabled: advInterval === 1 }}
                       style={{
-                        flex: 1, paddingVertical: 5, borderRadius: 8, alignItems: 'center',
-                        backgroundColor: advFreq === f ? colors.fill : colors.bg3,
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        backgroundColor: colors.bg3,
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: advFreq === f ? colors.onFill : colors.fg3 }}>
-                        {label}
+                      <Text
+                        style={{
+                          fontFamily: fonts.sans,
+                          fontSize: 16,
+                          color: colors.fg2,
+                          lineHeight: 20,
+                        }}
+                      >
+                        −
                       </Text>
                     </Tap>
-                  ))}
-                </View>
-              </View>
+                    <Text
+                      style={{
+                        fontFamily: fonts.sans,
+                        fontSize: 15,
+                        color: colors.fg,
+                        minWidth: 22,
+                        textAlign: "center",
+                      }}
+                    >
+                      {advInterval}
+                    </Text>
+                    <Tap
+                      onPress={() =>
+                        changeRecurrence(setAdvInterval, (v) =>
+                          Math.min(99, v + 1),
+                        )
+                      }
+                      disabled={advInterval === 99}
+                      hitSlop={9}
+                      accessibilityLabel="Increase recurrence interval"
+                      accessibilityState={{ disabled: advInterval === 99 }}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        backgroundColor: colors.bg3,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: fonts.sans,
+                          fontSize: 16,
+                          color: colors.fg2,
+                          lineHeight: 20,
+                        }}
+                      >
+                        +
+                      </Text>
+                    </Tap>
+                  </View>
 
-              {/* ── Day picker (weekly only) ── */}
-              {advFreq === 'WEEKLY' && (
-                <View>
-                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3, marginBottom: 8 }}>On</Text>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {WEEKDAYS_DISPLAY.map(({ label, day }, i) => {
-                      const active = advDays.has(day);
-                      return (
-                        <Tap
-                          key={i}
-                          haptic="select"
-                          onPress={() => setAdvDays(prev => {
-                            const next = new Set(prev);
-                            if (next.has(day) && next.size > 1) next.delete(day);
-                            else next.add(day);
-                            return next;
-                          })}
-                          hitSlop={{ top: 3, bottom: 3 }}
-                          accessibilityLabel={['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][i]}
-                          accessibilityState={{ selected: active }}
+                  {/* freq selector */}
+                  <View style={{ flexDirection: "row", gap: 4, flex: 1 }}>
+                    {(
+                      [
+                        ["DAILY", "Day"],
+                        ["WEEKLY", "Week"],
+                        ["MONTHLY", "Month"],
+                        ["YEARLY", "Year"],
+                      ] as const
+                    ).map(([f, label]) => (
+                      <Tap
+                        key={f}
+                        haptic="select"
+                        onPress={() => changeRecurrence(setAdvFreq, f)}
+                        hitSlop={{ top: 8, bottom: 8 }}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`${label} frequency`}
+                        accessibilityState={{ checked: advFreq === f }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 5,
+                          borderRadius: 8,
+                          alignItems: "center",
+                          backgroundColor:
+                            advFreq === f ? colors.fill : colors.bg3,
+                        }}
+                      >
+                        <Text
                           style={{
-                            flex: 1, aspectRatio: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-                            backgroundColor: active ? colors.fill : colors.bg3,
+                            fontFamily: fonts.sans,
+                            fontSize: 11,
+                            color: advFreq === f ? colors.onFill : colors.fg3,
                           }}
                         >
-                          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 11, color: active ? colors.onFill : colors.fg3 }}>
-                            {label}
-                          </Text>
-                        </Tap>
-                      );
-                    })}
+                          {label}
+                        </Text>
+                      </Tap>
+                    ))}
                   </View>
                 </View>
-              )}
 
-              {/* ── Ends ── */}
-              <View>
-                <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3, marginBottom: 8 }}>Ends</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {(['never', 'count'] as const).map(type => (
-                    <Tap
-                      key={type}
-                      haptic="select"
-                      onPress={() => setAdvEndType(type)}
-                      hitSlop={{ top: 6, bottom: 6 }}
-                      accessibilityRole="radio"
-                      accessibilityLabel={type === 'never' ? 'Never ends' : 'Ends after a number of occurrences'}
-                      accessibilityState={{ checked: advEndType === type }}
-                      style={advEndType === type ? styles.pillActive : styles.pill}
+                {/* ── Day picker (weekly only) ── */}
+                {advFreq === "WEEKLY" && (
+                  <View>
+                    <Text
+                      style={{
+                        fontFamily: fonts.sans,
+                        fontSize: 12,
+                        color: colors.fg3,
+                        marginBottom: 8,
+                      }}
                     >
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: advEndType === type ? colors.fg : colors.fg3 }}>
-                        {type === 'never' ? 'Never' : 'After'}
-                      </Text>
-                    </Tap>
-                  ))}
-                  {advEndType === 'count' && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Tap
-                        onPress={() => setAdvCount(v => Math.max(1, v - 1))}
-                        disabled={advCount === 1}
-                        hitSlop={9}
-                        accessibilityLabel="Decrease occurrence count"
-                        accessibilityState={{ disabled: advCount === 1 }}
-                        style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>−</Text>
-                      </Tap>
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 15, color: colors.fg, minWidth: 22, textAlign: 'center' }}>
-                        {advCount}
-                      </Text>
-                      <Tap
-                        onPress={() => setAdvCount(v => Math.min(999, v + 1))}
-                        disabled={advCount === 999}
-                        hitSlop={9}
-                        accessibilityLabel="Increase occurrence count"
-                        accessibilityState={{ disabled: advCount === 999 }}
-                        style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg3, alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Text style={{ fontFamily: fonts.sans, fontSize: 16, color: colors.fg2, lineHeight: 20 }}>+</Text>
-                      </Tap>
-                      <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
-                        {advCount === 1 ? 'time' : 'times'}
-                      </Text>
+                      On
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {WEEKDAYS_DISPLAY.map(({ label, day }, i) => {
+                        const active = advDays.has(day);
+                        return (
+                          <Tap
+                            key={i}
+                            haptic="select"
+                            onPress={() =>
+                              changeRecurrence(setAdvDays, (prev) => {
+                                const next = new Set(prev);
+                                if (next.has(day) && next.size > 1)
+                                  next.delete(day);
+                                else next.add(day);
+                                return next;
+                              })
+                            }
+                            hitSlop={{ top: 3, bottom: 3 }}
+                            accessibilityLabel={
+                              [
+                                "Monday",
+                                "Tuesday",
+                                "Wednesday",
+                                "Thursday",
+                                "Friday",
+                                "Saturday",
+                                "Sunday",
+                              ][i]
+                            }
+                            accessibilityState={{ selected: active }}
+                            style={{
+                              flex: 1,
+                              aspectRatio: 1,
+                              borderRadius: 8,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: active
+                                ? colors.fill
+                                : colors.bg3,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontFamily: fonts.sansMedium,
+                                fontSize: 11,
+                                color: active ? colors.onFill : colors.fg3,
+                              }}
+                            >
+                              {label}
+                            </Text>
+                          </Tap>
+                        );
+                      })}
                     </View>
-                  )}
+                  </View>
+                )}
+
+                {/* ── Ends ── */}
+                <View>
+                  <Text
+                    style={{
+                      fontFamily: fonts.sans,
+                      fontSize: 12,
+                      color: colors.fg3,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Ends
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {(["never", "count"] as const).map((type) => (
+                      <Tap
+                        key={type}
+                        haptic="select"
+                        onPress={() => changeRecurrence(setAdvEndType, type)}
+                        hitSlop={{ top: 6, bottom: 6 }}
+                        accessibilityRole="radio"
+                        accessibilityLabel={
+                          type === "never"
+                            ? "Never ends"
+                            : "Ends after a number of occurrences"
+                        }
+                        accessibilityState={{ checked: advEndType === type }}
+                        style={
+                          advEndType === type ? styles.pillActive : styles.pill
+                        }
+                      >
+                        <Text
+                          style={{
+                            fontFamily: fonts.sans,
+                            fontSize: 12,
+                            color: advEndType === type ? colors.fg : colors.fg3,
+                          }}
+                        >
+                          {type === "never" ? "Never" : "After"}
+                        </Text>
+                      </Tap>
+                    ))}
+                    {advEndType === "count" && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Tap
+                          onPress={() =>
+                            changeRecurrence(setAdvCount, (v) =>
+                              Math.max(1, v - 1),
+                            )
+                          }
+                          disabled={advCount === 1}
+                          hitSlop={9}
+                          accessibilityLabel="Decrease occurrence count"
+                          accessibilityState={{ disabled: advCount === 1 }}
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: 13,
+                            backgroundColor: colors.bg3,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: fonts.sans,
+                              fontSize: 16,
+                              color: colors.fg2,
+                              lineHeight: 20,
+                            }}
+                          >
+                            −
+                          </Text>
+                        </Tap>
+                        <Text
+                          style={{
+                            fontFamily: fonts.sans,
+                            fontSize: 15,
+                            color: colors.fg,
+                            minWidth: 22,
+                            textAlign: "center",
+                          }}
+                        >
+                          {advCount}
+                        </Text>
+                        <Tap
+                          onPress={() =>
+                            changeRecurrence(setAdvCount, (v) =>
+                              Math.min(999, v + 1),
+                            )
+                          }
+                          disabled={advCount === 999}
+                          hitSlop={9}
+                          accessibilityLabel="Increase occurrence count"
+                          accessibilityState={{ disabled: advCount === 999 }}
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: 13,
+                            backgroundColor: colors.bg3,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: fonts.sans,
+                              fontSize: 16,
+                              color: colors.fg2,
+                              lineHeight: 20,
+                            }}
+                          >
+                            +
+                          </Text>
+                        </Tap>
+                        <Text
+                          style={{
+                            fontFamily: fonts.sans,
+                            fontSize: 12,
+                            color: colors.fg3,
+                          }}
+                        >
+                          {advCount === 1 ? "time" : "times"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
+
+                {/* ── Human-readable summary ── */}
+                <Text
+                  style={{
+                    fontFamily: fonts.sans,
+                    fontSize: 11,
+                    color: colors.fg3,
+                    fontStyle: "italic",
+                  }}
+                >
+                  {describeAdvanced({
+                    freq: advFreq,
+                    interval: advInterval,
+                    days: advDays,
+                    endType: advEndType,
+                    count: advCount,
+                  })}
+                </Text>
               </View>
-
-              {/* ── Human-readable summary ── */}
-              <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg3, fontStyle: 'italic' }}>
-                {describeAdvanced({ freq: advFreq, interval: advInterval, days: advDays, endType: advEndType, count: advCount })}
-              </Text>
-
-            </View>
-            )
-          )}
+            ))}
         </View>
 
         {/* The long tail — note/location/url stay folded until asked for,
@@ -1114,17 +1733,28 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         {!detailsOpen ? (
           <Tap
             onPress={() => setDetailsOpen(true)}
-            style={[styles.fieldContainer, { flexDirection: "row", alignItems: "center", gap: 8 }]}
+            style={[
+              styles.fieldContainer,
+              { flexDirection: "row", alignItems: "center", gap: 8 },
+            ]}
           >
             <Feather name="plus" size={14} color={colors.fg3} />
-            <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg3 }}>
+            <Text
+              style={{
+                fontFamily: fonts.sans,
+                fontSize: 13,
+                color: colors.fg3,
+              }}
+            >
               Add note, location or link
             </Text>
           </Tap>
         ) : (
           <>
             <View style={styles.fieldContainer}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Note</Text>
+              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
+                Note
+              </Text>
               <TextInput
                 value={newDescription}
                 onChangeText={setNewDescription}
@@ -1136,7 +1766,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               />
             </View>
             <View style={styles.fieldContainer}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>Location</Text>
+              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
+                Location
+              </Text>
               <TextInput
                 value={newLocation}
                 onChangeText={setNewLocation}
@@ -1148,7 +1780,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
               />
             </View>
             <View style={styles.fieldContainer}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>URL</Text>
+              <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
+                URL
+              </Text>
               <TextInput
                 value={newUrl}
                 onChangeText={setNewUrl}
@@ -1158,15 +1792,23 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                 multiline={true}
                 style={[styles.fieldValueText, { fontFamily: fonts.sans }]}
               />
-              {urlError ? <Text style={styles.errorText}>{urlError}</Text> : null}
+              {urlError ? (
+                <Text style={styles.errorText}>{urlError}</Text>
+              ) : null}
             </View>
           </>
         )}
       </ScrollView>
       {!docked && (
-        <View style={[styles.modalButtons, { paddingBottom: insets.bottom + 16 }]}>
+        <View
+          style={[styles.modalButtons, { paddingBottom: insets.bottom + 16 }]}
+        >
           <Btn label="Cancel" variant="secondary" onPress={handleClose} />
-          <Btn label={event ? "Save" : "Create"} onPress={handleSave} loading={isLoading} />
+          <Btn
+            label={event ? "Save" : "Create"}
+            onPress={handleSave}
+            loading={isLoading}
+          />
         </View>
       )}
       <OptionPicker
@@ -1174,11 +1816,13 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         title="Remind Me"
         options={reminderChoices}
         value={reminderValue}
-        onSelect={(value) => setReminderRule(
-          reminderKind === "timed"
-            ? withTimed(reminderRule, value)
-            : withAllDay(reminderRule, value),
-        )}
+        onSelect={(value) =>
+          setReminderRule(
+            reminderKind === "timed"
+              ? withTimed(reminderRule, value)
+              : withAllDay(reminderRule, value),
+          )
+        }
         onClose={() => setReminderPicker(false)}
       />
     </>
@@ -1188,13 +1832,35 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     return (
       <>
         <Animated.View
-          style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)" }, backdropStyle]}
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.45)",
+            },
+            backdropStyle,
+          ]}
         >
-          <Pressable style={{ flex: 1 }} onPress={dockCollapse} accessible={false} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={dockCollapse}
+            accessible={false}
+          />
         </Animated.View>
-        <Animated.View style={[styles.modalSheet, {
-          height: DOCK_H, maxHeight: DOCK_H, minHeight: 0,
-        }, dockedSlide]}>
+        <Animated.View
+          style={[
+            styles.modalSheet,
+            {
+              height: DOCK_H,
+              maxHeight: DOCK_H,
+              minHeight: 0,
+            },
+            dockedSlide,
+          ]}
+        >
           {sheetContent}
         </Animated.View>
       </>
@@ -1211,7 +1877,11 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
-          <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={handleClose}
+            accessible={false}
+          />
         </Animated.View>
         <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
           {sheetContent}
@@ -1225,7 +1895,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
 const local = StyleSheet.create({
   chip: {
     borderRadius: 8,
-    borderCurve: 'continuous',
+    borderCurve: "continuous",
     paddingHorizontal: 12,
     paddingVertical: 7,
   },

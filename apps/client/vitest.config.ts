@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -13,6 +14,15 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 // are run directly by tsx from the root script. One suffix per runner keeps
 // either from trying to execute the other's files.
 export default defineConfig({
+  plugins: [
+    {
+      name: "expo-migration-sql",
+      load(id) {
+        if (id.endsWith(".sql"))
+          return `export default ${JSON.stringify(readFileSync(id, "utf8"))}`;
+      },
+    },
+  ],
   resolve: {
     alias: { "@": root },
   },
@@ -21,6 +31,7 @@ export default defineConfig({
     // depend on the machine's zone. Prague observes daylight saving, UTC doesn't.
     env: { TZ: "Europe/Prague" },
     environment: "node",
+    server: { deps: { inline: ["drizzle-orm"] } },
     include: ["**/*.spec.ts"],
   },
 });

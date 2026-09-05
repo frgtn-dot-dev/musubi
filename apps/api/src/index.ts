@@ -117,6 +117,7 @@ import {
 import {
   handlerDisconnectAccount,
   handlerDisconnectExternalCalendar,
+  handlerSyncConnections,
 } from "./handlers/connections";
 import {
   handlerDeleteMusubiAccount,
@@ -320,6 +321,8 @@ app.delete(
 // Events
 app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
 app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
+app.patch("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
+// PUT deliberately uses the same strict PATCH contract: no legacy write bypass.
 app.put("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
 app.delete("/api/v1/events", requireAuth, wrap(handlerRemoveEvent));
 
@@ -541,6 +544,11 @@ app.delete(
   "/api/v1/users/connections/caldav",
   requireAuth,
   wrap(handlerDisconnectCaldav),
+);
+app.post(
+  "/api/v1/users/connections/sync",
+  requireAuth,
+  wrap(handlerSyncConnections),
 );
 app.post(
   "/api/v1/users/connections/disconnect",

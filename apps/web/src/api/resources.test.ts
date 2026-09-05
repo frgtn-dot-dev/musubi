@@ -77,3 +77,18 @@ it("keeps the compatibility full event read available", async () => {
 
 	expect(fetch.mock.calls[0]?.[0]).toBe("/api/v1/events");
 });
+
+it("preserves explicit account scope and empty manual refresh scope", async () => {
+  const { syncProviderCalendars } = await import("./resources");
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    void input;
+    void init;
+    return new Response("OK");
+  });
+  vi.stubGlobal("fetch", fetch);
+  await syncProviderCalendars({ provider: "google", accountId: "work" });
+  await syncProviderCalendars();
+  expect(fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+    { provider: "google", accountId: "work" }, {},
+  ]);
+});

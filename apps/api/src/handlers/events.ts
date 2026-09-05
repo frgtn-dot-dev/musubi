@@ -4,33 +4,41 @@ import {
   type AttendanceStatus,
   type NewEvent,
   createEvent,
+  diffEventContent,
+  forkEventAtRevision,
   getCalendarMembers,
-  getEvent,
+  getEventSnapshot,
   getEventAttendees,
-  getEventCalendars,
   getEventOrigin,
-  getExternalLinkForCalendar,
   getUsersEvents,
-  linkEventToCalendars,
+  patchEventAndCalendarLinks,
   setAttendance,
-  unlinkEventAndTombstoneIfOrphaned,
-  updateEventAndCalendarLinks,
 } from "@musubi/db";
 import {
   BadRequestError,
   type Event,
-  EventSchema,
-  ForbiddenError,
+  EventCreateRequestSchema,
+  EventDeleteRequestSchema,
+  EventUnlinkRequestSchema,
+  EventLinkRequestSchema,
+  EventForkRequestSchema,
+  EventPatchRequestSchema,
+  type EventPatchRequest,
+  EventWriteError,
   NotFoundError,
 } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
-import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
 import {
-  assertCan,
-  assertCanEditEvent,
-  assertCanViewEvent,
-  canDo,
-} from "../permissions";
+  prepareEventWrites,
+  type CalendarEventWrite,
+} from "../sync/engine";
+import { committedFailure } from "./event_commit";
+import { assertCanViewEvent } from "../permissions";
+import {
+  assertEventCalendarAccess,
+  assertEventContentAccess,
+  hasEventCalendarAccess,
+} from "../event_permissions";
 import {
   dropEventNotifications,
   queueEventChange,
@@ -43,299 +51,359 @@ import {
 
 const MAX_EVENT_RANGE_MS = 3 * 366 * 24 * 60 * 60 * 1000;
 
-function parseEvent(body: unknown, message: string): Event {
-  let event: Event;
-  try {
-    event = EventSchema.parse(body);
-  } catch {
-    throw new BadRequestError(message);
-  }
-
-  event.id = requireUUID(event.id, "event.id");
-  event.calendars = event.calendars.map((calendarID) =>
-    requireUUID(calendarID, "event.calendars[]"),
-  );
-  if (event.originCalendarID) {
-    event.originCalendarID = requireUUID(
-      event.originCalendarID,
-      "event.originCalendarID",
-    );
-  }
-  return event;
+async function currentEvent(id: string) {
+  const row = await getEventSnapshot(id);
+  if (!row) throw new NotFoundError("Event not found.");
+  return row;
 }
 
-async function assertEventCapableCalendar(calendarID: string) {
-  const link = await getExternalLinkForCalendar(calendarID);
-  if (link && !link.supportsEvents) {
-    throw new BadRequestError(
-      "This external calendar does not support events...",
-    );
+function conflict(res: Response, current: Event) {
+  return res.status(409).json({
+    error:
+      "This event changed after editing began. Your draft was kept. Refresh and reconcile before saving again.",
+    code: "event-revision-conflict",
+    localCommitted: false,
+    current,
+    currentRevision: current.revision,
+  });
+}
+
+async function notifyEvent(
+  calendars: string[],
+  type: "event_created" | "event_updated" | "event_removed",
+  result: Record<string, unknown>,
+) {
+  const members = new Set<string>();
+  for (const calendarID of new Set(calendars)) {
+    for (const member of await getCalendarMembers(calendarID))
+      members.add(member.userID);
   }
+  notifyCalendarMembers([...members], type, result);
+}
+
+/** The local commit is final. Never claim a provider failure undid it, and never
+ * expose internal account/resource identities in a collaborator's receipt. */
+async function sendCommitted(
+  res: Response,
+  deliver: Awaited<ReturnType<typeof prepareEventWrites>>,
+  event: Event,
+  result: unknown,
+  status = 200,
+  afterCommit: () => Promise<void> = async () => {},
+) {
+  try {
+    await afterCommit();
+    await deliver(undefined, event.revision);
+  } catch (error) {
+    const failure = committedFailure(error, [event]);
+    // Reconciliation is optional. Purge or database failure cannot erase commit truth.
+    let current: Event | undefined;
+    try { current = await currentEvent(event.id); } catch { /* retained receipt below */ }
+    return res.status(failure.status).json({
+      ...failure.body,
+      ...(current ? { current, currentRevision: current.revision } : {}),
+    });
+  }
+  return res.status(status).json(result);
+}
+
+function validateCalendars(event: Event) {
+  event.id = requireUUID(event.id, "event.id");
+  event.calendars = [
+    ...new Set(
+      event.calendars.map((id) => requireUUID(id, "event.calendars[]")),
+    ),
+  ];
+  if (!event.calendars.length)
+    throw new BadRequestError("Event needs at least one calendar.");
+  if (event.originCalendarID)
+    requireUUID(event.originCalendarID, "event.originCalendarID");
+}
+
+function plannedWrites(
+  previous: Event,
+  event: Event,
+  scopeEditValidated = false,
+): CalendarEventWrite[] {
+  const removed = previous.calendars.filter(
+    (id) => !event.calendars.includes(id),
+  );
+  const added = event.calendars.filter(
+    (id) => !previous.calendars.includes(id),
+  );
+  const kept = event.calendars.filter((id) => previous.calendars.includes(id));
+  const patch = diffEventContent(previous, event);
+  return [
+    { event: previous, calendarIDs: removed, action: "delete" },
+    { event, calendarIDs: added, action: "create" },
+    // A current no-op still has a CAS check, but no provider mutation.
+    ...(Object.keys(patch).length
+      ? [
+          {
+            event,
+            previous,
+            patch,
+            calendarIDs: kept,
+            action: "update" as const,
+            scopeEditValidated,
+          },
+        ]
+      : []),
+  ];
+}
+
+async function prepareUpdate(
+  userID: string,
+  request: EventPatchRequest,
+  previous: Event,
+) {
+  const event = { ...previous, ...request.patch };
+  validateCalendars(event);
+  for (const id of event.calendars.filter(
+    (id) => !previous.calendars.includes(id),
+  ))
+    await assertEventCalendarAccess(userID, id);
+  const scope = request.scopeEdit;
+  let create: Event | undefined;
+  if (scope) {
+    const { scopeEdit: _scope, ...update } = request;
+    if (JSON.stringify(scope.updates[0]) !== JSON.stringify(update))
+      throw new BadRequestError(
+        "Scope edit intent does not match the first update.",
+      );
+    create = scope.creates[0];
+    if (create) {
+      validateCalendars(create);
+      if (
+        create.id === event.id ||
+        (create.originCalendarID &&
+          !create.calendars.includes(create.originCalendarID))
+      )
+        throw new BadRequestError("Invalid scope create destination.");
+      for (const id of create.calendars)
+        await assertEventCalendarAccess(userID, id);
+    }
+  }
+  const writes = plannedWrites(previous, event, Boolean(scope));
+  // Even update-only recurrence intents must receive complete recurrence preflight.
+  if (scope && !writes.some((write) => write.action === "update"))
+    writes.push({
+      event,
+      previous,
+      patch: {},
+      calendarIDs: event.calendars,
+      action: "update",
+      scopeEditValidated: true,
+    });
+  const scopeWrites = create
+    ? [
+        ...writes,
+        {
+          event: create,
+          calendarIDs: create.calendars,
+          action: "create" as const,
+        },
+      ]
+    : writes;
+  if (create) await prepareEventWrites(scopeWrites); // authorize future create now; not an atomic scope operation
+  return prepareEventWrites(writes);
 }
 
 export async function handlerCreateEvent(req: Request, res: Response) {
-  const event = parseEvent(req.body, "Request is missing valid event data...");
-  // Server-side shape guards (don't trust the client): an event needs at least
-  // one calendar, and its HOME must be one of the linked calendars — those are
-  // membership-verified below, which also proves they exist (clean 400/403
-  // instead of an FK 500, and no smuggling a foreign calendar in as origin).
-  if (event.calendars.length === 0)
-    throw new BadRequestError("Event needs at least one calendar...");
-  if (!event.originCalendarID) event.originCalendarID = event.calendars[0];
-  if (!event.calendars.includes(event.originCalendarID)) {
+  const event = EventCreateRequestSchema.parse(req.body);
+  validateCalendars(event);
+  event.originCalendarID ??= event.calendars[0];
+  if (!event.calendars.includes(event.originCalendarID!))
     throw new BadRequestError(
-      "originCalendarID must be one of the event's calendars...",
+      "originCalendarID must be one of the event's calendars.",
     );
-  }
-  const newEvent: NewEvent = {
-    ...event,
-    creatorID: req.user!.id,
-  };
-  for (const cal of event.calendars) {
-    await assertCan(req.user!.id, cal, "editEvents");
-    await assertEventCapableCalendar(cal);
-  }
-  const createdEvent = await createEvent(newEvent, event.calendars);
+  for (const id of event.calendars)
+    await assertEventCalendarAccess(req.user!.id, id);
+  const deliver = await prepareEventWrites([
+    { event, calendarIDs: event.calendars, action: "create" },
+  ]);
+  const created = await createEvent(
+    { ...event, creatorID: req.user!.id },
+    event.calendars,
+  );
 
-  const result = { ...createdEvent, calendars: event.calendars };
+  const result = { ...created, calendars: event.calendars };
 
-  await pushEventToProviders(result, "create");
-
-  const memberIDSeen = new Set<string>();
-
-  for (const cal of event.calendars) {
-    const members = await getCalendarMembers(cal);
-
-    for (const member of members) {
-      if (!memberIDSeen.has(member.userID)) {
-        memberIDSeen.add(member.userID);
-      }
-    }
-  }
-
-  notifyCalendarMembers([...memberIDSeen], "event_created", result);
-
-  res.status(201).json(result);
+  return sendCommitted(res, deliver, result, result, 201, () =>
+    notifyEvent(event.calendars, "event_created", result));
 }
 
 export async function handlerUpdateEvent(req: Request, res: Response) {
-  const event = parseEvent(req.body, "Request missing valid event data...");
+  const request = EventPatchRequestSchema.parse(req.body);
 
-  await assertCanEditEvent(req.user!.id, event.id!); // edit-content gated by home calendar
-
-  // Read before write: telling a guest "it moved" needs to know where from, and
-  // once the update lands that is gone.
-  const previous = await getEvent(event.id!);
-
-  // Diff the calendar links: what got removed / added / kept.
-  const existing = await getEventCalendars(event.id!);
-  const incoming = event.calendars;
-  const removed = existing.filter((c) => !incoming.includes(c));
-  const added = incoming.filter((c) => !existing.includes(c));
-  const kept = incoming.filter((c) => existing.includes(c));
-
-  for (const cal of incoming) await assertEventCapableCalendar(cal);
-
-  // Adding a link puts the event into someone's calendar — same gate as handlerLinkEvent.
-  for (const cal of added) await assertCan(req.user!.id, cal, "editEvents");
-
-  // creatorID / originCalendarID are immutable — never trust them from the client
-  // (creator is the permission fallback, origin governs who may edit).
-  const { creatorID: _c, originCalendarID: _o, ...editable } = event;
-  // Remove provider copies while their mappings still exist. Provider delivery
-  // is best-effort; the local event + link reconciliation below is one DB unit.
-  await pushEventToCalendars(event, removed, "delete");
-  const updatedEvent = await updateEventAndCalendarLinks(
-    { ...editable, id: event.id! },
-    added,
-    removed,
+  await assertEventContentAccess(req.user!.id, request.id);
+  const previous = await currentEvent(request.id);
+  if (previous.revision !== request.expectedRevision || previous.deletedAt)
+    return conflict(res, previous);
+  const deliver = await prepareUpdate(req.user!.id, request, previous);
+  const saved = await patchEventAndCalendarLinks(
+    request.id,
+    request.expectedRevision,
+    request.patch,
   );
 
-  if (updatedEvent) {
-    // The local transaction has committed; propagate its new state outward.
-    await pushEventToCalendars(event, added, "create"); // create in Google (+ mapping)
-    await pushEventToCalendars(event, kept, "update"); // update the rest
-
-    const result = { ...updatedEvent, calendars: incoming };
-
-    // Notify members of both old and new calendars (removed ones need to drop it).
-    const memberIDSeen = new Set<string>();
-    for (const cal of new Set([...existing, ...incoming])) {
-      const members = await getCalendarMembers(cal);
-      for (const member of members) memberIDSeen.add(member.userID);
-    }
-
-    notifyCalendarMembers([...memberIDSeen], "event_updated", result);
-
-    // Guests get an email if the TIME moved or it was called off; everything
-    // else is an edit, not news. Awaited so a failure is logged, not unhandled.
-    if (previous) {
-      await queueEventChange(previous, updatedEvent, req.user!.id);
-    }
-
-    return res.status(200).json({ ...result, calendars: incoming });
+  if (saved.status === "not_found") throw new NotFoundError("Event not found.");
+  if (saved.status === "conflict") return conflict(res, saved.current);
+  return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
+  if (saved.changed) {
+    await notifyEvent(
+      [...saved.previous.calendars, ...saved.event.calendars],
+      "event_updated",
+      saved.event,
+    );
+    await queueEventChange(saved.previous, saved.event, req.user!.id);
   }
-  throw new NotFoundError("Request missing valid event data...");
+
+  });
 }
 
 export async function handlerRemoveEvent(req: Request, res: Response) {
-  const event = parseEvent(req.body, "Request missing valid event data...");
-
-  // "Delete" = unlink from every calendar the user is allowed to edit. Calendars
-  // they can only view are left untouched. The event row is tombstoned only once
-  // its last link is gone.
-  const existing = await getEventCalendars(event.id);
-  const unlinkCalendarID =
+  const request =
     req.body?.unlinkCalendarID === undefined
-      ? undefined
-      : requireUUID(req.body.unlinkCalendarID, "unlinkCalendarID");
+      ? EventDeleteRequestSchema.parse(req.body)
+      : EventUnlinkRequestSchema.parse(req.body);
+  const existing = await assertCanViewEvent(req.user!.id, request.id);
+  const unlinkCalendarID =
+    "unlinkCalendarID" in request
+      ? (request.unlinkCalendarID as string)
+      : undefined;
 
   let targets: string[];
   if (unlinkCalendarID) {
-    // Unlink from ONE calendar only (used from a non-origin calendar view).
     if (!existing.includes(unlinkCalendarID))
-      throw new BadRequestError("Event isn't in that calendar...");
-    if (!(await canDo(req.user!.id, unlinkCalendarID, "editEvents"))) {
-      throw new ForbiddenError(
-        "You can't remove this event from that calendar.",
-      );
-    }
+      throw new BadRequestError("Event isn't in that calendar.");
+    await assertEventCalendarAccess(req.user!.id, unlinkCalendarID);
     targets = [unlinkCalendarID];
   } else {
-    // Delete: unlink every calendar the user can edit. If the HOME (origin) is among
-    // them the delete is authoritative → cascade to ALL calendars (even viewers').
     const editable: string[] = [];
-    for (const cal of existing) {
-      if (await canDo(req.user!.id, cal, "editEvents")) editable.push(cal);
-    }
-    if (editable.length === 0) {
-      throw new ForbiddenError(
-        "You can't remove this event from any of your calendars.",
-      );
-    }
-    const origin = (await getEventOrigin(event.id))?.originCalendarID ?? null;
+    for (const id of existing)
+      if (await hasEventCalendarAccess(req.user!.id, id)) editable.push(id);
+    if (!editable.length) throw new EventWriteError("event-write", "denied");
+    const origin = (await getEventOrigin(request.id))?.originCalendarID;
     targets = origin && editable.includes(origin) ? existing : editable;
   }
 
-  await pushEventToCalendars(event, targets, "delete"); // remove from external while mapping still exists
-  const { remaining, removed } = await unlinkEventAndTombstoneIfOrphaned(
-    event.id,
-    targets,
+  const previous = await currentEvent(request.id);
+  if (previous.revision !== request.expectedRevision || previous.deletedAt)
+    return conflict(res, previous);
+  const deliver = await prepareEventWrites([
+    { event: previous, calendarIDs: targets, action: "delete" },
+  ]);
+  const saved = await patchEventAndCalendarLinks(
+    request.id,
+    request.expectedRevision,
+    { calendars: existing.filter((id) => !targets.includes(id)) },
+    true,
   );
+  if (saved.status === "not_found") throw new NotFoundError("Event not found.");
+  if (saved.status === "conflict") return conflict(res, saved.current);
+  const removed = saved.event.deletedAt !== null;
 
-  const result = { id: event.id, calendars: remaining, removed };
-
-  // Notify everyone who had it: full removal → drop; partial → update their view.
-  const memberIDSeen = new Set<string>();
-  for (const cal of existing) {
-    const members = await getCalendarMembers(cal);
-    for (const member of members) memberIDSeen.add(member.userID);
-  }
-  notifyCalendarMembers(
-    [...memberIDSeen],
+  const result = {
+    id: request.id,
+    revision: saved.event.revision,
+    calendars: saved.event.calendars,
+    removed,
+    event: saved.event,
+  };
+  return sendCommitted(res, deliver, saved.event, result, 200, async () => {
+  await notifyEvent(
+    existing,
     removed ? "event_removed" : "event_updated",
-    removed ? result : { ...event, calendars: remaining },
+    removed ? result : saved.event,
   );
+  if (removed) await dropEventNotifications(request.id);
 
-  // A queued "it moved" about an event that no longer exists is a message about
-  // nothing. Deleting outright rather than converting to a cancellation: the
-  // guest list went with it, and the SSE has already taken it off their screen.
-  if (removed) await dropEventNotifications(event.id);
-
-  return res.status(200).json(result);
+  });
 }
 
-// Propagate: add an existing event into another calendar. Anyone who can VIEW the
-// event may link it into a calendar they can EDIT — no edit-on-event needed. To
-// change the event itself they'd have to fork it.
 export async function handlerLinkEvent(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const calendarID = requireUUID(req.body?.calendarID, "calendarID");
-
-  // Must be able to see the event (member of some calendar it lives in).
+  const { calendarID, expectedRevision } = EventLinkRequestSchema.parse(
+    req.body,
+  );
   const existing = await assertCanViewEvent(req.user!.id, eventID);
 
-  // Must be able to edit the target calendar.
-  if (!(await canDo(req.user!.id, calendarID, "editEvents"))) {
-    throw new ForbiddenError("You can't add events to that calendar.");
-  }
-  await assertEventCapableCalendar(calendarID);
-
-  if (!existing.includes(calendarID)) {
-    await linkEventToCalendars(eventID, [calendarID]);
-    const row = await getEvent(eventID);
-    await pushEventToCalendars(
-      { ...row, calendars: [...existing, calendarID] } as Event,
-      [calendarID],
-      "create",
-    );
-  }
-
-  const calendars = await getEventCalendars(eventID);
-  const row = await getEvent(eventID);
-  const result = { ...row, calendars };
-
-  // Everyone who can see the event needs the new `calendars` list — not just
-  // the target calendar's members (their open detail modal shows the links).
-  const memberIDSeen = new Set<string>();
-  for (const cal of calendars) {
-    for (const member of await getCalendarMembers(cal))
-      memberIDSeen.add(member.userID);
-  }
-  notifyCalendarMembers([...memberIDSeen], "event_updated", result);
-
-  return res.status(200).json(result);
+  await assertEventCalendarAccess(req.user!.id, calendarID);
+  const previous = await currentEvent(eventID);
+  if (previous.revision !== expectedRevision || previous.deletedAt)
+    return conflict(res, previous);
+  const calendars = [...new Set([...existing, calendarID])];
+  const deliver = await prepareEventWrites(
+    existing.includes(calendarID)
+      ? []
+      : [
+          {
+            event: { ...previous, calendars },
+            calendarIDs: [calendarID],
+            action: "create",
+          },
+        ],
+  );
+  const saved = await patchEventAndCalendarLinks(eventID, expectedRevision, {
+    calendars,
+  });
+  if (saved.status === "not_found") throw new NotFoundError("Event not found.");
+  if (saved.status === "conflict") return conflict(res, saved.current);
+  return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
+    if (saved.changed) await notifyEvent(calendars, "event_updated", saved.event);
+  });
 }
 
-// Fork (claim): make an INDEPENDENT copy of the event into a calendar the user can
-// edit. New id + creatorID + origin = target, no external mapping to the original.
-// Detached from the previous owner — editing the fork never touches the source.
 export async function handlerForkEvent(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const calendarID = requireUUID(req.body?.calendarID, "calendarID");
-
-  // Must be able to see the source, and edit the target.
+  const { calendarID, expectedRevision } = EventForkRequestSchema.parse(
+    req.body,
+  );
   const sourceCalendars = await assertCanViewEvent(req.user!.id, eventID);
-  if (!(await canDo(req.user!.id, calendarID, "editEvents"))) {
-    throw new ForbiddenError("You can't add events to that calendar.");
-  }
-  await assertEventCapableCalendar(calendarID);
-  if (sourceCalendars.includes(calendarID)) {
+  await assertEventCalendarAccess(req.user!.id, calendarID);
+  if (sourceCalendars.includes(calendarID))
     throw new BadRequestError("This event is already in that calendar.");
-  }
-
-  const src = await getEvent(eventID);
-  if (!src) throw new NotFoundError("Event not found...");
+  const source = await currentEvent(eventID);
+  if (source.revision !== expectedRevision || source.deletedAt)
+    return conflict(res, source);
 
   const newEvent: NewEvent = {
+    ...EventCreateRequestSchema.parse(
+      (({
+        revision: _revision,
+        deletedAt: _deletedAt,
+        updatedAt: _updatedAt,
+        createdAt: _createdAt,
+        ...event
+      }) => event)(source),
+    ),
     id: randomUUID(),
     creatorID: req.user!.id,
-    title: src.title,
-    color: src.color,
-    start: src.start,
-    end: src.end,
-    isAllDay: src.isAllDay,
-    hasAttendees: src.hasAttendees,
-    description: src.description,
-    location: src.location,
-    organizer: req.user!.id, // new owner
-    recurrence: src.recurrence,
-    url: src.url,
-    originCalendarID: calendarID, // fork's home = chosen calendar
+    organizer: req.user!.id,
+    originCalendarID: calendarID,
+    isCanceled: false,
   };
-  const created = await createEvent(newEvent, [calendarID]);
-  const result = { ...created, calendars: [calendarID] };
-
-  await pushEventToProviders(result, "create"); // sync to target's provider if external
-
-  const members = await getCalendarMembers(calendarID);
-  notifyCalendarMembers(
-    members.map((m) => m.userID),
-    "event_created",
-    result,
-  );
-
-  return res.status(201).json(result);
+  const projected = {
+    ...source,
+    ...newEvent,
+    revision: 1,
+    calendars: [calendarID],
+  } as Event;
+  const deliver = await prepareEventWrites([
+    {
+      event: projected,
+      calendarIDs: [calendarID],
+      action: "create",
+    },
+  ]);
+  const saved = await forkEventAtRevision(eventID, expectedRevision, newEvent, [
+    calendarID,
+  ]);
+  if (saved.status === "not_found") throw new NotFoundError("Event not found.");
+  if (saved.status === "conflict") return conflict(res, saved.current);
+  return sendCommitted(res, deliver, saved.event, saved.event, 201, () =>
+    notifyEvent([calendarID], "event_created", saved.event));
 }
 
 // Attendees: anyone who can view the event sees the list and can answer.

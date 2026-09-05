@@ -10,6 +10,33 @@ import { BadRequestError } from "@musubi/types";
 import { revokeGoogleToken } from "../sync/oauth";
 import { decryptToken } from "../tokenCrypto";
 import { notifyCalendarMembers } from "./stream";
+import { syncUser } from "../sync/engine";
+import { z } from "zod";
+
+const syncRequest = z
+  .object({
+    provider: z.enum(["google", "microsoft", "caldav"]).optional(),
+    accountId: z.string().min(1).optional(),
+  })
+  .strict()
+  .refine((input) => !input.accountId || !!input.provider);
+
+// OAuth callbacks know the provider, not necessarily the newly linked account.
+// An explicit accountId narrows discovery too; an empty body refreshes all of
+// this session user's connected providers.
+export async function handlerSyncConnections(req: Request, res: Response) {
+  const parsed = syncRequest.safeParse(req.body ?? {});
+  if (!parsed.success)
+    throw new BadRequestError("Invalid provider/account sync request");
+  try {
+    await syncUser(req.user!.id, { ...parsed.data, throwOnError: true });
+  } catch {
+    throw new BadRequestError(
+      "Connected, but the calendar sync failed. Please retry.",
+    );
+  }
+  res.sendStatus(200);
+}
 
 const DISCONNECT_PROVIDERS = new Set(["caldav", "google", "microsoft"]);
 

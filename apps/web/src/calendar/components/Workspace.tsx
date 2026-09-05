@@ -1,3 +1,4 @@
+import { editedEvent, EventMutationError } from "@musubi/types";
 import type {
   Calendar,
   CreatePageRequest,
@@ -13,7 +14,11 @@ import type {
   TaskUpdate,
   User,
 } from "@musubi/types";
-import { seriesEditWrites, type EditScope } from "@musubi/calendar";
+import {
+  seriesEditWrites,
+  withSeriesEditIntent,
+  type EditScope,
+} from "@musubi/calendar";
 import type {
   Attendee,
   ImportedCalendar,
@@ -408,23 +413,34 @@ export function Workspace({
     }
 
     const created: Event[] = [];
-    const { creates, updates } = seriesEditWrites({
-      edited: { ...event, end, start },
-      master,
-      occurrence: event,
-      scope,
-    });
+    const { creates, updates } = withSeriesEditIntent(
+      seriesEditWrites({
+        edited: { ...event, end, start },
+        master,
+        occurrence: event,
+        scope,
+      }),
+    );
+
+    let savedMaster: Event | undefined;
 
     setBusyEventId(master.id);
     try {
       // Sequential: the update carries the exclusion that keeps the created
       // event from briefly showing twice.
       for (const update of updates) {
-        await onUpdateEvent(update);
+        savedMaster = await onUpdateEvent(update);
       }
       for (const create of creates) {
         created.push(await onCreateEvent(create));
       }
+    } catch (error) {
+      if (savedMaster)
+        throw new EventMutationError(
+          "Part of this recurring edit was saved. Later delivery was not confirmed. Refresh and reconcile before retrying.",
+          true,
+        );
+      throw error;
     } finally {
       setBusyEventId(undefined);
     }
@@ -438,7 +454,12 @@ export function Workspace({
           for (const event of created) {
             await onRemoveEvent(event);
           }
-          await onUpdateEvent(master);
+          await onUpdateEvent(
+            withSeriesEditIntent({
+              updates: [editedEvent(savedMaster!, master)],
+              creates: [],
+            }).updates[0],
+          );
         },
       },
     );

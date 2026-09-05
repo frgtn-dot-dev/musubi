@@ -5,13 +5,13 @@ import { getServerCapabilities } from "~/api/resources";
 import { getServerOrigin } from "~/api/query-keys";
 import { authClient } from "~/auth/auth-client";
 import {
-  GOOGLE_CALENDAR_SCOPES,
-  MICROSOFT_CALENDAR_SCOPES,
+  providerConnectionScopes,
   rememberProviderLink,
 } from "~/calendar/connections";
 import { ThemeToggle } from "~/calendar/components/ThemeToggle";
 import { AuthShell } from "~/ui/AuthShell";
 import { Button } from "~/ui/Button";
+import { Checkbox } from "~/ui/Checkbox";
 import { ColorPicker } from "~/ui/ColorPicker";
 import { Field } from "~/ui/Field";
 import { ProviderGlyph } from "~/ui/ProviderGlyph";
@@ -79,6 +79,7 @@ export function Onboarding({
   const [name, setName] = useState(userName);
   const [calendarName, setCalendarName] = useState(personal?.name ?? "Personal");
   const [color, setColor] = useState(personal?.color ?? "#C8553D");
+  const [includeTasks, setIncludeTasks] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -126,10 +127,7 @@ export function Onboarding({
       const result = await authClient.linkSocial({
         callbackURL: window.location.href,
         provider,
-        scopes:
-          provider === "google"
-            ? GOOGLE_CALENDAR_SCOPES
-            : MICROSOFT_CALENDAR_SCOPES,
+        scopes: providerConnectionScopes(provider, includeTasks),
       });
       if (result?.error) throw new Error(result.error.message);
     }, "Could not start the connection.");
@@ -227,6 +225,15 @@ export function Onboarding({
 
         {step === 3 ? (
           <div className={styles.providers}>
+            {providers.includes("google") || providers.includes("microsoft") ? (
+              <Checkbox
+                checked={includeTasks}
+                description="When off, no new Tasks permission is requested. Previously granted access is not revoked."
+                disabled={busy}
+                label="Include Tasks (optional)"
+                onChange={(event) => setIncludeTasks(event.target.checked)}
+              />
+            ) : null}
             {providers.includes("google") ? (
               <Button
                 disabled={busy}

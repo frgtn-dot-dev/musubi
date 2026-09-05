@@ -1,4 +1,5 @@
 import type { Event, Task, TaskStatus } from "@musubi/types";
+import type { EventContentPatch } from "@musubi/db";
 
 // A calendar event reduced to what Musubi stores, provider-agnostic.
 // Adapters translate their own format (Google JSON / Graph JSON / iCal) <-> this.
@@ -14,7 +15,7 @@ export type NormalizedEvent = {
   organizer: string | null;
   recurrence: string | null; // RRULE text, or null
   url: string | null;
-  etag?: string | null; // used by CalDAV; null for OAuth providers
+  etag?: string | null; // exact provider validator when exposed; never synthesize from changeKey
   icalUid?: string | null; // preserve the remote UID across CalDAV writes
 };
 
@@ -54,6 +55,18 @@ export type ExternalTaskRef = {
   icalUid?: string | null;
 };
 
+export type EventWriteOperation = {
+  action: "create" | "update" | "delete";
+  event: Event;
+  previous?: Event;
+  // Server-computed actual content diff; never a client full snapshot. Missing
+  // is not an empty diff. CAS callers supply the committed transaction's patch.
+  patch?: EventContentPatch;
+  external?: ExternalEventRef;
+  // Server-only: the handler validated the complete request intent and its ACLs.
+  scopeEditValidated?: boolean;
+};
+
 export type ExternalCalendarInfo = {
   externalId: string;
   name: string;
@@ -63,6 +76,13 @@ export type ExternalCalendarInfo = {
   // Provider says the user can't write (holidays, subscribed calendars, …) →
   // mirror becomes read-only even for its owner.
   readOnly?: boolean;
+};
+
+export type CalendarDiscoveryResult = {
+  calendars: ExternalCalendarInfo[];
+  // False means optional task-list discovery was omitted or failed. Its absent
+  // mirrors are not evidence of deletion and must not be fetched or swept.
+  taskListsComplete: boolean;
 };
 
 export type FetchChangesResult = {
@@ -79,13 +99,16 @@ export type CalendarAdapter = {
   // Connected accounts for this provider (id = Better Auth account.accountId for
   // OAuth / caldav_accounts.id for CalDAV; label = human name e.g. email/username).
   // Empty = provider not connected.
-  listAccounts(userID: string): Promise<{ id: string; label: string }[]>;
+  listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]>;
 
   // Which calendars can this account sync?
   listCalendars(
     userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]>;
+  ): Promise<CalendarDiscoveryResult>;
 
   // Pull changes since `cursor` (null = full sync). Adapter paginates internally
   // and returns the complete change set + the new cursor to persist.
@@ -95,6 +118,15 @@ export type CalendarAdapter = {
     externalCalendarId: string,
     cursor: string | null,
   ): Promise<FetchChangesResult>;
+
+  // Read current provider evidence before any local mutation or provider write.
+  // This is a preflight, not a reservation or a distributed transaction.
+  assertEventWrite?(
+    userID: string,
+    accountId: string,
+    externalCalendarId: string,
+    operation: EventWriteOperation,
+  ): Promise<void>;
 
   // Push a Musubi event out. Adapter maps Event -> its own format.
   pushCreate(
@@ -110,6 +142,7 @@ export type CalendarAdapter = {
     externalEventId: string,
     event: Event,
     ref?: ExternalEventRef,
+    patch?: EventContentPatch,
   ): Promise<{ etag?: string | null; icalUid?: string | null } | void>;
   pushDelete(
     userID: string,

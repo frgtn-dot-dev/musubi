@@ -1,7 +1,8 @@
-import { config } from "@musubi/config";
-import { getOAuthAccountIDs } from "@musubi/db";
+import { config, logger } from "@musubi/config";
+import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
 import {
   DEFAULT_CALENDAR_COLOR,
+  EventWriteError,
   type Event,
   nearestMicrosoftCalendarColor,
   type Task,
@@ -9,6 +10,7 @@ import {
 } from "@musubi/types";
 import type {
   CalendarAdapter,
+  CalendarDiscoveryResult,
   ExternalCalendarInfo,
   FetchChangesResult,
   NormalizedChange,
@@ -16,6 +18,8 @@ import type {
   NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
+import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
+import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, canonicalEventRecurrence } from "../event_write";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TASK_LIST_PREFIX = "musubi-microsoft-task-list:";
@@ -49,20 +53,33 @@ const DAY_MS = 86_400_000;
 // timezone/HTML conversion on our side.
 const PREFER = `outlook.timezone="UTC", outlook.body-content-type="text", odata.maxpagesize=${PAGE_SIZE}`;
 
-function getAccessToken(userID: string, accountId: string) {
+async function getAccessToken(
+  userID: string,
+  accountId: string,
+  requireTasks = false,
+) {
   const tenant = config.social.microsoftTenantID;
-  return getOAuthAccessToken("microsoft", userID, accountId, {
-    tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-    clientId: config.social.microsoftClientID,
-    clientSecret: config.social.microsoftClientSecret,
-    // Microsoft requires the scope again on refresh (and rotates the refresh
-    // token — the shared helper persists the new one).
-    extraParams: {
-      scope:
-        "openid User.Read Calendars.ReadWrite Tasks.ReadWrite offline_access",
+  const accessToken = await getOAuthAccessToken(
+    "microsoft",
+    userID,
+    accountId,
+    {
+      tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+      clientId: config.social.microsoftClientID,
+      clientSecret: config.social.microsoftClientSecret,
+      // Omit scope on refresh: Microsoft retains the original grant, including
+      // Tasks when granted, without escalating calendar-only consent.
+      subtypeKey: "suberror",
     },
-    subtypeKey: "suberror",
-  });
+  );
+  // Refresh may return a narrower grant. Check after minting, before any Tasks
+  // endpoint, including task writes that bypass discovery.
+  if (
+    requireTasks &&
+    !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+  )
+    throw new TaskScopeMissingError();
+  return accessToken;
 }
 
 // Error with Graph's own message when available ("Cannot delete default
@@ -114,6 +131,8 @@ export function toNormalized(item: any): NormalizedEvent {
 
   return {
     externalId: item.id,
+    // Opaque provider metadata only. changeKey is NOT an If-Match guarantee.
+    etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
     status: "active",
     title: item.subject ?? "(untitled)",
     start,
@@ -161,6 +180,33 @@ export function toGraphEvent(event: Event) {
       timeZone: "UTC",
     },
   };
+}
+
+/** Graph event-update documents omission preservation, not event If-Match CAS.
+ * This serializer is deliberately not an enabled remote write path while
+ * conditional enforcement is unverified. Do not round-trip rich omitted data.
+ */
+export function toGraphEventPatch(event: Event, patch: Partial<Event>) {
+  const full = toGraphEvent({ ...event, recurrence: null });
+  const result: Record<string, unknown> = {};
+  if (patch.title !== undefined) result.subject = full.subject;
+  if (patch.description !== undefined) result.body = full.body;
+  if (patch.location !== undefined) result.location = full.location;
+  if (patch.isAllDay !== undefined) result.isAllDay = full.isAllDay;
+  if (patch.start !== undefined || patch.isAllDay !== undefined) result.start = full.start;
+  if (patch.end !== undefined || patch.isAllDay !== undefined) result.end = full.end;
+  if (patch.recurrence !== undefined) {
+    throw new EventWriteError("recurrence", "unsupported", "Outlook recurrence changes are not supported yet. No changes were saved.");
+  }
+  return result;
+}
+
+function refuseUnverifiedOutlookEventWrite(): never {
+  // https://learn.microsoft.com/en-us/graph/api/event-update does not establish
+  // event-specific If-Match enforcement. Re-enable only after explicit evidence
+  // and review; neither changeKey nor a fake HTTP server proves this contract.
+  throw new EventWriteError("event-write", "unknown",
+    "Outlook event conflict protection is not yet verified. Updates and deletions are temporarily blocked. No changes were saved.");
 }
 
 function graphTaskDate(value: any) {
@@ -412,6 +458,7 @@ async function graphGet(
 // cache per sync run so a holiday calendar costs one extra GET per series.
 async function fetchSeriesMaster(
   accessToken: string,
+  externalCalendarId: string,
   id: string,
   cache: Map<string, any>,
   fetchImpl: typeof fetch = fetch,
@@ -420,10 +467,17 @@ async function fetchSeriesMaster(
   if (cache.has(id)) return cache.get(id);
   const res = await graphGet(
     accessToken,
-    `${graphBase}/me/events/${encodeURIComponent(id)}`,
+    `${graphBase}${microsoftEventPath(externalCalendarId, id)}`,
     fetchImpl,
   );
-  const master = res.ok ? await res.json() : null;
+  // Even 404/410 on an active occurrence's dependency is ambiguous. Only
+  // explicit delta @removed entries authorize removal; never advance past an
+  // incomplete hydration or cache an error as a successful empty master.
+  if (!res.ok) throw await graphError(res);
+  const master = await res.json();
+  if (!master || master.id !== id || master["@removed"]) {
+    throw new Error("Outlook returned an invalid series master");
+  }
   cache.set(id, master);
   return master;
 }
@@ -479,12 +533,13 @@ export async function fetchMicrosoftChanges(
       if (item.seriesMasterId && !item["@removed"]) {
         const master = await fetchSeriesMaster(
           accessToken,
+          externalCalendarId,
           item.seriesMasterId,
           seriesMasters,
           fetchImpl,
           graphBase,
         );
-        if (master) item = { ...master, ...item };
+        item = { ...master, ...item };
       }
       changes.push({ kind: "event", data: toNormalized(item) });
     }
@@ -534,8 +589,11 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 export const microsoftAdapter: CalendarAdapter = {
   provider: "microsoft",
 
-  async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
-    const ids = await getOAuthAccountIDs(userID, "microsoft");
+  async listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]> {
+    const ids = await getOAuthAccountIDs(userID, "microsoft", accountId);
     return Promise.all(
       ids.map(async (id) => {
         let label = id;
@@ -559,7 +617,7 @@ export const microsoftAdapter: CalendarAdapter = {
   async listCalendars(
     userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]> {
+  ): Promise<CalendarDiscoveryResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
     let url: string | null =
@@ -571,8 +629,27 @@ export const microsoftAdapter: CalendarAdapter = {
       for (const c of data.value ?? []) calendars.push(toExternalCalendar(c));
       url = data["@odata.nextLink"] ?? null;
     }
-    const taskLists = await listMicrosoftTaskLists(accessToken);
-    return [...calendars, ...taskLists.map(toExternalMicrosoftTaskList)];
+    if (!(await hasOAuthTaskScope(userID, "microsoft", accountId))) {
+      return { calendars, taskListsComplete: false };
+    }
+    try {
+      const taskLists = await listMicrosoftTaskLists(accessToken);
+      return {
+        calendars: [
+          ...calendars,
+          ...taskLists.map(toExternalMicrosoftTaskList),
+        ],
+        taskListsComplete: true,
+      };
+    } catch (error) {
+      if (!isOptionalTaskError(error)) throw error;
+      logger.warn("sync.tasks.discovery_unavailable", {
+        provider: "microsoft",
+        userId: userID,
+        accountId,
+      });
+      return { calendars, taskListsComplete: false };
+    }
   },
 
   async fetchChanges(
@@ -583,12 +660,55 @@ export const microsoftAdapter: CalendarAdapter = {
   ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
       : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
   },
 
+  async assertEventWrite(userID, accountId, externalCalendarId, operation) {
+    if (
+      (operation.action === "create" && operation.event.recurrence) ||
+      (operation.action === "update" &&
+        canonicalEventRecurrence(operation.event.recurrence) !==
+          canonicalEventRecurrence(operation.previous?.recurrence))
+    ) {
+      throw new EventWriteError(
+        "recurrence", "unsupported",
+        "Outlook recurrence creation and changes are not supported yet. No changes were saved.",
+      );
+    }
+    const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    const response = await fetch(
+      `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}?$select=canEdit`,
+      { headers },
+    );
+    assertEventWriteResponse(response);
+    const calendar = await response.json();
+    assertEventWriteEvidence(calendar.canEdit, "event-write");
+    if (operation.action !== "create" && operation.external) {
+      const response = await fetch(
+        `${GRAPH}${microsoftEventPath(externalCalendarId, operation.external.externalEventId)}?$select=isOrganizer`,
+        { headers },
+      );
+      assertEventWriteResponse(response);
+      const current = await response.json();
+      assertEventWriteEvidence(operation.action === "delete" && current.isOrganizer === false ? true : current.isOrganizer, "organizer");
+      refuseUnverifiedOutlookEventWrite();
+    }
+  },
+
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {
+    if (event.recurrence) {
+      throw new EventWriteError("recurrence", "unsupported",
+        "Outlook recurrence creation is not supported yet. No changes were saved.");
+    }
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}/events`,
@@ -603,41 +723,15 @@ export const microsoftAdapter: CalendarAdapter = {
     );
     if (!res.ok) throw await graphError(res);
     const data = await res.json();
-    return { externalEventId: data.id };
+    return { externalEventId: data.id, etag: typeof data["@odata.etag"] === "string" ? data["@odata.etag"] : null };
   },
 
-  async pushUpdate(
-    userID,
-    accountId,
-    externalCalendarId,
-    externalEventId,
-    event: Event,
-  ) {
-    const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(
-      `${GRAPH}${microsoftEventPath(externalCalendarId, externalEventId)}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(toGraphEvent(event)),
-      },
-    );
-    if (!res.ok) throw await graphError(res);
+  async pushUpdate() {
+    refuseUnverifiedOutlookEventWrite();
   },
 
-  async pushDelete(userID, accountId, externalCalendarId, externalEventId) {
-    const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(
-      `${GRAPH}${microsoftEventPath(externalCalendarId, externalEventId)}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    // 404/410 = already gone = success (idempotent)
-    if (!res.ok && res.status !== 404 && res.status !== 410) {
-      throw await graphError(res);
-    }
+  async pushDelete() {
+    refuseUnverifiedOutlookEventWrite();
   },
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {
@@ -645,7 +739,7 @@ export const microsoftAdapter: CalendarAdapter = {
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     return createMicrosoftTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       task,
     );
@@ -663,7 +757,7 @@ export const microsoftAdapter: CalendarAdapter = {
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     return updateMicrosoftTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       task,
@@ -682,7 +776,7 @@ export const microsoftAdapter: CalendarAdapter = {
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     await deleteMicrosoftTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       ref?.etag,
@@ -694,6 +788,7 @@ export const microsoftAdapter: CalendarAdapter = {
     // the nearest preset. The client offers exactly these presets for Outlook
     // calendars, so this is normally an exact match.
     const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
     const res = await fetch(`${GRAPH}/me/calendars`, {
       method: "POST",
       headers: {
@@ -713,6 +808,11 @@ export const microsoftAdapter: CalendarAdapter = {
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     if (taskListId) {
       const res = await fetch(
         `${GRAPH}/me/todo/lists/${encodeURIComponent(taskListId)}`,
@@ -748,6 +848,11 @@ export const microsoftAdapter: CalendarAdapter = {
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
+    if (
+      taskListId &&
+      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+    )
+      throw new TaskScopeMissingError();
     const res = await fetch(
       taskListId
         ? `${GRAPH}/me/todo/lists/${encodeURIComponent(taskListId)}`

@@ -33,6 +33,47 @@ Going the other way — a client that needs an endpoint the server has not
 deployed — needs a feature flag or a capability check, not a careful eye on the
 deploy order.
 
+## K06 coordinated compatibility break (prepared, not deployed)
+
+The fixing release is **0.1.8**, not 0.1.9: the latest actual upstream release
+is GitHub tag `v0.1.7`; the root manifest's 0.1.8 is unreleased work. Release
+authority is the upstream tag, not the current product constant.
+
+The owner approved raising **both client and federation peer floors to 0.1.8**.
+Prepare server, web and native together; do not enable this deployment until
+compatible clients and connected servers are available. This explicitly
+supersedes the normal additive API→web→phone order above. No publishing,
+production migration or deployment is authorized by this implementation.
+
+All authenticated product API reads and writes require
+`x-musubi-client-version: X.Y.Z >= 0.1.8`, including member-token requests,
+uploads, ICS and streams. Browser EventSource alone uses
+`/api/stream?clientVersion=0.1.8` because it cannot set headers. Missing/malformed
+or old versions receive 426, not an authentication failure or a forced reload
+that discards a draft. The header is compatibility evidence, **not authorization
+or a substitute for event expected-revision validation**.
+
+Exemptions are existing public discovery/health, Better Auth/bootstrap and OAuth
+callbacks, public invite previews/deep links, account-confirmation pages/token
+confirmation, universal-link metadata and public avatar reads. Public federation
+accept additionally requires the compatible requester version before issuing a
+member token. The only authenticated exemption is
+`POST /api/v1/federation/token/rotate`; its handler still requires the existing
+external member credential and only rotates that credential. There is no blanket
+member-token exemption. Old peer handshakes and product requests are refused;
+unknown/unreachable peer versions do not establish compatibility. Existing
+connections and cache records are retained, never silently deleted.
+
+Gateway requests forward the **actual calling client version**, never replace
+it with the home server's version. Server-originated federated SSE identifies
+its own product version. Established peer connections are checked before
+forwarding product requests/connecting streams as well as at handshake.
+
+The additive revision column can remain through an application rollback, but
+rolling back to revision-incapable writers invalidates CAS protection; do not
+advertise safe mixed-version writes. Full K06 enforcement/draft/provider work
+must be completed and reviewed before this prepared rollout can be accepted.
+
 ## What the machine checks
 
 `pnpm check` runs all of these; nothing below needs remembering. In CI they are

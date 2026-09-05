@@ -1,9 +1,14 @@
-import { config } from "@musubi/config";
-import { getOAuthAccountIDs } from "@musubi/db";
+import { config, logger } from "@musubi/config";
+import {
+  getOAuthAccountIDs,
+  hasOAuthTaskScope,
+  type EventContentPatch,
+} from "@musubi/db";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import type { Event, Task } from "@musubi/types";
 import type {
   CalendarAdapter,
+  CalendarDiscoveryResult,
   ExternalCalendarInfo,
   FetchChangesResult,
   NormalizedChange,
@@ -11,6 +16,18 @@ import type {
   NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
+import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
+import {
+  assertEventWriteEvidence,
+  assertEventWriteResponse,
+  assertOAuthEventWriteGrant,
+  assertAcceptedEventEtag,
+  assertProviderEventMutationResponse,
+  requireEventEtag,
+  requireEventPatch,
+  strongEventEtag,
+  ProviderEventWriteError,
+} from "../event_write";
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 const GTASKS = "https://tasks.googleapis.com/tasks/v1";
@@ -63,13 +80,22 @@ async function patchCalendarColor(
   if (!res.ok) throw await googleError(res);
 }
 
-function getAccessToken(userID: string, accountId: string) {
-  return getOAuthAccessToken("google", userID, accountId, {
+async function getAccessToken(
+  userID: string,
+  accountId: string,
+  requireTasks = false,
+) {
+  const accessToken = await getOAuthAccessToken("google", userID, accountId, {
     tokenEndpoint: GOOGLE_TOKEN_ENDPOINT,
     clientId: config.social.googleWebClientID,
     clientSecret: config.social.googleClientSecret,
     subtypeKey: "error_subtype",
   });
+  // Refresh may return a narrower grant. Check after minting, before any Tasks
+  // endpoint, including task writes that bypass discovery.
+  if (requireTasks && !(await hasOAuthTaskScope(userID, "google", accountId)))
+    throw new TaskScopeMissingError();
+  return accessToken;
 }
 
 // "What UTC instant is <local wall-clock time> in <tz>?" — via Intl, no tz lib.
@@ -158,6 +184,7 @@ function toNormalized(item: any): NormalizedEvent {
   if (item.status === "cancelled") {
     return {
       externalId: item.id,
+      etag: strongEventEtag(item.etag),
       status: "cancelled",
       title: "",
       start: new Date(0),
@@ -179,6 +206,7 @@ function toNormalized(item: any): NormalizedEvent {
 
   return {
     externalId: item.id,
+    etag: strongEventEtag(item.etag),
     status: "active",
     title: item.summary ?? "(untitled)",
     start,
@@ -238,6 +266,33 @@ function toGoogleEvent(event: Event) {
         } // +1 day, Google exclusive
       : { dateTime: event.end.toISOString() },
   };
+}
+
+/** Calendar PATCH preserves omitted properties (including HTML and rich provider state). */
+function toGoogleEventPatch(
+  event: Event,
+  patch: EventContentPatch | undefined,
+) {
+  const diff = requireEventPatch(patch);
+  const next = { ...event, ...diff };
+  const full = toGoogleEvent(next);
+  const result: Record<string, unknown> = {};
+  for (const [field, property] of [
+    ["title", "summary"],
+    ["description", "description"],
+    ["location", "location"],
+    ["recurrence", "recurrence"],
+    ["start", "start"],
+    ["end", "end"],
+  ] as const) {
+    if (diff[field] !== undefined) result[property] = full[property];
+  }
+  if (diff.isAllDay !== undefined) {
+    result.start = full.start;
+    result.end = full.end;
+    if (next.recurrence) result.recurrence = full.recurrence;
+  }
+  return result;
 }
 
 function googleTaskDate(value: unknown) {
@@ -484,8 +539,11 @@ export async function fetchGoogleChanges(
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
 
-  async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
-    const ids = await getOAuthAccountIDs(userID, "google");
+  async listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]> {
+    const ids = await getOAuthAccountIDs(userID, "google", accountId);
     return Promise.all(
       ids.map(async (id) => {
         let label = id;
@@ -512,23 +570,48 @@ export const googleAdapter: CalendarAdapter = {
   async listCalendars(
     userID: string,
     accountId: string,
-  ): Promise<ExternalCalendarInfo[]> {
+  ): Promise<CalendarDiscoveryResult> {
     const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(`${GCAL}/users/me/calendarList`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
-    const data = await res.json();
-    const calendars = (data.items ?? []).map((c: any) => ({
-      externalId: c.id,
-      name: c.summary,
-      color: c.backgroundColor,
-      readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
-      supportsEvents: true,
-      supportsTasks: false,
-    }));
-    const taskLists = await listGoogleTaskLists(accessToken);
-    return [...calendars, ...taskLists.map(toExternalGoogleTaskList)];
+    const calendars: ExternalCalendarInfo[] = [];
+    let pageToken: string | undefined;
+    // The engine sweeps absent mirrors only after this complete discovery.
+    do {
+      const params = new URLSearchParams();
+      if (pageToken) params.set("pageToken", pageToken);
+      const res = await fetch(`${GCAL}/users/me/calendarList?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw await googleError(res);
+      const data = await res.json();
+      for (const c of data.items ?? [])
+        calendars.push({
+          externalId: c.id,
+          name: c.summary,
+          color: c.backgroundColor,
+          readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
+          supportsEvents: true,
+          supportsTasks: false,
+        });
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+    if (!(await hasOAuthTaskScope(userID, "google", accountId))) {
+      return { calendars, taskListsComplete: false };
+    }
+    try {
+      const taskLists = await listGoogleTaskLists(accessToken);
+      return {
+        calendars: [...calendars, ...taskLists.map(toExternalGoogleTaskList)],
+        taskListsComplete: true,
+      };
+    } catch (error) {
+      if (!isOptionalTaskError(error)) throw error;
+      logger.warn("sync.tasks.discovery_unavailable", {
+        provider: "google",
+        userId: userID,
+        accountId,
+      });
+      return { calendars, taskListsComplete: false };
+    }
   },
 
   async fetchChanges(
@@ -539,9 +622,58 @@ export const googleAdapter: CalendarAdapter = {
   ): Promise<FetchChangesResult> {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
       : fetchGoogleChanges(accessToken, externalCalendarId, cursor);
+  },
+
+  async assertEventWrite(userID, accountId, externalCalendarId, operation) {
+    const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "google", accountId);
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    const response = await fetch(
+      `${GCAL}/users/me/calendarList/${encodeURIComponent(externalCalendarId)}`,
+      { headers },
+    );
+    assertEventWriteResponse(response);
+    const calendar = await response.json();
+    assertEventWriteEvidence(
+      typeof calendar.accessRole === "string"
+        ? ["owner", "writer"].includes(calendar.accessRole)
+        : undefined,
+      "event-write",
+    );
+    // A calendar grant does not make an invited copy an organizer's meeting.
+    // DELETE can cancel an organizer copy, but only removes an attendee copy.
+    if (operation.action !== "create" && operation.external) {
+      requireEventEtag(operation.external.etag);
+      if (operation.action === "update")
+        toGoogleEventPatch(operation.event, operation.patch);
+      const response = await fetch(
+        `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(operation.external.externalEventId)}`,
+        { headers },
+      );
+      if (operation.action === "delete" && [404, 410].includes(response.status))
+        return;
+      assertEventWriteResponse(response);
+      const current = await response.json();
+      assertAcceptedEventEtag(operation.external.etag, current.etag);
+      // Google documents self=false as the default on an organizer object.
+      // An absent organizer object is not evidence of that default.
+      const self =
+        typeof current.organizer?.self === "boolean"
+          ? current.organizer.self
+          : typeof current.organizer?.email === "string" &&
+              current.organizer.email
+            ? false
+            : undefined;
+      assertEventWriteEvidence(
+        operation.action === "delete" && self === false ? true : self,
+        "organizer",
+      );
+    }
   },
 
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {
@@ -555,11 +687,19 @@ export const googleAdapter: CalendarAdapter = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(toGoogleEvent(event)),
+        redirect: "error",
       },
     );
-    if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
-    const data = await res.json();
-    return { externalEventId: data.id };
+    assertProviderEventMutationResponse(res);
+    const data = await res.json().catch(() => null);
+    if (typeof data?.id !== "string" || !data.id) {
+      throw new ProviderEventWriteError(
+        "provider-write-failed",
+        "unconfirmed",
+        res.status,
+      );
+    }
+    return { externalEventId: data.id, etag: strongEventEtag(data.etag) };
   },
 
   async pushUpdate(
@@ -568,7 +708,12 @@ export const googleAdapter: CalendarAdapter = {
     externalCalendarId,
     externalEventId,
     event: Event,
+    ref,
+    patch,
   ) {
+    const etag = requireEventEtag(ref?.etag);
+    const payload = toGoogleEventPatch(event, patch);
+    if (Object.keys(payload).length === 0) return; // Known local-only/no-op diff, no write.
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
@@ -577,22 +722,39 @@ export const googleAdapter: CalendarAdapter = {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
+          "If-Match": etag,
         },
-        body: JSON.stringify(toGoogleEvent(event)),
+        body: JSON.stringify(payload),
+        redirect: "error", // Never turn a conditional mutation into a redirected GET.
       },
     );
-    if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
+    assertProviderEventMutationResponse(res);
+    // A missing/malformed success body cannot authorize another write. Never
+    // adopt a later GET's version without accepting its content through sync.
+    const data = await res.json().catch(() => null);
+    return { etag: strongEventEtag(data?.etag) };
   },
 
-  async pushDelete(userID, accountId, externalCalendarId, externalEventId) {
+  async pushDelete(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalEventId,
+    ref,
+  ) {
+    const etag = requireEventEtag(ref?.etag);
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+      {
+        method: "DELETE",
+        redirect: "error",
+        headers: { Authorization: `Bearer ${accessToken}`, "If-Match": etag },
+      },
     );
     // 404/410 = already gone = success (idempotent)
-    if (!res.ok && res.status !== 404 && res.status !== 410) {
-      throw new Error(`Google ${res.status} ${res.statusText}`);
+    if (res.status !== 404 && res.status !== 410) {
+      assertProviderEventMutationResponse(res);
     }
   },
 
@@ -600,7 +762,7 @@ export const googleAdapter: CalendarAdapter = {
     const taskListId = googleTaskListId(externalCalendarId);
     if (!taskListId) throw new Error("Google task write requires a task list");
     return createGoogleTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       task,
     );
@@ -617,7 +779,7 @@ export const googleAdapter: CalendarAdapter = {
     const taskListId = googleTaskListId(externalCalendarId);
     if (!taskListId) throw new Error("Google task write requires a task list");
     return updateGoogleTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       task,
@@ -635,7 +797,7 @@ export const googleAdapter: CalendarAdapter = {
     const taskListId = googleTaskListId(externalCalendarId);
     if (!taskListId) throw new Error("Google task write requires a task list");
     await deleteGoogleTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       ref?.etag,
@@ -644,6 +806,7 @@ export const googleAdapter: CalendarAdapter = {
 
   async createCalendar(userID, accountId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "google", accountId);
     const res = await fetch(`${GCAL}/calendars`, {
       method: "POST",
       headers: {
@@ -661,6 +824,8 @@ export const googleAdapter: CalendarAdapter = {
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     if (taskListId) {
       const res = await fetch(
         `${GTASKS}/users/@me/lists/${encodeURIComponent(taskListId)}`,
@@ -694,6 +859,8 @@ export const googleAdapter: CalendarAdapter = {
   async deleteCalendar(userID, accountId, externalCalendarId) {
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
+    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
+      throw new TaskScopeMissingError();
     const res = await fetch(
       taskListId
         ? `${GTASKS}/users/@me/lists/${encodeURIComponent(taskListId)}`

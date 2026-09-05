@@ -85,8 +85,9 @@ export default function OnboardingSync() {
       <SyncCalendarModal
         visible={syncVisible}
         onClose={() => setSyncVisible(false)}
-        onConnected={(provider) => {
-          refresh({ full: true, providerSync: provider !== "caldav" }).catch(() => { });
+        onConnected={() => {
+          // Connection flows already completed their scoped provider import.
+          refresh({ full: true, providerSync: false }).catch(() => { });
         }}
         callbackURL="/onboarding/sync"
       />

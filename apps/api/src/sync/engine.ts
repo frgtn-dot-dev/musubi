@@ -1,9 +1,11 @@
-import type { Event, Task } from "@musubi/types";
+import { EventWriteError, type Event, type Task } from "@musubi/types";
 import { logger } from "@musubi/config";
 import {
   deleteExternalEvent,
   deleteExternalTask,
+  diffEventContent,
   getCalendarMembers,
+  getEventCalendars,
   getExternalEvent,
   getExternalTask,
   getDisabledExternalCalendarIDs,
@@ -27,14 +29,21 @@ import {
 import { notifyCalendarMembers } from "../handlers/stream";
 import type {
   CalendarAdapter,
+  EventWriteOperation,
   NormalizedEvent,
   NormalizedTask,
 } from "./adapter";
 import { googleAdapter } from "./adapters/google";
 import { caldavAdapter } from "./adapters/caldav";
 import { microsoftAdapter } from "./adapters/microsoft";
-import { isTransientSyncError, providerAuthErrorFields } from "./errors";
+import {
+  isOptionalTaskError,
+  isTransientSyncError,
+  providerAuthErrorFields,
+  ProviderAuthError,
+} from "./errors";
 import { recordExternalSyncFailure } from "../metrics";
+import { ProviderEventWriteError, requireEventPatch } from "./event_write";
 import { type ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
 
 // provider -> adapter. Register new providers here.
@@ -128,6 +137,31 @@ export async function reconcileExternalChanges(
   return changed;
 }
 
+// A user who lost their last link is absent from subsequent event deltas.
+// Include the accepted local revision so a delayed removal cannot evict a newer row.
+async function notifyExternalEventUnlinks(
+  calendarID: string,
+  unlinks: { id: string; revision: number }[],
+) {
+  if (unlinks.length === 0) return;
+  const previousMembers = await getCalendarMembers(calendarID);
+  for (const { id, revision } of unlinks) {
+    const remainingCalendars = await getEventCalendars(id);
+    const remainingMembers = new Set<string>();
+    for (const calendar of remainingCalendars) {
+      for (const member of await getCalendarMembers(calendar))
+        remainingMembers.add(member.userID);
+    }
+    notifyCalendarMembers(
+      previousMembers
+        .filter((member) => !remainingMembers.has(member.userID))
+        .map((member) => member.userID),
+      "event_removed",
+      { id, revision },
+    );
+  }
+}
+
 // Pull: reconcile calendars, then pull each calendar's changes into Musubi. Scoped
 // to ONE connected account of the provider.
 export async function syncProvider(
@@ -145,7 +179,10 @@ export async function syncProvider(
   await setAccountLabel(provider, userID, accountId, account.label);
 
   // 1. reconcile the calendar list
-  const remote = await adapter.listCalendars(userID, accountId);
+  const { calendars: remote, taskListsComplete } = await adapter.listCalendars(
+    userID,
+    accountId,
+  );
   const remoteIDs = new Set(remote.map((c) => c.externalId));
   logger.debug("sync.account.calendars_discovered", {
     provider,
@@ -160,7 +197,10 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
-    if (!remoteIDs.has(link.externalCalendarID)) {
+    if (
+      !remoteIDs.has(link.externalCalendarID) &&
+      (taskListsComplete || link.supportsEvents || !link.supportsTasks)
+    ) {
       await removeCalendar(link.calendarID);
     }
   }
@@ -208,46 +248,81 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
+    const taskOnly = link.supportsTasks && !link.supportsEvents;
+    if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
-    const { changes, nextCursor, reset } = await adapter.fetchChanges(
-      userID,
-      accountId,
-      link.externalCalendarID,
-      link.cursor,
-    );
+    let fetched;
+    try {
+      fetched = await adapter.fetchChanges(
+        userID,
+        accountId,
+        link.externalCalendarID,
+        link.cursor,
+      );
+    } catch (error) {
+      if (
+        !taskOnly ||
+        (provider !== "google" && provider !== "microsoft") ||
+        !isOptionalTaskError(error)
+      )
+        throw error;
+      logger.warn("sync.tasks.fetch_unavailable", {
+        provider,
+        userId: userID,
+        accountId,
+        calendarId: link.calendarID,
+      });
+      continue;
+    }
+    const { changes, nextCursor, reset } = fetched;
 
-    const changed = await reconcileExternalChanges(changes, reset, {
-      deleteEvent: (externalID) =>
-        deleteExternalEvent(provider, link.calendarID, externalID),
-      deleteTask: (externalID) =>
-        deleteExternalTask(provider, link.calendarID, externalID),
-      upsertEvent: (event) =>
-        upsertExternalEvent(
-          provider,
-          userID,
-          link.calendarID,
-          link.externalCalendarID,
-          event.externalId,
-          toEventValues(event, link.calColor),
-          event.etag ?? null,
-          event.icalUid ?? null,
-        ),
-      upsertTask: (task) =>
-        upsertExternalTask(
-          provider,
-          userID,
-          link.calendarID,
-          link.externalCalendarID,
-          task.externalId,
-          toTaskValues(task),
-          task.etag ?? null,
-          task.icalUid ?? null,
-        ),
-      sweepEvents: (seenExternalIDs) =>
-        sweepExternalEvents(provider, link.calendarID, seenExternalIDs),
-      sweepTasks: (seenExternalIDs) =>
-        sweepExternalTasks(provider, link.calendarID, seenExternalIDs),
-    });
+    const unlinkedEventIDs: { id: string; revision: number }[] = [];
+    const onUnlink = (id: string, revision: number) => {
+      unlinkedEventIDs.push({ id, revision });
+    };
+    let changed: number;
+    try {
+      changed = await reconcileExternalChanges(changes, reset, {
+        deleteEvent: (externalID) =>
+          deleteExternalEvent(provider, link.calendarID, externalID, onUnlink),
+        deleteTask: (externalID) =>
+          deleteExternalTask(provider, link.calendarID, externalID),
+        upsertEvent: (event) =>
+          upsertExternalEvent(
+            provider,
+            userID,
+            link.calendarID,
+            link.externalCalendarID,
+            event.externalId,
+            toEventValues(event, link.calColor),
+            event.etag ?? null,
+            event.icalUid ?? null,
+          ),
+        upsertTask: (task) =>
+          upsertExternalTask(
+            provider,
+            userID,
+            link.calendarID,
+            link.externalCalendarID,
+            task.externalId,
+            toTaskValues(task),
+            task.etag ?? null,
+            task.icalUid ?? null,
+          ),
+        sweepEvents: (seenExternalIDs) =>
+          sweepExternalEvents(
+            provider,
+            link.calendarID,
+            seenExternalIDs,
+            onUnlink,
+          ),
+        sweepTasks: (seenExternalIDs) =>
+          sweepExternalTasks(provider, link.calendarID, seenExternalIDs),
+      });
+    } finally {
+      // Earlier unlinks have committed even if a later resource fails.
+      await notifyExternalEventUnlinks(link.calendarID, unlinkedEventIDs);
+    }
 
     if (changed > 0) changedCalendarIDs.push(link.calendarID);
     await setCursor(link.calendarID, nextCursor);
@@ -339,79 +414,248 @@ export async function pushEventToCalendars(
   calendarIDs: string[],
   action: "create" | "update" | "delete",
 ) {
-  for (const calendarID of calendarIDs) {
-    const link = await getExternalLinkForCalendar(calendarID);
-    if (!link?.supportsEvents) continue;
-    const adapter = getAdapter(link.provider);
-    if (!adapter) continue;
+  const deliver = await prepareEventWrites([{ event, calendarIDs, action }]);
+  await deliver();
+}
 
-    try {
-      if (action === "create") {
-        const external = await adapter.pushCreate(
+export type CalendarEventWrite = Omit<EventWriteOperation, "external"> & {
+  calendarIDs: string[];
+};
+
+export type EventDeliveryReceipt = {
+  action: EventWriteOperation["action"];
+  eventID: string;
+  calendarID: string;
+  provider: string;
+  accountID: string;
+  externalCalendarID: string;
+  externalEventID?: string;
+  status:
+    | "not-attempted"
+    | "completed"
+    | "not-needed"
+    | "conflict"
+    | "not-written"
+    | "unconfirmed";
+};
+
+/** Request-scoped delivery only. Handler must add localCommitted/current revision;
+ * these receipts are neither a durable outbox nor proof of multi-target atomicity.
+ */
+export class EventDeliveryError extends Error {
+  constructor(
+    readonly receipts: EventDeliveryReceipt[],
+    readonly failure: Error,
+  ) {
+    super("Event provider delivery did not complete.");
+    this.name = "EventDeliveryError";
+  }
+}
+
+/** Validate the ENTIRE operation before returning a delivery function. Handlers
+ * call this before touching event/link rows, including before removed-copy deletes.
+ * It is deliberately request-scoped, not a reservation or an outbox.
+ */
+export async function prepareEventWrites(writes: CalendarEventWrite[]) {
+  const prepared: Array<{
+    operation: CalendarEventWrite;
+    calendarID: string;
+    link: NonNullable<Awaited<ReturnType<typeof getExternalLinkForCalendar>>>;
+    adapter: CalendarAdapter;
+    external: Awaited<ReturnType<typeof getExternalEvent>> | null;
+    receipt: EventDeliveryReceipt;
+  }> = [];
+  for (const write of writes) {
+    // Legacy handlers provide a server-read previous snapshot. This narrows
+    // payloads, but is NOT local CAS. Next-stage CAS supplies its actual patch.
+    const operation = structuredClone(write);
+    if (
+      operation.action === "update" &&
+      operation.patch === undefined &&
+      operation.previous
+    ) {
+      operation.patch = diffEventContent(operation.previous, operation.event);
+    }
+    for (const calendarID of new Set(operation.calendarIDs)) {
+      const link = await getExternalLinkForCalendar(calendarID);
+      if (!link) continue;
+      if (!link.supportsEvents)
+        throw new EventWriteError("event-write", "unsupported");
+      const adapter = getAdapter(link.provider);
+      if (!adapter?.assertEventWrite)
+        throw new EventWriteError("event-write", "unknown");
+      const external =
+        operation.action === "create"
+          ? null
+          : await getExternalEvent(
+              link.provider,
+              operation.event.id,
+              link.externalCalendarID,
+              calendarID,
+            );
+      if (operation.action === "update" && external)
+        requireEventPatch(operation.patch);
+      try {
+        await adapter.assertEventWrite(
           link.userID,
           link.accountID,
           link.externalCalendarID,
-          event,
+          {
+            ...operation,
+            external: external ?? undefined,
+          },
         );
-        await importExternalEvent(
-          link.provider,
-          event.id,
-          calendarID,
-          link.externalCalendarID,
-          external.externalEventId,
-          external.etag ?? null,
-          external.icalUid ?? null,
-        );
-      } else {
-        const external = await getExternalEvent(
-          link.provider,
-          event.id,
-          link.externalCalendarID,
-        );
-        if (!external) continue;
-        if (action === "update") {
-          const result = await adapter.pushUpdate(
-            link.userID,
-            link.accountID,
-            link.externalCalendarID,
-            external.externalEventId,
-            event,
-            external,
-          );
-          if (result) {
-            await setExternalEventSyncData(
-              link.provider,
-              event.id,
-              link.externalCalendarID,
-              {
-                etag: result.etag ?? null,
-                icalUid: result.icalUid ?? external.icalUid ?? null,
-              },
-            );
-          }
-        } else {
-          await adapter.pushDelete(
-            link.userID,
-            link.accountID,
-            link.externalCalendarID,
-            external.externalEventId,
-            external,
-          );
-        }
+      } catch (error) {
+        if (
+          error instanceof EventWriteError ||
+          error instanceof ProviderAuthError ||
+          error instanceof ProviderEventWriteError
+        )
+          throw error;
+        throw new EventWriteError("event-write", "unknown");
       }
-    } catch (e) {
-      recordExternalSyncFailure("push", link.provider);
-      logger.error("sync.push.failed", {
-        action,
-        provider: link.provider,
-        userId: link.userID,
-        accountId: link.accountID,
-        calendarId: calendarID,
-        eventId: event.id,
-        error: e,
+      prepared.push({
+        operation,
+        calendarID,
+        link,
+        adapter,
+        external,
+        receipt: {
+          action: operation.action,
+          eventID: operation.event.id,
+          calendarID,
+          provider: link.provider,
+          accountID: link.accountID,
+          externalCalendarID: link.externalCalendarID,
+          externalEventID: external?.externalEventId,
+          status: "not-attempted",
+        },
       });
     }
   }
+  let failure: EventDeliveryError | undefined;
+  return async (
+    onlyAction?: EventWriteOperation["action"],
+    committedRevision?: number | ReadonlyMap<string, number>,
+  ) => {
+    if (failure) throw failure;
+    for (const {
+      operation,
+      calendarID,
+      link,
+      adapter,
+      external,
+      receipt,
+    } of prepared) {
+      const acceptedRevision = typeof committedRevision === "number"
+        ? committedRevision : committedRevision?.get(operation.event.id);
+      const { action, event } = operation;
+      if (onlyAction && action !== onlyAction) continue;
+      // A closure is single-attempt; calling it again cannot retry a conflict
+      // or re-send completed creates/deletes. Reconciliation is a new request.
+      if (receipt.status !== "not-attempted") continue;
+      try {
+        if (action === "create") {
+          const external = await adapter.pushCreate(
+            link.userID,
+            link.accountID,
+            link.externalCalendarID,
+            event,
+          );
+          receipt.externalEventID = external.externalEventId;
+          const accepted = await importExternalEvent(
+            link.provider,
+            event.id,
+            calendarID,
+            link.externalCalendarID,
+            external.externalEventId,
+            external.etag ?? null,
+            external.icalUid ?? null,
+            acceptedRevision,
+          );
+          if (!accepted)
+            throw new ProviderEventWriteError(
+              "provider-write-failed",
+              "unconfirmed",
+            );
+        } else {
+          if (!external) {
+            receipt.status = "not-needed";
+            continue;
+          }
+          if (action === "update") {
+            const result = await adapter.pushUpdate(
+              link.userID,
+              link.accountID,
+              link.externalCalendarID,
+              external.externalEventId,
+              event,
+              external,
+              operation.patch,
+            );
+            if (result) {
+              const accepted = await setExternalEventSyncData(
+                link.provider,
+                event.id,
+                link.externalCalendarID,
+                {
+                  etag: result.etag ?? null,
+                  icalUid: result.icalUid ?? external.icalUid ?? null,
+                },
+                calendarID,
+                acceptedRevision === undefined
+                  ? undefined
+                  : {
+                      revision: acceptedRevision,
+                      etag: external.etag,
+                      externalEventID: external.externalEventId,
+                    },
+              );
+              if (!accepted)
+                throw new ProviderEventWriteError(
+                  "provider-write-failed",
+                  "unconfirmed",
+                );
+            }
+          } else {
+            await adapter.pushDelete(
+              link.userID,
+              link.accountID,
+              link.externalCalendarID,
+              external.externalEventId,
+              external,
+            );
+          }
+        }
+        receipt.status = "completed";
+      } catch (e) {
+        receipt.status =
+          e instanceof ProviderEventWriteError
+            ? e.code === "provider-conflict"
+              ? "conflict"
+              : e.outcome
+            : "unconfirmed";
+        recordExternalSyncFailure("push", link.provider);
+        logger.error("sync.push.failed", {
+          action,
+          provider: link.provider,
+          userId: link.userID,
+          accountId: link.accountID,
+          calendarId: calendarID,
+          eventId: event.id,
+          error: e,
+        });
+        failure = new EventDeliveryError(
+          prepared.map(({ receipt }) => ({ ...receipt })),
+          e instanceof Error
+            ? e
+            : new Error("Unknown provider delivery failure"),
+        );
+        throw failure;
+      }
+    }
+    return prepared.map(({ receipt }) => ({ ...receipt }));
+  };
 }
 
 export async function pushTaskToCalendar(

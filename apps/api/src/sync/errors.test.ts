@@ -2,7 +2,7 @@
 // apps/api. Cases are the real shapes seen in production logs.
 import assert from "node:assert";
 
-import { isTransientSyncError, ProviderAuthError } from "./errors";
+import { isOptionalTaskError, isTransientSyncError, ProviderAuthError, TaskScopeMissingError } from "./errors";
 
 // undici wraps the DNS failure as a bare "fetch failed" with the code on cause.
 const dnsFailure = Object.assign(new TypeError("fetch failed"), {
@@ -31,5 +31,14 @@ assert.equal(isTransientSyncError(new TypeError("x is not a function")), false);
 assert.equal(isTransientSyncError(new Error("Google 404 Not Found")), false);
 assert.equal(isTransientSyncError(new Error("cannot find homeUrl")), false);
 assert.equal(isTransientSyncError(undefined), false);
+
+assert.equal(isOptionalTaskError(new TaskScopeMissingError()), true);
+for (const message of ["Google 403: Forbidden", "Google Tasks 403 Forbidden", "Outlook 503: Unavailable"]) {
+  assert.equal(isOptionalTaskError(new Error(message)), true);
+}
+assert.equal(isOptionalTaskError(dnsFailure), true);
+for (const error of [new Error("Google Tasks 401 Unauthorized"), new Error("Outlook 401: Unauthorized"), new TypeError("bug"), new ProviderAuthError("google", "invalid_grant", undefined, true), new ProviderAuthError("microsoft", "token_endpoint_unreachable", undefined, false)]) {
+  assert.equal(isOptionalTaskError(error), false);
+}
 
 console.log("sync/errors self-check passed");

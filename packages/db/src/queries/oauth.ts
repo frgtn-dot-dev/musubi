@@ -13,16 +13,23 @@ export const CALENDAR_SCOPE: Record<string, string> = {
   microsoft: "Calendars.ReadWrite",
 };
 
-// Task APIs use separate consent even though their lists become task-only
-// calendars in Musubi. Existing grants must reconnect before sync resumes.
-export const PROVIDER_SYNC_SCOPES: Record<string, readonly string[]> = {
-  google: [CALENDAR_SCOPE.google, "https://www.googleapis.com/auth/tasks"],
-  microsoft: [CALENDAR_SCOPE.microsoft, "Tasks.ReadWrite"],
+// Calendar eligibility is independent of the optional Tasks grant.
+export const TASK_SCOPE: Record<string, string> = {
+  google: "https://www.googleapis.com/auth/tasks",
+  microsoft: "Tasks.ReadWrite",
 };
 
 export function hasProviderSyncScopes(provider: string, scope = "") {
-  const required = PROVIDER_SYNC_SCOPES[provider];
-  return Boolean(required?.length && required.every(item => scope.split(/[\s,]+/).includes(item)));
+  return Boolean(CALENDAR_SCOPE[provider] && scope.split(/[\s,]+/).includes(CALENDAR_SCOPE[provider]));
+}
+
+export function hasProviderTaskScope(provider: string, scope = "") {
+  return Boolean(TASK_SCOPE[provider] && scope.split(/[\s,]+/).includes(TASK_SCOPE[provider]));
+}
+
+export async function hasOAuthTaskScope(userID: string, provider: string, accountID: string) {
+  const credentials = await getOAuthCredentials(userID, provider, accountID);
+  return hasProviderTaskScope(provider, credentials?.scope ?? "");
 }
 
 export async function oauthConnectionCheck(userID: string, provider: string): Promise<GoogleCheck> {
@@ -42,7 +49,7 @@ export async function oauthConnectionCheck(userID: string, provider: string): Pr
 
 // account ids of the user's accounts that granted calendar access — used by
 // the adapters' listAccounts (one row per connected account).
-export async function getOAuthAccountIDs(userID: string, provider: string): Promise<string[]> {
+export async function getOAuthAccountIDs(userID: string, provider: string, accountID?: string): Promise<string[]> {
   const rows = await db.select({
     accountId: account.accountId,
     scope: account.scope,
@@ -51,7 +58,8 @@ export async function getOAuthAccountIDs(userID: string, provider: string): Prom
     syncErrorCode: account.syncErrorCode,
   })
     .from(account)
-    .where(and(eq(account.userId, userID), eq(account.providerId, provider)));
+    .where(and(eq(account.userId, userID), eq(account.providerId, provider),
+      accountID === undefined ? undefined : eq(account.accountId, accountID)));
   // Require a refresh token too — same bar as oauthConnectionCheck's
   // `calendarConnected`. Permanently revoked accounts stay excluded, while an
   // insufficient-scope status self-heals when the stored grant is actually full.
@@ -87,6 +95,7 @@ export async function getOAuthAccountIDs(userID: string, provider: string): Prom
 
 export async function getOAuthCredentials(userID: string, provider: string, accountID: string) {
   const [row] = await db.select({
+    scope: account.scope,
     accessToken: account.accessToken,
     refreshToken: account.refreshToken,
     accessTokenExpiresAt: account.accessTokenExpiresAt,
@@ -108,13 +117,14 @@ export async function updateOAuthTokens(
   userID: string,
   provider: string,
   accountID: string,
-  tokens: { accessToken: string; accessTokenExpiresAt: Date; refreshToken?: string },
+  tokens: { accessToken: string; accessTokenExpiresAt: Date; refreshToken?: string; scope?: string },
 ) {
   await db.update(account)
     .set({
       accessToken: tokens.accessToken,
       accessTokenExpiresAt: tokens.accessTokenExpiresAt,
       ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
+      ...(tokens.scope === undefined ? {} : { scope: tokens.scope }),
     })
     .where(and(
       eq(account.userId, userID),

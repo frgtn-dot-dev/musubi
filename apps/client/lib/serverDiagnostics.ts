@@ -1,3 +1,5 @@
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
+
 const entries: string[] = [];
 
 function inputUrl(input: RequestInfo | URL) {
@@ -34,7 +36,9 @@ export function diagnosticFetchFor(serverOrigin: string) {
 		const requested = safeTarget(requestedUrl);
 		recordServerDiagnostic(`→ ${init?.method ?? "GET"} ${requested}`);
 		try {
-			const response = await fetch(requestedUrl, init);
+			const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+			headers.set(CLIENT_VERSION_HEADER, PRODUCT_VERSION);
+			const response = await fetch(requestedUrl, { ...init, headers });
 			recordServerDiagnostic(
 				`← ${response.status} ${requested} => ${safeTarget(response.url)}`,
 			);

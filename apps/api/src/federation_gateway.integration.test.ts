@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -15,6 +16,7 @@ type Recorded = {
   auth?: string;
   body: string;
   cookie?: string;
+  clientVersion?: string;
   method?: string;
   url?: string;
 };
@@ -52,11 +54,12 @@ function proxyRequest(input: {
   rest: string[];
   url: string;
   userId: string;
+  clientVersion?: string;
 }): Request {
   return {
     body: input.body,
     get: (name: string) =>
-      name.toLowerCase() === "accept" ? "application/json" : undefined,
+      name.toLowerCase() === "accept" ? "application/json" : name === CLIENT_VERSION_HEADER ? input.clientVersion ?? PRODUCT_VERSION : undefined,
     headers: { cookie: "musubi_session=home-secret" },
     method: input.method ?? "GET",
     originalUrl: input.url,
@@ -76,15 +79,21 @@ async function main() {
   const userID = `gw-user-${randomUUID()}`;
   const memberToken = `mt1_test_${randomUUID()}`;
   let recorded: Recorded = { body: "" };
+  let peerVersion = PRODUCT_VERSION;
 
   const remote = createServer((req: IncomingMessage, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
+      if (req.url === "/api/v1/server") {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ version: peerVersion }));
+      }
       recorded = {
         auth: req.headers.authorization,
         body: Buffer.concat(chunks).toString(),
         cookie: req.headers.cookie,
+        clientVersion: req.headers[CLIENT_VERSION_HEADER] as string | undefined,
         method: req.method,
         url: req.url,
       };
@@ -132,6 +141,7 @@ async function main() {
       assert.equal(recorded.method, "GET");
       assert.equal(recorded.url, "/api/v1/events?since=2026-07-01");
       assert.equal(recorded.auth, `Bearer ${memberToken}`);
+      assert.equal(recorded.clientVersion, PRODUCT_VERSION);
       assert.equal(recorded.cookie, undefined, "home cookie must not be forwarded");
       assert.equal(result().statusCode, 200);
       assert.equal(result().payload, JSON.stringify({ ok: true }));
@@ -143,6 +153,7 @@ async function main() {
       await handlerFederationProxy(
         proxyRequest({
           body: { attending: true },
+          clientVersion: "0.1.10",
           connectionId: account.id,
           method: "PUT",
           rest: ["api", "v1", "events", "e1", "attendance"],
@@ -153,6 +164,7 @@ async function main() {
       );
 
       assert.equal(recorded.method, "PUT");
+      assert.equal(recorded.clientVersion, "0.1.10", "gateway forwards the caller's version, never substitutes its own");
       assert.equal(recorded.url, "/api/v1/events/e1/attendance");
       assert.equal(recorded.body, JSON.stringify({ attending: true }));
       assert.equal(result().statusCode, 200);
@@ -173,6 +185,19 @@ async function main() {
       assert.equal(result().statusCode, 403);
     }
 
+    // Existing connections are retained but old peers cannot receive reads or writes.
+    peerVersion = "0.1.7";
+    for (const method of ["GET", "PATCH"]) {
+      const before = recorded;
+      const { response, result } = fakeResponse();
+      await handlerFederationProxy(proxyRequest({ connectionId: account.id, method,
+        rest: ["api", "v1", "events"], url: `/api/v1/federation/s/${account.id}/api/v1/events`, userId: userID,
+      }), response);
+      assert.equal(result().statusCode, 426);
+      assert.equal(recorded, before, "no product request reaches an incompatible peer");
+    }
+    peerVersion = PRODUCT_VERSION;
+
     // Another user's connection id is invisible.
     await assert.rejects(
       () =>
@@ -188,7 +213,7 @@ async function main() {
       /not found/i,
     );
 
-    // A dead origin becomes 502, not an unhandled error.
+    // A dead origin cannot establish compatibility; no product request is sent.
     {
       await new Promise<void>((resolve) => remote.close(() => resolve()));
       const { response, result } = fakeResponse();
@@ -201,7 +226,8 @@ async function main() {
         }),
         response,
       );
-      assert.equal(result().statusCode, 502);
+      assert.equal(result().statusCode, 426);
+      assert.match(JSON.stringify(result().payload), /could not be verified/);
     }
 
     console.log("federation gateway DB integration self-check: OK");

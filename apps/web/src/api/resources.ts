@@ -1,4 +1,9 @@
 import {
+  eventCreateRequest,
+  eventPatchRequest,
+  requireEventRevision,
+} from "@musubi/types";
+import {
   AdminAnnouncementsResponseSchema,
   AttendeesResponseSchema,
   CalendarMembersResponseSchema,
@@ -476,20 +481,16 @@ export function disconnectFederatedServer(server: string) {
   });
 }
 
-/**
- * Pull in the calendars of every provider account this user has connected.
- *
- * The endpoint is named after Google for historical reasons; it runs the sync
- * engine for the whole user, which is what a freshly linked account needs. The
- * background scheduler does the same thing every few minutes — this is how the
- * person who just linked something does not have to wait for it.
- */
-export function syncProviderCalendars(signal?: AbortSignal) {
-  return apiRequest("/api/v1/calendars/google", {
+/** Bootstrap a provider, one account, or explicitly refresh all own providers. */
+export function syncProviderCalendars(
+  input: { provider?: string; accountId?: string } = {},
+  signal?: AbortSignal,
+) {
+  return apiRequest("/api/v1/users/connections/sync", {
+    body: input,
+    method: "POST",
     responseSchema: z.unknown(),
     signal,
-    // Talking to Google or Microsoft for every calendar takes longer than a
-    // normal read, and giving up early would leave a half-imported account.
     timeoutMs: 60_000,
   });
 }
@@ -524,7 +525,7 @@ export function deleteAccount() {
 
 export function createEvent(event: Event, connectionId?: string) {
   return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: event,
+    body: eventCreateRequest(event),
     method: "POST",
     responseSchema: EventSchema,
   });
@@ -532,15 +533,15 @@ export function createEvent(event: Event, connectionId?: string) {
 
 export function updateEvent(event: Event, connectionId?: string) {
   return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: event,
-    method: "PUT",
+    body: eventPatchRequest(event),
+    method: "PATCH",
     responseSchema: EventSchema,
   });
 }
 
 export function removeEvent(event: Event, connectionId?: string) {
   return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: event,
+    body: { id: event.id, expectedRevision: requireEventRevision(event) },
     method: "DELETE",
     responseSchema: RemoveEventResponseSchema,
   });
@@ -548,11 +549,12 @@ export function removeEvent(event: Event, connectionId?: string) {
 
 export function linkEvent(
   eventId: string,
+  expectedRevision: number,
   calendarId: string,
   connectionId?: string,
 ) {
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/link`), {
-    body: { calendarID: calendarId },
+    body: { calendarID: calendarId, expectedRevision },
     method: "POST",
     responseSchema: EventSchema,
   });
@@ -560,11 +562,12 @@ export function linkEvent(
 
 export function forkEvent(
   eventId: string,
+  expectedRevision: number,
   calendarId: string,
   connectionId?: string,
 ) {
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/fork`), {
-    body: { calendarID: calendarId },
+    body: { calendarID: calendarId, expectedRevision },
     method: "POST",
     responseSchema: EventSchema,
   });
