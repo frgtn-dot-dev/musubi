@@ -65,13 +65,22 @@ async function patchCalendarColor(
   if (!res.ok) throw await googleError(res);
 }
 
-function getAccessToken(userID: string, accountId: string) {
-  return getOAuthAccessToken("google", userID, accountId, {
+async function getAccessToken(
+  userID: string,
+  accountId: string,
+  requireTasks = false,
+) {
+  const accessToken = await getOAuthAccessToken("google", userID, accountId, {
     tokenEndpoint: GOOGLE_TOKEN_ENDPOINT,
     clientId: config.social.googleWebClientID,
     clientSecret: config.social.googleClientSecret,
     subtypeKey: "error_subtype",
   });
+  // Refresh may return a narrower grant. Check after minting, before any Tasks
+  // endpoint, including task writes that bypass discovery.
+  if (requireTasks && !(await hasOAuthTaskScope(userID, "google", accountId)))
+    throw new TaskScopeMissingError();
+  return accessToken;
 }
 
 // "What UTC instant is <local wall-clock time> in <tz>?" — via Intl, no tz lib.
@@ -630,11 +639,9 @@ export const googleAdapter: CalendarAdapter = {
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {
     const taskListId = googleTaskListId(externalCalendarId);
-    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
-      throw new TaskScopeMissingError();
     if (!taskListId) throw new Error("Google task write requires a task list");
     return createGoogleTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       task,
     );
@@ -649,11 +656,9 @@ export const googleAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = googleTaskListId(externalCalendarId);
-    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
-      throw new TaskScopeMissingError();
     if (!taskListId) throw new Error("Google task write requires a task list");
     return updateGoogleTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       task,
@@ -669,11 +674,9 @@ export const googleAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = googleTaskListId(externalCalendarId);
-    if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
-      throw new TaskScopeMissingError();
     if (!taskListId) throw new Error("Google task write requires a task list");
     await deleteGoogleTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       ref?.etag,

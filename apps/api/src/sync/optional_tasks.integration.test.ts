@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { auth } from "@musubi/auth";
+import { google, microsoft } from "better-auth/social-providers";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { eq } from "drizzle-orm";
@@ -17,14 +18,25 @@ import { isOptionalTaskError, ProviderAuthError, TaskScopeMissingError } from ".
 // are redirected to this disposable fixture; unexpected requests fail closed.
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
+  const oauthProviders = [
+    google({ ...auth.options.socialProviders.google, clientId: "fixture-client", clientSecret: "fixture-secret" }),
+    microsoft({ ...auth.options.socialProviders.microsoft, clientId: "fixture-client", clientSecret: "fixture-secret" }),
+  ];
   for (const adapter of [googleAdapter, microsoftAdapter]) {
     const provider = adapter.provider;
     const google = provider === "google";
+    const oauthProvider = oauthProviders.find((item) => item.id === provider)!;
+    for (const includeTasks of [false, true]) {
+      const url = await oauthProvider.createAuthorizationURL({ state: "fixture-state", codeVerifier: "fixture-verifier", redirectURI: "http://localhost:7531/api/auth/callback/fixture", scopes: [CALENDAR_SCOPE[provider], ...(includeTasks ? [TASK_SCOPE[provider]] : [])] });
+      assert.equal(url.searchParams.get("scope")?.split(" ").includes(TASK_SCOPE[provider]), includeTasks, "Better Auth/provider defaults must not add Tasks to calendar-only requests");
+      if (google) assert.equal(url.searchParams.get("include_granted_scopes"), "true", "Google incremental consent retains already granted capabilities");
+    }
     const userID = `optional-tasks-${randomUUID()}`;
     const rowID = randomUUID();
     let mode = "complete";
     let revision = 0;
     let revoked = false;
+    let returnedScope: string | undefined;
     let taskCalls = 0;
     const refreshBodies: URLSearchParams[] = [];
     const graph = "https://graph.microsoft.com/v1.0";
@@ -40,7 +52,7 @@ async function main() {
         req.on("data", (chunk) => { body += chunk; });
         req.on("end", () => {
           refreshBodies.push(new URLSearchParams(body));
-          json(revoked ? { error: "invalid_grant" } : { access_token: "fixture-access", expires_in: 3600 }, revoked ? 400 : 200);
+          json(revoked ? { error: "invalid_grant" } : { access_token: "fixture-access", expires_in: 3600, ...(returnedScope === undefined ? {} : { scope: returnedScope }) }, revoked ? 400 : 200);
         });
         return;
       }
@@ -105,13 +117,14 @@ async function main() {
       assert.equal(beforeTasks.length, 1, "Full consent imports Tasks alongside events");
       const beforeMappings = await db.select().from(externalTasks).where(eq(externalTasks.calendarID, taskLink.calendarID));
       assert.equal(beforeMappings.length, 1);
-      for (const failure of ["missing", "discovery403", "discovery503", "lists-page2", "fetch403", "fetch503", "items-page2"]) {
+      for (const failure of ["missing", "narrowed", "discovery403", "discovery503", "lists-page2", "fetch403", "fetch503", "items-page2"]) {
         mode = failure;
         revision++;
-        await update({ scope: failure === "missing" ? CALENDAR_SCOPE[provider] : `${CALENDAR_SCOPE[provider]},${TASK_SCOPE[provider]}` });
+        returnedScope = failure === "narrowed" ? CALENDAR_SCOPE[provider] : undefined;
+        await update({ scope: failure === "missing" ? CALENDAR_SCOPE[provider] : `${CALENDAR_SCOPE[provider]},${TASK_SCOPE[provider]}`, ...(failure === "narrowed" ? { accessTokenExpiresAt: new Date(0) } : {}) });
         const beforeCalls: number = taskCalls;
         await run();
-        if (failure === "missing") {
+        if (failure === "missing" || failure === "narrowed") {
           assert.equal(taskCalls, beforeCalls);
           // Direct reads and task/list writes must also be gated, not merely the scheduler.
           await assert.rejects(adapter.fetchChanges(userID, "account", taskLink.externalCalendarID, null), TaskScopeMissingError);
@@ -136,6 +149,24 @@ async function main() {
         mode = failure;
         await assert.rejects(run(), /401/, "Resource authentication failure must not be swallowed as optional Tasks");
       }
+      // A refresh-time scope loss must also stop direct task mutations.
+      returnedScope = CALENDAR_SCOPE[provider];
+      const callsBeforeNarrowedWrites: number = taskCalls;
+      for (const write of [
+        () => adapter.pushTaskCreate!(userID, "account", taskLink.externalCalendarID, beforeTasks[0] as never),
+        () => adapter.pushTaskUpdate!(userID, "account", taskLink.externalCalendarID, "task", beforeTasks[0] as never),
+        () => adapter.pushTaskDelete!(userID, "account", taskLink.externalCalendarID, "task"),
+      ]) {
+        await update({ scope: `${CALENDAR_SCOPE[provider]},${TASK_SCOPE[provider]}`, accessTokenExpiresAt: new Date(0) });
+        await assert.rejects(write(), TaskScopeMissingError);
+        assert.equal((await getOAuthCredentials(userID, provider, "account"))?.scope, CALENDAR_SCOPE[provider]);
+      }
+      assert.equal(taskCalls, callsBeforeNarrowedWrites);
+      // Exercise Better Auth's own configured refresh HTTP, not just our adapter.
+      await oauthProvider.refreshAccessToken!("fixture-refresh");
+      assert.equal(refreshBodies[refreshBodies.length - 1].get("scope"), null, "Better Auth refresh must neither narrow nor escalate the stored grant");
+      returnedScope = undefined;
+      await update({ scope: `${CALENDAR_SCOPE[provider]},${TASK_SCOPE[provider]}` });
       mode = "empty";
       await run();
       assert.ok(!(await links()).some((link) => link.calendarID === taskLink.calendarID), "Authoritative empty Tasks discovery still removes deleted lists");

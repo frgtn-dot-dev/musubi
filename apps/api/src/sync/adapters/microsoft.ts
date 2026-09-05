@@ -51,16 +51,33 @@ const DAY_MS = 86_400_000;
 // timezone/HTML conversion on our side.
 const PREFER = `outlook.timezone="UTC", outlook.body-content-type="text", odata.maxpagesize=${PAGE_SIZE}`;
 
-function getAccessToken(userID: string, accountId: string) {
+async function getAccessToken(
+  userID: string,
+  accountId: string,
+  requireTasks = false,
+) {
   const tenant = config.social.microsoftTenantID;
-  return getOAuthAccessToken("microsoft", userID, accountId, {
-    tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-    clientId: config.social.microsoftClientID,
-    clientSecret: config.social.microsoftClientSecret,
-    // Omit scope on refresh: Microsoft retains the original grant, including
-    // Tasks when granted, without escalating calendar-only consent.
-    subtypeKey: "suberror",
-  });
+  const accessToken = await getOAuthAccessToken(
+    "microsoft",
+    userID,
+    accountId,
+    {
+      tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+      clientId: config.social.microsoftClientID,
+      clientSecret: config.social.microsoftClientSecret,
+      // Omit scope on refresh: Microsoft retains the original grant, including
+      // Tasks when granted, without escalating calendar-only consent.
+      subtypeKey: "suberror",
+    },
+  );
+  // Refresh may return a narrower grant. Check after minting, before any Tasks
+  // endpoint, including task writes that bypass discovery.
+  if (
+    requireTasks &&
+    !(await hasOAuthTaskScope(userID, "microsoft", accountId))
+  )
+    throw new TaskScopeMissingError();
+  return accessToken;
 }
 
 // Error with Graph's own message when available ("Cannot delete default
@@ -676,15 +693,10 @@ export const microsoftAdapter: CalendarAdapter = {
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {
     const taskListId = microsoftTaskListId(externalCalendarId);
-    if (
-      taskListId &&
-      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
-    )
-      throw new TaskScopeMissingError();
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     return createMicrosoftTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       task,
     );
@@ -699,15 +711,10 @@ export const microsoftAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = microsoftTaskListId(externalCalendarId);
-    if (
-      taskListId &&
-      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
-    )
-      throw new TaskScopeMissingError();
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     return updateMicrosoftTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       task,
@@ -723,15 +730,10 @@ export const microsoftAdapter: CalendarAdapter = {
     ref,
   ) {
     const taskListId = microsoftTaskListId(externalCalendarId);
-    if (
-      taskListId &&
-      !(await hasOAuthTaskScope(userID, "microsoft", accountId))
-    )
-      throw new TaskScopeMissingError();
     if (!taskListId)
       throw new Error("Microsoft task write requires a task list");
     await deleteMicrosoftTask(
-      await getAccessToken(userID, accountId),
+      await getAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       ref?.etag,

@@ -117,13 +117,14 @@ export async function updateOAuthTokens(
   userID: string,
   provider: string,
   accountID: string,
-  tokens: { accessToken: string; accessTokenExpiresAt: Date; refreshToken?: string },
+  tokens: { accessToken: string; accessTokenExpiresAt: Date; refreshToken?: string; scope?: string },
 ) {
   await db.update(account)
     .set({
       accessToken: tokens.accessToken,
       accessTokenExpiresAt: tokens.accessTokenExpiresAt,
       ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
+      ...(tokens.scope !== undefined ? { scope: tokens.scope } : {}),
     })
     .where(and(
       eq(account.userId, userID),

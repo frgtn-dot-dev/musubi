@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { refreshAccessToken } from "better-auth/oauth2";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -108,6 +109,16 @@ export const auth = betterAuth({
       clientSecret: config.social.microsoftClientSecret,
       tenantId: config.social.microsoftTenantID,
       prompt: "select_account",
+      // Better Auth's default Microsoft refresh requests identity scopes only.
+      // Omit scope to retain the actual calendar/optional Tasks grant instead.
+      refreshAccessToken: (refreshToken) => refreshAccessToken({
+        refreshToken,
+        options: {
+          clientId: config.social.microsoftClientID,
+          clientSecret: config.social.microsoftClientSecret,
+        },
+        tokenEndpoint: `https://login.microsoftonline.com/${config.social.microsoftTenantID}/oauth2/v2.0/token`,
+      }),
     },
     apple: {
       // Two registrations for one provider. The Services ID goes first because
