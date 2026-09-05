@@ -36,8 +36,7 @@ import type { AttendanceChoice } from "@/lib/attendance";
 const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
 const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
 
-// Names + avatars only — the API deliberately sends no attendee emails. `status`
-// is the answer: public RSVPs land in this same list (spec 2026-08-12).
+// Names + avatars only — the API deliberately sends no attendee emails.
 export type Attendee = {
   id: string;
   name: string;

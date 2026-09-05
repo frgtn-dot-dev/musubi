@@ -109,7 +109,7 @@ the API and auth hooks.
 
 ## emails (`packages/emails`)
 
-Transactional email: `sendEmail()` (a nodemailer SMTP transport built from `config.smtp`) plus the HTML templates for password reset, deletion, verification, address changes, and scheduler sign-in codes. `@musubi/auth` uses the send/template surface; `apps/api` calls `initializeEmailCapability()` before listening and serves its instant `canSendEmail()` snapshot through capability discovery. The package depends only on `@musubi/config`.
+Transactional email: `sendEmail()` (a nodemailer SMTP transport built from `config.smtp`) plus the HTML templates for password reset, deletion, verification, address changes, and email sign-in codes. `@musubi/auth` uses the send/template surface; `apps/api` calls `initializeEmailCapability()` before listening and serves its instant `canSendEmail()` snapshot through capability discovery. The package depends only on `@musubi/config`.
 
 <Aside type="note">
 With SMTP unset or unreachable, the server still starts and advertises `email: false`; actual sends fail rather than pretending delivery. The availability snapshot changes only on API restart.

@@ -11,8 +11,6 @@ export * from './queries/reminders';
 export * from './queries/push';
 export * from './queries/notifications';
 export * from './queries/pages';
-export * from './queries/event_shares';
-export * from './queries/scheduling';
 export * from './queries/external';
 export * from './queries/caldav';
 export * from './queries/oauth';

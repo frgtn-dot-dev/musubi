@@ -8,405 +8,325 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppRouteImport } from './routes/app'
-import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
-import { Route as FindATimeRouteImport } from './routes/find-a-time'
-import { Route as HealthzRouteImport } from './routes/healthz'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as NewEventRouteImport } from './routes/new-event'
-import { Route as AppIndexRouteImport } from './routes/app/index'
-import { Route as AppAdminRouteImport } from './routes/app/admin'
-import { Route as AppSwDotjsRouteImport } from './routes/app/sw[.]js'
-import { Route as ETokenRouteImport } from './routes/e.$token'
-import { Route as InviteTokenRouteImport } from './routes/invite.$token'
-import { Route as STokenRouteImport } from './routes/s.$token'
-import { Route as AppPPageIdViewRouteImport } from './routes/app/p.$pageId.$view'
-import { Route as AppPPageIdEventEventIdRouteImport } from './routes/app/p.$pageId.event.$eventId'
-import { Route as AppPPageIdEventNewRouteImport } from './routes/app/p.$pageId.event.new'
-import { Route as AppPPageIdViewEventEventIdRouteImport } from './routes/app/p.$pageId.$view.event.$eventId'
-import { Route as AppPPageIdViewEventNewRouteImport } from './routes/app/p.$pageId.$view.event.new'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as AppRouteImport } from "./routes/app";
+import { Route as FaviconDoticoRouteImport } from "./routes/favicon[.]ico";
+import { Route as HealthzRouteImport } from "./routes/healthz";
+import { Route as LoginRouteImport } from "./routes/login";
+import { Route as AppIndexRouteImport } from "./routes/app/index";
+import { Route as AppAdminRouteImport } from "./routes/app/admin";
+import { Route as AppSwDotjsRouteImport } from "./routes/app/sw[.]js";
+import { Route as InviteTokenRouteImport } from "./routes/invite.$token";
+import { Route as AppPPageIdViewRouteImport } from "./routes/app/p.$pageId.$view";
+import { Route as AppPPageIdEventEventIdRouteImport } from "./routes/app/p.$pageId.event.$eventId";
+import { Route as AppPPageIdEventNewRouteImport } from "./routes/app/p.$pageId.event.new";
+import { Route as AppPPageIdViewEventEventIdRouteImport } from "./routes/app/p.$pageId.$view.event.$eventId";
+import { Route as AppPPageIdViewEventNewRouteImport } from "./routes/app/p.$pageId.$view.event.new";
 
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AppRoute = AppRouteImport.update({
-  id: '/app',
-  path: '/app',
+  id: "/app",
+  path: "/app",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const FaviconDoticoRoute = FaviconDoticoRouteImport.update({
-  id: '/favicon.ico',
-  path: '/favicon.ico',
+  id: "/favicon.ico",
+  path: "/favicon.ico",
   getParentRoute: () => rootRouteImport,
-} as any)
-const FindATimeRoute = FindATimeRouteImport.update({
-  id: '/find-a-time',
-  path: '/find-a-time',
-  getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const HealthzRoute = HealthzRouteImport.update({
-  id: '/healthz',
-  path: '/healthz',
+  id: "/healthz",
+  path: "/healthz",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
-} as any)
-const NewEventRoute = NewEventRouteImport.update({
-  id: '/new-event',
-  path: '/new-event',
-  getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AppIndexRoute = AppIndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => AppRoute,
-} as any)
+} as any);
 const AppAdminRoute = AppAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+  id: "/admin",
+  path: "/admin",
   getParentRoute: () => AppRoute,
-} as any)
+} as any);
 const AppSwDotjsRoute = AppSwDotjsRouteImport.update({
-  id: '/sw.js',
-  path: '/sw.js',
+  id: "/sw.js",
+  path: "/sw.js",
   getParentRoute: () => AppRoute,
-} as any)
-const ETokenRoute = ETokenRouteImport.update({
-  id: '/e/$token',
-  path: '/e/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const InviteTokenRoute = InviteTokenRouteImport.update({
-  id: '/invite/$token',
-  path: '/invite/$token',
+  id: "/invite/$token",
+  path: "/invite/$token",
   getParentRoute: () => rootRouteImport,
-} as any)
-const STokenRoute = STokenRouteImport.update({
-  id: '/s/$token',
-  path: '/s/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AppPPageIdViewRoute = AppPPageIdViewRouteImport.update({
-  id: '/p/$pageId/$view',
-  path: '/p/$pageId/$view',
+  id: "/p/$pageId/$view",
+  path: "/p/$pageId/$view",
   getParentRoute: () => AppRoute,
-} as any)
+} as any);
 const AppPPageIdEventEventIdRoute = AppPPageIdEventEventIdRouteImport.update({
-  id: '/p/$pageId/event/$eventId',
-  path: '/p/$pageId/event/$eventId',
+  id: "/p/$pageId/event/$eventId",
+  path: "/p/$pageId/event/$eventId",
   getParentRoute: () => AppRoute,
-} as any)
+} as any);
 const AppPPageIdEventNewRoute = AppPPageIdEventNewRouteImport.update({
-  id: '/p/$pageId/event/new',
-  path: '/p/$pageId/event/new',
+  id: "/p/$pageId/event/new",
+  path: "/p/$pageId/event/new",
   getParentRoute: () => AppRoute,
-} as any)
+} as any);
 const AppPPageIdViewEventEventIdRoute =
   AppPPageIdViewEventEventIdRouteImport.update({
-    id: '/event/$eventId',
-    path: '/event/$eventId',
+    id: "/event/$eventId",
+    path: "/event/$eventId",
     getParentRoute: () => AppPPageIdViewRoute,
-  } as any)
+  } as any);
 const AppPPageIdViewEventNewRoute = AppPPageIdViewEventNewRouteImport.update({
-  id: '/event/new',
-  path: '/event/new',
+  id: "/event/new",
+  path: "/event/new",
   getParentRoute: () => AppPPageIdViewRoute,
-} as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/app': typeof AppRouteWithChildren
-  '/favicon.ico': typeof FaviconDoticoRoute
-  '/find-a-time': typeof FindATimeRoute
-  '/healthz': typeof HealthzRoute
-  '/login': typeof LoginRoute
-  '/new-event': typeof NewEventRoute
-  '/app/admin': typeof AppAdminRoute
-  '/app/sw.js': typeof AppSwDotjsRoute
-  '/e/$token': typeof ETokenRoute
-  '/invite/$token': typeof InviteTokenRoute
-  '/s/$token': typeof STokenRoute
-  '/app/': typeof AppIndexRoute
-  '/app/p/$pageId/$view': typeof AppPPageIdViewRouteWithChildren
-  '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
-  '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
-  '/app/p/$pageId/$view/event/$eventId': typeof AppPPageIdViewEventEventIdRoute
-  '/app/p/$pageId/$view/event/new': typeof AppPPageIdViewEventNewRoute
+  "/": typeof IndexRoute;
+  "/app": typeof AppRouteWithChildren;
+  "/favicon.ico": typeof FaviconDoticoRoute;
+  "/healthz": typeof HealthzRoute;
+  "/login": typeof LoginRoute;
+  "/app/admin": typeof AppAdminRoute;
+  "/app/sw.js": typeof AppSwDotjsRoute;
+  "/invite/$token": typeof InviteTokenRoute;
+  "/app/": typeof AppIndexRoute;
+  "/app/p/$pageId/$view": typeof AppPPageIdViewRouteWithChildren;
+  "/app/p/$pageId/event/$eventId": typeof AppPPageIdEventEventIdRoute;
+  "/app/p/$pageId/event/new": typeof AppPPageIdEventNewRoute;
+  "/app/p/$pageId/$view/event/$eventId": typeof AppPPageIdViewEventEventIdRoute;
+  "/app/p/$pageId/$view/event/new": typeof AppPPageIdViewEventNewRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/favicon.ico': typeof FaviconDoticoRoute
-  '/find-a-time': typeof FindATimeRoute
-  '/healthz': typeof HealthzRoute
-  '/login': typeof LoginRoute
-  '/new-event': typeof NewEventRoute
-  '/app/admin': typeof AppAdminRoute
-  '/app/sw.js': typeof AppSwDotjsRoute
-  '/e/$token': typeof ETokenRoute
-  '/invite/$token': typeof InviteTokenRoute
-  '/s/$token': typeof STokenRoute
-  '/app': typeof AppIndexRoute
-  '/app/p/$pageId/$view': typeof AppPPageIdViewRouteWithChildren
-  '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
-  '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
-  '/app/p/$pageId/$view/event/$eventId': typeof AppPPageIdViewEventEventIdRoute
-  '/app/p/$pageId/$view/event/new': typeof AppPPageIdViewEventNewRoute
+  "/": typeof IndexRoute;
+  "/favicon.ico": typeof FaviconDoticoRoute;
+  "/healthz": typeof HealthzRoute;
+  "/login": typeof LoginRoute;
+  "/app/admin": typeof AppAdminRoute;
+  "/app/sw.js": typeof AppSwDotjsRoute;
+  "/invite/$token": typeof InviteTokenRoute;
+  "/app": typeof AppIndexRoute;
+  "/app/p/$pageId/$view": typeof AppPPageIdViewRouteWithChildren;
+  "/app/p/$pageId/event/$eventId": typeof AppPPageIdEventEventIdRoute;
+  "/app/p/$pageId/event/new": typeof AppPPageIdEventNewRoute;
+  "/app/p/$pageId/$view/event/$eventId": typeof AppPPageIdViewEventEventIdRoute;
+  "/app/p/$pageId/$view/event/new": typeof AppPPageIdViewEventNewRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/app': typeof AppRouteWithChildren
-  '/favicon.ico': typeof FaviconDoticoRoute
-  '/find-a-time': typeof FindATimeRoute
-  '/healthz': typeof HealthzRoute
-  '/login': typeof LoginRoute
-  '/new-event': typeof NewEventRoute
-  '/app/admin': typeof AppAdminRoute
-  '/app/sw.js': typeof AppSwDotjsRoute
-  '/e/$token': typeof ETokenRoute
-  '/invite/$token': typeof InviteTokenRoute
-  '/s/$token': typeof STokenRoute
-  '/app/': typeof AppIndexRoute
-  '/app/p/$pageId/$view': typeof AppPPageIdViewRouteWithChildren
-  '/app/p/$pageId/event/$eventId': typeof AppPPageIdEventEventIdRoute
-  '/app/p/$pageId/event/new': typeof AppPPageIdEventNewRoute
-  '/app/p/$pageId/$view/event/$eventId': typeof AppPPageIdViewEventEventIdRoute
-  '/app/p/$pageId/$view/event/new': typeof AppPPageIdViewEventNewRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/app": typeof AppRouteWithChildren;
+  "/favicon.ico": typeof FaviconDoticoRoute;
+  "/healthz": typeof HealthzRoute;
+  "/login": typeof LoginRoute;
+  "/app/admin": typeof AppAdminRoute;
+  "/app/sw.js": typeof AppSwDotjsRoute;
+  "/invite/$token": typeof InviteTokenRoute;
+  "/app/": typeof AppIndexRoute;
+  "/app/p/$pageId/$view": typeof AppPPageIdViewRouteWithChildren;
+  "/app/p/$pageId/event/$eventId": typeof AppPPageIdEventEventIdRoute;
+  "/app/p/$pageId/event/new": typeof AppPPageIdEventNewRoute;
+  "/app/p/$pageId/$view/event/$eventId": typeof AppPPageIdViewEventEventIdRoute;
+  "/app/p/$pageId/$view/event/new": typeof AppPPageIdViewEventNewRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
-    | '/'
-    | '/app'
-    | '/favicon.ico'
-    | '/find-a-time'
-    | '/healthz'
-    | '/login'
-    | '/new-event'
-    | '/app/admin'
-    | '/app/sw.js'
-    | '/e/$token'
-    | '/invite/$token'
-    | '/s/$token'
-    | '/app/'
-    | '/app/p/$pageId/$view'
-    | '/app/p/$pageId/event/$eventId'
-    | '/app/p/$pageId/event/new'
-    | '/app/p/$pageId/$view/event/$eventId'
-    | '/app/p/$pageId/$view/event/new'
-  fileRoutesByTo: FileRoutesByTo
+    | "/"
+    | "/app"
+    | "/favicon.ico"
+    | "/healthz"
+    | "/login"
+    | "/app/admin"
+    | "/app/sw.js"
+    | "/invite/$token"
+    | "/app/"
+    | "/app/p/$pageId/$view"
+    | "/app/p/$pageId/event/$eventId"
+    | "/app/p/$pageId/event/new"
+    | "/app/p/$pageId/$view/event/$eventId"
+    | "/app/p/$pageId/$view/event/new";
+  fileRoutesByTo: FileRoutesByTo;
   to:
-    | '/'
-    | '/favicon.ico'
-    | '/find-a-time'
-    | '/healthz'
-    | '/login'
-    | '/new-event'
-    | '/app/admin'
-    | '/app/sw.js'
-    | '/e/$token'
-    | '/invite/$token'
-    | '/s/$token'
-    | '/app'
-    | '/app/p/$pageId/$view'
-    | '/app/p/$pageId/event/$eventId'
-    | '/app/p/$pageId/event/new'
-    | '/app/p/$pageId/$view/event/$eventId'
-    | '/app/p/$pageId/$view/event/new'
+    | "/"
+    | "/favicon.ico"
+    | "/healthz"
+    | "/login"
+    | "/app/admin"
+    | "/app/sw.js"
+    | "/invite/$token"
+    | "/app"
+    | "/app/p/$pageId/$view"
+    | "/app/p/$pageId/event/$eventId"
+    | "/app/p/$pageId/event/new"
+    | "/app/p/$pageId/$view/event/$eventId"
+    | "/app/p/$pageId/$view/event/new";
   id:
-    | '__root__'
-    | '/'
-    | '/app'
-    | '/favicon.ico'
-    | '/find-a-time'
-    | '/healthz'
-    | '/login'
-    | '/new-event'
-    | '/app/admin'
-    | '/app/sw.js'
-    | '/e/$token'
-    | '/invite/$token'
-    | '/s/$token'
-    | '/app/'
-    | '/app/p/$pageId/$view'
-    | '/app/p/$pageId/event/$eventId'
-    | '/app/p/$pageId/event/new'
-    | '/app/p/$pageId/$view/event/$eventId'
-    | '/app/p/$pageId/$view/event/new'
-  fileRoutesById: FileRoutesById
+    | "__root__"
+    | "/"
+    | "/app"
+    | "/favicon.ico"
+    | "/healthz"
+    | "/login"
+    | "/app/admin"
+    | "/app/sw.js"
+    | "/invite/$token"
+    | "/app/"
+    | "/app/p/$pageId/$view"
+    | "/app/p/$pageId/event/$eventId"
+    | "/app/p/$pageId/event/new"
+    | "/app/p/$pageId/$view/event/$eventId"
+    | "/app/p/$pageId/$view/event/new";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AppRoute: typeof AppRouteWithChildren
-  FaviconDoticoRoute: typeof FaviconDoticoRoute
-  FindATimeRoute: typeof FindATimeRoute
-  HealthzRoute: typeof HealthzRoute
-  LoginRoute: typeof LoginRoute
-  NewEventRoute: typeof NewEventRoute
-  ETokenRoute: typeof ETokenRoute
-  InviteTokenRoute: typeof InviteTokenRoute
-  STokenRoute: typeof STokenRoute
+  IndexRoute: typeof IndexRoute;
+  AppRoute: typeof AppRouteWithChildren;
+  FaviconDoticoRoute: typeof FaviconDoticoRoute;
+  HealthzRoute: typeof HealthzRoute;
+  LoginRoute: typeof LoginRoute;
+  InviteTokenRoute: typeof InviteTokenRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/app': {
-      id: '/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/favicon.ico': {
-      id: '/favicon.ico'
-      path: '/favicon.ico'
-      fullPath: '/favicon.ico'
-      preLoaderRoute: typeof FaviconDoticoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/find-a-time': {
-      id: '/find-a-time'
-      path: '/find-a-time'
-      fullPath: '/find-a-time'
-      preLoaderRoute: typeof FindATimeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/healthz': {
-      id: '/healthz'
-      path: '/healthz'
-      fullPath: '/healthz'
-      preLoaderRoute: typeof HealthzRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/new-event': {
-      id: '/new-event'
-      path: '/new-event'
-      fullPath: '/new-event'
-      preLoaderRoute: typeof NewEventRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/app/': {
-      id: '/app/'
-      path: '/'
-      fullPath: '/app/'
-      preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/admin': {
-      id: '/app/admin'
-      path: '/admin'
-      fullPath: '/app/admin'
-      preLoaderRoute: typeof AppAdminRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/sw.js': {
-      id: '/app/sw.js'
-      path: '/sw.js'
-      fullPath: '/app/sw.js'
-      preLoaderRoute: typeof AppSwDotjsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/e/$token': {
-      id: '/e/$token'
-      path: '/e/$token'
-      fullPath: '/e/$token'
-      preLoaderRoute: typeof ETokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/invite/$token': {
-      id: '/invite/$token'
-      path: '/invite/$token'
-      fullPath: '/invite/$token'
-      preLoaderRoute: typeof InviteTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/s/$token': {
-      id: '/s/$token'
-      path: '/s/$token'
-      fullPath: '/s/$token'
-      preLoaderRoute: typeof STokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/app/p/$pageId/$view': {
-      id: '/app/p/$pageId/$view'
-      path: '/p/$pageId/$view'
-      fullPath: '/app/p/$pageId/$view'
-      preLoaderRoute: typeof AppPPageIdViewRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/p/$pageId/event/$eventId': {
-      id: '/app/p/$pageId/event/$eventId'
-      path: '/p/$pageId/event/$eventId'
-      fullPath: '/app/p/$pageId/event/$eventId'
-      preLoaderRoute: typeof AppPPageIdEventEventIdRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/p/$pageId/event/new': {
-      id: '/app/p/$pageId/event/new'
-      path: '/p/$pageId/event/new'
-      fullPath: '/app/p/$pageId/event/new'
-      preLoaderRoute: typeof AppPPageIdEventNewRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/p/$pageId/$view/event/$eventId': {
-      id: '/app/p/$pageId/$view/event/$eventId'
-      path: '/event/$eventId'
-      fullPath: '/app/p/$pageId/$view/event/$eventId'
-      preLoaderRoute: typeof AppPPageIdViewEventEventIdRouteImport
-      parentRoute: typeof AppPPageIdViewRoute
-    }
-    '/app/p/$pageId/$view/event/new': {
-      id: '/app/p/$pageId/$view/event/new'
-      path: '/event/new'
-      fullPath: '/app/p/$pageId/$view/event/new'
-      preLoaderRoute: typeof AppPPageIdViewEventNewRouteImport
-      parentRoute: typeof AppPPageIdViewRoute
-    }
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/app": {
+      id: "/app";
+      path: "/app";
+      fullPath: "/app";
+      preLoaderRoute: typeof AppRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/favicon.ico": {
+      id: "/favicon.ico";
+      path: "/favicon.ico";
+      fullPath: "/favicon.ico";
+      preLoaderRoute: typeof FaviconDoticoRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/healthz": {
+      id: "/healthz";
+      path: "/healthz";
+      fullPath: "/healthz";
+      preLoaderRoute: typeof HealthzRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/login": {
+      id: "/login";
+      path: "/login";
+      fullPath: "/login";
+      preLoaderRoute: typeof LoginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/app/": {
+      id: "/app/";
+      path: "/";
+      fullPath: "/app/";
+      preLoaderRoute: typeof AppIndexRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/app/admin": {
+      id: "/app/admin";
+      path: "/admin";
+      fullPath: "/app/admin";
+      preLoaderRoute: typeof AppAdminRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/app/sw.js": {
+      id: "/app/sw.js";
+      path: "/sw.js";
+      fullPath: "/app/sw.js";
+      preLoaderRoute: typeof AppSwDotjsRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/invite/$token": {
+      id: "/invite/$token";
+      path: "/invite/$token";
+      fullPath: "/invite/$token";
+      preLoaderRoute: typeof InviteTokenRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/app/p/$pageId/$view": {
+      id: "/app/p/$pageId/$view";
+      path: "/p/$pageId/$view";
+      fullPath: "/app/p/$pageId/$view";
+      preLoaderRoute: typeof AppPPageIdViewRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/app/p/$pageId/event/$eventId": {
+      id: "/app/p/$pageId/event/$eventId";
+      path: "/p/$pageId/event/$eventId";
+      fullPath: "/app/p/$pageId/event/$eventId";
+      preLoaderRoute: typeof AppPPageIdEventEventIdRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/app/p/$pageId/event/new": {
+      id: "/app/p/$pageId/event/new";
+      path: "/p/$pageId/event/new";
+      fullPath: "/app/p/$pageId/event/new";
+      preLoaderRoute: typeof AppPPageIdEventNewRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/app/p/$pageId/$view/event/$eventId": {
+      id: "/app/p/$pageId/$view/event/$eventId";
+      path: "/event/$eventId";
+      fullPath: "/app/p/$pageId/$view/event/$eventId";
+      preLoaderRoute: typeof AppPPageIdViewEventEventIdRouteImport;
+      parentRoute: typeof AppPPageIdViewRoute;
+    };
+    "/app/p/$pageId/$view/event/new": {
+      id: "/app/p/$pageId/$view/event/new";
+      path: "/event/new";
+      fullPath: "/app/p/$pageId/$view/event/new";
+      preLoaderRoute: typeof AppPPageIdViewEventNewRouteImport;
+      parentRoute: typeof AppPPageIdViewRoute;
+    };
   }
 }
 
 interface AppPPageIdViewRouteChildren {
-  AppPPageIdViewEventEventIdRoute: typeof AppPPageIdViewEventEventIdRoute
-  AppPPageIdViewEventNewRoute: typeof AppPPageIdViewEventNewRoute
+  AppPPageIdViewEventEventIdRoute: typeof AppPPageIdViewEventEventIdRoute;
+  AppPPageIdViewEventNewRoute: typeof AppPPageIdViewEventNewRoute;
 }
 
 const AppPPageIdViewRouteChildren: AppPPageIdViewRouteChildren = {
   AppPPageIdViewEventEventIdRoute: AppPPageIdViewEventEventIdRoute,
   AppPPageIdViewEventNewRoute: AppPPageIdViewEventNewRoute,
-}
+};
 
 const AppPPageIdViewRouteWithChildren = AppPPageIdViewRoute._addFileChildren(
   AppPPageIdViewRouteChildren,
-)
+);
 
 interface AppRouteChildren {
-  AppAdminRoute: typeof AppAdminRoute
-  AppSwDotjsRoute: typeof AppSwDotjsRoute
-  AppIndexRoute: typeof AppIndexRoute
-  AppPPageIdViewRoute: typeof AppPPageIdViewRouteWithChildren
-  AppPPageIdEventEventIdRoute: typeof AppPPageIdEventEventIdRoute
-  AppPPageIdEventNewRoute: typeof AppPPageIdEventNewRoute
+  AppAdminRoute: typeof AppAdminRoute;
+  AppSwDotjsRoute: typeof AppSwDotjsRoute;
+  AppIndexRoute: typeof AppIndexRoute;
+  AppPPageIdViewRoute: typeof AppPPageIdViewRouteWithChildren;
+  AppPPageIdEventEventIdRoute: typeof AppPPageIdEventEventIdRoute;
+  AppPPageIdEventNewRoute: typeof AppPPageIdEventNewRoute;
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -416,31 +336,27 @@ const AppRouteChildren: AppRouteChildren = {
   AppPPageIdViewRoute: AppPPageIdViewRouteWithChildren,
   AppPPageIdEventEventIdRoute: AppPPageIdEventEventIdRoute,
   AppPPageIdEventNewRoute: AppPPageIdEventNewRoute,
-}
+};
 
-const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   FaviconDoticoRoute: FaviconDoticoRoute,
-  FindATimeRoute: FindATimeRoute,
   HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
-  NewEventRoute: NewEventRoute,
-  ETokenRoute: ETokenRoute,
   InviteTokenRoute: InviteTokenRoute,
-  STokenRoute: STokenRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
+import type { getRouter } from "./router.tsx";
+import type { createStart } from "@tanstack/react-start";
+declare module "@tanstack/react-start" {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }

@@ -45,15 +45,15 @@ each themed variant is a separate file and both must exist.
 
 **The mark inside the app is a React component, not a file.**
 `apps/web/src/components/BrandMark.tsx` draws both arms as SVG paths, and it is
-the mark people actually look at — the sidebar, the login shell, every public
-page and every route state. It takes no file and no bucket URL, because it has
+the mark people actually look at — the sidebar, the login shell and every
+route state. It takes no file and no bucket URL, because it has
 to recolour itself: one arm is `currentColor` so it follows the text on either
 theme, the other is `var(--accent-primary)`. A bucket asset has its colours
 baked in and would go invisible on the light theme.
 
-Used by `Sidebar.tsx`, `AuthShell.tsx`, `RouteState.tsx`, `ProviderIcon.tsx`,
-`find-a-time.tsx`, `new-event.tsx`, `e.$token.tsx` and `s.$token.tsx`. Its size
-is set in CSS in three places — `workspace.module.css .brandMark`,
+Used by `Sidebar.tsx`, `AuthShell.tsx`, `RouteState.tsx`, and `ProviderIcon.tsx`.
+Its size is set in CSS in three places —
+`workspace.module.css .brandMark`,
 `primitives.module.css .authBrand svg` and `.routeStateMark`,
 `provider-icon.module.css .musubiMark` — so a change of aspect ratio has to be
 followed there too.

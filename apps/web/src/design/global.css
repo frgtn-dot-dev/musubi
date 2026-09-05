@@ -2,36 +2,20 @@
  box-sizing: border-box;
 }
 
-/* Scheduling answers are domain colours rather than foundation tokens. They live
-   at the root because answer controls can render through a portal. */
+/* Check verdicts. Colour never carries a verdict alone; the icon's shape does. */
 :root {
- --answer-yes: #1f5c39;
- --answer-yes-fill: rgba(47, 125, 79, 0.18);
- --answer-maybe: #7a5406;
- --answer-maybe-fill: rgba(176, 125, 26, 0.2);
- --answer-no: #8c2f21;
- --answer-no-fill: rgba(179, 64, 47, 0.16);
-
- /* Check verdicts, in the colours the app already uses to mean the same
-    things. A second green would be a second green — and these are the only
-    ones in the system that carry "good" and "needs a look". Failure stays on
-    the accent, which is what everything else wrong is drawn in.
-
-    Colour never carries a verdict alone; the icon's shape does. */
- --status-pass: var(--answer-yes);
- --status-pass-fill: var(--answer-yes-fill);
- --status-warn: var(--answer-maybe);
- --status-warn-fill: var(--answer-maybe-fill);
+ --status-pass: #1f5c39;
+ --status-pass-fill: rgba(47, 125, 79, 0.18);
+ --status-warn: #7a5406;
+ --status-warn-fill: rgba(176, 125, 26, 0.2);
  --status-fail: var(--accent-primary);
 }
 
 :root[data-theme="dark"] {
- --answer-yes: #7fd6a2;
- --answer-yes-fill: rgba(127, 214, 162, 0.16);
- --answer-maybe: #e8c266;
- --answer-maybe-fill: rgba(230, 194, 102, 0.16);
- --answer-no: #f0958a;
- --answer-no-fill: rgba(240, 149, 138, 0.16);
+ --status-pass: #7fd6a2;
+ --status-pass-fill: rgba(127, 214, 162, 0.16);
+ --status-warn: #e8c266;
+ --status-warn-fill: rgba(230, 194, 102, 0.16);
 }
 
 html {

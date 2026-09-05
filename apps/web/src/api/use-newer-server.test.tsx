@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -31,7 +33,9 @@ vi.mock("./resources", () => ({
  * assertion below waits for the answer to be in the cache first.
  */
 function served(version: string | undefined) {
-  getServerCapabilities.mockResolvedValue(version === undefined ? {} : { version });
+  getServerCapabilities.mockResolvedValue(
+    version === undefined ? {} : { version },
+  );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });

@@ -192,9 +192,8 @@ export const userSettings = pgTable("user_settings", {
     .$type<ReminderRule>()
     .notNull()
     .default(DEFAULT_REMINDER_RULE),
-  // Emails about what OTHER people did — an event you are attending moving, a
-  // poll you answered being decided. Not reminders, which are a promise you
-  // made to yourself; these arrive unbidden, so they get their own switches.
+  // Emails about what other people did, separate from reminders. The document
+  // keeps the deprecated pollDecided key only for 0.1.7 client compatibility.
   notificationEmails: jsonb("notification_emails")
     .$type<NotificationEmails>()
     .notNull()
@@ -328,12 +327,8 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   user: one(user, { fields: [tasks.creatorID], references: [user.id] }),
 }));
 
-// A published event page. No row means the event is private, which is every
-// event until somebody says otherwise — publishing is always an explicit act.
-//
-// The token, not the event id, is what a URL carries: an id is guessable by
-// anyone who has seen another one, and revoking a share has to be able to kill
-// the old URL without renaming the event everywhere else.
+// Deprecated public-event storage. No runtime code reads or writes this table.
+// Keep through 0.1.8 for rollback safety; drop it in a later contract release.
 export const eventShares = pgTable("event_shares", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -344,46 +339,21 @@ export const eventShares = pgTable("event_shares", {
   eventID: uuid("event_id")
     .references(() => events.id, { onDelete: "cascade" })
     .notNull(),
-  // 128 bits of randomness, hex. Long enough that a link is a credential.
   token: text("token").notNull().unique(),
-  // `link` — anyone holding the URL, never indexed. `public` — the same, but the
-  // page may say it can be indexed. Access control and indexability are separate
-  // questions and the PRD keeps them separate on purpose.
   mode: text("mode").notNull(),
   indexable: boolean("indexable").notNull().default(false),
-  // What a reader of the page learns about who is coming. The organizer decides
-  // (PRD §18.2) — `counts` says how many, `names` says who, `hidden` says
-  // nothing. Never a default that reveals more than the previous state did.
   attendeeVisibility: text("attendee_visibility").notNull().default("counts"),
-  // How the page looks — a closed set of choices validated at the handler
-  // (`@musubi/types` EventPageThemeSchema), stored as JSONB so adding a knob
-  // later is a schema change in one place rather than a migration per knob.
   theme: jsonb("theme").notNull().default({}),
-  // Tags, agenda and uploaded-cover placement. Validated as EventPageContent at
-  // the API boundary; JSONB keeps page-only presentation out of core events.
   content: jsonb("content").notNull().default({}),
   createdBy: text("created_by")
     .references(() => user.id, { onDelete: "cascade" })
     .notNull(),
-  // Revoked shares are kept: the token must stay burned rather than be free to
-  // be issued again, and "this used to be public" is worth being able to see.
   revokedAt: timestamp("revoked_at"),
 });
 
-export type NewEventShare = typeof eventShares.$inferInsert;
-
-export const eventSharesRelations = relations(eventShares, ({ one }) => ({
-  event: one(events, {
-    fields: [eventShares.eventID],
-    references: [events.id],
-  }),
-}));
-
-// ── Scheduling (group poll) ──────────────────────────────────────────────────
-// "When can everyone meet?" — a set of candidate slots people mark up. This is
-// the group poll from PRD §19.1, deliberately NOT a booking page: a poll looks
-// for a time that suits everyone, a booking page hands out one of the
-// organizer's free slots. Mixing them is what the PRD warns against.
+// Deprecated scheduler storage. No runtime code reads or writes these tables.
+// Keep through 0.1.8 so rolling back the API does not meet a missing schema;
+// remove in a later contract release per docs/releasing.md.
 export const schedulingPolls = pgTable("scheduling_polls", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -399,8 +369,7 @@ export const schedulingPolls = pgTable("scheduling_polls", {
   /** Exact start time for timed polls; optional context for all-day polls. */
   approximateStartTime: text("approximate_start_time"),
   durationMinutes: integer("duration_minutes").notNull(),
-  // The link is the invitation, same as a published event page: unguessable,
-  // and revocable by closing the poll rather than by renaming anything.
+  // An unguessable capability, revocable by closing the poll.
   token: text("token").notNull().unique(),
   deadline: timestamp("deadline"),
   // Where the decided event lands. Chosen when the poll is written, used days
@@ -634,9 +603,7 @@ export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
   }),
 }));
 
-// Attendees and their answer. Public RSVPs land here too (spec
-// `docs/superpowers/specs/2026-08-12-attendees-rsvp-unification-design.md`): one
-// event, one list of people, so the calendar shows what the page collected.
+// Attendees and their answer: one event, one list of people.
 export const eventUsers = pgTable(
   "event_users",
   {
@@ -737,7 +704,7 @@ export const pendingNotifications = pgTable(
       .notNull(),
     /** What happened: "event_changed", and whatever comes later. */
     kind: text("kind").notNull(),
-    /** What it happened to. Text, not a uuid FK — a poll is not an event. */
+    /** What it happened to; text keeps notification kinds decoupled from FKs. */
     subjectID: text("subject_id").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
     dueAt: timestamp("due_at").notNull(),

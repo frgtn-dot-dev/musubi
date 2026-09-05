@@ -212,10 +212,8 @@ export const auth = betterAuth({
   plugins: [
     bearer(),
     expo(),
-    // Passwordless sign-in by emailed code. This is what turns "I want to RSVP"
-    // into an identity without asking a stranger to invent a password for a
-    // calendar app they may never open again (PRD §18.1) — and the code proves
-    // the address, so a confirmed answer means a real inbox.
+    // Passwordless sign-in by emailed code. The code proves the address without
+    // asking the user to create another password.
     emailOTP({
       // Ten minutes: long enough to switch to a phone and read the mail, short
       // enough that a code left in an inbox is not a standing key.

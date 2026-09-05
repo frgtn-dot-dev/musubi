@@ -112,7 +112,7 @@ authentication is enabled. Do not enter the normal Apple ID password.
 Check the exact collection URL and whether the server permits depth-one
 `PROPFIND`, `calendar-multiget`, or `sync-collection` on that collection.
 
-### Every poll appears to rewrite everything
+### Every sync appears to rewrite everything
 
 Inspect ETag preservation and reset-upsert behavior. A quiet, unchanged
 full-fetch should not bump local timestamps or emit an external-sync nudge.

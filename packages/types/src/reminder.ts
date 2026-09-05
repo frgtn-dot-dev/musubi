@@ -16,27 +16,22 @@ const MINUTES_PER_DAY = 1_440;
  * both branches null is a real answer — it is how a calendar says "never".
  */
 export const ReminderRuleSchema = z
-  .object({
-    minutesBefore: z
-      .number()
-      .int()
-      .min(0)
-      .max(MAX_MINUTES_BEFORE)
-      .nullable(),
-    allDay: z
-      .object({
-        daysBefore: z.number().int().min(0).max(30),
-        /** Minutes past local midnight; 1080 is 18:00. */
-        atMinute: z
-          .number()
-          .int()
-          .min(0)
-          .max(MINUTES_PER_DAY - 1),
-      })
-      .strict()
-      .nullable(),
-  })
-  .strict();
+ .object({
+  minutesBefore: z.number().int().min(0).max(MAX_MINUTES_BEFORE).nullable(),
+  allDay: z
+   .object({
+    daysBefore: z.number().int().min(0).max(30),
+    /** Minutes past local midnight; 1080 is 18:00. */
+    atMinute: z
+     .number()
+     .int()
+     .min(0)
+     .max(MINUTES_PER_DAY - 1),
+   })
+   .strict()
+   .nullable(),
+ })
+ .strict();
 
 export type ReminderRule = z.infer<typeof ReminderRuleSchema>;
 
@@ -51,18 +46,18 @@ export const ReminderRuleOrInheritSchema = ReminderRuleSchema.nullable();
 
 /** The one thing above which there is nothing left to inherit from. */
 export const DEFAULT_REMINDER_RULE: ReminderRule = {
-  minutesBefore: 10,
-  allDay: { daysBefore: 1, atMinute: 18 * 60 },
+ minutesBefore: 10,
+ allDay: { daysBefore: 1, atMinute: 18 * 60 },
 };
 
 export const SILENT_REMINDER_RULE: ReminderRule = {
-  minutesBefore: null,
-  allDay: null,
+ minutesBefore: null,
+ allDay: null,
 };
 
 /** Does this rule ever produce a reminder? */
 export function isSilentRule(rule: ReminderRule) {
-  return rule.minutesBefore === null && rule.allDay === null;
+ return rule.minutesBefore === null && rule.allDay === null;
 }
 
 /**
@@ -73,30 +68,30 @@ export function isSilentRule(rule: ReminderRule) {
  * of having calendar rules.
  */
 export function sameRule(left: ReminderRule, right: ReminderRule) {
-  return (
-    left.minutesBefore === right.minutesBefore &&
-    left.allDay?.daysBefore === right.allDay?.daysBefore &&
-    left.allDay?.atMinute === right.allDay?.atMinute
-  );
+ return (
+  left.minutesBefore === right.minutesBefore &&
+  left.allDay?.daysBefore === right.allDay?.daysBefore &&
+  left.allDay?.atMinute === right.allDay?.atMinute
+ );
 }
 
 /** Everything a client needs to resolve reminders without asking again. */
 export const RemindersDocumentSchema = z
-  .object({
-    default: ReminderRuleSchema,
-    /** Calendar id → my rule for it. Absent means inherit the default. */
-    calendars: z.record(z.string(), ReminderRuleSchema),
-    /** Event id → my override. Absent means inherit from the calendar. */
-    events: z.record(z.string(), ReminderRuleSchema),
-  })
-  .strict();
+ .object({
+  default: ReminderRuleSchema,
+  /** Calendar id → my rule for it. Absent means inherit the default. */
+  calendars: z.record(z.string(), ReminderRuleSchema),
+  /** Event id → my override. Absent means inherit from the calendar. */
+  events: z.record(z.string(), ReminderRuleSchema),
+ })
+ .strict();
 
 export type RemindersDocument = z.infer<typeof RemindersDocumentSchema>;
 
 /** Body of the two PUTs. `rule: null` clears the override / goes back to inheriting. */
 export const PutReminderRequestSchema = z
-  .object({ rule: ReminderRuleOrInheritSchema })
-  .strict();
+ .object({ rule: ReminderRuleOrInheritSchema })
+ .strict();
 
 export type PutReminderRequest = z.infer<typeof PutReminderRequestSchema>;
 
@@ -113,19 +108,19 @@ export type PutReminderRequest = z.infer<typeof PutReminderRequestSchema>;
  * you opt out of a password reset you asked for.
  */
 export const NotificationEmailsSchema = z
-  .object({
-    /** An event you are attending was cancelled or moved. */
-    eventChanged: z.boolean(),
-    /** A poll you answered has a time. */
-    pollDecided: z.boolean(),
-  })
-  .strict();
+ .object({
+  /** An event you are attending was cancelled or moved. */
+  eventChanged: z.boolean(),
+  /** @deprecated Compatibility only; ignored since 0.1.8. */
+  pollDecided: z.boolean(),
+ })
+ .strict();
 
 export type NotificationEmails = z.infer<typeof NotificationEmailsSchema>;
 
-// On by default. Both only fire when a human deliberately changed something
-// that affects you, which is the kind of mail people are cross about MISSING.
+// Active event-change mail is on by default. pollDecided remains true only so
+// older clients keep their expected document shape; no runtime reads it.
 export const DEFAULT_NOTIFICATION_EMAILS: NotificationEmails = {
-  eventChanged: true,
-  pollDecided: true,
+ eventChanged: true,
+ pollDecided: true,
 };

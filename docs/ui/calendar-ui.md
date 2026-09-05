@@ -1004,9 +1004,8 @@ create churn without reducing another implementation.
 
 ### Vědomě odloženo
 
-Year view, 3-day/custom range, right utility rail, suggested times / find-a-time,
-tasks / focus time / OOO / appointment schedules. Žádné z toho nemá cenu, dokud
-neběží B a C.
+Year view, 3-day/custom range, right utility rail, focus time / OOO /
+appointment schedules. Žádné z toho nemá cenu, dokud neběží B a C.
 
 ## 7. Checklist na každý UI ticket
 
@@ -1067,113 +1066,6 @@ vzešlo a nedá se vyčíst z kódu:
   řádků × sloupců (dnes jen auto), skrytí víkendů, barevná pravidla, search
   highlight a zakládání eventu klikem do bloku. Všechno jde přidat nad stejnou
   definicí a stejným blokem.
-
-## Veřejné stránky eventů (M8.2)
-
-- Publikování je **vždy explicitní akt**: event bez řádku v `event_shares` je
-  privátní, což je každý event, dokud někdo neřekne jinak. Není žádný „výchozí
-  sdílený" stav, který by šlo přehlédnout.
-- V URL je **token, ne id eventu**. Id je uhodnutelné pro každého, kdo viděl jiné,
-  a odvolání musí umět zabít starou URL, aniž by se event přejmenoval všude jinde.
-  Odvolané řádky se nemažou — token musí zůstat spálený.
-- Režimy jsou tři, ne přepínač: `private` / `link` / `public`. **Přístup a
-  indexovatelnost jsou dvě různé otázky** (PRD §17.1) a jejich sloučení je přesně
-  to, jak se privátní věc objeví ve vyhledávání. API `link + indexable` odmítá.
-- Projekce pro anonymního čtenáře se skládá **klíč po klíči, nikdy spreadem** —
-  self-check přímo asertuje množinu klíčů, takže nový sloupec v dotazu nemůže
-  vylézt na veřejnou stránku omylem. Nikdy: účastníci, kalendář, jakékoli id.
-- Opakovaný event posílá **pravidlo, ne expanzi**. Recurrence je wall-clock, takže
-  server v UTC kontejneru by čtenáři v Praze půl roku ukazoval o hodinu vedle;
-  příští výskyt počítá stránka v zóně čtenáře.
-- Zrušený event stránku **má** (s cedulkou), protože 404 se čte jako rozbitý
-  odkaz a pošle člověka ptát se.
-- **RSVP (M8.3)**: odpověď se drží v komponentě, dokud host nepotvrdí adresu —
-  v databázi nikdy nevznikne „nepotvrzená" odpověď, takže počet je vždy počet
-  skutečných lidí. Tím se zodpovídá otevřená otázka PRD §18.3. Identita je
-  passwordless přes Better Auth `emailOTP`; kód posílá server, účet vznikne až
-  jeho použitím. Jméno se zapisuje **jen do prázdného** účtu, aby druhá odpověď
-  nepřepsala profil člena, který na veřejný odkaz odpověděl.
-- **RSVP a účast jsou jeden seznam** (spec
-  `docs/superpowers/specs/2026-08-12-attendees-rsvp-unification-design.md`).
-  `event_users` nese `status` (`going | maybe | declined`), veřejná odpověď píše
-  do stejné tabulky a `event_rsvps` zmizelo. Dřív to byly dvě tabulky s
-  odůvodněním, že cizí člověk z odkazu nemá padnout do seznamu, který vidí
-  členové — jenže pak nebyla odpověď v kalendáři vidět nikde kromě dialogu
-  sdílení a dva seznamy u jedné akce se nedaly srovnat. Cena je vědomá: cizí
-  jméno z veřejného odkazu uvidí každý, kdo vidí event.
-- Žádný řádek = **neodpověděl**. Přítomnost + `status` je celá odpověď, takže
-  „zrušit odpověď" je smazání řádku, ne čtvrtý stav.
-- Detail eventu odpovídá **třemi tlačítky** (Going / Maybe / Can't go), klik na
-  už vybrané odpověď zruší (`status: "none"`) — to je dřívější „Leave". Facepile
-  a počet nad seznamem berou jen `going`, rozbalený seznam má skupiny. Řadí
-  **server** (`going` → `maybe` → `declined`, pak jméno), aby web a mobil neměly
-  dvě verze pořadí.
-- `PUT /events/:id/attendance` bere `{status}` a **stále** `{attending}` jako
-  alias (`true`→going, `false`→none): mobilní build je venku na Play a nasazení
-  API nečeká na store review.
-- Jméno je u odpovědi **povinné** — seznam účastníků je seznam lidí, ne prázdna.
-  Klient to blokuje před odesláním kódu, server vrací 400. „Guest" zůstává jen
-  pro řádky z doby, kdy povinné nebylo.
-- Jména vidí čtenář stránky jen když to organizátor zapne, a **jen u těch, kdo
-  řekli ano**: „možná" a „ne" jsou odpovědi, které lidé dávají v důvěře.
-- `attendeeVisibility` řídí **jen veřejnou projekci**. Uvnitř appky seznam vidí
-  každý, kdo vidí event, takže „Show nothing" neoslepí organizátora. Zvláštní
-  endpoint na to (`GET /events/:id/rsvps`) proto zmizel i s blokem odpovědí v
-  dialogu sdílení — odpovědi se čtou v detailu eventu.
-- Publikování stránky zapne `hasAttendees`: publikovaný event sbírá odpovědi a
-  sekce, která je ukazuje, musí být zapnutá. Ptát se organizátora na totéž dvakrát
-  není nastavení, jen práce.
-- V dialogu sdílení jsou přepínače řádky, ne `Select`: dialog se otevírá z
-  popoveru a dropdown si otevírá vlastní popover, který se zaskládá pod něj —
-  tentýž problém s vrstvami, co je popsaný výš. Odznak s počtem u ikony sdílení
-  **není** schválně: stál by jeden request při každém otevření libovolného
-  eventu kvůli funkci, kterou většina eventů nikdy nepoužije.
-- **Vzhled stránky (M8.5)**: paleta / layout / cover / písmo jsou **uzavřené
-  množiny** validované Zodem na API. Tím se drží PRD §17.3 („žádné libovolné CSS
-  a JavaScript") jako vlastnost systému, ne jako slib — barva, která se do
-  systému nedostane, nemůže rozbít kontrast.
-- Palety **dokazují svůj kontrast** self-checkem v `@musubi/design-system` (text,
-  muted, accent, accent-text, na surface i na background). Práh pro accent na
-  ploše je 4.5:1, ne 3:1, protože accent barví i odkazy v běžné velikosti — což
-  odhalil až axe na `/e/<token>` (4.34:1) a poté se zvedl práh i palety.
-- Stránka si přemapovává **app tokeny** (`--control-fill`, `--text-primary`, …)
-  na paletu. Bez toho tlačítka RSVP na tmavé paletě zmizela, a RSVP flow je v PRD
-  na straně **pevných** věcí. Palety proto nesou i `border` a `raised` explicitně,
-  místo počítání přes `color-mix`.
-- Cover je kresba z palety, nikdy nahraný obrázek: upload je moderační plocha a
-  neomezené riziko pro kontrast.
-- Zatím není: kapacita, vlastní vzhled stránky, cover,
-  `.ics` subscription feed. `.ics` soubor se skládá v prohlížeči z dat, která
-  stránka už má.
-
-## Scheduler — group poll (M8.4)
-
-- Je to **group poll, ne booking page**. Poll hledá termín, který vyhovuje všem;
-  booking page rozdává sloty z organizátorova volna. PRD §19.2 to výslovně
-  odděluje a míchat je do jedné obrazovky je ta chyba, před kterou varuje.
-- Hlasuje se o dnech. Výchozí délka je **celý den**; organizátor ale může
-  vybrat délku časované události, kdy je začátek povinný. Slot pak nese přesný
-  instant a server z něj vytvoří časovanou událost. U celodenní varianty zůstává
-  `Approximate start` jen nepovinným orientačním údajem.
-- Volitelná poznámka organizátora se ukládá jako `description` a veřejná stránka
-  ji ukazuje nad seznamem termínů.
-- „Pokud bude nutné" je **plnohodnotná odpověď, ne chybějící ano** — a v pořadí
-  slotů slouží jako tiebreak, ne jako polovina hlasu. Slot, kde dva řekli ano,
-  bije slot, kde čtyři řekli „když to jinak nejde".
-- Vedoucí slot se **zvýrazní, nevybere**. Dva termíny můžou být na remízu a volba
-  je organizátorova; `bestSlots` proto vrací pole, ne jeden slot.
-- Zápis hlasů **nahrazuje celou sadu** jednoho člověka. Kdyby klient poslal jen
-  cizí sloty, smazalo by mu to odpovědi — proto se to odmítá 400. Odhlásit se jde
-  prázdným polem, které to říká.
-- Dostupnost z vlastního kalendáře se **nikdy neposílá na server**: stránka to
-  napíše nad formulář ještě předtím, než host zmáčkne tlačítko (PRD §19.1).
-- E-mail je **privátní identifikátor, ne vstupenka**. Organizátor i účastník při
-  prvním zápisu uvedou jméno a e-mail bez kódu; kód se vyžádá až při přepsání
-  existující odpovědi nebo správě pollu. Veřejná projekce e-mail ani stabilní id
-  účastníka nikdy neposílá.
-- Event zakládá **server** při rozhodnutí, ne klient — jinak by se anketa a
-  kalendář mohly rozejít v tom, co bylo domluveno.
-- Zatím není: předvyplnění dostupnosti z vlastního kalendáře.
 
 ## 8. Anti-patterny (červené vlajky v review)
 

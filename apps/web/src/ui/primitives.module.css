@@ -1114,11 +1114,7 @@
 }
 
 .rowAction[data-tone="destructive"]:hover:not(:disabled) {
-	background: color-mix(
-		in srgb,
-		var(--accent-primary) 7%,
-		var(--surface-panel)
-	);
+	background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
 }
 
 .rowAction[data-tone="destructive"] .rowLabel,
@@ -1336,7 +1332,7 @@
    beside a panel — rather than one block as long as it happens to be. Those
    shrink to a letterbox while their content loads, and back again when a tab
    holds one short group. A dialog that is simply short does not want this: an
-   empty half under a two-line poll is the same complaint the other way up.
+   empty half under two lines of content is the same complaint the other way up.
    Clamped by the same viewport expression as each cap, so the two never cross. */
 .dialog_tall.dialog_wide {
 	min-height: min(
@@ -2215,10 +2211,7 @@
 	}
 
 	.toastRegion {
-		bottom: var(
-			--toast-bottom,
-			calc(var(--space-3) + var(--layer-safe-bottom))
-		);
+		bottom: var(--toast-bottom, calc(var(--space-3) + var(--layer-safe-bottom)));
 	}
 
 	.selectSheetTitle {

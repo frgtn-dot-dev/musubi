@@ -19,7 +19,10 @@ const base = {
 {
   // Editing the words is not news. This is the assertion that keeps a shared
   // calendar from mailing thirty people because somebody fixed a typo.
-  assert.equal(describeChange(base, { ...base, title: "Standup (daily)" }), null);
+  assert.equal(
+    describeChange(base, { ...base, title: "Standup (daily)" }),
+    null,
+  );
 }
 
 {
@@ -29,7 +32,11 @@ const base = {
     start: new Date("2026-08-20T11:00:00Z"),
   });
   assert.equal(moved?.kind, "moved");
-  assert.equal(moved?.wasStart, base.start.toISOString(), "a move says where from");
+  assert.equal(
+    moved?.wasStart,
+    base.start.toISOString(),
+    "a move says where from",
+  );
 }
 
 {
@@ -48,7 +55,10 @@ const base = {
 
   // Already cancelled and then edited: nothing further to announce.
   assert.equal(
-    describeChange({ ...base, isCanceled: true }, { ...base, isCanceled: true, title: "x" }),
+    describeChange(
+      { ...base, isCanceled: true },
+      { ...base, isCanceled: true, title: "x" },
+    ),
     null,
   );
 
@@ -60,8 +70,15 @@ const base = {
 // ── Who hears about it ───────────────────────────────────────────────────────
 
 {
-  assert.equal(wants(null, "event_changed"), true, "no settings row means defaults");
-  assert.equal(wants({ eventChanged: false, pollDecided: true }, "event_changed"), false);
+  assert.equal(
+    wants(null, "event_changed"),
+    true,
+    "no settings row means defaults",
+  );
+  assert.equal(
+    wants({ eventChanged: false, pollDecided: true }, "event_changed"),
+    false,
+  );
   // A kind this build does not know is a newer server's row. Staying quiet is
   // the failure nobody notices; sending is the one that annoys somebody.
   assert.equal(wants(null, "something_later"), false);
@@ -75,7 +92,12 @@ const base = {
     kind: "event_changed",
     name: "Filip",
     notificationEmails: null,
-    payload: { isAllDay: false, kind: "moved", start: base.start.toISOString(), title: "Standup" },
+    payload: {
+      isAllDay: false,
+      kind: "moved",
+      start: base.start.toISOString(),
+      title: "Standup",
+    },
     subjectID: "event-1",
     timezone: "Europe/Prague",
     userID: "user-1",
@@ -103,7 +125,12 @@ const base = {
       kind: "event_changed",
       name: "Nope",
       notificationEmails: { eventChanged: false, pollDecided: true },
-      payload: { isAllDay: false, kind: "moved", start: base.start.toISOString(), title: "x" },
+      payload: {
+        isAllDay: false,
+        kind: "moved",
+        start: base.start.toISOString(),
+        title: "x",
+      },
       subjectID: "event-1",
       timezone: "UTC",
       userID: "user-2",

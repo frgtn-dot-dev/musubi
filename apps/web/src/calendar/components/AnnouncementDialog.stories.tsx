@@ -7,16 +7,16 @@ import { AnnouncementDialogView } from "./AnnouncementDialog";
 const SINGLE: Announcement[] = [
   {
     id: "2026-08-20",
-    title: "Shared availability polls",
-    body: "Propose a few times and let attendees pick the ones that work — no more back-and-forth in chat.",
+    title: "Tasks across your accounts",
+    body: "Google Tasks, Microsoft To Do, and CalDAV tasks now stay together with your calendars.",
   },
 ];
 
 const MULTIPLE: Announcement[] = [
   {
     id: "2026-08-20",
-    title: "Shared availability polls",
-    body: "Propose a few times and let attendees pick the ones that work — no more back-and-forth in chat.\n\nJoin the conversation at https://discord.gg/example if you have feedback.",
+    title: "Tasks across your accounts",
+    body: "Google Tasks, Microsoft To Do, and CalDAV tasks now stay together with your calendars.\n\nJoin the conversation at https://discord.gg/example if you have feedback.",
   },
   {
     id: "2026-08-10",
@@ -55,11 +55,11 @@ export const SingleAnnouncement: Story = {
   },
   play: async () => {
     const dialog = await screen.findByRole("dialog", {
-      name: "Shared availability polls",
+      name: "Tasks across your accounts",
     });
     await waitFor(() => expect(dialog).toBeVisible());
     within(dialog).getByText(
-      "Propose a few times and let attendees pick the ones that work — no more back-and-forth in chat.",
+      "Google Tasks, Microsoft To Do, and CalDAV tasks now stay together with your calendars.",
     );
   },
 };

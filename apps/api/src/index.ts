@@ -50,29 +50,7 @@ import {
   handlerRemoveTask,
   handlerUpdateTask,
 } from "./handlers/tasks";
-import { optionalAuth, requireAuth } from "./middleware/require_auth";
-import {
-  handlerCreatePoll,
-  handlerClosePoll,
-  handlerDecidePoll,
-  handlerDeletePoll,
-  handlerGetPoll,
-  handlerListPollCalendar,
-  handlerListPolls,
-  handlerVotePoll,
-} from "./handlers/scheduling";
-import {
-  handlerGetEventShare,
-  handlerGetPublicEvent,
-  handlerGetPublicRsvp,
-  handlerPutEventShare,
-  handlerPutPublicRsvp,
-  handlerRevokeEventShare,
-} from "./handlers/event_shares";
-import {
-  handlerGetPublicEventCover,
-  handlerPutEventCover,
-} from "./handlers/event_covers";
+import { requireAuth } from "./middleware/require_auth";
 import { BadRequestError, ForbiddenError } from "@musubi/types";
 import { rateLimit } from "./middleware/rate_limit";
 import {
@@ -364,34 +342,6 @@ app.put(
   requireAuth,
   wrap(handlerSetAttendance),
 );
-// Publishing an event page. Gated on editing the event — handing something to
-// the open internet is not a read.
-app.get(
-  "/api/v1/events/:eventId/share",
-  requireAuth,
-  wrap(handlerGetEventShare),
-);
-app.put(
-  "/api/v1/events/:eventId/share",
-  requireAuth,
-  wrap(handlerPutEventShare),
-);
-app.delete(
-  "/api/v1/events/:eventId/share",
-  requireAuth,
-  wrap(handlerRevokeEventShare),
-);
-app.put(
-  "/api/v1/events/:eventId/share/cover",
-  requireAuth,
-  express.raw({
-    limit: "5mb",
-    type: ["image/jpeg", "image/png", "image/webp"],
-  }),
-  wrap(handlerPutEventCover),
-);
-// Who answered. For the organizer, so it ignores the reader-facing visibility.
-
 // Calendars — /google must stay before /:id (both one-segment GETs)
 app.get("/api/v1/calendars", requireAuth, wrap(handlerGetCalendars));
 app.get(
@@ -405,74 +355,6 @@ app.get(
   "/api/v1/calendars/tokens/:token",
   rateLimit(30, 15 * 60_000),
   wrap(handlerGetCalendarFromToken),
-);
-// Scheduling (group poll, PRD §19.1). Creating and answering require a verified
-// email; reading stays open by token.
-app.get(
-  "/api/v1/scheduling/polls/calendar",
-  requireAuth,
-  wrap(handlerListPollCalendar),
-);
-app.get("/api/v1/scheduling/polls", requireAuth, wrap(handlerListPolls));
-app.post(
-  "/api/v1/scheduling/polls",
-  requireAuth,
-  rateLimit(30, 15 * 60_000),
-  wrap(handlerCreatePoll),
-);
-app.post(
-  "/api/v1/scheduling/polls/:pollId/decide",
-  requireAuth,
-  wrap(handlerDecidePoll),
-);
-app.post(
-  "/api/v1/scheduling/polls/:pollId/close",
-  requireAuth,
-  wrap(handlerClosePoll),
-);
-app.delete(
-  "/api/v1/scheduling/polls/:pollId",
-  requireAuth,
-  wrap(handlerDeletePoll),
-);
-app.get(
-  "/api/v1/public/polls/:token",
-  optionalAuth,
-  rateLimit(60, 15 * 60_000),
-  wrap(handlerGetPoll),
-);
-app.put(
-  "/api/v1/public/polls/:token/votes",
-  requireAuth,
-  rateLimit(60, 15 * 60_000),
-  wrap(handlerVotePoll),
-);
-
-// Public: the token IS the credential, same as an invite. Rate-limited per IP so
-// the space cannot be walked, and the projection is narrow by construction.
-app.get(
-  "/api/v1/public/events/:token",
-  rateLimit(60, 15 * 60_000),
-  wrap(handlerGetPublicEvent),
-);
-// Answering needs a session — the page signs the guest in with an emailed code
-// first, so every RSVP is an address somebody proved.
-app.get(
-  "/api/v1/public/events/:token/rsvp",
-  optionalAuth,
-  rateLimit(60, 15 * 60_000),
-  wrap(handlerGetPublicRsvp),
-);
-app.put(
-  "/api/v1/public/events/:token/rsvp",
-  requireAuth,
-  rateLimit(30, 15 * 60_000),
-  wrap(handlerPutPublicRsvp),
-);
-app.get(
-  "/api/v1/public/events/:token/cover",
-  rateLimit(120, 15 * 60_000),
-  wrap(handlerGetPublicEventCover),
 );
 app.get(
   "/api/v1/calendars/:id/export",

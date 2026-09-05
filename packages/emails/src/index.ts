@@ -9,7 +9,6 @@ export { getChangeEmailHtml } from "./change_email";
 export { getSignInCodeHtml } from "./sign_in_code";
 export { brandUrl, LOGO_CID, logoAttachment } from "./brand";
 export { getEventChangesHtml, type EventChange } from "./event_changes";
-export { getPollDecidedHtml } from "./poll_decided";
 export { getCalendarInviteHtml } from "./calendar_invite";
 
 export function smtpTransportOptions(smtp: typeof config.smtp) {

@@ -8,7 +8,10 @@ const settings = {
   dateFormat: "dmy",
   defaultCalendarView: "month",
   id: "user-1",
-  defaultReminder: { minutesBefore: 10, allDay: { daysBefore: 1, atMinute: 1080 } },
+  defaultReminder: {
+    minutesBefore: 10,
+    allDay: { daysBefore: 1, atMinute: 1080 },
+  },
   lastSeenAnnouncement: "",
   notificationEmails: { eventChanged: true, pollDecided: true },
   notificationsOnByDefault: true,
@@ -43,95 +46,92 @@ function responseRecorder() {
 }
 
 async function run() {
-{
-  const { response, result } = responseRecorder();
-  const handler = createPatchSettingsHandler({
-    notify: () => undefined,
-    patch: async () => ({ conflict: true, settings }),
-  });
-  await handler(
-    {
-      body: { baseRevision: 3, patch: { theme: "dark" } },
-      requestId: "settings-conflict",
-      user: { id: "user-1" },
-    } as Request,
-    response,
-  );
-
-  assert.equal(result().statusCode, 409);
-  assert.deepEqual(result().payload, {
-    current: {
-      revision: 4,
-      updatedAt: settings.updatedAt,
-      value: {
-        calendarOrder: [],
-        dateFormat: "dmy",
-        defaultCalendarView: "month",
-        defaultReminder: settings.defaultReminder,
-        lastSeenAnnouncement: settings.lastSeenAnnouncement,
-        notificationEmails: settings.notificationEmails,
-        notificationsOnByDefault: true,
-        onboarded: true,
-        tabBarLabels: true,
-        theme: "system",
-        timeFormat: "24h",
-        timezone: "Europe/Prague",
-        weekStartsOn: "monday",
-      },
-    },
-    error: "SettingsConflict",
-    message: "Settings changed on another device.",
-    requestId: "settings-conflict",
-  });
-}
-
-{
-  const notifications: unknown[] = [];
-  const { response, result } = responseRecorder();
-  const handler = createPatchSettingsHandler({
-    notify: (...args) => {
-      notifications.push(args);
-    },
-    patch: async () => ({
-      conflict: false,
-      settings: { ...settings, revision: 5, theme: "dark" },
-    }),
-  });
-  await handler(
-    {
-      body: { baseRevision: 4, patch: { theme: "dark" } },
-      requestId: "settings-saved",
-      user: { id: "user-1" },
-    } as Request,
-    response,
-  );
-
-  assert.equal(result().statusCode, 200);
-  assert.equal(
-    (result().payload as { revision: number }).revision,
-    5,
-  );
-  assert.deepEqual(notifications, [
-    [["user-1"], "settings_updated", { revision: 5 }],
-  ]);
-}
-
-await assert.rejects(
-  () =>
-    createPatchSettingsHandler()(
+  {
+    const { response, result } = responseRecorder();
+    const handler = createPatchSettingsHandler({
+      notify: () => undefined,
+      patch: async () => ({ conflict: true, settings }),
+    });
+    await handler(
       {
-        body: {
-          baseRevision: 4,
-          patch: { unknownSetting: true },
-        },
+        body: { baseRevision: 3, patch: { theme: "dark" } },
+        requestId: "settings-conflict",
         user: { id: "user-1" },
       } as Request,
-      responseRecorder().response,
-    ),
-  (error: unknown) =>
-    error instanceof Error &&
-    error.message === "Request is missing a valid settings patch.",
-);
+      response,
+    );
+
+    assert.equal(result().statusCode, 409);
+    assert.deepEqual(result().payload, {
+      current: {
+        revision: 4,
+        updatedAt: settings.updatedAt,
+        value: {
+          calendarOrder: [],
+          dateFormat: "dmy",
+          defaultCalendarView: "month",
+          defaultReminder: settings.defaultReminder,
+          lastSeenAnnouncement: settings.lastSeenAnnouncement,
+          notificationEmails: settings.notificationEmails,
+          notificationsOnByDefault: true,
+          onboarded: true,
+          tabBarLabels: true,
+          theme: "system",
+          timeFormat: "24h",
+          timezone: "Europe/Prague",
+          weekStartsOn: "monday",
+        },
+      },
+      error: "SettingsConflict",
+      message: "Settings changed on another device.",
+      requestId: "settings-conflict",
+    });
+  }
+
+  {
+    const notifications: unknown[] = [];
+    const { response, result } = responseRecorder();
+    const handler = createPatchSettingsHandler({
+      notify: (...args) => {
+        notifications.push(args);
+      },
+      patch: async () => ({
+        conflict: false,
+        settings: { ...settings, revision: 5, theme: "dark" },
+      }),
+    });
+    await handler(
+      {
+        body: { baseRevision: 4, patch: { theme: "dark" } },
+        requestId: "settings-saved",
+        user: { id: "user-1" },
+      } as Request,
+      response,
+    );
+
+    assert.equal(result().statusCode, 200);
+    assert.equal((result().payload as { revision: number }).revision, 5);
+    assert.deepEqual(notifications, [
+      [["user-1"], "settings_updated", { revision: 5 }],
+    ]);
+  }
+
+  await assert.rejects(
+    () =>
+      createPatchSettingsHandler()(
+        {
+          body: {
+            baseRevision: 4,
+            patch: { unknownSetting: true },
+          },
+          user: { id: "user-1" },
+        } as Request,
+        responseRecorder().response,
+      ),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.message === "Request is missing a valid settings patch.",
+  );
 }
 
 void run();

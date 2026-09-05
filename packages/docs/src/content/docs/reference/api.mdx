@@ -89,12 +89,6 @@ The same value is returned in `x-request-id` and attached to structured logs.
 | `POST /api/v1/federation/accept` | Accept invite as a remote-server shadow user | 10 / 15 min / IP |
 | `POST /api/v1/users/delete/confirm` | Complete email-token account deletion | 10 / 15 min / IP |
 | `GET /api/v1/users/:userId/avatar` | Public immutable avatar bytes | — |
-| `GET /api/v1/public/events/:token` | Read the narrow published-event projection; token is the capability | 60 / 15 min / IP |
-| `GET /api/v1/public/events/:token/rsvp` | Read public guest counts/names allowed by the organizer, plus the caller's answer when authenticated | 60 / 15 min / IP |
-| `PUT /api/v1/public/events/:token/rsvp` | Write the authenticated, verified-email guest's answer | 30 / 15 min / IP |
-| `GET /api/v1/public/events/:token/cover` | Read the active uploaded event cover; token is the capability | 120 / 15 min / IP |
-| `GET /api/v1/public/polls/:token` | Read a scheduling poll; auth is optional | 60 / 15 min / IP |
-| `PUT /api/v1/public/polls/:token/votes` | Write a verified participant's complete answer set | 60 / 15 min / IP |
 | `GET /invite/:token` | HTML hand-off to `musubi://invite/...` | — |
 | `GET /reset-password` | Self-hosted password reset HTML | — |
 | `GET /delete-account` | Self-hosted account-deletion HTML | — |
@@ -149,27 +143,6 @@ including the originating one, which discards the duplicate by revision.
 SSE is best-effort and has no replay buffer. The durable recovery path is event
 delta sync.
 
-## Scheduling polls
-
-| Method and path | Auth | Purpose |
-| --- | --- | --- |
-| `GET /api/v1/scheduling/polls` | Required | List polls owned by the signed-in email identity |
-| `POST /api/v1/scheduling/polls` | Required | Create a poll from `title`, day `slots`, and optional `description`, `deadline`, `approximateStartTime` |
-| `GET /api/v1/public/polls/:token` | Optional | Read the public poll projection and the caller's own answer when identifiable |
-| `PUT /api/v1/public/polls/:token/votes` | Required | Replace one participant's complete `yes` / `if-needed` / `no` answer set |
-| `POST /api/v1/scheduling/polls/:pollId/decide` | Required owner | Pick `slotId` and `calendarId`, create the all-day event, and close the poll |
-| `POST /api/v1/scheduling/polls/:pollId/close` | Required owner | Stop answers without creating an event |
-| `DELETE /api/v1/scheduling/polls/:pollId` | Required owner | Delete the poll and its answers; an already-created event remains |
-
-Poll choices are calendar days. `approximateStartTime` is optional `HH:mm`
-context only; deciding a current poll creates an all-day event. Older timed polls
-retain their stored duration for compatibility.
-
-Creation and answers require a verified email OTP. An existing account's saved
-name is reused; a new account chooses one after verification. The public
-projection contains participant names and answers, never email addresses or
-private participant identifiers.
-
 ## Events
 
 | Method and path | Request | Response / notes |
@@ -180,17 +153,8 @@ private participant identifiers.
 | `DELETE /api/v1/events` | `Event` plus optional `unlinkCalendarID` | `{ id, calendars, removed }` |
 | `POST /api/v1/events/:eventId/link` | `{ calendarID }` | Same event linked into target |
 | `POST /api/v1/events/:eventId/fork` | `{ calendarID }` | Independent new `Event` |
-| `GET /api/v1/events/:eventId/attendees` | — | `[{ id, name, image }]`; no emails |
+| `GET /api/v1/events/:eventId/attendees` | — | `[{ id, name, image, status }]`; no emails |
 | `PUT /api/v1/events/:eventId/attendance` | `{ status: "going" | "maybe" | "declined" | "none" }`; legacy`{ attending: boolean }` remains accepted | Fresh attendee list |
-| `GET /api/v1/events/:eventId/share` | — | Current published-page settings or `null` |
-| `PUT /api/v1/events/:eventId/share` | `{ attendeeVisibility, content, theme }` | Create or update the published page, tags, agenda, cover focal point, and token URL |
-| `PUT /api/v1/events/:eventId/share/cover` | JPEG, PNG, or WebP bytes (max 5 MB) | Store or replace the uploaded cover in configured media storage |
-| `DELETE /api/v1/events/:eventId/share` | — | Revoke the public token |
-
-Published event reads and organizer-approved attendee counts/names are open to
-possession of the token. Reading one's own RSVP and writing any answer require a
-verified-email session; the public page authenticates guests with an emailed code
-before accepting an answer.
 
 Event/calendar identifiers on this surface must use canonical hyphenated UUID
 form. Invalid body references, route parameters, `unlinkCalendarID`, and
@@ -285,13 +249,12 @@ The server stores rules, never a schedule: clients resolve what to ring with
 ## Notification emails
 
 Sent because a **person** did something, as opposed to a reminder, which is a
-promise you made to yourself. Two switches in `settings.notificationEmails`
-(`eventChanged`, `pollDecided`), both on by default.
+promise you made to yourself. The `settings.notificationEmails.eventChanged`
+switch is on by default.
 
 | What | When | Batched |
 | --- | --- | --- |
 | An event moved or was cancelled | Only the start/end changing or `isCanceled` going true. Guests who have not declined, minus whoever made the change | Yes — `pending_notifications`, one email per person per batch |
-| A poll has a time | `POST /api/v1/scheduling/polls/:pollId/decide` | No — a poll is decided once, and half the participants may have no account |
 | A calendar invitation | Somebody typed an address and pressed send | No — transactional, and it has no preference for the same reason a password reset does not |
 
 Batched notifications wait `BATCH_DELAY_MS` (3 minutes) from the **first**

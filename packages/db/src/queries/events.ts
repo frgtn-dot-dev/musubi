@@ -153,9 +153,7 @@ export async function setAttendance(
 	if (status === "none") {
 		await db
 			.delete(eventUsers)
-			.where(
-				and(eq(eventUsers.eventID, eventID), eq(eventUsers.userID, userID)),
-			);
+			.where(and(eq(eventUsers.eventID, eventID), eq(eventUsers.userID, userID)));
 		return;
 	}
 
@@ -166,15 +164,6 @@ export async function setAttendance(
 			set: { status, updatedAt: new Date() },
 			target: [eventUsers.eventID, eventUsers.userID],
 		});
-}
-
-// Publishing a page collects answers, so the event's attendee section has to be
-// on. Set by the share handler rather than asked of the organizer twice.
-export async function setEventHasAttendees(
-	eventID: string,
-	hasAttendees: boolean,
-) {
-	await db.update(events).set({ hasAttendees }).where(eq(events.id, eventID));
 }
 
 // Hard-delete tombstones older than `before` (cascades their calendarEvents +

@@ -54,8 +54,6 @@ Nobody else is building exactly this: **an open calendar designed as social infr
 | 鈴 | **Notifications** | Local reminders that survive edits, moves, and recurrence — even for synced events |
 | 卓 | **Android home-screen widgets** | Scrollable Agenda + adaptive month Calendar; recurring occurrences, deep-linked event/day detail, per-widget calendar filters, and light/dark themes |
 | 網 | **Desktop web client** | Month, week and agenda planning; event, calendar, account and page administration; the phone-sized web UI hands off to the native app |
-| 問 | **Find a time** | Share day-based availability polls without requiring an account; names are public, participant emails stay private |
-| 開 | **Published events & RSVP** | Share a public event page, collect going / maybe / declined answers, and control whether guests see attendee names or counts |
 | 家 | **Self-hosting** | `docker-compose.yml` for the whole stack — web client and API on one origin behind a gateway, HTTPS included — or `docker-compose.api.yml` for the API alone |
 
 ### Sync providers

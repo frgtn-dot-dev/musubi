@@ -98,7 +98,6 @@ export function PageSettingsDialog({
   );
   const [view, setView] = useState<PageConfigV1["view"]>(page.config.view);
   const [visibility, setVisibility] = useState(page.config.calendarVisibility);
-  const [showPolls, setShowPolls] = useState(page.config.showPolls ?? false);
   const [busy, setBusy] = useState(false);
   const [isDefault, setIsDefault] = useState(page.isDefault);
   const [settingDefault, setSettingDefault] = useState(false);
@@ -114,7 +113,6 @@ export function PageSettingsDialog({
     trimmedName !== page.name ||
     icon !== resolvePageIcon(page.config.icon, page.isDefault) ||
     JSON.stringify(view) !== JSON.stringify(page.config.view) ||
-    showPolls !== (page.config.showPolls ?? false) ||
     !visibilityEquals(visibility, page.config.calendarVisibility);
   const canSave = Boolean(trimmedName) && dirty && !busy;
   const visibleCalendarIds = calendarIdsForVisibility(visibility, calendars);
@@ -123,7 +121,6 @@ export function PageSettingsDialog({
     ...page.config,
     calendarVisibility: visibility,
     icon,
-    showPolls,
     view,
   });
 
@@ -180,7 +177,9 @@ export function PageSettingsDialog({
       onNotice("Page saved.");
       onOpenChange(false);
     } catch {
-      setError("This page could not be saved. Your changes are still here — try again.");
+      setError(
+        "This page could not be saved. Your changes are still here — try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -199,7 +198,9 @@ export function PageSettingsDialog({
       onOpenChange(false);
       onOpenPage(created.id, created.config.view.id);
     } catch {
-      setError("The new page could not be created. Nothing was added — try again.");
+      setError(
+        "The new page could not be created. Nothing was added — try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -217,7 +218,9 @@ export function PageSettingsDialog({
       setConfirmation(undefined);
       onOpenChange(false);
     } catch {
-      setDeleteError("This page could not be deleted. It is still here — try again.");
+      setDeleteError(
+        "This page could not be deleted. It is still here — try again.",
+      );
       setBusy(false);
     }
   }
@@ -232,7 +235,9 @@ export function PageSettingsDialog({
       setIsDefault(true);
       onNotice(`“${page.name}” is now the default Page.`);
     } catch {
-      setError("The default page could not be changed. It is still the one it was — try again.");
+      setError(
+        "The default page could not be changed. It is still the one it was — try again.",
+      );
     } finally {
       setSettingDefault(false);
       setBusy(false);
@@ -246,311 +251,299 @@ export function PageSettingsDialog({
 
   return (
     <>
-    <Dialog
-      bodyLayout="flush"
-      closeLabel="Close page settings"
-      description="Applies to this page only, on every device."
-      footer={
-        conflict ? (
-          <>
-            <Button
-              disabled={busy}
-              variant="secondary"
-              onClick={() => {
-                onResolveConflictDraft?.();
-                onOpenChange(false);
-              }}
-            >
-              Discard my changes
-            </Button>
-            <Button loading={busy} onClick={() => void saveAsCopy()}>
-              Save as a copy
-            </Button>
-          </>
-        ) : (
-          <>
-            {canDelete ? (
+      <Dialog
+        bodyLayout="flush"
+        closeLabel="Close page settings"
+        description="Applies to this page only, on every device."
+        footer={
+          conflict ? (
+            <>
               <Button
-                className={styles.footerDelete}
                 disabled={busy}
-                icon={
-                  <Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />
-                }
-                ref={deleteButtonRef}
-                variant="destructive"
+                variant="secondary"
                 onClick={() => {
-                  setDeleteError("");
-                  setConfirmation("delete");
+                  onResolveConflictDraft?.();
+                  onOpenChange(false);
                 }}
               >
-                Delete page
+                Discard my changes
               </Button>
-            ) : null}
-            <Button
-              disabled={!canSave}
-              form="page-settings-form"
-              loading={busy}
-              type="submit"
-            >
-              Save
-            </Button>
-          </>
-        )
-      }
-      initialFocus={nameRef}
-      onOpenChange={requestClose}
-      open
-      size="wide"
-      title="Page settings"
-    >
-      <form
-        className={styles.form}
-        id="page-settings-form"
-        onSubmit={handleSubmit}
-      >
-        {conflict ? (
-          <div className={styles.conflict} role="alert">
-            <AlertTriangle aria-hidden="true" size={18} strokeWidth={1.6} />
-            <div>
-              <strong>This page changed on another device</strong>
-              <p>
-                Your edits weren’t saved. Keep them as a new page, or discard
-                them and use the latest version.
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        <Field label="Page name" variant="section">
-          <input
-            disabled={busy}
-            maxLength={80}
-            ref={nameRef}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-
-        <IconField
-          disabled={busy}
-          name="page-settings-icon"
-          value={icon}
-          onChange={setIcon}
-        />
-
-        <section className={styles.section}>
-          <SectionLabel className={styles.sectionHeading} level={3}>
-            General
-          </SectionLabel>
-          <div className={styles.sectionRows}>
-            <Row
-              label="Default page"
-              detail="Opened when a link does not name one"
-              trailing={
-                isDefault ? (
-                  <span className={styles.defaultStatus}>
-                    <Check aria-hidden="true" size={14} strokeWidth={1.8} />
-                    Default
-                  </span>
-                ) : (
-                  <Button
-                    disabled={busy}
-                    loading={settingDefault}
-                    size="compact"
-                    variant="secondary"
-                    onClick={() => void setAsDefault()}
-                  >
-                    Set as default
-                  </Button>
-                )
-              }
-            />
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <SectionLabel className={styles.sectionHeading} level={3}>
-            Presentation
-          </SectionLabel>
-          <div className={styles.sectionRows}>
-            {"density" in view ? (
-              <Row
-                label="Row height"
-                detail="How tall an hour is in the day and week grids"
-                trailing={
-                  <Select
-                    disabled={busy}
-                    label="Row height"
-                    options={DENSITY_OPTIONS}
-                    size="compact"
-                    value={view.density}
-                    onChange={(value) =>
-                      setView((current) =>
-                        "density" in current
-                          ? { ...current, density: value as Density }
-                          : current,
-                      )
-                    }
-                  />
-                }
-              />
-            ) : null}
-            {"weeks" in view ? (
-              <Row
-                label="Weeks shown"
-                detail="How far ahead this page looks, in whole weeks"
-                trailing={
-                  <Select
-                    disabled={busy}
-                    label="Weeks shown"
-                    options={WEEKS_OPTIONS}
-                    size="compact"
-                    value={String(view.weeks)}
-                    onChange={(value) =>
-                      setView((current) =>
-                        "weeks" in current
-                          ? { ...current, weeks: Number(value) }
-                          : current,
-                      )
-                    }
-                  />
-                }
-              />
-            ) : null}
-            {"weekend" in view ? (
-              <Row
-                label="Weekend"
-                detail="Show Saturday and Sunday columns"
-                trailing={
-                  <Checkbox
-                    checked={view.weekend}
-                    disabled={busy}
-                    label="Weekend"
-                    labelHidden
-                    onChange={(event) =>
-                      setView((current) =>
-                        "weekend" in current
-                          ? { ...current, weekend: event.target.checked }
-                          : current,
-                      )
-                    }
-                  />
-                }
-              />
-            ) : null}
-            {"showAdjacentDays" in view ? (
-              <Row
-                label="Nearby months"
-                detail="Fill the month grid with neighbouring days"
-                trailing={
-                  <Checkbox
-                    checked={view.showAdjacentDays}
-                    disabled={busy}
-                    label="Nearby months"
-                    labelHidden
-                    onChange={(event) =>
-                      setView((current) =>
-                        "showAdjacentDays" in current
-                          ? {
-                              ...current,
-                              showAdjacentDays: event.target.checked,
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                }
-              />
-            ) : null}
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <SectionLabel className={styles.sectionHeading} level={3}>
-            Filters
-          </SectionLabel>
-          {/* Calendar visibility belongs to the Page, so it is configured here
-              with its other saved presentation choices instead of in the
-              calendar toolbar. */}
-          <div className={styles.sectionRows}>
-            <Row
-              detail="Show active scheduling polls you organize or answered"
-              label="Scheduling polls"
-              trailing={
-                <Checkbox
-                  checked={showPolls}
+              <Button loading={busy} onClick={() => void saveAsCopy()}>
+                Save as a copy
+              </Button>
+            </>
+          ) : (
+            <>
+              {canDelete ? (
+                <Button
+                  className={styles.footerDelete}
                   disabled={busy}
-                  label="Scheduling polls"
-                  labelHidden
-                  onChange={(event) => setShowPolls(event.target.checked)}
-                />
-              }
+                  icon={
+                    <Trash2 aria-hidden="true" size={16} strokeWidth={1.7} />
+                  }
+                  ref={deleteButtonRef}
+                  variant="destructive"
+                  onClick={() => {
+                    setDeleteError("");
+                    setConfirmation("delete");
+                  }}
+                >
+                  Delete page
+                </Button>
+              ) : null}
+              <Button
+                disabled={!canSave}
+                form="page-settings-form"
+                loading={busy}
+                type="submit"
+              >
+                Save
+              </Button>
+            </>
+          )
+        }
+        initialFocus={nameRef}
+        onOpenChange={requestClose}
+        open
+        size="wide"
+        title="Page settings"
+      >
+        <form
+          className={styles.form}
+          id="page-settings-form"
+          onSubmit={handleSubmit}
+        >
+          {conflict ? (
+            <div className={styles.conflict} role="alert">
+              <AlertTriangle aria-hidden="true" size={18} strokeWidth={1.6} />
+              <div>
+                <strong>This page changed on another device</strong>
+                <p>
+                  Your edits weren’t saved. Keep them as a new page, or discard
+                  them and use the latest version.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <Field label="Page name" variant="section">
+            <input
+              disabled={busy}
+              maxLength={80}
+              ref={nameRef}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
             />
-          </div>
-          <div className={styles.pillGrid}>
-            {calendars.map((calendar) => (
-              <CalendarVisibilityPill
-                calendar={calendar}
-                key={calendar.id}
-                visible={visibleCalendarIds.includes(calendar.id)}
-                onVisibleChange={() =>
-                  setVisibility((current) =>
-                    toggleCalendarVisibility(current, calendar.id, calendars),
+          </Field>
+
+          <IconField
+            disabled={busy}
+            name="page-settings-icon"
+            value={icon}
+            onChange={setIcon}
+          />
+
+          <section className={styles.section}>
+            <SectionLabel className={styles.sectionHeading} level={3}>
+              General
+            </SectionLabel>
+            <div className={styles.sectionRows}>
+              <Row
+                label="Default page"
+                detail="Opened when a link does not name one"
+                trailing={
+                  isDefault ? (
+                    <span className={styles.defaultStatus}>
+                      <Check aria-hidden="true" size={14} strokeWidth={1.8} />
+                      Default
+                    </span>
+                  ) : (
+                    <Button
+                      disabled={busy}
+                      loading={settingDefault}
+                      size="compact"
+                      variant="secondary"
+                      onClick={() => void setAsDefault()}
+                    >
+                      Set as default
+                    </Button>
                   )
                 }
               />
-            ))}
-          </div>
-        </section>
+            </div>
+          </section>
 
+          <section className={styles.section}>
+            <SectionLabel className={styles.sectionHeading} level={3}>
+              Presentation
+            </SectionLabel>
+            <div className={styles.sectionRows}>
+              {"density" in view ? (
+                <Row
+                  label="Row height"
+                  detail="How tall an hour is in the day and week grids"
+                  trailing={
+                    <Select
+                      disabled={busy}
+                      label="Row height"
+                      options={DENSITY_OPTIONS}
+                      size="compact"
+                      value={view.density}
+                      onChange={(value) =>
+                        setView((current) =>
+                          "density" in current
+                            ? { ...current, density: value as Density }
+                            : current,
+                        )
+                      }
+                    />
+                  }
+                />
+              ) : null}
+              {"weeks" in view ? (
+                <Row
+                  label="Weeks shown"
+                  detail="How far ahead this page looks, in whole weeks"
+                  trailing={
+                    <Select
+                      disabled={busy}
+                      label="Weeks shown"
+                      options={WEEKS_OPTIONS}
+                      size="compact"
+                      value={String(view.weeks)}
+                      onChange={(value) =>
+                        setView((current) =>
+                          "weeks" in current
+                            ? { ...current, weeks: Number(value) }
+                            : current,
+                        )
+                      }
+                    />
+                  }
+                />
+              ) : null}
+              {"weekend" in view ? (
+                <Row
+                  label="Weekend"
+                  detail="Show Saturday and Sunday columns"
+                  trailing={
+                    <Checkbox
+                      checked={view.weekend}
+                      disabled={busy}
+                      label="Weekend"
+                      labelHidden
+                      onChange={(event) =>
+                        setView((current) =>
+                          "weekend" in current
+                            ? { ...current, weekend: event.target.checked }
+                            : current,
+                        )
+                      }
+                    />
+                  }
+                />
+              ) : null}
+              {"showAdjacentDays" in view ? (
+                <Row
+                  label="Nearby months"
+                  detail="Fill the month grid with neighbouring days"
+                  trailing={
+                    <Checkbox
+                      checked={view.showAdjacentDays}
+                      disabled={busy}
+                      label="Nearby months"
+                      labelHidden
+                      onChange={(event) =>
+                        setView((current) =>
+                          "showAdjacentDays" in current
+                            ? {
+                                ...current,
+                                showAdjacentDays: event.target.checked,
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  }
+                />
+              ) : null}
+            </div>
+          </section>
 
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-      </form>
-    </Dialog>
-    <ConfirmationDialog
-      closeLabel="Close discard changes confirmation"
-      confirmLabel="Discard changes"
-      description={`Your edits to “${page.name}” have not been saved.`}
-      onConfirm={() => {
-        setConfirmation(undefined);
-        onOpenChange(false);
-      }}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) setConfirmation(undefined);
-      }}
-      open={confirmation === "discard"}
-      returnFocus={discardReturnFocusRef}
-      title="Discard page changes?"
-    >
-      <ConfirmationNotice icon={<AlertTriangle size={18} strokeWidth={1.6} />}>
-        <strong>Your current Page draft will be lost.</strong>
-        <p>Name, icon, presentation, and visibility will stay unchanged.</p>
-      </ConfirmationNotice>
-    </ConfirmationDialog>
+          <section className={styles.section}>
+            <SectionLabel className={styles.sectionHeading} level={3}>
+              Filters
+            </SectionLabel>
+            {/* Calendar visibility belongs to the Page, so it is configured here
+              with its other saved presentation choices instead of in the
+              calendar toolbar. */}
+            <div className={styles.pillGrid}>
+              {calendars.map((calendar) => (
+                <CalendarVisibilityPill
+                  calendar={calendar}
+                  key={calendar.id}
+                  visible={visibleCalendarIds.includes(calendar.id)}
+                  onVisibleChange={() =>
+                    setVisibility((current) =>
+                      toggleCalendarVisibility(current, calendar.id, calendars),
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </section>
 
-    <ConfirmationDialog
-      closeLabel="Close delete page confirmation"
-      confirmLabel="Delete page"
-      description={`“${page.name}” will disappear from every device.`}
-      loading={busy && confirmation === "delete"}
-      onConfirm={() => void remove()}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && !busy) setConfirmation(undefined);
-      }}
-      open={confirmation === "delete"}
-      returnFocus={deleteButtonRef}
-      title={`Delete “${page.name}”?`}
-    >
-      <ConfirmationNotice icon={<AlertTriangle size={18} strokeWidth={1.6} />}>
-        <strong>This cannot be undone.</strong>
-        <p>The server has no way to restore a deleted Page.</p>
-      </ConfirmationNotice>
-      {deleteError ? <InlineError>{deleteError}</InlineError> : null}
-    </ConfirmationDialog>
+          {error ? (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          ) : null}
+        </form>
+      </Dialog>
+      <ConfirmationDialog
+        closeLabel="Close discard changes confirmation"
+        confirmLabel="Discard changes"
+        description={`Your edits to “${page.name}” have not been saved.`}
+        onConfirm={() => {
+          setConfirmation(undefined);
+          onOpenChange(false);
+        }}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmation(undefined);
+        }}
+        open={confirmation === "discard"}
+        returnFocus={discardReturnFocusRef}
+        title="Discard page changes?"
+      >
+        <ConfirmationNotice
+          icon={<AlertTriangle size={18} strokeWidth={1.6} />}
+        >
+          <strong>Your current Page draft will be lost.</strong>
+          <p>Name, icon, presentation, and visibility will stay unchanged.</p>
+        </ConfirmationNotice>
+      </ConfirmationDialog>
+
+      <ConfirmationDialog
+        closeLabel="Close delete page confirmation"
+        confirmLabel="Delete page"
+        description={`“${page.name}” will disappear from every device.`}
+        loading={busy && confirmation === "delete"}
+        onConfirm={() => void remove()}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !busy) setConfirmation(undefined);
+        }}
+        open={confirmation === "delete"}
+        returnFocus={deleteButtonRef}
+        title={`Delete “${page.name}”?`}
+      >
+        <ConfirmationNotice
+          icon={<AlertTriangle size={18} strokeWidth={1.6} />}
+        >
+          <strong>This cannot be undone.</strong>
+          <p>The server has no way to restore a deleted Page.</p>
+        </ConfirmationNotice>
+        {deleteError ? <InlineError>{deleteError}</InlineError> : null}
+      </ConfirmationDialog>
     </>
   );
 }
@@ -636,7 +629,9 @@ export function NewPageDialog({
       await onCreate({ icon, name: trimmedName });
       onOpenChange(false);
     } catch {
-      setError("The new page could not be created. Nothing was added — try again.");
+      setError(
+        "The new page could not be created. Nothing was added — try again.",
+      );
       setBusy(false);
     }
   }
