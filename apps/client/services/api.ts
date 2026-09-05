@@ -794,11 +794,12 @@ export function useApi() {
       return data;
     },
 
-    async getGoogleCalendars() {
+    async syncProviderCalendars(input: { provider?: string; accountId?: string } = {}) {
       const { error } = await authClient.$fetch(
-        `${apiUrl}/api/${apiVersion}/calendars/google`,
+        `${apiUrl}/api/${apiVersion}/users/connections/sync`,
         {
-          method: "GET",
+          method: "POST",
+          body: input,
         },
       );
 

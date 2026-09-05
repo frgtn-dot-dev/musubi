@@ -117,6 +117,7 @@ import {
 import {
   handlerDisconnectAccount,
   handlerDisconnectExternalCalendar,
+  handlerSyncConnections,
 } from "./handlers/connections";
 import {
   handlerDeleteMusubiAccount,
@@ -541,6 +542,11 @@ app.delete(
   "/api/v1/users/connections/caldav",
   requireAuth,
   wrap(handlerDisconnectCaldav),
+);
+app.post(
+  "/api/v1/users/connections/sync",
+  requireAuth,
+  wrap(handlerSyncConnections),
 );
 app.post(
   "/api/v1/users/connections/disconnect",

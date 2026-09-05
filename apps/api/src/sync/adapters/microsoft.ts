@@ -534,8 +534,8 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 export const microsoftAdapter: CalendarAdapter = {
   provider: "microsoft",
 
-  async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
-    const ids = await getOAuthAccountIDs(userID, "microsoft");
+  async listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]> {
+    const ids = await getOAuthAccountIDs(userID, "microsoft", accountId);
     return Promise.all(
       ids.map(async (id) => {
         let label = id;

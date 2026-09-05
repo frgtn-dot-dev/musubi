@@ -107,7 +107,7 @@ export function useProviderLinkReturn(userId: string) {
       setState({ error, importing: false, linked: true });
     };
 
-    void syncProviderCalendars().then(
+    void syncProviderCalendars({ provider }).then(
       () => settle(),
       (reason: unknown) =>
         settle(

@@ -39,7 +39,7 @@ export function useRefreshData() {
     if (opts?.providerSync !== false) {
       // trigger server-side provider sync first, so its imported/changed events
       // show up in the delta below (best-effort, no-op for unconnected providers)
-      try { await api.getGoogleCalendars(); } catch (e) { console.error("Sync failed:", e); }
+      try { await api.syncProviderCalendars(); } catch (e) { console.error("Sync failed:", e); }
     }
 
     // delta: only events changed since our last sync (+ tombstones to drop).

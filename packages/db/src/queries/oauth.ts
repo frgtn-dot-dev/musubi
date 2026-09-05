@@ -42,7 +42,7 @@ export async function oauthConnectionCheck(userID: string, provider: string): Pr
 
 // account ids of the user's accounts that granted calendar access — used by
 // the adapters' listAccounts (one row per connected account).
-export async function getOAuthAccountIDs(userID: string, provider: string): Promise<string[]> {
+export async function getOAuthAccountIDs(userID: string, provider: string, accountID?: string): Promise<string[]> {
   const rows = await db.select({
     accountId: account.accountId,
     scope: account.scope,
@@ -51,7 +51,8 @@ export async function getOAuthAccountIDs(userID: string, provider: string): Prom
     syncErrorCode: account.syncErrorCode,
   })
     .from(account)
-    .where(and(eq(account.userId, userID), eq(account.providerId, provider)));
+    .where(and(eq(account.userId, userID), eq(account.providerId, provider),
+      accountID === undefined ? undefined : eq(account.accountId, accountID)));
   // Require a refresh token too — same bar as oauthConnectionCheck's
   // `calendarConnected`. Permanently revoked accounts stay excluded, while an
   // insufficient-scope status self-heals when the stored grant is actually full.

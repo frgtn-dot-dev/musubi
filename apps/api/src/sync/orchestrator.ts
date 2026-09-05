@@ -15,7 +15,7 @@ export type ProviderSyncFailure = {
 
 type ProviderAccountSource = {
   provider: string;
-  listAccounts(userID: string): Promise<{ id: string; label: string }[]>;
+  listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]>;
 };
 
 /**
@@ -43,7 +43,7 @@ export async function runProviderSyncs<TAdapter extends ProviderAccountSource>(
 
     let accounts: { id: string; label: string }[];
     try {
-      accounts = await adapter.listAccounts(userID);
+      accounts = await adapter.listAccounts(userID, options.accountId);
     } catch (error) {
       hooks.onFailure({
         stage: "discovery",
@@ -52,6 +52,10 @@ export async function runProviderSyncs<TAdapter extends ProviderAccountSource>(
       });
       if (options.throwOnError) throw error;
       continue;
+    }
+
+    if (options.accountId && options.throwOnError && !accounts.some((account) => account.id === options.accountId)) {
+      throw new Error("Connected account not found or not eligible for sync");
     }
 
     for (const account of accounts) {

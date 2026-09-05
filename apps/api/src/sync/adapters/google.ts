@@ -484,8 +484,8 @@ export async function fetchGoogleChanges(
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
 
-  async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
-    const ids = await getOAuthAccountIDs(userID, "google");
+  async listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]> {
+    const ids = await getOAuthAccountIDs(userID, "google", accountId);
     return Promise.all(
       ids.map(async (id) => {
         let label = id;

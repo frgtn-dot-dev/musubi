@@ -15,6 +15,7 @@ import {
   type NewEvent,
   type NewTask,
 } from "..";
+import { hasProviderSyncScopes } from "./oauth";
 import { type DbTransaction, removeCalendarInTransaction } from "./calendars";
 
 // Column values written to the `events` row for a synced event.
@@ -448,15 +449,20 @@ async function mappedEventForUpdate(
     .select({ id: externalEvents.id, event: events })
     .from(externalEvents)
     .innerJoin(events, eq(externalEvents.eventID, events.id))
-    .where(and(
-      eq(externalEvents.provider, provider),
-      eq(externalEvents.calendarID, calendarID),
-      eq(externalEvents.externalEventID, externalEventID),
-    ))
+    .where(
+      and(
+        eq(externalEvents.provider, provider),
+        eq(externalEvents.calendarID, calendarID),
+        eq(externalEvents.externalEventID, externalEventID),
+      ),
+    )
     .for("update", { of: events });
   if (!mapped) return undefined;
-  const [mapping] = await tx.select().from(externalEvents)
-    .where(eq(externalEvents.id, mapped.id)).for("update");
+  const [mapping] = await tx
+    .select()
+    .from(externalEvents)
+    .where(eq(externalEvents.id, mapped.id))
+    .for("update");
   return mapping ? { ...mapping, event: mapped.event } : undefined;
 }
 
@@ -477,13 +483,20 @@ export async function upsertExternalEvent(
   icalUid: string | null = null,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const map = await mappedEventForUpdate(tx, provider, calendarID, externalEventID);
+    const map = await mappedEventForUpdate(
+      tx,
+      provider,
+      calendarID,
+      externalEventID,
+    );
 
     if (map) {
       if (etag !== null && map.etag === etag && map.event.deletedAt === null)
         return false;
       if (map.event.originCalendarID !== calendarID) {
-        const changedFields = (Object.keys(values) as (keyof EventValues)[]).filter((key) => {
+        const changedFields = (
+          Object.keys(values) as (keyof EventValues)[]
+        ).filter((key) => {
           // Mirror color is presentation, not provider event content.
           if (key === "color") return false;
           const incoming = values[key];
@@ -556,18 +569,28 @@ export async function deleteExternalEvent(
 ): Promise<boolean> {
   let unlinkedEventID: string | undefined;
   const changed = await db.transaction(async (tx) => {
-    const mapped = await mappedEventForUpdate(tx, provider, calendarID, externalEventID);
+    const mapped = await mappedEventForUpdate(
+      tx,
+      provider,
+      calendarID,
+      externalEventID,
+    );
     if (!mapped) return false;
 
     if (mapped.event.originCalendarID !== calendarID) {
-      await unlinkEventFromCalendarsInTransaction(tx, mapped.event.id, [calendarID]);
+      await unlinkEventFromCalendarsInTransaction(tx, mapped.event.id, [
+        calendarID,
+      ]);
       await touchEvent(tx, mapped.event.id);
       unlinkedEventID = mapped.event.id;
       return true;
     }
     if (mapped.event.deletedAt !== null) return false;
     // Retain authoritative mappings/links for tombstone deltas and revival.
-    await tx.update(events).set({ deletedAt: new Date() }).where(eq(events.id, mapped.event.id));
+    await tx
+      .update(events)
+      .set({ deletedAt: new Date() })
+      .where(eq(events.id, mapped.event.id));
     return true;
   });
   // Emit receipts only after commit, never for rolled-back link changes.
@@ -598,18 +621,39 @@ export async function sweepExternalEvents(
   // ponytail: one transaction per missing resource; batch only if large reset
   // sweeps are measurably slow. Delta and reset must share deletion semantics.
   for (const mapping of mappings) {
-    if (!seen.has(mapping.externalEventID) &&
-        await deleteExternalEvent(provider, calendarID, mapping.externalEventID, onUnlink)) changed++;
+    if (
+      !seen.has(mapping.externalEventID) &&
+      (await deleteExternalEvent(
+        provider,
+        calendarID,
+        mapping.externalEventID,
+        onUnlink,
+      ))
+    )
+      changed++;
   }
   return changed;
 }
 
-/** Users with at least one provider mirror — the scheduled sync's work list. */
+/** Include connected accounts before their first mirror exists. */
 export async function getExternalSyncUserIDs(): Promise<string[]> {
   const rows = await db
     .selectDistinct({ userID: externalCalendars.userID })
     .from(externalCalendars);
-  return rows.map((r) => r.userID);
+  const caldav = await db.selectDistinct({ userID: caldavAccounts.userID }).from(caldavAccounts);
+  const oauth = await db.select({
+    userID: account.userId,
+    provider: account.providerId,
+    scope: account.scope,
+    refreshToken: account.refreshToken,
+    syncStatus: account.syncStatus,
+    syncErrorCode: account.syncErrorCode,
+  }).from(account).where(inArray(account.providerId, ["google", "microsoft"]));
+  const eligible = oauth.filter((row) => row.refreshToken &&
+    hasProviderSyncScopes(row.provider, row.scope ?? "") &&
+    (row.syncStatus === "active" ||
+      (row.syncStatus === "reconnect_required" && row.syncErrorCode === "insufficient_scope")));
+  return [...new Set([...rows, ...caldav, ...eligible].map((row) => row.userID))];
 }
 
 // For push update/delete: find the external id of an already-synced Musubi event.

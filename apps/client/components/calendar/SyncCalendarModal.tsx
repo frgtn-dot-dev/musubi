@@ -115,6 +115,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
         void markGoogleDisclosureSeen();
         setGoogleAcked(true);
       }
+      await api.syncProviderCalendars({ provider });
       haptics.success();
       onConnected(provider);
       handleClose();

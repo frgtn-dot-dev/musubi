@@ -6145,15 +6145,15 @@ test("imports the calendars of an account the moment it comes back linked", asyn
 	// The provider consent screen is a full page load away, so what the app sees
 	// on the way back is a fresh boot with a marker in session storage.
 	let imported = false;
-	const googleCalendar = {
-		accountId: "google-account-1",
-		accountLabel: "qa@gmail.com",
+	const microsoftCalendar = {
+		accountId: "microsoft-account-1",
+		accountLabel: "qa@outlook.com",
 		color: "#4285f4",
 		creatorID: "user-web-qa",
 		id: "g-cal-1",
 		members: [],
-		name: "Work (Google)",
-		provider: "google",
+		name: "Work (Outlook)",
+		provider: "microsoft",
 		role: "owner",
 		syncStatus: "active",
 	};
@@ -6163,13 +6163,15 @@ test("imports the calendars of an account the moment it comes back linked", asyn
 	// fixture's own calendars route answer and the import would look like a no-op.
 	await page.route("**/api/v1/calendars", (route) =>
 		route.request().method() === "GET"
-			? respond(route, imported ? [...calendars, googleCalendar] : calendars)
+			? respond(route, imported ? [...calendars, microsoftCalendar] : calendars)
 			: route.fallback(),
 	);
 	// The sync endpoint is what actually pulls the provider's calendars in; until
 	// it runs, Better Auth has an account and the app has nothing to show for it.
 	let syncCalls = 0;
-	await page.route("**/api/v1/calendars/google", (route) => {
+	await page.route("**/api/v1/users/connections/sync", (route) => {
+		expect(route.request().method()).toBe("POST");
+		expect(route.request().postDataJSON()).toEqual({ provider: "microsoft" });
 		syncCalls += 1;
 		imported = true;
 		return respond(route, {});
@@ -6181,7 +6183,7 @@ test("imports the calendars of an account the moment it comes back linked", asyn
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 	await page.evaluate(() =>
-		window.sessionStorage.setItem("musubi:linking-provider", "google"),
+		window.sessionStorage.setItem("musubi:linking-provider", "microsoft"),
 	);
 	await page.reload();
 
@@ -6189,12 +6191,12 @@ test("imports the calendars of an account the moment it comes back linked", asyn
 	// calendar after consenting is what reads as "nothing happened".
 	const dialog = page.getByRole("dialog", { name: "Connections" });
 	await expect(
-		dialog.getByRole("button", { name: /Disconnect qa@gmail.com/ }),
+		dialog.getByRole("button", { name: /Disconnect qa@outlook.com/ }),
 	).toBeVisible();
 	expect(syncCalls).toBe(1);
 
 	// One import per return trip. The marker is consumed on read, so a later
-	// reload of the same tab must not talk to Google again — nor pop the dialog.
+	// reload of the same tab must not talk to Microsoft again — nor pop the dialog.
 	await page.reload();
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 	await expect(page.getByRole("dialog", { name: "Connections" })).toHaveCount(0);
@@ -6205,11 +6207,11 @@ test("says so when the import fails instead of showing an empty list", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
-	await page.route("**/api/v1/calendars/google", (route) =>
+	await page.route("**/api/v1/users/connections/sync", (route) =>
 		route.fulfill({
 			body: JSON.stringify({
 				error: "ProviderUnavailable",
-				message: "Google could not be reached.",
+				message: "Outlook could not be reached.",
 				requestId: "sync-failed",
 			}),
 			contentType: "application/json",
@@ -6220,7 +6222,7 @@ test("says so when the import fails instead of showing an empty list", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 	await page.evaluate(() =>
-		window.sessionStorage.setItem("musubi:linking-provider", "google"),
+		window.sessionStorage.setItem("musubi:linking-provider", "microsoft"),
 	);
 	await page.reload();
 
