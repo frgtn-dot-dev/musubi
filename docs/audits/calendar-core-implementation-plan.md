@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K04 implementovány, lokálně ověřeny a převzaty (2026-09-05). K05 lokálně implementován a ověřen, čeká na nezávislou revizi a převzetí rodičem. K06–K15 čekají.
+Stav: K01–K05 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06–K15 čekají.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K04 jsou `completed`; K05 čeká na revizi a převzetí po lokální implementaci; K06–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K05 jsou `completed`; K06–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -122,13 +122,14 @@ Doplňující audit zachytil mezeru mezi calendar ACL a OAuth grantem: Google/Gr
 
 **Hotovo:** helper testy plus alespoň test reálného propojení callbacků; samostatný helper test by původní Cancel chybu nezachytil. Použít existující UI bez redesignu.
 
-**Lokální evidence K05 (2026-09-05), čeká na revizi a převzetí rodičem:**
+**Dokončený K05 — evidence a převzetí (2026-09-05):**
 
 - `61e63da`: timed validace i serializace čtou `endDate`. Skutečný formulář zachová overnight/vícedenní title-only edit i inclusive all-day hranice. Se souhlasem rodiče se stávající Ends picker zpřístupnil také timed událostem, minimum času konce platí jen ve stejném dni. Změna Date přenese konec pouze u dosud jednodenního timed draftu; nezávislý vícedenní konec ani all-day konvence se nepřepisují. Bez CSS, nového controlu nebo změny duration/default policy.
 - `61d1172`: inline scoped editor používá vybraný výskyt. More options převádí jeho draft přes stávající čisté `seriesEditWrites(scope: "series")` na master, bez zápisu nebo transient intentu v URL. Explicitní full editor zůstává master-based. Chromium ověřuje třetí výskyt pro occurrence/following/series, přesné PUT/POST datumy a K04 write-set intent, Cancel/focus i předání title-only a časové změny do skutečného full editoru a jeho save.
 - `GlobalEventModals` vrací boolean skutečného `applySeriesEdit`. Rozšířený existující `AddEventModal.spec.ts` vykonává host → formulář (včetně seed efektů) → scope Alert → helper → skutečný store a API transport. Cancel zachová draft, stav composeru a reminders bez event/cache/API mutace, reminder persistence/reconciliation nebo zavření; opakovaný úspěšný save čeká na odpověď, uloží a zavře. Denied/unknown/unsupported i síťová chyba zachovají draft a K04 rollback. Nativní hosty, animace, cache a notification služby jsou testovací švy, nikoli nový renderer.
 - Red před každou opravou: 7 datumových regresí, 5 occurrence browser scénářů a skutečný nativní Cancel callback selhaly na původním chování. Po opravách prošly nejbližší suite a finální `pnpm test` (363 web / 90 native), `pnpm typecheck`, `pnpm check:contracts`, web lint a focused native lint (0 errors; 19 existujících warnings v nezměněném AddEventModal). Finální Chromium 16/16 včetně K04 refusals při 1280/390 px, klávesnice a focus return. Logy: `/tmp/musubi-k05-logs/`; souhrnný diff vůči `b969de3`: `/tmp/musubi-k05-implementation.diff`.
-- Celé unit ověření běželo s `ENVIRONMENT=test`, explicitním neexistujícím lokálním DB socketem a bez zděděných credentials (`safe-test.py` v adresáři logů). Žádná DB infrastruktura, migrace, živý provider, závislost, push nebo build. Pět zděděných dirty souborů zůstává byte-for-byte shodných se snapshotem; generated routeTree churn odstraněn. Finální LSP/lens kontrola a nezávislá revize náleží rodiči; lokální testy nejsou převzetí ani živá certifikace.
+- Celé unit ověření běželo s `ENVIRONMENT=test`, explicitním neexistujícím lokálním DB socketem a bez zděděných credentials (`safe-test.py` v adresáři logů). Žádná DB infrastruktura, migrace, živý provider, závislost, push nebo build. Pět zděděných dirty souborů zůstává byte-for-byte shodných se snapshotem; generated routeTree churn odstraněn. Živá providerová certifikace ani plná E2E matice nebyly součástí tohoto řezu.
+- Finální převzetí: nezávislá revize bez nálezů (`OK`), rodič zkontroloval produkční diff a konkrétní důkazy. Čerstvé gates na skutečném worktree znovu prošly: root testy (363 web / 90 native), typecheck, contracts, web lint a Chromium 16/16. LSP potvrdilo všech osm změněných TS/TSX souborů bez chyb, závěrečné lens diagnostics bez blokujících chyb. Logy: `/tmp/musubi-k05-final-logs/`. Dodatečné přeformátování osmi K05 souborů neznámého původu je ekvivalentní podle TypeScript i emitovaných JavaScript AST; spolu s původními pěti změnami zůstává všech 13 souborů beze změny a mimo staging. Implementační commity jsou `61e63da`, `61d1172`, `68070ac`; žádný push.
 
 ## Druhá série: spolehlivé doručování
 
@@ -334,6 +335,6 @@ Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestá
 
 ## Další konkrétní práce
 
-K04 je převzat. **K05 je lokálně implementován a ověřen, čeká na nezávislou revizi a převzetí rodičem.** Čekání nativního delete na výsledek již převzal K04. Zastavit po třech zbývajících K05 opravách; K06–K15 zůstávají pending a nejsou součástí tohoto řezu.
+K05 je převzat včetně nativního delete dokončeného v K04. **K06–K15 zůstávají pending.** Další K06 zavede revize a nedestruktivní patche; před enforcementem musí vlastník rozhodnout kompatibilitu a přechodný režim starších klientů podle gate K06.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.
