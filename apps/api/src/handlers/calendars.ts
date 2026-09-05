@@ -379,7 +379,7 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 	} catch (error) {
 		if (error instanceof EventWriteError) {
 			throw new EventWriteError(error.capability, error.reason,
-				`${error.message} The new calendar remains empty; no events were imported.`);
+				`The new calendar was created, but event writing is ${error.reason}. No events were imported; the calendar remains empty.`);
 		}
 		throw error;
 	}

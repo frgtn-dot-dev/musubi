@@ -7,7 +7,7 @@ import {
   account, CALENDAR_SCOPE, calendarEvents, calendarMembers, calendars, createCalendar,
   createEvent, db, events, externalEvents,
   getExternalEvent, importExternalCalendar, importExternalEvent,
-  memberTokens, saveCaldavAccount, setExternalEventSyncData, user,
+  linkEventToCalendars, memberTokens, saveCaldavAccount, setExternalEventSyncData, user,
 } from "@musubi/db";
 import { EventSchema } from "@musubi/types";
 import { withSeriesEditIntent } from "@musubi/calendar";
@@ -192,8 +192,9 @@ async function main() {
     await refuses(() => request("POST", eventIn([outlook.id])), "denied");
     canEdit = true;
     // Same remote identity in two local mirrors: mapping reads/updates and writes stay isolated.
-    await importExternalEvent("google", event.id, sibling.id, "allowed", "sibling-event", '"sibling"');
-    assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.externalEventId, "sibling-event");
+    await importExternalEvent("google", event.id, sibling.id, "allowed", "created", '"sibling"');
+    assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.externalEventId, "created");
+    assert.equal(await getExternalEvent("google", event.id, "allowed", randomUUID()), null, "No remote-ID fallback for an explicit local scope");
     await setExternalEventSyncData("google", event.id, "allowed", { etag: '"home"', icalUid: null }, google.id);
     assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.etag, '"sibling"');
     writes.length = 0;
@@ -239,6 +240,15 @@ async function main() {
     reads.length = 0;
     await refuses(() => request("PUT", series, "/events", viewerToken.raw), "denied");
     assert.equal(reads.length, 0, "A collaborator's viewer ACL never opens provider reads");
+    await refuses(() => request("DELETE", { ...series, unlinkCalendarID: dav.id }, "/events", viewerToken.raw), "denied");
+    const ownedCopy = await createCalendar({ creatorID: viewer, name: "Own linked copy", color: "#7A8BA3" });
+    await linkEventToCalendars(series.id, [ownedCopy.id]);
+    await refuses(() => request("PUT", { ...series, calendars: [dav.id, ownedCopy.id], originCalendarID: ownedCopy.id }, "/events", viewerToken.raw), "denied");
+    const foreignAccount = await saveCaldavAccount(viewer, `${fixtureOrigin}/dav/`, "other", encryptSecret("fixture-password"));
+    const mismatched = await mirror("caldav", `${fixtureOrigin}/dav/foreign/`, foreignAccount.id, "viewer");
+    reads.length = 0;
+    await refuses(() => request("POST", eventIn([mismatched.id])), "denied");
+    assert.equal(reads.length, 0, "Projected role exception requires the actor's actual account");
     // Discovery must not project unknown or read-only as owner.
     privileges = undefined;
     const discovery = await caldavAdapter.listCalendars(owner, davAccount.id);

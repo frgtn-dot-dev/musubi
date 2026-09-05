@@ -20,7 +20,7 @@ import {
   type Event,
   EventSchema,
   ScopeEditIntentSchema,
-  ForbiddenError,
+  EventWriteError,
   NotFoundError,
 } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
@@ -216,7 +216,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
     if (!existing.includes(unlinkCalendarID))
       throw new BadRequestError("Event isn't in that calendar...");
     if (!(await hasEventCalendarAccess(req.user!.id, unlinkCalendarID))) {
-      throw new ForbiddenError(
+      throw new EventWriteError("event-write", "denied",
         "You can't remove this event from that calendar.",
       );
     }
@@ -229,7 +229,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
       if (await hasEventCalendarAccess(req.user!.id, cal)) editable.push(cal);
     }
     if (editable.length === 0) {
-      throw new ForbiddenError(
+      throw new EventWriteError("event-write", "denied",
         "You can't remove this event from any of your calendars.",
       );
     }

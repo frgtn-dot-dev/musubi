@@ -455,68 +455,68 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
       const { action, event } = operation;
       if (onlyAction && action !== onlyAction) continue;
       try {
-      if (action === "create") {
-        const external = await adapter.pushCreate(
-          link.userID,
-          link.accountID,
-          link.externalCalendarID,
-          event,
-        );
-        await importExternalEvent(
-          link.provider,
-          event.id,
-          calendarID,
-          link.externalCalendarID,
-          external.externalEventId,
-          external.etag ?? null,
-          external.icalUid ?? null,
-        );
-      } else {
-        if (!external) continue;
-        if (action === "update") {
-          const result = await adapter.pushUpdate(
+        if (action === "create") {
+          const external = await adapter.pushCreate(
             link.userID,
             link.accountID,
             link.externalCalendarID,
-            external.externalEventId,
             event,
-            external,
           );
-          if (result) {
-            await setExternalEventSyncData(
-              link.provider,
-              event.id,
+          await importExternalEvent(
+            link.provider,
+            event.id,
+            calendarID,
+            link.externalCalendarID,
+            external.externalEventId,
+            external.etag ?? null,
+            external.icalUid ?? null,
+          );
+        } else {
+          if (!external) continue;
+          if (action === "update") {
+            const result = await adapter.pushUpdate(
+              link.userID,
+              link.accountID,
               link.externalCalendarID,
-              {
-                etag: result.etag ?? null,
-                icalUid: result.icalUid ?? external.icalUid ?? null,
-              },
-              calendarID,
+              external.externalEventId,
+              event,
+              external,
+            );
+            if (result) {
+              await setExternalEventSyncData(
+                link.provider,
+                event.id,
+                link.externalCalendarID,
+                {
+                  etag: result.etag ?? null,
+                  icalUid: result.icalUid ?? external.icalUid ?? null,
+                },
+                calendarID,
+              );
+            }
+          } else {
+            await adapter.pushDelete(
+              link.userID,
+              link.accountID,
+              link.externalCalendarID,
+              external.externalEventId,
+              external,
             );
           }
-        } else {
-          await adapter.pushDelete(
-            link.userID,
-            link.accountID,
-            link.externalCalendarID,
-            external.externalEventId,
-            external,
-          );
         }
+      } catch (e) {
+        if (e instanceof EventWriteError) throw e;
+        recordExternalSyncFailure("push", link.provider);
+        logger.error("sync.push.failed", {
+          action,
+          provider: link.provider,
+          userId: link.userID,
+          accountId: link.accountID,
+          calendarId: calendarID,
+          eventId: event.id,
+          error: e,
+        });
       }
-    } catch (e) {
-      if (e instanceof EventWriteError) throw e;
-      recordExternalSyncFailure("push", link.provider);
-      logger.error("sync.push.failed", {
-        action,
-        provider: link.provider,
-        userId: link.userID,
-        accountId: link.accountID,
-        calendarId: calendarID,
-        eventId: event.id,
-        error: e,
-      });
-    }
     }
   };
 }

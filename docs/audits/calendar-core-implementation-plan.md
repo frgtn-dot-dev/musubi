@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K03 implementovány, lokálně ověřeny a převzaty (2026-09-05). K04–K15 čekají.
+Stav: K01–K03 implementovány, lokálně ověřeny a převzaty (2026-09-05). K04 implementován a lokálně ověřen; čeká na nezávislé review a převzetí nadřazenou relací. K05–K15 čekají.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K03 jsou `completed`; K04–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K03 jsou `completed`; K04 zůstává `pending` do nezávislého review a převzetí, přestože implementace a lokální ověření proběhly; K05–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -95,6 +95,16 @@ Do K12 blokovat známé destruktivní CalDAV změny detached výjimek a nepodpor
 
 **Test/hotovo:** zakázaná operace nezmění DB, neodešle žádný provider write a vrátí srozumitelný důvod i při přímém API volání. Změna oprávnění mezi formulářem a uložením se znovu kontroluje.
 
+**Lokální evidence K04 (2026-09-05, čeká na review):** řezy `edead87` (API/adaptéry/kontrakt) a `c779f8d` (klienti), následné doplnění regresí a evidence. `event_capabilities.integration.test.ts` používá skutečné autentizované HTTP handlery, adaptéry proti HTTP fixtures a disposable PostgreSQL 18: odmítnutí create/update/delete/link/unlink/fork, pozdější odmítnutý cíl, změna práv, organizer/copy role, DAV bind/write-content/unbind/unknown, zachování detached komponent a lokálně scoped mapping/ETag. Je zapojen do `pnpm test:db`. Prošly celé `pnpm test:db` (včetně K01–K03), `pnpm test`, `pnpm typecheck`, `pnpm check:contracts`, web lint; Chromium 9 scénářů včetně tří důvodů odmítnutí při 1280/390 px, klávesnice, zachování draftu a návratu focusu. Nativní callback testy propojují skutečný detail/formulář, store a API transport; bez nového rendereru či UI vzoru. Logy: `/tmp/musubi-k04-logs/`.
+
+**Schválená rozhodnutí a omezení K04:**
+
+- Scope intent je aditivní `scopeEdit: { updates: [Event], creates: [Event] }` pouze na prvním PUT. Server kontroluje shodu prvního payloadu, oprávnění každého kroku a celý známý write-set před prvním zápisem; skutečný request znovu prochází běžným preflightem. Intent se neukládá do event/store/cache ani provider payloadu. Není to rezervace ani atomická operace. Bez intentu zůstávají serverové zákazy změn Outlook recurrence a destruktivních změn CalDAV recurrence s detached overrides; bezpečný legacy CalDAV update bez overrides není plošně zakázán. Pozdější síťová chyba či souběžná změna mezi requesty patří do K06–K12.
+- Původní vlastník externího mirroru může mít `viewer` jako konzervativní provider projekci. Jen v event preflight cestě se ověří současně actor = calendar creator = mirror owner, skutečné vlastnictví účtu a membership; konečné právo určí čerstvý provider důkaz. Obecné `assertCan/canDo`, ostatní členové, Tasks ani origin autorita se neuvolňují.
+- Google/Graph DELETE rozlišuje ověřenou organizer copy od pozvánkové kopie; vlastnictví kalendáře není role organizátora. Google respektuje dokumentovaný default `organizer.self=false` při existujícím organizer objektu. CalDAV ORGANIZER vyžaduje ověřenou DAV identitu; odlišný current-user-principal na sdílené organizer kolekci není důkaz vlastní pozvánkové kopie a delete vrací `unknown`. Appointment bez ORGANIZER zůstává běžným zápisem.
+- Výslovně schválená výjimka pro ICS import do **nového** externího kalendáře: známý unsupported obsah se odmítne ještě před CREATE kalendáře. Práva nové kolekce lze zjistit až po jejím vytvoření; poté se ověří všechny event creates před prvním event/link DB či provider event zápisem. Při denied/unknown může zůstat prázdný kalendář, chyba to výslovně sdělí. Automatický remote rollback se neprovádí. Výjimka neplatí pro existující cíle.
+- Žádné migrace, nové závislosti, skutečné provider účty, outbox, konfliktní UI, plný recurrence model ani RSVP/scheduling lifecycle. Jediný schválený přesah do K05 je čekání nativního delete na výsledek (viz níže); Cancel/boolean návrat `GlobalEventModals` a datumové opravy zůstávají mimo K04.
+
 ### K05 — Malé opravy klientských ztrát
 
 Čtyři nezávislé patche s regresním scénářem:
@@ -102,7 +112,7 @@ Do K12 blokovat známé destruktivní CalDAV změny detached výjimek a nepodpor
 - Timed event používá samostatné datum konce ve validaci i serializaci. Title-only edit zachová noc přes půlnoc i více dní.
 - Inline scoped editor se inicializuje vybraným výskytem; explicitní editor celé série zůstane master-based. Název na třetím výskytu nesmí posunout sérii.
 - Native `GlobalEventModals` vrací výsledek `applySeriesEdit`; Cancel zachová draft a nespustí následnou změnu reminders.
-- Native delete čeká na výsledek, zachová detail při chybě a spustí reminder reconciliation až po úspěchu.
+- Native delete čeká na výsledek, zachová detail při chybě a spustí reminder reconciliation až po úspěchu. **Tento konkrétní podbod implementován a lokálně ověřen v K04 se souhlasem vlastníka; čeká na jeho review. K05 jako celek zůstává pending.**
 
 **Místa:** web `event-form.ts`, `EventEditorForm`, `EventDetailsPopover`; native `GlobalEventModals`, `EventDetailModal`, `AddEventModal`.
 
