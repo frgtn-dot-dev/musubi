@@ -5429,47 +5429,77 @@ test("offers the drawer toggle only where there is a drawer", async ({
 	).toBeVisible();
 });
 
-test("asks which occurrences an edited series applies to", async ({ page }) => {
-	await mockAuthenticatedReads(page);
-	const writes: Array<{ body: Record<string, unknown>; method: string }> = [];
-	await page.route("**/api/v1/events", async (route) => {
-		const method = route.request().method();
-		if (method === "PUT" || method === "POST") {
-			writes.push({
-				body: route.request().postDataJSON() as Record<string, unknown>,
-				method,
-			});
-		}
-		return route.fallback();
-	});
+for (const [scopeLabel, width] of [["This event", 1280], ["This and following events", 390], ["All events", 1280]] as const) {
+  test(`K05 third occurrence title edit: ${scopeLabel}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const master = event("weekly-review", "Weekly review", "personal", "#b3492f", "2026-07-06T09:00:00Z", "2026-07-06T10:30:00Z", { recurrence: "FREQ=WEEKLY;COUNT=6" });
+    await mockAuthenticatedReads(page, { ...events, events: [master] });
+    const writes: Array<{ body: Record<string, unknown>; method: string }> = [];
+    await page.route("**/api/v1/events", async route => {
+      const method = route.request().method();
+      if (method === "PUT" || method === "POST") writes.push({ method, body: route.request().postDataJSON() });
+      return route.fallback();
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
+    await page.getByRole("button", { name: /Weekly review/ }).first().click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("July 20");
+    await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("July 20");
+    await page.getByRole("textbox", { name: "Event title" }).fill("Weekly retro");
+    await page.getByRole("textbox", { name: "Event title" }).press("Control+Enter");
+    const scope = page.getByRole("dialog", { name: "Change recurring event" });
+    await expect(scope).toBeVisible();
+    expect(writes).toHaveLength(0);
+    await scope.getByRole("button", { name: "Close change recurring event dialog" }).click();
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Weekly retro");
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeFocused();
+    expect(writes).toHaveLength(0);
+    await page.keyboard.press("Enter");
+    await scope.getByRole("button", { name: scopeLabel, exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(scope).toHaveCount(0);
+    expect(writes.map(write => write.method)).toEqual(scopeLabel === "All events" ? ["PUT"] : ["PUT", "POST"]);
+    const { scopeEdit, ...update } = writes[0]!.body;
+    expect(scopeEdit).toEqual({ updates: [update], creates: writes.slice(1).map(write => write.body) });
+    expect(update).toMatchObject({ start: new Date(master.start).toISOString(), end: new Date(master.end).toISOString(), title: scopeLabel === "All events" ? "Weekly retro" : master.title });
+    if (scopeLabel !== "All events") {
+      expect(writes[1]!.body).toMatchObject({ title: "Weekly retro", start: "2026-07-20T09:00:00.000Z", end: "2026-07-20T10:30:00.000Z", recurrence: scopeLabel === "This event" ? null : "FREQ=WEEKLY;COUNT=4" });
+      expect(update.recurrence).toContain(scopeLabel === "This event" ? "EXDATE:20260720T090000Z" : "UNTIL=20260720T085959Z");
+    } else expect(update.recurrence).toBe(master.recurrence);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  });
+}
 
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page
-		.getByRole("button", { name: /Weekly review/ })
-		.first()
-		.click();
-	await page.getByRole("button", { name: "Edit", exact: true }).click();
-	await page.getByRole("textbox", { name: "Event title" }).fill("Weekly retro");
-	await page.getByRole("button", { name: "Save" }).click();
-
-	// Editing one occurrence of a series is the same question dragging one asks.
-	const scope = page.getByRole("dialog", { name: "Change recurring event" });
-	await expect(scope).toBeVisible();
-	await expect(scope).toContainText("Which events should take the changes");
-	expect(writes).toHaveLength(0);
-
-	await scope.getByRole("button", { name: "This event" }).click();
-
-	// The series keeps its own title minus this date; the edit becomes a
-	// standalone event.
-	await expect(page.getByRole("status")).toContainText("Occurrence updated.");
-	const updated = writes.find((write) => write.method === "PUT")!;
-	expect(updated.body.title).toBe("Weekly review");
-	expect(updated.body.recurrence).toContain("EXDATE:");
-	const created = writes.find((write) => write.method === "POST")!;
-	expect(created.body.title).toBe("Weekly retro");
-	expect(created.body.recurrence).toBeNull();
-});
+for (const shift of [false, true]) {
+  test(`K05 More options rebases third occurrence draft to master (time change ${shift})`, async ({ page }) => {
+    await mockAuthenticatedReads(page);
+    const writes: Record<string, unknown>[] = [];
+    await page.route("**/api/v1/events", async route => {
+      if (["PUT", "POST"].includes(route.request().method())) writes.push(route.request().postDataJSON());
+      return route.fallback();
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
+    await page.getByRole("button", { name: /Weekly review/ }).first().click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("July 20");
+    await page.getByRole("textbox", { name: "Event title" }).fill("Master draft");
+    if (shift) {
+      await page.getByRole("combobox", { name: "Start time" }).fill("13:00");
+      await page.getByRole("combobox", { name: "Start time" }).press("Tab");
+    }
+    await page.getByRole("button", { name: "More options" }).click();
+    await expect(page.getByText("Changes here apply to the recurring series.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("July 6");
+    await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("July 6");
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Master draft");
+    expect(writes).toHaveLength(0);
+    expect(page.url()).not.toContain("scopeEdit");
+    await page.getByRole("textbox", { name: "Event title" }).press("Control+Enter");
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ title: "Master draft", start: `2026-07-06T${shift ? "11" : "09"}:00:00.000Z`, end: `2026-07-06T${shift ? "12" : "10"}:00:00.000Z` });
+  });
+}
 
 for (const width of [1280, 390]) {
   for (const reason of ["unsupported", "denied", "unknown"] as const) {

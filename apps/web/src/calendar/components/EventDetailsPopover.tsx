@@ -598,13 +598,23 @@ export function EventDetailsPopover({
 								calendarLocked
 								calendars={calendars}
 								compact
-								initialValues={eventFormValues(master)}
+								initialValues={eventFormValues(master.recurrence && onRestoreEvent ? event : master)}
 								onCancel={() => setEditing(false)}
 								onExpand={
 									onOpenFullEditor
 										? (values) => {
+												// The full editor explicitly edits the master. Carry the
+												// draft's changes, not the occurrence's anchor dates.
+												const draft = master.recurrence && onRestoreEvent
+													? eventFormValues(seriesEditWrites({
+															edited: updateEventFromForm(event, values),
+															master,
+															occurrence: event,
+															scope: "series",
+														}).updates[0]!)
+													: values;
 												handleOpenChange(false);
-												onOpenFullEditor(values, master);
+												onOpenFullEditor(draft, master);
 											}
 										: undefined
 								}
