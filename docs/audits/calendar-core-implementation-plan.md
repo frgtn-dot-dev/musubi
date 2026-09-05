@@ -379,3 +379,26 @@ query/store callbacky a Chromium, ne živé účty ani fyzická zařízení. Če
 `/tmp/musubi-k06-final-logs/`; přesný commit/isolation/gate report je ve finálním
 managed handoffu. K07/K09/K12 se nerozšiřují, Outlook refusal a 0.1.8 platí dál.
 **Celý K06 stále není převzat ani schválen k nasazení; následuje readonly recheck.**
+
+**K06 klientský recheck — tři zbývající blokery opraveny a lokálně ověřeny, čeká na nový nezávislý recheck:**
+Předchozí důkazy nepokrývaly SQLite refresh, souběh dvou nativních identit ani
+nově vytvořený web query během mutace. Nativní generovaná aditivní migrace
+`0007_event_revision` přidává nullable revizi bez backfillu; původní řádky zůstávají
+unknown/read-only do autoritativního refresh. Skutečný Expo drizzle runner a cache
+serializéry běží v regresích nad SQLite (Node test-only platform adapter, bez nové
+závislosti); skutečný refresh → composer → PATCH zachová očekávanou revizi.
+Synchronní cache transakce nevrací starší/unknown řádek přes prokázanou novější revizi.
+Nativní receipts sledují odstranění konkrétní identity, nikoli globální removal
+čítač: unrelated A nespolkne potvrzené B delete/update/create/link/fork. Nová
+serverová identita není identita zdroje; nejasná full/access-loss absence vyvolá
+skutečný refresh, ne tiché dokončení. Překonaný success drží draft a nespustí nové
+reminder override callbacky. Evidence i případný refresh končí s account/server
+lifecycle. Web zapisuje receipt pouze do jednotlivých nezměněných query snapshotů;
+nová date/view query s novější absencí ani její tombstone se nezmění, i když refetch
+není dostupný. Původní zmrazený draft, revision guard a rollback chování zůstává.
+Čerstvé lokální gates jsou v `/tmp/musubi-k06-client-closure-logs/`: SQLite/cache/
+refresh/composer a dvoueventové red/green regrese, web skutečné hooks/QueryClient,
+root check a Chromium K04/K05/K06 (26/26). Server/shared runtime nebyl měněn;
+předchozí plný DB důkaz je výslovně převzat, nikoli vydáván za nový DB běh.
+Žádná produkční migrace, živý provider, fyzické zařízení, push nebo release.
+**Toto není převzetí celého K06; rodič zvlášť zkontroluje kandidáta i zděděné residue.**

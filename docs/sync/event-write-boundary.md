@@ -214,3 +214,34 @@ DB suite (including authenticated fault and account-deletion handlers), root che
 (types/tests/contracts/VERIFY/lint/build), and Chromium K04/K05/K06. Fixtures prove
 local implementation behavior, not live-provider or physical-device certification.
 The independent readonly recheck and final parent acceptance remain outstanding.
+
+### Client-only recheck closure (locally verified, acceptance pending)
+
+Native migration `0007_event_revision` adds a nullable SQLite cache column, with
+no invented revision/backfill and no applied migration edits. Bootstrap keeps the
+existing Expo drizzle bundled runner. Old rows remain readable but nonwritable;
+only an authoritative refresh supplies revision. Both serializers preserve it.
+Cache writes use synchronous transactions (the Expo driver is synchronous), retain
+higher known revisions across older/unknown writes, and roll back failed replacement.
+Rollback of the application can leave the additive column in place; older readers
+ignore it. No destructive down migration or production migration was performed.
+
+Native receipt evidence is per affected identity and only retained for in-flight
+requests. Unrelated removals/full loads do not discard a confirmed target write.
+Versioned removal defeats older receipts, not a proven newer revival. Ambiguous
+full/access-loss ordering requests the real home/federated refresh; superseded
+successes retain the draft rather than run stale composer reminder callbacks.
+Account/server reset invalidates pending receipts and their refresh. A fork/new
+server-assigned identity is not fenced by removal of its unrelated source.
+
+Web receipts patch only individually unchanged query instances/data captured at
+request start. A date/view query populated later is not patched and its absence or
+removal marker cannot be transiently resurrected, even if invalidation cannot
+refetch. Unchanged queries still receive normal confirmations.
+
+Fresh SQLite/native/real-hook regressions, root check and Chromium evidence:
+`/tmp/musubi-k06-client-closure-logs/`. The SQLite test adapter replaces only Expo's
+platform handle and uses Node's actual SQLite with the production cache and migration
+runner; it is not device certification. Prior full PostgreSQL evidence is reused
+explicitly for unchanged server/shared runtime. These are the three client recheck
+repairs, not acceptance of whole K06, a provider certification, or a release.
