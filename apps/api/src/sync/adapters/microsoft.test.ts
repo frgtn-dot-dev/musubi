@@ -8,7 +8,7 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
-  const { microsoftEventPath, parseGraphDate, toExternalCalendar, toNormalized, toGraphEvent, parseCursor } = await import("./microsoft");
+  const { microsoftAdapter, microsoftEventPath, parseGraphDate, toExternalCalendar, toNormalized, toGraphEvent, toGraphEventPatch, parseCursor } = await import("./microsoft");
 
   // Writes stay scoped to their source, including non-default work calendars.
   assert.equal(
@@ -31,6 +31,8 @@ async function main() {
   // toNormalized: timed event
   const timed = toNormalized({
     id: "e1",
+    "@odata.etag": 'W/"actual-provider-version"',
+    changeKey: "not-an-etag-guarantee",
     subject: "Standup",
     isAllDay: false,
     start: { dateTime: "2026-07-18T09:00:00.0000000", timeZone: "UTC" },
@@ -39,6 +41,7 @@ async function main() {
     organizer: { emailAddress: { address: "boss@example.com" } },
   });
   assert.equal(timed.title, "Standup");
+  assert.equal(timed.etag, 'W/"actual-provider-version"');
   assert.equal(timed.description, null);
   assert.equal(timed.organizer, "boss@example.com");
   assert.equal(timed.recurrence, null);
@@ -71,6 +74,33 @@ async function main() {
 
   // toGraphEvent: recurring events are rejected, not silently flattened
   assert.throws(() => toGraphEvent({ recurrence: "FREQ=DAILY", isAllDay: false, start: new Date(), end: new Date() } as any));
+
+  // Omitted Graph properties preserve their rich provider shape. This proves
+  // payload shape only: existing-event writes stay refused until conditional
+  // enforcement is substantiated, never by converting changeKey to If-Match.
+  const rich = {
+    subject: "Before", body: { contentType: "HTML", content: "<b>Keep meeting blob</b>" },
+    location: { displayName: "Office", address: { city: "Prague" }, coordinates: { latitude: 50 } },
+    locations: [{ displayName: "Office", uniqueId: "room-identity" }],
+    recurrence: { pattern: { type: "weekly" } },
+    start: { dateTime: "2026-07-18T09:00:00", timeZone: "Europe/Prague" },
+  };
+  const titleOnly = toGraphEventPatch({ ...timed, title: "After" } as any, { title: "After" });
+  assert.deepEqual(titleOnly, { subject: "After" });
+  assert.deepEqual({ ...rich, ...titleOnly }, { ...rich, subject: "After" });
+  assert.deepEqual(toGraphEventPatch(timed as any, {}), {});
+  assert.deepEqual(toGraphEventPatch({ ...timed, description: null } as any, { description: null }),
+    { body: { contentType: "text", content: "" } });
+  const realFetch = globalThis.fetch;
+  let remoteCalls = 0;
+  globalThis.fetch = (async () => { remoteCalls++; throw new Error("Unexpected remote request"); }) as typeof fetch;
+  try {
+    await assert.rejects(() => microsoftAdapter.pushUpdate("user", "account", "calendar", "event", timed as any),
+      /conflict protection is not yet verified/);
+    await assert.rejects(() => microsoftAdapter.pushDelete("user", "account", "calendar", "event"),
+      /conflict protection is not yet verified/);
+    assert.equal(remoteCalls, 0, "direct adapter paths cannot bypass complete preflight refusal");
+  } finally { globalThis.fetch = realFetch; }
 
   // nearestMicrosoftCalendarColor: exact preset, nearby shade, garbage fallback
   const { nearestMicrosoftCalendarColor, MICROSOFT_CALENDAR_COLORS } = await import("@musubi/types");

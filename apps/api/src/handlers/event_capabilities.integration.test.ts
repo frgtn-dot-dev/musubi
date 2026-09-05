@@ -201,8 +201,25 @@ async function main() {
     await createEvent(recurringOutlook, recurringOutlook.calendars);
     await importExternalEvent("microsoft", recurringOutlook.id, outlook.id, "outlook", "master");
     await refuses(() => request("PUT", { ...recurringOutlook, recurrence: "RRULE:FREQ=DAILY" }), "unsupported");
-    assert.equal((await request("PUT", { ...recurringOutlook, title: "Safe content" })).status, 200);
-    assert.equal(JSON.parse(writes[writes.length - 1]!.body).recurrence, undefined);
+    await refuses(() => request("PUT", { ...recurringOutlook, title: "Protection unverified" }), "unknown");
+    await refuses(() => request("DELETE", recurringOutlook), "unknown");
+    await refuses(() => request("PUT", withSeriesEditIntent({
+      updates: [{ ...recurringOutlook, title: "Update-only still requires protection" }], creates: [],
+    }).updates[0]), "unknown");
+    // A known Outlook mirror must stop the entire write set before any local
+    // mutation, even if the home itself is not an Outlook calendar.
+    await linkEventToCalendars(source.id, [outlook.id]);
+    await importExternalEvent("microsoft", source.id, outlook.id, "outlook", "mirror");
+    await refuses(() => request("PUT", { ...source, calendars: [...source.calendars, outlook.id], title: "Mirror refuses" }), "unknown");
+    // Existing local-only unlink has no remote resource/mutation and remains
+    // available; this does not introduce a detach/override operation.
+    const localOnlyLink = eventIn([local.id]);
+    await createEvent(localOnlyLink, localOnlyLink.calendars);
+    await linkEventToCalendars(localOnlyLink.id, [outlook.id]);
+    const writesBeforeLocalUnlink = writes.length;
+    const localUnlink = await request("DELETE", { ...localOnlyLink, calendars: [local.id, outlook.id], unlinkCalendarID: outlook.id });
+    assert.equal(localUnlink.status, 200);
+    assert.equal(writes.length, writesBeforeLocalUnlink);
     canEdit = undefined;
     await refuses(() => request("POST", eventIn([outlook.id])), "unknown");
     canEdit = false;

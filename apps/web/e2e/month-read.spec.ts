@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { Calendar } from "@musubi/types";
+import { PRODUCT_VERSION, type Calendar } from "@musubi/types";
 import {
 	expect,
 	test,
@@ -454,7 +454,7 @@ async function mockAuthenticatedReads(
 	);
 	// Hold the SSE connection open like the real server so EventSource stays
 	// connected instead of reconnect-looping against a closed mock.
-	await page.route("**/api/stream", () => {
+	await page.route("**/api/stream?clientVersion=*", () => {
 		// Intentionally never resolved; Playwright aborts it when the page closes.
 		return new Promise<void>(() => {});
 	});
@@ -5662,14 +5662,14 @@ test("brings the calendar forward when the live stream comes back", async ({
 	});
 	// The stream is down before the app opens it, so it starts out reconnecting.
 	const streamDown = (route: Route) => route.abort();
-	await page.route("**/api/stream", streamDown);
+	await page.route("**/api/stream?clientVersion=*", streamDown);
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 	const whileDown = eventReads;
 
-	await page.unroute("**/api/stream", streamDown);
-	await page.route("**/api/stream", (route) =>
+	await page.unroute("**/api/stream?clientVersion=*", streamDown);
+	await page.route("**/api/stream?clientVersion=*", (route) =>
 		route.fulfill({ body: ":ok\n\n", contentType: "text/event-stream" }),
 	);
 
@@ -5904,7 +5904,8 @@ test("carries one session's edit into the other over the stream", async ({
 
 	const first = await context.newPage();
 	const second = await context.newPage();
-	await second.route("**/api/stream", async (route) => {
+	await second.route("**/api/stream?clientVersion=*", async (route) => {
+		expect(new URL(route.request().url()).searchParams.get("clientVersion")).toBe(PRODUCT_VERSION);
 		for (let waited = 0; pending.length === 0 && waited < 10_000; waited += 50) {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 		}

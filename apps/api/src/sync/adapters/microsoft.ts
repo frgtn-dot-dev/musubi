@@ -131,6 +131,8 @@ export function toNormalized(item: any): NormalizedEvent {
 
   return {
     externalId: item.id,
+    // Opaque provider metadata only. changeKey is NOT an If-Match guarantee.
+    etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
     status: "active",
     title: item.subject ?? "(untitled)",
     start,
@@ -178,6 +180,33 @@ export function toGraphEvent(event: Event) {
       timeZone: "UTC",
     },
   };
+}
+
+/** Graph event-update documents omission preservation, not event If-Match CAS.
+ * This serializer is deliberately not an enabled remote write path while
+ * conditional enforcement is unverified. Do not round-trip rich omitted data.
+ */
+export function toGraphEventPatch(event: Event, patch: Partial<Event>) {
+  const full = toGraphEvent({ ...event, recurrence: null });
+  const result: Record<string, unknown> = {};
+  if (patch.title !== undefined) result.subject = full.subject;
+  if (patch.description !== undefined) result.body = full.body;
+  if (patch.location !== undefined) result.location = full.location;
+  if (patch.isAllDay !== undefined) result.isAllDay = full.isAllDay;
+  if (patch.start !== undefined || patch.isAllDay !== undefined) result.start = full.start;
+  if (patch.end !== undefined || patch.isAllDay !== undefined) result.end = full.end;
+  if (patch.recurrence !== undefined) {
+    throw new EventWriteError("recurrence", "unsupported", "Outlook recurrence changes are not supported yet. No changes were saved.");
+  }
+  return result;
+}
+
+function refuseUnverifiedOutlookEventWrite(): never {
+  // https://learn.microsoft.com/en-us/graph/api/event-update does not establish
+  // event-specific If-Match enforcement. Re-enable only after explicit evidence
+  // and review; neither changeKey nor a fake HTTP server proves this contract.
+  throw new EventWriteError("event-write", "unknown",
+    "Outlook event conflict protection is not yet verified. Updates and deletions are temporarily blocked. No changes were saved.");
 }
 
 function graphTaskDate(value: any) {
@@ -668,10 +697,10 @@ export const microsoftAdapter: CalendarAdapter = {
         `${GRAPH}${microsoftEventPath(externalCalendarId, operation.external.externalEventId)}?$select=isOrganizer`,
         { headers },
       );
-      if (operation.action === "delete" && [404, 410].includes(response.status)) return;
       assertEventWriteResponse(response);
       const current = await response.json();
       assertEventWriteEvidence(operation.action === "delete" && current.isOrganizer === false ? true : current.isOrganizer, "organizer");
+      refuseUnverifiedOutlookEventWrite();
     }
   },
 
@@ -694,43 +723,15 @@ export const microsoftAdapter: CalendarAdapter = {
     );
     if (!res.ok) throw await graphError(res);
     const data = await res.json();
-    return { externalEventId: data.id };
+    return { externalEventId: data.id, etag: typeof data["@odata.etag"] === "string" ? data["@odata.etag"] : null };
   },
 
-  async pushUpdate(
-    userID,
-    accountId,
-    externalCalendarId,
-    externalEventId,
-    event: Event,
-  ) {
-    const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(
-      `${GRAPH}${microsoftEventPath(externalCalendarId, externalEventId)}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        // Preflight already refused recurrence changes. Omit recurrence from
-        // an ordinary content PATCH instead of rejecting the whole series.
-        body: JSON.stringify(toGraphEvent({ ...event, recurrence: null })),
-      },
-    );
-    if (!res.ok) throw await graphError(res);
+  async pushUpdate() {
+    refuseUnverifiedOutlookEventWrite();
   },
 
-  async pushDelete(userID, accountId, externalCalendarId, externalEventId) {
-    const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(
-      `${GRAPH}${microsoftEventPath(externalCalendarId, externalEventId)}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    // 404/410 = already gone = success (idempotent)
-    if (!res.ok && res.status !== 404 && res.status !== 410) {
-      throw await graphError(res);
-    }
+  async pushDelete() {
+    refuseUnverifiedOutlookEventWrite();
   },
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {

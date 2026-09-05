@@ -14,7 +14,7 @@ export type NormalizedEvent = {
   organizer: string | null;
   recurrence: string | null; // RRULE text, or null
   url: string | null;
-  etag?: string | null; // used by CalDAV; null for OAuth providers
+  etag?: string | null; // exact provider validator when exposed; never synthesize from changeKey
   icalUid?: string | null; // preserve the remote UID across CalDAV writes
 };
 
