@@ -296,6 +296,10 @@ async function acceptServerEvent(event: Event, fence: ReceiptFence, api: ReturnT
     throw supersededReceipt();
   }
   await useEventsStore.getState().localUpdateEvent(EventSchema.parse(event));
+  const latest = useEventsStore.getState().events.find(e => e.id === event.id);
+  if (receiptOrder(event, fence) !== "safe" || !latest || (latest.revision ?? 0) > (event.revision ?? 0)) {
+    throw supersededReceipt();
+  }
   return event;
 }
 async function acceptMutationFailure(error: unknown, fence: ReceiptFence, api: ReturnType<typeof useApi>) {

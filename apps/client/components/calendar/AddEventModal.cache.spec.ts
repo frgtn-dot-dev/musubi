@@ -430,3 +430,17 @@ it("refresh reminder completion uses current store truth after a later target re
   expect(await cacheGetAllEvents()).toEqual([]);
   expect(mocks.reconcile).toHaveBeenCalledWith([]);
 });
+
+it("a newer removal while receipt side effects settle still prevents composer reminder override/close", async () => {
+  await useRefreshData()({ providerSync: false, full: true });
+  useEditComposerStore.getState().open(useEventsStore.getState().events[0]);
+  titleInput(renderComposer(true))!.onChangeText("Changed from SQLite");
+  mocks.reconcile.mockImplementationOnce(async () => {
+    await useEventsStore.getState().localRemoveEvent({ ...apiEvent, revision: 9 });
+  });
+  await saveButton(renderComposer())!.onPress!();
+  expect(await cacheGetAllEvents()).toEqual([]);
+  expect(mocks.reminder).not.toHaveBeenCalled();
+  expect(mocks.close).not.toHaveBeenCalled();
+  expect(useEditComposerStore.getState().master?.revision).toBe(7);
+});
