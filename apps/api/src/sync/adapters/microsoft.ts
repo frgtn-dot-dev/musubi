@@ -412,6 +412,7 @@ async function graphGet(
 // cache per sync run so a holiday calendar costs one extra GET per series.
 async function fetchSeriesMaster(
   accessToken: string,
+  externalCalendarId: string,
   id: string,
   cache: Map<string, any>,
   fetchImpl: typeof fetch = fetch,
@@ -420,10 +421,17 @@ async function fetchSeriesMaster(
   if (cache.has(id)) return cache.get(id);
   const res = await graphGet(
     accessToken,
-    `${graphBase}/me/events/${encodeURIComponent(id)}`,
+    `${graphBase}${microsoftEventPath(externalCalendarId, id)}`,
     fetchImpl,
   );
-  const master = res.ok ? await res.json() : null;
+  // Even 404/410 on an active occurrence's dependency is ambiguous. Only
+  // explicit delta @removed entries authorize removal; never advance past an
+  // incomplete hydration or cache an error as a successful empty master.
+  if (!res.ok) throw await graphError(res);
+  const master = await res.json();
+  if (!master || master.id !== id || master["@removed"]) {
+    throw new Error("Outlook returned an invalid series master");
+  }
   cache.set(id, master);
   return master;
 }
@@ -479,12 +487,13 @@ export async function fetchMicrosoftChanges(
       if (item.seriesMasterId && !item["@removed"]) {
         const master = await fetchSeriesMaster(
           accessToken,
+          externalCalendarId,
           item.seriesMasterId,
           seriesMasters,
           fetchImpl,
           graphBase,
         );
-        if (master) item = { ...master, ...item };
+        item = { ...master, ...item };
       }
       changes.push({ kind: "event", data: toNormalized(item) });
     }

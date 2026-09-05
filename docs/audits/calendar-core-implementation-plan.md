@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01 implementován a lokálně ověřen (2026-09-05). K02–K15 čekají.
+Stav: K01–K02 implementovány a lokálně ověřeny (2026-09-05). K03–K15 čekají.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01 je `completed`, ostatní položky jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01 a K02 jsou `completed`, K03–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -279,8 +279,21 @@ Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestá
 - Nový test `apps/api/src/sync/external_events.integration.test.ts` je součástí `test:db:sync`, a tím existujícího integračního CI jobu.
 - Bez změny schématu nebo wire kontraktu; bez nových závislostí a bez živých providerových zápisů. Nejde o plné zařízení/browser E2E ani certifikaci providerové kompatibility.
 
+## Dokončený K02 — evidence
+
+- Tři sériové řezy: autentizovaný bootstrap, úplný Google calendar-list, fail-closed Graph master hydration. Bez změny schématu, Tasks consent policy, UI vzhledu nebo závislostí.
+- `POST /api/v1/users/connections/sync` používá existující orchestrace a identitu z `requireAuth`. Volitelný `accountId` vyžaduje `provider`; explicitní účet omezuje už DB eligibility i profilové/tokenové čtení. Cizí/neznámý účet nevede k širšímu syncu. Legacy Google GET zůstává Google-only.
+- Schválený kompromis: OAuth callback webu i mobilu zná provider, ne ID právě připojeného účtu. Bootstrapuje proto způsobilé účty pouze tohoto providera přihlášeného uživatele, nikoli výhradně nově připojený účet. Prázdné tělo slouží ručnímu all-provider refreshi vlastního uživatele.
+- `apps/api/src/sync/bootstrap.integration.test.ts`: skutečné HTTP → auth middleware (testovací bearer identita) → handler → orchestrace → provider HTTP fixture → disposable DB. Microsoft-only uživatel bez zrcadel získá kalendář; scheduler najde účet bez zrcadel; explicitní scope nečte profil/token sesterského účtu ani nemění jeho credentials. Testuje také 401, vadné body, cizí účet, provider-only a legacy cestu.
+- `google_discovery.integration.test.ts`: regrese před opravou selhala na chybějícím odmítnutí 503 druhé stránky. Skutečný adapter sleduje všechny page tokens včetně prázdné prostřední stránky; neúplný seznam nezmění zrcadla, události ani cursory. Kompletní retry zachová pozdní zrcadla a odstraní jen skutečně chybějící.
+- `microsoft_hydration.integration.test.ts`: regrese před opravou selhala na chybějícím odmítnutí master 503. 429/5xx/403 i nejednoznačné 404/410, síťová chyba a neplatný payload nyní zachovají event data i cursor celé delty. Další pokus doplní název/body/all-day data bez duplikátů. Master lookup používá stejný calendar-scoped event path jako ostatní Graph operace; úspěšná hydratace se cachuje pouze v dané deltě.
+- Schválená bezpečná hranice: samotný chybějící master nedokazuje smazání výskytu. Pouze explicitní delta `@removed` se zpracuje bez hydratace jako cancellation. Nejednoznačně chybějící master ponechá sync chybový, místo aby zničil data nebo posunul cursor.
+- Webový hook test prochází skutečným resource transportem; nativní test vykoná skutečný Outlook button callback a `useApi` při úspěchu i chybě (nativní hosty jsou mockované). Dva Playwright callback scénáře prošly: import Microsoft účtu po návratu a viditelná chyba importu. Nejde o živý OAuth round-trip ani test fyzického telefonu.
+- Prošly API suite, všech 62 mobilních a 342 webových unit testů, API/mobilní/web typecheck, web lint, types suite a route/realtime contracts. `pnpm test:db` prošel po každém řezu nad čerstvě migrovaným dočasným PostgreSQL 18.6 (Unix socket, port 55432), včetně nezměněné K01 event authority regrese. Nové tři DB testy jsou zapojeny do `test:db:sync`, a tedy `test:db`.
+- Lokální evidence běhu: `/tmp/musubi-k02-logs/` (red/green provider regrese, jednotlivé řezy a finální gates). První full DB běh narazil na chybějící testovací `FEDERATION_ALLOW_PRIVATE_HOSTS`; opakování s existujícím CI nastavením prošlo. Žádné živé providerové volání, produkční migrace, push ani release. Build/full milestone gates a závěrečná LSP kontrola nejsou tímto lokálním ověřením nahrazeny.
+
 ## Další konkrétní práce
 
-Pokračovat **K02**, rozděleným na tři samostatně ověřené změny: bootstrap prvního účtu, Google calendar-list pagination a Graph master hydration.
+K02 zde končí. **K03–K15 zůstávají pending**; další implementace vyžaduje navazující zadání. Tasks permission policy se v K02 nemění.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.

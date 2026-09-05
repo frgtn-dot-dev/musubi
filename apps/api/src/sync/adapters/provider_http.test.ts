@@ -248,7 +248,7 @@ async function main() {
         "@odata.nextLink": `${origin}/graph-page-2`,
       });
     }
-    if (url.pathname === "/graph/me/events/master-1") {
+    if (url.pathname === "/graph/me/calendars/calendar-graph/events/master-1") {
       graphMasterRequests++;
       return json(
         200,
