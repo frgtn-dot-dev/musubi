@@ -35,6 +35,8 @@ import { notifyCalendarMembers } from "./stream";
 import { assertCan } from "../permissions";
 import { getAdapter, prepareEventWrites } from "../sync/engine";
 import { buildInvitePreview } from "../invite_preview";
+import { assertOAuthEventWriteGrant } from "../sync/event_write";
+import { ProviderAuthError } from "../sync/errors";
 
 // External mirror? Then only the person whose provider account backs it may
 // change/delete it — and the change must land on the provider FIRST (throwing
@@ -80,6 +82,9 @@ async function createCalendarAtDestination(
 		const adapter = getAdapter(input.provider);
 		if (!adapter)
 			throw new BadRequestError(`Unknown provider "${input.provider}".`);
+		if (input.provider === "google" || input.provider === "microsoft") {
+			await assertOAuthEventWriteGrant(user.id, input.provider, input.accountId);
+		}
 		const accounts = await adapter.listAccounts(user.id);
 		const account = accounts.find((a) => a.id === input.accountId);
 		if (!account)
@@ -92,6 +97,7 @@ async function createCalendarAtDestination(
 				color: input.color,
 			}));
 		} catch (error: unknown) {
+			if (error instanceof EventWriteError || error instanceof ProviderAuthError) throw error;
 			throw new BadRequestError(
 				error instanceof Error
 					? error.message
@@ -134,7 +140,7 @@ export async function handlerCreateCalendar(req: Request, res: Response) {
 	let calendar: Calendar;
 	try {
 		calendar = CalendarSchema.parse(req.body);
-	} catch (err) {
+	} catch {
 		throw new BadRequestError("Request is missing valid calendar data...");
 	}
 
@@ -151,7 +157,7 @@ export async function handlerRemoveCalendar(req: Request, res: Response) {
 	let calendar: Calendar;
 	try {
 		calendar = CalendarSchema.parse(req.body);
-	} catch (err) {
+	} catch {
 		throw new BadRequestError("Request is missing valid calendar data...");
 	}
 	const members = await getCalendarMembers(calendar.id);
@@ -192,7 +198,7 @@ export async function handlerUpdateCalendar(req: Request, res: Response) {
 	let calendar: Calendar;
 	try {
 		calendar = CalendarSchema.parse(req.body);
-	} catch (err) {
+	} catch {
 		throw new BadRequestError("Request missing valid calendar data...");
 	}
 

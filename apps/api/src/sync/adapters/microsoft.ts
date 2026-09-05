@@ -19,7 +19,7 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
-import { assertEventWriteEvidence, assertEventWriteResponse, canonicalEventRecurrence } from "../event_write";
+import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, canonicalEventRecurrence } from "../event_write";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TASK_LIST_PREFIX = "musubi-microsoft-task-list:";
@@ -654,6 +654,7 @@ export const microsoftAdapter: CalendarAdapter = {
       );
     }
     const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}?$select=canEdit`,
@@ -786,6 +787,7 @@ export const microsoftAdapter: CalendarAdapter = {
     // the nearest preset. The client offers exactly these presets for Outlook
     // calendars, so this is normally an exact match.
     const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
     const res = await fetch(`${GRAPH}/me/calendars`, {
       method: "POST",
       headers: {

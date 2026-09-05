@@ -13,7 +13,7 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
-import { assertEventWriteEvidence, assertEventWriteResponse } from "../event_write";
+import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant } from "../event_write";
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 const GTASKS = "https://tasks.googleapis.com/tasks/v1";
@@ -588,6 +588,7 @@ export const googleAdapter: CalendarAdapter = {
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {
     const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "google", accountId);
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(
       `${GCAL}/users/me/calendarList/${encodeURIComponent(externalCalendarId)}`,
@@ -721,6 +722,7 @@ export const googleAdapter: CalendarAdapter = {
 
   async createCalendar(userID, accountId, { name, color }) {
     const accessToken = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "google", accountId);
     const res = await fetch(`${GCAL}/calendars`, {
       method: "POST",
       headers: {

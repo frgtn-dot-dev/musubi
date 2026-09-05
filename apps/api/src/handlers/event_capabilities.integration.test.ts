@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import express from "express";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   account, CALENDAR_SCOPE, calendarEvents, calendarMembers, calendars, createCalendar,
   createEvent, db, events, externalEvents,
-  getExternalEvent, importExternalCalendar, importExternalEvent,
+  getExternalEvent, getOAuthCredentials, importExternalCalendar, importExternalEvent,
   linkEventToCalendars, memberTokens, saveCaldavAccount, setExternalEventSyncData, user,
 } from "@musubi/db";
 import { EventSchema } from "@musubi/types";
@@ -34,6 +34,9 @@ async function main() {
   let canEdit: boolean | undefined = true;
   let organizer: boolean | undefined = true;
   let googleGuestDefault = false;
+  let returnedScope: string | undefined;
+  let revokedRefresh = false;
+  let refreshCalls = 0;
   let privileges: string[] | undefined = ["write"];
   let addresses: string[] | undefined = ["mailto:owner@example.test"];
   const importedPrivileges: string[] | undefined = ["bind"];
@@ -52,6 +55,11 @@ async function main() {
         res.writeHead(207, { "content-type": "application/xml" });
         res.end(`<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${href}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 ${status}</d:status></d:propstat></d:response></d:multistatus>`);
       };
+      if (path.endsWith("/token")) {
+        refreshCalls++;
+        return revokedRefresh ? json({ error: "invalid_grant" }, 400)
+          : json({ access_token: "refreshed-access", expires_in: 3600, ...(returnedScope === undefined ? {} : { scope: returnedScope }) });
+      }
       if (["POST", "PUT", "PATCH", "DELETE", "MKCALENDAR"].includes(method)) {
         if (path === "/v1.0/me/calendars" || method === "MKCALENDAR") {
           remoteCalendarCreates++;
@@ -100,7 +108,7 @@ async function main() {
   globalThis.fetch = (input, init) => {
     const url = new URL(String(input));
     if ([fixtureOrigin, apiOrigin].includes(url.origin)) return realFetch(input, init);
-    assert.ok(["www.googleapis.com", "graph.microsoft.com"].includes(url.hostname), `No live requests: ${url}`);
+    assert.ok(["www.googleapis.com", "graph.microsoft.com", "oauth2.googleapis.com", "login.microsoftonline.com"].includes(url.hostname), `No live requests: ${url}`);
     return realFetch(`${fixtureOrigin}${url.pathname}${url.search}`, init);
   };
   const request = (method: string, body: unknown, path = "/events", bearer = token.raw) => fetch(`${apiOrigin}${path}`, {
@@ -274,6 +282,52 @@ async function main() {
     }
     canEdit = true;
     assert.equal((await importIcs("microsoft", "primary", originalResource.replace(/RRULE:FREQ=WEEKLY\r\n/, ""))).status, 201);
+    // Owning a calendar is insufficient when the OAuth token cannot write.
+    // Calendar-only grants work; Tasks are neither requested nor required.
+    for (const [provider, target] of [["google", google.id], ["microsoft", outlook.id]]) {
+      const scope = CALENDAR_SCOPE[provider];
+      const readOnlyScope = provider === "google" ? "https://www.googleapis.com/auth/calendar.readonly" : "Calendars.Read";
+      const setGrant = (values: Partial<typeof account.$inferInsert>) => db.update(account).set(values).where(and(
+        eq(account.userId, owner), eq(account.providerId, provider), eq(account.accountId, "primary"),
+      ));
+      const plainIcs = originalResource.replace(/RRULE:FREQ=WEEKLY\r\n/, "");
+      for (const grant of [null, "", readOnlyScope]) {
+        await setGrant({ scope: grant, accessTokenExpiresAt: new Date(Date.now() + 3600_000) });
+        await refuses(() => request("POST", eventIn([target])), grant === null ? "unknown" : "denied");
+        const beforeCalendars = await calendarCount();
+        const beforeCreates = remoteCalendarCreates;
+        await refuses(() => importIcs(provider, "primary", plainIcs), grant === null ? "unknown" : "denied");
+        assert.equal(await calendarCount(), beforeCalendars);
+        assert.equal(remoteCalendarCreates, beforeCreates, "Known grant refusal precedes even calendar creation");
+      }
+      for (const narrowed of [readOnlyScope, "", undefined]) {
+        returnedScope = narrowed;
+        await setGrant({ scope: narrowed === undefined ? null : scope, accessTokenExpiresAt: new Date(0) });
+        const beforeRefresh = refreshCalls;
+        await refuses(() => request("POST", eventIn([target])), narrowed === undefined ? "unknown" : "denied");
+        assert.equal(refreshCalls, beforeRefresh + 1);
+        assert.equal((await getOAuthCredentials(owner, provider, "primary"))?.scope, narrowed ?? null);
+      }
+      returnedScope = readOnlyScope;
+      await setGrant({ scope, accessTokenExpiresAt: new Date(0) });
+      const beforeCreates = remoteCalendarCreates;
+      const beforeCalendars = await calendarCount();
+      await refuses(() => importIcs(provider, "primary", plainIcs), "denied");
+      assert.equal(remoteCalendarCreates, beforeCreates, "Refresh narrowing also precedes calendar creation");
+      assert.equal(await calendarCount(), beforeCalendars);
+      returnedScope = undefined;
+      await setGrant({ scope, accessTokenExpiresAt: new Date(0) });
+      assert.equal((await request("POST", eventIn([target]))).status, 201, "Unchanged calendar-only grant stays writable after refresh");
+      revokedRefresh = true;
+      await setGrant({ scope, accessTokenExpiresAt: new Date(0) });
+      const error = await refuses(() => request("POST", eventIn([target])), "", 500);
+      assert.equal(error.reason, undefined, "Revocation is not disguised as a capability denial");
+      const revoked = await getOAuthCredentials(owner, provider, "primary");
+      assert.equal(revoked?.syncStatus, "reconnect_required");
+      assert.equal(revoked?.syncErrorCode, "invalid_grant");
+      revokedRefresh = false;
+      await setGrant({ scope, syncStatus: "active", syncErrorCode: null, accessTokenExpiresAt: new Date(Date.now() + 3600_000) });
+    }
     console.log("K04 authenticated event capabilities + provider HTTP + DB: OK");
   } finally {
     globalThis.fetch = realFetch;

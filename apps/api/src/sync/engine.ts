@@ -39,6 +39,7 @@ import {
   isOptionalTaskError,
   isTransientSyncError,
   providerAuthErrorFields,
+  ProviderAuthError,
 } from "./errors";
 import { recordExternalSyncFailure } from "../metrics";
 import { type ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
@@ -444,7 +445,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
           ...operation, external: external ?? undefined,
         });
       } catch (error) {
-        if (error instanceof EventWriteError) throw error;
+        if (error instanceof EventWriteError || error instanceof ProviderAuthError) throw error;
         throw new EventWriteError("event-write", "unknown");
       }
       prepared.push({ operation, calendarID, link, adapter, external });
