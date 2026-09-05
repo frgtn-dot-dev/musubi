@@ -201,3 +201,28 @@ for (const scope of [
     },
   );
 }
+
+for (const reconciliation of ["other-removal", "full-unchanged-target"] as const) {
+  it(`confirmed B deletion closes detail only after applying cache/reminder cleanup despite ${reconciliation} of A`, async () => {
+    const { cacheDeleteEvents } = await import("@/services/eventsCache");
+    const { cancelEventNotification } = await import("@/services/notifications");
+    const target = { ...master, recurrence: null };
+    const other = { ...target, id: "other" };
+    useEventsStore.setState({ events: [other, target] });
+    let complete!: (value: unknown) => void;
+    mocks.request.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    deleteButton(EventDetailModal({ visible: true, event: target, onClose: mocks.close, onEdit: vi.fn() }))!();
+    const pending = mocks.confirm.mock.lastCall![1]();
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledOnce());
+    if (reconciliation === "other-removal") await useEventsStore.getState().localRemoveEvent({ ...other, revision: 3 });
+    else useEventsStore.getState().loadEvents([target]);
+    vi.mocked(cacheDeleteEvents).mockClear(); vi.mocked(cancelEventNotification).mockClear();
+    expect(mocks.close).not.toHaveBeenCalled();
+    complete({ data: { id: target.id, removed: true, calendars: [], revision: 2 }, error: null });
+    await pending;
+    expect(useEventsStore.getState().events).toEqual([]);
+    expect(cacheDeleteEvents).toHaveBeenCalledWith([target.id]);
+    expect(cancelEventNotification).toHaveBeenCalledWith(target.id);
+    expect(mocks.close).toHaveBeenCalledOnce();
+  });
+}

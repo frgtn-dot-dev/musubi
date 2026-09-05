@@ -1,6 +1,6 @@
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
-import { useEventsStore } from "@/store/useEventsStore";
+import { getEventLifecycle, useEventsStore } from "@/store/useEventsStore";
 import {
   adoptLegacyReminderRules,
   storeReminderRules,
@@ -14,8 +14,16 @@ import { mergeHomeEventSnapshot, serializeEventRefresh } from "@/lib/eventSync";
 
 export function useRefreshData() {
   const api = useApi();
-  const { loadCalendars } = useCalendarsStore();
-  const { loadEvents } = useEventsStore();
+  return (opts?: RefreshOptions) => refreshEventData(api, opts);
+}
+
+type RefreshOptions = { providerSync?: boolean; full?: boolean; settingsOnly?: boolean };
+
+export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshOptions) {
+  const lifecycle = getEventLifecycle();
+  const isCurrent = () => lifecycle === getEventLifecycle();
+  const { loadCalendars } = useCalendarsStore.getState();
+  const { loadEvents } = useEventsStore.getState();
 
   // providerSync=false: skip triggering the server-side provider sync — used by
   // the SSE "external_sync" handler, where the server JUST synced (re-triggering
@@ -23,8 +31,8 @@ export function useRefreshData() {
   // full=true forces an authoritative home event snapshot after launch,
   // reconnect, or joining a calendar. Cached federated events are retained until
   // their origin server can provide its own authoritative snapshot.
-  return (opts?: { providerSync?: boolean; full?: boolean; settingsOnly?: boolean }) =>
-    serializeEventRefresh(async () => {
+  return serializeEventRefresh(async () => {
+    if (!isCurrent()) return;
     // Load settings FIRST and independently: the onboarding gate (and theme)
     // depend on `onboarded` arriving. It must not be held hostage to the
     // events/calendar pipeline below — a throw there used to leave `onboarded`
@@ -34,7 +42,7 @@ export function useRefreshData() {
     } catch (e) {
       console.error("Settings load failed:", e);
     }
-    if (opts?.settingsOnly) return;
+    if (opts?.settingsOnly || !isCurrent()) return;
 
     if (opts?.providerSync !== false) {
       // trigger server-side provider sync first, so its imported/changed events
@@ -49,15 +57,19 @@ export function useRefreshData() {
     const since = sinceDate && !Number.isNaN(sinceDate.getTime()) ? sinceDate : undefined;
     const { events, deletedIds, serverTime } = await api.getEvents(since);
     const cachedCalendars = await cacheGetCalendars();
+    if (!isCurrent()) return;
     if (since === undefined) {
       const cachedEvents = await cacheGetAllEvents();
+      if (!isCurrent()) return;
       await cacheReplaceAllEvents(
         mergeHomeEventSnapshot(events, cachedEvents, cachedCalendars),
       );
     } else {
       await cacheUpsertEvents(events);
+      if (!isCurrent()) return;
       await cacheDeleteEvents(deletedIds);
     }
+    if (!isCurrent()) return;
     await setLastSync(serverTime);
 
     const homeCalendars = await api.getCalendars();
@@ -67,7 +79,9 @@ export function useRefreshData() {
     // from the home server inside, falling back to the offline cache; token
     // rotation now happens server-side (ADR-005). A server that's down keeps
     // its last-cached calendars so the reconcile below doesn't wipe local copies.
+    if (!isCurrent()) return;
     const fed = await syncFederatedAccounts(cachedCalendars);
+    if (!isCurrent()) return;
     if (fed.syncedServers.size) {
       // full-set semantics per synced server: cached events living only in that
       // server's calendars and absent from the fresh pull were deleted remotely
@@ -75,6 +89,7 @@ export function useRefreshData() {
         fed.calendars.filter(c => c.serverUrl && fed.syncedServers.has(c.serverUrl)).map(c => c.id));
       const fetchedIds = new Set(fed.events.map(e => e.id));
       const cachedNow = await cacheGetAllEvents();
+      if (!isCurrent()) return;
       const staleRemote = cachedNow
         .filter(e => (e.calendars?.length ?? 0) > 0
           && e.calendars.every(id => syncedCalIds.has(id))
@@ -82,11 +97,14 @@ export function useRefreshData() {
         .map(e => e.id);
       if (staleRemote.length) await cacheDeleteEvents(staleRemote);
     }
+    if (!isCurrent()) return;
     if (fed.events.length) await cacheUpsertEvents(fed.events);
 
+    if (!isCurrent()) return;
     const calendars = [...homeCalendars, ...fed.calendars];
     loadCalendars(calendars);
     const all = await cacheGetAllEvents();
+    if (!isCurrent()) return;
 
     // Reconcile against membership: an offline kick sends no SSE and the delta
     // can't tombstone events we merely lost access to — drop links to calendars
@@ -104,8 +122,10 @@ export function useRefreshData() {
       } else kept.push(e);
     }
     if (dropped.length) await cacheDeleteEvents(dropped);
+    if (!isCurrent()) return;
     if (fixed.length) await cacheUpsertEvents(fixed);
 
+    if (!isCurrent()) return;
     loadEvents(kept);
     await cacheSetCalendars(calendars);
 
@@ -114,6 +134,7 @@ export function useRefreshData() {
     // Best-effort — the cached rules stand in when the request fails.
     try {
       const reminders = await api.getReminders();
+      if (!isCurrent()) return;
       if (reminders) {
         await storeReminderRules(reminders);
       } else {
@@ -128,6 +149,7 @@ export function useRefreshData() {
       console.error("Reminder rules load failed:", e);
     }
     // fire-and-forget: drop reminders of gone events, refresh the rest
-    syncScheduledReminders(kept).catch(() => { });
+    if (!isCurrent()) return;
+    syncScheduledReminders(useEventsStore.getState().events).catch(() => { });
   });
 }

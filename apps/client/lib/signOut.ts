@@ -17,7 +17,7 @@ export async function resetLocalAccountState() {
   resetSettingsSync();
   await resetFederatedAccounts();
   useCalendarsStore.getState().loadCalendars([]);
-  useEventsStore.getState().loadEvents([]);
+  useEventsStore.getState().resetEvents();
   resetOnboardingRoute();
   await clearAgendaWidget();
   await cacheClearAll();

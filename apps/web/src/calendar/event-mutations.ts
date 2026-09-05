@@ -7,6 +7,7 @@ import {
   useMutation,
   useQueryClient,
   type QueryClient,
+  type Query,
 } from "@tanstack/react-query";
 import type {
   Attendee,
@@ -35,12 +36,14 @@ function eventQueryPrefix(userId: string) {
   return ["events", getServerOrigin(), userId] as const;
 }
 
+type ReceiptGuard = (query: Query) => boolean;
+
 function upsertEvent(
   queryClient: QueryClient,
   userId: string,
-  event: Event) {
+  event: Event, guard: ReceiptGuard) {
   queryClient.setQueriesData<EventsResponse>(
-    { queryKey: eventQueryPrefix(userId) },
+    { queryKey: eventQueryPrefix(userId), predicate: guard },
     (current) =>
       current
         ? current.events.some(
@@ -70,9 +73,10 @@ function applyRemoval(
   userId: string,
   event: Event,
   result: RemoveEventResponse,
+  guard: ReceiptGuard,
 ) {
   queryClient.setQueriesData<EventsResponse>(
-    { queryKey: eventQueryPrefix(userId) },
+    { queryKey: eventQueryPrefix(userId), predicate: guard },
     (current) => {
       if (!current) return current;
       const cached = current.events.find((item) => item.id === result.id);
@@ -122,67 +126,67 @@ export function useEventMutations(userId: string) {
 
   // Federated events live in the federation query, not the home event cache, so
   // a remote write refetches that server instead of patching local rows.
-  const applyWrite = (event: Event, connectionId?: string) => {
+  const applyWrite = (event: Event, guard: ReceiptGuard, connectionId?: string) => {
     if (connectionId) {
       void refreshFederated();
       return;
     }
-    upsertEvent(queryClient, userId, event);
+    upsertEvent(queryClient, userId, event, guard);
     void refreshEvents();
   };
 
-  const reconcileMutationFailure = (error: unknown, connectionId?: string) => {
+  const reconcileMutationFailure = (error: unknown, guard: ReceiptGuard, connectionId?: string) => {
     if (error instanceof EventMutationError && error.current && !connectionId) {
       const current = error.current;
       if (current.deletedAt) applyRemoval(queryClient, userId, current, {
         id: current.id, removed: true, calendars: [], revision: current.revision,
-      });
-      else upsertEvent(queryClient, userId, current);
+      }, guard);
+      else upsertEvent(queryClient, userId, current, guard);
     }
     void refreshEvents();
     void refreshFederated();
   };
 
-  // A receipt cannot undo a refetch/access-loss reconciliation that arrived
-  // while it was in flight, even when no row remains to compare revisions.
-  const captureReceiptGuard = () => {
-    const snapshots = queryClient.getQueriesData({ queryKey: prefix });
-    return () => snapshots.every(([key, data]) => queryClient.getQueryData(key) === data);
+  // Apply only to the exact query instances/data observed at request start.
+  // Navigation may populate another range while this request is pending; that
+  // newer snapshot (including absence) must never receive the old receipt.
+  const captureReceiptGuard = (): ReceiptGuard => {
+    const snapshots = new Map(queryClient.getQueryCache().findAll({ queryKey: prefix })
+      .map(query => [query, query.state.data]));
+    return query => snapshots.has(query) && snapshots.get(query) === query.state.data;
   };
+  const rejectReceipt: ReceiptGuard = () => false;
 
   const create = useMutation({
     onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       createEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input, guard) => reconcileMutationFailure(guard?.() ? error : undefined, connectionForEvent(connections, input)),
+    onError: (error, input, guard) => reconcileMutationFailure(error, guard ?? rejectReceipt, connectionForEvent(connections, input)),
     onSuccess: (event, input, guard) => {
-      if (guard?.()) applyWrite(event, connectionForEvent(connections, input));
-      else { void refreshEvents(); void refreshFederated(); }
+      applyWrite(event, guard ?? rejectReceipt, connectionForEvent(connections, input));
     },
   });
   const update = useMutation({
     onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       updateEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input, guard) => reconcileMutationFailure(guard?.() ? error : undefined, connectionForEvent(connections, input)),
+    onError: (error, input, guard) => reconcileMutationFailure(error, guard ?? rejectReceipt, connectionForEvent(connections, input)),
     onSuccess: (event, input, guard) => {
-      if (guard?.()) applyWrite(event, connectionForEvent(connections, input));
-      else { void refreshEvents(); void refreshFederated(); }
+      applyWrite(event, guard ?? rejectReceipt, connectionForEvent(connections, input));
     },
   });
   const remove = useMutation({
     onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       removeEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input, guard) => reconcileMutationFailure(guard?.() ? error : undefined, connectionForEvent(connections, input)),
+    onError: (error, input, guard) => reconcileMutationFailure(error, guard ?? rejectReceipt, connectionForEvent(connections, input)),
     onSuccess: (result, event, guard) => {
-      if (!guard?.()) { void refreshEvents(); void refreshFederated(); return; }
       const connectionId = connectionForEvent(connections, event);
       if (connectionId) {
         void refreshFederated();
         return;
       }
-      applyRemoval(queryClient, userId, event, result);
+      applyRemoval(queryClient, userId, event, result, guard ?? rejectReceipt);
       void refreshEvents();
     },
   });
@@ -204,10 +208,9 @@ export function useEventMutations(userId: string) {
         connectionForCalendar(connections, calendarId),
       ),
     onError: (error, input, guard) => reconcileMutationFailure(
-        guard?.() ? error : undefined, connectionForCalendar(connections, input.calendarId)),
+        error, guard ?? rejectReceipt, connectionForCalendar(connections, input.calendarId)),
     onSuccess: (event, { calendarId }, guard) => {
-      if (guard?.()) applyWrite(event, connectionForCalendar(connections, calendarId));
-      else { void refreshEvents(); void refreshFederated(); }
+      applyWrite(event, guard ?? rejectReceipt, connectionForCalendar(connections, calendarId));
     },
   });
   const fork = useMutation({
@@ -228,10 +231,9 @@ export function useEventMutations(userId: string) {
         connectionForCalendar(connections, calendarId),
       ),
     onError: (error, input, guard) => reconcileMutationFailure(
-        guard?.() ? error : undefined, connectionForCalendar(connections, input.calendarId)),
+        error, guard ?? rejectReceipt, connectionForCalendar(connections, input.calendarId)),
     onSuccess: (event, { calendarId }, guard) => {
-      if (guard?.()) applyWrite(event, connectionForCalendar(connections, calendarId));
-      else { void refreshEvents(); void refreshFederated(); }
+      applyWrite(event, guard ?? rejectReceipt, connectionForCalendar(connections, calendarId));
     },
   });
   const attendance = useMutation({
