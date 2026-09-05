@@ -7297,3 +7297,46 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 	expect(await headerOffset()).toBeCloseTo(before, 0);
 	await expect(placement.getByText("Calendar 16")).toBeInViewport();
 });
+
+for (const { provider, width, theme } of [
+  { provider: "google", width: 1280, theme: "light" },
+  { provider: "microsoft", width: 390, theme: "dark" },
+] as const) {
+  test(`optional Tasks consent: ${provider}, ${theme}, ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 850 });
+    await page.addInitScript((value) => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.route("**/api/v1/server", (route) => respond(route, { syncProviders: ["google", "microsoft"] }));
+    const requests: { provider: string; scopes: string[]; callbackURL: string }[] = [];
+    await page.route("**/api/auth/link-social", (route) => {
+      requests.push(route.request().postDataJSON());
+      return respond(route, { redirect: false, url: "" });
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections" }).click();
+    const dialog = page.getByRole("dialog", { name: "Connections" });
+    const checkbox = dialog.getByRole("checkbox", { name: /Include Tasks/ });
+    await expect(checkbox).toBeChecked();
+    await expect(dialog).toContainText("Previously granted access is not revoked.");
+    const connect = dialog.getByRole("button", { name: provider === "google" ? "Google Calendar" : "Outlook" });
+    const taskScope = provider === "google" ? "https://www.googleapis.com/auth/tasks" : "Tasks.ReadWrite";
+    await connect.click();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0].scopes).toContain(taskScope);
+    await expect(checkbox).toBeEnabled();
+    await checkbox.focus();
+    await page.keyboard.press("Space");
+    await expect(checkbox).not.toBeChecked();
+    await connect.click();
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests[1]).toMatchObject({ provider, callbackURL: page.url() });
+    expect(requests[1].scopes).not.toContain(taskScope);
+    expect(requests[1].scopes).toContain(provider === "google" ? "https://www.googleapis.com/auth/calendar.events" : "Calendars.ReadWrite");
+    const accessibility = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    expect(accessibility.violations).toEqual([]);
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await dialog.getByRole("button", { name: "Close connections" }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+}

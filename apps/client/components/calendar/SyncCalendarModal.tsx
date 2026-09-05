@@ -9,6 +9,8 @@ import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-ha
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Tap } from "@/components/ui/Tap";
+import { SettingRowToggle } from "@/components/SettingRow";
+import { typeSizes } from "@musubi/design-system";
 import { Btn } from "@/components/ui/Btn";
 import { GoogleG } from "@/components/auth/SocialAuthButtons";
 import * as haptics from "@/lib/haptics";
@@ -59,6 +61,8 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   }, [visible, apiUrl]);
   const shows = (provider: string) => !available || available.includes(provider);
 
+  // Keep existing Tasks users opted in unless they explicitly choose calendar-only.
+  const [includeTasks, setIncludeTasks] = useState(true);
   const [step, setStep] = useState<Step>("providers");
   // Musubi servers this account is federated with. Loaded when that step opens,
   // from the home server (the source of truth) with the local registry as the
@@ -88,6 +92,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   const closeSequence = () => {
     onClose();
     setStep("providers");
+    setIncludeTasks(true);
     setInviteLink("");
     setServerUrl("");
     setUsername("");
@@ -131,12 +136,12 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.calendarlist",
     "https://www.googleapis.com/auth/calendar.calendars",
-    "https://www.googleapis.com/auth/tasks",
+    ...(includeTasks ? ["https://www.googleapis.com/auth/tasks"] : []),
   ], "Google");
   // Show the data-use disclosure before the first Google authorization; once
   // the user has connected a Google calendar, go straight to OAuth.
   const startGoogle = () => (googleAcked ? handleGoogle() : setStep("google"));
-  const handleMicrosoft = () => handleOAuth("microsoft", ["Calendars.ReadWrite", "Tasks.ReadWrite"], "Outlook");
+  const handleMicrosoft = () => handleOAuth("microsoft", ["Calendars.ReadWrite", ...(includeTasks ? ["Tasks.ReadWrite"] : [])], "Outlook");
 
   const openMusubi = async () => {
     setStep("musubi");
@@ -248,6 +253,18 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
             <ScrollView showsVerticalScrollIndicator={false}>
               {step === "providers" && (
                 <View style={styles.modalButtonsColumn}>
+                  {(shows("google") || shows("microsoft")) && (
+                    <>
+                      <SettingRowToggle
+                        label="Include Tasks (optional)"
+                        toggle={includeTasks}
+                        onToggle={() => { if (!loadingProvider) setIncludeTasks(!includeTasks); }}
+                      />
+                      <Text style={{ fontFamily: fonts.sans, fontSize: typeSizes[12], color: colors.fg2 }}>
+                        When off, no new Tasks permission is requested. Previously granted access is not revoked.
+                      </Text>
+                    </>
+                  )}
                   {shows("google") && (
                     <Btn
                       label="Google Calendar"

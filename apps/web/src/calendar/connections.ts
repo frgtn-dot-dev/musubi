@@ -15,13 +15,18 @@ import type { ParsedInvite } from "@musubi/types";
 
 // Calendar scopes are requested at connect time — distinct from sign-in, which
 // only needs identity. Better Auth links the extra account server-side.
-export const GOOGLE_CALENDAR_SCOPES = [
+const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.calendarlist",
   "https://www.googleapis.com/auth/calendar.calendars",
-  "https://www.googleapis.com/auth/tasks",
 ];
-export const MICROSOFT_CALENDAR_SCOPES = ["Calendars.ReadWrite", "Tasks.ReadWrite"];
+const MICROSOFT_CALENDAR_SCOPES = ["Calendars.ReadWrite"];
+
+export function providerConnectionScopes(provider: "google" | "microsoft", includeTasks: boolean) {
+  const calendars = provider === "google" ? GOOGLE_CALENDAR_SCOPES : MICROSOFT_CALENDAR_SCOPES;
+  const tasks = provider === "google" ? "https://www.googleapis.com/auth/tasks" : "Tasks.ReadWrite";
+  return includeTasks ? [...calendars, tasks] : [...calendars];
+}
 
 // Linking a provider is a full-page trip to Google or Microsoft and back, so no
 // React state survives it. This marker does — sessionStorage is per tab and
