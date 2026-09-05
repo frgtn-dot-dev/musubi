@@ -59,6 +59,8 @@ export type EventWriteOperation = {
   event: Event;
   previous?: Event;
   external?: ExternalEventRef;
+  // Server-only: the handler validated the complete request intent and its ACLs.
+  scopeEditValidated?: boolean;
 };
 
 export type ExternalCalendarInfo = {

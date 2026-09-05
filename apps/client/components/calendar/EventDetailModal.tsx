@@ -37,6 +37,7 @@ import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
 import {
 	excludeOccurrence,
 	endSeriesBefore,
+	withSeriesEditIntent,
 	noteParts,
 } from "@musubi/calendar";
 import { syncScheduledReminders } from "@/services/notifications";
@@ -174,7 +175,8 @@ export default function EventDetailModal({
 	};
 	const saveDeletionRule = async (updated: Event) => {
 		try {
-			await updateEvent(updated, api);
+			const { updates } = withSeriesEditIntent({ updates: [updated], creates: [] });
+			await updateEvent(updates[0], api);
 			await syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(() => {});
 			handleClose();
 		} catch (error) {

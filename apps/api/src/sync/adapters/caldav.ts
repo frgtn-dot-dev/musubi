@@ -915,6 +915,15 @@ export const caldavAdapter: CalendarAdapter = {
           !component.getFirstProperty("recurrence-id") && component.getFirstPropertyValue("uid") === uid,
         );
         if (!master) throw new EventWriteError("event-write", "unknown");
+        if (operation.action === "update" && !operation.scopeEditValidated &&
+          canonicalRecurrence(recurrenceFrom(master)) !== canonicalRecurrence(recurrenceFrom(toVevent(operation.event, uid)))) {
+          // A legacy recurrence PUT may be the first half of a split. Without a
+          // complete intent, require the potential create right before changing it.
+          const collectionPrivileges = await caldavEventPrivileges(externalCalendarId, authorization);
+          const canCreate = caldavAllows(collectionPrivileges, "create");
+          if (canCreate !== true) throw new EventWriteError("recurrence", canCreate === false ? "denied" : "unknown",
+            "CalDAV recurrence changes without a complete scope edit intent require calendar create permission. No changes were saved.");
+        }
         const organizer = componentString(master, "organizer");
         if (organizer) {
           const addresses = await caldavOrganizerAddresses(externalCalendarId, authorization);

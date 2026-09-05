@@ -23,11 +23,11 @@ export const EventSchema = z.object({
 
 export type Event = z.infer<typeof EventSchema>;
 
-// Transient request intent for the existing update-then-create scoped edit.
+// Transient request intent for update-only or update-then-create scoped edits.
 // Never persisted as part of an Event, and not an atomic scope operation.
 export const ScopeEditIntentSchema = z.object({
   updates: z.array(EventSchema).length(1),
-  creates: z.array(EventSchema).length(1),
+  creates: z.array(EventSchema).max(1),
 });
 export type EventWriteRequest = Event & {
   scopeEdit?: z.infer<typeof ScopeEditIntentSchema>;

@@ -1458,6 +1458,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await page.keyboard.press("Escape");
 	await expect(deleteDialog).toHaveCount(0);
 	await expect(recurringEvent).toBeFocused();
+	const deletionRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/events") && request.method() === "PUT");
 	await recurringEvent.click();
 	await page.getByRole("button", { name: "Delete" }).click();
 	await page
@@ -1467,9 +1468,16 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await expect(page.locator('[class*="toastRegion"]')).toContainText(
 		"Occurrence removed.",
 	);
+	const { scopeEdit, ...update } = (await deletionRequest).postDataJSON();
+	expect(scopeEdit).toEqual({ updates: [update], creates: [] });
 	await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(
 		0,
 	);
+	const undoRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/events") && request.method() === "PUT");
+	await page.getByRole("button", { name: "Undo", exact: true }).click();
+	const { scopeEdit: undoIntent, ...undo } = (await undoRequest).postDataJSON();
+	expect(undoIntent).toEqual({ updates: [undo], creates: [] });
+	await expect(recurringEvent).toBeVisible();
 	expect(runtimeErrors).toEqual([]);
 });
 
@@ -5538,6 +5546,8 @@ test("edits a whole series without moving it onto one date", async ({
 	expect(writes).toHaveLength(1);
 	expect(writes[0]!.title).toBe("Weekly retro");
 	expect(writes[0]!.recurrence).toBe(recurrence);
+	const { scopeEdit, ...update } = writes[0]!;
+	expect(scopeEdit).toEqual({ updates: [update], creates: [] });
 	// The master keeps its own first occurrence rather than jumping to the one
 	// that was edited.
 	expect(new Date(writes[0]!.start as string).toISOString()).toContain(

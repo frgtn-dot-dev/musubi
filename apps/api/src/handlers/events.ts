@@ -60,17 +60,17 @@ function parseEvent(body: unknown, message: string): Event {
   return event;
 }
 
-async function assertScopeEditIntent(userID: string, event: Event, raw: unknown) {
-  if (raw === undefined) return;
+async function assertScopeEditIntent(userID: string, event: Event, raw: unknown): Promise<boolean> {
+  if (raw === undefined) return false;
   const parsed = ScopeEditIntentSchema.safeParse(raw);
   if (!parsed.success) throw new BadRequestError("Invalid scope edit intent.");
   const update = parseEvent(parsed.data.updates[0], "Invalid scope update.");
-  const create = parseEvent(parsed.data.creates[0], "Invalid scope create.");
-  if (JSON.stringify(update) !== JSON.stringify(event) || create.id === update.id) {
+  const create = parsed.data.creates[0] && parseEvent(parsed.data.creates[0], "Invalid scope create.");
+  if (JSON.stringify(update) !== JSON.stringify(event) || create?.id === update.id) {
     throw new BadRequestError("Scope edit intent does not match the first update.");
   }
-  if (!create.calendars.length ||
-    (create.originCalendarID && !create.calendars.includes(create.originCalendarID))) {
+  if (create && (!create.calendars.length ||
+    (create.originCalendarID && !create.calendars.includes(create.originCalendarID)))) {
     throw new BadRequestError("Invalid scope create destination.");
   }
   // Authorize EVERY proposed step before even reading provider evidence.
@@ -80,14 +80,15 @@ async function assertScopeEditIntent(userID: string, event: Event, raw: unknown)
   for (const calendarID of update.calendars.filter((id) => !existing.includes(id))) {
     await assertEventCalendarAccess(userID, calendarID);
   }
-  for (const calendarID of create.calendars) await assertEventCalendarAccess(userID, calendarID);
+  for (const calendarID of create?.calendars ?? []) await assertEventCalendarAccess(userID, calendarID);
   const writes: CalendarEventWrite[] = [
     { event: update, calendarIDs: existing.filter((id) => !update.calendars.includes(id)), action: "delete" },
     { event: update, calendarIDs: update.calendars.filter((id) => !existing.includes(id)), action: "create" },
-    { event: update, previous: { ...previous, calendars: existing }, calendarIDs: update.calendars.filter((id) => existing.includes(id)), action: "update" },
-    { event: create, calendarIDs: create.calendars, action: "create" },
+    { event: update, previous: { ...previous, calendars: existing }, calendarIDs: update.calendars.filter((id) => existing.includes(id)), action: "update", scopeEditValidated: true },
   ];
+  if (create) writes.push({ event: create, calendarIDs: create.calendars, action: "create" });
   await prepareEventWrites(writes);
+  return true;
 }
 
 export async function handlerCreateEvent(req: Request, res: Response) {
@@ -138,7 +139,7 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   const event = parseEvent(req.body, "Request missing valid event data...");
 
   await assertEventContentAccess(req.user!.id, event.id!); // gated by home, never by a copy
-  await assertScopeEditIntent(req.user!.id, event, req.body?.scopeEdit);
+  const scopeEditValidated = await assertScopeEditIntent(req.user!.id, event, req.body?.scopeEdit);
 
   // Read before write: telling a guest "it moved" needs to know where from, and
   // once the update lands that is gone.
@@ -156,7 +157,7 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   const deliver = await prepareEventWrites([
     { event, calendarIDs: removed, action: "delete" },
     { event, calendarIDs: added, action: "create" },
-    { event, previous: { ...previous, calendars: existing }, calendarIDs: kept, action: "update" },
+    { event, previous: { ...previous, calendars: existing }, calendarIDs: kept, action: "update", scopeEditValidated },
   ]);
 
   // creatorID / originCalendarID are immutable — never trust them from the client

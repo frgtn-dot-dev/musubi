@@ -21,11 +21,11 @@ export type SeriesEdit<T> = {
   updates: T[];
 };
 
-/** Attach the known second step to the first request for server preflight.
+/** Attach the complete known write-set, including update-only scope operations.
  * This is not atomic execution: each later request still checks current rights.
  */
 export function withSeriesEditIntent<T extends SeriesEditable>(writes: SeriesEdit<T>): SeriesEdit<T> {
-  if (!writes.creates.length || !writes.updates.length) return writes;
+  if (!writes.updates.length) return writes;
   return {
     creates: writes.creates,
     updates: writes.updates.map((event, index) => index === 0 ? { ...event, scopeEdit: writes } : event),

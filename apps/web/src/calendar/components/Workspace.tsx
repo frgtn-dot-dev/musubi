@@ -438,7 +438,7 @@ export function Workspace({
           for (const event of created) {
             await onRemoveEvent(event);
           }
-          await onUpdateEvent(master);
+          await onUpdateEvent(withSeriesEditIntent({ updates: [master], creates: [] }).updates[0]);
         },
       },
     );

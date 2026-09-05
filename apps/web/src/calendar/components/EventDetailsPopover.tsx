@@ -337,7 +337,7 @@ export function EventDetailsPopover({
 						for (const event of created) {
 							await onRemoveEvent(event);
 						}
-						await onUpdateEvent(master);
+						await onUpdateEvent(withSeriesEditIntent({ updates: [master], creates: [] }).updates[0]);
 					},
 				},
 			);
@@ -366,14 +366,15 @@ export function EventDetailsPopover({
 					scope === "occurrence"
 						? excludeOccurrence(master.recurrence, event.start)
 						: endSeriesBefore(master.recurrence, event.start);
-				await onUpdateEvent({ ...master, recurrence });
+				const { updates } = withSeriesEditIntent({ updates: [{ ...master, recurrence }], creates: [] });
+				await onUpdateEvent(updates[0]);
 				onNotice(
 					scope === "occurrence"
 						? "Occurrence removed."
 						: "Following occurrences removed.",
 					// Only the rule changed, so putting the old one back restores the
 					// occurrences exactly.
-					{ undo: () => onUpdateEvent(master) },
+					{ undo: () => onUpdateEvent(withSeriesEditIntent({ updates: [master], creates: [] }).updates[0]) },
 				);
 			} else {
 				const result = await onRemoveEvent(master);

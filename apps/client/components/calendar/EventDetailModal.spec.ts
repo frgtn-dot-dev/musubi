@@ -101,6 +101,14 @@ for (const scope of ["This event only", "This and following events", "All events
     expect(mocks.reminders).not.toHaveBeenCalled();
     const message = `Event writing is ${reason}. No changes were saved.`;
     const deletion = ["plain", "All events"].includes(scope);
+    const options = mocks.request.mock.lastCall![1];
+    const { scopeEdit, ...update } = JSON.parse(options.body);
+    expect(options.method).toBe(deletion ? "DELETE" : "PUT");
+    if (deletion) expect(scopeEdit).toBeUndefined();
+    else {
+      expect(scopeEdit).toEqual({ updates: [update], creates: [] });
+      expect(useEventsStore.getState().events[0]).not.toHaveProperty("scopeEdit");
+    }
     complete(reason === "success"
       ? { error: null, data: deletion ? { id: master.id, calendars: [], removed: true } : master }
       : { error: { status: 403, error: message, reason, capability: "event-write" }, data: null });

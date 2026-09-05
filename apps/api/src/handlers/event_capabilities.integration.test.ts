@@ -10,7 +10,7 @@ import {
   linkEventToCalendars, memberTokens, saveCaldavAccount, setExternalEventSyncData, user,
 } from "@musubi/db";
 import { EventSchema } from "@musubi/types";
-import { withSeriesEditIntent } from "@musubi/calendar";
+import { endSeriesBefore, excludeOccurrence, withSeriesEditIntent } from "@musubi/calendar";
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
 import { middlewareErrorHandler } from "../middleware/error_handler";
@@ -38,6 +38,7 @@ async function main() {
   let revokedRefresh = false;
   let refreshCalls = 0;
   let privileges: string[] | undefined = ["write"];
+  let resourcePrivileges: string[] | undefined;
   let addresses: string[] | undefined = ["mailto:owner@example.test"];
   const importedPrivileges: string[] | undefined = ["bind"];
   let remoteCalendarCreates = 0;
@@ -79,7 +80,8 @@ async function main() {
       if (method === "REPORT") return xml("/dav/cal/event.ics", `<d:getetag>"current"</d:getetag><c:calendar-data>${xmlEscape(davData)}</c:calendar-data>`);
       if (method === "PROPFIND") {
         if (body.includes("current-user-privilege-set")) {
-          const grants = path.includes("musubi-") ? importedPrivileges : privileges;
+          const grants = path.includes("musubi-") ? importedPrivileges
+            : path.endsWith(".ics") ? resourcePrivileges ?? privileges : privileges;
           return grants ? xml(path, `<d:current-user-privilege-set>${grants.map((name) => `<d:privilege><d:${name}/></d:privilege>`).join("")}</d:current-user-privilege-set>`) : xml(path, "<d:current-user-privilege-set/>", "404 Not Found");
         }
         if (body.includes("calendar-user-address-set")) return addresses ? xml(path, `<c:calendar-user-address-set>${addresses.map((address) => `<d:href>${address}</d:href>`).join("")}</c:calendar-user-address-set>`) : xml(path, "", "404 Not Found");
@@ -234,6 +236,48 @@ async function main() {
     await refuses(() => request("POST", eventIn([dav.id])), "denied");
     privileges = ["unbind"];
     assert.equal((await request("DELETE", davEvent)).status, 200);
+    // A legacy EXDATE/UNTIL PUT may precede a replacement POST. A known absent
+    // bind must stop that first step, despite resource write-content permission.
+    const legacySeries = eventIn([dav.id], "RRULE:FREQ=WEEKLY");
+    await createEvent(legacySeries, legacySeries.calendars);
+    const legacyResource = `${fixtureOrigin}/dav/cal/legacy.ics`;
+    await importExternalEvent("caldav", legacySeries.id, dav.id, `${fixtureOrigin}/dav/cal/`, legacyResource, '"current"', legacySeries.id);
+    davData = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", `UID:${legacySeries.id}`, "DTSTART:20260101T100000Z", "DTEND:20260101T110000Z", "RRULE:FREQ=WEEKLY", "SUMMARY:Before", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    const legacyOriginal = davData;
+    resourcePrivileges = ["write-content"];
+    for (const recurrence of [
+      excludeOccurrence(legacySeries.recurrence!, new Date("2026-01-08T10:00:00Z")),
+      endSeriesBefore(legacySeries.recurrence!, new Date("2026-01-08T10:00:00Z")),
+    ]) {
+      const update = { ...legacySeries, recurrence };
+      for (privileges of [["read"], undefined]) {
+        const reason = privileges ? "denied" : "unknown";
+        const error = await refuses(() => request("PUT", { ...update, scopeEditValidated: true }), reason);
+        assert.match(error.error, /without a complete scope edit intent/);
+        assert.equal(davData, legacyOriginal);
+        const split = withSeriesEditIntent({ updates: [update], creates: [eventIn([dav.id])] });
+        await refuses(() => request("PUT", split.updates[0]), reason);
+      }
+      privileges = ["read"];
+      const updateOnly = withSeriesEditIntent({ updates: [update], creates: [] });
+      await refuses(() => request("PUT", { ...updateOnly.updates[0], title: "Mismatched update-only" }), "", 400);
+      resourcePrivileges = ["read"];
+      await refuses(() => request("PUT", updateOnly.updates[0]), "denied");
+      resourcePrivileges = ["write-content"];
+      writes.length = 0;
+      assert.equal((await request("PUT", updateOnly.updates[0])).status, 200, "Explicit update-only recurrence changes need no bind");
+      assert.deepEqual(writes.map(({ method, path }) => [method, path]), [["PUT", "/dav/cal/legacy.ics"]]);
+      assert.equal(icalToNormalized({ url: legacyResource, data: davData })?.recurrence, recurrence.startsWith("RRULE:") ? recurrence : `RRULE:${recurrence}`);
+      assert.ok(!(await snapshot()).includes("scopeEdit"), "Intent is never persisted");
+      assert.equal((await request("PUT", withSeriesEditIntent({ updates: [legacySeries], creates: [] }).updates[0])).status, 200, "Update-only undo also needs no bind");
+      privileges = ["bind"];
+      assert.equal((await request("PUT", update)).status, 200, "Legacy recurrence change still works with fresh bind");
+      assert.equal((await request("PUT", legacySeries)).status, 200);
+      davData = legacyOriginal;
+    }
+    privileges = ["read"];
+    assert.equal((await request("PUT", { ...legacySeries, title: "Legacy preserving title", recurrence: "FREQ=WEEKLY" })).status, 200, "Semantically unchanged recurrence needs no bind");
+    resourcePrivileges = undefined;
     // Calendar owner is NOT organizer identity. No ORGANIZER remains a plain appointment.
     privileges = ["write"];
     davData = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:series", "DTSTART:20260101T100000Z", "DTEND:20260101T110000Z", "RRULE:FREQ=WEEKLY", "ORGANIZER:mailto:owner@example.test", "SUMMARY:Series", "END:VEVENT", "BEGIN:VEVENT", "UID:series", "RECURRENCE-ID:20260108T100000Z", "DTSTART:20260108T120000Z", "DTEND:20260108T130000Z", "SUMMARY:Detached", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
@@ -243,9 +287,11 @@ async function main() {
     await importExternalEvent("caldav", series.id, dav.id, `${fixtureOrigin}/dav/cal/`, `${fixtureOrigin}/dav/cal/event.ics`, '"current"', "series");
     const originalResource = davData;
     await refuses(() => request("PUT", { ...series, recurrence: "RRULE:FREQ=DAILY" }), "unsupported");
+    await refuses(() => request("PUT", withSeriesEditIntent({ updates: [{ ...series, recurrence: "RRULE:FREQ=DAILY" }], creates: [] }).updates[0]), "unsupported");
     assert.equal(davData, originalResource);
     addresses = ["mailto:someone-else@example.test"];
     await refuses(() => request("PUT", { ...series, title: "Not organizer" }), "denied");
+    await refuses(() => request("PUT", withSeriesEditIntent({ updates: [{ ...series, title: "Not organizer" }], creates: [] }).updates[0]), "denied");
     await refuses(() => request("DELETE", series), "unknown"); // Shared organizer collection, different session principal: NOT a proven attendee copy.
     addresses = undefined;
     await refuses(() => request("PUT", { ...series, title: "Unknown organizer" }), "unknown");
