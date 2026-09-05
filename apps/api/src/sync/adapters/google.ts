@@ -514,19 +514,27 @@ export const googleAdapter: CalendarAdapter = {
     accountId: string,
   ): Promise<ExternalCalendarInfo[]> {
     const accessToken = await getAccessToken(userID, accountId);
-    const res = await fetch(`${GCAL}/users/me/calendarList`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
-    const data = await res.json();
-    const calendars = (data.items ?? []).map((c: any) => ({
-      externalId: c.id,
-      name: c.summary,
-      color: c.backgroundColor,
-      readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
-      supportsEvents: true,
-      supportsTasks: false,
-    }));
+    const calendars: ExternalCalendarInfo[] = [];
+    let pageToken: string | undefined;
+    // The engine sweeps absent mirrors only after this complete discovery.
+    do {
+      const params = new URLSearchParams();
+      if (pageToken) params.set("pageToken", pageToken);
+      const res = await fetch(`${GCAL}/users/me/calendarList?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw await googleError(res);
+      const data = await res.json();
+      for (const c of data.items ?? []) calendars.push({
+        externalId: c.id,
+        name: c.summary,
+        color: c.backgroundColor,
+        readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
+        supportsEvents: true,
+        supportsTasks: false,
+      });
+      pageToken = data.nextPageToken;
+    } while (pageToken);
     const taskLists = await listGoogleTaskLists(accessToken);
     return [...calendars, ...taskLists.map(toExternalGoogleTaskList)];
   },
