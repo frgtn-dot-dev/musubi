@@ -54,6 +54,13 @@ export type ExternalTaskRef = {
   icalUid?: string | null;
 };
 
+export type EventWriteOperation = {
+  action: "create" | "update" | "delete";
+  event: Event;
+  previous?: Event;
+  external?: ExternalEventRef;
+};
+
 export type ExternalCalendarInfo = {
   externalId: string;
   name: string;
@@ -105,6 +112,15 @@ export type CalendarAdapter = {
     externalCalendarId: string,
     cursor: string | null,
   ): Promise<FetchChangesResult>;
+
+  // Read current provider evidence before any local mutation or provider write.
+  // This is a preflight, not a reservation or a distributed transaction.
+  assertEventWrite?(
+    userID: string,
+    accountId: string,
+    externalCalendarId: string,
+    operation: EventWriteOperation,
+  ): Promise<void>;
 
   // Push a Musubi event out. Adapter maps Event -> its own format.
   pushCreate(

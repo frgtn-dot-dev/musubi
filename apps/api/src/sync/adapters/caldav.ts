@@ -1,7 +1,7 @@
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
-import type { Event, Task, TaskStatus } from "@musubi/types";
+import { EventWriteError, type Event, type Task, type TaskStatus } from "@musubi/types";
 import { logger } from "@musubi/config";
 import { getCaldavAccountById, getCaldavAccountsByUser } from "@musubi/db";
 import type {
@@ -16,6 +16,8 @@ import type {
 } from "../adapter";
 import { createCaldavClient, createGuardedCaldavFetch } from "../caldav_client";
 import { decryptSecret } from "../crypto";
+import { assertEventWriteEvidence } from "../event_write";
+import { caldavAllows, caldavEventPrivileges, caldavOrganizerAddresses } from "../caldav_privileges";
 
 const TASK_STATUS_BY_ICAL: Record<string, TaskStatus> = {
   "NEEDS-ACTION": "needs-action",
@@ -460,6 +462,14 @@ function patchCalendarData(
   const recurrenceChanged =
     canonicalRecurrence(recurrenceFrom(component)) !==
     canonicalRecurrence(recurrenceFrom(replacement));
+  if (componentName === "vevent" && recurrenceChanged &&
+    calendar.getAllSubcomponents("vevent").some((candidate) =>
+      candidate.getFirstProperty("recurrence-id") &&
+      candidate.getFirstPropertyValue("uid") === uid,
+    )) {
+    throw new EventWriteError("recurrence", "unsupported",
+      "CalDAV recurrence changes with detached exceptions are not supported yet. No changes were saved.");
+  }
   patchProperties(
     component,
     replacement,
@@ -790,6 +800,13 @@ export const caldavAdapter: CalendarAdapter = {
         supportsEvents: c.components?.includes("VEVENT") ?? true,
         supportsTasks: c.components?.includes("VTODO") ?? false,
       }));
+    const authorization = await basicAuthForAccount(accountId);
+    for (const calendar of calendars) {
+      const privileges = await caldavEventPrivileges(calendar.externalId, authorization);
+      Object.assign(calendar, { readOnly: !["create", "update", "delete"].some(
+        (action) => caldavAllows(privileges, action as "create" | "update" | "delete") === true,
+      ) });
+    }
     return { calendars, taskListsComplete: true };
   },
 
@@ -871,6 +888,43 @@ export const caldavAdapter: CalendarAdapter = {
     });
 
     return { changes, nextCursor: cal.syncToken ?? null, reset: true };
+  },
+
+  async assertEventWrite(_userID, accountId, externalCalendarId, operation) {
+    const authorization = await basicAuthForAccount(accountId);
+    // DAV bind/unbind belong to the collection; write-content to the resource.
+    const target = operation.action === "update" && operation.external
+      ? operation.external.externalEventId : externalCalendarId;
+    const privileges = await caldavEventPrivileges(target, authorization);
+    assertEventWriteEvidence(caldavAllows(privileges, operation.action), "event-write");
+    if (operation.action !== "create" && operation.external) {
+      if (!operation.external.etag) throw new EventWriteError("event-write", "unknown");
+      {
+        const client = await clientForAccount(accountId);
+        const [object] = await client.fetchCalendarObjects({
+          calendar: { url: externalCalendarId } as DAVCalendar,
+          objectUrls: [operation.external.externalEventId],
+        });
+        if (!object?.data) throw new EventWriteError("event-write", "unknown");
+        const uid = operation.external.icalUid ?? icalToNormalized(object)?.icalUid;
+        if (!uid) throw new EventWriteError("event-write", "unknown");
+        // Exercise the real preserving patch before any DB or provider mutation.
+        if (operation.action === "update") patchEventIcal(object.data, operation.event, uid);
+        const calendar = new ICAL.Component(ICAL.parse(object.data));
+        const master = calendar.getAllSubcomponents("vevent").find((component) =>
+          !component.getFirstProperty("recurrence-id") && component.getFirstPropertyValue("uid") === uid,
+        );
+        if (!master) throw new EventWriteError("event-write", "unknown");
+        const organizer = componentString(master, "organizer");
+        if (organizer) {
+          const addresses = await caldavOrganizerAddresses(externalCalendarId, authorization);
+          const self = addresses?.includes(organizer.replace(/^mailto:/i, "").toLowerCase());
+          // Nonmatch on a shared calendar does NOT prove an attendee copy: its
+          // organizer may be the collection owner rather than this principal.
+          assertEventWriteEvidence(operation.action === "delete" && self === false ? undefined : self, "organizer");
+        }
+      }
+    }
   },
 
   async pushCreate(_userID, accountId, externalCalendarId, event: Event) {

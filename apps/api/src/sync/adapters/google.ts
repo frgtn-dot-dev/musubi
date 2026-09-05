@@ -13,6 +13,7 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
+import { assertEventWriteEvidence, assertEventWriteResponse } from "../event_write";
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 const GTASKS = "https://tasks.googleapis.com/tasks/v1";
@@ -583,6 +584,41 @@ export const googleAdapter: CalendarAdapter = {
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
       : fetchGoogleChanges(accessToken, externalCalendarId, cursor);
+  },
+
+  async assertEventWrite(userID, accountId, externalCalendarId, operation) {
+    const accessToken = await getAccessToken(userID, accountId);
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    const response = await fetch(
+      `${GCAL}/users/me/calendarList/${encodeURIComponent(externalCalendarId)}`,
+      { headers },
+    );
+    assertEventWriteResponse(response);
+    const calendar = await response.json();
+    assertEventWriteEvidence(
+      typeof calendar.accessRole === "string"
+        ? ["owner", "writer"].includes(calendar.accessRole)
+        : undefined,
+      "event-write",
+    );
+    // A calendar grant does not make an invited copy an organizer's meeting.
+    // DELETE can cancel an organizer copy, but only removes an attendee copy.
+    if (operation.action !== "create" && operation.external) {
+      const response = await fetch(
+        `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(operation.external.externalEventId)}`,
+        { headers },
+      );
+      if (operation.action === "delete" && [404, 410].includes(response.status)) return;
+      assertEventWriteResponse(response);
+      const current = await response.json();
+      // Google documents self=false as the default on an organizer object.
+      // An absent organizer object is not evidence of that default.
+      const self = typeof current.organizer?.self === "boolean"
+        ? current.organizer.self
+        : typeof current.organizer?.email === "string" && current.organizer.email
+          ? false : undefined;
+      assertEventWriteEvidence(operation.action === "delete" && self === false ? true : self, "organizer");
+    }
   },
 
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {

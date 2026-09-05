@@ -786,6 +786,7 @@ export async function getExternalEvent(
   provider: string,
   eventID: string,
   externalCalendarID: string,
+  calendarID?: string,
 ) {
   const [res] = await db
     .select({
@@ -799,6 +800,7 @@ export async function getExternalEvent(
         eq(externalEvents.provider, provider),
         eq(externalEvents.eventID, eventID),
         eq(externalEvents.externalCalendarID, externalCalendarID),
+        calendarID ? eq(externalEvents.calendarID, calendarID) : undefined,
       ),
     );
   return res ?? null;
@@ -809,6 +811,7 @@ export async function setExternalEventSyncData(
   eventID: string,
   externalCalendarID: string,
   data: { etag: string | null; icalUid: string | null },
+  calendarID?: string,
 ) {
   await db
     .update(externalEvents)
@@ -818,6 +821,7 @@ export async function setExternalEventSyncData(
         eq(externalEvents.provider, provider),
         eq(externalEvents.eventID, eventID),
         eq(externalEvents.externalCalendarID, externalCalendarID),
+        calendarID ? eq(externalEvents.calendarID, calendarID) : undefined,
       ),
     );
 }

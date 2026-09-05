@@ -25,13 +25,15 @@ import {
 	BadRequestError,
 	type Calendar,
 	CalendarSchema,
+	EventSchema,
+	EventWriteError,
 	ForbiddenError,
 	NotFoundError,
 	type User,
 } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { assertCan } from "../permissions";
-import { getAdapter, pushEventToProviders } from "../sync/engine";
+import { getAdapter, prepareEventWrites } from "../sync/engine";
 import { buildInvitePreview } from "../invite_preview";
 
 // External mirror? Then only the person whose provider account backs it may
@@ -356,44 +358,34 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 	const accountId =
 		typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
-	const created = await createCalendarAtDestination(req.user!, {
-		accountId,
-		color,
-		name,
-		provider,
-	});
-
-	// ponytail: RECURRENCE-ID overrides (edited single occurrences) are skipped —
-	// the master VEVENT carries the series; per-occurrence edits need detached
-	// instances, which Musubi doesn't model yet. Also one createEvent per VEVENT
-	// (3 inserts each) — batch if huge imports ever matter.
-	let imported = 0;
-	for (const vevent of vevents) {
-		if (vevent.getFirstPropertyValue("recurrence-id")) continue;
-		const fields = veventToFields(vevent);
-		if (!fields) continue;
-		const event = await createEvent(
-			{
-				id: randomUUID(),
-				creatorID: req.user!.id,
-				organizer: req.user!.id,
-				title: fields.title,
-				color,
-				start: fields.start,
-				end: fields.end,
-				isAllDay: fields.isAllDay,
-				description: fields.description,
-				location: fields.location,
-				recurrence: fields.recurrence,
-				originCalendarID: created.id,
-			},
-			[created.id],
-		);
-		await pushEventToProviders({ ...event, calendars: [created.id] }, "create");
-		imported++;
+	// Detached import fidelity remains K11. Inspect every accepted master before
+	// creating a destination, so known unsupported content cannot partially import.
+	const fields = vevents.filter((event) => !event.getFirstPropertyValue("recurrence-id"))
+		.map(veventToFields).filter((event) => event !== null);
+	if (provider === "microsoft" && fields.some((event) => event.recurrence)) {
+		throw new EventWriteError("recurrence", "unsupported",
+			"Outlook recurring import is not supported yet. No calendar or events were created.");
 	}
-
-	res.status(201).json({ ...created, imported });
+	const created = await createCalendarAtDestination(req.user!, { accountId, color, name, provider });
+	const importedEvents = fields.map((event) => EventSchema.parse({
+		...event, id: randomUUID(), creatorID: req.user!.id, organizer: req.user!.id,
+		color, isCanceled: false, originCalendarID: created.id, calendars: [created.id],
+	}));
+	let deliver: Awaited<ReturnType<typeof prepareEventWrites>>;
+	try {
+		deliver = await prepareEventWrites(importedEvents.map((event) => ({
+			event, calendarIDs: [created.id], action: "create",
+		})));
+	} catch (error) {
+		if (error instanceof EventWriteError) {
+			throw new EventWriteError(error.capability, error.reason,
+				`${error.message} The new calendar remains empty; no events were imported.`);
+		}
+		throw error;
+	}
+	for (const event of importedEvents) await createEvent(event, [created.id]);
+	await deliver();
+	res.status(201).json({ ...created, imported: importedEvents.length });
 }
 
 export function assertImportEventLimit(count: number) {

@@ -1,4 +1,4 @@
-import type { Event, Task } from "@musubi/types";
+import { EventWriteError, type Event, type Task } from "@musubi/types";
 import { logger } from "@musubi/config";
 import {
   deleteExternalEvent,
@@ -28,6 +28,7 @@ import {
 import { notifyCalendarMembers } from "../handlers/stream";
 import type {
   CalendarAdapter,
+  EventWriteOperation,
   NormalizedEvent,
   NormalizedTask,
 } from "./adapter";
@@ -410,13 +411,50 @@ export async function pushEventToCalendars(
   calendarIDs: string[],
   action: "create" | "update" | "delete",
 ) {
-  for (const calendarID of calendarIDs) {
-    const link = await getExternalLinkForCalendar(calendarID);
-    if (!link?.supportsEvents) continue;
-    const adapter = getAdapter(link.provider);
-    if (!adapter) continue;
+  const deliver = await prepareEventWrites([{ event, calendarIDs, action }]);
+  await deliver();
+}
 
-    try {
+export type CalendarEventWrite = Omit<EventWriteOperation, "external"> & { calendarIDs: string[] };
+
+/** Validate the ENTIRE operation before returning a delivery function. Handlers
+ * call this before touching event/link rows, including before removed-copy deletes.
+ * It is deliberately request-scoped, not a reservation or an outbox.
+ */
+export async function prepareEventWrites(writes: CalendarEventWrite[]) {
+  const prepared: Array<{
+    operation: CalendarEventWrite;
+    calendarID: string;
+    link: NonNullable<Awaited<ReturnType<typeof getExternalLinkForCalendar>>>;
+    adapter: CalendarAdapter;
+    external: Awaited<ReturnType<typeof getExternalEvent>> | null;
+  }> = [];
+  for (const operation of writes) {
+    for (const calendarID of new Set(operation.calendarIDs)) {
+      const link = await getExternalLinkForCalendar(calendarID);
+      if (!link) continue;
+      if (!link.supportsEvents) throw new EventWriteError("event-write", "unsupported");
+      const adapter = getAdapter(link.provider);
+      if (!adapter?.assertEventWrite) throw new EventWriteError("event-write", "unknown");
+      const external = operation.action === "create" ? null : await getExternalEvent(
+        link.provider, operation.event.id, link.externalCalendarID, calendarID,
+      );
+      try {
+        await adapter.assertEventWrite(link.userID, link.accountID, link.externalCalendarID, {
+          ...operation, external: external ?? undefined,
+        });
+      } catch (error) {
+        if (error instanceof EventWriteError) throw error;
+        throw new EventWriteError("event-write", "unknown");
+      }
+      prepared.push({ operation, calendarID, link, adapter, external });
+    }
+  }
+  return async (onlyAction?: EventWriteOperation["action"]) => {
+    for (const { operation, calendarID, link, adapter, external } of prepared) {
+      const { action, event } = operation;
+      if (onlyAction && action !== onlyAction) continue;
+      try {
       if (action === "create") {
         const external = await adapter.pushCreate(
           link.userID,
@@ -434,11 +472,6 @@ export async function pushEventToCalendars(
           external.icalUid ?? null,
         );
       } else {
-        const external = await getExternalEvent(
-          link.provider,
-          event.id,
-          link.externalCalendarID,
-        );
         if (!external) continue;
         if (action === "update") {
           const result = await adapter.pushUpdate(
@@ -458,6 +491,7 @@ export async function pushEventToCalendars(
                 etag: result.etag ?? null,
                 icalUid: result.icalUid ?? external.icalUid ?? null,
               },
+              calendarID,
             );
           }
         } else {
@@ -471,6 +505,7 @@ export async function pushEventToCalendars(
         }
       }
     } catch (e) {
+      if (e instanceof EventWriteError) throw e;
       recordExternalSyncFailure("push", link.provider);
       logger.error("sync.push.failed", {
         action,
@@ -482,7 +517,8 @@ export async function pushEventToCalendars(
         error: e,
       });
     }
-  }
+    }
+  };
 }
 
 export async function pushTaskToCalendar(

@@ -2,6 +2,7 @@ import { config, logger } from "@musubi/config";
 import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
 import {
   DEFAULT_CALENDAR_COLOR,
+  EventWriteError,
   type Event,
   nearestMicrosoftCalendarColor,
   type Task,
@@ -18,6 +19,7 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
+import { assertEventWriteEvidence, assertEventWriteResponse, canonicalEventRecurrence } from "../event_write";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TASK_LIST_PREFIX = "musubi-microsoft-task-list:";
@@ -639,7 +641,44 @@ export const microsoftAdapter: CalendarAdapter = {
       : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
   },
 
+  async assertEventWrite(userID, accountId, externalCalendarId, operation) {
+    if (
+      (operation.action === "create" && operation.event.recurrence) ||
+      (operation.action === "update" &&
+        canonicalEventRecurrence(operation.event.recurrence) !==
+          canonicalEventRecurrence(operation.previous?.recurrence))
+    ) {
+      throw new EventWriteError(
+        "recurrence", "unsupported",
+        "Outlook recurrence creation and changes are not supported yet. No changes were saved.",
+      );
+    }
+    const accessToken = await getAccessToken(userID, accountId);
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    const response = await fetch(
+      `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}?$select=canEdit`,
+      { headers },
+    );
+    assertEventWriteResponse(response);
+    const calendar = await response.json();
+    assertEventWriteEvidence(calendar.canEdit, "event-write");
+    if (operation.action !== "create" && operation.external) {
+      const response = await fetch(
+        `${GRAPH}${microsoftEventPath(externalCalendarId, operation.external.externalEventId)}?$select=isOrganizer`,
+        { headers },
+      );
+      if (operation.action === "delete" && [404, 410].includes(response.status)) return;
+      assertEventWriteResponse(response);
+      const current = await response.json();
+      assertEventWriteEvidence(operation.action === "delete" && current.isOrganizer === false ? true : current.isOrganizer, "organizer");
+    }
+  },
+
   async pushCreate(userID, accountId, externalCalendarId, event: Event) {
+    if (event.recurrence) {
+      throw new EventWriteError("recurrence", "unsupported",
+        "Outlook recurrence creation is not supported yet. No changes were saved.");
+    }
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}/events`,
@@ -673,7 +712,9 @@ export const microsoftAdapter: CalendarAdapter = {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(toGraphEvent(event)),
+        // Preflight already refused recurrence changes. Omit recurrence from
+        // an ordinary content PATCH instead of rejecting the whole series.
+        body: JSON.stringify(toGraphEvent({ ...event, recurrence: null })),
       },
     );
     if (!res.ok) throw await graphError(res);

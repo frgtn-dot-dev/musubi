@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { logger } from "@musubi/config";
 import { httpErrorFor } from "./http_error";
+import { EventWriteError } from "@musubi/types";
 
 export function middlewareErrorHandler(
   err: Error,
@@ -28,6 +29,7 @@ export function middlewareErrorHandler(
 
   res.status(statusCode).json({
     error: errorMessage,
+    ...(err instanceof EventWriteError ? { reason: err.reason, capability: err.capability } : {}),
     requestId: req.requestId,
   });
 }
