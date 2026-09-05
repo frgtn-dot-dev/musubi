@@ -10,7 +10,6 @@ async function main() {
     icalToNormalizedTask,
     patchEventIcal,
     patchTaskIcal,
-    toCaldavCalendarObject,
     toCaldavTaskObject,
     toVtodo,
     vtodoToFields,
@@ -211,6 +210,7 @@ async function main() {
     compatibilityData,
     event,
     "series@example.com",
+    { title: event.title, start: event.start, end: event.end },
   );
   assert.match(patchedEventData, /BEGIN:VTIMEZONE/);
   assert.match(patchedEventData, /BEGIN:VALARM/);
@@ -221,20 +221,11 @@ async function main() {
   );
   assert.doesNotMatch(patchedEventData, /^RDATE:/m);
 
-  assert.throws(
-    () => toCaldavCalendarObject("https://dav.example/cal/imported.ics", event),
-    /no ETag/,
-  );
-
-  const calendarObject = toCaldavCalendarObject(
-    "https://dav.example/cal/imported.ics",
-    event,
-    {
-      externalEventId: "https://dav.example/cal/imported.ics",
-      etag: '"remote-v1"',
-      icalUid: imported!.icalUid,
-    },
-  );
+  const calendarObject = {
+    url: "https://dav.example/cal/imported.ics",
+    data: patchEventIcal(data, event, imported!.icalUid!, { title: event.title }),
+    etag: '"remote-v1"',
+  };
   assert.equal(calendarObject.etag, '"remote-v1"');
   assert.match(calendarObject.data, /UID:remote-uid@example\.com/);
 

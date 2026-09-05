@@ -3,6 +3,7 @@ import { logger } from "@musubi/config";
 import {
   deleteExternalEvent,
   deleteExternalTask,
+  diffEventContent,
   getCalendarMembers,
   getEventCalendars,
   getExternalEvent,
@@ -42,6 +43,7 @@ import {
   ProviderAuthError,
 } from "./errors";
 import { recordExternalSyncFailure } from "../metrics";
+import { ProviderEventWriteError, requireEventPatch } from "./event_write";
 import { type ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
 
 // provider -> adapter. Register new providers here.
@@ -418,6 +420,27 @@ export async function pushEventToCalendars(
 
 export type CalendarEventWrite = Omit<EventWriteOperation, "external"> & { calendarIDs: string[] };
 
+export type EventDeliveryReceipt = {
+  action: EventWriteOperation["action"];
+  eventID: string;
+  calendarID: string;
+  provider: string;
+  accountID: string;
+  externalCalendarID: string;
+  externalEventID?: string;
+  status: "not-attempted" | "completed" | "not-needed" | "conflict" | "not-written" | "unconfirmed";
+};
+
+/** Request-scoped delivery only. Handler must add localCommitted/current revision;
+ * these receipts are neither a durable outbox nor proof of multi-target atomicity.
+ */
+export class EventDeliveryError extends Error {
+  constructor(readonly receipts: EventDeliveryReceipt[], readonly failure: Error) {
+    super("Event provider delivery did not complete.");
+    this.name = "EventDeliveryError";
+  }
+}
+
 /** Validate the ENTIRE operation before returning a delivery function. Handlers
  * call this before touching event/link rows, including before removed-copy deletes.
  * It is deliberately request-scoped, not a reservation or an outbox.
@@ -429,8 +452,15 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
     link: NonNullable<Awaited<ReturnType<typeof getExternalLinkForCalendar>>>;
     adapter: CalendarAdapter;
     external: Awaited<ReturnType<typeof getExternalEvent>> | null;
+    receipt: EventDeliveryReceipt;
   }> = [];
-  for (const operation of writes) {
+  for (const write of writes) {
+    // Legacy handlers provide a server-read previous snapshot. This narrows
+    // payloads, but is NOT local CAS. Next-stage CAS supplies its actual patch.
+    const operation = structuredClone(write);
+    if (operation.action === "update" && operation.patch === undefined && operation.previous) {
+      operation.patch = diffEventContent(operation.previous, operation.event);
+    }
     for (const calendarID of new Set(operation.calendarIDs)) {
       const link = await getExternalLinkForCalendar(calendarID);
       if (!link) continue;
@@ -440,21 +470,31 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
       const external = operation.action === "create" ? null : await getExternalEvent(
         link.provider, operation.event.id, link.externalCalendarID, calendarID,
       );
+      if (operation.action === "update" && external) requireEventPatch(operation.patch);
       try {
         await adapter.assertEventWrite(link.userID, link.accountID, link.externalCalendarID, {
           ...operation, external: external ?? undefined,
         });
       } catch (error) {
-        if (error instanceof EventWriteError || error instanceof ProviderAuthError) throw error;
+        if (error instanceof EventWriteError || error instanceof ProviderAuthError || error instanceof ProviderEventWriteError) throw error;
         throw new EventWriteError("event-write", "unknown");
       }
-      prepared.push({ operation, calendarID, link, adapter, external });
+      prepared.push({ operation, calendarID, link, adapter, external, receipt: {
+        action: operation.action, eventID: operation.event.id, calendarID,
+        provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID,
+        externalEventID: external?.externalEventId, status: "not-attempted",
+      } });
     }
   }
+  let failure: EventDeliveryError | undefined;
   return async (onlyAction?: EventWriteOperation["action"]) => {
-    for (const { operation, calendarID, link, adapter, external } of prepared) {
+    if (failure) throw failure;
+    for (const { operation, calendarID, link, adapter, external, receipt } of prepared) {
       const { action, event } = operation;
       if (onlyAction && action !== onlyAction) continue;
+      // A closure is single-attempt; calling it again cannot retry a conflict
+      // or re-send completed creates/deletes. Reconciliation is a new request.
+      if (receipt.status !== "not-attempted") continue;
       try {
         if (action === "create") {
           const external = await adapter.pushCreate(
@@ -463,6 +503,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             link.externalCalendarID,
             event,
           );
+          receipt.externalEventID = external.externalEventId;
           await importExternalEvent(
             link.provider,
             event.id,
@@ -473,7 +514,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             external.icalUid ?? null,
           );
         } else {
-          if (!external) continue;
+          if (!external) { receipt.status = "not-needed"; continue; }
           if (action === "update") {
             const result = await adapter.pushUpdate(
               link.userID,
@@ -482,6 +523,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
               external.externalEventId,
               event,
               external,
+              operation.patch,
             );
             if (result) {
               await setExternalEventSyncData(
@@ -505,8 +547,11 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             );
           }
         }
+        receipt.status = "completed";
       } catch (e) {
-        if (e instanceof EventWriteError) throw e;
+        receipt.status = e instanceof ProviderEventWriteError
+          ? e.code === "provider-conflict" ? "conflict" : e.outcome
+          : "unconfirmed";
         recordExternalSyncFailure("push", link.provider);
         logger.error("sync.push.failed", {
           action,
@@ -517,8 +562,12 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
           eventId: event.id,
           error: e,
         });
+        failure = new EventDeliveryError(prepared.map(({ receipt }) => ({ ...receipt })),
+          e instanceof Error ? e : new Error("Unknown provider delivery failure"));
+        throw failure;
       }
     }
+    return prepared.map(({ receipt }) => ({ ...receipt }));
   };
 }
 

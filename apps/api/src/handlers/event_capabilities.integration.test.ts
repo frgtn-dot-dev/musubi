@@ -42,6 +42,9 @@ async function main() {
   let addresses: string[] | undefined = ["mailto:owner@example.test"];
   const importedPrivileges: string[] | undefined = ["bind"];
   let remoteCalendarCreates = 0;
+  const davEtags = new Map<string, string>();
+  const googleEtags = new Map<string, string>();
+  let version = 0;
   let davData = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:fixture", "DTSTART:20260101T100000Z", "DTEND:20260101T110000Z", "SUMMARY:Before", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
   const xmlEscape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const fixture = createServer((req, res) => {
@@ -67,16 +70,27 @@ async function main() {
           return json({ id: `imported-${remoteCalendarCreates}` }, 201);
         }
         writes.push({ path, method, auth: req.headers.authorization, body });
-        if (method === "PUT" && path.startsWith("/dav/")) davData = body;
-        if (method === "DELETE") { res.writeHead(204); return res.end(); }
-        if (path.startsWith("/dav/")) { res.writeHead(201, { etag: '"next"' }); return res.end(); }
-        return json({ id: `created-${randomUUID()}` }, 201);
+        if (method === "PUT" && path.startsWith("/dav/")) {
+          davData = body;
+          davEtags.set(path, `"dav-${++version}"`);
+        }
+        if (method === "DELETE") { davEtags.delete(path); res.writeHead(204); return res.end(); }
+        if (path.startsWith("/dav/")) { res.writeHead(201, { etag: davEtags.get(path)! }); return res.end(); }
+        const id = `created-${randomUUID()}`;
+        const eventPath = method === "POST" ? `${path}/${id}` : path;
+        const etag = `"google-${++version}"`;
+        googleEtags.set(`${req.headers.authorization}:${eventPath}`, etag);
+        return json({ id, etag }, 201);
       }
       reads.push({ path, auth: req.headers.authorization });
       if (path === "/v1.0/me") return json({ mail: "owner@example.test" });
       if (path.includes("/calendarList/")) return json({ accessRole: path.endsWith("/denied") ? "reader" : role });
       if (path.startsWith("/v1.0/me/calendars/") && !path.includes("/events/")) return json({ canEdit });
-      if (path.includes("/events/")) return json(path.startsWith("/v1.0") ? { isOrganizer: organizer } : { organizer: googleGuestDefault ? { email: "host@example.test", displayName: "Host" } : { self: organizer } });
+      if (path.includes("/events/")) return json(path.startsWith("/v1.0") ? { isOrganizer: organizer } : { etag: googleEtags.get(`${req.headers.authorization}:${path}`) ?? '"current"', organizer: googleGuestDefault ? { email: "host@example.test", displayName: "Host" } : { self: organizer } });
+      if (method === "GET" && path.startsWith("/dav/") && path.endsWith(".ics")) {
+        res.writeHead(200, { "content-type": "text/calendar", etag: davEtags.get(path) ?? '"current"' });
+        return res.end(davData);
+      }
       if (method === "REPORT") return xml("/dav/cal/event.ics", `<d:getetag>"current"</d:getetag><c:calendar-data>${xmlEscape(davData)}</c:calendar-data>`);
       if (method === "PROPFIND") {
         if (body.includes("current-user-privilege-set")) {
@@ -182,8 +196,8 @@ async function main() {
     assert.equal((await request("PUT", { ...event, title: "Allowed" })).status, 200);
     const mixed = eventIn([google.id, denied.id]);
     await createEvent(mixed, mixed.calendars);
-    await importExternalEvent("google", mixed.id, google.id, "allowed", "mixed");
-    await importExternalEvent("google", mixed.id, denied.id, "denied", "mixed");
+    await importExternalEvent("google", mixed.id, google.id, "allowed", "mixed", '"current"');
+    await importExternalEvent("google", mixed.id, denied.id, "denied", "mixed", '"current"');
     await refuses(() => request("PUT", { ...mixed, calendars: [denied.id], title: "Must not delete first" }), "denied");
     await refuses(() => request("DELETE", mixed), "denied");
     for (const action of ["link", "fork"]) await refuses(() => request("POST", { calendarID: denied.id }, `/events/${event.id}/${action}`), "denied");
@@ -232,6 +246,7 @@ async function main() {
     assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.externalEventId, homeMapping.externalEventId);
     assert.equal(await getExternalEvent("google", event.id, "allowed", randomUUID()), null, "No remote-ID fallback for an explicit local scope");
     await setExternalEventSyncData("google", event.id, "allowed", { etag: '"home"', icalUid: null }, google.id);
+    googleEtags.set(`Bearer primary-access:/calendar/v3/calendars/allowed/events/${homeMapping.externalEventId}`, '"home"');
     assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.etag, '"sibling"');
     writes.length = 0;
     assert.equal((await request("PUT", { ...event, title: "Scoped identity" })).status, 200);

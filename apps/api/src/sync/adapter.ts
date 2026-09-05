@@ -1,4 +1,5 @@
 import type { Event, Task, TaskStatus } from "@musubi/types";
+import type { EventContentPatch } from "@musubi/db";
 
 // A calendar event reduced to what Musubi stores, provider-agnostic.
 // Adapters translate their own format (Google JSON / Graph JSON / iCal) <-> this.
@@ -58,6 +59,9 @@ export type EventWriteOperation = {
   action: "create" | "update" | "delete";
   event: Event;
   previous?: Event;
+  // Server-computed actual content diff; never a client full snapshot. Missing
+  // is not an empty diff. CAS callers supply the committed transaction's patch.
+  patch?: EventContentPatch;
   external?: ExternalEventRef;
   // Server-only: the handler validated the complete request intent and its ACLs.
   scopeEditValidated?: boolean;
@@ -138,6 +142,7 @@ export type CalendarAdapter = {
     externalEventId: string,
     event: Event,
     ref?: ExternalEventRef,
+    patch?: EventContentPatch,
   ): Promise<{ etag?: string | null; icalUid?: string | null } | void>;
   pushDelete(
     userID: string,

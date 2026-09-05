@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import { EventWriteError, type Event, type Task, type TaskStatus } from "@musubi/types";
 import { logger } from "@musubi/config";
-import { getCaldavAccountById, getCaldavAccountsByUser } from "@musubi/db";
+import { getCaldavAccountById, getCaldavAccountsByUser, type EventContentPatch } from "@musubi/db";
 import type {
   CalendarAdapter,
   CalendarDiscoveryResult,
@@ -16,7 +16,8 @@ import type {
 } from "../adapter";
 import { createCaldavClient, createGuardedCaldavFetch } from "../caldav_client";
 import { decryptSecret } from "../crypto";
-import { assertEventWriteEvidence } from "../event_write";
+import { assertEventWriteEvidence, assertEventWriteResponse, assertAcceptedEventEtag, assertProviderEventMutationResponse, ProviderEventWriteError, requireEventEtag, requireEventPatch, strongEventEtag } from "../event_write";
+import { replaceEventProperties } from "./caldav_event_ical";
 import { caldavAllows, caldavEventPrivileges, caldavOrganizerAddresses } from "../caldav_privileges";
 
 const TASK_STATUS_BY_ICAL: Record<string, TaskStatus> = {
@@ -439,9 +440,9 @@ function preserveTimezones(
   }
 }
 
-function patchCalendarData(
+function patchTaskCalendarData(
   data: string,
-  componentName: "vevent" | "vtodo",
+  componentName: "vtodo",
   uid: string,
   replacement: ICAL.Component,
   propertyNames: string[],
@@ -462,14 +463,6 @@ function patchCalendarData(
   const recurrenceChanged =
     canonicalRecurrence(recurrenceFrom(component)) !==
     canonicalRecurrence(recurrenceFrom(replacement));
-  if (componentName === "vevent" && recurrenceChanged &&
-    calendar.getAllSubcomponents("vevent").some((candidate) =>
-      candidate.getFirstProperty("recurrence-id") &&
-      candidate.getFirstPropertyValue("uid") === uid,
-    )) {
-    throw new EventWriteError("recurrence", "unsupported",
-      "CalDAV recurrence changes with detached exceptions are not supported yet. No changes were saved.");
-  }
   patchProperties(
     component,
     replacement,
@@ -490,21 +483,53 @@ function patchCalendarData(
   return calendar.toString();
 }
 
-export function patchEventIcal(data: string, event: Event, uid: string) {
-  return patchCalendarData(data, "vevent", uid, toVevent(event, uid), [
-    "summary",
-    "description",
-    "location",
-    "dtstart",
-    "dtend",
-    "rrule",
-    "exdate",
-    "rdate",
-  ]);
+function eventMaster(data: string, uid?: string | null) {
+  const calendar = new ICAL.Component(ICAL.parse(data));
+  if (calendar.name !== "vcalendar") throw new ProviderEventWriteError("provider-write-failed");
+  const events = calendar.getAllSubcomponents("vevent");
+  const masters = events.filter((component) => !component.getFirstProperty("recurrence-id") &&
+    (uid == null || component.getFirstPropertyValue("uid") === uid));
+  if (masters.length !== 1 || masters[0].getAllProperties("uid").length !== 1) {
+    throw new ProviderEventWriteError("provider-write-failed");
+  }
+  const master = masters[0];
+  const actualUid = componentString(master, "uid");
+  if (!actualUid) throw new ProviderEventWriteError("provider-write-failed");
+  return { calendar, master, uid: actualUid, index: events.indexOf(master) };
+}
+
+export function patchEventIcal(data: string, event: Event, uid: string, patch?: EventContentPatch) {
+  const diff = requireEventPatch(patch);
+  const { calendar, master, index } = eventMaster(data, uid);
+  const replacement = toVevent({ ...event, ...diff }, uid);
+  const names = new Set<string>();
+  for (const [field, name] of [["title", "summary"], ["description", "description"],
+    ["location", "location"], ["start", "dtstart"], ["end", "dtend"]] as const) {
+    if (diff[field] !== undefined) names.add(name);
+  }
+  if (diff.isAllDay !== undefined) { names.add("dtstart"); names.add("dtend"); }
+  // Materialize the intended end rather than keeping a DURATION that would
+  // implicitly shift the end on a start-only edit (DTEND and DURATION exclude).
+  if ((names.has("dtstart") || names.has("dtend")) && master.hasProperty("duration")) {
+    names.add("dtend"); names.add("duration");
+  }
+  const recurrenceChanged = (diff.recurrence !== undefined || diff.isAllDay !== undefined) &&
+    (canonicalRecurrence(recurrenceFrom(master)) !== canonicalRecurrence(recurrenceFrom(replacement)) ||
+      (diff.isAllDay !== undefined && master.hasProperty("rrule")));
+  if (recurrenceChanged) {
+    if (calendar.getAllSubcomponents("vevent").some((candidate) =>
+      candidate.hasProperty("recurrence-id") && candidate.getFirstPropertyValue("uid") === uid)) {
+      throw new EventWriteError("recurrence", "unsupported",
+        "CalDAV recurrence changes with detached exceptions are not supported yet. No changes were saved.");
+    }
+    for (const name of ["rrule", "exdate", "rdate"]) names.add(name);
+  }
+  preserveTimezones(master, replacement, [...names].filter((name) => name === "dtstart" || name === "dtend"));
+  return replaceEventProperties(data, index, new Map([...names].map((name) => [name, replacement.getAllProperties(name)])));
 }
 
 export function patchTaskIcal(data: string, task: Task, uid: string) {
-  return patchCalendarData(data, "vtodo", uid, toVtodo(task, uid), [
+  return patchTaskCalendarData(data, "vtodo", uid, toVtodo(task, uid), [
     "summary",
     "description",
     "status",
@@ -539,20 +564,6 @@ function toTaskIcal(task: Task, uid = task.id): string {
   return vcal.toString();
 }
 
-export function toCaldavCalendarObject(
-  externalEventId: string,
-  event: Event,
-  ref?: ExternalEventRef,
-) {
-  if (!ref?.etag)
-    throw new Error("CalDAV event has no ETag; refusing an unsafe update");
-  return {
-    url: externalEventId,
-    data: toIcal(event, ref.icalUid ?? event.id),
-    etag: ref.etag,
-  };
-}
-
 export function toCaldavTaskObject(
   externalTaskId: string,
   task: Task,
@@ -567,36 +578,28 @@ export function toCaldavTaskObject(
   };
 }
 
-async function calendarObjectForUpdate(
+async function taskCalendarObjectForUpdate(
   client: Awaited<ReturnType<typeof clientForAccount>>,
   externalCalendarId: string,
   externalObjectId: string,
   ref: { etag?: string | null; icalUid?: string | null } | undefined,
-  value: Event | Task,
-  kind: "event" | "task",
+  value: Task,
 ) {
   if (!ref?.etag)
-    throw new Error(`CalDAV ${kind} has no ETag; refusing an unsafe update`);
+    throw new Error("CalDAV task has no ETag; refusing an unsafe update");
   const [object] = await client.fetchCalendarObjects({
     calendar: { url: externalCalendarId } as DAVCalendar,
     objectUrls: [externalObjectId],
   });
   if (!object?.data)
-    throw new Error(`CalDAV ${kind} resource is missing; refusing an update`);
-  const uid =
-    ref.icalUid ??
-    (kind === "event"
-      ? icalToNormalized(object)?.icalUid
-      : icalToNormalizedTask(object)?.icalUid);
+    throw new Error("CalDAV task resource is missing; refusing an update");
+  const uid = ref.icalUid ?? icalToNormalizedTask(object)?.icalUid;
   if (!uid)
-    throw new Error(`CalDAV ${kind} has no UID; refusing an unsafe update`);
+    throw new Error("CalDAV task has no UID; refusing an unsafe update");
   return {
     calendarObject: {
       url: externalObjectId,
-      data:
-        kind === "event"
-          ? patchEventIcal(object.data, value as Event, uid)
-          : patchTaskIcal(object.data, value as Task, uid),
+      data: patchTaskIcal(object.data, value, uid),
       etag: ref.etag,
     },
     uid,
@@ -769,6 +772,26 @@ async function etagAfterWrite(
   }
 }
 
+/** A complete GET and its own strong ETag, checked against the version already
+ * accepted into the mapping. A newer GET must not silently rebase the edit.
+ */
+async function readEventResource(authorization: string, externalEventId: string, ref?: ExternalEventRef) {
+  const etag = requireEventEtag(ref?.etag);
+  const response = await caldavFetch(externalEventId, {
+    headers: { authorization, accept: "text/calendar", "Cache-Control": "no-cache" },
+  });
+  assertEventWriteResponse(response);
+  assertAcceptedEventEtag(etag, response.headers.get("etag"));
+  if (response.status !== 200 || response.headers.has("content-range")) {
+    throw new ProviderEventWriteError("provider-write-failed");
+  }
+  // UTF-8 decoding must not replace invalid bytes and then PUT lossy text.
+  const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
+  const { master, uid, index } = eventMaster(data, ref?.icalUid);
+  replaceEventProperties(data, index, new Map()); // Validate full physical structure, including DELETE preflight.
+  return { data, etag, master, uid };
+}
+
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
 
@@ -898,25 +921,12 @@ export const caldavAdapter: CalendarAdapter = {
     const privileges = await caldavEventPrivileges(target, authorization);
     assertEventWriteEvidence(caldavAllows(privileges, operation.action), "event-write");
     if (operation.action !== "create" && operation.external) {
-      if (!operation.external.etag) throw new EventWriteError("event-write", "unknown");
       {
-        const client = await clientForAccount(accountId);
-        const [object] = await client.fetchCalendarObjects({
-          calendar: { url: externalCalendarId } as DAVCalendar,
-          objectUrls: [operation.external.externalEventId],
-        });
-        if (!object?.data) throw new EventWriteError("event-write", "unknown");
-        const uid = operation.external.icalUid ?? icalToNormalized(object)?.icalUid;
-        if (!uid) throw new EventWriteError("event-write", "unknown");
-        // Exercise the real preserving patch before any DB or provider mutation.
-        if (operation.action === "update") patchEventIcal(object.data, operation.event, uid);
-        const calendar = new ICAL.Component(ICAL.parse(object.data));
-        const master = calendar.getAllSubcomponents("vevent").find((component) =>
-          !component.getFirstProperty("recurrence-id") && component.getFirstPropertyValue("uid") === uid,
-        );
-        if (!master) throw new EventWriteError("event-write", "unknown");
-        if (operation.action === "update" && !operation.scopeEditValidated &&
-          canonicalRecurrence(recurrenceFrom(master)) !== canonicalRecurrence(recurrenceFrom(toVevent(operation.event, uid)))) {
+        const { data, uid, master } = await readEventResource(authorization, operation.external.externalEventId, operation.external);
+        // Exercise the exact preserving path before any DB or provider mutation.
+        if (operation.action === "update") patchEventIcal(data, operation.event, uid, operation.patch);
+        if (operation.action === "update" && (operation.patch?.recurrence !== undefined || operation.patch?.isAllDay !== undefined) && !operation.scopeEditValidated &&
+          canonicalRecurrence(recurrenceFrom(master)) !== canonicalRecurrence(recurrenceFrom(toVevent({ ...operation.event, ...requireEventPatch(operation.patch) }, uid)))) {
           // A legacy recurrence PUT may be the first half of a split. Without a
           // complete intent, require the potential create right before changing it.
           const collectionPrivileges = await caldavEventPrivileges(externalCalendarId, authorization);
@@ -944,19 +954,16 @@ export const caldavAdapter: CalendarAdapter = {
       filename,
       iCalString: toIcal(event),
     });
-    if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
+    assertProviderEventMutationResponse(res);
     const base = externalCalendarId.endsWith("/")
       ? externalCalendarId
       : `${externalCalendarId}/`;
     const externalEventId = `${base}${filename}`;
     return {
       externalEventId,
-      etag: await etagAfterWrite(
-        client,
-        externalCalendarId,
-        externalEventId,
-        res,
-      ),
+      // RFC 4791 §5.3.4: transformed PUT cannot return a strong ETag. A
+      // follow-up GET may include unseen edits; sync must accept its content.
+      etag: strongEventEtag(res.headers.get("etag")),
       icalUid: event.id,
     };
   },
@@ -964,31 +971,25 @@ export const caldavAdapter: CalendarAdapter = {
   async pushUpdate(
     _userID,
     accountId,
-    externalCalendarId,
+    _externalCalendarId,
     externalEventId,
     event: Event,
     ref,
+    patch,
   ) {
-    const client = await clientForAccount(accountId);
-    const { calendarObject, uid: icalUid } = await calendarObjectForUpdate(
-      client,
-      externalCalendarId,
-      externalEventId,
-      ref,
-      event,
-      "event",
-    );
-    const res = await client.updateCalendarObject({ calendarObject });
-    if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
-    return {
-      etag: await etagAfterWrite(
-        client,
-        externalCalendarId,
-        externalEventId,
-        res,
-      ),
-      icalUid,
-    };
+    requireEventPatch(patch);
+    requireEventEtag(ref?.etag);
+    const authorization = await basicAuthForAccount(accountId);
+    const current = await readEventResource(authorization, externalEventId, ref);
+    const data = patchEventIcal(current.data, event, current.uid, patch);
+    if (data === current.data) return; // Known no-op; retain accepted validator.
+    const res = await caldavFetch(externalEventId, {
+      method: "PUT",
+      headers: { authorization, "Content-Type": "text/calendar; charset=utf-8", "If-Match": current.etag },
+      body: data,
+    });
+    assertProviderEventMutationResponse(res);
+    return { etag: strongEventEtag(res.headers.get("etag")), icalUid: current.uid };
   },
 
   async pushDelete(
@@ -998,14 +999,12 @@ export const caldavAdapter: CalendarAdapter = {
     externalEventId,
     ref,
   ) {
-    if (!ref?.etag)
-      throw new Error("CalDAV event has no ETag; refusing an unsafe delete");
-    const client = await clientForAccount(accountId);
-    const res = await client.deleteCalendarObject({
-      calendarObject: { url: externalEventId, etag: ref.etag },
+    const etag = requireEventEtag(ref?.etag);
+    const authorization = await basicAuthForAccount(accountId);
+    const res = await caldavFetch(externalEventId, {
+      method: "DELETE", headers: { authorization, "If-Match": etag },
     });
-    if (!res.ok && res.status !== 404)
-      throw new Error(`CalDAV ${res.status} ${res.statusText}`);
+    if (res.status !== 404) assertProviderEventMutationResponse(res);
   },
 
   async pushTaskCreate(_userID, accountId, externalCalendarId, task: Task) {
@@ -1042,13 +1041,12 @@ export const caldavAdapter: CalendarAdapter = {
     ref,
   ) {
     const client = await clientForAccount(accountId);
-    const { calendarObject, uid: icalUid } = await calendarObjectForUpdate(
+    const { calendarObject, uid: icalUid } = await taskCalendarObjectForUpdate(
       client,
       externalCalendarId,
       externalTaskId,
       ref,
       task,
-      "task",
     );
     const res = await client.updateCalendarObject({ calendarObject });
     if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
