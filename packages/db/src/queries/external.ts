@@ -17,6 +17,7 @@ import {
 } from "..";
 import { hasProviderSyncScopes } from "./oauth";
 import { type DbTransaction, removeCalendarInTransaction } from "./calendars";
+import { diffEventContent, type EventContentPatch } from "./events";
 
 // Column values written to the `events` row for a synced event.
 type EventValues = {
@@ -298,8 +299,8 @@ export async function clearCalendarEvents(calendarID: string) {
   // Keep links/mappings so authoritative upserts revive the SAME local ID.
   await db
     .update(events)
-    .set({ deletedAt: new Date() })
-    .where(eq(events.originCalendarID, calendarID));
+    .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
+    .where(and(eq(events.originCalendarID, calendarID), isNull(events.deletedAt)));
 }
 
 async function linkEventToCalendarsInTransaction(
@@ -379,6 +380,68 @@ export async function unlinkEventFromCalendars(
   await db.transaction(async (tx) => {
     await touchEvent(tx, eventID);
     await unlinkEventFromCalendarsInTransaction(tx, eventID, calendarIDs);
+  });
+}
+
+export type EventRevisionMutationResult =
+  | { status: "not_found" }
+  | { status: "conflict"; current: typeof events.$inferSelect & { calendars: string[] } }
+  | {
+      status: "saved";
+      changed: boolean;
+      previous: typeof events.$inferSelect & { calendars: string[] };
+      event: typeof events.$inferSelect & { calendars: string[] };
+      patch: EventContentPatch;
+      addedCalendarIDs: string[];
+      removedCalendarIDs: string[];
+    };
+
+/** Event-before-link lock order matches inbound reconciliation. The revision
+ * check, actual diff and every event/link/mapping write share this transaction.
+ * Callers authorize/preflight first and deliver only after a saved result.
+ */
+export async function patchEventAndCalendarLinks(
+  eventID: string,
+  expectedRevision: number,
+  input: EventContentPatch & { calendars?: string[] },
+  tombstoneIfOrphaned = false,
+): Promise<EventRevisionMutationResult> {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    throw new TypeError("A positive expected event revision is required");
+  }
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select().from(events)
+      .where(eq(events.id, eventID)).for("update");
+    if (!current) return { status: "not_found" };
+    const links = await tx.select({ id: calendarEvents.calendarID }).from(calendarEvents)
+      .where(eq(calendarEvents.eventID, eventID));
+    const existing = links.map((link) => link.id);
+    const previous = { ...current, calendars: existing };
+    // Even a stale patch that looks empty against newer content is a conflict.
+    if (current.revision !== expectedRevision || current.deletedAt !== null) {
+      return { status: "conflict", current: previous };
+    }
+    const incoming = input.calendars === undefined ? existing : [...new Set(input.calendars)];
+    const addedCalendarIDs = incoming.filter((id) => !existing.includes(id));
+    const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
+    const patch = diffEventContent(current, input);
+    const deletedAt = tombstoneIfOrphaned && incoming.length === 0 ? new Date() : null;
+    const changed = Object.keys(patch).length > 0 || addedCalendarIDs.length > 0 ||
+      removedCalendarIDs.length > 0 || deletedAt !== null;
+    if (!changed) return {
+      status: "saved", changed, previous, event: previous, patch,
+      addedCalendarIDs, removedCalendarIDs,
+    };
+    const [updated] = await tx.update(events).set({
+      ...patch, deletedAt, revision: sql`${events.revision} + 1`,
+    }).where(and(eq(events.id, eventID), eq(events.revision, expectedRevision))).returning();
+    if (!updated) throw new Error("Locked event revision changed unexpectedly");
+    await unlinkEventFromCalendarsInTransaction(tx, eventID, removedCalendarIDs);
+    await linkEventToCalendarsInTransaction(tx, eventID, addedCalendarIDs);
+    return {
+      status: "saved", changed, previous, event: { ...updated, calendars: incoming },
+      patch, addedCalendarIDs, removedCalendarIDs,
+    };
   });
 }
 
@@ -520,15 +583,21 @@ export async function upsertExternalEvent(
         }
         return false;
       }
-      // Only the authoritative mirror can change or revive shared content.
-      await tx
-        .update(events)
-        .set({ ...values, deletedAt: null })
-        .where(eq(events.id, map.event.id));
+      // Provider version changes are not necessarily content changes. Persist
+      // the accepted validator without waking delta readers for identical polls.
+      const patch = diffEventContent(map.event, values);
+      const changed = Object.keys(patch).length > 0 || map.event.deletedAt !== null;
+      if (changed) {
+        await tx
+          .update(events)
+          .set({ ...patch, deletedAt: null, revision: sql`${events.revision} + 1` })
+          .where(eq(events.id, map.event.id));
+      }
       await tx
         .update(externalEvents)
         .set({ etag, icalUid: icalUid ?? map.icalUid })
         .where(eq(externalEvents.id, map.id));
+      return changed;
     } else {
       const [ev] = await tx
         .insert(events)
@@ -581,7 +650,9 @@ export async function deleteExternalEvent(
       await unlinkEventFromCalendarsInTransaction(tx, mapped.event.id, [
         calendarID,
       ]);
-      await touchEvent(tx, mapped.event.id);
+      await tx.update(events)
+        .set({ revision: sql`${events.revision} + 1` })
+        .where(eq(events.id, mapped.event.id));
       unlinkedEventID = mapped.event.id;
       return true;
     }
@@ -589,7 +660,7 @@ export async function deleteExternalEvent(
     // Retain authoritative mappings/links for tombstone deltas and revival.
     await tx
       .update(events)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
       .where(eq(events.id, mapped.event.id));
     return true;
   });

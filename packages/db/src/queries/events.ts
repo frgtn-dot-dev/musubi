@@ -11,6 +11,32 @@ import {
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+export const EVENT_CONTENT_FIELDS = [
+	"title", "color", "start", "end", "isAllDay", "description", "location",
+	"isCanceled", "hasAttendees", "organizer", "recurrence", "url",
+] as const;
+export type EventContentPatch = Partial<Pick<NewEvent, typeof EVENT_CONTENT_FIELDS[number]>>;
+
+/** Only modeled, explicitly supplied changes. Undefined is omission; null clears.
+ * Dates compare by instant, recurrence lines by set, not transport spelling.
+ */
+export function diffEventContent(current: EventContentPatch, incoming: EventContentPatch): EventContentPatch {
+	const diff: EventContentPatch = {};
+	const comparable = (key: typeof EVENT_CONTENT_FIELDS[number], value: unknown) => {
+		if (value instanceof Date) return value.getTime();
+		if (key === "recurrence") return typeof value === "string" && value
+			? [...new Set(value.split("\n").filter(Boolean))].sort().join("\n") : null;
+		return value ?? null;
+	};
+	for (const key of EVENT_CONTENT_FIELDS) {
+		const value = incoming[key];
+		if (value !== undefined && comparable(key, current[key]) !== comparable(key, value)) {
+			Object.assign(diff, { [key]: value });
+		}
+	}
+	return diff;
+}
+
 export async function createEventInTransaction(
 	tx: Transaction,
 	event: NewEvent,
@@ -22,6 +48,7 @@ export async function createEventInTransaction(
 		.insert(events)
 		.values({
 			...event,
+			revision: 1, // New identity never inherits a draft/source revision.
 			originCalendarID: event.originCalendarID ?? calendars[0],
 		})
 		.onConflictDoNothing()

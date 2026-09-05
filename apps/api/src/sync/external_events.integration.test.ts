@@ -303,10 +303,11 @@ async function checkDeletion(f: Fixture, sweep: boolean) {
   assert.equal(await remove(f.copy), 1);
   const after = await getEvent(id);
   assert.deepEqual(
-    { ...after, updatedAt: before?.updatedAt },
+    { ...after, updatedAt: before?.updatedAt, revision: before?.revision },
     before,
     "Deleting a derived copy changes links, not shared content or deletedAt",
   );
+  assert.equal(after.revision, before.revision + 1, "Membership changes invalidate stale event drafts");
   assert.deepEqual(
     (await getEventCalendars(id)).sort(),
     [f.home, f.sibling].sort(),
