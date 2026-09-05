@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K03 implementovány, lokálně ověřeny a převzaty (2026-09-05). K04 implementován a lokálně ověřen; čeká na nezávislé review a převzetí nadřazenou relací. K05–K15 čekají.
+Stav: K01–K04 implementovány, lokálně ověřeny a převzaty (2026-09-05). K05–K15 čekají.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K03 jsou `completed`; K04 zůstává `pending` do nezávislého review a převzetí, přestože implementace a lokální ověření proběhly; K05–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K04 jsou `completed`; K05–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -95,9 +95,11 @@ Do K12 blokovat známé destruktivní CalDAV změny detached výjimek a nepodpor
 
 **Test/hotovo:** zakázaná operace nezmění DB, neodešle žádný provider write a vrátí srozumitelný důvod i při přímém API volání. Změna oprávnění mezi formulářem a uložením se znovu kontroluje.
 
-**Lokální evidence K04 (2026-09-05, čeká na review):** řezy `edead87` (API/adaptéry/kontrakt) a `c779f8d` (klienti), následné doplnění regresí a evidence. `event_capabilities.integration.test.ts` používá skutečné autentizované HTTP handlery, adaptéry proti HTTP fixtures a disposable PostgreSQL 18: odmítnutí create/update/delete/link/unlink/fork, pozdější odmítnutý cíl, změna práv, organizer/copy role, DAV bind/write-content/unbind/unknown, zachování detached komponent a lokálně scoped mapping/ETag. Je zapojen do `pnpm test:db`. Prošly celé `pnpm test:db` (včetně K01–K03), `pnpm test`, `pnpm typecheck`, `pnpm check:contracts`, web lint; Chromium 9 scénářů včetně tří důvodů odmítnutí při 1280/390 px, klávesnice, zachování draftu a návratu focusu. Nativní callback testy propojují skutečný detail/formulář, store a API transport; bez nového rendereru či UI vzoru. Logy: `/tmp/musubi-k04-logs/`.
+**Lokální evidence K04 (2026-09-05):** řezy `edead87` (API/adaptéry/kontrakt) a `c779f8d` (klienti), následné doplnění regresí a evidence. `event_capabilities.integration.test.ts` používá skutečné autentizované HTTP handlery, adaptéry proti HTTP fixtures a disposable PostgreSQL 18: odmítnutí create/update/delete/link/unlink/fork, pozdější odmítnutý cíl, změna práv, organizer/copy role, DAV bind/write-content/unbind/unknown, zachování detached komponent a lokálně scoped mapping/ETag. Je zapojen do `pnpm test:db`. Prošly celé `pnpm test:db` (včetně K01–K03), `pnpm test`, `pnpm typecheck`, `pnpm check:contracts`, web lint; Chromium 9 scénářů včetně tří důvodů odmítnutí při 1280/390 px, klávesnice, zachování draftu a návratu focusu. Nativní callback testy propojují skutečný detail/formulář, store a API transport; bez nového rendereru či UI vzoru. Logy: `/tmp/musubi-k04-logs/`.
 
 Doplňující audit zachytil mezeru mezi calendar ACL a OAuth grantem: Google/Graph nyní po možném refreshi čtou aktuální uložený grant přes stávající `hasProviderSyncScopes/CALENDAR_SCOPE`. Chybějící evidence je `unknown`, prázdný či nedostatečný grant `denied`; Tasks se nevyžadují. Regrese pro oba providery ověřují owner ACL + read-only/missing grant, refresh-time narrowing, import bez předčasného CREATE kalendáře a zachování `invalid_grant → reconnect_required`. Po opravě znovu prošly celé DB/unit/typecheck/contracts/web-lint gates; logy mají prefix `grant-final-`.
+
+**Revize a finální převzetí (2026-09-05):** nezávislá revize na `ef17b19` našla P1 (legacy CalDAV split bez bind mohl částečně změnit sérii) a P2 (duplicitní fixture ID obcházelo skutečné mazání Google guest copy). Opravy `1361ac3` a `d06a8dd` doplnily skutečné mapping/GET/DELETE assertions a předběžnou kontrolu bind s bezpečným update-only intentem. Rodič samostatně prošel oba opravné diffy, autorizační cestu a regresní důkazy; nálezy jsou uzavřeny. Finální `pnpm test:db`, `pnpm test` (88 native / 351 web), typecheck, contracts a web lint prošly; Chromium 10 scénářů prošlo na nezměněném finálním webovém řezu. LSP potvrdilo všech 30 změněných TS/TSX souborů bez chyb, závěrečné lens diagnostics bez blokujících chyb. Logy mají prefix `review-` v `/tmp/musubi-k04-logs/`. Pět zděděných nestageovaných úprav je beze změny, vlastní testovací DB odstraněna; žádný push ani živá providerová certifikace.
 
 **Schválená rozhodnutí a omezení K04:**
 
@@ -114,7 +116,7 @@ Doplňující audit zachytil mezeru mezi calendar ACL a OAuth grantem: Google/Gr
 - Timed event používá samostatné datum konce ve validaci i serializaci. Title-only edit zachová noc přes půlnoc i více dní.
 - Inline scoped editor se inicializuje vybraným výskytem; explicitní editor celé série zůstane master-based. Název na třetím výskytu nesmí posunout sérii.
 - Native `GlobalEventModals` vrací výsledek `applySeriesEdit`; Cancel zachová draft a nespustí následnou změnu reminders.
-- Native delete čeká na výsledek, zachová detail při chybě a spustí reminder reconciliation až po úspěchu. **Tento konkrétní podbod implementován a lokálně ověřen v K04 se souhlasem vlastníka; čeká na jeho review. K05 jako celek zůstává pending.**
+- Native delete čeká na výsledek, zachová detail při chybě a spustí reminder reconciliation až po úspěchu. **Tento konkrétní podbod implementován, ověřen a převzat v K04 se souhlasem vlastníka. K05 jako celek zůstává pending.**
 
 **Místa:** web `event-form.ts`, `EventEditorForm`, `EventDetailsPopover`; native `GlobalEventModals`, `EventDetailModal`, `AddEventModal`.
 
@@ -324,6 +326,6 @@ Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestá
 
 ## Další konkrétní práce
 
-K03 je převzat. **K04–K15 zůstávají pending**; další je předběžná validace schopností a read-only operací v K04.
+K04 je převzat. **K05–K15 zůstávají pending**; další jsou zbývající tři K05 opravy datumů a draftu. Čekání nativního delete na výsledek již řeší K04.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.
