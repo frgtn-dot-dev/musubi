@@ -1,3 +1,4 @@
+import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logger } from "@musubi/config";
 import {
@@ -16,7 +17,7 @@ import {
   type NewTask,
 } from "..";
 import { hasProviderSyncScopes } from "./oauth";
-import { type DbTransaction, removeCalendarInTransaction } from "./calendars";
+import { type DbTransaction, removeCalendarInTransaction, lockCalendarRemovalEvents } from "./calendars";
 import {
   createEventInTransaction,
   diffEventContent, type EventContentPatch,
@@ -96,6 +97,7 @@ export async function importExternalCalendar(
   role: string = "owner", // "viewer" for provider-side read-only calendars (holidays, …)
 ) {
   return db.transaction(async (tx) => {
+    await lockUserLifecycle(tx, [userID], "shared");
     const [created] = await tx
       .insert(calendars)
       .values({ creatorID: userID, name: cal.name, color: cal.color })
@@ -148,6 +150,7 @@ export async function disableExternalCalendar(
   calendarID: string,
 ) {
   return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [calendarID], "exclusive");
     const [row] = await tx
       .update(externalCalendars)
       .set({ disabled: true, calendarID: null, cursor: null })
@@ -185,6 +188,8 @@ export async function removeExternalAccountData(
         ),
       );
 
+    await lockCalendarLifecycle(tx, links.map((link) => link.calendarID), "exclusive");
+    await lockCalendarRemovalEvents(tx, links.map((link) => link.calendarID));
     for (const link of links) {
       await removeCalendarInTransaction(tx, link.calendarID);
     }
@@ -337,6 +342,7 @@ async function reconcileEventLinks(
   tombstone: boolean,
 ) {
   return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, add, "shared");
     const [row] = await tx
       .select()
       .from(events)
@@ -436,15 +442,16 @@ export async function patchEventAndCalendarLinks(
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
     throw new TypeError("A positive expected event revision is required");
   }
-  return db.transaction((tx) =>
-    patchEventAndCalendarLinksInTransaction(
+  return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, input.calendars ?? [], "shared");
+    return patchEventAndCalendarLinksInTransaction(
       tx,
       eventID,
       expectedRevision,
       input,
       tombstoneIfOrphaned,
-    ),
-  );
+    );
+  });
 }
 
 async function patchEventAndCalendarLinksInTransaction(
@@ -526,6 +533,7 @@ export async function forkEventAtRevision(
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
     throw new TypeError("A positive expected event revision is required");
   return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [...calendarIDs, ...(event.originCalendarID ? [event.originCalendarID] : [])], "shared");
     const checked = await patchEventAndCalendarLinksInTransaction(
       tx,
       sourceID,
@@ -597,6 +605,7 @@ export async function upsertExternalEvent(
   icalUid: string | null = null,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
     const map = await mappedEventForUpdate(
       tx,
       provider,
@@ -690,9 +699,9 @@ export async function deleteExternalEvent(
   provider: string,
   calendarID: string,
   externalEventID: string,
-  onUnlink?: (eventID: string) => void,
+  onUnlink?: (eventID: string, revision: number) => void,
 ): Promise<boolean> {
-  let unlinkedEventID: string | undefined;
+  let unlinked: { id: string; revision: number } | undefined;
   const changed = await db.transaction(async (tx) => {
     const mapped = await mappedEventForUpdate(
       tx,
@@ -710,7 +719,7 @@ export async function deleteExternalEvent(
         .update(events)
         .set({ revision: sql`${events.revision} + 1` })
         .where(eq(events.id, mapped.event.id));
-      unlinkedEventID = mapped.event.id;
+      unlinked = { id: mapped.event.id, revision: mapped.event.revision + 1 };
       return true;
     }
     if (mapped.event.deletedAt !== null) return false;
@@ -722,7 +731,7 @@ export async function deleteExternalEvent(
     return true;
   });
   // Emit receipts only after commit, never for rolled-back link changes.
-  if (unlinkedEventID) onUnlink?.(unlinkedEventID);
+  if (unlinked) onUnlink?.(unlinked.id, unlinked.revision);
   return changed;
 }
 
@@ -731,7 +740,7 @@ export async function sweepExternalEvents(
   provider: string,
   calendarID: string,
   seenExternalEventIDs: string[],
-  onUnlink?: (eventID: string) => void,
+  onUnlink?: (eventID: string, revision: number) => void,
 ): Promise<number> {
   const mappings = await db
     .select({

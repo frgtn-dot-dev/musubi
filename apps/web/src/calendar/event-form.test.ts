@@ -189,3 +189,22 @@ describe("timed end date validation", () => {
     expect(validateEventForm({ ...defaultEventFormValues("calendar-1", "2026-07-26", "23:00"), title: "Night", endDate: endDate!, endTime: endTime! })).toBe(error);
   });
 });
+
+describe("K06 untouched nullable text", () => {
+  for (const text of ["  preserved text\n", "", "   "]) {
+    it(`preserves exact unchanged text ${JSON.stringify(text)} in a title-only PATCH`, async () => {
+      const { eventPatchRequest } = await import("@musubi/types");
+      const baseline = {
+        ...createEventFromForm({ ...defaultEventFormValues("calendar-1", "2026-07-26"), title: "Before" },
+          { userId: "user-1", email: "a@example.test" }, "#112233"),
+        revision: 1, description: text, location: text, url: text,
+      };
+      expect(eventPatchRequest(updateEventFromForm(baseline, {
+        ...eventFormValues(baseline), title: "After",
+      })).patch).toEqual({ title: "After" });
+      if (text !== "") expect(eventPatchRequest(updateEventFromForm(baseline, {
+        ...eventFormValues(baseline), description: "", location: "", url: "",
+      })).patch).toEqual({ description: null, location: null, url: null });
+    });
+  }
+});

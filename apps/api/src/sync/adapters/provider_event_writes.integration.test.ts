@@ -21,6 +21,7 @@ import { encryptSecret } from "../crypto";
 import { issueMemberToken } from "../../federation_tokens";
 import { requireAuth } from "../../middleware/require_auth";
 import { middlewareErrorHandler } from "../../middleware/error_handler";
+import { handlerImportCalendar } from "../../handlers/calendars";
 import { handlerUpdateEvent, handlerRemoveEvent } from "../../handlers/events";
 
 // This fixture proves actual adapter/handler HTTP behavior, not provider-side
@@ -78,12 +79,14 @@ async function main() {
   let partialRead = false;
   let invalidUtf8Read = false;
   let beforeEventRead: (() => Promise<void>) | undefined;
+  let beforeMutationResponse: (() => Promise<void>) | undefined;
+  let eventCreatesUntilFailure: number | undefined;
   let deniedWriteAuth: string | undefined;
   const key = (auth: string, path: string) => `${auth}:${path}`;
   const fixture = createServer((req, res) => {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       const path = new URL(req.url!, "http://fixture.test").pathname;
       const method = req.method!;
       const auth = req.headers.authorization ?? "";
@@ -142,7 +145,14 @@ async function main() {
           return res.end();
         }
         if (deniedWriteAuth === auth) return json({}, 412);
-        if (writeStatus !== 200) return json({}, writeStatus);
+        if (writeStatus !== 200) {
+          await beforeMutationResponse?.();
+          return json({}, writeStatus);
+        }
+        if (method === "POST" && path.endsWith("/events") && eventCreatesUntilFailure !== undefined) {
+          if (eventCreatesUntilFailure-- === 0) return json({}, 503);
+        }
+
         if (method === "DELETE") {
           remote.delete(key(auth, path));
           res.writeHead(204);
@@ -159,6 +169,7 @@ async function main() {
           etag, json: { ...stored?.json, ...JSON.parse(body), id },
         });
         if (malformedWrite) { res.writeHead(200, { "content-type": "application/json" }); return res.end("{"); }
+        if (path.endsWith("/events") || path.includes("/events/")) await beforeMutationResponse?.();
         return json({ id, ...(responseEtag === null ? {} : { etag: responseEtag }) });
       }
       return json({ error: `Unexpected ${method} ${path}` }, 500);
@@ -171,6 +182,7 @@ async function main() {
   app.patch("/events", requireAuth, handlerUpdateEvent);
   app.put("/events", requireAuth, handlerUpdateEvent);
   app.delete("/events", requireAuth, handlerRemoveEvent);
+  app.post("/import", requireAuth, express.text({ type: "text/calendar" }), handlerImportCalendar);
   app.use(middlewareErrorHandler);
   const api = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => api.once("listening", resolve));
@@ -1177,6 +1189,75 @@ async function main() {
     assert.ok(!JSON.stringify(receipt).includes("sibling-access"));
     assert.ok(!JSON.stringify(receipt).includes("http-partial"));
     deniedWriteAuth = undefined;
+    // Provider failure, followed by a failed latest read or a concurrent purge.
+    for (const mode of ["read-failure", "purge"] as const) {
+      const faultEvent = eventIn([mirrors[0].id]);
+      await createEvent(faultEvent, faultEvent.calendars);
+      const resource = `fault-${mode}`;
+      remote.set(key("Bearer primary-access", `/calendar/v3/calendars/same-calendar/events/${resource}`), {
+        etag: '"fault-v1"', json: { id: resource, summary: faultEvent.title },
+      });
+      await importExternalEvent("google", faultEvent.id, mirrors[0].id, "same-calendar", resource, '"fault-v1"');
+      const query = db.$client.query.bind(db.$client);
+      beforeMutationResponse = async () => {
+        if (mode === "purge") await db.delete(events).where(eq(events.id, faultEvent.id));
+        else (db.$client as any).query = async (config: any, ...args: any[]) => {
+          if ((typeof config === "string" ? config : config.text).includes('from "events"')) throw new Error("post-provider read unavailable");
+          return (query as any)(config, ...args);
+        };
+      };
+      writeStatus = 412;
+      try {
+        const response = await rawPatch(faultEvent.id, 1, { title: "Committed despite provider failure" });
+        const result = await response.json();
+        assert.equal(response.status, 409);
+        assert.equal(result.localCommitted, true);
+        assert.equal(result.current, undefined);
+        assert.equal(result.committed[0].revision, 2);
+        assert.equal(result.committed[0].title, "Committed despite provider failure");
+        assert.deepEqual(result.delivery, { completed: false, status: "conflict" });
+      } finally { db.$client.query = query; beforeMutationResponse = undefined; writeStatus = 200; }
+    }
+    const ics = (count: number) => ["BEGIN:VCALENDAR", "VERSION:2.0", ...Array.from({ length: count }, (_, n) => [
+      "BEGIN:VEVENT", `UID:import-${n}@fixture.test`, `SUMMARY:Import ${n}`,
+      "DTSTART:20260101T090000Z", "DTEND:20260101T100000Z", "END:VEVENT",
+    ]).flat(), "END:VCALENDAR", ""].join("\r\n");
+    const importRequest = (count: number) => fetch(`${apiOrigin}/import?provider=google&accountId=primary`, {
+      method: "POST", headers: { authorization: `Bearer ${token.raw}`, "content-type": "text/calendar", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: ics(count),
+    });
+    eventCreatesUntilFailure = 1;
+    const importPartial = await importRequest(3);
+    const importReceipt = await importPartial.json();
+    assert.equal(importPartial.status, 502);
+    assert.equal(importReceipt.localCommitted, true);
+    assert.equal(importReceipt.imported, 3);
+    assert.equal(importReceipt.committed.length, 3);
+    assert.deepEqual(importReceipt.delivery, { completed: true, status: "unconfirmed" });
+    assert.ok(!JSON.stringify(importReceipt).includes("primary-access"));
+    eventCreatesUntilFailure = undefined;
+    // Actual provider create acknowledgement is held while local state changes.
+    for (const change of ["update", "unlink"] as const) {
+      let changedID = "";
+      beforeMutationResponse = async () => {
+        const [imported] = await db.select().from(events).where(eq(events.title, "Import 0")).orderBy(events.createdAt);
+        // Select newest import rather than earlier partial-import identities.
+        const rows = await db.select().from(events).where(eq(events.title, "Import 0"));
+        const latest = rows.reduce((a, b) => a.createdAt > b.createdAt ? a : b, imported);
+        changedID = latest.id;
+        const result = await patchEventAndCalendarLinks(latest.id, 1,
+          change === "update" ? { title: "Newer local state" } : { calendars: [] }, change === "unlink");
+        assert.equal(result.status, "saved");
+      };
+      const response = await importRequest(1);
+      const result = await response.json();
+      beforeMutationResponse = undefined;
+      assert.equal(response.status, 502);
+      assert.equal(result.localCommitted, true);
+      assert.equal(result.committed[0].revision, 1);
+      assert.equal((await getEvent(changedID)).revision, 2);
+      assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.eventID, changedID)), [], "delayed create ACK cannot resurrect mapping or bless newer revision");
+      assert.deepEqual(result.delivery, { completed: false, status: "unconfirmed" });
+    }
     // A response validator cannot overwrite an intervening accepted mapping or
     // acknowledge an event revision that no longer equals its local commit.
     assert.equal(await setExternalEventSyncData("google", partialEvent.id, "same-calendar", { etag: '"late"', icalUid: null }, mirrors[0].id, { revision: 1, etag: '"partial-v1"', externalEventID: "http-partial" }), false);

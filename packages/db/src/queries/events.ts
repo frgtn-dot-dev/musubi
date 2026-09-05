@@ -1,3 +1,4 @@
+import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
 import {
@@ -44,6 +45,7 @@ export async function createEventInTransaction(
 	event: NewEvent,
 	calendars: string[],
 ) {
+	// Caller holds the complete lifecycle admission fence before any event lock.
 	// Home calendar = where it's created (first picked). Edit-content is gated by
 	// editEvents on this calendar; the other picked calendars are read-only shares.
 	const [result] = await tx
@@ -71,7 +73,10 @@ export async function createEventInTransaction(
 }
 
 export function createEvent(event: NewEvent, calendars: string[]) {
-	return db.transaction((tx) => createEventInTransaction(tx, event, calendars));
+	return db.transaction(async (tx) => {
+		await lockCalendarLifecycle(tx, [...calendars, ...(event.originCalendarID ? [event.originCalendarID] : [])], "shared");
+		return createEventInTransaction(tx, event, calendars);
+	});
 }
 
 // Who governs editing this event's shared content: its home calendar (+ creator
@@ -97,6 +102,17 @@ export async function getEventCalendars(eventID: string): Promise<string[]> {
 		.from(calendarEvents)
 		.where(eq(calendarEvents.eventID, eventID));
 	return rows.map((r) => r.calendarID);
+}
+
+/** Content and links from one PostgreSQL statement snapshot. */
+export async function getEventSnapshot(id: string) {
+  const row = await db.query.events.findFirst({
+    where: eq(events.id, id),
+    with: { calendarEvents: true },
+  });
+  if (!row) return undefined;
+  const { calendarEvents: links, ...event } = row;
+  return { ...event, calendars: links.map((link) => link.calendarID) };
 }
 
 export async function getEvent(id: string) {

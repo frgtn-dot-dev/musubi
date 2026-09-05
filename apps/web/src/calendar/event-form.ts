@@ -230,7 +230,8 @@ export function updateEventFromForm(
   return editedEvent(event, {
     ...event,
     calendars: values.calendarIds,
-    description: values.description.trim() || null,
+    description: values.description === original.description
+      ? event.description : values.description.trim() || null,
     end:
       values.endDate === original.endDate &&
       values.endTime === original.endTime &&
@@ -239,15 +240,17 @@ export function updateEventFromForm(
         : boundaries.end,
     hasAttendees: values.hasAttendees,
     isAllDay: values.isAllDay,
-    location: values.location.trim() || null,
-    recurrence: values.recurrence || null,
+    location: values.location === original.location
+      ? event.location : values.location.trim() || null,
+    recurrence: values.recurrence === original.recurrence
+      ? event.recurrence : values.recurrence || null,
     start:
       values.date === original.date &&
       values.startTime === original.startTime &&
       values.isAllDay === original.isAllDay
         ? event.start
         : boundaries.start,
-    title: values.title.trim(),
-    url: values.url.trim() || null,
+    title: values.title === original.title ? event.title : values.title.trim(),
+    url: values.url === original.url ? event.url : values.url.trim() || null,
   });
 }

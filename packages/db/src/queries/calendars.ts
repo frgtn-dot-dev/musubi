@@ -1,3 +1,4 @@
+import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "..";
 import {
@@ -16,6 +17,7 @@ export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function createCalendar(calendar: NewCalendar) {
 	return db.transaction(async (tx) => {
+		await lockUserLifecycle(tx, [calendar.creatorID], "shared");
 		const [result] = await tx
 			.insert(calendars)
 			.values(calendar)
@@ -105,12 +107,23 @@ export async function getCalendar(id: string) {
 	return result;
 }
 
+/** Lock the union once before removing multiple calendars; sequential subsets
+ * could invert event-row order across different accounts sharing events. */
+export async function lockCalendarRemovalEvents(tx: DbTransaction, calendarIDs: string[]) {
+  if (!calendarIDs.length) return;
+  await tx.select({ id: events.id }).from(events).where(or(
+    inArray(events.originCalendarID, calendarIDs),
+    sql`${events.id} in (select ${calendarEvents.eventID} from ${calendarEvents} where ${inArray(calendarEvents.calendarID, calendarIDs)})`,
+  )).orderBy(events.id).for("update");
+}
+
 // Internal transaction-aware form used when calendar removal is one step in a
 // larger local invariant (for example disabling an external mirror).
 export async function removeCalendarInTransaction(
 	tx: DbTransaction,
 	calendarID: string,
 ) {
+	// Caller holds exclusive lifecycle fences for the complete removal set.
 	// Lock every affected event BEFORE cascade link/mapping rows. Origin SET NULL
 	// and surviving link removal are real changes even when content is unchanged.
 	const affected = await tx
@@ -172,7 +185,10 @@ export async function removeCalendarInTransaction(
 }
 
 export async function removeCalendar(calendarID: string) {
-	return db.transaction((tx) => removeCalendarInTransaction(tx, calendarID));
+	return db.transaction(async (tx) => {
+		await lockCalendarLifecycle(tx, [calendarID], "exclusive");
+		return removeCalendarInTransaction(tx, calendarID);
+	});
 }
 
 export async function updateCalendar(calendar: NewCalendar) {
@@ -330,6 +346,8 @@ export async function transferCalendarOwnership(
 	targetUserID: string,
 ): Promise<TransferCalendarOwnershipResult> {
 	return db.transaction(async (tx) => {
+    await lockUserLifecycle(tx, [currentOwnerID, targetUserID], "shared");
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
 		// Serialize transfers for this calendar. Without the row lock, two requests
 		// can both observe the same owner and leave multiple memberships as owner.
 		const [calendar] = await tx

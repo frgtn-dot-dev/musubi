@@ -12,6 +12,7 @@ import editorStyles from "~/calendar/components/styles/event-editor.module.css";
 import { toDateKey } from "~/calendar/date-key";
 import {
   applyEventEditorSearch,
+    hasEventEditorContent,
   eventEditorSearchSchema,
 } from "~/calendar/event-editor-search";
 import {
@@ -54,8 +55,7 @@ function EditEventRoute() {
   if (event && event.id !== eventId) setEvent(undefined);
   if (!event && currentEvent) {
     const handedOff = eventEditorBaseline(eventId);
-    const urlDraft =
-      search.title !== undefined || search.startTime !== undefined;
+    const urlDraft = hasEventEditorContent(search);
     setEvent(
       structuredClone(
         handedOff ?? {

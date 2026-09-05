@@ -1,3 +1,4 @@
+import { committedFailure } from "./event_commit";
 import type { Request, Response } from "express";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
@@ -389,8 +390,18 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 		}
 		throw error;
 	}
-	for (const event of importedEvents) await createEvent(event, [created.id]);
-	await deliver();
+	const committed: import("@musubi/types").Event[] = [];
+	try {
+		for (const event of importedEvents) {
+			const saved = await createEvent(event, [created.id]);
+			committed.push({ ...saved, calendars: [created.id] });
+		}
+		await deliver(undefined, new Map(committed.map((event) => [event.id, event.revision!])));
+	} catch (error) {
+		if (!committed.length) throw error;
+		const failure = committedFailure(error, committed);
+		return res.status(failure.status).json({ ...failure.body, calendar: created, imported: committed.length });
+	}
 	res.status(201).json({ ...created, imported: importedEvents.length });
 }
 

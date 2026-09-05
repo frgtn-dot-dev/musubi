@@ -143,25 +143,40 @@ export function useEventMutations(userId: string) {
     void refreshFederated();
   };
 
+  // A receipt cannot undo a refetch/access-loss reconciliation that arrived
+  // while it was in flight, even when no row remains to compare revisions.
+  const captureReceiptGuard = () => {
+    const snapshots = queryClient.getQueriesData({ queryKey: prefix });
+    return () => snapshots.every(([key, data]) => queryClient.getQueryData(key) === data);
+  };
+
   const create = useMutation({
+    onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       createEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input) => reconcileMutationFailure(error, connectionForEvent(connections, input)),
-    onSuccess: (event, input) =>
-      applyWrite(event, connectionForEvent(connections, input)),
+    onError: (error, input, guard) => reconcileMutationFailure(guard?.() ? error : undefined, connectionForEvent(connections, input)),
+    onSuccess: (event, input, guard) => {
+      if (guard?.()) applyWrite(event, connectionForEvent(connections, input));
+      else { void refreshEvents(); void refreshFederated(); }
+    },
   });
   const update = useMutation({
+    onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       updateEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input) => reconcileMutationFailure(error, connectionForEvent(connections, input)),
-    onSuccess: (event, input) =>
-      applyWrite(event, connectionForEvent(connections, input)),
+    onError: (error, input, guard) => reconcileMutationFailure(guard?.() ? error : undefined, connectionForEvent(connections, input)),
+    onSuccess: (event, input, guard) => {
+      if (guard?.()) applyWrite(event, connectionForEvent(connections, input));
+      else { void refreshEvents(); void refreshFederated(); }
+    },
   });
   const remove = useMutation({
+    onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       removeEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input) => reconcileMutationFailure(error, connectionForEvent(connections, input)),
-    onSuccess: (result, event) => {
+    onError: (error, input, guard) => reconcileMutationFailure(guard?.() ? error : undefined, connectionForEvent(connections, input)),
+    onSuccess: (result, event, guard) => {
+      if (!guard?.()) { void refreshEvents(); void refreshFederated(); return; }
       const connectionId = connectionForEvent(connections, event);
       if (connectionId) {
         void refreshFederated();
@@ -172,6 +187,7 @@ export function useEventMutations(userId: string) {
     },
   });
   const link = useMutation({
+    onMutate: captureReceiptGuard,
     mutationFn: ({
       calendarId,
       eventId,
@@ -187,11 +203,15 @@ export function useEventMutations(userId: string) {
         calendarId,
         connectionForCalendar(connections, calendarId),
       ),
-    onError: (error, input) => reconcileMutationFailure(error, connectionForCalendar(connections, input.calendarId)),
-    onSuccess: (event, { calendarId }) =>
-      applyWrite(event, connectionForCalendar(connections, calendarId)),
+    onError: (error, input, guard) => reconcileMutationFailure(
+        guard?.() ? error : undefined, connectionForCalendar(connections, input.calendarId)),
+    onSuccess: (event, { calendarId }, guard) => {
+      if (guard?.()) applyWrite(event, connectionForCalendar(connections, calendarId));
+      else { void refreshEvents(); void refreshFederated(); }
+    },
   });
   const fork = useMutation({
+    onMutate: captureReceiptGuard,
     mutationFn: ({
       calendarId,
       eventId,
@@ -207,9 +227,12 @@ export function useEventMutations(userId: string) {
         calendarId,
         connectionForCalendar(connections, calendarId),
       ),
-    onError: (error, input) => reconcileMutationFailure(error, connectionForCalendar(connections, input.calendarId)),
-    onSuccess: (event, { calendarId }) =>
-      applyWrite(event, connectionForCalendar(connections, calendarId)),
+    onError: (error, input, guard) => reconcileMutationFailure(
+        guard?.() ? error : undefined, connectionForCalendar(connections, input.calendarId)),
+    onSuccess: (event, { calendarId }, guard) => {
+      if (guard?.()) applyWrite(event, connectionForCalendar(connections, calendarId));
+      else { void refreshEvents(); void refreshFederated(); }
+    },
   });
   const attendance = useMutation({
     mutationFn: ({

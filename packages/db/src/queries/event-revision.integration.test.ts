@@ -5,6 +5,7 @@ import {
   calendarEvents, clearCalendarEvents, createCalendar, createEvent, db,
   deleteExternalEvent, events, externalEvents, getEvent, getEventCalendars,
   importExternalEvent, patchEventAndCalendarLinks, upsertExternalEvent, user,
+  removeCalendar, linkEventToCalendars, forkEventAtRevision,
 } from "..";
 
 // Explicit disposable PostgreSQL only; no credentials or provider HTTP calls.
@@ -70,6 +71,93 @@ async function main() {
     assert.equal((await getEvent(event.id)).revision, winner.event.revision + 1);
     assert.deepEqual(await getEventCalendars(event.id), []);
     assert.equal((await patchEventAndCalendarLinks(event.id, winner.event.revision, { title: "revive" })).status, "conflict");
+
+    // Pause actual removal after its affected-event SELECT. New admissions
+    // must wait BEFORE taking the unrelated event's row lock.
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => { resolve = done; });
+      return { promise, resolve };
+    };
+    const waitForAdvisoryWaiter = async () => {
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const result = await db.$client.query("select 1 from pg_locks where locktype = 'advisory' and not granted");
+        if (result.rowCount) return;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      throw new Error("writer did not wait on lifecycle fence");
+    };
+    for (const admission of ["cas", "administrative", "create", "inbound", "fork"] as const) {
+      const destination = await createCalendar({ creatorID: userID, name: admission, color: "#112233" });
+      const source = await createEvent({ id: randomUUID(), creatorID: userID, ...values }, [home.id]);
+      const scanned = deferred(), release = deferred();
+      const pool = db.$client;
+      const connect = pool.connect.bind(pool);
+      let paused = false;
+      (pool as any).connect = async () => {
+        const client = await connect();
+        const query = client.query.bind(client);
+        const releaseClient = client.release.bind(client);
+        (client as any).query = async (config: any, ...args: any[]) => {
+          const text = typeof config === "string" ? config : config.text;
+          const result = await (query as any)(config, ...args);
+          if (!paused && text.includes('in (select') && text.includes('for update')) {
+            paused = true; scanned.resolve(); await release.promise;
+          }
+          return result;
+        };
+        client.release = (...args) => { client.query = query; client.release = releaseClient; releaseClient(...args); };
+        return client;
+      };
+      const removal = removeCalendar(destination.id);
+      await scanned.promise;
+      // Restore pool entry immediately; the held transaction retains its query hook.
+      pool.connect = connect;
+      const newID = randomUUID();
+      const waiting = (admission === "cas" ? patchEventAndCalendarLinks(source.id, 1, { calendars: [home.id, destination.id] })
+        : admission === "administrative" ? linkEventToCalendars(source.id, [destination.id])
+        : admission === "create" ? createEvent({ id: newID, creatorID: userID, ...values }, [destination.id])
+        : admission === "inbound" ? upsertExternalEvent("google", userID, destination.id, "remote", newID, values)
+        : forkEventAtRevision(source.id, 1, { id: newID, creatorID: userID, ...values }, [destination.id]))
+        .then(() => undefined, (error: unknown) => error);
+      try {
+        await waitForAdvisoryWaiter();
+        // No event-row inversion: a content-only writer still completes.
+        assert.equal((await patchEventAndCalendarLinks(source.id, 1, { title: "concurrent content" })).status, "saved");
+      } finally { release.resolve(); }
+      await removal;
+      const outcome = await waiting;
+      // CAS/fork can instead lose their revision check before trying admission.
+      if (!["cas", "fork"].includes(admission)) assert.ok(outcome instanceof Error);
+      assert.deepEqual(await getEventCalendars(source.id), [home.id]);
+      assert.equal((await getEvent(source.id)).revision, 2);
+      assert.equal(await getEvent(newID), undefined);
+    }
+    // Opposite arrival: a completed admission is in the removal's affected set.
+    const admitted = await createCalendar({ creatorID: userID, name: "admitted", color: "#112233" });
+    const survivor = await createEvent({ id: randomUUID(), creatorID: userID, ...values }, [home.id]);
+    const { lockCalendarLifecycle } = await import("./calendar-lifecycle");
+    const ready = deferred(), releaseAdmission = deferred();
+    const admission = db.transaction(async (tx) => {
+      await lockCalendarLifecycle(tx, [admitted.id], "shared");
+      await tx.select().from(events).where(eq(events.id, survivor.id)).for("update");
+      await tx.insert(calendarEvents).values({ eventID: survivor.id, calendarID: admitted.id });
+      await tx.update(events).set({ revision: 2 }).where(eq(events.id, survivor.id));
+      ready.resolve(); await releaseAdmission.promise;
+    });
+    await ready.promise;
+    const removal = removeCalendar(admitted.id);
+    await waitForAdvisoryWaiter();
+    releaseAdmission.resolve(); await admission; await removal;
+    assert.equal((await getEvent(survivor.id)).revision, 3);
+    assert.equal((await patchEventAndCalendarLinks(survivor.id, 2, {})).status, "conflict");
+    assert.deepEqual(await getEventCalendars(survivor.id), [home.id]);
+    // Transaction rollback releases the fence, without a session lock residue.
+    await assert.rejects(db.transaction(async (tx) => {
+      await lockCalendarLifecycle(tx, [home.id], "exclusive");
+      throw new Error("rollback lifecycle");
+    }), /rollback lifecycle/);
+    await createEvent({ id: randomUUID(), creatorID: userID, ...values }, [home.id]);
 
     for (const provider of ["google", "microsoft", "caldav"]) {
       const remoteID = randomUUID();

@@ -7,9 +7,8 @@ import {
   diffEventContent,
   forkEventAtRevision,
   getCalendarMembers,
-  getEvent,
+  getEventSnapshot,
   getEventAttendees,
-  getEventCalendars,
   getEventOrigin,
   getUsersEvents,
   patchEventAndCalendarLinks,
@@ -30,10 +29,9 @@ import {
 } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { prepareEventWrites,
-  EventDeliveryError,
   type CalendarEventWrite,
 } from "../sync/engine";
-import { ProviderEventWriteError } from "../sync/event_write";
+import { committedFailure } from "./event_commit";
 import { assertCanViewEvent } from "../permissions";
 import { assertEventCalendarAccess, assertEventContentAccess, hasEventCalendarAccess,
 } from "../event_permissions";
@@ -50,9 +48,9 @@ import {
 const MAX_EVENT_RANGE_MS = 3 * 366 * 24 * 60 * 60 * 1000;
 
 async function currentEvent(id: string) {
-  const row = await getEvent(id);
+  const row = await getEventSnapshot(id);
   if (!row) throw new NotFoundError("Event not found.");
-  return { ...row, calendars: await getEventCalendars(id) };
+  return row;
 }
 
 function conflict(res: Response, current: Event) {
@@ -87,30 +85,20 @@ async function sendCommitted(
   event: Event,
   result: unknown,
   status = 200,
+  afterCommit: () => Promise<void> = async () => {},
 ) {
   try {
+    await afterCommit();
     await deliver(undefined, event.revision);
   } catch (error) {
-    const failure = error instanceof EventDeliveryError ? error.failure : error;
-    const providerConflict =
-      failure instanceof ProviderEventWriteError &&
-      failure.code === "provider-conflict";
-    const current = await currentEvent(event.id);
-    return res.status(providerConflict ? 409 : 502).json({
-      error:
-        "Saved locally, but remote delivery was not confirmed. Your draft was kept. Refresh and reconcile before any retry.",
-      code: providerConflict
-        ? "provider-conflict"
-        : "event-delivery-unconfirmed",
-      localCommitted: true,
-      current,
-      currentRevision: current.revision,
-      delivery: {
-        completed:
-          error instanceof EventDeliveryError &&
-          error.receipts.some((receipt) => receipt.status === "completed"),
-        status: providerConflict ? "conflict" : "unconfirmed",
-      },
+    const failure = committedFailure(error, [event]);
+    // Reconciliation is optional. Purge or database failure cannot erase commit truth.
+    let current: Event | undefined;
+    try { current = await currentEvent(event.id); } catch { /* retained receipt below */ }
+    return res.status(failure.status).json({
+      ...failure.body,
+      ...(current ? { current,
+      currentRevision: current.revision } : {}),
     });
   }
   return res.status(status).json(result);
@@ -225,8 +213,8 @@ export async function handlerCreateEvent(req: Request, res: Response) {
 
   const result = { ...created, calendars: event.calendars };
 
-  await notifyEvent(event.calendars, "event_created", result);
-  return sendCommitted(res, deliver, result, result, 201);
+  return sendCommitted(res, deliver, result, result, 201, () =>
+    notifyEvent(event.calendars, "event_created", result));
 }
 
 export async function handlerUpdateEvent(req: Request, res: Response) {
@@ -245,6 +233,7 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
 
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
+  return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
   if (saved.changed) {
     await notifyEvent([...saved.previous.calendars, ...saved.event.calendars], "event_updated",
       saved.event,
@@ -252,7 +241,7 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
     await queueEventChange(saved.previous, saved.event, req.user!.id);
     }
 
-    return sendCommitted(res, deliver, saved.event, saved.event);
+  });
 }
 
 export async function handlerRemoveEvent(req: Request, res: Response) {
@@ -301,6 +290,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
     calendars: saved.event.calendars, removed,
     event: saved.event,
   };
+  return sendCommitted(res, deliver, saved.event, result, 200, async () => {
   await notifyEvent(
     existing,
     removed ? "event_removed" : "event_updated",
@@ -308,7 +298,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   );
   if (removed) await dropEventNotifications(request.id);
 
-  return sendCommitted(res, deliver, saved.event, result);
+  });
 }
 
 export async function handlerLinkEvent(req: Request, res: Response) {
@@ -336,8 +326,9 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   });
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
-  if (saved.changed) await notifyEvent(calendars, "event_updated", saved.event);
-  return sendCommitted(res, deliver, saved.event, saved.event);
+  return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
+    if (saved.changed) await notifyEvent(calendars, "event_updated", saved.event);
+  });
   }
 
 export async function handlerForkEvent(req: Request, res: Response) {
@@ -382,10 +373,8 @@ export async function handlerForkEvent(req: Request, res: Response) {
   ]);
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
-  await notifyEvent([calendarID],
-    "event_created", saved.event);
-
-  return sendCommitted(res, deliver, saved.event, saved.event, 201);
+  return sendCommitted(res, deliver, saved.event, saved.event, 201, () =>
+    notifyEvent([calendarID], "event_created", saved.event));
 }
 
 // Attendees: anyone who can view the event sees the list and can answer.

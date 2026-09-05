@@ -170,6 +170,8 @@ export const EventMutationFailureSchema = z.object({
     deletedAt: z.coerce.date().nullish(),
   }).optional(),
   currentRevision: EventRevisionSchema.optional(),
+  // Last committed snapshots are evidence, never confirmed-latest cache authority.
+  committed: z.array(EventSchema.extend({ deletedAt: z.coerce.date().nullish() })).optional(),
 });
 export class EventMutationError extends Error {
   constructor(

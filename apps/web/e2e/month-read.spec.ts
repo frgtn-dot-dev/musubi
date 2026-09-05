@@ -7598,7 +7598,7 @@ for (const editor of ["full", "handoff"] as const) {
   });
 }
 
-for (const code of ["provider-conflict", "401", "426", "network"] as const) {
+for (const code of ["provider-conflict", "committed-fallback", "401", "426", "network"] as const) {
   test(`K06 actual full editor retains multiday draft after ${code}`, async ({ page }) => {
     const item = event("k06-delivery", "Delivery draft", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", "2026-07-10T02:00:00+02:00");
     await mockAuthenticatedReads(page, { ...events, events: [item] });
@@ -7607,11 +7607,13 @@ for (const code of ["provider-conflict", "401", "426", "network"] as const) {
       if (route.request().method() !== "PATCH") return route.fallback();
       requests.push(route.request().postDataJSON());
       if (code === "network") return route.abort("failed");
-      return respond(route, code === "provider-conflict" ? {
+      return respond(route, (code === "provider-conflict" || code === "committed-fallback") ? {
         error: "Saved locally, but remote delivery was not confirmed. Your draft was kept. Refresh and reconcile before any retry.",
-        code, localCommitted: true, current: { ...item, title: "Keep delivery draft", revision: 2 }, currentRevision: 2,
+        code, localCommitted: true, ...(code === "committed-fallback"
+          ? { committed: [{ ...item, title: "Keep delivery draft", revision: 2 }] }
+          : { current: { ...item, title: "Keep delivery draft", revision: 2 }, currentRevision: 2 }),
         delivery: { completed: true, status: "conflict" },
-      } : { error: code === "401" ? "Sign in required" : "ClientUpgradeRequired" }, code === "provider-conflict" ? 409 : Number(code));
+      } : { error: code === "401" ? "Sign in required" : "ClientUpgradeRequired" }, code === "provider-conflict" ? 409 : code === "committed-fallback" ? 502 : Number(code));
     });
     await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/k06-delivery?date=2026-07-08`);
     const title = page.getByRole("textbox", { name: "Event title" });
@@ -7620,11 +7622,35 @@ for (const code of ["provider-conflict", "401", "426", "network"] as const) {
     await expect(page.getByRole("alert")).toBeVisible();
     await expect(title).toHaveValue("Keep delivery draft");
     expect(requests).toEqual([{ id: item.id, expectedRevision: 1, patch: { title: "Keep delivery draft" } }]);
-    if (code === "provider-conflict") {
+    if (code === "provider-conflict" || code === "committed-fallback") {
       await expect(page.getByRole("alert")).toContainText("Saved locally");
       await title.press("Control+Enter");
       await expect.poll(() => requests.length).toBe(2);
       expect(requests[1]).toEqual(requests[0]);
     }
+  });
+}
+
+for (const override of ["description=Restored", "endTime=12%3A30", "recurrence=FREQ%3DDAILY", 'calendarIds=%5B%22personal%22%5D']) {
+  test(`K06 URL-only ${override} cannot borrow freshly read revision`, async ({ page }) => {
+    const item = event("url-only", "Original", "personal", "#b3492f", "2026-07-08T09:00:00+02:00", "2026-07-08T10:00:00+02:00");
+    await mockAuthenticatedReads(page, { ...events, events: [item] });
+    const writes: unknown[] = [];
+    await page.route("**/api/v1/events", (route) => {
+      if (route.request().method() === "PATCH") writes.push(route.request().postDataJSON());
+      return route.fallback();
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/url-only?date=2026-07-08&${override}`);
+    const title = page.getByRole("textbox", { name: "Event title" });
+    await title.fill("Retained restored draft");
+    await title.press("Control+Enter");
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(title).toHaveValue("Retained restored draft");
+    expect(writes).toEqual([]);
+    await page.reload();
+    await title.fill("Still not authorized after reload");
+    await title.press("Control+Enter");
+    await expect(page.getByRole("alert")).toBeVisible();
+    expect(writes).toEqual([]);
   });
 }

@@ -104,6 +104,7 @@ async function main() {
       await checkUnlinkNotifications(fixture, false);
       await checkUnlinkNotifications(fixture, true);
       await checkUnlinkNotifications(fixture, false, true);
+      await checkUnlinkNotifications(fixture, false, false, true);
       await checkMissingOrigin(fixture);
       await checkLegacyReset(fixture);
     }
@@ -409,6 +410,7 @@ async function checkUnlinkNotifications(
   f: Fixture,
   reset: boolean,
   failAfterUnlink = false,
+  relinkDuringNotification = false,
 ) {
   const viewer = `copy-only-${randomUUID()}`;
   const responses: StreamResponse[] = [];
@@ -435,6 +437,22 @@ async function checkUnlinkNotifications(
     assert.ok(link);
     const adapter = getAdapter(f.provider);
     assert.ok(adapter);
+    const unlinkRevision = (await getEvent(id))!.revision + 1;
+    const query = db.$client.query.bind(db.$client);
+    let relinked = false;
+    if (relinkDuringNotification) (db.$client as any).query = async (config: any, ...args: any[]) => {
+      const text = typeof config === "string" ? config : config.text;
+      const result = await (query as any)(config, ...args);
+      if (!relinked && text.includes('from "calendar_members"') && args[0]?.includes(f.home)) {
+        const links = await query('select 1 from calendar_events where event_id = $1 and calendar_id = $2', [id, f.copy]);
+        if (!links.rowCount) {
+          relinked = true;
+          // The membership result above describes the old audience, not this relink.
+          await linkEventToCalendars(id, [f.copy]);
+        }
+      }
+      return result;
+    };
     const sync = syncProvider(
       {
         ...adapter,
@@ -474,10 +492,16 @@ async function checkUnlinkNotifications(
       f.bob,
       { id: link.accountID, label: "Copy" },
     );
-    if (failAfterUnlink) await assert.rejects(sync);
-    else await sync;
+    try {
+      if (failAfterUnlink) await assert.rejects(sync);
+      else await sync;
+    } finally { db.$client.query = query; }
+    if (relinkDuringNotification) {
+      assert.equal(relinked, true);
+      assert.equal((await getEvent(id))!.revision, unlinkRevision + 1);
+    }
     assert.equal((await getEvent(id))?.deletedAt, null);
-    const removal = `data: ${JSON.stringify({ type: "event_removed", payload: { id, revision: (await getEvent(id))?.revision } })}\n\n`;
+    const removal = `data: ${JSON.stringify({ type: "event_removed", payload: { id, revision: unlinkRevision } })}\n\n`;
     assert.ok(
       responses[0].writes.includes(removal),
       "Copy-only viewer must evict the event via the existing SSE frame",
@@ -487,7 +511,7 @@ async function checkUnlinkNotifications(
       "Do not remove an event from a viewer who retains origin access",
     );
     assert.ok(
-      !(await getUsersEvents(viewer)).some((row) => row.event.id === id),
+      (await getUsersEvents(viewer)).some((row) => row.event.id === id) === relinkDuringNotification,
       "Full catch-up no longer includes the removed copy",
     );
     assert.ok(

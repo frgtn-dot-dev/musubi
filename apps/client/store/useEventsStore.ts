@@ -28,9 +28,13 @@ type EventsStore = {
   ) => Promise<void>;
 };
 
+// Request-scoped fence also covers unversioned full access-loss reconciliation.
+let inboundRemovalGeneration = 0;
+
 export const useEventsStore = create<EventsStore>((set, get) => ({
   events: [],
   addEvent: async (event, api) => {
+    const generation = inboundRemovalGeneration;
     const request = event;
     const { scopeEdit: _intent,
       contentPatch: _patch,
@@ -42,10 +46,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     void cacheUpsertEvents([event]);
     try {
       const result = await api.createEvent(request);
-      await acceptServerEvent(result);
+      if (generation === inboundRemovalGeneration) await acceptServerEvent(result);
     } catch (error) {
-      if (error instanceof EventMutationError && error.current) {
-        await acceptMutationFailure(error);
+      if (error instanceof EventMutationError && (error.localCommitted || error.current)) {
+        if (generation === inboundRemovalGeneration) await acceptMutationFailure(error);
         throw error;
       }
       if (get().events.find((e) => e.id === event.id) !== event) throw error;
@@ -66,21 +70,31 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     );
   },
   linkEvent: async (event, calendarID, api) => {
+    const generation = inboundRemovalGeneration;
     try {
-      await acceptServerEvent(await api.linkEvent(event.id, calendarID, requireEventRevision(event)));
-    } catch (error) { await acceptMutationFailure(error); throw error; }
+      const result = await api.linkEvent(event.id, calendarID, requireEventRevision(event));
+      if (generation === inboundRemovalGeneration) await acceptServerEvent(result);
+    } catch (error) {
+      if (generation === inboundRemovalGeneration) await acceptMutationFailure(error); throw error; }
   },
   forkEvent: async (event, calendarID, api) => {
+    const generation = inboundRemovalGeneration;
     try {
-      await acceptServerEvent(await api.forkEvent(event.id, calendarID, requireEventRevision(event)));
-    } catch (error) { await acceptMutationFailure(error); throw error; }
+      const result = await api.forkEvent(event.id, calendarID, requireEventRevision(event));
+      if (generation === inboundRemovalGeneration) await acceptServerEvent(result);
+    } catch (error) {
+      if (generation === inboundRemovalGeneration) await acceptMutationFailure(error); throw error; }
   },
-  loadEvents: (events) => set(() => ({
-    events: events,
-  })),
+  loadEvents: (events) => {
+    inboundRemovalGeneration++;
+    set({
+    events });
+  },
   removeEvent: async (event, api, unlinkCalendarID) => {
+    const generation = inboundRemovalGeneration;
     try {
       const result = await api.removeEvent(event, unlinkCalendarID);
+      if (generation !== inboundRemovalGeneration) return;
       const current = get().events.find((e) => e.id === event.id);
       if ((current?.revision ?? 0) > (result.revision ?? event.revision ?? 0))
         return;
@@ -98,11 +112,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
           },
         );
     } catch (error) {
-      await acceptMutationFailure(error);
+      if (generation === inboundRemovalGeneration) await acceptMutationFailure(error);
       throw error;
     }
   },
   localRemoveEvent: async (event) => {
+    inboundRemovalGeneration++;
     const current = get().events.find((e) => e.id === event.id);
     if ((current?.revision ?? 0) > (event.revision ?? 0)) return;
     set((state) => ({ events: [...state.events.filter((e) => e.id !== event.id)],
@@ -113,24 +128,25 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   },
   updateEvent: async (event, api) => {
     requireEventRevision(event);
+    const generation = inboundRemovalGeneration;
     const request = event;
     const { scopeEdit: _intent,
       contentPatch: _patch, ...snapshot } = event as EventWriteRequest;
     event = snapshot; // keep intent only on the API request
     const previous = get().events.find((e) => e.id === event.id);
     // A known newer inbound row is never replaced by this older draft.
-    if ((previous?.revision ?? 0) <= (event.revision ?? 0)) {
+    if (previous && (previous.revision ?? 0) <= (event.revision ?? 0)) {
         set((state) => ({ events: [...state.events.filter((e) => e.id !== event.id), event],
       }));
       void cacheUpsertEvents([event]);
     }
     try {
       const result = await api.updateEvent(request);
-      await acceptServerEvent(result);
+      if (generation === inboundRemovalGeneration) await acceptServerEvent(result);
       return result;
     } catch (error) {
-      if (error instanceof EventMutationError && error.current) {
-        await acceptMutationFailure(error);
+      if (error instanceof EventMutationError && (error.localCommitted || error.current)) {
+        if (generation === inboundRemovalGeneration) await acceptMutationFailure(error);
         throw error;
       }
       if (previous && get().events.find((e) => e.id === event.id) === event) {
@@ -160,6 +176,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   // every event, drop events that lived only there — memory AND cache, so they
   // don't linger until sign-out.
   localRemoveCalendarEvents: async (calendarID) => {
+    inboundRemovalGeneration++;
     const kept: Event[] = [], dropped: string[] = [], changed: Event[] = [];
     for (const e of get().events) {
       if (!e.calendars?.includes(calendarID)) { kept.push(e); continue; }

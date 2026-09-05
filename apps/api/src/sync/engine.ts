@@ -6,7 +6,6 @@ import {
   diffEventContent,
   getCalendarMembers,
   getEventCalendars,
-  getEvent,
   getExternalEvent,
   getExternalTask,
   getDisabledExternalCalendarIDs,
@@ -142,11 +141,11 @@ export async function reconcileExternalChanges(
 // Include the accepted local revision so a delayed removal cannot evict a newer row.
 async function notifyExternalEventUnlinks(
   calendarID: string,
-  eventIDs: string[],
+  unlinks: { id: string; revision: number }[],
 ) {
-  if (eventIDs.length === 0) return;
+  if (unlinks.length === 0) return;
   const previousMembers = await getCalendarMembers(calendarID);
-  for (const id of new Set(eventIDs)) {
+  for (const { id, revision } of unlinks) {
     const remainingCalendars = await getEventCalendars(id);
     const remainingMembers = new Set<string>();
     for (const calendar of remainingCalendars) {
@@ -158,7 +157,7 @@ async function notifyExternalEventUnlinks(
         .filter((member) => !remainingMembers.has(member.userID))
         .map((member) => member.userID),
       "event_removed",
-      { id, revision: (await getEvent(id))?.revision },
+      { id, revision },
     );
   }
 }
@@ -277,9 +276,9 @@ export async function syncProvider(
     }
     const { changes, nextCursor, reset } = fetched;
 
-    const unlinkedEventIDs: string[] = [];
-    const onUnlink = (eventID: string) => {
-      unlinkedEventIDs.push(eventID);
+    const unlinkedEventIDs: { id: string; revision: number }[] = [];
+    const onUnlink = (id: string, revision: number) => {
+      unlinkedEventIDs.push({ id, revision });
     };
     let changed: number;
     try {
@@ -489,10 +488,12 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
   }
   let failure: EventDeliveryError | undefined;
   return async (onlyAction?: EventWriteOperation["action"],
-    committedRevision?: number,
+    committedRevision?: number | ReadonlyMap<string, number>,
   ) => {
     if (failure) throw failure;
     for (const { operation, calendarID, link, adapter, external, receipt } of prepared) {
+      const acceptedRevision = typeof committedRevision === "number"
+        ? committedRevision : committedRevision?.get(operation.event.id);
       const { action, event } = operation;
       if (onlyAction && action !== onlyAction) continue;
       // A closure is single-attempt; calling it again cannot retry a conflict
@@ -515,7 +516,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             external.externalEventId,
             external.etag ?? null,
             external.icalUid ?? null,
-            committedRevision,
+            acceptedRevision,
           );
           if (!accepted)
             throw new ProviderEventWriteError(
@@ -544,10 +545,10 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
                   icalUid: result.icalUid ?? external.icalUid ?? null,
                 },
                 calendarID,
-                committedRevision === undefined
+                acceptedRevision === undefined
                   ? undefined
                   : {
-                      revision: committedRevision,
+                      revision: acceptedRevision,
                       etag: external.etag,
                       externalEventID: external.externalEventId,
                     },

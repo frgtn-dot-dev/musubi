@@ -2,15 +2,13 @@ import { betterAuth } from "better-auth";
 import { refreshAccessToken } from "better-auth/oauth2";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { calendarAwareAdapter } from "./calendar-aware-adapter";
 import {
   createCalendar,
-  db,
   ensureDefaultPage,
   getUserSettings,
   hasProviderSyncScopes,
   markOAuthAccountActive,
-  schema,
 } from "@musubi/db";
 import { config, logger } from "@musubi/config";
 import { defaultPageConfig } from "@musubi/types";
@@ -38,10 +36,7 @@ const appleWeb: AppleWebCredentials = {
 export const appleWebSignInEnabled = appleWebConfigured(appleWeb);
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: schema,
-  }),
+  database: calendarAwareAdapter,
   baseURL: config.api.url,
   trustedOrigins: [
     "musubi://",
