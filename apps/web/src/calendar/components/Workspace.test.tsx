@@ -1,5 +1,4 @@
 import type { PageConfigV1 } from "@musubi/types";
-import type { PollCalendar } from "~/api/contracts";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -82,9 +81,6 @@ describe("Workspace", () => {
     );
     const studio = dialog.getByRole("button", { name: "Studio" });
     await user.click(studio);
-    await user.click(
-      dialog.getByRole("checkbox", { name: "Scheduling polls" }),
-    );
 
     expect(studio.getAttribute("aria-pressed")).toBe("false");
     expect(onSavePage).not.toHaveBeenCalled();
@@ -94,7 +90,6 @@ describe("Workspace", () => {
       config: {
         ...commonProps.pages[0]!.config,
         calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" },
-        showPolls: true,
       },
       id: "my-calendar",
       name: "My calendar",
@@ -288,7 +283,6 @@ describe("Workspace", () => {
       config: {
         ...commonProps.pages[0]!.config,
         calendarVisibility: { hiddenCalendarIds: ["studio"], mode: "all" },
-        showPolls: false,
       },
       name: "My calendar copy",
     });
@@ -452,7 +446,6 @@ describe("Workspace", () => {
         filters: [],
         icon: "briefcase",
         schemaVersion: 1,
-        showPolls: false,
         view: { configVersion: 1, id: "month", showAdjacentDays: true },
       },
       name: "Work",
@@ -665,95 +658,6 @@ describe("Workspace", () => {
     expect(
       screen.queryByRole("button", { name: "Next agenda start" }),
     ).toBeNull();
-  });
-
-  it("renders enabled poll days in every grid view", async () => {
-    const user = userEvent.setup();
-    const poll: PollCalendar = {
-      approximateStartTime: null,
-      chosenSlotID: null,
-      closed: false,
-      closedAt: null,
-      createdAt: new Date("2026-08-01T00:00:00.000Z"),
-      days: [
-        {
-          date: "2026-08-18",
-          end: new Date("2026-08-19T00:00:00.000Z"),
-          id: "slot-1",
-          ifNeeded: 0,
-          no: 0,
-          start: new Date("2026-08-18T00:00:00.000Z"),
-          yes: 2,
-        },
-      ],
-      deadline: null,
-      durationMinutes: 1440,
-      id: "poll-1",
-      respondents: 2,
-      role: "participant",
-      title: "Studio planning",
-      token: "token",
-      url: "https://musubi.test/s/token",
-    };
-    const page = {
-      ...commonProps.pages[0]!,
-      config: { ...commonProps.pages[0]!.config, showPolls: true },
-    };
-    const props = {
-      ...commonProps,
-      date: "2026-08-18",
-      pages: [page],
-      polls: [poll],
-    };
-    const rendered = render(<Workspace {...props} activeView="month" />);
-
-    expect(
-      document.querySelectorAll('[data-poll-calendar="poll-1"]'),
-    ).toHaveLength(1);
-    for (const activeView of ["day", "week", "multi-week"] as const) {
-      rendered.rerender(<Workspace {...props} activeView={activeView} />);
-      expect(
-        document.querySelectorAll('[data-poll-calendar="poll-1"]'),
-      ).toHaveLength(1);
-    }
-
-    // Not the agenda: that view lists what is agreed, and a poll is still a
-    // question.
-    rendered.rerender(<Workspace {...props} activeView="agenda" />);
-    expect(
-      document.querySelectorAll('[data-poll-calendar="poll-1"]'),
-    ).toHaveLength(0);
-    rendered.rerender(<Workspace {...props} activeView="month" pollsError />);
-    expect(screen.getByRole("status").textContent).toContain(
-      "Scheduling polls could not be loaded",
-    );
-
-    const crowdedPolls = Array.from({ length: 4 }, (_, index) => ({
-      ...poll,
-      days: [{ ...poll.days[0]!, id: `slot-${index}` }],
-      id: `poll-${index}`,
-      title: `Poll ${index}`,
-      token: `token-${index}`,
-    }));
-    rendered.rerender(
-      <Workspace {...props} activeView="week" polls={crowdedPolls} />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: "2 more all-day items" }),
-    );
-    expect(
-      screen.getByRole("dialog", { name: "Hidden all-day items" }),
-    ).not.toBeNull();
-    await user.keyboard("{Escape}");
-    rendered.rerender(
-      <Workspace {...props} activeView="multi-week" polls={crowdedPolls} />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: /2 more all-day items on/ }),
-    );
-    expect(
-      screen.getByRole("dialog", { name: /hidden all-day items/ }),
-    ).not.toBeNull();
   });
 
   it("exposes Agenda as an enabled view", async () => {

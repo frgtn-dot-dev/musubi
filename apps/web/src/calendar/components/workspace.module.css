@@ -469,15 +469,6 @@
 	min-width: 66px;
 }
 
-.pollLayerError {
-	padding: 7px 28px;
-	border-bottom: 1px solid
-		color-mix(in srgb, var(--accent-primary) 28%, transparent);
-	background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-panel));
-	color: var(--text-secondary);
-	font-size: var(--text-11);
-}
-
 .pageDraftBar {
 	z-index: 10;
 	display: flex;
@@ -941,8 +932,6 @@
 
 .timeGridAllDayEvent {
 	--event-color: var(--accent-primary);
-	--poll-chip-height: 20px;
-	--poll-join: 0px;
 	--event-foreground: #000;
 	position: absolute;
 	display: block;
@@ -957,8 +946,6 @@
 	text-align: left;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	/* The same lift the chips and timeline blocks carry: a poll bar sits in this
-     row beside them and has to read as the same kind of object. */
 	box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
 }
 
@@ -1507,10 +1494,6 @@
 .eventChip {
 	--event-color: var(--accent-primary);
 	--event-foreground: #000;
-	--poll-chip-height: 21px;
-	--poll-font-size: 0.65rem;
-	--poll-icon-size: 11px;
-	--poll-join: var(--event-bleed);
 	position: relative;
 	z-index: 1;
 	display: grid;
@@ -2153,8 +2136,6 @@
      own under the name — a repeating event became a chip twice as tall as the
      one next to it. */
 	.eventChip {
-		--poll-font-size: 0.58rem;
-		--poll-icon-size: 0.58rem;
 		grid-template-columns: minmax(0, 1fr);
 		min-height: 20px;
 		gap: 0;
@@ -2337,8 +2318,6 @@
 /* All-day sits at the top of its column, above the timed blocks, the way the
    real week grid stacks them. */
 .weekBlockAllDay {
-	--poll-chip-height: 11px;
-	--poll-join: 1px;
 	top: 1px;
 	height: 11px;
 }

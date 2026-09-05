@@ -9,13 +9,7 @@ import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useNewerServer } from "~/api/use-newer-server";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import {
-  createTask,
-  getPollCalendar,
-  getTasks,
-  removeTask,
-  updateTask,
-} from "~/api/resources";
+import { createTask, getTasks, removeTask, updateTask } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
 import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
@@ -92,23 +86,12 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const workspace = useWorkspaceQueries(date, userId, activeView);
   const pages = workspace.pages.data;
   const activePage = pages?.find((page) => page.id === pageId);
-  const pollEnabled =
-    !snapshot.offline &&
-    Boolean(
-      pageDrafts.get(pageId)?.config.showPolls ?? activePage?.config.showPolls,
-    );
   const tasksQuery = useQuery({
     // Fetch only when the view needs tasks. Once fetched, the snapshot keeps
     // them readable offline without turning every calendar Page into a request.
     enabled: taskView && !snapshot.offline,
     queryFn: ({ signal }) => getTasks(signal),
     queryKey: queryKeys.tasks(getServerOrigin(), userId),
-  });
-  const pollCalendar = useQuery({
-    enabled: pollEnabled,
-    queryFn: ({ signal }) => getPollCalendar(signal),
-    queryKey: queryKeys.pollCalendar(getServerOrigin(), userId),
-    refetchInterval: 30_000,
   });
   // Same query (and same staleTime/refetchOnWindowFocus) the announcement
   // modal makes, so this costs no extra request and cannot revive the modal
@@ -258,16 +241,11 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       baseEvents={workspace.mergedEvents?.baseEvents}
       calendars={workspace.mergedCalendars}
       pages={workspace.pages.data}
-      polls={pollCalendar.data ?? []}
-      pollsError={pollEnabled && Boolean(pollCalendar.error)}
       date={date}
       events={workspace.mergedEvents?.events ?? []}
       tasks={tasksQuery.data?.tasks ?? []}
       isAdmin={isAdmin}
-      isRefreshing={
-        queries.some((query) => query.isFetching) ||
-        (pollEnabled && pollCalendar.isFetching)
-      }
+      isRefreshing={queries.some((query) => query.isFetching)}
       newerServer={newerServer}
       offline={offline}
       snapshotAt={snapshot.savedAt}

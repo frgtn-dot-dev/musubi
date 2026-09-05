@@ -35,9 +35,6 @@ export const queryKeys = {
   reminders: (serverOrigin: string, userId: string) =>
     ["reminders", serverOrigin, userId] as const,
 
-  pollCalendar: (serverOrigin: string, userId: string) =>
-    ["poll-calendar", serverOrigin, userId] as const,
-
   federated: (serverOrigin: string, userId: string) =>
     ["federated", serverOrigin, userId] as const,
 

@@ -53,10 +53,6 @@ import {
 	type EventActionHandlers,
 } from "./EventDetailsPopover";
 import { EventPopover } from "./EventPopover";
-import {
-	PollCalendarChip,
-	type PollCalendarItem,
-} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 const ALL_DAY_LANES = 3;
@@ -81,8 +77,6 @@ type TimeGridViewProps = EventActionHandlers & {
 	calendars: Calendar[];
 	events: Event[];
 	geometry: TimeGeometry;
-	pollItems?: PollCalendarItem[];
-	onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
 	/**
 	 * Commit a drag or resize. Absent (or returning without moving) leaves the
 	 * grid read-only for direct manipulation.
@@ -382,8 +376,6 @@ export function TimeGridView({
 	calendars,
 	events,
 	geometry,
-	pollItems = [],
-	onOpenPoll,
 	onCancelDraft,
 	onCreateAtTime,
 	onMoveEvent,
@@ -406,9 +398,7 @@ export function TimeGridView({
 	const eventsByDay = useMemo(() => bucketEventsByDay(events), [events]);
 	const segmentsByDay = useMemo(
 		() =>
-			days.map((day) =>
-				getDaySegments(eventsByDay.get(dayKey(day)) ?? [], day),
-			),
+			days.map((day) => getDaySegments(eventsByDay.get(dayKey(day)) ?? [], day)),
 		[days, eventsByDay],
 	);
 	const calendarsById = useMemo(
@@ -416,8 +406,8 @@ export function TimeGridView({
 		[calendars],
 	);
 	const allDaySpans = useMemo(
-		() => calendarLaneSpans(events, pollItems, days),
-		[days, events, pollItems],
+		() => calendarLaneSpans(events, days),
+		[days, events],
 	);
 	const allDayLaneTotal = Math.max(
 		0,
@@ -434,19 +424,11 @@ export function TimeGridView({
 		(span) => span.lane >= visibleAllDayLaneCount,
 	);
 	const hiddenAllDayCount = hiddenAllDaySpans.length;
-	const allDayLaneCount = Math.max(
-		1,
-		Math.min(
-			allDayLaneTotal,
-			ALL_DAY_LANES,
-		),
-	);
+	const allDayLaneCount = Math.max(1, Math.min(allDayLaneTotal, ALL_DAY_LANES));
 	const [now, setNow] = useState(() => new Date());
 	const hasToday = days.some((day) => isSameDay(day, now));
 	const dayMode = view === "day";
-	const [detailBoundary, setDetailBoundary] = useState<HTMLElement | null>(
-		null,
-	);
+	const [detailBoundary, setDetailBoundary] = useState<HTMLElement | null>(null);
 	const dismissGuard = useLayerDismissGuard();
 	const rootRef = useRef<HTMLElement>(null);
 	const setRoot = useCallback((element: HTMLElement | null) => {
@@ -546,9 +528,7 @@ export function TimeGridView({
 	const draftSlot = useMemo(() => {
 		if (!pendingCreate?.startTime) return undefined;
 
-		const dayIndex = days.findIndex(
-			(day) => dayKey(day) === pendingCreate.date,
-		);
+		const dayIndex = days.findIndex((day) => dayKey(day) === pendingCreate.date);
 		if (dayIndex < 0) return undefined;
 
 		const startMinutes = clockMinutes(pendingCreate.startTime);
@@ -565,33 +545,31 @@ export function TimeGridView({
 	// A second pointer machine, for the draft: same threshold, snapping,
 	// auto-scroll and Escape as a real event, but it commits into the open form
 	// instead of to the server.
-	const { begin: beginDraftDrag, drag: draftDrag } = useTimeGridDrag<undefined>(
-		{
-			columns: readColumns,
-			geometry,
-			onCommit: async ({ dayOffset, mode, times }) => {
-				if (!draftSlot || !onMoveDraft) return;
-				const day =
-					days[
-						Math.max(
-							0,
-							Math.min(
-								days.length - 1,
-								draftSlot.dayIndex + (mode === "move" ? dayOffset : 0),
-							),
-						)
-					];
-				if (!day) return;
-				onMoveDraft({
-					date: dayKey(day),
-					endTime: clockValue(times.endMinutes),
-					startTime: clockValue(times.startMinutes),
-				});
-			},
-			onError: eventActions.onNotice,
-			scrollRoot: () => rootRef.current?.parentElement,
+	const { begin: beginDraftDrag, drag: draftDrag } = useTimeGridDrag<undefined>({
+		columns: readColumns,
+		geometry,
+		onCommit: async ({ dayOffset, mode, times }) => {
+			if (!draftSlot || !onMoveDraft) return;
+			const day =
+				days[
+					Math.max(
+						0,
+						Math.min(
+							days.length - 1,
+							draftSlot.dayIndex + (mode === "move" ? dayOffset : 0),
+						),
+					)
+				];
+			if (!day) return;
+			onMoveDraft({
+				date: dayKey(day),
+				endTime: clockValue(times.endMinutes),
+				startTime: clockValue(times.startMinutes),
+			});
 		},
-	);
+		onError: eventActions.onNotice,
+		scrollRoot: () => rootRef.current?.parentElement,
+	});
 	const dragPreviewColor = drag
 		? (calendarsById.get(eventHomeCalendarId(drag.event) ?? "")?.color ??
 			drag.event.color)
@@ -685,18 +663,14 @@ export function TimeGridView({
 			scrollRoot.scrollBy({
 				behavior: "smooth",
 				top:
-					event.key === "PageDown"
-						? 4 * geometry.hourHeight
-						: geometry.hourHeight,
+					event.key === "PageDown" ? 4 * geometry.hourHeight : geometry.hourHeight,
 			});
 		} else if (event.key === "ArrowUp" || event.key === "PageUp") {
 			event.preventDefault();
 			scrollRoot.scrollBy({
 				behavior: "smooth",
 				top:
-					event.key === "PageUp"
-						? -4 * geometry.hourHeight
-						: -geometry.hourHeight,
+					event.key === "PageUp" ? -4 * geometry.hourHeight : -geometry.hourHeight,
 			});
 		} else if (event.key === "Home") {
 			event.preventDefault();
@@ -712,9 +686,7 @@ export function TimeGridView({
 
 	return (
 		<section
-			className={`${styles.timeGridView} ${
-				dayMode ? styles.timeGridViewDay : ""
-			}`}
+			className={`${styles.timeGridView} ${dayMode ? styles.timeGridViewDay : ""}`}
 			aria-label={`${view === "day" ? "Day" : "Week"} time grid`}
 			onKeyDown={handleKeyDown}
 			ref={setRoot}
@@ -739,10 +711,7 @@ export function TimeGridView({
 								key={dayKey(day)}
 							>
 								<span>
-									{(dayMode
-										? longWeekdayFormatter
-										: shortWeekdayFormatter
-									).format(day)}
+									{(dayMode ? longWeekdayFormatter : shortWeekdayFormatter).format(day)}
 								</span>
 								<strong>{day.getDate()}</strong>
 							</time>
@@ -754,32 +723,6 @@ export function TimeGridView({
 					<span className={styles.timeGridAllDayLabel}>All day</span>
 					<div className={styles.timeGridAllDayTrack}>
 						{visibleAllDaySpans.flatMap((span) => {
-							if (span.kind === "poll") {
-								if (!onOpenPoll) return [];
-								return span.items.flatMap((item) => {
-									const dayIndex = days.findIndex(
-										(day) => dayKey(day) === item.date,
-									);
-									if (dayIndex < 0) return [];
-									return [
-										<PollCalendarChip
-											className={styles.timeGridAllDayEvent}
-											continuesAfter={dayIndex < span.endCol}
-											continuesBefore={dayIndex > span.startCol}
-											item={item}
-											key={`${span.id}:${item.day.id}`}
-											onOpen={onOpenPoll}
-											showLabel={dayIndex === span.startCol}
-											style={{
-												left: `${(dayIndex / days.length) * 100}%`,
-												top: `${span.lane * 24 + 4}px`,
-												width: `${100 / days.length}%`,
-											}}
-										/>,
-									];
-								});
-							}
-
 							const calendar = calendarsById.get(
 								eventHomeCalendarId(span.event) ?? "",
 							);
@@ -807,13 +750,11 @@ export function TimeGridView({
 										style={
 											{
 												"--event-color": eventColor,
-												"--event-foreground":
-													getReadableEventTextColor(eventColor),
+												"--event-foreground": getReadableEventTextColor(eventColor),
 												left: `${(span.startCol / days.length) * 100}%`,
 												top: `${span.lane * 24 + 4}px`,
 												width: `${
-													((span.endCol - span.startCol + 1) / days.length) *
-													100
+													((span.endCol - span.startCol + 1) / days.length) * 100
 												}%`,
 											} as CSSProperties
 										}
@@ -850,28 +791,9 @@ export function TimeGridView({
 								>
 									<div className={styles.monthOverflowList}>
 										{hiddenAllDaySpans.flatMap((span) => {
-											if (span.kind === "poll") {
-												const item = span.items.find((candidate) =>
-													days.some(
-														(day) => dayKey(day) === candidate.date,
-													),
-												);
-												return item && onOpenPoll
-													? [
-															<PollCalendarChip
-																className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-																item={item}
-																key={span.id}
-																onOpen={onOpenPoll}
-															/>,
-														]
-													: [];
-											}
 											return [
 												<EventPopover
-													calendar={calendarsById.get(
-														eventHomeCalendarId(span.event) ?? "",
-													)}
+													calendar={calendarsById.get(eventHomeCalendarId(span.event) ?? "")}
 													calendars={calendars}
 													event={span.event}
 													key={span.id}
@@ -947,8 +869,7 @@ export function TimeGridView({
 										// dismisses on pointerdown, so nothing is open to ask about
 										// by now — the press had to be remembered.
 										dismissGuard.consumeDismiss() ||
-										(event.target instanceof Element &&
-											event.target.closest("button"))
+										(event.target instanceof Element && event.target.closest("button"))
 									) {
 										return;
 									}
@@ -956,19 +877,13 @@ export function TimeGridView({
 									const bounds = event.currentTarget.getBoundingClientRect();
 									// Same geometry the grid is drawn with, so the created time is
 									// the time the user pointed at (snapped and clamped there).
-									const minutes = yToMinutes(
-										event.clientY - bounds.top,
-										geometry,
-									);
+									const minutes = yToMinutes(event.clientY - bounds.top, geometry);
 									const hour = Math.floor(minutes / 60);
 									const minute = minutes % 60;
 
 									onCreateAtTime(
 										dayKey(day),
-										`${String(hour).padStart(2, "0")}:${String(minute).padStart(
-											2,
-											"0",
-										)}`,
+										`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
 										{
 											returnFocus: event.currentTarget,
 											// Beside the column, level with the slot that was clicked
@@ -999,9 +914,7 @@ export function TimeGridView({
 												top: `${minutesToY(selection.startMinutes, geometry)}px`,
 											} as CSSProperties
 										}
-										onPointerDown={(pointerEvent) =>
-											startDraftDrag(pointerEvent, "move")
-										}
+										onPointerDown={(pointerEvent) => startDraftDrag(pointerEvent, "move")}
 									>
 										<span className={styles.timeGridSelectionTime}>
 											{minuteLabel(selection.startMinutes, timeFormat)}–
@@ -1010,9 +923,7 @@ export function TimeGridView({
 										{/* Named once it is laid down, so it reads as the event it
                         is about to become rather than as a selection. */}
 										{draftSlot && !liveSelection ? (
-											<span className={styles.timeGridSelectionTitle}>
-												New event
-											</span>
+											<span className={styles.timeGridSelectionTitle}>New event</span>
 										) : null}
 										{draftSlot && onMoveDraft ? (
 											<>
@@ -1042,8 +953,7 @@ export function TimeGridView({
 										style={
 											{
 												"--event-color": dragPreviewColor,
-												"--event-foreground":
-													getReadableEventTextColor(dragPreviewColor),
+												"--event-foreground": getReadableEventTextColor(dragPreviewColor),
 												height: `${Math.max(
 													durationToHeight(
 														drag.times.endMinutes - drag.times.startMinutes,
@@ -1059,9 +969,7 @@ export function TimeGridView({
 											{minuteLabel(drag.times.startMinutes, timeFormat)}–
 											{minuteLabel(drag.times.endMinutes, timeFormat)}
 										</span>
-										<span className={styles.dragPreviewTitle}>
-											{drag.event.title}
-										</span>
+										<span className={styles.dragPreviewTitle}>{drag.event.title}</span>
 									</div>
 								) : null}
 								{segmentsByDay[dayIndex]?.map((segment) => (
@@ -1073,9 +981,7 @@ export function TimeGridView({
 											(segment.event.id === busyEventId ||
 												segment.event.id.startsWith(`${busyEventId}_`))
 										}
-										calendar={calendarsById.get(
-											eventHomeCalendarId(segment.event) ?? "",
-										)}
+										calendar={calendarsById.get(eventHomeCalendarId(segment.event) ?? "")}
 										calendars={calendars}
 										dayIndex={dayIndex}
 										daySegment={segment}
@@ -1083,21 +989,14 @@ export function TimeGridView({
 											// A resize grows the block in place. A move leaves this one
 											// where it was, as a ghost, and travels as its own preview
 											// in whichever column the pointer is over.
-											drag?.event.id === segment.event.id &&
-											drag.mode !== "move"
+											drag?.event.id === segment.event.id && drag.mode !== "move"
 												? drag.times
 												: undefined
 										}
-										ghost={
-											drag?.event.id === segment.event.id &&
-											drag.mode === "move"
-										}
+										ghost={drag?.event.id === segment.event.id && drag.mode === "move"}
 										draggable={
 											Boolean(onMoveEvent) &&
-											canEditEvent(
-												eventActions.getEventMaster(segment.event),
-												calendars,
-											)
+											canEditEvent(eventActions.getEventMaster(segment.event), calendars)
 										}
 										geometry={geometry}
 										key={segment.event.id}

@@ -9,7 +9,6 @@ async function main() {
     parseAdminEmails,
     parseEnvironment,
     parseMediaConfig,
-    parseStaticMapUrlTemplate,
     validateAuthSecret,
   } = await import("./index");
 
@@ -55,20 +54,6 @@ async function main() {
       S3_REGION: "eu-central-1",
     }).s3?.bucket,
     "media",
-  );
-
-  assert.equal(parseStaticMapUrlTemplate(undefined), "");
-  assert.equal(
-    parseStaticMapUrlTemplate("https://maps.example/static?q={location}"),
-    "https://maps.example/static?q={location}",
-  );
-  assert.throws(
-    () => parseStaticMapUrlTemplate("https://maps.example/static"),
-    /must include \{location\}/,
-  );
-  assert.throws(
-    () => parseStaticMapUrlTemplate("javascript:{location}"),
-    /HTTP\(S\)/,
   );
 
   // Admin serveru je seznam e-mailů v env. Normalizuje se, protože e-mail

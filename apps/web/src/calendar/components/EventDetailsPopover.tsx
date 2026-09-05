@@ -23,7 +23,6 @@ import {
 	MapPin,
 	Pencil,
 	Repeat2,
-	Share2,
 	Star,
 	Trash2,
 	UsersRound,
@@ -94,8 +93,6 @@ import {
 } from "@musubi/types";
 import { CalendarDot } from "./CalendarDot";
 import { EventEditorForm } from "./EventEditorForm";
-import { ShareEventDialog } from "./ShareEventDialog";
-
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import styles from "./styles/event-details.module.css";
 
@@ -192,7 +189,6 @@ export function EventDetailsPopover({
 	const reminderTitleId = useId();
 	const [open, setOpen] = useState(false);
 	const [editing, setEditing] = useState(false);
-	const [sharing, setSharing] = useState(false);
 	const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
 	// The edit waiting for its scope answer, kept whole so nothing typed is lost
 	// if the question is dismissed.
@@ -205,7 +201,6 @@ export function EventDetailsPopover({
 	const [targetAction, setTargetAction] = useState<TargetAction>();
 	const [pendingTargetId, setPendingTargetId] = useState<string>();
 	const linkActionRef = useRef<HTMLButtonElement>(null);
-	const shareActionRef = useRef<HTMLButtonElement>(null);
 	const [editSubmitElement, setEditSubmitElement] =
 		useState<HTMLButtonElement | null>(null);
 	const forkActionRef = useRef<HTMLButtonElement>(null);
@@ -633,22 +628,6 @@ export function EventDetailsPopover({
 										</span>
 									) : null}
 								</div>
-								{/* In the header, not the action row: that row already holds
-                      four buttons in equal columns, and a fifth would squeeze
-                      every label. Publishing is also a different kind of act
-                      from editing — it hands the event to people who have no
-                      account here. */}
-								{editable ? (
-									<IconButton
-										label="Share event"
-										ref={shareActionRef}
-										size="compact"
-										title="Publish as a page"
-										onClick={() => setSharing(true)}
-									>
-										<Share2 size={16} strokeWidth={1.6} />
-									</IconButton>
-								) : null}
 								<PopoverClose asChild>
 									<IconButton label="Close event details" size="compact">
 										<X size={17} strokeWidth={1.6} />
@@ -1078,21 +1057,6 @@ export function EventDetailsPopover({
 					)}
 				</PopoverContent>
 			</Popover>
-
-			{sharing ? (
-				<ShareEventDialog
-					/* The master, like every other write here: an occurrence is addressed
-             as "<uuid>_<timestamp>" and only the master exists as a row. */
-					event={master}
-					onNotice={onNotice}
-					onSaveEvent={onUpdateEvent}
-					onOpenChange={(open) => {
-						if (!open) setSharing(false);
-					}}
-					returnFocus={shareActionRef}
-					timeFormat={timeFormat}
-				/>
-			) : null}
 
 			{pendingEdit ? (
 				<RecurrenceScopeDialog

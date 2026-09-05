@@ -18,10 +18,10 @@ import type { EventChangePayload } from "./event_notifications";
 /**
  * Send the emails that were waiting for their moment.
  *
- * Everything here happened because a PERSON did something — moved an event,
- * decided a poll. That is why it is batched and why it is opt-out, and why it
- * is a separate pass from the reminder dispatcher: reminders need push keys,
- * these need a mail server, and an install can have either, both or neither.
+ * Everything here happened because a PERSON changed an event. That is why it
+ * is batched and why it is opt-out, and why it is a separate pass from the
+ * reminder dispatcher: reminders need push keys, these need a mail server, and
+ * an install can have either, both or neither.
  */
 
 export const EVENT_CHANGED = "event_changed";
@@ -67,9 +67,10 @@ function when(iso: string, isAllDay: boolean, timezone: string) {
   try {
     return new Intl.DateTimeFormat("en-GB", options).format(new Date(iso));
   } catch {
-    return new Intl.DateTimeFormat("en-GB", { ...options, timeZone: "UTC" }).format(
-      new Date(iso),
-    );
+    return new Intl.DateTimeFormat("en-GB", {
+      ...options,
+      timeZone: "UTC",
+    }).format(new Date(iso));
   }
 }
 
@@ -81,7 +82,10 @@ export function toEventChange(
   return {
     kind: payload.kind,
     title: payload.title,
-    when: payload.kind === "moved" ? when(payload.start, payload.isAllDay, timezone) : undefined,
+    when:
+      payload.kind === "moved"
+        ? when(payload.start, payload.isAllDay, timezone)
+        : undefined,
     wasWhen: payload.wasStart
       ? when(payload.wasStart, payload.isAllDay, timezone)
       : payload.kind === "cancelled"

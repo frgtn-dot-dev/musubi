@@ -57,7 +57,7 @@ naimplementovaný třikrát (`SettingsDialog`, `ThemeToggle`, `__root.tsx`).
 `apps/client` má přesně tu vrstvu, která webu chybí:
 
 | Co | Kde v mobilu |
-|---|---|
+| --- | --- |
 | jeden modul tokenů | `constants/theme.ts` (mutable singleton + `applyTheme`) |
 | primitiva | `components/ui/{Tap,Btn,Empty,Toast,Portal,ModalPortal}.tsx` |
 | řádky nastavení | `components/SettingRow.tsx` — `Toggle` / `Options` / `Action` |
@@ -123,7 +123,7 @@ Postavit sadu, kterou handoff `store/musubi-web-handoff/05-frontend-implementati
 a má unit test:
 
 | Primitivo | Zrcadlí | Nahrazuje |
-|---|---|---|
+| --- | --- | --- |
 | `Button` / `IconButton` | `ui/Btn.tsx` (`variant`, `icon`, `loading`, `disabled`) | všech 15 mechanismů |
 | `Dialog` | mobilní skořápku sheetu | `.manageDialog*`, `.scopeDialog`, `.popoverHeader` — jedna hlavička (titul, popis, zavřít), scroll body, footer slot; **pod 600px se renderuje jako bottom sheet** přes CSS, které už existuje |
 | `Field` | `fieldContainer` + `fieldLabel` | `.formRow`, `.settingRow`, `.transferControls`, `.caldavForm` |
@@ -221,7 +221,7 @@ focus se vrací na trigger, šipky se hýbou uvnitř.
 - Samotné pohledy kalendáře (geometrie Month/Week/Day/Agenda, drag, drafty) —
   fáze A–F tam už dosedly; tahle práce se jich dotkne jen tam, kde primitivum
   nahradí ad-hoc CSS.
-- Year view, custom ranges, pravá utility rail, find-a-time — vědomě odložené
+- Year view, custom ranges a pravá utility rail — vědomě odložené
   v `docs/ui/calendar-ui.md` a odložené zůstávají.
 
 ## Ověřování
@@ -242,7 +242,7 @@ změní `getByLabel("Start time")` + `toHaveValue("02:00")` na assert na trigger
 plus interakci s listboxem. Reprezentativní testy podle fáze:
 
 | Fáze | Test | Selektor, který padne |
-|---|---|---|
+| --- | --- | --- |
 | Settings | „saves revisioned settings…" | `combobox "Time format"`, `combobox "Theme"` |
 | Sdílení | „manages members and invite links" | `combobox "Sam Rivers role"` |
 | Chrome | „changes time grid density from the page editor" | `combobox "Row height"` |

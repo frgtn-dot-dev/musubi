@@ -4,7 +4,6 @@
   `RowGroup` still has one consumer, and the `Dialog` size rule only applies to
   whoever adds the next variant.**
 - Scope: `apps/web`
-- Excluded: Scheduler, polls, `find-a-time`, `SchedulingDialog`, `Poll*`, poll CSS
 - Previous restructure:
   [`ui-restructure-handoff.md`](./ui-restructure-handoff.md) is complete; do not
   reopen it as a redesign.
@@ -73,24 +72,6 @@ No new shared API should be needed for these changes.
   `:focus-visible` at `+3px` the first and last result could clip their ring.
   Give `.rowAction` its own inward ring before reopening this; it belongs with
   the row anatomy work in P1.2.
-
-- [x] Replace the icon-only agenda removal button in
-  `calendar/components/EventPageSettings.tsx` with `IconButton`.
-
-  It was a fixed 34×34 target, below the minimum on touch; `size="compact"`
-  scales to 38px regular and 44px touch. The local accent-coloured hover is
-  gone deliberately: `.button_ghost:hover:not(:disabled)` outranks a feature
-  override, and one hover treatment across every ghost icon button is worth
-  more than a per-button signal the trash glyph already carries.
-
-- [x] Re-evaluate the quiet back action in `routes/new-event.tsx` against
-  `Button variant="ghost"`. Change it only if markup and appearance remain
-  equivalent; otherwise leave it domain-owned.
-
-  **Left domain-owned.** `.back` is an underlined 12px text link with no
-  padding and no control height. `Button variant="ghost"` is a 44px control
-  with `--space-4` inline padding, 13px, weight 500, no underline. Different
-  affordance, not different pixels.
 
 Done when obsolete feature CSS is removed and existing interaction tests still
 cover the same behavior.
@@ -198,10 +179,6 @@ The consumers say the same thing:
   carries the name.
 - All four `ColorPicker` call sites render it bare beside a `Field`, as a
   compact swatch with no visible label at all.
-- `routes/new-event.tsx` was the only candidate, and what it actually needed was
-  its picker labels marked `aria-hidden`, matching `EventEditorForm`. Screen
-  readers were announcing each one twice. That is fixed.
-
 Forwarding `id`, `aria-describedby` and `aria-invalid` to the triggers was
 written and reverted: with no consumer it is public API nobody calls.
 
@@ -242,50 +219,25 @@ code in the same change.
 - [x] Expose the existing visually-hidden recipe through one tiny shared helper
   or public class and remove identical local copies.
 
-  There were thirteen copies, not the handful this item assumed, and
+  There were twelve copies, not the handful this item assumed, and
   `primitives.module.css` already held the canonical one. Eleven rules now
-  compose it and `.srOnly` is gone as a second name for it. Two stay out:
-  `poll-grid.module.css` is out of scope, and
-  `event-editor.module.css` keeps the recipe inline because `composes` only
-  works on a rule whose selector is a single class and that one is compound.
+  compose it and `.srOnly` is gone as a second name for it. The remaining
+  `event-editor.module.css` recipe stays inline because `composes` only works on
+  a rule whose selector is a single class and that one is compound.
 
   The canonical rule sits at the top of its file on purpose — same-file
   `composes` cannot look forward. `Select`'s sheet title composes it and is
   un-hidden again below 600px, which now has a story that fails if the hidden
   recipe ever wins there.
-- [x] Extract the duplicated readonly copy-link control used by
-  `ShareEventDialog` and `routes/new-event.tsx` as a small `CopyField` only if
-  label, value, copy action, and feedback share one contract.
-
-  Four call sites, four behaviours. `ShareEventDialog` awaited the write and
-  reset after two seconds; `SchedulingDialog` reported both outcomes as a
-  toast; `routes/new-event.tsx` and `routes/find-a-time.tsx` called
-  `navigator.clipboard?.writeText` without awaiting it, set `copied` and never
-  reset — so outside a secure context the button said "Copied" while nothing had
-  been copied, permanently. `CopyField` awaits, says "Copy failed" when it
-  fails, and leaves the value selected so copying by hand takes one keystroke.
-
-  `.linkField` was byte-identical across the modules and `.linkRow` differed
-  only by `width: 100%`. `routes/find-a-time.tsx` was migrated too, on a later
-  decision to lift its exclusion for this — it had the same misleading-success
-  bug, and its copy state was threaded through two props that the shared control
-  now keeps to itself. With both public pages on `CopyField`, the
-  `public-page.module.css` copies went as well.
-
-  `SchedulingDialog` keeps its own. It is the one call site with no bug — it
-  reports success and failure as a toast — so migrating it would remove the
-  "Link copied." confirmation rather than fix anything, and the scheduler UI is
-  due to be reworked anyway.
 - [x] Consolidate the repeated interactive attendee facepile as `AvatarStack`
   or a calendar feature component. Keep it outside `apps/web/src/ui` if its
   behavior remains attendee-specific.
 
   It went to `apps/web/src/ui`: the behaviour is a button that opens a list, and
   nothing in it is attendee-specific — the semantics stay with the two
-  consumers, `EventDetailsPopover` and `routes/-rsvp-block.tsx`. Both had the
-  same button, the same 2px ring between the circles and the same overflow
-  count, differing only in palette, which now travels through
-  `--avatar-stack-ring` and the two `--avatar-stack-more-*` properties.
+  remaining consumer, `EventDetailsPopover`. The 2px ring and overflow count
+  travel through `--avatar-stack-ring` and the two
+  `--avatar-stack-more-*` properties.
 
   The overflow chip was 36px in the popover while its faces were 32px. The ring
   is inside the box, so the chip stood two pixels above and below the row; it is
@@ -350,45 +302,29 @@ migration proves the need.
 
   `compact` (26), `default` (32) and `profile` (64) cover seven of the eight,
   named by role the way `RowSize` and `DialogSize` are rather than as `sm`/`md`.
-  The organizer card on the public event page keeps `size={42}` with a comment:
-  that page runs its own scale, and one measured exception is what the numeric
-  hatch is for.
-
 - [x] Delete compatibility selectors, dead feature CSS, and obsolete exports
   created by completed migrations.
 
-  Seven unreachable rules: `.calendarList`, `.calendarDot` and
-  `.calendarVisibilityRow` in `workspace.module.css`, `.indexRow` and `.note` in
-  `share-event.module.css`, and `.rsvpForm` and `.rsvpError` on the event page.
-  Two lived inside shared selectors, so only the dead member went.
+  Unreachable rules in `workspace.module.css` were removed.
 
   None of it came from this pass — it was already unreachable. Worth saying
   because the detector had to distinguish real deaths from dynamic keys:
   `dialog_compact`, `field_plain` and friends look unused but are reached
   through `` styles[`dialog_${size}`] ``.
 
-  One thing left standing: `.calendarDot` is defined five times across
-  `calendars`, `event-details`, `event-editor`, `scheduling` and `workspace`. Only
-  the `workspace` copy was dead. It is a 7px circle written out five times, but
-  `scheduling` is out of scope and no plan item covers it.
-
 ## Found on the way
 
 Three duplications this plan never listed, closed with it.
 
-- **`CalendarDot`.** The 9px colour mark was written out four times — in
-  `calendars`, `event-details`, `event-editor` and `scheduling` — once at 8px
-  with a heavier hairline, and every one of the seven call sites paired it with
-  the same `style={{ backgroundColor }}`. It is a component in
+- **`CalendarDot`.** The 9px colour mark was written out in `calendars`,
+  `event-details`, and `event-editor`, with each call site pairing it with the
+  same `style={{ backgroundColor }}`. It is a component in
   `calendar/components` rather than a shared primitive: a calendar's colour is
-  domain, and the anatomy travels with it. `scheduling` keeps its copy for
-  `PollForm`, which is out of scope.
+  domain, and the anatomy travels with it.
 
-- **`0.58rem`.** Seven raw uses, no reason recorded anywhere, and no token that
-  small — `--text-10` is `0.625rem`. Two were chips, `calendars .badge` and
-  `workspace .brandStage`, and they are on the scale now. The other five are
-  calendar geometry — event meta, the today label, the narrow poll chip — which
-  the skill keeps feature-owned, so they stay.
+- **`0.58rem`.** Raw uses had no recorded reason and no token that small —
+  `--text-10` is `0.625rem`. Chips moved onto the scale; the remaining calendar
+  geometry stays feature-owned.
 
 - **Two names.** `.recurrenceBadge` and `.homeBadge` claim a badge without a
   border, a radius or a fill; both are icon-and-word marks, and they are
@@ -404,7 +340,6 @@ Three duplications this plan never listed, closed with it.
 - Prop-per-pixel APIs for padding, radius, gaps, icon width, or control layout.
 - Moving web primitives into `packages/ui-web`; extraction waits for stable APIs
   and proven cross-app value.
-- Scheduler and polling UI.
 
 ## Verification per work item
 

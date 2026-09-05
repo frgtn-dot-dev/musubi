@@ -51,10 +51,8 @@ export const Route = createRootRouteWithContext<{
         name: "description",
         content: "Musubi — the open, self-hostable shared calendar.",
       },
-      // The app is mostly behind a sign-in, but /login, /invite, /e, /s,
-      // /find-a-time and /new-event are not — and those are exactly the URLs
-      // people paste to each other. Set here so every one of them unfurls with
-      // something; a route that wants its own image overrides this key.
+      // Login and invite URLs are public and commonly shared. Give them a
+      // default preview; a route that wants its own image overrides this key.
       { content: `${BRAND_ASSETS}/og.png`, property: "og:image" },
       { content: "summary_large_image", name: "twitter:card" },
     ],

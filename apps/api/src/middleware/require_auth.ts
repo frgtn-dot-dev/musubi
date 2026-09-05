@@ -5,8 +5,7 @@ import type { NextFunction, Request, Response } from "express";
 import { bearerMemberToken, hashMemberToken } from "../federation_tokens";
 import { logger } from "@musubi/config";
 
-
-export async function optionalAuth(
+export async function requireAuth(
   req: Request,
   _res: Response,
   next: NextFunction,
@@ -14,15 +13,6 @@ export async function optionalAuth(
   const session = await auth.api.getSession({
     headers: new Headers(req.headers as Record<string, string>),
   });
-  if (session) {
-    req.user = session.user;
-    logger.addContext({ userId: session.user.id });
-  }
-  next();
-}
-
-export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
-  const session = await auth.api.getSession({ headers: new Headers(req.headers as Record<string, string>) });
   if (session) {
     req.user = session.user;
     logger.addContext({ userId: session.user.id });

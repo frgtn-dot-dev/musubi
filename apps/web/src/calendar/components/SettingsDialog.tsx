@@ -493,20 +493,6 @@ export function SettingsDialog({
                       })
                     }
                   />
-                  <RowToggle
-                    checked={notificationEmails.pollDecided}
-                    detail="The one moment a poll actually has an answer"
-                    disabled={saving}
-                    label="A poll I answered gets a time"
-                    onCheckedChange={(pollDecided) =>
-                      void save({
-                        notificationEmails: {
-                          ...notificationEmails,
-                          pollDecided,
-                        },
-                      })
-                    }
-                  />
                 </SettingsSection>
               ) : null}
 

@@ -152,7 +152,7 @@ export const PageConfigV1Schema = z
     view: BuiltInViewConfigSchema,
     calendarVisibility: CalendarVisibilitySchema,
     filters: z.array(PageFilterSchema).max(20).default([]),
-    /** Optional scheduling layer; absent legacy configs keep it hidden. */
+    /** Deprecated compatibility field; ignored by current clients. */
     showPolls: z.boolean().optional(),
   })
   .strict();
@@ -229,8 +229,8 @@ export function defaultPageConfig(view: PageViewId): PageConfigV1 {
           : view === "tasks"
             ? { id: "tasks", configVersion: 1 }
             : view === "multi-week"
-            ? { id: "multi-week", configVersion: 1 }
-            : { id: "month", configVersion: 1 },
+              ? { id: "multi-week", configVersion: 1 }
+              : { id: "month", configVersion: 1 },
   );
   return {
     schemaVersion: 1,
@@ -239,6 +239,5 @@ export function defaultPageConfig(view: PageViewId): PageConfigV1 {
     view: viewConfig,
     calendarVisibility: { mode: "all", hiddenCalendarIds: [] },
     filters: [],
-    showPolls: false,
   };
 }

@@ -45,7 +45,6 @@ You rarely edit these — Better Auth's Drizzle adapter owns them. See [Auth in 
 | --- | --- | --- |
 | `calendars` | A calendar | `creatorID`, `color`, `isDefault` (one auto-created per user, undeletable) |
 | `events` | An event | `title`, `start`/`end`, `isAllDay`, `hasAttendees`, `recurrence`, `creatorID`, **`originCalendarID`**, `deletedAt` |
-| `eventShares` | Token-gated public event page | publication mode, attendee visibility, closed `theme` JSONB, and validated `content` JSONB for cover placement, display tags, and agenda |
 | `calendarInvites` | Share links | `calendarID`, `expiresAt`, `maxUses` |
 
 <Aside type="caution">
@@ -81,7 +80,7 @@ erDiagram
 - A shared event linked into 3 calendars is *one* row. Editing it edits it everywhere. That's the feature.
 
 <Aside type="note">
-`eventUsers` is the attendee list: presence in the table means attending, and anyone who can *view* the event may join/leave (`GET /events/:id/attendees`, `PUT /events/:id/attendance`). The feature is per-event opt-in via `events.hasAttendees` — a UI toggle, **non-destructive**: switching it off keeps the `event_users` rows, so re-enabling restores the same list. The payload is name + avatar only — no emails, since an event can span calendars whose members aren't mutuals. When real RSVP lands (web), add a `status` column (`yes | no | maybe`) — presence + status needs no rework. External sync inserts events directly (not via `createEvent`), so provider-imported events don't get a phantom creator-attendee.
+`eventUsers` is the attendee list: anyone who can *view* the event may answer going, maybe, declined, or clear their answer (`GET /events/:id/attendees`, `PUT /events/:id/attendance`). The feature is per-event opt-in via `events.hasAttendees` — a UI toggle, **non-destructive**: switching it off keeps the `event_users` rows, so re-enabling restores the same list. The payload is name + avatar only — no emails, since an event can span calendars whose members aren't mutuals. External sync inserts events directly (not via `createEvent`), so provider-imported events don't get a phantom creator-attendee.
 </Aside>
 
 ### 5. External sync (provider-agnostic)
@@ -106,11 +105,7 @@ The `(calendarID)` scoping on `externalEvents` is deliberate: two users can mirr
 `userAvatars` remains only as a compatibility bridge for installations that
 stored avatar bytes in PostgreSQL. First read copies a legacy row to configured
 media storage and deletes that row. New uploads go directly to remote S3 when
-`S3_BUCKET` is set, or to the persistent local media volume otherwise. Public
-avatar endpoints and client URLs stay unchanged. Uploaded event covers use the
-same storage abstraction under an event-scoped key; `eventShares.content` stores
-only whether that cover is active and its focal point, never image bytes or an
-S3-specific URL.
+`S3_BUCKET` is set, or to the persistent local media volume otherwise. Public avatar endpoints and client URLs stay unchanged.
 
 ## Soft delete → delta sync
 

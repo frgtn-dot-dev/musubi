@@ -279,8 +279,8 @@ export async function handlerForkEvent(req: Request, res: Response) {
   return res.status(201).json(result);
 }
 
-// Attendees: anyone who can VIEW the event sees the list and can join/leave.
-// Viewers RSVP too — that's the point. No emails in the payload (see query).
+// Attendees: anyone who can view the event sees the list and can answer.
+// No emails in the payload (see query).
 export async function handlerGetAttendees(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
   await assertCanViewEvent(req.user!.id, eventID);
@@ -312,10 +312,9 @@ export function parseAttendanceBody(body: unknown): AttendanceStatus | "none" {
 
 /**
  * Live-update open details for everyone who can see the event, and hand back the
- * list that was sent. Shared with the public RSVP path: an answer from the page
- * and attendance from the app are the same list, so they are the same frame.
+ * list that was sent.
  */
-export async function notifyAttendanceChanged(eventID: string, eventCalendars: string[]) {
+async function notifyAttendanceChanged(eventID: string, eventCalendars: string[]) {
   const attendees = await getEventAttendees(eventID);
   // The actor gets the frame too — it carries the same list the PUT response
   // does, harmless.

@@ -1,4 +1,8 @@
-import { SettingRowAction, SettingRowOptions, SettingRowToggle } from "@/components/SettingRow";
+import {
+  SettingRowAction,
+  SettingRowOptions,
+  SettingRowToggle,
+} from "@/components/SettingRow";
 import InputModal from "@/components/TextInputModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import {
@@ -19,7 +23,16 @@ import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, RefreshControl, Share, StyleSheet, Linking, Platform } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  Share,
+  StyleSheet,
+  Linking,
+  Platform,
+} from "react-native";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { Btn } from "@/components/ui/Btn";
 import { Tap } from "@/components/ui/Tap";
@@ -35,7 +48,10 @@ import { queueSettingsPatch } from "@/services/settingsSync";
 import { getServerDiagnostics } from "@/lib/serverDiagnostics";
 import { requestEventNotificationPermission } from "@/services/notifications";
 import { buildReport, collectDebugSnapshot } from "@/services/debugReport";
-import { developerModeEnabled, setDeveloperMode } from "@/services/developerMode";
+import {
+  developerModeEnabled,
+  setDeveloperMode,
+} from "@/services/developerMode";
 import { registerTap, type TapState } from "@/lib/developerMode";
 import { formatChecks, summarise } from "@/lib/healthChecks";
 import { router } from "expo-router";
@@ -51,7 +67,10 @@ const TERMS_URL = "https://musubi.pro/terms/";
 /** What the row shows on the right: whatever is stored, in the shared wording. */
 function reminderLabel(rule: ReminderRule, kind: "allDay" | "timed") {
   const value = kind === "timed" ? timedValue(rule) : allDayValue(rule);
-  return optionsFor(rule, kind).find((option) => option.value === value)?.label ?? "Off";
+  return (
+    optionsFor(rule, kind).find((option) => option.value === value)?.label ??
+    "Off"
+  );
 }
 
 export default function SettingsTab() {
@@ -66,12 +85,18 @@ export default function SettingsTab() {
     value: string;
   } | null>(null);
   const {
-    defaultCalendarView, setDefaultCalendarView,
-    weekStartsOn, setWeekStartsOn,
-    timeFormat, setTimeFormat,
-    dateFormat, setDateFormat,
-    theme, setTheme,
-    tabBarLabels, setTabBarLabels,
+    defaultCalendarView,
+    setDefaultCalendarView,
+    weekStartsOn,
+    setWeekStartsOn,
+    timeFormat,
+    setTimeFormat,
+    dateFormat,
+    setDateFormat,
+    theme,
+    setTheme,
+    tabBarLabels,
+    setTabBarLabels,
   } = useSettingsStore();
 
   const [confrimDeleteVisible, setConfirmDeleteVisible] = useState(false);
@@ -84,14 +109,20 @@ export default function SettingsTab() {
     fetchWithTimeout(`${apiUrl}/api/v1/server`)
       .then((r) => r.json())
       .then(({ email }) => setEmailEnabled(email !== false))
-      .catch(() => { });
+      .catch(() => {});
   }, [apiUrl]);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const userSession = authClient.useSession();
-  const appVersion = Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? "unknown";
-  const appBuild = Constants.nativeBuildVersion
-    ?? String(Platform.OS === "android" ? Constants.expoConfig?.android?.versionCode ?? "dev" : "dev");
+  const appVersion =
+    Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? "unknown";
+  const appBuild =
+    Constants.nativeBuildVersion ??
+    String(
+      Platform.OS === "android"
+        ? (Constants.expoConfig?.android?.versionCode ?? "dev")
+        : "dev",
+    );
 
   const openExternal = async (url: string, fallback: string) => {
     try {
@@ -161,7 +192,9 @@ export default function SettingsTab() {
       await Share.share({ message: report, title: "Musubi problem report" });
     } catch {
       warn();
-      showToast({ message: `Could not open sharing. Email us at ${SUPPORT_EMAIL}.` });
+      showToast({
+        message: `Could not open sharing. Email us at ${SUPPORT_EMAIL}.`,
+      });
     }
   };
 
@@ -176,7 +209,9 @@ export default function SettingsTab() {
     } catch (e) {
       warn();
       console.error("Avatar upload failed:", e);
-      showToast({ message: userFacingError(e, "Could not update your photo.") });
+      showToast({
+        message: userFacingError(e, "Could not update your photo."),
+      });
     } finally {
       setAvatarBusy(false);
     }
@@ -220,7 +255,9 @@ export default function SettingsTab() {
     } catch (e) {
       warn();
       console.error("Email change failed:", e);
-      showToast({ message: userFacingError(e, "Could not start the email change.") });
+      showToast({
+        message: userFacingError(e, "Could not start the email change."),
+      });
     }
   };
 
@@ -228,23 +265,29 @@ export default function SettingsTab() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async function runRefresh() {
     setRefreshing(true);
-    try { await refresh(); }
-    catch (e) {
+    try {
+      await refresh();
+    } catch (e) {
       console.error(e);
       showToast({
         message: userFacingError(e, "Could not refresh settings."),
         actionLabel: "Retry",
-        onAction: () => setTimeout(() => { void runRefresh(); }, 320),
+        onAction: () =>
+          setTimeout(() => {
+            void runRefresh();
+          }, 320),
       });
+    } finally {
+      setRefreshing(false);
     }
-    finally { setRefreshing(false); }
   };
 
   // Autosave: settings persist the moment they change — no Save button to forget.
   // `patch` carries the just-changed value (store reads here would be stale).
   // The bottom of the reminder chain is always a concrete rule, so an account
   // whose settings predate the field still gives the pills something to show.
-  const defaultReminder = settingsDocument?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
+  const defaultReminder =
+    settingsDocument?.value.defaultReminder ?? DEFAULT_REMINDER_RULE;
 
   const notificationEmails =
     settingsDocument?.value.notificationEmails ?? DEFAULT_NOTIFICATION_EMAILS;
@@ -329,7 +372,9 @@ export default function SettingsTab() {
     queueSettingsPatch(api, patch).catch((e) => {
       warn();
       console.error("Settings save failed:", e);
-      showToast({ message: userFacingError(e, "This setting could not be saved.") });
+      showToast({
+        message: userFacingError(e, "This setting could not be saved."),
+      });
     });
   };
 
@@ -343,28 +388,47 @@ export default function SettingsTab() {
       await api.deleteUser();
     } catch (error) {
       warn();
-      throw new Error(userFacingError(error, "Your account could not be deleted."));
+      throw new Error(
+        userFacingError(error, "Your account could not be deleted."),
+      );
     }
 
     success();
-    showToast({ message: "Check your email — open the link we sent to permanently delete your account." });
-  }
+    showToast({
+      message:
+        "Check your email — open the link we sent to permanently delete your account.",
+    });
+  };
 
   const testDeleteConfirm = async (v: string) => {
     if (v === userSession.data?.user.name!) {
-      return { ok: true, error: "" }
+      return { ok: true, error: "" };
     }
-    return { ok: false, error: "Name does not match..." }
-  }
+    return { ok: false, error: "Name does not match..." };
+  };
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.screenTitle}>Settings</Text>
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Who you are — tap the avatar to change the photo, tap the name to rename. */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 20, borderBottomWidth: 1, borderColor: colors.line }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 14,
+            padding: 20,
+            borderBottomWidth: 1,
+            borderColor: colors.line,
+          }}
+        >
           <Tap
             onPress={changeAvatar}
             disabled={avatarBusy}
@@ -372,13 +436,26 @@ export default function SettingsTab() {
             accessibilityLabel="Change profile photo"
           >
             <View style={{ opacity: avatarBusy ? 0.5 : 1 }}>
-              <Avatar name={userSession.data?.user.name ?? "?"} image={userSession.data?.user.image} size={52} />
-              <View style={{
-                position: "absolute", right: -3, bottom: -3,
-                width: 20, height: 20, borderRadius: 10,
-                backgroundColor: colors.fill, alignItems: "center", justifyContent: "center",
-                borderWidth: 2, borderColor: colors.bg1,
-              }}>
+              <Avatar
+                name={userSession.data?.user.name ?? "?"}
+                image={userSession.data?.user.image}
+                size={52}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  right: -3,
+                  bottom: -3,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: colors.fill,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 2,
+                  borderColor: colors.bg1,
+                }}
+              >
                 <Feather name="camera" size={10} color={colors.onFill} />
               </View>
             </View>
@@ -389,27 +466,49 @@ export default function SettingsTab() {
             style={{ flex: 1, gap: 2 }}
             accessibilityLabel={`Change display name. Current name ${userSession.data?.user.name ?? "unknown"}`}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ fontFamily: fonts.serif, fontSize: 19, color: colors.fg }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.serif,
+                  fontSize: 19,
+                  color: colors.fg,
+                }}
+              >
                 {userSession.data?.user.name}
               </Text>
               <Feather name="edit-2" size={12} color={colors.fg4} />
             </View>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>
+            <Text
+              style={{
+                fontFamily: fonts.sans,
+                fontSize: 12,
+                color: colors.fg3,
+              }}
+            >
               {userSession.data?.user.email}
             </Text>
-            <Text style={{ fontFamily: fonts.sans, fontSize: 11, color: colors.fg4 }}>
+            <Text
+              style={{
+                fontFamily: fonts.sans,
+                fontSize: 11,
+                color: colors.fg4,
+              }}
+            >
               {apiUrl?.slice(8)}
             </Text>
           </Tap>
         </View>
 
-        <Text style={[styles.sectionLabel, local.sectionHeading]}>Appearance</Text>
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>
+          Appearance
+        </Text>
         <SettingRowOptions
           label="Theme"
           value={theme}
           options={["system", "dark", "light"]}
-          onChange={v => {
+          onChange={(v) => {
             setTheme(v as "system" | "dark" | "light");
             save({ theme: v as "system" | "dark" | "light" });
           }}
@@ -426,7 +525,7 @@ export default function SettingsTab() {
           label="Default View"
           value={defaultCalendarView}
           options={["month", "week", "day"]}
-          onChange={v => {
+          onChange={(v) => {
             setDefaultCalendarView(v as CalendarView);
             save({ defaultCalendarView: v as CalendarView });
           }}
@@ -435,7 +534,7 @@ export default function SettingsTab() {
           label="Week Starts on"
           value={weekStartsOn}
           options={["sunday", "monday"]}
-          onChange={v => {
+          onChange={(v) => {
             setWeekStartsOn(v as "monday" | "sunday");
             save({ weekStartsOn: v as "monday" | "sunday" });
           }}
@@ -444,7 +543,7 @@ export default function SettingsTab() {
           label="Time Format"
           value={timeFormat}
           options={["24h", "12h"]}
-          onChange={v => {
+          onChange={(v) => {
             setTimeFormat(v as "12h" | "24h");
             save({ timeFormat: v as "12h" | "24h" });
           }}
@@ -454,13 +553,15 @@ export default function SettingsTab() {
           value={dateFormat}
           options={["dmy", "mdy", "ymd"]}
           labels={{ dmy: "D/M/Y", mdy: "M/D/Y", ymd: "Y-M-D" }}
-          onChange={v => {
+          onChange={(v) => {
             setDateFormat(v as "dmy" | "mdy" | "ymd");
             save({ dateFormat: v as "dmy" | "mdy" | "ymd" });
           }}
         />
 
-        <Text style={[styles.sectionLabel, local.sectionHeading]}>Reminders</Text>
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>
+          Reminders
+        </Text>
         <SettingRowAction
           label="Timed Events"
           detail="Meetings and anything with a time"
@@ -483,33 +584,38 @@ export default function SettingsTab() {
               "All-day events",
               optionsFor(defaultReminder, "allDay"),
               allDayValue(defaultReminder),
-              (value) => saveDefaultReminder(withAllDay(defaultReminder, value)),
+              (value) =>
+                saveDefaultReminder(withAllDay(defaultReminder, value)),
             )
           }
         />
 
-        <Text style={[styles.sectionLabel, local.sectionHeading]}>Email Me When</Text>
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>
+          Email Me When
+        </Text>
         <SettingRowToggle
           label="An Event Moves or Is Cancelled"
           toggle={notificationEmails.eventChanged}
           onToggle={() =>
-            saveNotificationEmails({ eventChanged: !notificationEmails.eventChanged })
-          }
-        />
-        <SettingRowToggle
-          label="A Poll Gets a Time"
-          toggle={notificationEmails.pollDecided}
-          onToggle={() =>
-            saveNotificationEmails({ pollDecided: !notificationEmails.pollDecided })
+            saveNotificationEmails({
+              eventChanged: !notificationEmails.eventChanged,
+            })
           }
         />
 
-        <Text style={[styles.sectionLabel, local.sectionHeading]}>Help & About</Text>
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>
+          Help & About
+        </Text>
         <SettingRowAction
           label="Feedback & Roadmap"
           detail="Suggest ideas, vote, and see what is planned"
           external
-          onPress={() => void openExternal(FEEDBACK_URL, "Feedback is available at feedback.musubi.pro.")}
+          onPress={() =>
+            void openExternal(
+              FEEDBACK_URL,
+              "Feedback is available at feedback.musubi.pro.",
+            )
+          }
         />
         <SettingRowAction
           label="Report a Problem"
@@ -520,17 +626,29 @@ export default function SettingsTab() {
           label="Support Us"
           detail="Buy us a coffee on Ko-fi"
           external
-          onPress={() => void openExternal(KOFI_URL, "Support us at ko-fi.com/frgtn.")}
+          onPress={() =>
+            void openExternal(KOFI_URL, "Support us at ko-fi.com/frgtn.")
+          }
         />
         <SettingRowAction
           label="Privacy Policy"
           external
-          onPress={() => void openExternal(PRIVACY_URL, "Privacy policy is available at musubi.pro/privacy.")}
+          onPress={() =>
+            void openExternal(
+              PRIVACY_URL,
+              "Privacy policy is available at musubi.pro/privacy.",
+            )
+          }
         />
         <SettingRowAction
           label="Terms of Service"
           external
-          onPress={() => void openExternal(TERMS_URL, "Terms are available at musubi.pro/terms.")}
+          onPress={() =>
+            void openExternal(
+              TERMS_URL,
+              "Terms are available at musubi.pro/terms.",
+            )
+          }
         />
         <SettingRowAction
           label="Version"
@@ -551,20 +669,30 @@ export default function SettingsTab() {
           <Btn
             label="Change Email"
             variant="secondary"
-            onPress={() => emailEnabled
-              ? setEmailModalVisible(true)
-              : showToast({ message: "This server can't send email, so a change can't be confirmed here. Ask your server's administrator." })}
+            onPress={() =>
+              emailEnabled
+                ? setEmailModalVisible(true)
+                : showToast({
+                    message:
+                      "This server can't send email, so a change can't be confirmed here. Ask your server's administrator.",
+                  })
+            }
           />
           <Btn label="Sign Out" variant="secondary" onPress={handleSignOut} />
           <Btn
             label="Delete Account"
             variant="destructive"
-            onPress={() => emailEnabled
-              ? setConfirmDeleteVisible(true)
-              : showToast({ message: "This server can't send email, so deletion can't be confirmed here. Ask your server's administrator to remove your account." })}
+            onPress={() =>
+              emailEnabled
+                ? setConfirmDeleteVisible(true)
+                : showToast({
+                    message:
+                      "This server can't send email, so deletion can't be confirmed here. Ask your server's administrator to remove your account.",
+                  })
+            }
           />
         </View>
-      </ScrollView >
+      </ScrollView>
       <InputModal
         visible={emailModalVisible}
         title="New email address"
@@ -596,7 +724,7 @@ export default function SettingsTab() {
         onSelect={(value) => picker?.apply(value)}
         onClose={() => setPicker(null)}
       />
-    </View >
+    </View>
   );
 }
 

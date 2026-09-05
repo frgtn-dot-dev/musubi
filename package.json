@@ -1,7 +1,7 @@
 {
   "name": "musubi",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Musubi monorepo \u2014 open, self-hostable shared calendar.",
   "workspaces": [
     "apps/*",
@@ -24,13 +24,12 @@
     "test": "pnpm --filter @musubi/design-system test && pnpm --filter @musubi/config test && pnpm --filter @musubi/types test && pnpm --filter @musubi/emails test && pnpm --filter @musubi/auth test && pnpm --filter @musubi/calendar test && pnpm --filter @musubi/client exec tsx lib/eventForm.test.ts && pnpm --filter @musubi/client exec tsx lib/rrule.test.ts && pnpm --filter @musubi/client exec tsx lib/ics.test.ts && pnpm --filter @musubi/client test && pnpm --filter @musubi/api test && pnpm --filter @musubi/db test && pnpm --filter @musubi/web test",
     "test:db:oauth": "pnpm --filter @musubi/api exec tsx src/handlers/connections.integration.test.ts",
     "test:db:pages": "pnpm --filter @musubi/api exec tsx src/handlers/calendar_pages.integration.test.ts",
-    "test:db:scheduling": "pnpm --filter @musubi/api exec tsx src/handlers/scheduling.integration.test.ts",
     "test:federation-db": "pnpm --filter @musubi/api exec tsx src/federation.integration.test.ts",
     "test:db:federation-gateway": "pnpm --filter @musubi/api exec tsx src/federation_gateway.integration.test.ts",
     "test:provider-db": "pnpm --filter @musubi/api exec tsx src/sync/oauth.integration.test.ts",
     "test:db:sync": "pnpm --filter @musubi/api exec tsx src/sync/external_tasks.integration.test.ts",
     "test:caldav:radicale": "pnpm --filter @musubi/api exec tsx src/sync/adapters/caldav.radicale.integration.test.ts",
-    "test:db": "pnpm test:db:oauth && pnpm test:db:pages && pnpm test:db:scheduling && pnpm test:federation-db && pnpm test:db:federation-gateway && pnpm test:provider-db && pnpm test:db:sync",
+    "test:db": "pnpm test:db:oauth && pnpm test:db:pages && pnpm test:federation-db && pnpm test:db:federation-gateway && pnpm test:provider-db && pnpm test:db:sync",
     "check": "pnpm release:verify && pnpm check:contracts && pnpm peers:check && pnpm typecheck && pnpm test && pnpm lint && pnpm build",
     "test:e2e": "pnpm --filter @musubi/web test:e2e",
     "test:e2e:radicale": "bash scripts/test-radicale-e2e.sh",

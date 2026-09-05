@@ -1,6 +1,12 @@
 import { bucketEventsByDay, getDaySegments } from "@musubi/calendar/layout";
 import type { Calendar, Event, Settings } from "@musubi/types";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { calendarLaneSpans, visibleLaneLimit } from "../all-day-lanes";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
 import { toDateKey } from "../date-key";
@@ -10,10 +16,6 @@ import { overlapPlacement } from "../time-grid-math";
 import type { EventActionHandlers } from "./EventDetailsPopover";
 import { EventDetailsPopover } from "./EventDetailsPopover";
 import { EventPopover } from "./EventPopover";
-import {
-  PollCalendarChip,
-  type PollCalendarItem,
-} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 // ── Matrix tuning ────────────────────────────────────────────────────────────
@@ -38,8 +40,6 @@ type MultiWeekCalendarProps = EventActionHandlers & {
   busyEventId?: string;
   calendars: Calendar[];
   events: Event[];
-  pollItems?: PollCalendarItem[];
-  onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   /** Whole weeks, in order. Each block is one of them. */
   weeks: Date[][];
   timeFormat: Settings["timeFormat"];
@@ -60,8 +60,6 @@ export function MultiWeekCalendar({
   busyEventId,
   calendars,
   events,
-  pollItems = [],
-  onOpenPoll,
   timeFormat,
   weeks,
   weekStartsOn,
@@ -80,7 +78,10 @@ export function MultiWeekCalendar({
 
     function measure() {
       if (!frame) return;
-      const fit = Math.max(1, Math.floor(frame.clientWidth / MIN_BLOCK_WIDTH_PX));
+      const fit = Math.max(
+        1,
+        Math.floor(frame.clientWidth / MIN_BLOCK_WIDTH_PX),
+      );
       const next = Math.min(fit, weeks.length);
       setColumns((current) => (current === next ? current : next));
     }
@@ -107,8 +108,6 @@ export function MultiWeekCalendar({
           calendars={calendars}
           days={week}
           eventsByDay={byDay}
-          pollItems={pollItems}
-          onOpenPoll={onOpenPoll}
           key={toDateKey(week[0]!)}
           timeFormat={timeFormat}
           todayKey={todayKey}
@@ -125,8 +124,6 @@ function WeekBlock({
   calendars,
   days,
   eventsByDay,
-  pollItems,
-  onOpenPoll,
   timeFormat,
   todayKey,
   weekStartsOn,
@@ -136,8 +133,6 @@ function WeekBlock({
   calendars: Calendar[];
   days: Date[];
   eventsByDay: Map<string, Event[]>;
-  pollItems: PollCalendarItem[];
-  onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   timeFormat: Settings["timeFormat"];
   todayKey: string;
   weekStartsOn: Settings["weekStartsOn"];
@@ -146,11 +141,14 @@ function WeekBlock({
   const weekEvents = [
     ...new Map(
       days.flatMap((day) =>
-        (eventsByDay.get(toDateKey(day)) ?? []).map((event) => [event.id, event]),
+        (eventsByDay.get(toDateKey(day)) ?? []).map((event) => [
+          event.id,
+          event,
+        ]),
       ),
     ).values(),
   ];
-  const laneSpans = calendarLaneSpans(weekEvents, pollItems, days);
+  const laneSpans = calendarLaneSpans(weekEvents, days);
   const laneCount = Math.max(0, ...laneSpans.map((span) => span.lane + 1));
   const visibleLaneCount = visibleLaneLimit(
     laneCount,
@@ -218,41 +216,20 @@ function WeekBlock({
               data-today={dayKey === todayKey ? "" : undefined}
               key={dayKey}
             >
-              {visibleLaneSpans.flatMap((span) => {
-                const top = `${1 + span.lane * 12}px`;
-                if (span.kind === "event") {
-                  return [
-                    <BlockEvent
-                      allDay
-                      busyEventId={busyEventId}
-                      calendars={calendars}
-                      event={span.event}
-                      key={`${span.id}:${dayKey}`}
-                      placement={{ left: "0%", width: "calc(100% - 2px)" }}
-                      style={{ top }}
-                      timeFormat={timeFormat}
-                      weekStartsOn={weekStartsOn}
-                      {...eventActions}
-                    />,
-                  ];
-                }
-                if (!onOpenPoll) return [];
-                const item = span.items.find((candidate) => candidate.date === dayKey);
-                return item
-                  ? [
-                      <PollCalendarChip
-                        className={styles.weekBlockAllDay}
-                        continuesAfter={dayIndex < span.endCol}
-                        continuesBefore={dayIndex > span.startCol}
-                        item={item}
-                        key={`${span.id}:${item.day.id}`}
-                        onOpen={onOpenPoll}
-                        showLabel={dayIndex === span.startCol}
-                        style={{ top }}
-                      />,
-                    ]
-                  : [];
-              })}
+              {visibleLaneSpans.map((span) => (
+                <BlockEvent
+                  allDay
+                  busyEventId={busyEventId}
+                  calendars={calendars}
+                  event={span.event}
+                  key={`${span.id}:${dayKey}`}
+                  placement={{ left: "0%", width: "calc(100% - 2px)" }}
+                  style={{ top: `${1 + span.lane * 12}px` }}
+                  timeFormat={timeFormat}
+                  weekStartsOn={weekStartsOn}
+                  {...eventActions}
+                />
+              ))}
               {hiddenLaneSpans.length > 0 ? (
                 <Popover>
                   <PopoverTrigger asChild>
@@ -284,21 +261,6 @@ function WeekBlock({
                   >
                     <div className={styles.monthOverflowList}>
                       {hiddenLaneSpans.flatMap((span) => {
-                        if (span.kind === "poll") {
-                          const item = span.items.find(
-                            (candidate) => candidate.date === dayKey,
-                          );
-                          return item && onOpenPoll
-                            ? [
-                                <PollCalendarChip
-                                  className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-                                  item={item}
-                                  key={span.id}
-                                  onOpen={onOpenPoll}
-                                />,
-                              ]
-                            : [];
-                        }
                         return [
                           <EventPopover
                             calendar={calendars.find((calendar) =>

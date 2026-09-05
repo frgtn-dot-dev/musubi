@@ -17,7 +17,6 @@ import { seriesEditWrites, type EditScope } from "@musubi/calendar";
 import type {
   Attendee,
   ImportedCalendar,
-  PollCalendar,
   RemoveEventResponse,
 } from "~/api/contracts";
 import {
@@ -65,9 +64,6 @@ import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
-import { SchedulingDialog } from "./SchedulingDialog";
-import { PollCalendarDialog } from "./PollCalendarDialog";
-import { pollCalendarItems, type PollCalendarItem } from "./PollCalendarChip";
 import { MonthCalendar } from "./MonthCalendar";
 import { MultiWeekCalendar } from "./MultiWeekCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
@@ -182,8 +178,6 @@ type WorkspaceProps = {
   onViewChange: (view: CalendarViewId) => void;
   pageId: string;
   pages: PageDocument[];
-  polls?: PollCalendar[];
-  pollsError?: boolean;
   settings: Settings;
   user: Pick<User, "email" | "id" | "image" | "name">;
 };
@@ -307,8 +301,6 @@ export function Workspace({
   onViewChange,
   pageId,
   pages,
-  polls = [],
-  pollsError = false,
   settings,
   user,
 }: WorkspaceProps) {
@@ -332,8 +324,6 @@ export function Workspace({
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPoll, setSelectedPoll] = useState<PollCalendar>();
-  const pollReturnFocusRef = useRef<HTMLElement>(null);
   const searchEventIdRef = useRef<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarModal, setSidebarModal] = useState(false);
@@ -470,8 +460,6 @@ export function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
-  const [schedulingOpen, setSchedulingOpen] = useState(false);
-  const schedulingTriggerRef = useRef<HTMLButtonElement>(null);
   // Coming back from a provider's consent screen, the dialog that started the
   // link is long gone — so it reopens itself onto the freshly imported account.
   // Derived rather than set in an effect, and dismissible like any other close.
@@ -582,18 +570,6 @@ export function Workspace({
       ),
     [events, visibleCalendarIds],
   );
-  const visiblePollItems = useMemo(
-    () => (workingConfig.showPolls ? pollCalendarItems(polls) : []),
-    [polls, workingConfig.showPolls],
-  );
-  const openPoll = useCallback(
-    (item: PollCalendarItem, trigger: HTMLButtonElement) => {
-      pollReturnFocusRef.current = trigger;
-      setSelectedPoll(item.poll);
-    },
-    [],
-  );
-
   useEffect(() => {
     const searchEventId = searchEventIdRef.current;
     if (searchOpen || !searchEventId) return;
@@ -924,10 +900,6 @@ export function Workspace({
           setSidebarOpen(false);
           setConnectionsOpen(true);
         }}
-        onOpenScheduling={() => {
-          setSidebarOpen(false);
-          setSchedulingOpen(true);
-        }}
         onEditPage={(page) => {
           setSidebarOpen(false);
           if (savingPageId === page.id) return;
@@ -985,12 +957,6 @@ export function Workspace({
         inert={sidebarModal ? true : undefined}
         ref={mainRef}
       >
-        {pollsError ? (
-          <div className={styles.pollLayerError} role="status">
-            Scheduling polls could not be loaded. Calendar events are still
-            shown.
-          </div>
-        ) : null}
         {/* Offline is the one state worth a bar, and only where the sidebar is a
             drawer: a reader who cannot see the status would trust data that may
             be days old. Everything else lives in the sidebar. */}
@@ -1129,8 +1095,6 @@ export function Workspace({
               calendars={calendars}
               events={visibleEvents}
               geometry={geometry}
-              pollItems={visiblePollItems}
-              onOpenPoll={openPoll}
               pendingCreate={
                 createIntent
                   ? {
@@ -1179,8 +1143,6 @@ export function Workspace({
               busyEventId={busyEventId}
               calendars={calendars}
               events={visibleEvents}
-              pollItems={visiblePollItems}
-              onOpenPoll={openPoll}
               getEventMaster={getEventMaster}
               onForkEvent={onForkEvent}
               onLinkEvent={onLinkEvent}
@@ -1202,8 +1164,6 @@ export function Workspace({
               busyEventId={busyEventId}
               calendars={calendars}
               events={visibleEvents}
-              pollItems={visiblePollItems}
-              onOpenPoll={openPoll}
               showAdjacentDays={showAdjacentDays}
               onMoveEventToDate={async ({ dayKey, event, originDayKey }) => {
                 // Only the date changes; the time of day and length are kept.
@@ -1387,29 +1347,6 @@ export function Workspace({
           userId={user.id}
         />
       ) : null}
-      {selectedPoll ? (
-        <PollCalendarDialog
-          calendars={calendars}
-          onClose={() => setSelectedPoll(undefined)}
-          onNotice={notify}
-          poll={selectedPoll}
-          returnFocus={pollReturnFocusRef}
-          userId={user.id}
-        />
-      ) : null}
-      {schedulingOpen ? (
-        <SchedulingDialog
-          calendars={calendars}
-          onNotice={notify}
-          onOpenChange={(open) => {
-            if (!open) setSchedulingOpen(false);
-          }}
-          returnFocus={schedulingTriggerRef}
-          timeFormat={settings.timeFormat}
-          weekStartsOn={settings.weekStartsOn}
-        />
-      ) : null}
-
       {accountOpen ? (
         <AccountDialog
           onNotice={notify}

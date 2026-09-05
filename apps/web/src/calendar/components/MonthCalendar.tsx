@@ -17,19 +17,12 @@ import { calendarLaneSpans, visibleLaneLimit } from "../all-day-lanes";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import { dayDelta, shiftDayKey, toDateKey } from "../date-key";
 import { getReadableEventTextColor } from "../event-color";
-import {
-  canEditEvent,
-  eventHomeCalendarId,
-} from "../event-permissions";
+import { canEditEvent, eventHomeCalendarId } from "../event-permissions";
 import { useLayerDismissGuard } from "../layer-focus";
 import { movePreviewRange } from "../time-grid-drag";
 import { useDayRangeCreate, useMonthDrag } from "../use-time-grid-drag";
 import { EventPopover } from "./EventPopover";
 import type { EventActionHandlers } from "./EventDetailsPopover";
-import {
-  PollCalendarChip,
-  type PollCalendarItem,
-} from "./PollCalendarChip";
 import styles from "./workspace.module.css";
 
 const DEFAULT_EVENT_CAPACITY = 3;
@@ -41,9 +34,7 @@ function eventCapacityForGrid(grid: HTMLElement, rows: number) {
 
   const styles = window.getComputedStyle(grid);
   const fixedSpace =
-    Number.parseFloat(
-      styles.getPropertyValue("--month-day-fixed-space"),
-    ) || 38;
+    Number.parseFloat(styles.getPropertyValue("--month-day-fixed-space")) || 38;
   const eventHeight =
     Number.parseFloat(styles.getPropertyValue("--month-event-height")) || 21;
   const eventGap =
@@ -82,8 +73,6 @@ type MonthCalendarProps = EventActionHandlers & {
   busyEventId?: string;
   calendars: Calendar[];
   events: Event[];
-  pollItems?: PollCalendarItem[];
-  onOpenPoll?: (item: PollCalendarItem, trigger: HTMLButtonElement) => void;
   onCreateAtDate?: (
     date: string,
     target: HTMLElement,
@@ -129,8 +118,6 @@ export function MonthCalendar({
   dimOutsideMonth = true,
   events,
   gridLabel,
-  pollItems = [],
-  onOpenPoll,
   rowMinHeight,
   onCreateAtDate,
   onMonthChange,
@@ -264,9 +251,7 @@ export function MonthCalendar({
     days.findIndex((day) => toDateKey(day) === toDateKey(anchor)),
   );
   const [focusedIndex, setFocusedIndex] = useState(initialFocusIndex);
-  const [eventCapacity, setEventCapacity] = useState(
-    DEFAULT_EVENT_CAPACITY,
-  );
+  const [eventCapacity, setEventCapacity] = useState(DEFAULT_EVENT_CAPACITY);
   const cellRefs = useRef<Array<HTMLDivElement | null>>([]);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -349,10 +334,13 @@ export function MonthCalendar({
       className={styles.monthView}
       data-event-capacity={eventCapacity}
       role="grid"
-      aria-label={gridLabel ?? `${anchor.toLocaleDateString("en", {
-        month: "long",
-        year: "numeric",
-      })} calendar`}
+      aria-label={
+        gridLabel ??
+        `${anchor.toLocaleDateString("en", {
+          month: "long",
+          year: "numeric",
+        })} calendar`
+      }
     >
       <div className={styles.weekdayRow} role="row">
         {weekdayLabels.map((weekday) => (
@@ -395,7 +383,7 @@ export function MonthCalendar({
               (rowHits(previewRange.from, previewRange.to) ||
                 rowHits(previewRange.originFrom, previewRange.originTo)),
           );
-          const laneSpans = calendarLaneSpans(events, pollItems, week, true);
+          const laneSpans = calendarLaneSpans(events, week, true);
           const laneCount = Math.max(
             0,
             ...laneSpans.map((span) => span.lane + 1),
@@ -403,344 +391,340 @@ export function MonthCalendar({
           const visibleLaneCount = visibleLaneLimit(laneCount, eventCapacity);
 
           return (
-          <div className={styles.monthWeek} role="row" key={weekFrom}>
-            {week.map((day, dayIndex) => {
-              const index = weekIndex * 7 + dayIndex;
-              const dateKey = toDateKey(day);
-              const dayLaneSpans = laneSpans.filter(
-                (span) => span.startCol <= dayIndex && span.endCol >= dayIndex,
-              );
-              const inMonth =
-                !dimOutsideMonth || day.getMonth() === anchor.getMonth();
-              const isToday = dateKey === todayKey;
-              // A hidden adjacent day keeps its cell (so the month keeps its
-              // height) but shows nothing and takes no clicks.
-              const muted = !inMonth && !showAdjacentDays;
-              const inDraft = Boolean(
-                draftRange &&
-                  dateKey >= draftRange.from &&
-                  dateKey <= draftRange.to,
-              );
-              const inPreview = Boolean(
-                previewRange &&
-                  dateKey >= previewRange.from &&
-                  dateKey <= previewRange.to,
-              );
-              const dragged =
-                previewRow && drag
-                  ? dayLaneSpans.find(
-                      (span) =>
-                        span.kind === "event" && span.event.id === drag.event.id,
-                    )
-                  : undefined;
-              const renderedSpans =
-                inPreview && dragged
-                  ? dayLaneSpans.filter((span) => span !== dragged)
-                  : dayLaneSpans;
-              const lastActiveLane = Math.max(
-                -1,
-                ...dayLaneSpans.map((span) => span.lane),
-              );
-              const visibleSlots = muted
-                ? []
-                : dragged
-                  ? (inPreview
-                      ? renderedSpans
-                      : [
-                          dragged,
-                          ...renderedSpans.filter((span) => span !== dragged),
-                        ]
-                    ).slice(0, visibleLaneCount)
-                  : Array.from(
-                      {
-                        length: Math.min(visibleLaneCount, lastActiveLane + 1),
-                      },
-                      (_, lane) =>
-                        renderedSpans.find((span) => span.lane === lane) ?? null,
-                    );
-              const itemCount = dayLaneSpans.length;
-              const overflow = muted
-                ? 0
-                : dayLaneSpans.filter((span) => span.lane >= visibleLaneCount)
-                    .length;
+            <div className={styles.monthWeek} role="row" key={weekFrom}>
+              {week.map((day, dayIndex) => {
+                const index = weekIndex * 7 + dayIndex;
+                const dateKey = toDateKey(day);
+                const dayLaneSpans = laneSpans.filter(
+                  (span) =>
+                    span.startCol <= dayIndex && span.endCol >= dayIndex,
+                );
+                const inMonth =
+                  !dimOutsideMonth || day.getMonth() === anchor.getMonth();
+                const isToday = dateKey === todayKey;
+                // A hidden adjacent day keeps its cell (so the month keeps its
+                // height) but shows nothing and takes no clicks.
+                const muted = !inMonth && !showAdjacentDays;
+                const inDraft = Boolean(
+                  draftRange &&
+                    dateKey >= draftRange.from &&
+                    dateKey <= draftRange.to,
+                );
+                const inPreview = Boolean(
+                  previewRange &&
+                    dateKey >= previewRange.from &&
+                    dateKey <= previewRange.to,
+                );
+                const dragged =
+                  previewRow && drag
+                    ? dayLaneSpans.find(
+                        (span) =>
+                          span.kind === "event" &&
+                          span.event.id === drag.event.id,
+                      )
+                    : undefined;
+                const renderedSpans =
+                  inPreview && dragged
+                    ? dayLaneSpans.filter((span) => span !== dragged)
+                    : dayLaneSpans;
+                const lastActiveLane = Math.max(
+                  -1,
+                  ...dayLaneSpans.map((span) => span.lane),
+                );
+                const visibleSlots = muted
+                  ? []
+                  : dragged
+                    ? (inPreview
+                        ? renderedSpans
+                        : [
+                            dragged,
+                            ...renderedSpans.filter((span) => span !== dragged),
+                          ]
+                      ).slice(0, visibleLaneCount)
+                    : Array.from(
+                        {
+                          length: Math.min(
+                            visibleLaneCount,
+                            lastActiveLane + 1,
+                          ),
+                        },
+                        (_, lane) =>
+                          renderedSpans.find((span) => span.lane === lane) ??
+                          null,
+                      );
+                const itemCount = dayLaneSpans.length;
+                const overflow = muted
+                  ? 0
+                  : dayLaneSpans.filter((span) => span.lane >= visibleLaneCount)
+                      .length;
 
-              return (
-                <div
-                  className={`${styles.dayCell} ${
-                    inMonth ? "" : styles.dayOutside
-                  } ${isToday ? styles.dayToday : ""}`}
-                  key={dateKey}
-                  ref={(node) => {
-                    cellRefs.current[index] = node;
-                  }}
-                  data-drop-target={
-                    drag && drag.dayKey === dateKey ? "" : undefined
-                  }
-                  onPointerDown={(pointerEvent) => {
-                    if (
-                      muted ||
-                      !onCreateAtDate ||
-                      pointerEvent.button !== 0 ||
-                      (pointerEvent.target instanceof Element &&
-                        pointerEvent.target.closest("button"))
-                    ) {
-                      return;
+                return (
+                  <div
+                    className={`${styles.dayCell} ${
+                      inMonth ? "" : styles.dayOutside
+                    } ${isToday ? styles.dayToday : ""}`}
+                    key={dateKey}
+                    ref={(node) => {
+                      cellRefs.current[index] = node;
+                    }}
+                    data-drop-target={
+                      drag && drag.dayKey === dateKey ? "" : undefined
                     }
-                    // A new gesture replaces the old draft from its first
-                    // press, not on release: leaving the previous popover open
-                    // over a range being dragged reads as two pending events.
-                    onCancelDraft?.();
-                    beginRangeCreate({
-                      cell: pointerEvent.currentTarget,
-                      dayKey: dateKey,
-                      pointerId: pointerEvent.pointerId,
-                      pointerType: pointerEvent.pointerType,
-                      time: pointerEvent.timeStamp,
-                      x: pointerEvent.clientX,
-                      y: pointerEvent.clientY,
-                    });
-                  }}
-                  role="gridcell"
-                  aria-label={
-                    muted
-                      ? getLongDateLabel(day)
-                      : `${getLongDateLabel(day)}, ${itemCount} ${
-                          itemCount === 1
-                            ? "calendar item"
-                            : "calendar items"
-                        }`
-                  }
-                  tabIndex={focusedIndex === index ? 0 : -1}
-                  data-day-key={dateKey}
-                  onClick={(event) => {
-                    // A drag already opened quick create for its range.
-                    if (muted || consumeClick() || dismissGuard.consumeDismiss())
-                      return;
-                    onCreateAtDate?.(dateKey, event.currentTarget);
-                  }}
-                  onFocus={() => setFocusedIndex(index)}
-                  onKeyDown={(event) => handleGridKeyDown(event, index)}
-                >
-                  <div className={styles.dayHeader}>
-                    {muted ? null : (
-                      <span className={styles.dayNumber}>{day.getDate()}</span>
-                    )}
-                    {isToday ? (
-                      <span className={styles.todayLabel}>Today</span>
-                    ) : null}
-                  </div>
-                  <div className={styles.dayEvents}>
-                    {/* The draft, as one pill across the range it covers: a
+                    onPointerDown={(pointerEvent) => {
+                      if (
+                        muted ||
+                        !onCreateAtDate ||
+                        pointerEvent.button !== 0 ||
+                        (pointerEvent.target instanceof Element &&
+                          pointerEvent.target.closest("button"))
+                      ) {
+                        return;
+                      }
+                      // A new gesture replaces the old draft from its first
+                      // press, not on release: leaving the previous popover open
+                      // over a range being dragged reads as two pending events.
+                      onCancelDraft?.();
+                      beginRangeCreate({
+                        cell: pointerEvent.currentTarget,
+                        dayKey: dateKey,
+                        pointerId: pointerEvent.pointerId,
+                        pointerType: pointerEvent.pointerType,
+                        time: pointerEvent.timeStamp,
+                        x: pointerEvent.clientX,
+                        y: pointerEvent.clientY,
+                      });
+                    }}
+                    role="gridcell"
+                    aria-label={
+                      muted
+                        ? getLongDateLabel(day)
+                        : `${getLongDateLabel(day)}, ${itemCount} ${
+                            itemCount === 1 ? "calendar item" : "calendar items"
+                          }`
+                    }
+                    tabIndex={focusedIndex === index ? 0 : -1}
+                    data-day-key={dateKey}
+                    onClick={(event) => {
+                      // A drag already opened quick create for its range.
+                      if (
+                        muted ||
+                        consumeClick() ||
+                        dismissGuard.consumeDismiss()
+                      )
+                        return;
+                      onCreateAtDate?.(dateKey, event.currentTarget);
+                    }}
+                    onFocus={() => setFocusedIndex(index)}
+                    onKeyDown={(event) => handleGridKeyDown(event, index)}
+                  >
+                    <div className={styles.dayHeader}>
+                      {muted ? null : (
+                        <span className={styles.dayNumber}>
+                          {day.getDate()}
+                        </span>
+                      )}
+                      {isToday ? (
+                        <span className={styles.todayLabel}>Today</span>
+                      ) : null}
+                    </div>
+                    <div className={styles.dayEvents}>
+                      {/* The draft, as one pill across the range it covers: a
                         month cell has no time axis, so this reads like the
                         all-day event it will become. Grabbing it moves the whole
                         range. It stays aria-hidden — the popover's own date
                         fields are the keyboard path to the same change. */}
-                    {inDraft && draftRange ? (
-                      <div
-                        aria-hidden="true"
-                        className={styles.dayDraft}
-                        data-continues-after={
-                          dateKey < draftRange.to && dayIndex < 6
-                            ? ""
-                            : undefined
-                        }
-                        data-continues-before={
-                          dateKey > draftRange.from && dayIndex > 0
-                            ? ""
-                            : undefined
-                        }
-                        data-draft={
-                          !draftRange.live && onMoveDraft ? "" : undefined
-                        }
-                        data-dragging={draftDrag ? "" : undefined}
-                        // Nothing to grab while it is still being dragged out —
-                        // the cell under it owns that gesture.
-                        data-live={draftRange.live ? "" : undefined}
-                        style={
-                          pendingCreate?.color
-                            ? ({
-                                "--draft-accent": pendingCreate.color,
-                              } as CSSProperties)
-                            : undefined
-                        }
-                        onPointerDown={
-                          draftRange.live
-                            ? undefined
-                            : (pointerEvent) => {
-                                if (!onMoveDraft || pointerEvent.button !== 0) {
-                                  return;
-                                }
-                                pointerEvent.stopPropagation();
-                                beginDraftDrag({
-                                  event: undefined,
-                                  originDayKey: dateKey,
-                                  pointerId: pointerEvent.pointerId,
-                                  x: pointerEvent.clientX,
-                                  y: pointerEvent.clientY,
-                                });
-                              }
-                        }
-                      >
-                        {dateKey === draftRange.from || dayIndex === 0
-                          ? "New event"
-                          : ""}
-                      </div>
-                    ) : draftRow && !muted ? (
-                      <div aria-hidden="true" className={styles.daySlot} />
-                    ) : null}
-                    {/* The dragged event across the days it would land on, drawn
-                        the way the draft draws a range — one block per cell,
-                        broken only at the week edge — but in the event's own
-                        colour and shape, because this is a move and not a new
-                        event. It sits on the line the whole row reserved, over
-                        the ghost it is passing rather than pushing it down. */}
-                    {inPreview && !muted && drag && previewRange ? (
-                      <div
-                        aria-hidden="true"
-                        className={`${styles.eventChip} ${
-                          drag.event.isAllDay ? styles.eventChipAllDay : ""
-                        } ${
-                          dateKey > previewRange.from && dayIndex > 0
-                            ? styles.eventChipContinuesBefore
-                            : ""
-                        } ${
-                          dateKey < previewRange.to && dayIndex < 6
-                            ? styles.eventChipContinuesAfter
-                            : ""
-                        } ${
-                          dateKey > previewRange.from &&
-                          dayIndex > 0 &&
-                          dateKey < previewRange.to &&
-                          dayIndex < 6
-                            ? styles.eventChipContinuesBoth
-                            : ""
-                        } ${styles.dragPreviewChip}`}
-                        data-drag-preview=""
-                        style={
-                          {
-                            "--event-color": dragPreviewColor,
-                            "--event-foreground":
-                              getReadableEventTextColor(dragPreviewColor),
-                          } as CSSProperties
-                        }
-                      >
-                        {!drag.event.isAllDay ? (
-                          <span className={styles.eventTime}>
-                            {
-                              getEventRangeLabel(drag.event, timeFormat).split(
-                                " ",
-                              )[0]
-                            }
-                          </span>
-                        ) : null}
-                        <span className={styles.eventTitle}>
-                          {dateKey > previewRange.from && dayIndex > 0
-                            ? ""
-                            : drag.event.title}
-                        </span>
-                      </div>
-                    ) : dragged || muted ? null : previewRow ? (
-                      <div aria-hidden="true" className={styles.daySlot} />
-                    ) : null}
-                    {visibleSlots.map((span, lane) => {
-                      if (!span) {
-                        return (
-                          <div
-                            aria-hidden="true"
-                            className={styles.daySlot}
-                            key={`lane:${lane}`}
-                          />
-                        );
-                      }
-                      const labelColumn = Array.from(
-                        { length: span.endCol - span.startCol + 1 },
-                        (_, offset) => span.startCol + offset,
-                      ).find((column) => {
-                        const labelDay = week[column];
-                        return Boolean(
-                          labelDay &&
-                            (showAdjacentDays ||
-                              !dimOutsideMonth ||
-                              labelDay.getMonth() === anchor.getMonth()),
-                        );
-                      });
-                      if (span.kind === "poll") {
-                        const item = span.items.find(
-                          (candidate) => candidate.date === dateKey,
-                        );
-                        return item && onOpenPoll ? (
-                          <PollCalendarChip
-                            className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-                            continuesAfter={dayIndex < span.endCol}
-                            continuesBefore={dayIndex > span.startCol}
-                            item={item}
-                            key={span.id}
-                            onOpen={onOpenPoll}
-                            showLabel={
-                              dayIndex === (labelColumn ?? span.startCol)
-                            }
-                          />
-                        ) : (
-                          <div
-                            aria-hidden="true"
-                            className={styles.daySlot}
-                            key={`lane:${lane}`}
-                          />
-                        );
-                      }
-                      const event = span.event;
-                      return (
-                        <EventPopover
-                          calendar={calendarsById.get(
-                            eventHomeCalendarId(event) ?? "",
-                          )}
-                          calendars={calendars}
-                          continuesAfter={event.isAllDay && dayIndex < span.endCol}
-                          continuesBefore={event.isAllDay && dayIndex > span.startCol}
-                          ghost={drag?.event.id === event.id}
-                          event={event}
-                          pending={
-                            busyEventId !== undefined &&
-                            (event.id === busyEventId ||
-                              event.id.startsWith(`${busyEventId}_`))
+                      {inDraft && draftRange ? (
+                        <div
+                          aria-hidden="true"
+                          className={styles.dayDraft}
+                          data-continues-after={
+                            dateKey < draftRange.to && dayIndex < 6
+                              ? ""
+                              : undefined
                           }
-                          key={span.id}
-                          onBeginDrag={
-                            onMoveEventToDate &&
-                            canEditEvent(
-                              eventActions.getEventMaster(event),
-                              calendars,
-                            )
-                              ? (pointerEvent) => {
-                                  if (pointerEvent.button !== 0) return;
-                                  beginMonthDrag({
-                                    event,
+                          data-continues-before={
+                            dateKey > draftRange.from && dayIndex > 0
+                              ? ""
+                              : undefined
+                          }
+                          data-draft={
+                            !draftRange.live && onMoveDraft ? "" : undefined
+                          }
+                          data-dragging={draftDrag ? "" : undefined}
+                          // Nothing to grab while it is still being dragged out —
+                          // the cell under it owns that gesture.
+                          data-live={draftRange.live ? "" : undefined}
+                          style={
+                            pendingCreate?.color
+                              ? ({
+                                  "--draft-accent": pendingCreate.color,
+                                } as CSSProperties)
+                              : undefined
+                          }
+                          onPointerDown={
+                            draftRange.live
+                              ? undefined
+                              : (pointerEvent) => {
+                                  if (
+                                    !onMoveDraft ||
+                                    pointerEvent.button !== 0
+                                  ) {
+                                    return;
+                                  }
+                                  pointerEvent.stopPropagation();
+                                  beginDraftDrag({
+                                    event: undefined,
                                     originDayKey: dateKey,
                                     pointerId: pointerEvent.pointerId,
                                     x: pointerEvent.clientX,
                                     y: pointerEvent.clientY,
                                   });
                                 }
-                              : undefined
                           }
-                          showLabel={dayIndex === (labelColumn ?? span.startCol)}
-                          timeFormat={timeFormat}
-                          weekStartsOn={weekStartsOn}
-                          {...eventActions}
-                        />
-                      );
-                    })}
-                    {overflow > 0 ? (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            className={styles.moreEvents}
-                            type="button"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            +{overflow} more
-                          </button>
-                        </PopoverTrigger>
+                        >
+                          {dateKey === draftRange.from || dayIndex === 0
+                            ? "New event"
+                            : ""}
+                        </div>
+                      ) : draftRow && !muted ? (
+                        <div aria-hidden="true" className={styles.daySlot} />
+                      ) : null}
+                      {/* The dragged event across the days it would land on, drawn
+                        the way the draft draws a range — one block per cell,
+                        broken only at the week edge — but in the event's own
+                        colour and shape, because this is a move and not a new
+                        event. It sits on the line the whole row reserved, over
+                        the ghost it is passing rather than pushing it down. */}
+                      {inPreview && !muted && drag && previewRange ? (
+                        <div
+                          aria-hidden="true"
+                          className={`${styles.eventChip} ${
+                            drag.event.isAllDay ? styles.eventChipAllDay : ""
+                          } ${
+                            dateKey > previewRange.from && dayIndex > 0
+                              ? styles.eventChipContinuesBefore
+                              : ""
+                          } ${
+                            dateKey < previewRange.to && dayIndex < 6
+                              ? styles.eventChipContinuesAfter
+                              : ""
+                          } ${
+                            dateKey > previewRange.from &&
+                            dayIndex > 0 &&
+                            dateKey < previewRange.to &&
+                            dayIndex < 6
+                              ? styles.eventChipContinuesBoth
+                              : ""
+                          } ${styles.dragPreviewChip}`}
+                          data-drag-preview=""
+                          style={
+                            {
+                              "--event-color": dragPreviewColor,
+                              "--event-foreground":
+                                getReadableEventTextColor(dragPreviewColor),
+                            } as CSSProperties
+                          }
+                        >
+                          {!drag.event.isAllDay ? (
+                            <span className={styles.eventTime}>
+                              {
+                                getEventRangeLabel(
+                                  drag.event,
+                                  timeFormat,
+                                ).split(" ")[0]
+                              }
+                            </span>
+                          ) : null}
+                          <span className={styles.eventTitle}>
+                            {dateKey > previewRange.from && dayIndex > 0
+                              ? ""
+                              : drag.event.title}
+                          </span>
+                        </div>
+                      ) : dragged || muted ? null : previewRow ? (
+                        <div aria-hidden="true" className={styles.daySlot} />
+                      ) : null}
+                      {visibleSlots.map((span, lane) => {
+                        if (!span) {
+                          return (
+                            <div
+                              aria-hidden="true"
+                              className={styles.daySlot}
+                              key={`lane:${lane}`}
+                            />
+                          );
+                        }
+                        const labelColumn = Array.from(
+                          { length: span.endCol - span.startCol + 1 },
+                          (_, offset) => span.startCol + offset,
+                        ).find((column) => {
+                          const labelDay = week[column];
+                          return Boolean(
+                            labelDay &&
+                              (showAdjacentDays ||
+                                !dimOutsideMonth ||
+                                labelDay.getMonth() === anchor.getMonth()),
+                          );
+                        });
+                        const event = span.event;
+                        return (
+                          <EventPopover
+                            calendar={calendarsById.get(
+                              eventHomeCalendarId(event) ?? "",
+                            )}
+                            calendars={calendars}
+                            continuesAfter={
+                              event.isAllDay && dayIndex < span.endCol
+                            }
+                            continuesBefore={
+                              event.isAllDay && dayIndex > span.startCol
+                            }
+                            ghost={drag?.event.id === event.id}
+                            event={event}
+                            pending={
+                              busyEventId !== undefined &&
+                              (event.id === busyEventId ||
+                                event.id.startsWith(`${busyEventId}_`))
+                            }
+                            key={span.id}
+                            onBeginDrag={
+                              onMoveEventToDate &&
+                              canEditEvent(
+                                eventActions.getEventMaster(event),
+                                calendars,
+                              )
+                                ? (pointerEvent) => {
+                                    if (pointerEvent.button !== 0) return;
+                                    beginMonthDrag({
+                                      event,
+                                      originDayKey: dateKey,
+                                      pointerId: pointerEvent.pointerId,
+                                      x: pointerEvent.clientX,
+                                      y: pointerEvent.clientY,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            showLabel={
+                              dayIndex === (labelColumn ?? span.startCol)
+                            }
+                            timeFormat={timeFormat}
+                            weekStartsOn={weekStartsOn}
+                            {...eventActions}
+                          />
+                        );
+                      })}
+                      {overflow > 0 ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              className={styles.moreEvents}
+                              type="button"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              +{overflow} more
+                            </button>
+                          </PopoverTrigger>
                           <PopoverContent
                             align="center"
                             aria-label={`${getLongDateLabel(day)} events`}
@@ -763,21 +747,6 @@ export function MonthCalendar({
                             </div>
                             <div className={styles.monthOverflowList}>
                               {dayLaneSpans.flatMap((span) => {
-                                if (span.kind === "poll") {
-                                  const item = span.items.find(
-                                    (candidate) => candidate.date === dateKey,
-                                  );
-                                  return item && onOpenPoll
-                                    ? [
-                                        <PollCalendarChip
-                                          className={`${styles.eventChip} ${styles.eventChipAllDay}`}
-                                          item={item}
-                                          key={span.id}
-                                          onOpen={onOpenPoll}
-                                        />,
-                                      ]
-                                    : [];
-                                }
                                 return [
                                   <EventPopover
                                     calendar={calendarsById.get(
@@ -802,13 +771,13 @@ export function MonthCalendar({
                               })}
                             </div>
                           </PopoverContent>
-                      </Popover>
-                    ) : null}
+                        </Popover>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
           );
         })}
       </div>

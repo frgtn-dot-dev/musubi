@@ -83,7 +83,6 @@ export function pageConfigEquals(
   return (
     left.schemaVersion === right.schemaVersion &&
     left.icon === right.icon &&
-    (left.showPolls ?? false) === (right.showPolls ?? false) &&
     JSON.stringify(left.filters) === JSON.stringify(right.filters) &&
     JSON.stringify(left.view) === JSON.stringify(right.view) &&
     visibilityEquals(left.calendarVisibility, right.calendarVisibility)
@@ -195,7 +194,9 @@ export function usePageMutations(userId: string) {
       if (!previous?.some((page) => page.id === defaultPageId)) {
         throw new Error("The default Page is not in the current Page list.");
       }
-      if (previous.some((page) => page.id === defaultPageId && page.isDefault)) {
+      if (
+        previous.some((page) => page.id === defaultPageId && page.isDefault)
+      ) {
         return;
       }
 

@@ -5,8 +5,7 @@ import { emailOTPClient } from "better-auth/client/plugins";
 // its standard /api/auth base path. That keeps cookies first-party in both the
 // Vite proxy and the eventual same-origin production deployment.
 export const authClient = createAuthClient({
-  // Passwordless sign-in by emailed code. A guest answering a published event
-  // has no account and no reason to invent a password (PRD §18.1).
+  // Passwordless sign-in by emailed code.
   plugins: [emailOTPClient()],
 });
 

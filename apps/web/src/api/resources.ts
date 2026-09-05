@@ -3,7 +3,6 @@ import {
   AttendeesResponseSchema,
   CalendarMembersResponseSchema,
   CalendarsResponseSchema,
-  EventShareSchema,
   EventsResponseSchema,
   FederationConnectionsResponseSchema,
   ImportedCalendarSchema,
@@ -11,14 +10,9 @@ import {
   InvitesResponseSchema,
   PageResponseSchema,
   PagesResponseSchema,
-  PollCalendarSchema,
-  PollSchema,
-  PollSummarySchema,
-  PublicEventSchema,
   PushSubscriptionsSchema,
   RemindersResponseSchema,
   RemoveEventResponseSchema,
-  RsvpSummarySchema,
   ServerCapabilitiesSchema,
   SettingsDocumentResponseSchema,
   SettingsResponseSchema,
@@ -42,16 +36,9 @@ import {
   type TaskCreate,
   type TaskUpdate,
 } from "@musubi/types";
-import type { EventPageContent, EventPageTheme } from "@musubi/types";
 import type { AttendanceChoice } from "~/calendar/attendance";
-import type { RsvpStatus, VoteValue } from "./contracts";
 import { z } from "zod";
-import {
-  apiRawBodyRequest,
-  apiRawJsonRequest,
-  apiRequest,
-  apiTextRequest,
-} from "./http";
+import { apiRawJsonRequest, apiRequest, apiTextRequest } from "./http";
 
 /**
  * Route a request at a connected Musubi server instead of the home one.
@@ -91,19 +78,33 @@ export function getEvents(
 }
 
 export function getTasks(signal?: AbortSignal) {
-  return apiRequest("/api/v1/tasks", { responseSchema: TasksResponseSchema, signal });
+  return apiRequest("/api/v1/tasks", {
+    responseSchema: TasksResponseSchema,
+    signal,
+  });
 }
 
 export function createTask(task: TaskCreate) {
-  return apiRequest("/api/v1/tasks", { body: task, method: "POST", responseSchema: TaskSchema });
+  return apiRequest("/api/v1/tasks", {
+    body: task,
+    method: "POST",
+    responseSchema: TaskSchema,
+  });
 }
 
 export function updateTask(id: string, task: TaskUpdate) {
-  return apiRequest(`/api/v1/tasks/${id}`, { body: task, method: "PUT", responseSchema: TaskSchema });
+  return apiRequest(`/api/v1/tasks/${id}`, {
+    body: task,
+    method: "PUT",
+    responseSchema: TaskSchema,
+  });
 }
 
 export function removeTask(id: string) {
-  return apiRequest(`/api/v1/tasks/${id}`, { method: "DELETE", responseSchema: z.undefined() });
+  return apiRequest(`/api/v1/tasks/${id}`, {
+    method: "DELETE",
+    responseSchema: z.undefined(),
+  });
 }
 
 export function getPages(signal?: AbortSignal) {
@@ -443,167 +444,6 @@ export function getFederatedEvents(connectionId: string, signal?: AbortSignal) {
   return apiRequest(`/api/v1/federation/s/${connectionId}/api/v1/events`, {
     responseSchema: EventsResponseSchema,
     signal,
-  });
-}
-
-export function getEventShare(eventId: string, signal?: AbortSignal) {
-  return apiRequest(`/api/v1/events/${eventId}/share`, {
-    responseSchema: EventShareSchema.nullable(),
-    signal,
-  });
-}
-
-export function publishEvent(input: {
-  attendeeVisibility: "counts" | "hidden" | "names";
-  content?: EventPageContent;
-  eventId: string;
-  indexable: boolean;
-  mode: "link" | "public";
-  /** Names an account that has none yet — a page made from /new-event. */
-  name?: string;
-  theme: EventPageTheme;
-}) {
-  return apiRequest(`/api/v1/events/${input.eventId}/share`, {
-    body: {
-      attendeeVisibility: input.attendeeVisibility,
-      content: input.content,
-      indexable: input.indexable,
-      mode: input.mode,
-      name: input.name,
-      theme: input.theme,
-    },
-    method: "PUT",
-    responseSchema: EventShareSchema,
-  });
-}
-
-export function uploadEventCover(eventId: string, file: File) {
-  return apiRawBodyRequest(`/api/v1/events/${eventId}/share/cover`, {
-    body: file,
-    contentType: file.type,
-    responseSchema: z.object({ url: z.string().url() }),
-  });
-}
-
-export function unpublishEvent(eventId: string) {
-  return apiRequest(`/api/v1/events/${eventId}/share`, {
-    method: "DELETE",
-    responseSchema: z.unknown(),
-  });
-}
-
-/** The public page's own read. No session, and none needed. */
-export function getPublicEvent(token: string, signal?: AbortSignal) {
-  return apiRequest(`/api/v1/public/events/${token}`, {
-    responseSchema: PublicEventSchema,
-    signal,
-  });
-}
-
-/** The reader's own answer and the counts, once they have a session. */
-export function getEventRsvp(token: string, signal?: AbortSignal) {
-  return apiRequest(`/api/v1/public/events/${token}/rsvp`, {
-    responseSchema: RsvpSummarySchema,
-    signal,
-  });
-}
-
-export function answerEvent(input: {
-  name?: string;
-  status: RsvpStatus;
-  token: string;
-}) {
-  return apiRequest(`/api/v1/public/events/${input.token}/rsvp`, {
-    body: { name: input.name, status: input.status },
-    method: "PUT",
-    responseSchema: RsvpSummarySchema,
-  });
-}
-
-// ── Scheduling ───────────────────────────────────────────────────────────────
-
-export function getPolls(signal?: AbortSignal) {
-  return apiRequest("/api/v1/scheduling/polls", {
-    responseSchema: z.array(PollSummarySchema),
-    signal,
-  });
-}
-
-export function getPollCalendar(signal?: AbortSignal) {
-  return apiRequest("/api/v1/scheduling/polls/calendar", {
-    responseSchema: z.array(PollCalendarSchema),
-    signal,
-  });
-}
-
-export function createPoll(input: {
-  /** Exact start for timed polls; optional context for all-day polls. */
-  approximateStartTime?: string;
-  /** Where the decided event lands. Absent when the creator has no calendars. */
-  calendarId?: string;
-  /** When answers stop being taken, if the organizer set a date. */
-  deadline?: string;
-  description?: string;
-  durationMinutes: number;
-  /** Private organizer identity for account-free creation. */
-  email?: string;
-  /** Public organizer label for account-free creation. */
-  name?: string;
-  slots: Array<{ date?: string; start: string }>;
-  title: string;
-}) {
-  return apiRequest("/api/v1/scheduling/polls", {
-    body: input,
-    method: "POST",
-    responseSchema: PollSummarySchema,
-  });
-}
-
-/** Open by token — reading a poll needs no session, answering does. */
-export function getPoll(token: string, signal?: AbortSignal) {
-  return apiRequest(`/api/v1/public/polls/${token}`, {
-    responseSchema: PollSchema,
-    signal,
-  });
-}
-
-export function votePoll(input: {
-  token: string;
-  votes: Array<{ slotID: string; value: VoteValue }>;
-}) {
-  return apiRequest(`/api/v1/public/polls/${input.token}/votes`, {
-    body: { votes: input.votes },
-    method: "PUT",
-    responseSchema: PollSchema,
-  });
-}
-
-export function decidePoll(input: {
-  calendarId: string;
-  pollId: string;
-  slotId: string;
-}) {
-  return apiRequest(`/api/v1/scheduling/polls/${input.pollId}/decide`, {
-    body: { calendarId: input.calendarId, slotId: input.slotId },
-    method: "POST",
-    responseSchema: z.object({ eventId: z.string(), slotId: z.string() }),
-  });
-}
-
-/** Stop taking answers without picking a time. The poll stays readable. */
-export function closePoll(pollId: string) {
-  return apiRequest(`/api/v1/scheduling/polls/${pollId}/close`, {
-    body: {},
-    method: "POST",
-    responseSchema: z.object({ closed: z.boolean() }),
-  });
-}
-
-/** Removes the poll and every answer on it. Any event a decision made stays. */
-export function deletePoll(pollId: string) {
-  return apiRequest(`/api/v1/scheduling/polls/${pollId}`, {
-    method: "DELETE",
-    responseSchema: z.unknown(),
   });
 }
 

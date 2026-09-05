@@ -49,8 +49,6 @@ export function AgendaView({
 }: AgendaViewProps) {
 	// One reading per render keeps the relative labels aligned.
 	const now = new Date();
-	// Polls live on the day, week and month grids only: the agenda is what is
-	// already agreed, and a poll is a question that has not landed on a day yet.
 	const groups = getAgendaGroups(events, anchor);
 	const calendarsById = useMemo(
 		() => new Map(calendars.map((calendar) => [calendar.id, calendar])),
@@ -127,8 +125,7 @@ export function AgendaView({
 				{visibleGroups.map((group, groupIndex) => {
 					const previous = visibleGroups[groupIndex - 1]?.date;
 					const isNewYear =
-						groupIndex === 0 ||
-						previous?.getFullYear() !== group.date.getFullYear();
+						groupIndex === 0 || previous?.getFullYear() !== group.date.getFullYear();
 					const isNewMonth =
 						!isNewYear && previous?.getMonth() !== group.date.getMonth();
 					const isToday = group.key === todayKey;
@@ -176,14 +173,12 @@ export function AgendaView({
 								</time>
 								<div className={styles.agendaEvents}>
 									{group.items.map((event) => {
-										const calendar = calendarsById.get(
-											eventHomeCalendarId(event) ?? "",
-										);
+										const calendar = calendarsById.get(eventHomeCalendarId(event) ?? "");
 										const eventColor = calendar?.color ?? event.color;
-										const rangeLabel = getEventRangeLabel(
-											event,
-											timeFormat,
-										).replace(" – ", "–");
+										const rangeLabel = getEventRangeLabel(event, timeFormat).replace(
+											" – ",
+											"–",
+										);
 
 										return (
 											<EventDetailsPopover
@@ -208,26 +203,18 @@ export function AgendaView({
 													)}, ${calendar?.name ?? "calendar"}`}
 													data-agenda-event={event.id}
 												>
-													<span className={styles.agendaEventTime}>
-														{rangeLabel}
-													</span>
+													<span className={styles.agendaEventTime}>{rangeLabel}</span>
 													<span
 														className={styles.agendaEventRule}
 														style={{ backgroundColor: eventColor }}
 													/>
 													<span className={styles.agendaEventCopy}>
-														<span className={styles.agendaEventTitle}>
-															{event.title}
-														</span>
+														<span className={styles.agendaEventTitle}>{event.title}</span>
 														{/* Only what this event actually has: an agenda row
                                 with empty slots reads as missing data. */}
 														{event.location ? (
 															<span className={styles.agendaEventWhere}>
-																<MapPin
-																	aria-hidden="true"
-																	size={12}
-																	strokeWidth={1.6}
-																/>
+																<MapPin aria-hidden="true" size={12} strokeWidth={1.6} />
 																{event.location}
 															</span>
 														) : null}
