@@ -1,12 +1,45 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
-import { type AttendanceStatus, type NewEvent, createEvent, getCalendarMembers, getEvent, getEventAttendees, getEventCalendars, getEventOrigin, getExternalLinkForCalendar, getUsersEvents, linkEventToCalendars, setAttendance, unlinkEventAndTombstoneIfOrphaned, updateEventAndCalendarLinks } from '@musubi/db';
-import { BadRequestError, type Event, EventSchema, ForbiddenError, NotFoundError } from "@musubi/types";
+import {
+  type AttendanceStatus,
+  type NewEvent,
+  createEvent,
+  getCalendarMembers,
+  getEvent,
+  getEventAttendees,
+  getEventCalendars,
+  getEventOrigin,
+  getExternalLinkForCalendar,
+  getUsersEvents,
+  linkEventToCalendars,
+  setAttendance,
+  unlinkEventAndTombstoneIfOrphaned,
+  updateEventAndCalendarLinks,
+} from "@musubi/db";
+import {
+  BadRequestError,
+  type Event,
+  EventSchema,
+  ForbiddenError,
+  NotFoundError,
+} from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { pushEventToCalendars, pushEventToProviders } from "../sync/engine";
-import { assertCan, assertCanEditEvent, assertCanViewEvent, canDo } from "../permissions";
-import { dropEventNotifications, queueEventChange } from "../event_notifications";
-import { optionalDateQuery, optionalDateRangeQuery, requireUUID } from "../request_validation";
+import {
+  assertCan,
+  assertCanEditEvent,
+  assertCanViewEvent,
+  canDo,
+} from "../permissions";
+import {
+  dropEventNotifications,
+  queueEventChange,
+} from "../event_notifications";
+import {
+  optionalDateQuery,
+  optionalDateRangeQuery,
+  requireUUID,
+} from "../request_validation";
 
 const MAX_EVENT_RANGE_MS = 3 * 366 * 24 * 60 * 60 * 1000;
 
@@ -20,9 +53,13 @@ function parseEvent(body: unknown, message: string): Event {
 
   event.id = requireUUID(event.id, "event.id");
   event.calendars = event.calendars.map((calendarID) =>
-    requireUUID(calendarID, "event.calendars[]"));
+    requireUUID(calendarID, "event.calendars[]"),
+  );
   if (event.originCalendarID) {
-    event.originCalendarID = requireUUID(event.originCalendarID, "event.originCalendarID");
+    event.originCalendarID = requireUUID(
+      event.originCalendarID,
+      "event.originCalendarID",
+    );
   }
   return event;
 }
@@ -30,7 +67,9 @@ function parseEvent(body: unknown, message: string): Event {
 async function assertEventCapableCalendar(calendarID: string) {
   const link = await getExternalLinkForCalendar(calendarID);
   if (link && !link.supportsEvents) {
-    throw new BadRequestError("This external calendar does not support events...");
+    throw new BadRequestError(
+      "This external calendar does not support events...",
+    );
   }
 }
 
@@ -40,15 +79,18 @@ export async function handlerCreateEvent(req: Request, res: Response) {
   // one calendar, and its HOME must be one of the linked calendars — those are
   // membership-verified below, which also proves they exist (clean 400/403
   // instead of an FK 500, and no smuggling a foreign calendar in as origin).
-  if (event.calendars.length === 0) throw new BadRequestError("Event needs at least one calendar...");
+  if (event.calendars.length === 0)
+    throw new BadRequestError("Event needs at least one calendar...");
   if (!event.originCalendarID) event.originCalendarID = event.calendars[0];
   if (!event.calendars.includes(event.originCalendarID)) {
-    throw new BadRequestError("originCalendarID must be one of the event's calendars...");
+    throw new BadRequestError(
+      "originCalendarID must be one of the event's calendars...",
+    );
   }
   const newEvent: NewEvent = {
     ...event,
     creatorID: req.user!.id,
-  }
+  };
   for (const cal of event.calendars) {
     await assertCan(req.user!.id, cal, "editEvents");
     await assertEventCapableCalendar(cal);
@@ -88,9 +130,9 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   // Diff the calendar links: what got removed / added / kept.
   const existing = await getEventCalendars(event.id!);
   const incoming = event.calendars;
-  const removed = existing.filter(c => !incoming.includes(c));
-  const added = incoming.filter(c => !existing.includes(c));
-  const kept = incoming.filter(c => existing.includes(c));
+  const removed = existing.filter((c) => !incoming.includes(c));
+  const added = incoming.filter((c) => !existing.includes(c));
+  const kept = incoming.filter((c) => existing.includes(c));
 
   for (const cal of incoming) await assertEventCapableCalendar(cal);
 
@@ -110,10 +152,9 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   );
 
   if (updatedEvent) {
-
     // The local transaction has committed; propagate its new state outward.
-    await pushEventToCalendars(event, added, "create");   // create in Google (+ mapping)
-    await pushEventToCalendars(event, kept, "update");     // update the rest
+    await pushEventToCalendars(event, added, "create"); // create in Google (+ mapping)
+    await pushEventToCalendars(event, kept, "update"); // update the rest
 
     const result = { ...updatedEvent, calendars: incoming };
 
@@ -144,16 +185,20 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   // they can only view are left untouched. The event row is tombstoned only once
   // its last link is gone.
   const existing = await getEventCalendars(event.id);
-  const unlinkCalendarID = req.body?.unlinkCalendarID === undefined
-    ? undefined
-    : requireUUID(req.body.unlinkCalendarID, "unlinkCalendarID");
+  const unlinkCalendarID =
+    req.body?.unlinkCalendarID === undefined
+      ? undefined
+      : requireUUID(req.body.unlinkCalendarID, "unlinkCalendarID");
 
   let targets: string[];
   if (unlinkCalendarID) {
     // Unlink from ONE calendar only (used from a non-origin calendar view).
-    if (!existing.includes(unlinkCalendarID)) throw new BadRequestError("Event isn't in that calendar...");
+    if (!existing.includes(unlinkCalendarID))
+      throw new BadRequestError("Event isn't in that calendar...");
     if (!(await canDo(req.user!.id, unlinkCalendarID, "editEvents"))) {
-      throw new ForbiddenError("You can't remove this event from that calendar.");
+      throw new ForbiddenError(
+        "You can't remove this event from that calendar.",
+      );
     }
     targets = [unlinkCalendarID];
   } else {
@@ -164,14 +209,19 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
       if (await canDo(req.user!.id, cal, "editEvents")) editable.push(cal);
     }
     if (editable.length === 0) {
-      throw new ForbiddenError("You can't remove this event from any of your calendars.");
+      throw new ForbiddenError(
+        "You can't remove this event from any of your calendars.",
+      );
     }
     const origin = (await getEventOrigin(event.id))?.originCalendarID ?? null;
-    targets = (origin && editable.includes(origin)) ? existing : editable;
+    targets = origin && editable.includes(origin) ? existing : editable;
   }
 
   await pushEventToCalendars(event, targets, "delete"); // remove from external while mapping still exists
-  const { remaining, removed } = await unlinkEventAndTombstoneIfOrphaned(event.id, targets);
+  const { remaining, removed } = await unlinkEventAndTombstoneIfOrphaned(
+    event.id,
+    targets,
+  );
 
   const result = { id: event.id, calendars: remaining, removed };
 
@@ -214,7 +264,11 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   if (!existing.includes(calendarID)) {
     await linkEventToCalendars(eventID, [calendarID]);
     const row = await getEvent(eventID);
-    await pushEventToCalendars({ ...row, calendars: [...existing, calendarID] } as Event, [calendarID], "create");
+    await pushEventToCalendars(
+      { ...row, calendars: [...existing, calendarID] } as Event,
+      [calendarID],
+      "create",
+    );
   }
 
   const calendars = await getEventCalendars(eventID);
@@ -225,7 +279,8 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   // the target calendar's members (their open detail modal shows the links).
   const memberIDSeen = new Set<string>();
   for (const cal of calendars) {
-    for (const member of await getCalendarMembers(cal)) memberIDSeen.add(member.userID);
+    for (const member of await getCalendarMembers(cal))
+      memberIDSeen.add(member.userID);
   }
   notifyCalendarMembers([...memberIDSeen], "event_updated", result);
 
@@ -263,10 +318,10 @@ export async function handlerForkEvent(req: Request, res: Response) {
     hasAttendees: src.hasAttendees,
     description: src.description,
     location: src.location,
-    organizer: req.user!.id,       // new owner
+    organizer: req.user!.id, // new owner
     recurrence: src.recurrence,
     url: src.url,
-    originCalendarID: calendarID,   // fork's home = chosen calendar
+    originCalendarID: calendarID, // fork's home = chosen calendar
   };
   const created = await createEvent(newEvent, [calendarID]);
   const result = { ...created, calendars: [calendarID] };
@@ -274,7 +329,11 @@ export async function handlerForkEvent(req: Request, res: Response) {
   await pushEventToProviders(result, "create"); // sync to target's provider if external
 
   const members = await getCalendarMembers(calendarID);
-  notifyCalendarMembers(members.map(m => m.userID), "event_created", result);
+  notifyCalendarMembers(
+    members.map((m) => m.userID),
+    "event_created",
+    result,
+  );
 
   return res.status(201).json(result);
 }
@@ -301,28 +360,40 @@ export function parseAttendanceBody(body: unknown): AttendanceStatus | "none" {
 
   if (typeof input.status === "string") {
     if (!ATTENDANCE_STATUSES.has(input.status)) {
-      throw new BadRequestError("status must be going, maybe, declined or none...");
+      throw new BadRequestError(
+        "status must be going, maybe, declined or none...",
+      );
     }
     return input.status as AttendanceStatus | "none";
   }
-  if (typeof input.attending === "boolean") return input.attending ? "going" : "none";
+  if (typeof input.attending === "boolean")
+    return input.attending ? "going" : "none";
 
-  throw new BadRequestError("status (going | maybe | declined | none) is required...");
+  throw new BadRequestError(
+    "status (going | maybe | declined | none) is required...",
+  );
 }
 
 /**
  * Live-update open details for everyone who can see the event, and hand back the
  * list that was sent.
  */
-async function notifyAttendanceChanged(eventID: string, eventCalendars: string[]) {
+async function notifyAttendanceChanged(
+  eventID: string,
+  eventCalendars: string[],
+) {
   const attendees = await getEventAttendees(eventID);
   // The actor gets the frame too — it carries the same list the PUT response
   // does, harmless.
   const memberIDSeen = new Set<string>();
   for (const cal of eventCalendars) {
-    for (const member of await getCalendarMembers(cal)) memberIDSeen.add(member.userID);
+    for (const member of await getCalendarMembers(cal))
+      memberIDSeen.add(member.userID);
   }
-  notifyCalendarMembers([...memberIDSeen], "attendance_changed", { eventID, attendees });
+  notifyCalendarMembers([...memberIDSeen], "attendance_changed", {
+    eventID,
+    attendees,
+  });
 
   return attendees;
 }
@@ -358,7 +429,10 @@ export async function handlerGetEvents(req: Request, res: Response) {
   const seen = new Map<string, Event>();
   const deletedIds = new Set<string>();
   for (const { event: dbEvent, calendarID } of rows) {
-    if (dbEvent.deletedAt) { deletedIds.add(dbEvent.id); continue; } // tombstone → client drops it
+    if (dbEvent.deletedAt) {
+      deletedIds.add(dbEvent.id);
+      continue;
+    } // tombstone → client drops it
     const existing = seen.get(dbEvent.id);
     if (existing) {
       existing.calendars.push(calendarID);

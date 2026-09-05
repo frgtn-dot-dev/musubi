@@ -23,7 +23,11 @@ import {
 } from "@/services/wire";
 import { useServer } from "@/contexts/ServerContext";
 import { apiVersion } from "@/constants/url";
-import { fedFetch, remoteForCalendar, setHomeRequester } from "@/services/federation";
+import {
+  fedFetch,
+  remoteForCalendar,
+  setHomeRequester,
+} from "@/services/federation";
 import { setReminderWriter } from "@/services/notifications";
 import { SettingsConflictError } from "@/lib/settingsConflict";
 import { notifySessionExpired } from "@/lib/signOut";
@@ -33,8 +37,10 @@ import type { AttendanceChoice } from "@/lib/attendance";
 // Federation: calendars shared from another Musubi server live at that server.
 // Calendar-scoped calls check the registry and, when the calendar is remote,
 // run against its origin with our member token — same endpoints, same shapes.
-const remoteOf = (calendarID: string | null | undefined) => remoteForCalendar(calendarID);
-const eventHome = (event: Event) => event.originCalendarID ?? event.calendars?.[0];
+const remoteOf = (calendarID: string | null | undefined) =>
+  remoteForCalendar(calendarID);
+const eventHome = (event: Event) =>
+  event.originCalendarID ?? event.calendars?.[0];
 
 // Names + avatars only — the API deliberately sends no attendee emails.
 export type Attendee = {
@@ -47,7 +53,13 @@ export type Attendee = {
 // Every endpoint below did the same check inline; keep it in one place.
 // `asserts error is null` preserves the narrowing the inline `if (error) throw`
 // gave — after the call, TS knows `data` is non-null.
-function throwOnError(error: { status?: number | string; message?: string; statusText?: string } | null): asserts error is null {
+function throwOnError(
+  error: {
+    status?: number | string;
+    message?: string;
+    statusText?: string;
+  } | null,
+): asserts error is null {
   if (error) {
     // Dead session — hand off to the recovery flow (registered by the signed-in
     // layout; a no-op on auth screens). Still throws so the caller fails loudly.
@@ -58,7 +70,6 @@ function throwOnError(error: { status?: number | string; message?: string; statu
 }
 
 export function useApi() {
-
   const { authClient: baseAuthClient, apiUrl } = useServer();
   // Better Auth's facade has no request timeout. Wrap its fetch entry point so
   // a weak connection resolves into the same friendly error path as offline,
@@ -68,7 +79,10 @@ export function useApi() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 18_000);
       try {
-        return await baseAuthClient.$fetch<T>(url, { ...options, signal: controller.signal });
+        return await baseAuthClient.$fetch<T>(url, {
+          ...options,
+          signal: controller.signal,
+        });
       } finally {
         clearTimeout(timer);
       }
@@ -78,7 +92,7 @@ export function useApi() {
   // Federation talks to the home server now (the gateway holds the member
   // token), so hand the registry an authenticated requester. Path-based, so the
   // federation module needs neither apiUrl nor the auth client.
-  setHomeRequester(async <T,>(path: string, init?: RequestInit) => {
+  setHomeRequester(async <T>(path: string, init?: RequestInit) => {
     const { error, data } = await authClient.$fetch<T>(`${apiUrl}${path}`, {
       method: init?.method ?? "GET",
       ...(init?.headers ? { headers: init.headers } : {}),
@@ -104,16 +118,18 @@ export function useApi() {
 
   return {
     async createCalendar(calendar: Calendar) {
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const { error, data } = await authClient.$fetch<Calendar>(
+        `${apiUrl}/api/${apiVersion}/calendars`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(calendar),
         },
-        body: JSON.stringify(calendar),
-      });
+      );
 
       throwOnError(error);
-
 
       // Pass the server response through whole — rebuilding the object here
       // silently dropped `role: "owner"`, so the creator didn't get owner
@@ -122,27 +138,36 @@ export function useApi() {
     },
 
     async getCalendars() {
-      const { error, data } = await authClient.$fetch<Calendar[]>(`${apiUrl}/api/${apiVersion}/calendars`, {
-        method: "GET",
-      });
+      const { error, data } = await authClient.$fetch<Calendar[]>(
+        `${apiUrl}/api/${apiVersion}/calendars`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
       return readWire(CalendarsResponse, data, "GET /calendars");
     },
 
     async getCalendar(calendarID: string) {
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars/${calendarID}`, {
-        method: "GET",
-      });
+      const { error, data } = await authClient.$fetch<Calendar>(
+        `${apiUrl}/api/${apiVersion}/calendars/${calendarID}`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
       return readWire(CalendarSchema, data, "GET /calendars/:id");
     },
 
     async getCalendarFromToken(token: string) {
-      const { error, data } = await authClient.$fetch<CalendarInvitePreview>(`${apiUrl}/api/${apiVersion}/calendars/tokens/${token}`, {
-        method: "GET",
-      });
+      const { error, data } = await authClient.$fetch<CalendarInvitePreview>(
+        `${apiUrl}/api/${apiVersion}/calendars/tokens/${token}`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
       return readWire(
@@ -155,18 +180,26 @@ export function useApi() {
     async createEvent(event: Event) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
-        const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
-          method: "POST", body: JSON.stringify(event),
-        });
+        const data = await fedFetch<Event>(
+          remote,
+          `/api/${apiVersion}/events`,
+          {
+            method: "POST",
+            body: JSON.stringify(event),
+          },
+        );
         return readWire(EventSchema, data, "POST /events (federated)");
       }
-      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const { error, data } = await authClient.$fetch<Event>(
+        `${apiUrl}/api/${apiVersion}/events`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(event),
         },
-        body: JSON.stringify(event),
-      });
+      );
 
       throwOnError(error);
 
@@ -176,16 +209,24 @@ export function useApi() {
     async linkEvent(eventID: string, calendarID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events/${eventID}/link`, {
-          method: "POST", body: JSON.stringify({ calendarID }),
-        });
+        const data = await fedFetch<Event>(
+          remote,
+          `/api/${apiVersion}/events/${eventID}/link`,
+          {
+            method: "POST",
+            body: JSON.stringify({ calendarID }),
+          },
+        );
         return readWire(EventSchema, data, "POST /events/:id/link (federated)");
       }
-      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/link`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ calendarID }),
-      });
+      const { error, data } = await authClient.$fetch<Event>(
+        `${apiUrl}/api/${apiVersion}/events/${eventID}/link`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ calendarID }),
+        },
+      );
 
       throwOnError(error);
 
@@ -195,16 +236,24 @@ export function useApi() {
     async forkEvent(eventID: string, calendarID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        const data = await fedFetch<Event>(remote, `/api/${apiVersion}/events/${eventID}/fork`, {
-          method: "POST", body: JSON.stringify({ calendarID }),
-        });
+        const data = await fedFetch<Event>(
+          remote,
+          `/api/${apiVersion}/events/${eventID}/fork`,
+          {
+            method: "POST",
+            body: JSON.stringify({ calendarID }),
+          },
+        );
         return readWire(EventSchema, data, "POST /events/:id/fork (federated)");
       }
-      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events/${eventID}/fork`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ calendarID }),
-      });
+      const { error, data } = await authClient.$fetch<Event>(
+        `${apiUrl}/api/${apiVersion}/events/${eventID}/fork`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ calendarID }),
+        },
+      );
 
       throwOnError(error);
 
@@ -217,18 +266,22 @@ export function useApi() {
         return readWire(
           CalendarSchema,
           await fedFetch<Calendar>(remote, `/api/${apiVersion}/calendars`, {
-            method: "PUT", body: JSON.stringify(calendar),
+            method: "PUT",
+            body: JSON.stringify(calendar),
           }),
           "PUT /calendars (federated)",
         );
       }
-      const { error, data } = await authClient.$fetch<Calendar>(`${apiUrl}/api/${apiVersion}/calendars`, {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
+      const { error, data } = await authClient.$fetch<Calendar>(
+        `${apiUrl}/api/${apiVersion}/calendars`,
+        {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(calendar),
         },
-        body: JSON.stringify(calendar),
-      });
+      );
       throwOnError(error);
 
       return readWire(CalendarSchema, data, "PUT /calendars");
@@ -237,19 +290,27 @@ export function useApi() {
     async removeCalendar(calendar: Calendar) {
       const remote = remoteOf(calendar.id);
       if (remote) {
-        const data = await fedFetch<{ id: string }>(remote, `/api/${apiVersion}/calendars`, {
-          method: "DELETE", body: JSON.stringify(calendar),
-        });
+        const data = await fedFetch<{ id: string }>(
+          remote,
+          `/api/${apiVersion}/calendars`,
+          {
+            method: "DELETE",
+            body: JSON.stringify(calendar),
+          },
+        );
         return data.id;
       }
-      const { error, data } = await authClient.$fetch<{ id: string }>(`${apiUrl}/api/${apiVersion}/calendars`, {
-        method: "DELETE",
-        headers: {
-          "content-type": "application/json",
-        },
+      const { error, data } = await authClient.$fetch<{ id: string }>(
+        `${apiUrl}/api/${apiVersion}/calendars`,
+        {
+          method: "DELETE",
+          headers: {
+            "content-type": "application/json",
+          },
 
-        body: JSON.stringify(calendar),
-      });
+          body: JSON.stringify(calendar),
+        },
+      );
       throwOnError(error);
 
       return data.id;
@@ -261,18 +322,22 @@ export function useApi() {
         return readWire(
           EventSchema,
           await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
-            method: "PUT", body: JSON.stringify(event),
+            method: "PUT",
+            body: JSON.stringify(event),
           }),
           "PUT /events (federated)",
         );
       }
-      const { error, data } = await authClient.$fetch<Event>(`${apiUrl}/api/${apiVersion}/events`, {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
+      const { error, data } = await authClient.$fetch<Event>(
+        `${apiUrl}/api/${apiVersion}/events`,
+        {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(event),
         },
-        body: JSON.stringify(event),
-      });
+      );
       throwOnError(error);
 
       return readWire(EventSchema, data, "PUT /events");
@@ -281,11 +346,20 @@ export function useApi() {
     async removeEvent(event: Event, unlinkCalendarID?: string) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
-        return fedFetch<{ id: string; calendars: string[]; removed: boolean }>(remote, `/api/${apiVersion}/events`, {
-          method: "DELETE", body: JSON.stringify({ ...event, unlinkCalendarID }),
-        });
+        return fedFetch<{ id: string; calendars: string[]; removed: boolean }>(
+          remote,
+          `/api/${apiVersion}/events`,
+          {
+            method: "DELETE",
+            body: JSON.stringify({ ...event, unlinkCalendarID }),
+          },
+        );
       }
-      const { error, data } = await authClient.$fetch<{ id: string; calendars: string[]; removed: boolean }>(`${apiUrl}/api/${apiVersion}/events`, {
+      const { error, data } = await authClient.$fetch<{
+        id: string;
+        calendars: string[];
+        removed: boolean;
+      }>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
@@ -301,11 +375,20 @@ export function useApi() {
     async getEventAttendees(event: Event) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
-        return (await fedFetch<Attendee[]>(remote, `/api/${apiVersion}/events/${event.id}/attendees`, { method: "GET" })) ?? [];
+        return (
+          (await fedFetch<Attendee[]>(
+            remote,
+            `/api/${apiVersion}/events/${event.id}/attendees`,
+            { method: "GET" },
+          )) ?? []
+        );
       }
-      const { error, data } = await authClient.$fetch<Attendee[]>(`${apiUrl}/api/${apiVersion}/events/${event.id}/attendees`, {
-        method: "GET",
-      });
+      const { error, data } = await authClient.$fetch<Attendee[]>(
+        `${apiUrl}/api/${apiVersion}/events/${event.id}/attendees`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
 
@@ -315,15 +398,25 @@ export function useApi() {
     async setAttendance(event: Event, status: AttendanceChoice) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
-        return (await fedFetch<Attendee[]>(remote, `/api/${apiVersion}/events/${event.id}/attendance`, {
-          method: "PUT", body: JSON.stringify({ status }),
-        })) ?? [];
+        return (
+          (await fedFetch<Attendee[]>(
+            remote,
+            `/api/${apiVersion}/events/${event.id}/attendance`,
+            {
+              method: "PUT",
+              body: JSON.stringify({ status }),
+            },
+          )) ?? []
+        );
       }
-      const { error, data } = await authClient.$fetch<Attendee[]>(`${apiUrl}/api/${apiVersion}/events/${event.id}/attendance`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
+      const { error, data } = await authClient.$fetch<Attendee[]>(
+        `${apiUrl}/api/${apiVersion}/events/${event.id}/attendance`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+      );
 
       throwOnError(error);
 
@@ -331,9 +424,15 @@ export function useApi() {
     },
 
     async getEvents(since?: Date) {
-      const qs = since ? `?since=${encodeURIComponent(since.toISOString())}` : "";
+      const qs = since
+        ? `?since=${encodeURIComponent(since.toISOString())}`
+        : "";
 
-      const { error, data } = await authClient.$fetch<{ events: Event[]; deletedIds: string[]; serverTime: string }>(`${apiUrl}/api/${apiVersion}/events${qs}`, {
+      const { error, data } = await authClient.$fetch<{
+        events: Event[];
+        deletedIds: string[];
+        serverTime: string;
+      }>(`${apiUrl}/api/${apiVersion}/events${qs}`, {
         method: "GET",
         headers: {
           "content-type": "application/json",
@@ -350,19 +449,27 @@ export function useApi() {
       if (remote) {
         return readWire(
           InviteSchema,
-          await fedFetch<Invite>(remote, `/api/${apiVersion}/calendars/invites`, {
-            method: "POST", body: JSON.stringify(invite),
-          }),
+          await fedFetch<Invite>(
+            remote,
+            `/api/${apiVersion}/calendars/invites`,
+            {
+              method: "POST",
+              body: JSON.stringify(invite),
+            },
+          ),
           "POST /calendars/invites (federated)",
         );
       }
-      const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/${apiVersion}/calendars/invites`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+      const { error, data } = await authClient.$fetch<Invite>(
+        `${apiUrl}/api/${apiVersion}/calendars/invites`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(invite),
         },
-        body: JSON.stringify(invite),
-      });
+      );
 
       throwOnError(error);
 
@@ -374,14 +481,17 @@ export function useApi() {
     async importCalendar(ics: string, name: string, color: string) {
       const { data } = await baseAuthClient.getSession();
       const qs = `?name=${encodeURIComponent(name)}&color=${encodeURIComponent(color)}`;
-      const res = await fetchWithTimeout(`${apiUrl}/api/${apiVersion}/calendars/import${qs}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${data?.session?.token}`,
-          "content-type": "text/calendar",
+      const res = await fetchWithTimeout(
+        `${apiUrl}/api/${apiVersion}/calendars/import${qs}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${data?.session?.token}`,
+            "content-type": "text/calendar",
+          },
+          body: ics,
         },
-        body: ics,
-      });
+      );
       if (!res.ok) throw new Error(`${res.status}: import failed`);
       return res.json() as Promise<Calendar & { imported: number }>;
     },
@@ -407,28 +517,46 @@ export function useApi() {
       if (remote) {
         return readWire(
           InvitesResponse,
-          (await fedFetch<Invite[]>(remote, `/api/${apiVersion}/calendars/${calendarID}/invites`, { method: "GET" })) ?? [],
+          (await fedFetch<Invite[]>(
+            remote,
+            `/api/${apiVersion}/calendars/${calendarID}/invites`,
+            { method: "GET" },
+          )) ?? [],
           "GET /calendars/:id/invites (federated)",
         );
       }
-      const { error, data } = await authClient.$fetch<Invite[]>(`${apiUrl}/api/${apiVersion}/calendars/${calendarID}/invites`, {
-        method: "GET",
-      });
+      const { error, data } = await authClient.$fetch<Invite[]>(
+        `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/invites`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
 
-      return readWire(InvitesResponse, data ?? [], "GET /calendars/:id/invites");
+      return readWire(
+        InvitesResponse,
+        data ?? [],
+        "GET /calendars/:id/invites",
+      );
     },
 
     async revokeInvite(calendarID: string, inviteID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        await fedFetch(remote, `/api/${apiVersion}/calendars/invites/${inviteID}`, { method: "DELETE" });
+        await fedFetch(
+          remote,
+          `/api/${apiVersion}/calendars/invites/${inviteID}`,
+          { method: "DELETE" },
+        );
         return true;
       }
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/calendars/invites/${inviteID}`, {
-        method: "DELETE",
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/calendars/invites/${inviteID}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       throwOnError(error);
 
@@ -436,11 +564,14 @@ export function useApi() {
     },
 
     async acceptInvite(calendarID: string, token: string) {
-      const { error, data } = await authClient.$fetch<Invite>(`${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
+      const { error, data } = await authClient.$fetch<Invite>(
+        `${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        },
+      );
 
       throwOnError(error);
 
@@ -448,11 +579,14 @@ export function useApi() {
     },
 
     async uploadAvatar(base64: string) {
-      const { error, data } = await authClient.$fetch<{ url: string }>(`${apiUrl}/api/${apiVersion}/users/avatar`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ data: base64 }),
-      });
+      const { error, data } = await authClient.$fetch<{ url: string }>(
+        `${apiUrl}/api/${apiVersion}/users/avatar`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ data: base64 }),
+        },
+      );
 
       throwOnError(error);
       return data.url;
@@ -461,12 +595,19 @@ export function useApi() {
     async leaveCalendar(calendarID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        await fedFetch(remote, `/api/${apiVersion}/calendars/members/${calendarID}`, { method: "DELETE" });
+        await fedFetch(
+          remote,
+          `/api/${apiVersion}/calendars/members/${calendarID}`,
+          { method: "DELETE" },
+        );
         return true;
       }
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`, {
-        method: "DELETE",
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/calendars/members/${calendarID}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       throwOnError(error);
 
@@ -476,25 +617,40 @@ export function useApi() {
     async getCalendarMembers(calendarID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        return (await fedFetch<{ id: string; name: string; image?: string | null; role: string }[]>(
-          remote, `/api/${apiVersion}/calendars/${calendarID}/members`, { method: "GET" })) ?? [];
+        return (
+          (await fedFetch<
+            { id: string; name: string; image?: string | null; role: string }[]
+          >(remote, `/api/${apiVersion}/calendars/${calendarID}/members`, {
+            method: "GET",
+          })) ?? []
+        );
       }
-      const { data, error } = await authClient.$fetch<{ id: string; name: string; image?: string | null; role: string }[]>(
-        `${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members`,
-        { method: "GET" },
-      );
+      const { data, error } = await authClient.$fetch<
+        { id: string; name: string; image?: string | null; role: string }[]
+      >(`${apiUrl}/api/${apiVersion}/calendars/${calendarID}/members`, {
+        method: "GET",
+      });
 
       throwOnError(error);
 
       return data ?? [];
     },
 
-    async setMemberRole(calendarID: string, userID: string, role: "viewer" | "editor" | "owner") {
+    async setMemberRole(
+      calendarID: string,
+      userID: string,
+      role: "viewer" | "editor" | "owner",
+    ) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        await fedFetch(remote, `/api/${apiVersion}/calendars/${calendarID}/members/${userID}`, {
-          method: "PUT", body: JSON.stringify({ role }),
-        });
+        await fedFetch(
+          remote,
+          `/api/${apiVersion}/calendars/${calendarID}/members/${userID}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ role }),
+          },
+        );
         return true;
       }
       const { error } = await authClient.$fetch(
@@ -510,7 +666,11 @@ export function useApi() {
     async removeMember(calendarID: string, userID: string) {
       const remote = remoteOf(calendarID);
       if (remote) {
-        await fedFetch(remote, `/api/${apiVersion}/calendars/${calendarID}/members/${userID}`, { method: "DELETE" });
+        await fedFetch(
+          remote,
+          `/api/${apiVersion}/calendars/${calendarID}/members/${userID}`,
+          { method: "DELETE" },
+        );
         return true;
       }
       const { error } = await authClient.$fetch(
@@ -546,9 +706,12 @@ export function useApi() {
     },
 
     async getSettingsDocument() {
-      const { data, error } = await authClient.$fetch<SettingsDocument>(`${apiUrl}/api/${apiVersion}/users/settings/document`, {
-        method: "GET",
-      });
+      const { data, error } = await authClient.$fetch<SettingsDocument>(
+        `${apiUrl}/api/${apiVersion}/users/settings/document`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
 
@@ -560,13 +723,16 @@ export function useApi() {
     },
 
     async patchSettings(request: PatchSettingsRequest) {
-      const { data, error } = await authClient.$fetch<SettingsDocument>(`${apiUrl}/api/${apiVersion}/users/me/settings`, {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
+      const { data, error } = await authClient.$fetch<SettingsDocument>(
+        `${apiUrl}/api/${apiVersion}/users/me/settings`,
+        {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(request),
         },
-        body: JSON.stringify(request),
-      });
+      );
 
       if (Number(error?.status) === 409) throw new SettingsConflictError();
       throwOnError(error);
@@ -588,9 +754,12 @@ export function useApi() {
     },
 
     async deleteUser() {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users`, {
-        method: "DELETE",
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users`,
+        {
+          method: "DELETE",
+        },
+      );
 
       throwOnError(error);
 
@@ -598,9 +767,12 @@ export function useApi() {
     },
 
     async checkGoogleStatus() {
-      const { error, data } = await authClient.$fetch<GoogleCheck>(`${apiUrl}/api/${apiVersion}/users/connections/google`, {
-        method: "GET",
-      });
+      const { error, data } = await authClient.$fetch<GoogleCheck>(
+        `${apiUrl}/api/${apiVersion}/users/connections/google`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
 
@@ -608,9 +780,12 @@ export function useApi() {
     },
 
     async revokeGoogleConnection() {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/google/revoke`, {
-        method: "POST",
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users/connections/google/revoke`,
+        {
+          method: "POST",
+        },
+      );
 
       throwOnError(error);
 
@@ -620,25 +795,33 @@ export function useApi() {
     },
 
     async getGoogleCalendars() {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/calendars/google`, {
-        method: "GET",
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/calendars/google`,
+        {
+          method: "GET",
+        },
+      );
 
       throwOnError(error);
     },
 
     async connectCaldav(serverUrl: string, username: string, password: string) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serverUrl, username, password }),
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users/connections/caldav`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serverUrl, username, password }),
+        },
+      );
 
       throwOnError(error);
     },
 
     async getCaldavAccounts() {
-      const { error, data } = await authClient.$fetch<{ accounts: { id: string; serverUrl: string; username: string }[] }>(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
+      const { error, data } = await authClient.$fetch<{
+        accounts: { id: string; serverUrl: string; username: string }[];
+      }>(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
         method: "GET",
       });
 
@@ -648,11 +831,14 @@ export function useApi() {
     },
 
     async disconnectCaldav(accountId: string) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/caldav`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId }),
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users/connections/caldav`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId }),
+        },
+      );
 
       throwOnError(error);
     },
@@ -662,21 +848,27 @@ export function useApi() {
     // `/federation/connections`, and the connection is created by
     // `/federation/connect`, both without a credential ever reaching this device.
     async deleteMusubiAccount(server: string) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/musubi`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ server }),
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users/connections/musubi`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ server }),
+        },
+      );
       throwOnError(error);
       return true;
     },
 
     async disconnectAccount(provider: string, accountId: string) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/disconnect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, accountId }),
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users/connections/disconnect`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, accountId }),
+        },
+      );
 
       throwOnError(error);
     },
@@ -684,13 +876,16 @@ export function useApi() {
     // Stop syncing ONE external calendar (drop its mirror) without disconnecting
     // the account or touching the calendar on the provider.
     async disconnectExternalCalendar(calendarId: string) {
-      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/users/connections/calendars/disconnect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ calendarId }),
-      });
+      const { error } = await authClient.$fetch(
+        `${apiUrl}/api/${apiVersion}/users/connections/calendars/disconnect`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ calendarId }),
+        },
+      );
 
       throwOnError(error);
-    }
-  }
-};
+    },
+  };
+}

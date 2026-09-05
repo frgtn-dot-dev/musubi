@@ -1,13 +1,32 @@
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createCalendar, db, ensureDefaultPage, getUserSettings, hasProviderSyncScopes, markOAuthAccountActive, schema } from '@musubi/db';
-import { config, logger } from '@musubi/config';
-import { defaultPageConfig } from '@musubi/types';
-import { sendEmail, getPasswordResetHtml, getDeleteAccountHtml, getVerifyEmailHtml, getChangeEmailHtml, getSignInCodeHtml } from '@musubi/emails';
-import { withVerifiedLanding } from './verified_landing';
-import { appleClientSecret, appleWebConfigured, type AppleWebCredentials } from './apple_secret';
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import {
+  createCalendar,
+  db,
+  ensureDefaultPage,
+  getUserSettings,
+  hasProviderSyncScopes,
+  markOAuthAccountActive,
+  schema,
+} from "@musubi/db";
+import { config, logger } from "@musubi/config";
+import { defaultPageConfig } from "@musubi/types";
+import {
+  sendEmail,
+  getPasswordResetHtml,
+  getDeleteAccountHtml,
+  getVerifyEmailHtml,
+  getChangeEmailHtml,
+  getSignInCodeHtml,
+} from "@musubi/emails";
+import { withVerifiedLanding } from "./verified_landing";
+import {
+  appleClientSecret,
+  appleWebConfigured,
+  type AppleWebCredentials,
+} from "./apple_secret";
 
 const appleWeb: AppleWebCredentials = {
   keyId: config.social.appleKeyID,
@@ -30,14 +49,16 @@ export const auth = betterAuth({
     "https://appleid.apple.com",
     "https://musubi.pro",
     "https://dev.musubi.pro",
-    ...(config.api.environment === "dev" ? [
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      "exp://",                      // Trust all Expo URLs (prefix matching)
-      "exp://**",                    // Trust all Expo URLs (wildcard matching)
-      "exp://192.168.*.*:*/**",      // Trust 192.168.x.x IP range with any port and path
-      "exp://10.0.2.2:*/**",
-    ] : [])
+    ...(config.api.environment === "dev"
+      ? [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "exp://", // Trust all Expo URLs (prefix matching)
+          "exp://**", // Trust all Expo URLs (wildcard matching)
+          "exp://192.168.*.*:*/**", // Trust 192.168.x.x IP range with any port and path
+          "exp://10.0.2.2:*/**",
+        ]
+      : []),
   ],
   emailAndPassword: {
     enabled: true,
@@ -48,8 +69,12 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, token }, _) => {
       // Served by this API on its own origin (apps/api handlers/pages.ts), so
       // self-hosters don't depend on the central website.
-      const customUrl = `${config.api.url}/reset-password?token=${token}`
-      await sendEmail(user.email, "Reset your password", getPasswordResetHtml(user.name, customUrl, "1 hour"));
+      const customUrl = `${config.api.url}/reset-password?token=${token}`;
+      await sendEmail(
+        user.email,
+        "Reset your password",
+        getPasswordResetHtml(user.name, customUrl, "1 hour"),
+      );
     },
   },
   emailVerification: {
@@ -73,9 +98,7 @@ export const auth = betterAuth({
   },
   socialProviders: {
     google: {
-      clientId: [
-        config.social.googleWebClientID,
-      ],
+      clientId: [config.social.googleWebClientID],
       clientSecret: config.social.googleClientSecret,
       accessType: "offline",
       prompt: "select_account consent",
@@ -95,7 +118,10 @@ export const auth = betterAuth({
       clientId: appleWebSignInEnabled
         ? [config.social.appleServicesID, config.social.appleClientID]
         : config.social.appleClientID,
-      audience: [config.social.appleServicesID, config.social.appleClientID].filter(Boolean),
+      audience: [
+        config.social.appleServicesID,
+        config.social.appleClientID,
+      ].filter(Boolean),
       appBundleIdentifier: "dev.frgtn.musubi",
       // A getter, not a value: Apple wants a JWT signed with the .p8 key, and a
       // fresh one per exchange is what keeps a server that has been up for six
@@ -104,7 +130,7 @@ export const auth = betterAuth({
       get clientSecret() {
         return appleWebSignInEnabled ? appleClientSecret(appleWeb) : "";
       },
-    }
+    },
   },
   account: {
     // Encrypt OAuth access/refresh tokens at rest, keyed by the auth secret
@@ -112,10 +138,31 @@ export const auth = betterAuth({
     // decrypts with the same key via apps/api's tokenCrypto helpers.
     encryptOAuthTokens: true,
     additionalFields: {
-      syncStatus: { type: "string", required: false, defaultValue: "active", input: false, returned: false },
-      syncErrorCode: { type: "string", required: false, input: false, returned: false },
-      syncErrorSubtype: { type: "string", required: false, input: false, returned: false },
-      syncDisabledAt: { type: "date", required: false, input: false, returned: false },
+      syncStatus: {
+        type: "string",
+        required: false,
+        defaultValue: "active",
+        input: false,
+        returned: false,
+      },
+      syncErrorCode: {
+        type: "string",
+        required: false,
+        input: false,
+        returned: false,
+      },
+      syncErrorSubtype: {
+        type: "string",
+        required: false,
+        input: false,
+        returned: false,
+      },
+      syncDisabledAt: {
+        type: "date",
+        required: false,
+        input: false,
+        returned: false,
+      },
     },
     accountLinking: {
       enabled: true,
@@ -141,7 +188,12 @@ export const auth = betterAuth({
         await sendEmail(
           user.email,
           "Approve your new email address",
-          getChangeEmailHtml(user.name, newEmail, withVerifiedLanding(url), "1 hour"),
+          getChangeEmailHtml(
+            user.name,
+            newEmail,
+            withVerifiedLanding(url),
+            "1 hour",
+          ),
         );
       },
     },
@@ -155,9 +207,13 @@ export const auth = betterAuth({
       sendDeleteAccountVerification: async ({ user, token }) => {
         // Served by this API on its own origin (apps/api handlers/pages.ts).
         const url = `${config.api.url}/delete-account?token=${token}`;
-        await sendEmail(user.email, "Confirm account deletion", getDeleteAccountHtml(user.name, url, "1 hour"));
+        await sendEmail(
+          user.email,
+          "Confirm account deletion",
+          getDeleteAccountHtml(user.name, url, "1 hour"),
+        );
       },
-    }
+    },
   },
   databaseHooks: {
     account: {
@@ -171,7 +227,11 @@ export const auth = betterAuth({
             hasProviderSyncScopes(account.providerId, account.scope ?? "") &&
             account.syncStatus === "reconnect_required"
           ) {
-            await markOAuthAccountActive(account.userId, account.providerId, account.accountId);
+            await markOAuthAccountActive(
+              account.userId,
+              account.providerId,
+              account.accountId,
+            );
           }
         },
       },
@@ -182,10 +242,18 @@ export const auth = betterAuth({
         // undeletable, non-transferable, the default home for future features.
         after: async (user) => {
           try {
-            await createCalendar({ name: user.name?.trim() || "Personal", color: "#C8553D", creatorID: user.id, isDefault: true });
+            await createCalendar({
+              name: user.name?.trim() || "Personal",
+              color: "#C8553D",
+              creatorID: user.id,
+              isDefault: true,
+            });
           } catch (e) {
             // Never block registration on this; onboarding self-heals a miss.
-            logger.error("auth.signup.personal_calendar_failed", { userId: user.id, error: e });
+            logger.error("auth.signup.personal_calendar_failed", {
+              userId: user.id,
+              error: e,
+            });
           }
           try {
             // Materialize the settings row now (onboarded=false) so the client's
@@ -193,7 +261,10 @@ export const auth = betterAuth({
             // lazy create left new users with no row (and PUT settings 404s).
             await getUserSettings(user.id);
           } catch (e) {
-            logger.error("auth.signup.settings_failed", { userId: user.id, error: e });
+            logger.error("auth.signup.settings_failed", {
+              userId: user.id,
+              error: e,
+            });
           }
           try {
             // Give the user their default "My calendar" Page up front. Existing
@@ -203,7 +274,10 @@ export const auth = betterAuth({
               config: defaultPageConfig("month"),
             });
           } catch (e) {
-            logger.error("auth.signup.default_page_failed", { userId: user.id, error: e });
+            logger.error("auth.signup.default_page_failed", {
+              userId: user.id,
+              error: e,
+            });
           }
         },
       },
@@ -219,7 +293,11 @@ export const auth = betterAuth({
       // enough that a code left in an inbox is not a standing key.
       expiresIn: 10 * 60,
       sendVerificationOTP: async ({ email, otp }) => {
-        await sendEmail(email, `${otp} is your Musubi code`, getSignInCodeHtml(otp, "10 minutes"));
+        await sendEmail(
+          email,
+          `${otp} is your Musubi code`,
+          getSignInCodeHtml(otp, "10 minutes"),
+        );
       },
     }),
   ],
