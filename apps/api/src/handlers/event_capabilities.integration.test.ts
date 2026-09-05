@@ -9,7 +9,7 @@ import {
   getExternalEvent, getOAuthCredentials, importExternalCalendar, importExternalEvent,
   linkEventToCalendars, memberTokens, saveCaldavAccount, setExternalEventSyncData, user,
 } from "@musubi/db";
-import { EventSchema } from "@musubi/types";
+import { CLIENT_VERSION_HEADER, EventSchema, PRODUCT_VERSION } from "@musubi/types";
 import { endSeriesBefore, excludeOccurrence, withSeriesEditIntent } from "@musubi/calendar";
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
@@ -114,7 +114,7 @@ async function main() {
     return realFetch(`${fixtureOrigin}${url.pathname}${url.search}`, init);
   };
   const request = (method: string, body: unknown, path = "/events", bearer = token.raw) => fetch(`${apiOrigin}${path}`, {
-    method, headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` }, body: JSON.stringify(body),
+    method, headers: { "content-type": "application/json", authorization: `Bearer ${bearer}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: JSON.stringify(body),
   });
   const snapshot = async () => JSON.stringify([
     await db.select().from(events).orderBy(events.id),
@@ -322,7 +322,7 @@ async function main() {
     }
     // New-calendar import has the explicitly approved empty-calendar boundary.
     const recurringIcs = originalResource;
-    const importIcs = (provider: string, accountId: string, data: string) => fetch(`${apiOrigin}/import?provider=${provider}&accountId=${accountId}`, { method: "POST", headers: { authorization: `Bearer ${token.raw}`, "content-type": "text/calendar" }, body: data });
+    const importIcs = (provider: string, accountId: string, data: string) => fetch(`${apiOrigin}/import?provider=${provider}&accountId=${accountId}`, { method: "POST", headers: { authorization: `Bearer ${token.raw}`, "content-type": "text/calendar", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: data });
     const calendarCount = async () => (await db.select().from(calendars).where(eq(calendars.creatorID, owner))).length;
     let count = await calendarCount();
     const remoteCount = remoteCalendarCreates;

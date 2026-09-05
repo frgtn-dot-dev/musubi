@@ -1,4 +1,5 @@
 import { useEventsStore } from "@/store/useEventsStore";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { useEffect, useRef } from "react";
 import EventSource from "react-native-sse";
 import * as Network from "expo-network";
@@ -111,7 +112,7 @@ export function useConnectToEventStream() {
 
     const subscribe = (url: string, token: string) => {
       const sse = new EventSource(`${url}/api/stream`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION },
       });
       // The library auto-reconnects every pollingInterval (5s) after an error or
       // clean stream end. Every open after the first catches up lost frames.

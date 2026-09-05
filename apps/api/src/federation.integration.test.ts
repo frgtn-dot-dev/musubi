@@ -16,7 +16,7 @@ import {
   rotateMemberToken,
   user,
 } from "@musubi/db";
-import { MEMBER_TOKEN_TTL_MS } from "@musubi/types";
+import { CLIENT_VERSION_HEADER, MEMBER_TOKEN_TTL_MS, PRODUCT_VERSION } from "@musubi/types";
 import { hashMemberToken } from "./federation_tokens";
 import { handlerFederationAccept } from "./handlers/federation";
 
@@ -36,6 +36,7 @@ async function acceptInvite(
       },
     },
     headers: authorization ? { authorization } : {},
+    get: (name: string) => name === CLIENT_VERSION_HEADER ? PRODUCT_VERSION : undefined,
   } as Request;
   const res = {
     status(code: number) {

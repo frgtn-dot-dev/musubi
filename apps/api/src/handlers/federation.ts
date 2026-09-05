@@ -11,7 +11,7 @@ import {
 	rotateMemberToken,
 	upsertMusubiAccount,
 } from "@musubi/db";
-import { BadRequestError, UnauthorizedError } from "@musubi/types";
+import { BadRequestError, CLIENT_VERSION_HEADER, isCompatibleVersion, MIN_PEER_VERSION, PRODUCT_VERSION, UnauthorizedError } from "@musubi/types";
 import { decryptSecret, encryptSecret } from "../sync/crypto";
 import {
 	bearerMemberToken,
@@ -45,6 +45,10 @@ const FederationProfileSchema = z.object({
  * profile fields therefore cannot bind to somebody else's memberships.
  */
 export async function handlerFederationAccept(req: Request, res: Response) {
+	if (!isCompatibleVersion(req.get(CLIENT_VERSION_HEADER), MIN_PEER_VERSION)) {
+		return res.status(426).json({ error: "PeerUpgradeRequired", minPeerVersion: MIN_PEER_VERSION,
+			message: `Federation requires Musubi ${MIN_PEER_VERSION} or newer on both servers.` });
+	}
 	const { token, profile } = req.body ?? {};
 	if (!token || typeof token !== "string")
 		throw new BadRequestError("Missing invite token...");
@@ -222,6 +226,7 @@ export async function handlerFederationConnect(req: Request, res: Response) {
 	);
 	const headers = new Headers({
 		accept: "application/json",
+		[CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
 		"content-type": "application/json",
 	});
 	if (existing) {

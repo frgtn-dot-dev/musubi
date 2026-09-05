@@ -136,30 +136,17 @@ void (async () => {
     "a newer peer is fine",
   );
 
-  // Silence is tolerated, not fatal: the read rule says a missing field is
-  // something to cope with, and the handshake that follows is the real test.
+  // K06: compatibility must be established before handing a peer requests.
   answering({ ok: true });
-  assert.equal(
-    await peerTooOld("https://unversioned.example"),
-    null,
-    "a peer that names no version is allowed through",
-  );
+  assert.match(String(await peerTooOld("https://unversioned.example")), /could not be verified/);
 
   answering({}, 500);
-  assert.equal(
-    await peerTooOld("https://broken.example"),
-    null,
-    "a peer that cannot be read is allowed through",
-  );
+  assert.match(String(await peerTooOld("https://broken.example")), /could not be verified/);
 
   globalThis.fetch = (async () => {
     throw new Error("connection refused");
   }) as typeof fetch;
-  assert.equal(
-    await peerTooOld("https://down.example"),
-    null,
-    "an unreachable peer is left to the handshake",
-  );
+  assert.match(String(await peerTooOld("https://down.example")), /could not be verified/);
 
   globalThis.fetch = realFetch;
   console.log("federation security self-check: OK");

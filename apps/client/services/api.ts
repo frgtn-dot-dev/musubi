@@ -1,5 +1,7 @@
 import {
   AnnouncementsResponseSchema,
+  CLIENT_VERSION_HEADER,
+  PRODUCT_VERSION,
   CalendarInvitePreviewSchema,
   CalendarSchema,
   EventSchema,
@@ -492,6 +494,7 @@ export function useApi() {
           method: "POST",
           headers: {
             Authorization: `Bearer ${data?.session?.token}`,
+            [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
             "content-type": "text/calendar",
           },
           body: ics,
@@ -511,7 +514,7 @@ export function useApi() {
         : `/api/${apiVersion}/calendars/${calendarID}/export`;
       const token = (await baseAuthClient.getSession()).data?.session?.token;
       const res = await fetchWithTimeout(`${apiUrl}${path}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION },
       });
       if (!res.ok) throw new Error(`${res.status}: export failed`);
       return res.text();

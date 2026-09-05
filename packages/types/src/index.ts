@@ -13,6 +13,8 @@ export * from "./google";
 export * from "./permissions";
 export * from "./federation";
 export {
+  CLIENT_VERSION_HEADER,
+  isCompatibleVersion,
   compareVersions,
   MIN_CLIENT_VERSION,
   MIN_PEER_VERSION,

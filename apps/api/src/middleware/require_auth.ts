@@ -4,10 +4,11 @@ import { UnauthorizedError } from "@musubi/types";
 import type { NextFunction, Request, Response } from "express";
 import { bearerMemberToken, hashMemberToken } from "../federation_tokens";
 import { logger } from "@musubi/config";
+import { requireClientVersion } from "./require_client_version";
 
 export async function requireAuth(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ) {
   const session = await auth.api.getSession({
@@ -16,7 +17,7 @@ export async function requireAuth(
   if (session) {
     req.user = session.user;
     logger.addContext({ userId: session.user.id });
-    return next();
+    return requireClientVersion(req, res, next);
   }
 
   // Federation fallback: external (shadow) members authenticate with a member
@@ -28,7 +29,7 @@ export async function requireAuth(
     if (external) {
       req.user = external;
       logger.addContext({ userId: external.id });
-      return next();
+      return requireClientVersion(req, res, next);
     }
   }
 

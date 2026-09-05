@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EventWriteReason } from "@musubi/types";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, type EventWriteReason } from "@musubi/types";
 import { notifyAuthExpired } from "~/auth/auth-client";
 
 const ApiErrorEnvelopeSchema = z.object({
@@ -115,6 +115,7 @@ export async function apiRequest<T>(
   const requestHeaders = new Headers(headers);
   requestHeaders.set("accept", "application/json");
   requestHeaders.set("x-request-id", requestId());
+  requestHeaders.set(CLIENT_VERSION_HEADER, PRODUCT_VERSION);
 
   if (body !== undefined) {
     requestHeaders.set("content-type", "application/json");
@@ -172,6 +173,7 @@ export async function apiRawBodyRequest<T>(
       accept: "application/json",
       "content-type": contentType,
       "x-request-id": requestId(),
+      [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
     },
     method,
     signal: signal
@@ -197,6 +199,7 @@ export async function apiTextRequest(
     headers: {
       accept: "text/calendar",
       "x-request-id": requestId(),
+      [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
     },
     signal: signal
       ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])

@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUTH_EXPIRED_EVENT } from "~/auth/auth-client";
-import { ApiError, ApiResponseError, apiRequest } from "./http";
+import { ApiError, ApiResponseError, apiRawBodyRequest, apiRequest, apiTextRequest } from "./http";
 import { getEventMutationError } from "~/calendar/event-permissions";
 
 afterEach(() => {
@@ -44,6 +45,29 @@ describe("apiRequest", () => {
     );
     const headers = new Headers(fetchMock.mock.calls[0]![1].headers);
     expect(headers.get("x-request-id")).toBeTruthy();
+    expect(headers.get(CLIENT_VERSION_HEADER)).toBe(PRODUCT_VERSION);
+  });
+
+  it("versions raw uploads and ICS exports without changing their bodies", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiRawBodyRequest("/api/v1/calendars/import", { body: "BEGIN:VCALENDAR", contentType: "text/calendar", responseSchema: z.object({}) });
+    await apiTextRequest("/api/v1/calendars/home/export");
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(new Headers(init.headers).get(CLIENT_VERSION_HEADER)).toBe(PRODUCT_VERSION);
+    }
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe("BEGIN:VCALENDAR");
+  });
+
+  it("preserves upgrade refusal without expiring a session or discarding a draft", async () => {
+    const expired = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, expired);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "ClientUpgradeRequired", message: "Update Musubi. Your open draft has not been submitted.",
+    }), { status: 426 })));
+    await expect(apiRequest("/api/v1/events", { responseSchema: z.unknown() })).rejects.toMatchObject({ status: 426, message: "Update Musubi. Your open draft has not been submitted." });
+    expect(expired).not.toHaveBeenCalled();
+    window.removeEventListener(AUTH_EXPIRED_EVENT, expired);
   });
 
   it("preserves the server request ID and emits the auth transition on 401", async () => {

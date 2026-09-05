@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import express from "express";
@@ -55,7 +56,7 @@ async function main() {
   };
   const post = (body: unknown, authenticated = true) => fetch(`${apiOrigin}/api/v1/users/connections/sync`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(authenticated ? { authorization: `Bearer ${token.raw}` } : {}) },
+    headers: { "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION, ...(authenticated ? { authorization: `Bearer ${token.raw}` } : {}) },
     body: JSON.stringify(body),
   });
   const calendars = (userID: string, accountID: string) => getUserExternalCalendars("microsoft", userID, accountID);
@@ -96,7 +97,7 @@ async function main() {
     assert.deepEqual(await db.select().from(account).where(inArray(account.userId, [owner, other])), before);
 
     requests.length = 0;
-    assert.equal((await fetch(`${apiOrigin}/api/v1/calendars/google`, { headers: { authorization: `Bearer ${token.raw}` } })).status, 200);
+    assert.equal((await fetch(`${apiOrigin}/api/v1/calendars/google`, { headers: { authorization: `Bearer ${token.raw}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION } })).status, 200);
     assert.equal(requests.length, 0, "Legacy route is still Google-only");
 
     // Exact same work-list/orchestration boundary used by the scheduler.
