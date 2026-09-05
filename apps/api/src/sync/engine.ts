@@ -4,6 +4,7 @@ import {
   deleteExternalEvent,
   deleteExternalTask,
   getCalendarMembers,
+  getEventCalendars,
   getExternalEvent,
   getExternalTask,
   getDisabledExternalCalendarIDs,
@@ -128,6 +129,25 @@ export async function reconcileExternalChanges(
   return changed;
 }
 
+// A user who lost their last link is absent from subsequent event deltas.
+// Reuse the existing removal frame so even older clients evict that copy.
+async function notifyExternalEventUnlinks(calendarID: string, eventIDs: string[]) {
+  if (eventIDs.length === 0) return;
+  const previousMembers = await getCalendarMembers(calendarID);
+  for (const id of new Set(eventIDs)) {
+    const remainingCalendars = await getEventCalendars(id);
+    const remainingMembers = new Set<string>();
+    for (const calendar of remainingCalendars) {
+      for (const member of await getCalendarMembers(calendar)) remainingMembers.add(member.userID);
+    }
+    notifyCalendarMembers(
+      previousMembers.filter((member) => !remainingMembers.has(member.userID)).map((member) => member.userID),
+      "event_removed",
+      { id },
+    );
+  }
+}
+
 // Pull: reconcile calendars, then pull each calendar's changes into Musubi. Scoped
 // to ONE connected account of the provider.
 export async function syncProvider(
@@ -216,38 +236,53 @@ export async function syncProvider(
       link.cursor,
     );
 
-    const changed = await reconcileExternalChanges(changes, reset, {
-      deleteEvent: (externalID) =>
-        deleteExternalEvent(provider, link.calendarID, externalID),
-      deleteTask: (externalID) =>
-        deleteExternalTask(provider, link.calendarID, externalID),
-      upsertEvent: (event) =>
-        upsertExternalEvent(
-          provider,
-          userID,
-          link.calendarID,
-          link.externalCalendarID,
-          event.externalId,
-          toEventValues(event, link.calColor),
-          event.etag ?? null,
-          event.icalUid ?? null,
-        ),
-      upsertTask: (task) =>
-        upsertExternalTask(
-          provider,
-          userID,
-          link.calendarID,
-          link.externalCalendarID,
-          task.externalId,
-          toTaskValues(task),
-          task.etag ?? null,
-          task.icalUid ?? null,
-        ),
-      sweepEvents: (seenExternalIDs) =>
-        sweepExternalEvents(provider, link.calendarID, seenExternalIDs),
-      sweepTasks: (seenExternalIDs) =>
-        sweepExternalTasks(provider, link.calendarID, seenExternalIDs),
-    });
+    const unlinkedEventIDs: string[] = [];
+    const onUnlink = (eventID: string) => {
+      unlinkedEventIDs.push(eventID);
+    };
+    let changed: number;
+    try {
+      changed = await reconcileExternalChanges(changes, reset, {
+        deleteEvent: (externalID) =>
+          deleteExternalEvent(provider, link.calendarID, externalID, onUnlink),
+        deleteTask: (externalID) =>
+          deleteExternalTask(provider, link.calendarID, externalID),
+        upsertEvent: (event) =>
+          upsertExternalEvent(
+            provider,
+            userID,
+            link.calendarID,
+            link.externalCalendarID,
+            event.externalId,
+            toEventValues(event, link.calColor),
+            event.etag ?? null,
+            event.icalUid ?? null,
+          ),
+        upsertTask: (task) =>
+          upsertExternalTask(
+            provider,
+            userID,
+            link.calendarID,
+            link.externalCalendarID,
+            task.externalId,
+            toTaskValues(task),
+            task.etag ?? null,
+            task.icalUid ?? null,
+          ),
+        sweepEvents: (seenExternalIDs) =>
+          sweepExternalEvents(
+            provider,
+            link.calendarID,
+            seenExternalIDs,
+            onUnlink,
+          ),
+        sweepTasks: (seenExternalIDs) =>
+          sweepExternalTasks(provider, link.calendarID, seenExternalIDs),
+      });
+    } finally {
+      // Earlier unlinks have committed even if a later resource fails.
+      await notifyExternalEventUnlinks(link.calendarID, unlinkedEventIDs);
+    }
 
     if (changed > 0) changedCalendarIDs.push(link.calendarID);
     await setCursor(link.calendarID, nextCursor);

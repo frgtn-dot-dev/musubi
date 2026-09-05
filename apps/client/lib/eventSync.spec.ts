@@ -6,7 +6,8 @@ const event = (id: string, calendars: string[]) => ({ id, calendars }) as Event;
 
 const calendars = [
   { id: "home" },
-  { id: "remote", serverUrl: "https://remote.example" },
+  { id: "remote", provider: "musubi", serverUrl: "https://remote.example" },
+  { id: "caldav", provider: "caldav", serverUrl: "https://dav.example" },
 ] as Calendar[];
 
 describe("event sync", () => {
@@ -18,6 +19,15 @@ describe("event sync", () => {
     );
 
     expect(merged.map(({ id }) => id)).toEqual(["cached-remote", "fresh-home"]);
+  });
+
+  it("evicts a removed CalDAV copy on full catch-up without evicting offline federation", () => {
+    const merged = mergeHomeEventSnapshot(
+      [],
+      [event("removed-caldav-copy", ["caldav"]), event("cached-remote", ["remote"])],
+      calendars,
+    );
+    expect(merged.map(({ id }) => id)).toEqual(["cached-remote"]);
   });
 
   it("runs refreshes in request order", async () => {

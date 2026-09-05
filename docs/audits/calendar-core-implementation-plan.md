@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: připraveno k implementaci, žádný krok níže zatím není implementován.
+Stav: K01 implementován a lokálně ověřen (2026-09-05). K02–K15 čekají.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. Všechny položky jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01 je `completed`, ostatní položky jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -268,8 +268,19 @@ Před příslušným krokem potvrdit:
 
 Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestála na zbytečných dotazech. Případné nové závislosti vyžadují samostatné zdůvodnění; pro UI vždy předchozí schválení.
 
-## První konkrétní práce
+## Dokončený K01 — evidence
 
-Začít **K01**: DB integrační regrese „viewer propojí cizí událost do vlastního externího kalendáře; inbound update/delete/sweep nesmí změnit originál“, potom minimální oprava společného reconciliation místa. Následuje **K02**, rozdělené na bootstrap, Google pagination a Graph hydration.
+- Regrese nejprve selhala na neoprávněném upsertu; oprava je ve společných DB dotazech, nikoli v jednotlivých adaptérech.
+- Neautoritativní update/revival je odmítnut; nesoulad se zaznamená bez hodnot providerových polí a bez posunu ETag. Uživatelské řešení konfliktů zůstává K06/K09.
+- Delta delete i reset sweep odpojí pouze dané zrcadlo. Mapování stejné vzdálené kolekce přes jiné účty zůstávají nedotčena.
+- Příjemci bez zbývajícího přístupu dostanou stávající SSE `event_removed`, i když následný import jiného objektu selže. Mobilní full catch-up již nepovažuje CalDAV zrcadla za offline federaci.
+- Regrese souběžného delete a řízený test pořadí zámků ověřují společné pořadí event → link/mapování.
+- Prošlo `pnpm --filter @musubi/api test`, celé `pnpm test:db` na samostatném dočasném PostgreSQL 18 clusteru, všech 59 mobilních unit testů, API/mobilní typecheck a kontrakty rout/realtime. Finální DB regrese navíc ověřuje chybu po již commitnutém unlinku.
+- Nový test `apps/api/src/sync/external_events.integration.test.ts` je součástí `test:db:sync`, a tím existujícího integračního CI jobu.
+- Bez změny schématu nebo wire kontraktu; bez nových závislostí a bez živých providerových zápisů. Nejde o plné zařízení/browser E2E ani certifikaci providerové kompatibility.
+
+## Další konkrétní práce
+
+Pokračovat **K02**, rozděleným na tři samostatně ověřené změny: bootstrap prvního účtu, Google calendar-list pagination a Graph master hydration.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.

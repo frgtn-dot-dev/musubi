@@ -16,7 +16,9 @@ export function mergeHomeEventSnapshot(
   cachedCalendars: Calendar[],
 ): Event[] {
   const remoteCalendarIds = new Set(
-    cachedCalendars.flatMap((calendar) => calendar.serverUrl ? [calendar.id] : []),
+    cachedCalendars.flatMap((calendar) =>
+      calendar.provider === "musubi" && calendar.serverUrl ? [calendar.id] : [],
+    ),
   );
   const preservedRemote = cachedEvents.filter((event) =>
     event.calendars?.some((id) => remoteCalendarIds.has(id)),
