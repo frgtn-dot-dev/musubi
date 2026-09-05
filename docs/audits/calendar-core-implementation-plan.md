@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K05 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 rozpracován; převzat pouze dílčí checkpoint, nikoli celý krok. K07–K15 čekají.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K05 jsou `completed`; K06 je rozpracován, jeho celkové acceptance není splněno; K07–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K06 jsou `completed`; K07–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -135,7 +135,7 @@ Doplňující audit zachytil mezeru mezi calendar ACL a OAuth grantem: Google/Gr
 
 ### K06 — Revize a změnové patche
 
-**Stav: K06 INTEGROVANÝ KANDIDÁT — NEPŘEVZATO, NENASAZOVAT.** Stage 2 zapojuje DB CAS do skutečných API a obou klientů, zmrazené drafty a conditional delivery s pravdivými postcommit chybami. Nezávislá revize a převzetí rodičem teprve čekají; historické dílčí checkpointy níže nejsou převzetím celého K06.
+**Stav: K06 DOKONČEN A PŘEVZAT.** DB CAS je zapojen do skutečných API a obou klientů, včetně zmrazených draftů, SQLite revizí a conditional delivery s pravdivými postcommit chybami. Nezávislé revize i rodičovské ověření uzavřely nalezené blokery. Platí [závěrečné převzetí](#dokončený-k06--závěrečné-převzetí); níže uvedené checkpointy jsou dobovou historií, nikoli aktuálními blokery. Nasazení stále vyžaduje koordinovaně dostupné klienty/peery 0.1.8 a samostatný souhlas.
 
 Aditivně zavést lokální event revision a serverovou kontrolu očekávané revize. Změna obsahu nebo příchozí změna, která obsah opravdu mění, revizi posune. Běžný no-op poll ji neposouvá. Server vypočítá skutečný field diff; neposílat providerovi znovu nezměněný text, čas nebo location.
 
@@ -306,7 +306,7 @@ Samotný plán není oprávnění k produkčním migracím, změně minimální 
 
 Před příslušným krokem potvrdit:
 
-1. **K06:** minimální write-compatible verzi a přechodný režim starších klientů. Bez revision-aware klienta nelze garantovat ochranu stale draftu.
+1. **K06 — rozhodnuto vlastníkem:** produkt, minimum klienta i peeru 0.1.8; staré/missing/malformed verze odmítat bez tichého bypassu. Koordinovaný rollout klientů a peerů zůstává podmínkou samostatně schváleného nasazení.
 2. **K09 / další UI:** nový výrazný vizuální vzor, pouze pokud ho stávající primitives/patterns nepokrývají.
 3. **K15:** vyhrazené testovací účty a infrastrukturu pro skutečné pozvánky, mazání a restart testy.
 
@@ -356,9 +356,13 @@ Výchozí směr ostatních rozhodnutí je uveden výše, aby implementace nestá
 
 ## Další konkrétní práce
 
-K05 je převzat. **K06 má převzat pouze dílčí checkpoint; K07–K15 zůstávají pending.** Stage 2 tyto wire/API/DB/client/provider cesty nyní integruje; další krok je nezávislá revize produkčního diffu a skutečných regresních důkazů, nikoli další foundation checkpoint. Kompatibilita je rozhodnuta: produkt, minimum klienta i peeru 0.1.8; Outlook update/delete dočasně blokovat podle schválené hranice. K06 dokončit a nezávisle ověřit před jakýmkoli nasazením.
+**K06 je celý převzat; K07–K15 zůstávají pending.** Vlastník schválil následnou samostatnou kontrolu odložených pracovních změn a závěrečný běžný push pouze větve `fix/calendar-origin-authority`. Není to souhlas s merge, release, nasazením, produkční migrací ani automatickým zahájením K07. Produkt, minimum klienta i peeru zůstávají 0.1.8; Outlook EVENT remote update/delete zůstává dočasně blokován podle schválené hranice.
 
 Odhady termínů přidat až po prvních opravách a návrhu revizí/outboxu. Kalendářní datum bez ověření těchto hranic by nyní bylo falešně přesné.
+
+## Historie závěrečných oprav K06
+
+Následující záznamy zachovávají dobový stav před jednotlivými rechecky. Aktuální výsledek je v závěrečném převzetí pod nimi.
 
 **K06 závěrečné review opravy — lokálně ověřeno, čeká na převzetí rodičem:**
 Potvrzené P1 server/client review jsou opraveny: všechny postcommit notifikace a
@@ -427,3 +431,13 @@ Nezměněný PostgreSQL a Chromium důkaz je výslovně převzat z předchozího
 release, K07/K09/K12 ani nové převzetí K01–K05. Všech 52 vstupních residue cest
 zůstává pro samostatnou rodičovskou kontrolu; vlastní delta je oddělená a reverzibilní.
 **Celý K06 není převzat; následuje nezávislá readonly revize a rozhodnutí rodiče.**
+
+## Dokončený K06 — závěrečné převzetí
+
+Rodič převzal celý K06 nad `78f9452145022b2420d47eefda32ee45640e6134` (2026-09-05), po uzavření serverových i klientských nezávislých revizí. Poslední readonly recheck `1dd06139-eb92-41fb-af2e-63f0401749ab` je **bez nálezů**; zbývající target-calendar receipt P1 uzavřen. Předchozí rechecky uzavřely postcommit/ICS/lifecycle/auth/SSE opravy, SQLite skutečný refresh a webové nově vzniklé query.
+
+- Převzatý celek: DB-owned revize a strict expectedRevision/PATCH, atomický lokální CAS obsahu/linků/tombstones, odmítnutí stale draftů, skutečný field diff, přijaté providerové validátory, Google/CalDAV conditional writes a pravdivé postcommit/partial failures. Nativní generovaná SQLite migrace `0007` zachovává unknown revize jako nezapisovatelné; normální cache → refresh → composer používá skutečnou revizi. Receipts nepřekryjí novější identitu/query ani odebraný cílový kalendář a nepovolí falešné dokončení pickeru či připomínek.
+- Rodič zkontroloval klíčové zdroje a migrační/receipt/reconciliation hranice, finální diff, RED/GREEN důkazy a nezávislý verdikt. Čerstvě znovu prošel celý `pnpm check`: **183 native / 379 web**, ostatní root testy, typecheck, route/realtime contracts, release VERIFY, peer kontrola, lint a build gate. Log `/tmp/musubi-k06-parent-final-logs/check.log`, exit 0. Build cache je přiznané opětovné použití, ne nový nezávislý build. Session `lens_diagnostics mode=all` nehlásí blokující chyby; nejde o tvrzení plošně čistého LSP a staré úzké compilerem vyvrácené diagnostiky se neskrývají.
+- Platné plné DB důkazy z `/tmp/musubi-k06-final-logs/test-db-staged.log` a **Chromium 26/26** z `/tmp/musubi-k06-client-closure-logs/chromium-postcommit.log` jsou výslovně převzaty: server/shared/web runtime se od jejich ověření funkčně nezměnil. Nové mobilní regrese používají skutečný stream/store/refresh/cache a SQLite, nikoli náhradu persistence. Jeden dřívější nezměněný web date-picker test selhal; cílený i úplný opakovaný běh a rodičovský check prošly, původní log zůstává zachován.
+- Hranice: vlastník schválil **0.1.8** pro produkt/klienty/peery a dočasné odmítnutí existujících Outlook EVENT remote update/delete před lokální změnou. Event-specific Graph conditional enforcement je **neověřený**, nikoli prokázaně nepodporovaný; subject-only serializer není povolením zápisu. Žádná živá providerová či fyzická-device certifikace, distribuovaná/crash atomicita, outbox ani záruka doručení po pádu. K07–K15 zůstávají pending.
+- Všech **52** zděděných pracovních cest zůstalo mimo funkční commity; 49 bylo byte-untouched a tři překryvy přesně reverzibilní. Rodič znovu ověřil TS i emitovaný JS pro 51 formátovacích rozdílů a původní OAuth byty. Jejich samostatná kontrola a případný commit následují po tomto převzetí. Testovací PG i dočasné služby jsou uklizeny; nic nenasazeno ani vydáno.
