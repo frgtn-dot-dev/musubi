@@ -69,7 +69,7 @@ async function main() {
         if (method === "PUT" && path.startsWith("/dav/")) davData = body;
         if (method === "DELETE") { res.writeHead(204); return res.end(); }
         if (path.startsWith("/dav/")) { res.writeHead(201, { etag: '"next"' }); return res.end(); }
-        return json({ id: "created" }, 201);
+        return json({ id: `created-${randomUUID()}` }, 201);
       }
       reads.push({ path, auth: req.headers.authorization });
       if (path === "/v1.0/me") return json({ mail: "owner@example.test" });
@@ -167,7 +167,14 @@ async function main() {
     await refuses(() => request("PUT", { ...event, title: "Guest cannot edit host" }), "denied");
     const guestCopy = eventIn([google.id]);
     assert.equal((await request("POST", guestCopy)).status, 201);
+    const guestMapping = await getExternalEvent("google", guestCopy.id, "allowed", google.id);
+    assert.ok(guestMapping, "Guest copy must have a real provider mapping");
+    const guestPath = `/calendar/v3/calendars/allowed/events/${guestMapping.externalEventId}`;
+    reads.length = 0;
+    writes.length = 0;
     assert.equal((await request("DELETE", guestCopy)).status, 200, "Documented Google self=false default allows personal copy removal");
+    assert.ok(reads.some((read) => read.path === guestPath), "Deletion must read guest organizer evidence");
+    assert.deepEqual(writes.map(({ method, path }) => [method, path]), [["DELETE", guestPath]]);
     googleGuestDefault = false;
     organizer = true;
     assert.equal((await request("PUT", { ...event, title: "Allowed" })).status, 200);
@@ -200,14 +207,16 @@ async function main() {
     await refuses(() => request("POST", eventIn([outlook.id])), "denied");
     canEdit = true;
     // Same remote identity in two local mirrors: mapping reads/updates and writes stay isolated.
-    await importExternalEvent("google", event.id, sibling.id, "allowed", "created", '"sibling"');
-    assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.externalEventId, "created");
+    const homeMapping = await getExternalEvent("google", event.id, "allowed", google.id);
+    assert.ok(homeMapping);
+    await importExternalEvent("google", event.id, sibling.id, "allowed", homeMapping.externalEventId, '"sibling"');
+    assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.externalEventId, homeMapping.externalEventId);
     assert.equal(await getExternalEvent("google", event.id, "allowed", randomUUID()), null, "No remote-ID fallback for an explicit local scope");
     await setExternalEventSyncData("google", event.id, "allowed", { etag: '"home"', icalUid: null }, google.id);
     assert.equal((await getExternalEvent("google", event.id, "allowed", sibling.id))?.etag, '"sibling"');
     writes.length = 0;
     assert.equal((await request("PUT", { ...event, title: "Scoped identity" })).status, 200);
-    assert.deepEqual(writes.map((write) => [write.auth, write.path]), [["Bearer primary-access", "/calendar/v3/calendars/allowed/events/created"]]);
+    assert.deepEqual(writes.map((write) => [write.auth, write.path]), [["Bearer primary-access", `/calendar/v3/calendars/allowed/events/${homeMapping.externalEventId}`]]);
     const davAccount = await saveCaldavAccount(owner, `${fixtureOrigin}/dav/`, "owner", encryptSecret("fixture-password"));
     const dav = await mirror("caldav", `${fixtureOrigin}/dav/cal/`, davAccount.id, "viewer");
     const davEvent = eventIn([dav.id]);
