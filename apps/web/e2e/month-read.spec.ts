@@ -7387,3 +7387,23 @@ for (const { provider, width, theme } of [
     await expect(dialog).toHaveCount(0);
   });
 }
+
+
+for (const [width, end] of [[1280, "2026-07-09T01:00:00+02:00"], [390, "2026-07-11T10:00:00+02:00"]] as const) {
+  test(`K05 timed title-only submission preserves independent end at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const item = event("night", "Night shift", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", end);
+    await mockAuthenticatedReads(page, { ...events, events: [item] });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/night?date=2026-07-08`);
+    const title = page.getByRole("textbox", { name: "Event title" });
+    await expect(title).toBeFocused();
+    await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(width === 390 ? "July 11" : "July 9");
+    await title.fill("Night renamed");
+    const write = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/api/v1/events"));
+    await title.press("Control+Enter");
+    const body = (await write).postDataJSON();
+    expect(body).toMatchObject({ title: "Night renamed", start: new Date(item.start).toISOString(), end: new Date(item.end).toISOString(), isAllDay: false });
+    await expect(title).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  });
+}

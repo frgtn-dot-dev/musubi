@@ -175,3 +175,17 @@ describe("event form", () => {
     });
   });
 });
+
+
+describe("timed end date validation", () => {
+  it.each([
+    ["2026-07-27", "01:00", null],
+    ["2026-07-29", "23:00", null],
+    ["2026-07-25", "23:59", "End time must be after start time."],
+    ["2026-07-26", "23:00", "End time must be after start time."],
+    ["", "01:00", "End time must be after start time."],
+    ["2026-07-27", "invalid", "End time must be after start time."],
+  ])("validates end %s %s against the complete start", (endDate, endTime, error) => {
+    expect(validateEventForm({ ...defaultEventFormValues("calendar-1", "2026-07-26", "23:00"), title: "Night", endDate: endDate!, endTime: endTime! })).toBe(error);
+  });
+});

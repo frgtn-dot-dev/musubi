@@ -144,12 +144,12 @@ export function validateEventForm(
     return "End date must be on or after the start date.";
   }
 
-  if (
-    !values.isAllDay &&
-    timedBoundary(values.date, values.endTime) <=
-      timedBoundary(values.date, values.startTime)
-  ) {
-    return "End time must be after start time.";
+  if (!values.isAllDay) {
+    const start = timedBoundary(values.date, values.startTime).getTime();
+    const end = timedBoundary(values.endDate, values.endTime).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return "End time must be after start time.";
+    }
   }
 
   return null;
@@ -195,7 +195,7 @@ function eventBoundaries(values: EventFormValues) {
         start: allDayBoundary(values.date),
       }
     : {
-        end: timedBoundary(values.date, values.endTime),
+        end: timedBoundary(values.endDate, values.endTime),
         start: timedBoundary(values.date, values.startTime),
       };
 }

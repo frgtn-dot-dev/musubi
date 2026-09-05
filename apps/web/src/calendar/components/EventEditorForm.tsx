@@ -314,14 +314,15 @@ export function EventEditorForm({
 						label="Date"
 						value={values.date}
 						weekStartsOn={weekStartsOn}
-						onChange={(date) => patch({ date })}
+						onChange={(date) => patch({
+							date,
+							...(!values.isAllDay && values.endDate === values.date
+								? { endDate: date }
+								: {}),
+						})}
 					/>
 				</div>
 
-				{/* One slot, two occupants: a time range or the day it ends on. Both rows
-            are one control tall, so the toggle underneath never moves — it used
-            to hop a row every time it was flipped, because the time row above it
-            disappeared while the end-date row appeared below. */}
 				{!values.isAllDay ? (
 					<div className={styles.timeRow}>
 						<Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
@@ -344,34 +345,33 @@ export function EventEditorForm({
 							disabled={saving}
 							label="End time"
 							max={LATEST_END_TIME}
-							min={minutesToTime(
+							min={values.endDate === values.date ? minutesToTime(
 								Math.min(
 									LAST_MINUTE,
 									(timeToMinutes(values.startTime) ?? 0) + TIME_SNAP_MINUTES,
 								),
-							)}
+							) : undefined}
 							timeFormat={timeFormat}
 							value={values.endTime}
 							onChange={(endTime) => patch({ endTime })}
 						/>
 					</div>
-				) : (
-					<div className={styles.pickerRow}>
-						<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
-						<span aria-hidden="true" className={styles.pickerLabel}>
-							Ends
-						</span>
-						<DatePicker
-							className={styles.pickerValue}
-							disabled={saving}
-							label="Ends"
-							min={values.date}
-							value={values.endDate}
-							weekStartsOn={weekStartsOn}
-							onChange={(endDate) => patch({ endDate })}
-						/>
-					</div>
-				)}
+				) : null}
+				<div className={styles.pickerRow}>
+					<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
+					<span aria-hidden="true" className={styles.pickerLabel}>
+						Ends
+					</span>
+					<DatePicker
+						className={styles.pickerValue}
+						disabled={saving}
+						label="Ends"
+						min={values.date}
+						value={values.endDate}
+						weekStartsOn={weekStartsOn}
+						onChange={(endDate) => patch({ endDate })}
+					/>
+				</div>
 
 				<Checkbox
 					checked={values.isAllDay}
