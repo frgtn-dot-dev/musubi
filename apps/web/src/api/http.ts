@@ -1,10 +1,12 @@
 import { z } from "zod";
+import type { EventWriteReason } from "@musubi/types";
 import { notifyAuthExpired } from "~/auth/auth-client";
 
 const ApiErrorEnvelopeSchema = z.object({
   error: z.string(),
   message: z.string().optional(),
   requestId: z.string().optional(),
+  reason: z.enum(["unsupported", "denied", "unknown"]).optional(),
 });
 
 type RequestOptions<T> = {
@@ -37,7 +39,7 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly status: number;
 
-  constructor(message: string, status: number, requestId?: string) {
+  constructor(message: string, status: number, requestId?: string, readonly reason?: EventWriteReason) {
     super(message);
     this.name = "ApiError";
     this.requestId = requestId;
@@ -96,7 +98,7 @@ function throwApiError(response: Response, payload: unknown): never {
     notifyAuthExpired();
   }
 
-  throw new ApiError(message, response.status, correlationId);
+  throw new ApiError(message, response.status, correlationId, envelope.success ? envelope.data.reason : undefined);
 }
 
 export async function apiRequest<T>(

@@ -84,6 +84,10 @@ export function getEventMutationError(
       ? error.requestId
       : undefined;
 
+  if (error instanceof ApiError && error.reason) {
+    return { message: error.message, requestId };
+  }
+
   if (error instanceof ApiError && error.status === 403) {
     return {
       message:

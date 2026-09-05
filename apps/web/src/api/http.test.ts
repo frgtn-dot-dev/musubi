@@ -2,12 +2,27 @@ import { z } from "zod";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUTH_EXPIRED_EVENT } from "~/auth/auth-client";
 import { ApiError, ApiResponseError, apiRequest } from "./http";
+import { getEventMutationError } from "~/calendar/event-permissions";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("apiRequest", () => {
+  it.each(["unsupported", "denied", "unknown"] as const)("preserves the server capability reason %s through event feedback", async (reason) => {
+    const message = `Event writing is ${reason}. No changes were saved.`;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: message, reason, capability: "event-write", requestId: "k04-request",
+    }), { status: 403 })));
+    try {
+      await apiRequest("/api/v1/events", { method: "PUT", body: {}, responseSchema: z.unknown() });
+      throw new Error("Expected refusal");
+    } catch (error) {
+      expect(error).toMatchObject({ reason, message });
+      expect(getEventMutationError(error, "update")).toEqual({ message, requestId: "k04-request" });
+    }
+  });
+
   it("sends first-party credentials and validates successful data", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ value: 3 }), {

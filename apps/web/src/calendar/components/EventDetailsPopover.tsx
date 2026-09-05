@@ -3,6 +3,7 @@ import {
 	excludeOccurrence,
 	noteParts,
 	seriesEditWrites,
+	withSeriesEditIntent,
 	shortUrlLabel,
 	type EditScope,
 } from "@musubi/calendar";
@@ -307,12 +308,12 @@ export function EventDetailsPopover({
 		setPendingEditScope(scope);
 		setActionError(undefined);
 
-		const { creates, updates } = seriesEditWrites({
+		const { creates, updates } = withSeriesEditIntent(seriesEditWrites({
 			edited,
 			master,
 			occurrence: event,
 			scope,
-		});
+		}));
 
 		try {
 			// Sequential: the update carries the exclusion that keeps the created

@@ -163,10 +163,23 @@ export default function EventDetailModal({
 	// series master (true anchor times) — updates must be built from the master.
 	const master = events.find((e) => e.id === event?.id);
 
-	const deleteAll = () => {
+	const deleteAll = async () => {
 		if (!event) return;
-		removeEvent(event, api); // cascade from origin
-		handleClose();
+		try {
+			await removeEvent(event, api); // cascade from origin
+			handleClose();
+		} catch (error) {
+			showToast({ message: userFacingError(error, "This event could not be removed.") });
+		}
+	};
+	const saveDeletionRule = async (updated: Event) => {
+		try {
+			await updateEvent(updated, api);
+			await syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(() => {});
+			handleClose();
+		} catch (error) {
+			showToast({ message: userFacingError(error, "This occurrence could not be removed.") });
+		}
 	};
 	const deleteThisOccurrence = () => {
 		if (!event || !master?.recurrence) return deleteAll();
@@ -174,11 +187,7 @@ export default function EventDetailModal({
 			...master,
 			recurrence: excludeOccurrence(master.recurrence, event.start),
 		};
-		updateEvent(updated, api);
-		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(
-			() => {},
-		);
-		handleClose();
+		return saveDeletionRule(updated);
 	};
 	const deleteFollowing = () => {
 		if (!event || !master?.recurrence) return deleteAll();
@@ -188,11 +197,7 @@ export default function EventDetailModal({
 			...master,
 			recurrence: endSeriesBefore(master.recurrence, event.start),
 		};
-		updateEvent(updated, api);
-		syncScheduledReminders([updated], { onlyEventIDs: [updated.id] }).catch(
-			() => {},
-		);
-		handleClose();
+		return saveDeletionRule(updated);
 	};
 
 	// Identity color: origin calendar first, else first visible linked calendar.

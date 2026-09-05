@@ -5463,6 +5463,43 @@ test("asks which occurrences an edited series applies to", async ({ page }) => {
 	expect(created.body.recurrence).toBeNull();
 });
 
+for (const width of [1280, 390]) {
+  for (const reason of ["unsupported", "denied", "unknown"] as const) {
+    test(`K04 scope refusal ${reason} keeps draft and server reason at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await mockAuthenticatedReads(page);
+      const requests: Array<{ method: string; body: Record<string, unknown> }> = [];
+      const message = `This recurrence operation is ${reason}. No changes were saved.`;
+      await page.route("**/api/v1/events", async (route) => {
+        const method = route.request().method();
+        if (method !== "PUT" && method !== "POST") return route.fallback();
+        requests.push({ method, body: route.request().postDataJSON() });
+        return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: message, reason, capability: "recurrence" }) });
+      });
+      await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+      await page.getByRole("button", { name: /Weekly review/ }).first().click();
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+      await page.getByRole("textbox", { name: "Event title" }).fill("Keep this draft");
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      const scope = page.getByRole("dialog", { name: "Change recurring event" });
+      const occurrence = scope.getByRole("button", { name: "This event", exact: true });
+      await occurrence.focus();
+      await page.keyboard.press("Enter");
+      await expect(scope.getByRole("alert")).toContainText(message);
+      expect(requests.map((request) => request.method)).toEqual(["PUT"]);
+      const intent = requests[0]!.body.scopeEdit as { updates: unknown[]; creates: Array<{ title: string }> };
+      expect(intent.updates).toHaveLength(1);
+      expect(intent.creates[0]!.title).toBe("Keep this draft");
+      await expect(page.getByRole("status").filter({ hasText: "Occurrence updated." })).toHaveCount(0);
+      await scope.getByRole("button", { name: "Close change recurring event dialog" }).click();
+      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Keep this draft");
+      await expect(page.getByRole("button", { name: "Save", exact: true })).toBeFocused();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      expect(overflow).toBe(false);
+    });
+  }
+}
+
 test("edits a whole series without moving it onto one date", async ({
 	page,
 }) => {

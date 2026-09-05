@@ -58,6 +58,8 @@ function throwOnError(
     status?: number | string;
     message?: string;
     statusText?: string;
+    error?: unknown;
+    reason?: unknown;
   } | null,
 ): asserts error is null {
   if (error) {
@@ -65,6 +67,9 @@ function throwOnError(
     // layout; a no-op on auth screens). Still throws so the caller fails loudly.
     if (error.status === 401) notifySessionExpired();
     console.error("API error", error);
+    if (["unsupported", "denied", "unknown"].includes(String(error.reason)) && typeof error.error === "string") {
+      throw new Error(error.error); // same server reason as web; keep the draft open
+    }
     throw new Error(`${error.status}: ${error.message ?? error.statusText}`);
   }
 }

@@ -1,5 +1,5 @@
 import { Event } from "@musubi/types";
-import { EditScope, seriesEditWrites } from "@musubi/calendar";
+import { EditScope, seriesEditWrites, withSeriesEditIntent } from "@musubi/calendar";
 import { uuidv7 } from "uuidv7";
 import { chooseOption } from "@/lib/confirm";
 import { reminderRules, setEventReminderRule } from "@/services/notifications";
@@ -51,7 +51,7 @@ export async function applySeriesEdit({
   // Backing out of the question is not a decision to discard the edit.
   if (!scope) return false;
 
-  const { creates, updates } = seriesEditWrites({
+  const { creates, updates } = withSeriesEditIntent(seriesEditWrites({
     edited,
     master,
     // React Native has no crypto.randomUUID; the app's own generator also keeps
@@ -59,7 +59,7 @@ export async function applySeriesEdit({
     newId: uuidv7,
     occurrence,
     scope,
-  });
+  }));
 
   // Sequential: the update carries the exclusion that keeps the created event
   // from briefly showing twice.

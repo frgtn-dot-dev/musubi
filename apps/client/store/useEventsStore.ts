@@ -1,4 +1,4 @@
-import type { Event } from "@musubi/types";
+import type { Event, EventWriteRequest } from "@musubi/types";
 import type { useApi } from "@/services/api";
 import { create } from "zustand";
 import { cancelEventNotification, syncScheduledReminders } from "@/services/notifications";
@@ -21,11 +21,14 @@ type EventsStore = {
 export const useEventsStore = create<EventsStore>((set, get) => ({
   events: [],
   addEvent: async (event, api) => {
+    const request = event;
+    const { scopeEdit: _intent, ...snapshot } = event as EventWriteRequest;
+    event = snapshot; // transient scope intent never enters cache/store
     const previous = get().events.find(e => e.id === event.id);
     set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), event] }));
     void cacheUpsertEvents([event]);
     try {
-      const result = await api.createEvent(event);
+      const result = await api.createEvent(request);
       set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), result] }));
       void cacheUpsertEvents([result]);
     } catch (error) {
@@ -97,11 +100,14 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     void cancelEventNotification(event.id).catch(() => { });
   },
   updateEvent: async (event, api) => {
+    const request = event;
+    const { scopeEdit: _intent, ...snapshot } = event as EventWriteRequest;
+    event = snapshot; // keep intent only on the API request
     const previous = get().events.find(e => e.id === event.id);
     set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), event] }));
     void cacheUpsertEvents([event]);
     try {
-      const result = await api.updateEvent(event);
+      const result = await api.updateEvent(request);
       set((state) => ({ events: [...state.events.filter(e => e.id !== event.id), result] }));
       void cacheUpsertEvents([result]);
     } catch (error) {

@@ -13,7 +13,7 @@ import type {
   TaskUpdate,
   User,
 } from "@musubi/types";
-import { seriesEditWrites, type EditScope } from "@musubi/calendar";
+import { seriesEditWrites, withSeriesEditIntent, type EditScope } from "@musubi/calendar";
 import type {
   Attendee,
   ImportedCalendar,
@@ -408,12 +408,12 @@ export function Workspace({
     }
 
     const created: Event[] = [];
-    const { creates, updates } = seriesEditWrites({
+    const { creates, updates } = withSeriesEditIntent(seriesEditWrites({
       edited: { ...event, end, start },
       master,
       occurrence: event,
       scope,
-    });
+    }));
 
     setBusyEventId(master.id);
     try {
