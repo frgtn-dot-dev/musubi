@@ -308,7 +308,11 @@ async function checkDeletion(f: Fixture, sweep: boolean) {
     before,
     "Deleting a derived copy changes links, not shared content or deletedAt",
   );
-  assert.equal(after.revision, before.revision + 1, "Membership changes invalidate stale event drafts");
+  assert.equal(
+    after.revision,
+    before.revision + 1,
+    "Membership changes invalidate stale event drafts",
+  );
   assert.deepEqual(
     (await getEventCalendars(id)).sort(),
     [f.home, f.sibling].sort(),
@@ -456,9 +460,12 @@ async function checkUnlinkNotifications(
     const sync = syncProvider(
       {
         ...adapter,
-        listCalendars: async () => ({ taskListsComplete: true, calendars: [
-          { externalId: f.remoteCalendar, name: "Copy", color: "#7A8BA3" },
-        ] }),
+        listCalendars: async () => ({
+          taskListsComplete: true,
+          calendars: [
+            { externalId: f.remoteCalendar, name: "Copy", color: "#7A8BA3" },
+          ],
+        }),
         fetchChanges: async () => ({
           changes: reset
             ? []

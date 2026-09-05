@@ -114,13 +114,16 @@ export function createGuardedCaldavFetch({
 			const method = requestInit.method?.toUpperCase() ?? "GET";
 			const becomesGet =
 				response.status === 303 ||
-				((response.status === 301 || response.status === 302) &&
-					method === "POST");
+				((response.status === 301 || response.status === 302) && method === "POST");
 			const headers = new Headers(requestInit.headers);
 			// A GET after a conditional PUT/DELETE is not acknowledgement of that
 			// mutation. Never turn a redirect into apparent compare-write success.
-			if (becomesGet && method !== "GET" && method !== "HEAD" &&
-				(headers.has("if-match") || headers.has("if-none-match"))) {
+			if (
+				becomesGet &&
+				method !== "GET" &&
+				method !== "HEAD" &&
+				(headers.has("if-match") || headers.has("if-none-match"))
+			) {
 				await response.body?.cancel();
 				throw new Error("CalDAV conditional mutation cannot redirect to GET.");
 			}

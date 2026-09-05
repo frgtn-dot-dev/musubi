@@ -15,7 +15,12 @@ export function useConnectToEventStream() {
   // same origin every other request uses, so the SSE stream tracks a custom
   // server URL too.
   const { authClient, apiUrl } = useServer();
-  const { localAddEvent, localUpdateEvent, localRemoveEvent, localRemoveCalendarEvents } = useEventsStore();
+  const {
+    localAddEvent,
+    localUpdateEvent,
+    localRemoveEvent,
+    localRemoveCalendarEvents,
+  } = useEventsStore();
   const { localUpdateCalendar, localRemoveCalendar } = useCalendarsStore();
   const setAttendees = useAttendeesStore((s) => s.setAttendees);
   // "external_sync" = the server's scheduled provider sync found changes → run a
@@ -24,25 +29,33 @@ export function useConnectToEventStream() {
   // hook instances share one queue, so reconnect catch-up cannot race launch.
   const refresh = useRefreshData();
   const refreshRef = useRef(refresh);
-  useEffect(() => { refreshRef.current = refresh; });
+  useEffect(() => {
+    refreshRef.current = refresh;
+  });
   const silentRefresh = async (full = false) => {
-    try { await refreshRef.current({ providerSync: false, full }); }
-    catch (e) { console.warn("SSE-triggered refresh failed:", e); }
+    try {
+      await refreshRef.current({ providerSync: false, full });
+    } catch (e) {
+      console.warn("SSE-triggered refresh failed:", e);
+    }
   };
   const applyLiveMutation = (mutation: () => void | Promise<void>) => {
-    void serializeEventRefresh(async () => { await mutation(); }).catch((e) =>
-      console.warn("SSE event apply failed:", e));
+    void serializeEventRefresh(async () => {
+      await mutation();
+    }).catch((e) => console.warn("SSE event apply failed:", e));
   };
 
   // Offline → online (airplane mode off, wifi back): sync right away instead
   // of waiting out the SSE retry cycle. Refs only inside — mount-once is safe.
   useEffect(() => {
     let wasOffline = false;
-    const sub = Network.addNetworkStateListener(({ isConnected, isInternetReachable }) => {
-      const offline = isConnected === false || isInternetReachable === false;
-      if (wasOffline && !offline) silentRefresh(true);
-      wasOffline = offline;
-    });
+    const sub = Network.addNetworkStateListener(
+      ({ isConnected, isInternetReachable }) => {
+        const offline = isConnected === false || isInternetReachable === false;
+        if (wasOffline && !offline) silentRefresh(true);
+        wasOffline = offline;
+      },
+    );
     return () => sub.remove();
   }, []);
 
@@ -61,7 +74,11 @@ export function useConnectToEventStream() {
         return;
       }
 
-      const toEvent = (p: any) => ({ ...p, start: new Date(p.start), end: new Date(p.end) });
+      const toEvent = (p: any) => ({
+        ...p,
+        start: new Date(p.start),
+        end: new Date(p.end),
+      });
 
       switch (data.type) {
         case "event_created":
@@ -71,14 +88,20 @@ export function useConnectToEventStream() {
           applyLiveMutation(() => localUpdateEvent(toEvent(data.payload)));
           break;
         case "event_removed":
-          if (!Number.isSafeInteger(data.payload?.revision) || data.payload.revision < 1) {
+          if (
+            !Number.isSafeInteger(data.payload?.revision) ||
+            data.payload.revision < 1
+          ) {
             // An access-loss frame may refer to an already purged row. Reconcile
             // authoritatively instead of evicting a possibly newer cached event.
             silentRefresh(true);
-          } else applyLiveMutation(() => localRemoveEvent(toEvent(data.payload)));
+          } else
+            applyLiveMutation(() => localRemoveEvent(toEvent(data.payload)));
           break;
         case "calendar_updated":
-          applyLiveMutation(() => { localUpdateCalendar(data.payload); });
+          applyLiveMutation(() => {
+            localUpdateCalendar(data.payload);
+          });
           break;
         case "calendar_removed":
           applyLiveMutation(async () => {
@@ -93,8 +116,9 @@ export function useConnectToEventStream() {
           silentRefresh();
           break;
         case "settings_updated":
-          refreshRef.current({ settingsOnly: true }).catch((e) =>
-            console.warn("Settings refresh failed:", e));
+          refreshRef
+            .current({ settingsOnly: true })
+            .catch((e) => console.warn("Settings refresh failed:", e));
           break;
         // Another device of this user changed a reminder rule. Only that user's
         // own connections receive it, and rescheduling is the whole point:
@@ -116,7 +140,10 @@ export function useConnectToEventStream() {
 
     const subscribe = (url: string, token: string) => {
       const sse = new EventSource(`${url}/api/stream`, {
-        headers: { Authorization: `Bearer ${token}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+        },
       });
       // The library auto-reconnects every pollingInterval (5s) after an error or
       // clean stream end. Every open after the first catches up lost frames.
@@ -151,8 +178,11 @@ export function useConnectToEventStream() {
       const token = data?.session?.token;
       if (cancelled || !token) return;
       subscribe(apiUrl, token);
-    }
+    };
     connect();
-    return () => { cancelled = true; sources.forEach(s => s.close()); };
+    return () => {
+      cancelled = true;
+      sources.forEach((s) => s.close());
+    };
   }, [apiUrl, authClient]);
 }

@@ -79,7 +79,10 @@ function throwOnError(
     console.error("API error", error);
     if (typeof error.localCommitted === "boolean")
       throw EventMutationError.from(error);
-    if (["unsupported", "denied", "unknown"].includes(String(error.reason)) && typeof error.error === "string") {
+    if (
+      ["unsupported", "denied", "unknown"].includes(String(error.reason)) &&
+      typeof error.error === "string"
+    ) {
       throw new Error(error.error); // same server reason as web; keep the draft open
     }
     throw new Error(`${error.status}: ${error.message ?? error.statusText}`);

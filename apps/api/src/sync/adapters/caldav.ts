@@ -1,9 +1,18 @@
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
-import { EventWriteError, type Event, type Task, type TaskStatus } from "@musubi/types";
+import {
+  EventWriteError,
+  type Event,
+  type Task,
+  type TaskStatus,
+} from "@musubi/types";
 import { logger } from "@musubi/config";
-import { getCaldavAccountById, getCaldavAccountsByUser, type EventContentPatch } from "@musubi/db";
+import {
+  getCaldavAccountById,
+  getCaldavAccountsByUser,
+  type EventContentPatch,
+} from "@musubi/db";
 import type {
   CalendarAdapter,
   CalendarDiscoveryResult,
@@ -16,9 +25,22 @@ import type {
 } from "../adapter";
 import { createCaldavClient, createGuardedCaldavFetch } from "../caldav_client";
 import { decryptSecret } from "../crypto";
-import { assertEventWriteEvidence, assertEventWriteResponse, assertAcceptedEventEtag, assertProviderEventMutationResponse, ProviderEventWriteError, requireEventEtag, requireEventPatch, strongEventEtag } from "../event_write";
+import {
+  assertEventWriteEvidence,
+  assertEventWriteResponse,
+  assertAcceptedEventEtag,
+  assertProviderEventMutationResponse,
+  ProviderEventWriteError,
+  requireEventEtag,
+  requireEventPatch,
+  strongEventEtag,
+} from "../event_write";
 import { replaceEventProperties } from "./caldav_event_ical";
-import { caldavAllows, caldavEventPrivileges, caldavOrganizerAddresses } from "../caldav_privileges";
+import {
+  caldavAllows,
+  caldavEventPrivileges,
+  caldavOrganizerAddresses,
+} from "../caldav_privileges";
 
 const TASK_STATUS_BY_ICAL: Record<string, TaskStatus> = {
   "NEEDS-ACTION": "needs-action",
@@ -485,10 +507,14 @@ function patchTaskCalendarData(
 
 function eventMaster(data: string, uid?: string | null) {
   const calendar = new ICAL.Component(ICAL.parse(data));
-  if (calendar.name !== "vcalendar") throw new ProviderEventWriteError("provider-write-failed");
+  if (calendar.name !== "vcalendar")
+    throw new ProviderEventWriteError("provider-write-failed");
   const events = calendar.getAllSubcomponents("vevent");
-  const masters = events.filter((component) => !component.getFirstProperty("recurrence-id") &&
-    (uid == null || component.getFirstPropertyValue("uid") === uid));
+  const masters = events.filter(
+    (component) =>
+      !component.getFirstProperty("recurrence-id") &&
+      (uid == null || component.getFirstPropertyValue("uid") === uid),
+  );
   if (masters.length !== 1 || masters[0].getAllProperties("uid").length !== 1) {
     throw new ProviderEventWriteError("provider-write-failed");
   }
@@ -498,34 +524,73 @@ function eventMaster(data: string, uid?: string | null) {
   return { calendar, master, uid: actualUid, index: events.indexOf(master) };
 }
 
-export function patchEventIcal(data: string, event: Event, uid: string, patch?: EventContentPatch) {
+export function patchEventIcal(
+  data: string,
+  event: Event,
+  uid: string,
+  patch?: EventContentPatch,
+) {
   const diff = requireEventPatch(patch);
   const { calendar, master, index } = eventMaster(data, uid);
   const replacement = toVevent({ ...event, ...diff }, uid);
   const names = new Set<string>();
-  for (const [field, name] of [["title", "summary"], ["description", "description"],
-    ["location", "location"], ["start", "dtstart"], ["end", "dtend"]] as const) {
+  for (const [field, name] of [
+    ["title", "summary"],
+    ["description", "description"],
+    ["location", "location"],
+    ["start", "dtstart"],
+    ["end", "dtend"],
+  ] as const) {
     if (diff[field] !== undefined) names.add(name);
   }
-  if (diff.isAllDay !== undefined) { names.add("dtstart"); names.add("dtend"); }
+  if (diff.isAllDay !== undefined) {
+    names.add("dtstart");
+    names.add("dtend");
+  }
   // Materialize the intended end rather than keeping a DURATION that would
   // implicitly shift the end on a start-only edit (DTEND and DURATION exclude).
-  if ((names.has("dtstart") || names.has("dtend")) && master.hasProperty("duration")) {
-    names.add("dtend"); names.add("duration");
+  if (
+    (names.has("dtstart") || names.has("dtend")) &&
+    master.hasProperty("duration")
+  ) {
+    names.add("dtend");
+    names.add("duration");
   }
-  const recurrenceChanged = (diff.recurrence !== undefined || diff.isAllDay !== undefined) &&
-    (canonicalRecurrence(recurrenceFrom(master)) !== canonicalRecurrence(recurrenceFrom(replacement)) ||
+  const recurrenceChanged =
+    (diff.recurrence !== undefined || diff.isAllDay !== undefined) &&
+    (canonicalRecurrence(recurrenceFrom(master)) !==
+      canonicalRecurrence(recurrenceFrom(replacement)) ||
       (diff.isAllDay !== undefined && master.hasProperty("rrule")));
   if (recurrenceChanged) {
-    if (calendar.getAllSubcomponents("vevent").some((candidate) =>
-      candidate.hasProperty("recurrence-id") && candidate.getFirstPropertyValue("uid") === uid)) {
-      throw new EventWriteError("recurrence", "unsupported",
-        "CalDAV recurrence changes with detached exceptions are not supported yet. No changes were saved.");
+    if (
+      calendar
+        .getAllSubcomponents("vevent")
+        .some(
+          (candidate) =>
+            candidate.hasProperty("recurrence-id") &&
+            candidate.getFirstPropertyValue("uid") === uid,
+        )
+    ) {
+      throw new EventWriteError(
+        "recurrence",
+        "unsupported",
+        "CalDAV recurrence changes with detached exceptions are not supported yet. No changes were saved.",
+      );
     }
     for (const name of ["rrule", "exdate", "rdate"]) names.add(name);
   }
-  preserveTimezones(master, replacement, [...names].filter((name) => name === "dtstart" || name === "dtend"));
-  return replaceEventProperties(data, index, new Map([...names].map((name) => [name, replacement.getAllProperties(name)])));
+  preserveTimezones(
+    master,
+    replacement,
+    [...names].filter((name) => name === "dtstart" || name === "dtend"),
+  );
+  return replaceEventProperties(
+    data,
+    index,
+    new Map(
+      [...names].map((name) => [name, replacement.getAllProperties(name)]),
+    ),
+  );
 }
 
 export function patchTaskIcal(data: string, task: Task, uid: string) {
@@ -775,10 +840,18 @@ async function etagAfterWrite(
 /** A complete GET and its own strong ETag, checked against the version already
  * accepted into the mapping. A newer GET must not silently rebase the edit.
  */
-async function readEventResource(authorization: string, externalEventId: string, ref?: ExternalEventRef) {
+async function readEventResource(
+  authorization: string,
+  externalEventId: string,
+  ref?: ExternalEventRef,
+) {
   const etag = requireEventEtag(ref?.etag);
   const response = await caldavFetch(externalEventId, {
-    headers: { authorization, accept: "text/calendar", "Cache-Control": "no-cache" },
+    headers: {
+      authorization,
+      accept: "text/calendar",
+      "Cache-Control": "no-cache",
+    },
   });
   assertEventWriteResponse(response);
   assertAcceptedEventEtag(etag, response.headers.get("etag"));
@@ -786,7 +859,10 @@ async function readEventResource(authorization: string, externalEventId: string,
     throw new ProviderEventWriteError("provider-write-failed");
   }
   // UTF-8 decoding must not replace invalid bytes and then PUT lossy text.
-  const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
+  const data = new TextDecoder("utf-8", {
+    fatal: true,
+    ignoreBOM: true,
+  }).decode(await response.arrayBuffer());
   const { master, uid, index } = eventMaster(data, ref?.icalUid);
   replaceEventProperties(data, index, new Map()); // Validate full physical structure, including DELETE preflight.
   return { data, etag, master, uid };
@@ -825,10 +901,19 @@ export const caldavAdapter: CalendarAdapter = {
       }));
     const authorization = await basicAuthForAccount(accountId);
     for (const calendar of calendars) {
-      const privileges = await caldavEventPrivileges(calendar.externalId, authorization);
-      Object.assign(calendar, { readOnly: !["create", "update", "delete"].some(
-        (action) => caldavAllows(privileges, action as "create" | "update" | "delete") === true,
-      ) });
+      const privileges = await caldavEventPrivileges(
+        calendar.externalId,
+        authorization,
+      );
+      Object.assign(calendar, {
+        readOnly: !["create", "update", "delete"].some(
+          (action) =>
+            caldavAllows(
+              privileges,
+              action as "create" | "update" | "delete",
+            ) === true,
+        ),
+      });
     }
     return { calendars, taskListsComplete: true };
   },
@@ -916,31 +1001,69 @@ export const caldavAdapter: CalendarAdapter = {
   async assertEventWrite(_userID, accountId, externalCalendarId, operation) {
     const authorization = await basicAuthForAccount(accountId);
     // DAV bind/unbind belong to the collection; write-content to the resource.
-    const target = operation.action === "update" && operation.external
-      ? operation.external.externalEventId : externalCalendarId;
+    const target =
+      operation.action === "update" && operation.external
+        ? operation.external.externalEventId
+        : externalCalendarId;
     const privileges = await caldavEventPrivileges(target, authorization);
-    assertEventWriteEvidence(caldavAllows(privileges, operation.action), "event-write");
+    assertEventWriteEvidence(
+      caldavAllows(privileges, operation.action),
+      "event-write",
+    );
     if (operation.action !== "create" && operation.external) {
       {
-        const { data, uid, master } = await readEventResource(authorization, operation.external.externalEventId, operation.external);
+        const { data, uid, master } = await readEventResource(
+          authorization,
+          operation.external.externalEventId,
+          operation.external,
+        );
         // Exercise the exact preserving path before any DB or provider mutation.
-        if (operation.action === "update") patchEventIcal(data, operation.event, uid, operation.patch);
-        if (operation.action === "update" && (operation.patch?.recurrence !== undefined || operation.patch?.isAllDay !== undefined) && !operation.scopeEditValidated &&
-          canonicalRecurrence(recurrenceFrom(master)) !== canonicalRecurrence(recurrenceFrom(toVevent({ ...operation.event, ...requireEventPatch(operation.patch) }, uid)))) {
+        if (operation.action === "update")
+          patchEventIcal(data, operation.event, uid, operation.patch);
+        if (
+          operation.action === "update" &&
+          (operation.patch?.recurrence !== undefined ||
+            operation.patch?.isAllDay !== undefined) &&
+          !operation.scopeEditValidated &&
+          canonicalRecurrence(recurrenceFrom(master)) !==
+            canonicalRecurrence(
+              recurrenceFrom(
+                toVevent(
+                  { ...operation.event, ...requireEventPatch(operation.patch) },
+                  uid,
+                ),
+              ),
+            )
+        ) {
           // A legacy recurrence PUT may be the first half of a split. Without a
           // complete intent, require the potential create right before changing it.
-          const collectionPrivileges = await caldavEventPrivileges(externalCalendarId, authorization);
+          const collectionPrivileges = await caldavEventPrivileges(
+            externalCalendarId,
+            authorization,
+          );
           const canCreate = caldavAllows(collectionPrivileges, "create");
-          if (canCreate !== true) throw new EventWriteError("recurrence", canCreate === false ? "denied" : "unknown",
-            "CalDAV recurrence changes without a complete scope edit intent require calendar create permission. No changes were saved.");
+          if (canCreate !== true)
+            throw new EventWriteError(
+              "recurrence",
+              canCreate === false ? "denied" : "unknown",
+              "CalDAV recurrence changes without a complete scope edit intent require calendar create permission. No changes were saved.",
+            );
         }
         const organizer = componentString(master, "organizer");
         if (organizer) {
-          const addresses = await caldavOrganizerAddresses(externalCalendarId, authorization);
-          const self = addresses?.includes(organizer.replace(/^mailto:/i, "").toLowerCase());
+          const addresses = await caldavOrganizerAddresses(
+            externalCalendarId,
+            authorization,
+          );
+          const self = addresses?.includes(
+            organizer.replace(/^mailto:/i, "").toLowerCase(),
+          );
           // Nonmatch on a shared calendar does NOT prove an attendee copy: its
           // organizer may be the collection owner rather than this principal.
-          assertEventWriteEvidence(operation.action === "delete" && self === false ? undefined : self, "organizer");
+          assertEventWriteEvidence(
+            operation.action === "delete" && self === false ? undefined : self,
+            "organizer",
+          );
         }
       }
     }
@@ -980,16 +1103,27 @@ export const caldavAdapter: CalendarAdapter = {
     requireEventPatch(patch);
     requireEventEtag(ref?.etag);
     const authorization = await basicAuthForAccount(accountId);
-    const current = await readEventResource(authorization, externalEventId, ref);
+    const current = await readEventResource(
+      authorization,
+      externalEventId,
+      ref,
+    );
     const data = patchEventIcal(current.data, event, current.uid, patch);
     if (data === current.data) return; // Known no-op; retain accepted validator.
     const res = await caldavFetch(externalEventId, {
       method: "PUT",
-      headers: { authorization, "Content-Type": "text/calendar; charset=utf-8", "If-Match": current.etag },
+      headers: {
+        authorization,
+        "Content-Type": "text/calendar; charset=utf-8",
+        "If-Match": current.etag,
+      },
       body: data,
     });
     assertProviderEventMutationResponse(res);
-    return { etag: strongEventEtag(res.headers.get("etag")), icalUid: current.uid };
+    return {
+      etag: strongEventEtag(res.headers.get("etag")),
+      icalUid: current.uid,
+    };
   },
 
   async pushDelete(
@@ -1002,7 +1136,8 @@ export const caldavAdapter: CalendarAdapter = {
     const etag = requireEventEtag(ref?.etag);
     const authorization = await basicAuthForAccount(accountId);
     const res = await caldavFetch(externalEventId, {
-      method: "DELETE", headers: { authorization, "If-Match": etag },
+      method: "DELETE",
+      headers: { authorization, "If-Match": etag },
     });
     if (res.status !== 404) assertProviderEventMutationResponse(res);
   },

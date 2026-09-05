@@ -1,9 +1,6 @@
 import { editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
 import { toDateKey } from "./date-key";
-import {
-  spansMultipleServers,
-  type ConnectionMap,
-} from "./federation-routing";
+import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
 export type EventFormValues = {
   calendarId: string;
@@ -49,9 +46,7 @@ function timedBoundary(date: string, time: string) {
 
 function allDayBoundary(date: string) {
   const [year, month, day] = date.split("-").map(Number);
-  return new Date(
-    Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1),
-  );
+  return new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
 }
 
 export function defaultEventFormValues(

@@ -40,7 +40,9 @@ export function middlewareErrorHandler(
     ...(err instanceof ProviderEventWriteError
       ? { code: err.code, localCommitted: false }
       : {}),
-    ...(err instanceof EventWriteError ? { reason: err.reason, capability: err.capability } : {}),
+    ...(err instanceof EventWriteError
+      ? { reason: err.reason, capability: err.capability }
+      : {}),
     requestId: req.requestId,
   });
 }

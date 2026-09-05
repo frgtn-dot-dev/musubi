@@ -1,7 +1,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createEventFromForm, defaultEventFormValues, eventFormValues, updateEventFromForm, type EventFormValues } from "../event-form";
+import {
+	createEventFromForm,
+	defaultEventFormValues,
+	eventFormValues,
+	updateEventFromForm,
+	type EventFormValues,
+} from "../event-form";
 import { fixtureCalendars } from "../fixtures";
 import { EventEditorForm } from "./EventEditorForm";
 import { RecurrenceEditor } from "./RecurrenceEditor";
@@ -214,9 +220,7 @@ describe("EventEditorForm custom recurrence", () => {
 			).value,
 		).toBe("3");
 		expect(
-			screen
-				.getByRole("button", { name: "Tuesday" })
-				.getAttribute("aria-pressed"),
+			screen.getByRole("button", { name: "Tuesday" }).getAttribute("aria-pressed"),
 		).toBe("true");
 		expect(screen.getByText("Every 3 weeks on Tue, Thu, 7 times")).toBeTruthy();
 	});
@@ -345,7 +349,6 @@ describe("EventEditorForm custom recurrence", () => {
 	});
 });
 
-
 describe("EventEditorForm event boundaries", () => {
 	function editEvent(values: Partial<EventFormValues> = {}) {
 		const event = createEventFromForm(
@@ -354,20 +357,38 @@ describe("EventEditorForm event boundaries", () => {
 			fixtureCalendars[0]!.color,
 		);
 		// Seed the independent end without relying on the serializer under test.
-		event.end = values.isAllDay ? new Date(`${values.endDate}T00:00:00Z`)
-			: new Date(`${values.endDate ?? baseValues.endDate}T${values.endTime ?? baseValues.endTime}:00`);
+		event.end = values.isAllDay
+			? new Date(`${values.endDate}T00:00:00Z`)
+			: new Date(
+					`${values.endDate ?? baseValues.endDate}T${values.endTime ?? baseValues.endTime}:00`,
+				);
 		const onSubmit = vi.fn(async (draft: EventFormValues) => {
 			return void saved.push(updateEventFromForm(event, draft));
 		});
-		const saved: typeof event[] = [];
-		render(<EventEditorForm calendars={fixtureCalendars} initialValues={eventFormValues(event)}
-			onCancel={vi.fn()} onError={() => ({ message: "Save failed" })}
-			onSubmit={onSubmit} submitLabel="Save" timeFormat="24h" weekStartsOn="monday" />);
+		const saved: (typeof event)[] = [];
+		render(
+			<EventEditorForm
+				calendars={fixtureCalendars}
+				initialValues={eventFormValues(event)}
+				onCancel={vi.fn()}
+				onError={() => ({ message: "Save failed" })}
+				onSubmit={onSubmit}
+				submitLabel="Save"
+				timeFormat="24h"
+				weekStartsOn="monday"
+			/>,
+		);
 		return { event, saved, onSubmit };
 	}
 
-	async function chooseDate(user: ReturnType<typeof userEvent.setup>, label: string, date: string) {
-		await user.click(screen.getByRole("button", { name: new RegExp(`^${label}:`) }));
+	async function chooseDate(
+		user: ReturnType<typeof userEvent.setup>,
+		label: string,
+		date: string,
+	) {
+		await user.click(
+			screen.getByRole("button", { name: new RegExp(`^${label}:`) }),
+		);
 		const input = screen.getByRole("textbox", { name: "Exact date" });
 		await user.clear(input);
 		await user.type(input, date);
@@ -379,22 +400,35 @@ describe("EventEditorForm event boundaries", () => {
 		{ endDate: "2026-07-11", startTime: "09:00", endTime: "10:00" },
 		{ endDate: "2026-07-08", isAllDay: true },
 		{ endDate: "2026-07-11", isAllDay: true },
-	])("preserves title-only boundaries %j on actual submission", async (values) => {
-		const user = userEvent.setup();
-		const { saved, event } = editEvent(values);
-		await user.clear(screen.getByRole("textbox", { name: "Event title" }));
-		await user.type(screen.getByRole("textbox", { name: "Event title" }), "Renamed");
-		await user.keyboard("{Control>}{Enter}{/Control}");
-		expect(saved).toHaveLength(1);
-		expect(saved[0]).toMatchObject({ title: "Renamed", start: event.start, end: event.end });
-	});
+	])(
+		"preserves title-only boundaries %j on actual submission",
+		async (values) => {
+			const user = userEvent.setup();
+			const { saved, event } = editEvent(values);
+			await user.clear(screen.getByRole("textbox", { name: "Event title" }));
+			await user.type(
+				screen.getByRole("textbox", { name: "Event title" }),
+				"Renamed",
+			);
+			await user.keyboard("{Control>}{Enter}{/Control}");
+			expect(saved).toHaveLength(1);
+			expect(saved[0]).toMatchObject({
+				title: "Renamed",
+				start: event.start,
+				end: event.end,
+			});
+		},
+	);
 
 	it("moves a same-day timed end with Date, but preserves an independently selected end", async () => {
 		const user = userEvent.setup();
 		const { saved } = editEvent();
 		await chooseDate(user, "Date", "2026-07-09");
 		await user.click(screen.getByRole("button", { name: "Save" }));
-		expect(eventFormValues(saved[0]!)).toMatchObject({ date: "2026-07-09", endDate: "2026-07-09" });
+		expect(eventFormValues(saved[0]!)).toMatchObject({
+			date: "2026-07-09",
+			endDate: "2026-07-09",
+		});
 		await chooseDate(user, "Ends", "2026-07-12");
 		await chooseDate(user, "Date", "2026-07-10");
 		const endTime = screen.getByRole("combobox", { name: "End time" });
@@ -402,10 +436,16 @@ describe("EventEditorForm event boundaries", () => {
 		await user.type(endTime, "01:00");
 		await user.tab();
 		await user.click(screen.getByRole("button", { name: "Save" }));
-		expect(eventFormValues(saved[1]!)).toMatchObject({ date: "2026-07-10", endDate: "2026-07-12", endTime: "01:00" });
+		expect(eventFormValues(saved[1]!)).toMatchObject({
+			date: "2026-07-10",
+			endDate: "2026-07-12",
+			endTime: "01:00",
+		});
 		await chooseDate(user, "Date", "2026-07-13");
 		await user.click(screen.getByRole("button", { name: "Save" }));
-		expect(screen.getByRole("alert").textContent).toContain("End time must be after start time.");
+		expect(screen.getByRole("alert").textContent).toContain(
+			"End time must be after start time.",
+		);
 		expect(saved).toHaveLength(2);
 	});
 
@@ -415,6 +455,10 @@ describe("EventEditorForm event boundaries", () => {
 		await chooseDate(user, "Ends", "2026-07-12");
 		await chooseDate(user, "Date", "2026-07-10");
 		await user.click(screen.getByRole("button", { name: "Save" }));
-		expect(saved[0]).toMatchObject({ start: new Date("2026-07-10T00:00:00Z"), end: new Date("2026-07-12T00:00:00Z"), isAllDay: true });
+		expect(saved[0]).toMatchObject({
+			start: new Date("2026-07-10T00:00:00Z"),
+			end: new Date("2026-07-12T00:00:00Z"),
+			isAllDay: true,
+		});
 	});
 });

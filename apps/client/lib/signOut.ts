@@ -24,11 +24,17 @@ export async function resetLocalAccountState() {
   await clearAllEventNotifications();
 }
 
-export async function signOutAndReset(authClient: { signOut: () => Promise<unknown> }) {
+export async function signOutAndReset(authClient: {
+  signOut: () => Promise<unknown>;
+}) {
   await resetLocalAccountState();
   // Clear the natively-cached Google account so the next sign-in shows the
   // account picker again instead of silently reusing the last account.
-  try { await GoogleSignin.signOut(); } catch { /* not signed in via Google */ }
+  try {
+    await GoogleSignin.signOut();
+  } catch {
+    /* not signed in via Google */
+  }
   await authClient.signOut(); // must finish before next sign-in, else B links onto A's session
   router.replace("/(auth)/welcome");
 }
@@ -44,7 +50,9 @@ let fired = false;
 export function onSessionExpired(handler: () => void) {
   expiredHandler = handler;
   fired = false; // new registration = new session, re-arm
-  return () => { if (expiredHandler === handler) expiredHandler = null; };
+  return () => {
+    if (expiredHandler === handler) expiredHandler = null;
+  };
 }
 
 export function notifySessionExpired() {

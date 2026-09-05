@@ -67,13 +67,19 @@ export async function cacheGetAllEvents(): Promise<Event[]> {
 }
 
 function hasValidDates(e: Event): boolean {
-  return !Number.isNaN(new Date(e.start).getTime()) && !Number.isNaN(new Date(e.end).getTime());
+  return (
+    !Number.isNaN(new Date(e.start).getTime()) &&
+    !Number.isNaN(new Date(e.end).getTime())
+  );
 }
 
 export async function cacheUpsertEvents(events: Event[]) {
   // Skip events with malformed dates so one bad import can't crash the whole sync.
   const valid = events.filter((e) => {
-    if (!e.id) { console.warn("Skipping event with no id"); return false; }
+    if (!e.id) {
+      console.warn("Skipping event with no id");
+      return false;
+    }
     if (hasValidDates(e)) return true;
     console.warn("Skipping event with invalid date:", e.id, e.start, e.end);
     return false;
@@ -87,18 +93,39 @@ export async function cacheUpsertEvents(events: Event[]) {
 // row with an older or revisionless cache write, including a full snapshot.
 function writeEventRows(events: Event[], replace: boolean) {
   db.transaction((tx) => {
-    const saved = new Map(tx.select().from(eventsTable).all().map(row => [row.id, row]));
+    const saved = new Map(
+      tx
+        .select()
+        .from(eventsTable)
+        .all()
+        .map((row) => [row.id, row]),
+    );
     const incomingRows = new Map<string, typeof eventsTable.$inferSelect>();
     for (const event of events) {
       const incoming = toRow(event);
       const current = incomingRows.get(event.id) ?? saved.get(event.id);
-      incomingRows.set(event.id, current && (current.revision ?? 0) > (incoming.revision ?? 0) ? current : incoming);
+      incomingRows.set(
+        event.id,
+        current && (current.revision ?? 0) > (incoming.revision ?? 0)
+          ? current
+          : incoming,
+      );
     }
     const rows = [...incomingRows.values()];
     if (replace) tx.delete(eventsTable).run();
-    else if (rows.length) tx.delete(eventsTable).where(inArray(eventsTable.id, rows.map(row => row.id))).run();
+    else if (rows.length)
+      tx.delete(eventsTable)
+        .where(
+          inArray(
+            eventsTable.id,
+            rows.map((row) => row.id),
+          ),
+        )
+        .run();
     for (let i = 0; i < rows.length; i += 200) {
-      tx.insert(eventsTable).values(rows.slice(i, i + 200)).run();
+      tx.insert(eventsTable)
+        .values(rows.slice(i, i + 200))
+        .run();
     }
   });
 }
@@ -111,14 +138,17 @@ export async function cacheDeleteEvents(ids: string[]) {
 // Full sync is authoritative: replace the whole cache so any local drift
 // (e.g. stale ids accumulated from past resets) is dropped.
 export async function cacheReplaceAllEvents(events: Event[]) {
-  writeEventRows(events.filter((e) => e.id && hasValidDates(e)), true);
+  writeEventRows(
+    events.filter((e) => e.id && hasValidDates(e)),
+    true,
+  );
 }
 
 // Upsert one sync_meta row. drizzle's onConflictDoUpdate emits a bind that
 // expo-sqlite on iOS rejects (InvalidConvertibleException, aborting the whole
 // refresh); a delete-then-insert on the PK is the driver-agnostic equivalent.
 async function setMeta(key: string, value: string) {
-  db.transaction(tx => {
+  db.transaction((tx) => {
     tx.delete(syncMetaTable).where(eq(syncMetaTable.key, key)).run();
     tx.insert(syncMetaTable).values({ key, value }).run();
   });
@@ -132,12 +162,18 @@ export async function cacheSetCalendars(calendars: Calendar[]) {
 }
 
 export async function cacheGetCalendars(): Promise<Calendar[]> {
-  const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "calendars"));
+  const [row] = await db
+    .select()
+    .from(syncMetaTable)
+    .where(eq(syncMetaTable.key, "calendars"));
   return row ? parseArray<Calendar>(row.value) : [];
 }
 
 export async function getLastSync(): Promise<string | null> {
-  const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "lastSync"));
+  const [row] = await db
+    .select()
+    .from(syncMetaTable)
+    .where(eq(syncMetaTable.key, "lastSync"));
   return row?.value ?? null;
 }
 
@@ -160,7 +196,8 @@ export async function cacheSetSettings(settings: Settings) {
 export function cacheGetSettingsSync(): Settings | null {
   try {
     const row = sqlite.getFirstSync<{ value: string }>(
-      "SELECT value FROM sync_meta WHERE key = 'settings'");
+      "SELECT value FROM sync_meta WHERE key = 'settings'",
+    );
     return row ? JSON.parse(row.value) : null;
   } catch {
     return null; // fresh install: the table appears once migrations run
@@ -175,7 +212,10 @@ export async function cacheSetReminders(document: RemindersDocument) {
 }
 
 export async function cacheGetReminders(): Promise<RemindersDocument | null> {
-  const [row] = await db.select().from(syncMetaTable).where(eq(syncMetaTable.key, "reminders"));
+  const [row] = await db
+    .select()
+    .from(syncMetaTable)
+    .where(eq(syncMetaTable.key, "reminders"));
   if (!row) return null;
   try {
     return JSON.parse(row.value) as RemindersDocument;
@@ -188,7 +228,7 @@ export async function cacheGetReminders(): Promise<RemindersDocument | null> {
 // Called on sign-out so the next account (or the same one on another device)
 // starts from a clean full sync instead of inheriting stale data.
 export async function cacheClearAll() {
-  db.transaction(tx => {
+  db.transaction((tx) => {
     tx.delete(eventsTable).run();
     tx.delete(syncMetaTable).run();
   });

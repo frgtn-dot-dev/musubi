@@ -24,7 +24,10 @@ describe("event sync", () => {
   it("evicts a removed CalDAV copy on full catch-up without evicting offline federation", () => {
     const merged = mergeHomeEventSnapshot(
       [],
-      [event("removed-caldav-copy", ["caldav"]), event("cached-remote", ["remote"])],
+      [
+        event("removed-caldav-copy", ["caldav"]),
+        event("cached-remote", ["remote"]),
+      ],
       calendars,
     );
     expect(merged.map(({ id }) => id)).toEqual(["cached-remote"]);
@@ -33,13 +36,17 @@ describe("event sync", () => {
   it("runs refreshes in request order", async () => {
     const order: string[] = [];
     let release!: () => void;
-    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const first = serializeEventRefresh(async () => {
       order.push("first:start");
       await blocked;
       order.push("first:end");
     });
-    const second = serializeEventRefresh(async () => { order.push("second"); });
+    const second = serializeEventRefresh(async () => {
+      order.push("second");
+    });
 
     await Promise.resolve();
     expect(order).toEqual(["first:start"]);

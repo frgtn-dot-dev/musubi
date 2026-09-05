@@ -10,10 +10,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 import { expandRecurringEvents, type Mode } from "@musubi/calendar";
 import dayjs from "dayjs";
-import { GestureDetector, GestureHandlerRootView,
+import {
+  GestureDetector,
+  GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { AddEventModal, DOCK_PEEK } from "./AddEventModal";
-import { Draft, DRILL_OPEN_MIN, minutesToY, Rect,
+import {
+  Draft,
+  DRILL_OPEN_MIN,
+  minutesToY,
+  Rect,
 } from "@/components/cal/layout";
 import { CalendarDrillView, useCalendarDrill } from "./CalendarDrillView";
 import { CalendarHeader } from "./CalendarHeader";
@@ -31,7 +37,6 @@ import { showToast, ToastHost } from "@/components/ui/Toast";
 import { Tap } from "@/components/ui/Tap";
 import { userFacingError } from "@/lib/network";
 
-
 type CalMode = "month" | "week" | "day";
 
 type Props = {
@@ -42,7 +47,12 @@ type Props = {
   onEdit: (event: Calendar) => void;
 };
 
-export default function CalendarDetail({ calendar, visible, onClose, onDelete, onEdit,
+export default function CalendarDetail({
+  calendar,
+  visible,
+  onClose,
+  onDelete,
+  onEdit,
 }: Props) {
   const { height } = useWindowDimensions();
   const calendarSpace = height * 0.8;
@@ -62,20 +72,26 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   const { weekStartsOn, defaultCalendarView } = useSettingsStore();
 
   const [calMode, setCalMode] = useState<CalMode>(
-    defaultCalendarView === "week" || defaultCalendarView === "day" ? defaultCalendarView : "month",
+    defaultCalendarView === "week" || defaultCalendarView === "day"
+      ? defaultCalendarView
+      : "month",
   );
   const [base, setBase] = useState(new Date());
   const [anchorDate, setAnchorDate] = useState(new Date());
   // Docked composer, same model as the home tab: no FAB — it peeks in day view
   // (or when there's a draft) and rides drag-to-create.
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [dockHidden, setDockHidden] = useState(false);   // X hides the sheet until the next draft
+  const [dockHidden, setDockHidden] = useState(false); // X hides the sheet until the next draft
   const [newCalendarVisible, setNewCalendarVisible] = useState(false);
   const [calendarSettingsVisible, setCalendarSettingsVisible] = useState(false);
-  const [prefilledCalendar, setPreffiledCalendar] = useState<Calendar | undefined>(undefined);
-  const [calendarSettings, setCallendarSettings] = useState<Calendar | null>(null,
+  const [prefilledCalendar, setPreffiledCalendar] = useState<
+    Calendar | undefined
+  >(undefined);
+  const [calendarSettings, setCallendarSettings] = useState<Calendar | null>(
+    null,
   );
-  const scrollPosRef = useRef(Math.max(0, minutesToY(new Date().getHours() * 60 - 60)),
+  const scrollPosRef = useRef(
+    Math.max(0, minutesToY(new Date().getHours() * 60 - 60)),
   );
   // drill-in day view keeps its own scroll memory, reset to noon on each open
   const drillScrollPosRef = useRef(minutesToY(DRILL_OPEN_MIN));
@@ -83,21 +99,32 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   const insets = useSafeAreaInsets();
   // keyboardAware off: the docked composer owns the keyboard lift; without this
   // the detail sheet would ride the keyboard too and both would move.
-  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(visible, onClose, false,
+  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(
+    visible,
+    onClose,
+    false,
   );
 
   const {
-    drill, contentReady: drillContentReady, zoom, monthTransition, drillOpacity,
-    openDrill: beginDrill, closeDrill: animateDrillClosed, resetDrill,
+    drill,
+    contentReady: drillContentReady,
+    zoom,
+    monthTransition,
+    drillOpacity,
+    openDrill: beginDrill,
+    closeDrill: animateDrillClosed,
+    resetDrill,
   } = useCalendarDrill(anchorDate);
 
-  const openDrill = useCallback((date: Date, rect: Rect) => {
-    setDraft(null);
-    setDockHidden(false); // a fresh drill always re-shows the composer, even if X hid it last time
-    drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
-    beginDrill(date, rect);
-    setAnchorDate(date);
-  }, [beginDrill],
+  const openDrill = useCallback(
+    (date: Date, rect: Rect) => {
+      setDraft(null);
+      setDockHidden(false); // a fresh drill always re-shows the composer, even if X hid it last time
+      drillScrollPosRef.current = minutesToY(DRILL_OPEN_MIN); // day view always opens at this time
+      beginDrill(date, rect);
+      setAnchorDate(date);
+    },
+    [beginDrill],
   );
 
   useEffect(() => {
@@ -116,7 +143,10 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
     if (mode !== "month" && mode !== "week" && mode !== "day") return;
     setDraft(null);
     if (drill) {
-      if (mode === "month") { closeDrill(); return; }
+      if (mode === "month") {
+        closeDrill();
+        return;
+      }
       resetDrill();
     }
     setBase(anchorDate);
@@ -142,7 +172,9 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   };
 
   // Store write — the global host renders the modal; it stacks above this one.
-  const openEventDetail = useCallback((event: Event) => presentEventDetail(events, event), [events],
+  const openEventDetail = useCallback(
+    (event: Event) => presentEventDetail(events, event),
+    [events],
   );
 
   const openCalendarSettings = (calendar: Calendar) => {
@@ -151,28 +183,32 @@ export default function CalendarDetail({ calendar, visible, onClose, onDelete, o
   };
 
   // Tap/drag on an empty slot → straight into the event form with that range.
-  const handleDraftChange = useCallback((d: Draft | null) => {
-    if (!canEditEvents) return;
-    setDraft(d);
-    setDockHidden(false);
-  }, [canEditEvents],
+  const handleDraftChange = useCallback(
+    (d: Draft | null) => {
+      if (!canEditEvents) return;
+      setDraft(d);
+      setDockHidden(false);
+    },
+    [canEditEvents],
   );
 
   const canMoveEvent = useCallback(
     (e: Event) => !e.recurrence && canEditEvent(e, calendars),
     [calendars],
   );
-  const onMoveEvent = useCallback((ev: Event, dayDelta: number, minDelta: number) => {
-    const shift = (d: Date) => {
-      const n = new Date(d);
-      n.setDate(n.getDate() + dayDelta);
-      n.setMinutes(n.getMinutes() + minDelta);
-      return n;
-    };
-    const updated = { ...ev, start: shift(ev.start), end: shift(ev.end) };
+  const onMoveEvent = useCallback(
+    (ev: Event, dayDelta: number, minDelta: number) => {
+      const shift = (d: Date) => {
+        const n = new Date(d);
+        n.setDate(n.getDate() + dayDelta);
+        n.setMinutes(n.getMinutes() + minDelta);
+        return n;
+      };
+      const updated = { ...ev, start: shift(ev.start), end: shift(ev.end) };
       void updateEvent(updated, api)
         .then((saved) => {
-          showToast({ message: `“${ev.title || "Event"}” moved`,
+          showToast({
+            message: `“${ev.title || "Event"}” moved`,
             actionLabel: "Undo",
             onAction: () => {
               void updateEvent(editedEvent(saved, ev), api).catch((err) =>

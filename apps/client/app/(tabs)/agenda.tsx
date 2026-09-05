@@ -23,9 +23,8 @@ import { showToast } from "@/components/ui/Toast";
 import { userFacingError } from "@/lib/network";
 import { useCurrentDay } from "@/hooks/useCurrentDay";
 
-
-
-const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+const dateKey = (d: Date) =>
+  `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 const PAGE = 14;
 const RECURRENCE_HORIZON_YEARS = 2;

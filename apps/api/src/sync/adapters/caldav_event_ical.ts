@@ -1,7 +1,8 @@
 import ICAL from "ical.js";
 import { ProviderEventWriteError } from "../event_write";
 
-const invalidResource = () => new ProviderEventWriteError("provider-write-failed");
+const invalidResource = () =>
+  new ProviderEventWriteError("provider-write-failed");
 
 /** Locate physical content-line spans only. ICAL owns grammar, component
  * selection and value encoding; untouched bytes never go through its serializer.
@@ -38,7 +39,8 @@ export function replaceEventProperties(
     if (boundary) {
       const name = boundary[2].toLowerCase();
       if (boundary[1].toUpperCase() === "BEGIN") {
-        if (stack.length === 0 && (name !== "vcalendar" || ++rootCount !== 1)) throw invalidResource();
+        if (stack.length === 0 && (name !== "vcalendar" || ++rootCount !== 1))
+          throw invalidResource();
         if (stack.length === 1 && name === "vevent") {
           eventIndex++;
           selected = eventIndex === masterIndex;
@@ -65,7 +67,8 @@ export function replaceEventProperties(
       }
     }
   }
-  if (stack.length || rootCount !== 1 || selectedEnd < 0) throw invalidResource();
+  if (stack.length || rootCount !== 1 || selectedEnd < 0)
+    throw invalidResource();
   const edits = new Map<number, string>();
   const additions: string[] = [];
   const newline = data.includes("\r\n") ? "\r\n" : "\n";
@@ -73,20 +76,27 @@ export function replaceEventProperties(
     const positions = spans.get(name) ?? [];
     const recurrence = ["rrule", "rdate", "exdate"].includes(name);
     if (!recurrence && positions.length > 1) throw invalidResource();
-    const serialized = properties.map((property) => {
-      const next = new ICAL.Property(structuredClone(property.toJSON()));
-      if (!recurrence && positions.length === 1) {
-        const original = ICAL.Property.fromString(lines[positions[0]].unfolded);
-        const parameters = structuredClone(original.toJSON()[1]);
-        if (["dtstart", "dtend"].includes(name)) {
-          delete parameters.tzid;
-          delete parameters.value;
+    const serialized = properties
+      .map((property) => {
+        const next = new ICAL.Property(structuredClone(property.toJSON()));
+        if (!recurrence && positions.length === 1) {
+          const original = ICAL.Property.fromString(
+            lines[positions[0]].unfolded,
+          );
+          const parameters = structuredClone(original.toJSON()[1]);
+          if (["dtstart", "dtend"].includes(name)) {
+            delete parameters.tzid;
+            delete parameters.value;
+          }
+          // Preserve extension/LANGUAGE/etc parameters even on the edited field.
+          Object.assign(next.toJSON()[1], {
+            ...parameters,
+            ...next.toJSON()[1],
+          });
         }
-        // Preserve extension/LANGUAGE/etc parameters even on the edited field.
-        Object.assign(next.toJSON()[1], { ...parameters, ...next.toJSON()[1] });
-      }
-      return next.toICALString().replace(/\r?\n/g, newline) + newline;
-    }).join("");
+        return next.toICALString().replace(/\r?\n/g, newline) + newline;
+      })
+      .join("");
     if (positions.length) {
       edits.set(positions[0], serialized);
       for (const position of positions.slice(1)) edits.set(position, "");
@@ -94,9 +104,13 @@ export function replaceEventProperties(
       additions.push(serialized);
     }
   }
-  const output = lines.map((line, index) =>
-    (index === selectedEnd ? additions.join("") : "") + (edits.get(index) ?? line.raw),
-  ).join("");
+  const output = lines
+    .map(
+      (line, index) =>
+        (index === selectedEnd ? additions.join("") : "") +
+        (edits.get(index) ?? line.raw),
+    )
+    .join("");
   // Reject invalid generated input before any network mutation, without using
   // the parsed representation to serialize the resource.
   ICAL.parse(output);

@@ -57,10 +57,11 @@ const patchRequest = z
     patch: EventPatchSchema,
   })
   .strict();
-export const ScopeEditIntentSchema = z.object({
-  updates: z.array(patchRequest).length(1),
-  creates: z.array(EventCreateRequestSchema).max(1),
-})
+export const ScopeEditIntentSchema = z
+  .object({
+    updates: z.array(patchRequest).length(1),
+    creates: z.array(EventCreateRequestSchema).max(1),
+  })
   .strict();
 export const EventPatchRequestSchema = patchRequest.extend({
   scopeEdit: ScopeEditIntentSchema.optional(),
@@ -197,5 +198,10 @@ export class EventMutationError extends Error {
 /** A draft owns dates and links as well as content and the read revision. */
 export function snapshotEvent(event: Event): Event {
   const snapshot = EventSchema.parse(event);
-  return { ...snapshot, start: new Date(snapshot.start), end: new Date(snapshot.end), calendars: [...snapshot.calendars] };
+  return {
+    ...snapshot,
+    start: new Date(snapshot.start),
+    end: new Date(snapshot.end),
+    calendars: [...snapshot.calendars],
+  };
 }

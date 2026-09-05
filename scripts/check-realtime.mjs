@@ -26,7 +26,13 @@ const PHONE_STREAM = resolve(root, "apps/client/hooks/useEventsStream.ts");
 
 /** The functions that put a frame on the wire. */
 // notifyEvent resolves calendar members, then delegates to notifyCalendarMembers.
-const EMITTERS = ["notifyCalendarMembers", "notifyEvent", "notifyPages", "notify", "emit"];
+const EMITTERS = [
+  "notifyCalendarMembers",
+  "notifyEvent",
+  "notifyPages",
+  "notify",
+  "emit",
+];
 
 /**
  * Frames the phone is allowed not to handle.

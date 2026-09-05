@@ -223,7 +223,9 @@ async function main() {
 
   const calendarObject = {
     url: "https://dav.example/cal/imported.ics",
-    data: patchEventIcal(data, event, imported!.icalUid!, { title: event.title }),
+    data: patchEventIcal(data, event, imported!.icalUid!, {
+      title: event.title,
+    }),
     etag: '"remote-v1"',
   };
   assert.equal(calendarObject.etag, '"remote-v1"');

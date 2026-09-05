@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("react-native-sse", () => ({
   default: class {
-    addEventListener(type: string, listener: (event: { data: string }) => void) {
+    addEventListener(
+      type: string,
+      listener: (event: { data: string }) => void,
+    ) {
       if (type === "message") mocks.streamMessage = listener;
     }
     close() {}
@@ -138,7 +141,9 @@ vi.mock("@/services/federation", () => ({
   setHomeRequester: vi.fn(),
   remoteForCalendar: vi.fn(),
   fedFetch: vi.fn(),
-  syncFederatedAccounts: vi.fn().mockResolvedValue({ calendars: [], events: [], syncedServers: new Set() }),
+  syncFederatedAccounts: vi
+    .fn()
+    .mockResolvedValue({ calendars: [], events: [], syncedServers: new Set() }),
 }));
 vi.mock("@/services/notifications", () => ({
   setReminderWriter: vi.fn(),
@@ -159,7 +164,9 @@ vi.mock("expo-sqlite", async () => {
   const sqlite = sqlitePlatform();
   return { openDatabaseSync: () => sqlite };
 });
-vi.mock("@/services/settingsSync", () => ({ refreshSettingsDocument: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/services/settingsSync", () => ({
+  refreshSettingsDocument: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/store/useAttendeesStore", () => ({
   useAttendeesStore: () => vi.fn(),
 }));
@@ -168,7 +175,12 @@ const { default: CalendarPickerModal } = await import("./CalendarPickerModal");
 vi.mock("./EventDetailModal", () => ({ default: "EventDetailModal" }));
 vi.mock("@/store/useCalendarsStore", async (original) => {
   const actual = await original<typeof import("@/store/useCalendarsStore")>();
-  return { useCalendarsStore: Object.assign(() => actual.useCalendarsStore.getState(), actual.useCalendarsStore) };
+  return {
+    useCalendarsStore: Object.assign(
+      () => actual.useCalendarsStore.getState(),
+      actual.useCalendarsStore,
+    ),
+  };
 });
 vi.mock("@/store/useEventsStore", async (original) => {
   const actual = await original<typeof import("@/store/useEventsStore")>();
@@ -212,7 +224,6 @@ const master = EventSchema.parse({
   originCalendarID: "calendar",
   recurrence: "FREQ=WEEKLY",
 });
-
 
 // Execute the real host-provided props, not a stand-in boolean callback. Native
 // hosts/animation are the seam; the form effects, scope helper, stores and API run.
@@ -262,11 +273,21 @@ const { useRefreshData } = await import("@/hooks/useRefreshData");
 const { useConnectToEventStream } = await import("@/hooks/useEventsStream");
 const { serializeEventRefresh } = await import("@/lib/eventSync");
 const { useCalendarsStore } = await import("@/store/useCalendarsStore");
-const { cacheClearAll, cacheGetAllEvents } = await import("@/services/eventsCache");
+const { cacheClearAll, cacheGetAllEvents } = await import(
+  "@/services/eventsCache"
+);
 const { db, sqlite } = await import("@/services/db");
 const { migrate } = await import("drizzle-orm/expo-sqlite/migrator");
 const migrations = (await import("@/drizzle/migrations")).default;
-const calendar = { id: "calendar", creatorID: "owner", role: "owner", name: "Calendar", color: "#7A8BA3", isVisible: true, isDefault: false };
+const calendar = {
+  id: "calendar",
+  creatorID: "owner",
+  role: "owner",
+  name: "Calendar",
+  color: "#7A8BA3",
+  isVisible: true,
+  isDefault: false,
+};
 const apiEvent = { ...master, recurrence: null, revision: 7 };
 let fetched: Event[] = [apiEvent];
 let fetchedCalendars = [calendar];
@@ -275,8 +296,16 @@ let initialBoot = true;
 
 beforeEach(async () => {
   if (initialBoot) {
-    await migrate(db, { ...migrations, journal: { ...migrations.journal, entries: migrations.journal.entries.slice(0, 7) } });
-    db.run(`INSERT INTO events (id, creatorID, title, color, start, end, organizer, calendars, originCalendarID) VALUES ('event', 'owner', 'Old cache', '#7A8BA3', '2026-07-06T09:00:00Z', '2026-07-06T10:00:00Z', 'owner', '["calendar"]', 'calendar')`);
+    await migrate(db, {
+      ...migrations,
+      journal: {
+        ...migrations.journal,
+        entries: migrations.journal.entries.slice(0, 7),
+      },
+    });
+    db.run(
+      `INSERT INTO events (id, creatorID, title, color, start, end, organizer, calendars, originCalendarID) VALUES ('event', 'owner', 'Old cache', '#7A8BA3', '2026-07-06T09:00:00Z', '2026-07-06T10:00:00Z', 'owner', '["calendar"]', 'calendar')`,
+    );
     await migrate(db, migrations);
     initialBoot = false;
   } else await cacheClearAll();
@@ -285,20 +314,41 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mocks.reconcile.mockResolvedValue(undefined);
   mocks.reminder.mockResolvedValue(undefined);
-  state.index = 0; state.values = []; state.effects = []; state.collectEffects = false;
+  state.index = 0;
+  state.values = [];
+  state.effects = [];
+  state.collectEffects = false;
   fetched = [apiEvent];
   fetchedCalendars = [calendar];
   mocks.streamMessage = undefined;
-  patchResult = async () => ({ data: { ...apiEvent, title: "Changed from SQLite", revision: 8 }, error: null });
+  patchResult = async () => ({
+    data: { ...apiEvent, title: "Changed from SQLite", revision: 8 },
+    error: null,
+  });
   mocks.request.mockImplementation(async (url, options) => {
     if (options.method === "PATCH") return patchResult();
-    if (url.includes("/events")) return { data: { events: fetched, deletedIds: [], serverTime: new Date().toISOString() }, error: null };
-    if (url.includes("/calendars")) return { data: fetchedCalendars, error: null };
-    if (url.includes("/reminders")) return { data: { default: DEFAULT_REMINDER_RULE, calendars: {}, events: {} }, error: null };
+    if (url.includes("/events"))
+      return {
+        data: {
+          events: fetched,
+          deletedIds: [],
+          serverTime: new Date().toISOString(),
+        },
+        error: null,
+      };
+    if (url.includes("/calendars"))
+      return { data: fetchedCalendars, error: null };
+    if (url.includes("/reminders"))
+      return {
+        data: { default: DEFAULT_REMINDER_RULE, calendars: {}, events: {} },
+        error: null,
+      };
     throw new Error(`Unexpected request: ${url}`);
   });
 });
-afterAll(() => (sqlite as unknown as { database: { close(): void } }).database.close());
+afterAll(() =>
+  (sqlite as unknown as { database: { close(): void } }).database.close(),
+);
 
 it("real refresh fetches revision-bearing Events through SQLite and composer PATCH uses that frozen authority; old-null remains read-only", async () => {
   const [old] = await cacheGetAllEvents();
@@ -310,7 +360,10 @@ it("real refresh fetches revision-bearing Events through SQLite and composer PAT
   expect(mocks.request).not.toHaveBeenCalled();
   expect(mocks.reminder).not.toHaveBeenCalled();
   expect(mocks.close).not.toHaveBeenCalled();
-  expect(mocks.alert).toHaveBeenLastCalledWith("Failed to save", expect.stringContaining("revision is unavailable"));
+  expect(mocks.alert).toHaveBeenLastCalledWith(
+    "Failed to save",
+    expect.stringContaining("revision is unavailable"),
+  );
 
   await useRefreshData()({ providerSync: false, full: true });
   expect((await cacheGetAllEvents())[0].revision).toBe(7);
@@ -320,40 +373,96 @@ it("real refresh fetches revision-bearing Events through SQLite and composer PAT
   state.values = [];
   titleInput(renderComposer(true))!.onChangeText("Changed from SQLite");
   await saveButton(renderComposer())!.onPress!();
-  const writes = mocks.request.mock.calls.filter(([, options]) => options.method === "PATCH");
+  const writes = mocks.request.mock.calls.filter(
+    ([, options]) => options.method === "PATCH",
+  );
   expect(writes).toHaveLength(1);
-  expect(JSON.parse(writes[0][1].body)).toMatchObject({ expectedRevision: 7, patch: { title: "Changed from SQLite" } });
-  expect((await cacheGetAllEvents())[0]).toMatchObject({ revision: 8, title: "Changed from SQLite" });
+  expect(JSON.parse(writes[0][1].body)).toMatchObject({
+    expectedRevision: 7,
+    patch: { title: "Changed from SQLite" },
+  });
+  expect((await cacheGetAllEvents())[0]).toMatchObject({
+    revision: 8,
+    title: "Changed from SQLite",
+  });
   expect(useEventsStore.getState().events[0].revision).toBe(8);
   expect(mocks.reminder).toHaveBeenCalledOnce();
   expect(mocks.close).toHaveBeenCalledOnce();
 });
 
-for (const removal of ["unrelated", "target", "full-target", "full-unchanged"] as const) {
+for (const removal of [
+  "unrelated",
+  "target",
+  "full-target",
+  "full-unchanged",
+] as const) {
   for (const outcome of ["success", "committed-error"] as const) {
     it(`actual composer/cache/reminders handle ${outcome} after ${removal} removal`, async () => {
       const other = { ...apiEvent, id: "other" };
       fetched = [other, apiEvent];
       await useRefreshData()({ providerSync: false, full: true });
-      useEditComposerStore.getState().open(useEventsStore.getState().events.find(e => e.id === apiEvent.id)!);
+      useEditComposerStore
+        .getState()
+        .open(
+          useEventsStore.getState().events.find((e) => e.id === apiEvent.id)!,
+        );
       titleInput(renderComposer(true))!.onChangeText("Changed from SQLite");
       let finish!: (value: unknown) => void;
-      patchResult = () => new Promise(resolve => { finish = resolve; });
+      patchResult = () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        });
       const pending = saveButton(renderComposer())!.onPress!();
-      await vi.waitFor(() => expect(mocks.request.mock.calls.some(([, opts]) => opts.method === "PATCH")).toBe(true));
+      await vi.waitFor(() =>
+        expect(
+          mocks.request.mock.calls.some(([, opts]) => opts.method === "PATCH"),
+        ).toBe(true),
+      );
       if (removal === "unrelated" || removal === "target") {
-        await useEventsStore.getState().localRemoveEvent({ ...(removal === "target" ? apiEvent : other), revision: 9 });
+        await useEventsStore.getState().localRemoveEvent({
+          ...(removal === "target" ? apiEvent : other),
+          revision: 9,
+        });
       } else {
-        fetched = removal === "full-target" ? [other] : [useEventsStore.getState().events.find(e => e.id === apiEvent.id)!];
+        fetched =
+          removal === "full-target"
+            ? [other]
+            : [
+                useEventsStore
+                  .getState()
+                  .events.find((e) => e.id === apiEvent.id)!,
+              ];
         await useRefreshData()({ providerSync: false, full: true });
       }
-      mocks.reminder.mockClear(); mocks.reconcile.mockClear();
-      const receipt = { ...apiEvent, title: "Changed from SQLite", revision: 8 };
-      finish(outcome === "success" ? { data: receipt, error: null } : { data: null, error: { status: 409, code: "provider-conflict", localCommitted: true, current: receipt, error: "Saved locally" } });
+      mocks.reminder.mockClear();
+      mocks.reconcile.mockClear();
+      const receipt = {
+        ...apiEvent,
+        title: "Changed from SQLite",
+        revision: 8,
+      };
+      finish(
+        outcome === "success"
+          ? { data: receipt, error: null }
+          : {
+              data: null,
+              error: {
+                status: 409,
+                code: "provider-conflict",
+                localCommitted: true,
+                current: receipt,
+                error: "Saved locally",
+              },
+            },
+      );
       await pending;
       const removedTarget = removal === "target" || removal === "full-target";
-      expect((await cacheGetAllEvents()).some(e => e.id === apiEvent.id)).toBe(!removedTarget);
-      expect(useEventsStore.getState().events.some(e => e.id === apiEvent.id)).toBe(!removedTarget);
+      expect(
+        (await cacheGetAllEvents()).some((e) => e.id === apiEvent.id),
+      ).toBe(!removedTarget);
+      expect(
+        useEventsStore.getState().events.some((e) => e.id === apiEvent.id),
+      ).toBe(!removedTarget);
       if (removedTarget || outcome === "committed-error") {
         expect(mocks.reminder).not.toHaveBeenCalled();
         expect(mocks.close).not.toHaveBeenCalled();
@@ -362,8 +471,18 @@ for (const removal of ["unrelated", "target", "full-target", "full-unchanged"] a
         expect(mocks.reminder).toHaveBeenCalledOnce();
         expect(mocks.close).toHaveBeenCalledOnce();
       }
-      if (removedTarget) expect(mocks.reconcile.mock.calls.every(([events]) => !events.some((e: typeof apiEvent) => e.id === apiEvent.id))).toBe(true);
-      else expect((await cacheGetAllEvents()).find(e => e.id === apiEvent.id)?.revision).toBe(8);
+      if (removedTarget)
+        expect(
+          mocks.reconcile.mock.calls.every(
+            ([events]) =>
+              !events.some((e: typeof apiEvent) => e.id === apiEvent.id),
+          ),
+        ).toBe(true);
+      else
+        expect(
+          (await cacheGetAllEvents()).find((e) => e.id === apiEvent.id)
+            ?.revision,
+        ).toBe(8);
     });
   }
 }
@@ -373,22 +492,52 @@ for (const action of ["addEvent", "forkEvent"] as const) {
     it(`reconciles server-assigned ${action} identity after full absence (${outcome}) without binding source removal`, async () => {
       await useRefreshData()({ providerSync: false, full: true });
       let finish!: (value: unknown) => void;
-      mocks.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-      const source = action === "addEvent" ? { ...apiEvent, id: "client-created" } : apiEvent;
-      const pending = action === "addEvent"
-        ? useEventsStore.getState().addEvent(source, useApi())
-        : useEventsStore.getState().forkEvent(source, "calendar", useApi());
+      mocks.request.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const source =
+        action === "addEvent"
+          ? { ...apiEvent, id: "client-created" }
+          : apiEvent;
+      const pending =
+        action === "addEvent"
+          ? useEventsStore.getState().addEvent(source, useApi())
+          : useEventsStore.getState().forkEvent(source, "calendar", useApi());
       fetched = [];
       await useRefreshData()({ providerSync: false, full: true });
       const created = { ...apiEvent, id: "server-created", revision: 1 };
       fetched = [created];
       mocks.request.mockClear();
-      finish(outcome === "success" ? { data: created, error: null } : { data: null, error: { status: 409, code: "provider-conflict", localCommitted: true, current: created, error: "Saved locally" } });
+      finish(
+        outcome === "success"
+          ? { data: created, error: null }
+          : {
+              data: null,
+              error: {
+                status: 409,
+                code: "provider-conflict",
+                localCommitted: true,
+                current: created,
+                error: "Saved locally",
+              },
+            },
+      );
       if (outcome === "success") await pending;
       else await expect(pending).rejects.toThrow("Saved locally");
-      expect(mocks.request.mock.calls.some(([, options]) => options.method === "GET")).toBe(true);
-      expect(useEventsStore.getState().events.map(e => e.id)).toEqual([created.id]);
-      expect((await cacheGetAllEvents()).map(e => [e.id, e.revision])).toEqual([[created.id, 1]]);
+      expect(
+        mocks.request.mock.calls.some(
+          ([, options]) => options.method === "GET",
+        ),
+      ).toBe(true);
+      expect(useEventsStore.getState().events.map((e) => e.id)).toEqual([
+        created.id,
+      ]);
+      expect(
+        (await cacheGetAllEvents()).map((e) => [e.id, e.revision]),
+      ).toEqual([[created.id, 1]]);
     });
   }
 }
@@ -398,12 +547,21 @@ it("an ambiguous committed success requests real reconciliation and preserves dr
   useEditComposerStore.getState().open(useEventsStore.getState().events[0]);
   titleInput(renderComposer(true))!.onChangeText("Held draft");
   let finish!: (value: unknown) => void;
-  patchResult = () => new Promise(resolve => { finish = resolve; });
+  patchResult = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
   const pending = saveButton(renderComposer())!.onPress!();
-  await vi.waitFor(() => expect(mocks.request.mock.calls.some(([, opts]) => opts.method === "PATCH")).toBe(true));
+  await vi.waitFor(() =>
+    expect(
+      mocks.request.mock.calls.some(([, opts]) => opts.method === "PATCH"),
+    ).toBe(true),
+  );
   fetched = [];
   await useRefreshData()({ providerSync: false, full: true });
-  mocks.request.mockImplementation(async () => { throw new Error("offline refetch"); });
+  mocks.request.mockImplementation(async () => {
+    throw new Error("offline refetch");
+  });
   mocks.reminder.mockClear();
   finish({ data: { ...apiEvent, revision: 8 }, error: null });
   await pending;
@@ -411,24 +569,44 @@ it("an ambiguous committed success requests real reconciliation and preserves dr
   expect(mocks.close).not.toHaveBeenCalled();
   expect(mocks.reminder).not.toHaveBeenCalled();
   expect(titleInput(renderComposer())!.value).toBe("Held draft");
-  expect(mocks.alert).toHaveBeenLastCalledWith("Failed to save", expect.stringContaining("Saved locally"));
+  expect(mocks.alert).toHaveBeenLastCalledWith(
+    "Failed to save",
+    expect.stringContaining("Saved locally"),
+  );
 });
 
 it("a receipt-triggered refresh cannot refill SQLite/store/reminders after account/server reset", async () => {
   await useRefreshData()({ providerSync: false, full: true });
   let finish!: (value: unknown) => void;
-  mocks.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  mocks.request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
   const pending = useEventsStore.getState().updateEvent(apiEvent, useApi());
   fetched = [];
   await useRefreshData()({ providerSync: false, full: true });
   let refreshed!: (value: unknown) => void;
-  mocks.request.mockImplementationOnce(() => new Promise(resolve => { refreshed = resolve; }));
+  mocks.request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        refreshed = resolve;
+      }),
+  );
   finish({ data: { ...apiEvent, revision: 8 }, error: null });
   await vi.waitFor(() => expect(refreshed).toBeTypeOf("function"));
   useEventsStore.getState().resetEvents();
   await cacheClearAll();
   mocks.reconcile.mockClear();
-  refreshed({ data: { events: [{ ...apiEvent, revision: 8 }], deletedIds: [], serverTime: new Date().toISOString() }, error: null });
+  refreshed({
+    data: {
+      events: [{ ...apiEvent, revision: 8 }],
+      deletedIds: [],
+      serverTime: new Date().toISOString(),
+    },
+    error: null,
+  });
   await expect(pending).rejects.toThrow("Saved locally");
   expect(useEventsStore.getState().events).toEqual([]);
   expect(await cacheGetAllEvents()).toEqual([]);
@@ -438,13 +616,23 @@ it("a receipt-triggered refresh cannot refill SQLite/store/reminders after accou
 it("refresh reminder completion uses current store truth after a later target removal", async () => {
   const request = mocks.request.getMockImplementation()!;
   let finish!: (value: unknown) => void;
-  mocks.request.mockImplementation((url, options) => url.includes("/reminders")
-    ? new Promise(resolve => { finish = resolve; }) : request(url, options));
+  mocks.request.mockImplementation((url, options) =>
+    url.includes("/reminders")
+      ? new Promise((resolve) => {
+          finish = resolve;
+        })
+      : request(url, options),
+  );
   const refresh = useRefreshData()({ providerSync: false, full: true });
   await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
-  await useEventsStore.getState().localRemoveEvent({ ...apiEvent, revision: 9 });
+  await useEventsStore
+    .getState()
+    .localRemoveEvent({ ...apiEvent, revision: 9 });
   mocks.reconcile.mockClear();
-  finish({ data: { default: DEFAULT_REMINDER_RULE, calendars: {}, events: {} }, error: null });
+  finish({
+    data: { default: DEFAULT_REMINDER_RULE, calendars: {}, events: {} },
+    error: null,
+  });
   await refresh;
   expect(await cacheGetAllEvents()).toEqual([]);
   expect(mocks.reconcile).toHaveBeenCalledWith([]);
@@ -455,7 +643,9 @@ it("a newer removal while receipt side effects settle still prevents composer re
   useEditComposerStore.getState().open(useEventsStore.getState().events[0]);
   titleInput(renderComposer(true))!.onChangeText("Changed from SQLite");
   mocks.reconcile.mockImplementationOnce(async () => {
-    await useEventsStore.getState().localRemoveEvent({ ...apiEvent, revision: 9 });
+    await useEventsStore
+      .getState()
+      .localRemoveEvent({ ...apiEvent, revision: 9 });
   });
   await saveButton(renderComposer())!.onPress!();
   expect(await cacheGetAllEvents()).toEqual([]);

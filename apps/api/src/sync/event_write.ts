@@ -1,7 +1,15 @@
 import { EventWriteError } from "@musubi/types";
-import { getOAuthCredentials, hasProviderSyncScopes, type EventContentPatch } from "@musubi/db";
+import {
+  getOAuthCredentials,
+  hasProviderSyncScopes,
+  type EventContentPatch,
+} from "@musubi/db";
 
-export type ProviderEventWriteCode = "provider-conflict" | "provider-version-unavailable" | "event-diff-unavailable" | "provider-write-failed";
+export type ProviderEventWriteCode =
+  | "provider-conflict"
+  | "provider-version-unavailable"
+  | "event-diff-unavailable"
+  | "provider-write-failed";
 
 /** Provider outcome only: this does NOT say whether the local transaction committed. */
 export class ProviderEventWriteError extends Error {
@@ -17,12 +25,16 @@ export class ProviderEventWriteError extends Error {
 
 /** RFC 9110 entity-tag, strong comparison only. Do not trim, quote or repair. */
 export function strongEventEtag(value: unknown): string | null {
-  return typeof value === "string" && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value) ? value : null;
+  return typeof value === "string" &&
+    /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value)
+    ? value
+    : null;
 }
 
 export function requireEventEtag(value: unknown): string {
   const etag = strongEventEtag(value);
-  if (etag === null) throw new ProviderEventWriteError("provider-version-unavailable");
+  if (etag === null)
+    throw new ProviderEventWriteError("provider-version-unavailable");
   return etag;
 }
 
@@ -32,9 +44,14 @@ export function assertAcceptedEventEtag(accepted: unknown, current: unknown) {
   }
 }
 
-export function requireEventPatch(patch: EventContentPatch | undefined): EventContentPatch {
-  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new ProviderEventWriteError("event-diff-unavailable");
-  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as EventContentPatch;
+export function requireEventPatch(
+  patch: EventContentPatch | undefined,
+): EventContentPatch {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch))
+    throw new ProviderEventWriteError("event-diff-unavailable");
+  return Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as EventContentPatch;
 }
 
 /** A 412 is never retried unconditionally. Other failed writes may be ambiguous. */
@@ -48,10 +65,16 @@ export function assertProviderEventMutationResponse(response: Response) {
 }
 
 /** Read AFTER token refresh: an ACL grant cannot replace the OAuth write grant. */
-export async function assertOAuthEventWriteGrant(userID: string, provider: string, accountID: string) {
+export async function assertOAuthEventWriteGrant(
+  userID: string,
+  provider: string,
+  accountID: string,
+) {
   const credentials = await getOAuthCredentials(userID, provider, accountID);
   assertEventWriteEvidence(
-    credentials?.scope == null ? undefined : hasProviderSyncScopes(provider, credentials.scope),
+    credentials?.scope == null
+      ? undefined
+      : hasProviderSyncScopes(provider, credentials.scope),
     "event-write",
   );
 }

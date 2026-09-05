@@ -6,7 +6,10 @@ import { useApi } from "@/services/api";
 import { liveEventDetail } from "@/lib/liveEvent";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
-import { useEditComposerStore, useEventDetailStore } from "@/store/useEventDetailStore";
+import {
+  useEditComposerStore,
+  useEventDetailStore,
+} from "@/store/useEventDetailStore";
 
 // THE event-detail modal and THE classic edit composer — mounted once in the
 // tabs layout, driven by their stores. Screens open them via store writes
@@ -30,7 +33,9 @@ export function GlobalEventModals() {
       <AddEventModal
         visible={composer.visible}
         onClose={composer.close}
-        onSave={async (e) => { await addEvent(e, api); }}
+        onSave={async (e) => {
+          await addEvent(e, api);
+        }}
         onEdit={async (edited) => {
           // The composer was opened on one occurrence; which occurrences the
           // edit belongs to is the composer's last question, not its first.

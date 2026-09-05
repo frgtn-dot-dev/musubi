@@ -418,7 +418,9 @@ export async function pushEventToCalendars(
   await deliver();
 }
 
-export type CalendarEventWrite = Omit<EventWriteOperation, "external"> & { calendarIDs: string[] };
+export type CalendarEventWrite = Omit<EventWriteOperation, "external"> & {
+  calendarIDs: string[];
+};
 
 export type EventDeliveryReceipt = {
   action: EventWriteOperation["action"];
@@ -428,14 +430,23 @@ export type EventDeliveryReceipt = {
   accountID: string;
   externalCalendarID: string;
   externalEventID?: string;
-  status: "not-attempted" | "completed" | "not-needed" | "conflict" | "not-written" | "unconfirmed";
+  status:
+    | "not-attempted"
+    | "completed"
+    | "not-needed"
+    | "conflict"
+    | "not-written"
+    | "unconfirmed";
 };
 
 /** Request-scoped delivery only. Handler must add localCommitted/current revision;
  * these receipts are neither a durable outbox nor proof of multi-target atomicity.
  */
 export class EventDeliveryError extends Error {
-  constructor(readonly receipts: EventDeliveryReceipt[], readonly failure: Error) {
+  constructor(
+    readonly receipts: EventDeliveryReceipt[],
+    readonly failure: Error,
+  ) {
     super("Event provider delivery did not complete.");
     this.name = "EventDeliveryError";
   }
@@ -458,40 +469,84 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
     // Legacy handlers provide a server-read previous snapshot. This narrows
     // payloads, but is NOT local CAS. Next-stage CAS supplies its actual patch.
     const operation = structuredClone(write);
-    if (operation.action === "update" && operation.patch === undefined && operation.previous) {
+    if (
+      operation.action === "update" &&
+      operation.patch === undefined &&
+      operation.previous
+    ) {
       operation.patch = diffEventContent(operation.previous, operation.event);
     }
     for (const calendarID of new Set(operation.calendarIDs)) {
       const link = await getExternalLinkForCalendar(calendarID);
       if (!link) continue;
-      if (!link.supportsEvents) throw new EventWriteError("event-write", "unsupported");
+      if (!link.supportsEvents)
+        throw new EventWriteError("event-write", "unsupported");
       const adapter = getAdapter(link.provider);
-      if (!adapter?.assertEventWrite) throw new EventWriteError("event-write", "unknown");
-      const external = operation.action === "create" ? null : await getExternalEvent(
-        link.provider, operation.event.id, link.externalCalendarID, calendarID,
-      );
-      if (operation.action === "update" && external) requireEventPatch(operation.patch);
+      if (!adapter?.assertEventWrite)
+        throw new EventWriteError("event-write", "unknown");
+      const external =
+        operation.action === "create"
+          ? null
+          : await getExternalEvent(
+              link.provider,
+              operation.event.id,
+              link.externalCalendarID,
+              calendarID,
+            );
+      if (operation.action === "update" && external)
+        requireEventPatch(operation.patch);
       try {
-        await adapter.assertEventWrite(link.userID, link.accountID, link.externalCalendarID, {
-          ...operation, external: external ?? undefined,
-        });
+        await adapter.assertEventWrite(
+          link.userID,
+          link.accountID,
+          link.externalCalendarID,
+          {
+            ...operation,
+            external: external ?? undefined,
+          },
+        );
       } catch (error) {
-        if (error instanceof EventWriteError || error instanceof ProviderAuthError || error instanceof ProviderEventWriteError) throw error;
+        if (
+          error instanceof EventWriteError ||
+          error instanceof ProviderAuthError ||
+          error instanceof ProviderEventWriteError
+        )
+          throw error;
         throw new EventWriteError("event-write", "unknown");
       }
-      prepared.push({ operation, calendarID, link, adapter, external, receipt: {
-        action: operation.action, eventID: operation.event.id, calendarID,
-        provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID,
-        externalEventID: external?.externalEventId, status: "not-attempted",
-      } });
+      prepared.push({
+        operation,
+        calendarID,
+        link,
+        adapter,
+        external,
+        receipt: {
+          action: operation.action,
+          eventID: operation.event.id,
+          calendarID,
+          provider: link.provider,
+          accountID: link.accountID,
+          externalCalendarID: link.externalCalendarID,
+          externalEventID: external?.externalEventId,
+          status: "not-attempted",
+        },
+      });
     }
   }
   let failure: EventDeliveryError | undefined;
-  return async (onlyAction?: EventWriteOperation["action"],
+  return async (
+    onlyAction?: EventWriteOperation["action"],
     committedRevision?: number | ReadonlyMap<string, number>,
   ) => {
     if (failure) throw failure;
-    for (const { operation, calendarID, link, adapter, external, receipt } of prepared) {
+    for (const {
+      operation,
+      calendarID,
+      link,
+      adapter,
+      external,
+      receipt,
+    } of prepared) {
       const acceptedRevision = typeof committedRevision === "number"
         ? committedRevision : committedRevision?.get(operation.event.id);
       const { action, event } = operation;
@@ -522,9 +577,12 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             throw new ProviderEventWriteError(
               "provider-write-failed",
               "unconfirmed",
-          );
+            );
         } else {
-          if (!external) { receipt.status = "not-needed"; continue; }
+          if (!external) {
+            receipt.status = "not-needed";
+            continue;
+          }
           if (action === "update") {
             const result = await adapter.pushUpdate(
               link.userID,
@@ -557,7 +615,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
                 throw new ProviderEventWriteError(
                   "provider-write-failed",
                   "unconfirmed",
-              );
+                );
             }
           } else {
             await adapter.pushDelete(
@@ -571,9 +629,12 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
         }
         receipt.status = "completed";
       } catch (e) {
-        receipt.status = e instanceof ProviderEventWriteError
-          ? e.code === "provider-conflict" ? "conflict" : e.outcome
-          : "unconfirmed";
+        receipt.status =
+          e instanceof ProviderEventWriteError
+            ? e.code === "provider-conflict"
+              ? "conflict"
+              : e.outcome
+            : "unconfirmed";
         recordExternalSyncFailure("push", link.provider);
         logger.error("sync.push.failed", {
           action,
@@ -584,8 +645,12 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
           eventId: event.id,
           error: e,
         });
-        failure = new EventDeliveryError(prepared.map(({ receipt }) => ({ ...receipt })),
-          e instanceof Error ? e : new Error("Unknown provider delivery failure"));
+        failure = new EventDeliveryError(
+          prepared.map(({ receipt }) => ({ ...receipt })),
+          e instanceof Error
+            ? e
+            : new Error("Unknown provider delivery failure"),
+        );
         throw failure;
       }
     }

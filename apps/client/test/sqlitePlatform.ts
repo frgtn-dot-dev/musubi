@@ -15,7 +15,10 @@ export function sqlitePlatform() {
             return { getAllSync: () => rows, getFirstSync: () => rows[0] };
           }
           const result = statement.run(...params);
-          return { changes: result.changes, lastInsertRowId: result.lastInsertRowid };
+          return {
+            changes: result.changes,
+            lastInsertRowId: result.lastInsertRowid,
+          };
         },
         executeForRawResultSync(params: SQLInputValue[]) {
           const statement = database.prepare(sql);
@@ -25,6 +28,8 @@ export function sqlitePlatform() {
         },
       };
     },
-    getFirstSync(sql: string) { return database.prepare(sql).get(); },
+    getFirstSync(sql: string) {
+      return database.prepare(sql).get();
+    },
   };
 }

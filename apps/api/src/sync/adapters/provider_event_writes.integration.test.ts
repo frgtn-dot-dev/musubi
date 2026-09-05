@@ -5,13 +5,28 @@ import { createServer } from "node:http";
 import express from "express";
 import { eq } from "drizzle-orm";
 import {
-  account, CALENDAR_SCOPE, calendarEvents, createEvent,
+  account,
+  CALENDAR_SCOPE,
+  calendarEvents,
+  createEvent,
   patchEventAndCalendarLinks,
-  db, events, externalEvents,
-  getEvent, getExternalEvent, importExternalCalendar, importExternalEvent, memberTokens,
-  saveCaldavAccount, setExternalEventSyncData, unlinkEventAndTombstoneIfOrphaned, user,
+  db,
+  events,
+  externalEvents,
+  getEvent,
+  getExternalEvent,
+  importExternalCalendar,
+  importExternalEvent,
+  memberTokens,
+  saveCaldavAccount,
+  setExternalEventSyncData,
+  unlinkEventAndTombstoneIfOrphaned,
+  user,
 } from "@musubi/db";
-import { CLIENT_VERSION_HEADER, EventSchema, PRODUCT_VERSION,
+import {
+  CLIENT_VERSION_HEADER,
+  EventSchema,
+  PRODUCT_VERSION,
 } from "@musubi/types";
 import { googleAdapter } from "./google";
 import { caldavAdapter, icalToNormalized } from "./caldav";
@@ -27,33 +42,71 @@ import { handlerUpdateEvent, handlerRemoveEvent } from "../../handlers/events";
 // This fixture proves actual adapter/handler HTTP behavior, not provider-side
 // enforcement. Google Calendar docs and RFC 4791/9110 supply that contract.
 const richIcs = [
-  "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Unknown vendor//Calendar//EN",
+  "BEGIN:VCALENDAR",
+  "VERSION:2.0",
+  "PRODID:-//Unknown vendor//Calendar//EN",
   'X-CALENDAR-EXTRA;X-PARAM="urn:calendar":keep\\,all',
-  "BEGIN:VTIMEZONE", "TZID:Europe/Prague", "X-ZONE:opaque",
-  "BEGIN:STANDARD", "DTSTART:19701025T030000", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100",
-  "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
-  "BEGIN:DAYLIGHT", "DTSTART:19700329T020000", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200",
-  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT", "END:VTIMEZONE",
-  "BEGIN:VEVENT", "UID:rich@example.test", "SEQUENCE:42", "DTSTAMP:20260101T000000Z",
+  "BEGIN:VTIMEZONE",
+  "TZID:Europe/Prague",
+  "X-ZONE:opaque",
+  "BEGIN:STANDARD",
+  "DTSTART:19701025T030000",
+  "TZOFFSETFROM:+0200",
+  "TZOFFSETTO:+0100",
+  "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+  "END:STANDARD",
+  "BEGIN:DAYLIGHT",
+  "DTSTART:19700329T020000",
+  "TZOFFSETFROM:+0100",
+  "TZOFFSETTO:+0200",
+  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+  "END:DAYLIGHT",
+  "END:VTIMEZONE",
+  "BEGIN:VEVENT",
+  "UID:rich@example.test",
+  "SEQUENCE:42",
+  "DTSTAMP:20260101T000000Z",
   'DTSTART;TZID=Europe/Prague;X-TIME="urn:time":20260101T100000',
-  "DTEND;TZID=Europe/Prague:20260101T110000", "RRULE:FREQ=WEEKLY",
+  "DTEND;TZID=Europe/Prague:20260101T110000",
+  "RRULE:FREQ=WEEKLY",
   'SUMMARY;LANGUAGE=cs;X-TITLE="urn:title":Before',
   'DESCRIPTION;ALTREP="cid:part1.0001@example.test":Text\\nwith folded',
-  "\t continuation and \\, escaping", 'X-ALT-DESC;FMTTYPE=text/html:<b>Rich</b>',
+  "\t continuation and \\, escaping",
+  "X-ALT-DESC;FMTTYPE=text/html:<b>Rich</b>",
   'LOCATION;LANGUAGE=cs;X-COORD="geo:50,14":Room\\, 2',
   'X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-TITLE="Room 2":geo:50,14',
   'ATTENDEE;CN="Guest: Person";ROLE=REQ-PARTICIPANT;X-UNKNOWN=YES:mailto:guest@example.test',
   'X-UNKNOWN;VALUE=TEXT;X-QUOTED="a:b;c":one\\,two',
-  "X-FOLDED:preserve this long line exactly", " and its folding", "\tand tab",
-  "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Alarm text",
-  'X-ALARM;X-ARG="urn:alarm":keep', "END:VALARM",
-  "BEGIN:X-CUSTOM", "X-PROP;X-PARAM=opaque:unknown component", "END:X-CUSTOM", "END:VEVENT",
-  "BEGIN:VEVENT", "UID:rich@example.test", "RECURRENCE-ID;TZID=Europe/Prague:20260108T100000",
-  "DTSTART;TZID=Europe/Prague:20260108T120000", "DTEND;TZID=Europe/Prague:20260108T130000",
-  "SUMMARY:Detached", "X-EXCEPTION;X-KEEP=YES:keep all", "END:VEVENT", "END:VCALENDAR", "",
+  "X-FOLDED:preserve this long line exactly",
+  " and its folding",
+  "\tand tab",
+  "BEGIN:VALARM",
+  "ACTION:DISPLAY",
+  "TRIGGER:-PT15M",
+  "DESCRIPTION:Alarm text",
+  'X-ALARM;X-ARG="urn:alarm":keep',
+  "END:VALARM",
+  "BEGIN:X-CUSTOM",
+  "X-PROP;X-PARAM=opaque:unknown component",
+  "END:X-CUSTOM",
+  "END:VEVENT",
+  "BEGIN:VEVENT",
+  "UID:rich@example.test",
+  "RECURRENCE-ID;TZID=Europe/Prague:20260108T100000",
+  "DTSTART;TZID=Europe/Prague:20260108T120000",
+  "DTEND;TZID=Europe/Prague:20260108T130000",
+  "SUMMARY:Detached",
+  "X-EXCEPTION;X-KEEP=YES:keep all",
+  "END:VEVENT",
+  "END:VCALENDAR",
+  "",
 ].join("\r\n");
 
-type Remote = { etag: string | null; data?: string; json?: Record<string, unknown> };
+type Remote = {
+  etag: string | null;
+  data?: string;
+  json?: Record<string, unknown>;
+};
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
@@ -85,23 +138,37 @@ async function main() {
   const key = (auth: string, path: string) => `${auth}:${path}`;
   const fixture = createServer((req, res) => {
     let body = "";
-    req.on("data", (chunk) => { body += chunk; });
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
     req.on("end", async () => {
       const path = new URL(req.url!, "http://fixture.test").pathname;
       const method = req.method!;
       const auth = req.headers.authorization ?? "";
-      requests.push({ method, path, auth, ifMatch: req.headers["if-match"] as string | undefined, body });
+      requests.push({
+        method,
+        path,
+        auth,
+        ifMatch: req.headers["if-match"] as string | undefined,
+        body,
+      });
       const json = (value: unknown, status = 200) => {
-        res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value));
+        res.writeHead(status, { "content-type": "application/json" });
+        res.end(JSON.stringify(value));
       };
       const xml = (props: string) => {
         res.writeHead(207, { "content-type": "application/xml" });
-        res.end(`<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${path}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`);
+        res.end(
+          `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${path}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`,
+        );
       };
       const stored = remote.get(key(auth, path));
-      if (method === "GET" && path.includes("/calendarList/")) return json({ accessRole: "owner" });
+      if (method === "GET" && path.includes("/calendarList/"))
+        return json({ accessRole: "owner" });
       if (method === "GET" && path.endsWith("/events")) {
-        return json({ items: [...remote.entries()].filter(([entry]) => entry.startsWith(`${auth}:${path}/`))
+        return json({
+          items: [...remote.entries()]
+            .filter(([entry]) => entry.startsWith(`${auth}:${path}/`))
             .map(([, value]) => ({ ...value.json, etag: value.etag })),
           nextSyncToken: "cursor",
         });
@@ -120,8 +187,14 @@ async function main() {
               : stored.data,
           );
         }
-        const send = () => json({ ...stored.json, etag, organizer: { self: true } });
-        if (beforeEventRead) { const action = beforeEventRead; beforeEventRead = undefined; void action().then(send); return; }
+        const send = () =>
+          json({ ...stored.json, etag, organizer: { self: true } });
+        if (beforeEventRead) {
+          const action = beforeEventRead;
+          beforeEventRead = undefined;
+          void action().then(send);
+          return;
+        }
         return send();
       }
       if (method === "PROPFIND")
@@ -152,25 +225,45 @@ async function main() {
         if (method === "POST" && path.endsWith("/events") && eventCreatesUntilFailure !== undefined) {
           if (eventCreatesUntilFailure-- === 0) return json({}, 503);
         }
-
         if (method === "DELETE") {
           remote.delete(key(auth, path));
           res.writeHead(204);
           return res.end();
         }
         const etag = `"written-${++nextVersion}"`;
-        const responseEtag = omitWriteEtag ? null : weakWriteEtag ? `W/${etag}` : etag;
+        const responseEtag = omitWriteEtag
+          ? null
+          : weakWriteEtag
+            ? `W/${etag}`
+            : etag;
         if (path.startsWith("/dav/")) {
-          remote.set(key(auth, path), { etag, data: body + (transformAfterWrite ? "\r\n" : "") });
-          res.writeHead(204, responseEtag === null ? {} : { etag: responseEtag }); return res.end();
+          remote.set(key(auth, path), {
+            etag,
+            data: body + (transformAfterWrite ? "\r\n" : ""),
+          });
+          res.writeHead(
+            204,
+            responseEtag === null ? {} : { etag: responseEtag },
+          );
+          return res.end();
         }
-        const id = method === "POST" ? `created-${nextVersion}` : stored?.json?.id ?? "same-remote-id";
+        const id =
+          method === "POST"
+            ? `created-${nextVersion}`
+            : (stored?.json?.id ?? "same-remote-id");
         remote.set(key(auth, method === "POST" ? `${path}/${id}` : path), {
-          etag, json: { ...stored?.json, ...JSON.parse(body), id },
+          etag,
+          json: { ...stored?.json, ...JSON.parse(body), id },
         });
-        if (malformedWrite) { res.writeHead(200, { "content-type": "application/json" }); return res.end("{"); }
+        if (malformedWrite) {
+          res.writeHead(200, { "content-type": "application/json" });
+          return res.end("{");
+        }
         if (path.endsWith("/events") || path.includes("/events/")) await beforeMutationResponse?.();
-        return json({ id, ...(responseEtag === null ? {} : { etag: responseEtag }) });
+        return json({
+          id,
+          ...(responseEtag === null ? {} : { etag: responseEtag }),
+        });
       }
       return json({ error: `Unexpected ${method} ${path}` }, 500);
     });
@@ -191,7 +284,11 @@ async function main() {
   globalThis.fetch = (input, init) => {
     const url = new URL(String(input));
     if ([origin, apiOrigin].includes(url.origin)) return realFetch(input, init);
-    assert.equal(url.origin, "https://www.googleapis.com", `No live provider calls: ${url}`);
+    assert.equal(
+      url.origin,
+      "https://www.googleapis.com",
+      `No live provider calls: ${url}`,
+    );
     return realFetch(`${origin}${url.pathname}${url.search}`, init);
   };
   const mutationRequests = () =>
@@ -202,7 +299,9 @@ async function main() {
   // Stale/local-CAS races are exercised by event_revision.integration.test.ts.
   const request = async (method: string, event: EventWriteRequest) =>
     fetch(`${apiOrigin}/events`, {
-    method, headers: { authorization: `Bearer ${token.raw}`,
+      method,
+      headers: {
+        authorization: `Bearer ${token.raw}`,
         "content-type": "application/json",
         [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
       },
@@ -628,7 +727,10 @@ async function main() {
 
     const davAccount = await saveCaldavAccount(
       owner,
-      `${origin}/dav/`, "owner", encryptSecret("fixture-password"));
+      `${origin}/dav/`,
+      "owner",
+      encryptSecret("fixture-password"),
+    );
     const davAuth = `Basic ${Buffer.from("owner:fixture-password").toString("base64")}`;
     const davCalendar = `${origin}/dav/cal/`;
     const davPath = "/dav/cal/rich.ics";
@@ -1156,34 +1258,82 @@ async function main() {
     const race = eventIn([mirrors[0].id]);
     await createEvent(race, race.calendars);
     const racePath = "/calendar/v3/calendars/same-calendar/events/local-race";
-    remote.set(key("Bearer primary-access", racePath), { etag: '"race-v1"', json: { id: "local-race", summary: race.title } });
-    await importExternalEvent("google", race.id, mirrors[0].id, "same-calendar", "local-race", '"race-v1"');
-    const rawPatch = (eventID: string, revision: number, patch: Record<string, unknown>) => fetch(`${apiOrigin}/events`, {
-      method: "PATCH", headers: { authorization: `Bearer ${token.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION },
-      body: JSON.stringify({ id: eventID, expectedRevision: revision, patch }),
+    remote.set(key("Bearer primary-access", racePath), {
+      etag: '"race-v1"',
+      json: { id: "local-race", summary: race.title },
     });
+    await importExternalEvent(
+      "google",
+      race.id,
+      mirrors[0].id,
+      "same-calendar",
+      "local-race",
+      '"race-v1"',
+    );
+    const rawPatch = (
+      eventID: string,
+      revision: number,
+      patch: Record<string, unknown>,
+    ) =>
+      fetch(`${apiOrigin}/events`, {
+        method: "PATCH",
+        headers: {
+          authorization: `Bearer ${token.raw}`,
+          "content-type": "application/json",
+          [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+        },
+        body: JSON.stringify({
+          id: eventID,
+          expectedRevision: revision,
+          patch,
+        }),
+      });
     requests.length = 0;
-    beforeEventRead = async () => { await patchEventAndCalendarLinks(race.id, 1, { start: new Date("2026-01-01T08:00:00Z") }); };
+    beforeEventRead = async () => {
+      await patchEventAndCalendarLinks(race.id, 1, {
+        start: new Date("2026-01-01T08:00:00Z"),
+      });
+    };
     const lost = await rawPatch(race.id, 1, { title: "Stale title" });
-    assert.equal(lost.status, 409); assert.equal((await lost.json()).localCommitted, false);
+    assert.equal(lost.status, 409);
+    assert.equal((await lost.json()).localCommitted, false);
     assert.equal(mutationRequests().length, 0);
     assert.equal((await getEvent(race.id)).title, race.title);
     assert.equal((await getEvent(race.id)).revision, 2);
 
     // Known multi-target delivery: first conditional PATCH succeeds, second
     // returns412. Public receipt reveals partial success, no account/resource IDs.
-    const partialEvent = eventIn(mirrors.map(mirror => mirror.id));
+    const partialEvent = eventIn(mirrors.map((mirror) => mirror.id));
     await createEvent(partialEvent, partialEvent.calendars);
-    const partialPath = "/calendar/v3/calendars/same-calendar/events/http-partial";
-    for (const [index, auth] of ["Bearer primary-access", "Bearer sibling-access"].entries()) {
-      remote.set(key(auth, partialPath), { etag: '"partial-v1"', json: { id: "http-partial", summary: partialEvent.title } });
-      await importExternalEvent("google", partialEvent.id, mirrors[index].id, "same-calendar", "http-partial", '"partial-v1"');
+    const partialPath =
+      "/calendar/v3/calendars/same-calendar/events/http-partial";
+    for (const [index, auth] of [
+      "Bearer primary-access",
+      "Bearer sibling-access",
+    ].entries()) {
+      remote.set(key(auth, partialPath), {
+        etag: '"partial-v1"',
+        json: { id: "http-partial", summary: partialEvent.title },
+      });
+      await importExternalEvent(
+        "google",
+        partialEvent.id,
+        mirrors[index].id,
+        "same-calendar",
+        "http-partial",
+        '"partial-v1"',
+      );
     }
-    deniedWriteAuth = "Bearer sibling-access"; requests.length = 0;
-    const partialResponse = await rawPatch(partialEvent.id, 1, { title: "Locally saved partial" });
+    deniedWriteAuth = "Bearer sibling-access";
+    requests.length = 0;
+    const partialResponse = await rawPatch(partialEvent.id, 1, {
+      title: "Locally saved partial",
+    });
     const receipt = await partialResponse.json();
-    assert.equal(partialResponse.status, 409); assert.equal(receipt.localCommitted, true);
-    assert.equal(receipt.currentRevision, 2); assert.deepEqual(receipt.delivery, { completed: true, status: "conflict" });
+    assert.equal(partialResponse.status, 409);
+    assert.equal(receipt.localCommitted, true);
+    assert.equal(receipt.currentRevision, 2);
+    assert.deepEqual(receipt.delivery, { completed: true, status: "conflict" });
     assert.equal(receipt.current.title, "Locally saved partial");
     assert.equal(mutationRequests().length, 2);
     assert.ok(!JSON.stringify(receipt).includes("sibling-access"));
@@ -1260,8 +1410,20 @@ async function main() {
     }
     // A response validator cannot overwrite an intervening accepted mapping or
     // acknowledge an event revision that no longer equals its local commit.
-    assert.equal(await setExternalEventSyncData("google", partialEvent.id, "same-calendar", { etag: '"late"', icalUid: null }, mirrors[0].id, { revision: 1, etag: '"partial-v1"', externalEventID: "http-partial" }), false);
-    console.log("K06 authenticated provider race/partial412/localCommitted and scoped metadata acceptance guards: OK");
+    assert.equal(
+      await setExternalEventSyncData(
+        "google",
+        partialEvent.id,
+        "same-calendar",
+        { etag: '"late"', icalUid: null },
+        mirrors[0].id,
+        { revision: 1, etag: '"partial-v1"', externalEventID: "http-partial" },
+      ),
+      false,
+    );
+    console.log(
+      "K06 authenticated provider race/partial412/localCommitted and scoped metadata acceptance guards: OK",
+    );
     console.log(
       "K06 Google/CalDAV actual adapter + authenticated handler + scoped prepared delivery: OK",
     );

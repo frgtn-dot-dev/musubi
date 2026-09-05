@@ -24,8 +24,8 @@ export function getEditableTaskCalendars(calendars: Calendar[]) {
 export function canEditEvent(event: Event, calendars: Calendar[]) {
   if (event.originCalendarID) {
     return can(
-      calendars.find(
-        (calendar) => calendar.id === event.originCalendarID)?.role,
+      calendars.find((calendar) => calendar.id === event.originCalendarID)
+        ?.role,
       "editEvents",
     );
   }
@@ -58,9 +58,7 @@ export function eventHomeCalendarId(event: Event): string | undefined {
   return event.originCalendarID ?? event.calendars[0];
 }
 
-export function getEventHomeCalendar(
-  event: Event,
-  calendars: Calendar[]) {
+export function getEventHomeCalendar(event: Event, calendars: Calendar[]) {
   const homeId = eventHomeCalendarId(event);
   return calendars.find((calendar) => calendar.id === homeId);
 }

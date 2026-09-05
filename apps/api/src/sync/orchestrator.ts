@@ -15,7 +15,10 @@ export type ProviderSyncFailure = {
 
 type ProviderAccountSource = {
   provider: string;
-  listAccounts(userID: string, accountId?: string): Promise<{ id: string; label: string }[]>;
+  listAccounts(
+    userID: string,
+    accountId?: string,
+  ): Promise<{ id: string; label: string }[]>;
 };
 
 /**
@@ -54,7 +57,11 @@ export async function runProviderSyncs<TAdapter extends ProviderAccountSource>(
       continue;
     }
 
-    if (options.accountId && options.throwOnError && !accounts.some((account) => account.id === options.accountId)) {
+    if (
+      options.accountId &&
+      options.throwOnError &&
+      !accounts.some((account) => account.id === options.accountId)
+    ) {
       throw new Error("Connected account not found or not eligible for sync");
     }
 
@@ -62,7 +69,7 @@ export async function runProviderSyncs<TAdapter extends ProviderAccountSource>(
       if (options.accountId && account.id !== options.accountId) continue;
       try {
         changedCalendarIDs.push(
-          ...await hooks.syncAccount(adapter, userID, account),
+          ...(await hooks.syncAccount(adapter, userID, account)),
         );
       } catch (error) {
         hooks.onFailure({

@@ -8,7 +8,16 @@ import {
 } from "@/services/notifications";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { syncFederatedAccounts } from "@/services/federation";
-import { cacheDeleteEvents, cacheGetAllEvents, cacheGetCalendars, cacheReplaceAllEvents, cacheSetCalendars, cacheUpsertEvents, getLastSync, setLastSync } from "@/services/eventsCache";
+import {
+  cacheDeleteEvents,
+  cacheGetAllEvents,
+  cacheGetCalendars,
+  cacheReplaceAllEvents,
+  cacheSetCalendars,
+  cacheUpsertEvents,
+  getLastSync,
+  setLastSync,
+} from "@/services/eventsCache";
 import { refreshSettingsDocument } from "@/services/settingsSync";
 import { mergeHomeEventSnapshot, serializeEventRefresh } from "@/lib/eventSync";
 
@@ -17,9 +26,16 @@ export function useRefreshData() {
   return (opts?: RefreshOptions) => refreshEventData(api, opts);
 }
 
-type RefreshOptions = { providerSync?: boolean; full?: boolean; settingsOnly?: boolean };
+type RefreshOptions = {
+  providerSync?: boolean;
+  full?: boolean;
+  settingsOnly?: boolean;
+};
 
-export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshOptions) {
+export function refreshEventData(
+  api: ReturnType<typeof useApi>,
+  opts?: RefreshOptions,
+) {
   const lifecycle = getEventLifecycle();
   const isCurrent = () => lifecycle === getEventLifecycle();
   const { loadCalendars } = useCalendarsStore.getState();
@@ -47,14 +63,19 @@ export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshO
     if (opts?.providerSync !== false) {
       // trigger server-side provider sync first, so its imported/changed events
       // show up in the delta below (best-effort, no-op for unconnected providers)
-      try { await api.syncProviderCalendars(); } catch (e) { console.error("Sync failed:", e); }
+      try {
+        await api.syncProviderCalendars();
+      } catch (e) {
+        console.error("Sync failed:", e);
+      }
     }
 
     // delta: only events changed since our last sync (+ tombstones to drop).
     // Tolerate a garbage stored value → fall back to a full sync (self-heals).
     const lastSync = opts?.full ? null : await getLastSync();
     const sinceDate = lastSync ? new Date(lastSync) : null;
-    const since = sinceDate && !Number.isNaN(sinceDate.getTime()) ? sinceDate : undefined;
+    const since =
+      sinceDate && !Number.isNaN(sinceDate.getTime()) ? sinceDate : undefined;
     const { events, deletedIds, serverTime } = await api.getEvents(since);
     const cachedCalendars = await cacheGetCalendars();
     if (!isCurrent()) return;
@@ -88,15 +109,21 @@ export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshO
       // full-set semantics per synced server: cached events living only in that
       // server's calendars and absent from the fresh pull were deleted remotely
       const syncedCalIds = new Set(
-        fed.calendars.filter(c => c.serverUrl && fed.syncedServers.has(c.serverUrl)).map(c => c.id));
-      const fetchedIds = new Set(fed.events.map(e => e.id));
+        fed.calendars
+          .filter((c) => c.serverUrl && fed.syncedServers.has(c.serverUrl))
+          .map((c) => c.id),
+      );
+      const fetchedIds = new Set(fed.events.map((e) => e.id));
       const cachedNow = await cacheGetAllEvents();
       if (!isCurrent()) return;
       const staleRemote = cachedNow
-        .filter(e => (e.calendars?.length ?? 0) > 0
-          && e.calendars.every(id => syncedCalIds.has(id))
-          && !fetchedIds.has(e.id))
-        .map(e => e.id);
+        .filter(
+          (e) =>
+            (e.calendars?.length ?? 0) > 0 &&
+            e.calendars.every((id) => syncedCalIds.has(id)) &&
+            !fetchedIds.has(e.id),
+        )
+        .map((e) => e.id);
       if (staleRemote.length) await cacheDeleteEvents(staleRemote);
     }
     if (!isCurrent()) return;
@@ -111,16 +138,20 @@ export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshO
     // Reconcile against membership: an offline kick sends no SSE and the delta
     // can't tombstone events we merely lost access to — drop links to calendars
     // we're no longer in, and events left with none.
-    const memberOf = new Set(calendars.map(c => c.id));
+    const memberOf = new Set(calendars.map((c) => c.id));
     const dropped: string[] = [];
     const fixed: typeof all = [];
     const kept: typeof all = [];
     for (const e of all) {
-      const cals = e.calendars?.filter(id => memberOf.has(id)) ?? [];
-      if (cals.length === 0) { dropped.push(e.id); continue; }
+      const cals = e.calendars?.filter((id) => memberOf.has(id)) ?? [];
+      if (cals.length === 0) {
+        dropped.push(e.id);
+        continue;
+      }
       if (cals.length !== e.calendars.length) {
         const updated = { ...e, calendars: cals };
-        fixed.push(updated); kept.push(updated);
+        fixed.push(updated);
+        kept.push(updated);
       } else kept.push(e);
     }
     if (dropped.length) await cacheDeleteEvents(dropped);
@@ -152,6 +183,6 @@ export function refreshEventData(api: ReturnType<typeof useApi>, opts?: RefreshO
     }
     // fire-and-forget: drop reminders of gone events, refresh the rest
     if (!isCurrent()) return;
-    syncScheduledReminders(useEventsStore.getState().events).catch(() => { });
+    syncScheduledReminders(useEventsStore.getState().events).catch(() => {});
   });
 }

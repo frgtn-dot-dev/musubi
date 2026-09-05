@@ -14,7 +14,10 @@ import type {
   TaskUpdate,
   User,
 } from "@musubi/types";
-import { seriesEditWrites, withSeriesEditIntent, type EditScope,
+import {
+  seriesEditWrites,
+  withSeriesEditIntent,
+  type EditScope,
 } from "@musubi/calendar";
 import type {
   Attendee,
@@ -410,12 +413,13 @@ export function Workspace({
     }
 
     const created: Event[] = [];
-    const { creates, updates } = withSeriesEditIntent(seriesEditWrites({
-      edited: { ...event, end, start },
-      master,
-      occurrence: event,
-      scope,
-    }),
+    const { creates, updates } = withSeriesEditIntent(
+      seriesEditWrites({
+        edited: { ...event, end, start },
+        master,
+        occurrence: event,
+        scope,
+      }),
     );
 
     let savedMaster: Event | undefined;
@@ -450,7 +454,10 @@ export function Workspace({
           for (const event of created) {
             await onRemoveEvent(event);
           }
-          await onUpdateEvent(withSeriesEditIntent({ updates: [editedEvent(savedMaster!, master)], creates: [],
+          await onUpdateEvent(
+            withSeriesEditIntent({
+              updates: [editedEvent(savedMaster!, master)],
+              creates: [],
             }).updates[0],
           );
         },

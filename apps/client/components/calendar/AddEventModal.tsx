@@ -1,33 +1,76 @@
 import "react-native-get-random-values";
 import {
   editedEvent,
-  allDayValue, Calendar, DEFAULT_REMINDER_RULE, Event, ReminderRule, can, optionsFor, sameRule, timedValue, withAllDay, withTimed,
+  allDayValue,
+  Calendar,
+  DEFAULT_REMINDER_RULE,
+  Event,
+  ReminderRule,
+  can,
+  optionsFor,
+  sameRule,
+  timedValue,
+  withAllDay,
+  withTimed,
 } from "@musubi/types";
 import { activeScheme, colors, fonts, styles } from "@/constants/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View,
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
-import Animated, { runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withSpring, withTiming,
+import Animated, {
+  runOnJS,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { sortCalendars } from "@/lib/calendarOrder";
 import { formatDateMedium, formatTime } from "@/lib/datetimeFormat";
 import { appColors } from "@/constants/colors";
-import { Gesture, GestureDetector, GestureHandlerRootView,
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { DateTimePicker } from '@expo/ui/community/datetime-picker';
+import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { effectiveReminderRule, inheritedReminderRule, requestEventNotificationPermission, setEventReminderRule,
+import {
+  effectiveReminderRule,
+  inheritedReminderRule,
+  requestEventNotificationPermission,
+  setEventReminderRule,
 } from "@/services/notifications";
 import dayjs from "dayjs";
-import { uuidv7 } from 'uuidv7';
-import { joinRecurrence, splitRecurrence } from '@musubi/calendar';
-import { AdvancedEndType, AdvancedFreq, buildRRule, describeAdvanced, parseAdvanced, parseRRule, rawUnsupportedRecurrence, RecurrenceOption,
+import { uuidv7 } from "uuidv7";
+import { joinRecurrence, splitRecurrence } from "@musubi/calendar";
+import {
+  AdvancedEndType,
+  AdvancedFreq,
+  buildRRule,
+  describeAdvanced,
+  parseAdvanced,
+  parseRRule,
+  rawUnsupportedRecurrence,
+  RecurrenceOption,
 } from "@/lib/rrule";
 import { validateEventForm } from "@/lib/eventForm";
 import { remoteForCalendar } from "@/services/federation";
@@ -43,11 +86,11 @@ import { OptionPicker } from "@/components/ui/OptionPicker";
 type Props = {
   visible: boolean;
   startingDate?: Date;
-  endingDate?: Date;    // drag-to-create range end
+  endingDate?: Date; // drag-to-create range end
   /** Docked: always-mounted bottom sheet on the calendar — peek shows title +
    *  quick save, pulling the top edge up reveals the full form. */
   docked?: boolean;
-  anchor?: Date;        // docked: day in view — default times land here
+  anchor?: Date; // docked: day in view — default times land here
   /** Docked only: false slides the sheet fully off-screen (week view waits for
    *  a draft); flipping to true brings it back at peek. */
   peekVisible?: boolean;
@@ -78,42 +121,61 @@ const withHours = (base: Date, hours: number): Date => {
 
 // Display order Mon–Sun; day = JS weekday number
 const WEEKDAYS_DISPLAY = [
-  { label: 'M', day: 1 }, { label: 'T', day: 2 }, { label: 'W', day: 3 },
-  { label: 'T', day: 4 }, { label: 'F', day: 5 }, { label: 'S', day: 6 }, { label: 'S', day: 0 },
+  { label: "M", day: 1 },
+  { label: "T", day: 2 },
+  { label: "W", day: 3 },
+  { label: "T", day: 4 },
+  { label: "F", day: 5 },
+  { label: "S", day: 6 },
+  { label: "S", day: 0 },
 ];
 
-const RECURRENCE_OPTIONS: { value: RecurrenceOption; label: string; icon: string;
+const RECURRENCE_OPTIONS: {
+  value: RecurrenceOption;
+  label: string;
+  icon: string;
 }[] = [
-  { value: 'none', label: 'None', icon: 'slash' },
-  { value: 'daily', label: 'Daily', icon: 'sun' },
-  { value: 'weekly', label: 'Weekly', icon: 'repeat' },
-  { value: 'weekdays', label: 'Weekdays', icon: 'briefcase' },
-  { value: 'monthly', label: 'Monthly', icon: 'calendar' },
-  { value: 'yearly', label: 'Yearly', icon: 'award' },
-  { value: 'custom', label: 'Custom', icon: 'sliders' },
+  { value: "none", label: "None", icon: "slash" },
+  { value: "daily", label: "Daily", icon: "sun" },
+  { value: "weekly", label: "Weekly", icon: "repeat" },
+  { value: "weekdays", label: "Weekdays", icon: "briefcase" },
+  { value: "monthly", label: "Monthly", icon: "calendar" },
+  { value: "yearly", label: "Yearly", icon: "award" },
+  { value: "custom", label: "Custom", icon: "sliders" },
 ];
 
 // ── Docked sheet tuning ──────────────────────────────────────────────────────
-export const DOCK_PEEK = 172;        // visible sliver of the docked sheet: actions + title
-const DOCK_MAX_H = 620;              // expanded height cap
-const DOCK_HEIGHT_RATIO = 0.8;       // …or this fraction of the window, whichever is smaller
-const DOCK_HIDDEN_EXTRA = 30;        // pushed this far past its height when hidden
-const DOCK_SNAP_VELOCITY = 400;      // fling speed that snaps open/closed regardless of position
-const DOCK_DISMISS_PAST = 60;        // dragged this far past peek = dismiss the sheet entirely
+export const DOCK_PEEK = 172; // visible sliver of the docked sheet: actions + title
+const DOCK_MAX_H = 620; // expanded height cap
+const DOCK_HEIGHT_RATIO = 0.8; // …or this fraction of the window, whichever is smaller
+const DOCK_HIDDEN_EXTRA = 30; // pushed this far past its height when hidden
+const DOCK_SNAP_VELOCITY = 400; // fling speed that snaps open/closed regardless of position
+const DOCK_DISMISS_PAST = 60; // dragged this far past peek = dismiss the sheet entirely
 const DOCK_SPRING = { damping: 28, stiffness: 240, mass: 0.8 };
-const KB_SHOW_MS = 220;              // keyboard lift in/out timings
+const KB_SHOW_MS = 220; // keyboard lift in/out timings
 const KB_HIDE_MS = 180;
 
-export function AddEventModal({ visible, startingDate, endingDate, docked, anchor, peekVisible = true, dockRevealProgress, dockBottomInset, onClose, onSave, onEdit, calendars, event,
+export function AddEventModal({
+  visible,
+  startingDate,
+  endingDate,
+  docked,
+  anchor,
+  peekVisible = true,
+  dockRevealProgress,
+  dockBottomInset,
+  onClose,
+  onSave,
+  onEdit,
+  calendars,
+  event,
 }: Props) {
-  const {
-    timeFormat,
-    dateFormat,
-    calendarOrder,
-    tabBarLabels } = useSettingsStore();
+  const { timeFormat, dateFormat, calendarOrder, tabBarLabels } =
+    useSettingsStore();
 
   const insets = useSafeAreaInsets();
-  const restingBottomInset = dockBottomInset ?? tabBarHeight(insets.bottom, tabBarLabels);
+  const restingBottomInset =
+    dockBottomInset ?? tabBarHeight(insets.bottom, tabBarLabels);
   const { authClient } = useServer();
 
   const [newTitle, setNewTitle] = useState("");
@@ -122,9 +184,11 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
-  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">("start",
+  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">(
+    "start",
   );
-  const [reminderRule, setReminderRule] = useState<ReminderRule>(DEFAULT_REMINDER_RULE,
+  const [reminderRule, setReminderRule] = useState<ReminderRule>(
+    DEFAULT_REMINDER_RULE,
   );
   const [reminderPicker, setReminderPicker] = useState(false);
   const [allDayToggle, setAllDayToggle] = useState(false);
@@ -132,38 +196,43 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [newLocation, setNewLocation] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const recurrenceEdited = useRef(false);
-  const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>('none');
-  const [unsupportedRecurrence, setUnsupportedRecurrence] = useState<string | null>(null);
+  const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>("none");
+  const [unsupportedRecurrence, setUnsupportedRecurrence] = useState<
+    string | null
+  >(null);
   // EXDATE/RDATE lines from the stored recurrence — carried through an edit
   // untouched so deleting one occurrence survives a later series edit.
   const [recurrenceExtras, setRecurrenceExtras] = useState<string[]>([]);
   // UNTIL from "end series here" — the editor UI can't express it (only COUNT),
   // so carry it through and re-apply unless the user picks a new ending.
   const [savedUntil, setSavedUntil] = useState<string | null>(null);
-  const [advFreq, setAdvFreq] = useState<AdvancedFreq>('WEEKLY');
+  const [advFreq, setAdvFreq] = useState<AdvancedFreq>("WEEKLY");
   const [advInterval, setAdvInterval] = useState(1);
   const [advDays, setAdvDays] = useState<Set<number>>(new Set([1]));
-  const [advEndType, setAdvEndType] = useState<AdvancedEndType>('never');
+  const [advEndType, setAdvEndType] = useState<AdvancedEndType>("never");
   const [advCount, setAdvCount] = useState(10);
 
   // Default to a calendar the user can actually write to (personal first) —
   // the first calendar in the list can be a read-only external one.
   const defaultCalSet = () => {
-    const c = calendars.find(
-        (c) => c.supportsEvents !== false && c.isDefault && can(c.role, "editEvents"),
-      )
-      ?? calendars.find(
+    const c =
+      calendars.find(
+        (c) =>
+          c.supportsEvents !== false &&
+          c.isDefault &&
+          can(c.role, "editEvents"),
+      ) ??
+      calendars.find(
         (c) => c.supportsEvents !== false && can(c.role, "editEvents"),
-      )
-      ?? calendars[0];
+      ) ??
+      calendars[0];
     return new Set(c ? [c.id] : []);
   };
   const [selectedCals, setSelectedCals] = useState<Set<string>>(defaultCalSet);
   // Explicit origin (home) pick via long-press. Falls back to first selected.
   const [originCal, setOriginCal] = useState<string | null>(null);
-  const originEffective = originCal && selectedCals.has(originCal)
-    ? originCal
-    : [...selectedCals][0];
+  const originEffective =
+    originCal && selectedCals.has(originCal) ? originCal : [...selectedCals][0];
   const [isLoading, setIsLoading] = useState(false);
   const [eventHint, setEventHint] = useState(
     () => EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)],
@@ -199,7 +268,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setKbPad(0);
     onClose();
 
-    setNewTitle('');
+    setNewTitle("");
     setNameError("");
     setNewStart(new Date());
     setStartError("");
@@ -216,19 +285,21 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     setUrlError("");
     setDetailsOpen(false);
     setAttendeesToggle(false);
-    setNewRecurrence('none');
+    setNewRecurrence("none");
     setUnsupportedRecurrence(null);
     setRecurrenceExtras([]);
     setSavedUntil(null);
-    setAdvFreq('WEEKLY');
+    setAdvFreq("WEEKLY");
     setAdvInterval(1);
     setAdvDays(new Set([1]));
-    setAdvEndType('never');
+    setAdvEndType("never");
     setAdvCount(10);
     setEventHint(EVENT_HINTS[Math.floor(Math.random() * EVENT_HINTS.length)]);
   };
 
-  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(!docked && visible, closeSequence,
+  const { slideStyle, fadeStyle, gesture, handleClose } = useModalAnimation(
+    !docked && visible,
+    closeSequence,
   );
 
   // ── Docked mode: fixed-height sheet pinned to the bottom of the calendar.
@@ -236,7 +307,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const win = useWindowDimensions();
   const DOCK_H = Math.min(win.height * DOCK_HEIGHT_RATIO, DOCK_MAX_H);
   const dockRange = DOCK_H - DOCK_PEEK;
-  const dockOff = useSharedValue(peekVisible ? dockRange : DOCK_H + DOCK_HIDDEN_EXTRA,
+  const dockOff = useSharedValue(
+    peekVisible ? dockRange : DOCK_H + DOCK_HIDDEN_EXTRA,
   );
   const dockShown = useSharedValue(peekVisible);
   const dockStart = useSharedValue(0);
@@ -251,7 +323,8 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   const [kbPad, setKbPad] = useState(0);
   useEffect(() => {
     if (!docked) return;
-    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e) => {
         const containerBottom = win.height - restingBottomInset; // sheet's resting bottom, window coords
         const overlap = Math.max(containerBottom - e.endCoordinates.screenY, 0);
@@ -259,12 +332,18 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         setKbPad(overlap);
       },
     );
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => { kbLift.value = withTiming(0, { duration: KB_HIDE_MS }); setKbPad(0); },
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        kbLift.value = withTiming(0, { duration: KB_HIDE_MS });
+        setKbPad(0);
+      },
     );
-    return () => { show.remove(); hide.remove(); };
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, [docked, win.height, restingBottomInset]);
-
 
   // Hide/show the docked sheet (week view: appears with the first draft).
   // When re-shown it lands at peek, never straight into the expanded state.
@@ -274,7 +353,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     dockShown.set(peekVisible);
     dockOff.value = withSpring(
       peekVisible
-        ? wasShown ? Math.min(dockOff.value, dockRange) : dockRange
+        ? wasShown
+          ? Math.min(dockOff.value, dockRange)
+          : dockRange
         : DOCK_H + DOCK_HIDDEN_EXTRA,
       DOCK_SPRING,
     );
@@ -288,37 +369,54 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
     closeSequence();
   };
 
-  const dockGesture = useMemo(() => Gesture.Pan()
-    // need a real vertical drag before we take over — otherwise a still tap on
-    // the X / Save buttons (they live inside this handle) reads as a micro-pan
-    // and the button press is eaten, so the sheet "won't close".
-    .activeOffsetY([-12, 12])
-    .onStart(() => { dockStart.value = dockOff.value; })
-    .onUpdate((e) => {
-      if (!dockShown.get()) return;
-      // From PEEK the drag may continue past the dock — that's the dismiss path.
-      // From EXPANDED it stops at peek (two-stage), so collapsing a tall sheet
-      // can't accidentally throw the whole composer away.
-      const maxY = dockStart.value >= dockRange - 1 ? DOCK_H + DOCK_HIDDEN_EXTRA : dockRange;
-      dockOff.value = Math.min(Math.max(dockStart.value + e.translationY, 0), maxY,
+  const dockGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        // need a real vertical drag before we take over — otherwise a still tap on
+        // the X / Save buttons (they live inside this handle) reads as a micro-pan
+        // and the button press is eaten, so the sheet "won't close".
+        .activeOffsetY([-12, 12])
+        .onStart(() => {
+          dockStart.value = dockOff.value;
+        })
+        .onUpdate((e) => {
+          if (!dockShown.get()) return;
+          // From PEEK the drag may continue past the dock — that's the dismiss path.
+          // From EXPANDED it stops at peek (two-stage), so collapsing a tall sheet
+          // can't accidentally throw the whole composer away.
+          const maxY =
+            dockStart.value >= dockRange - 1
+              ? DOCK_H + DOCK_HIDDEN_EXTRA
+              : dockRange;
+          dockOff.value = Math.min(
+            Math.max(dockStart.value + e.translationY, 0),
+            maxY,
           );
-    })
-    .onEnd((e) => {
-      if (!dockShown.get()) {
-        dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, DOCK_SPRING);
-        return;
-      }
-      const past = dockOff.value - dockRange;
-      if (past > DOCK_DISMISS_PAST || (past > 0 && e.velocityY > DOCK_SNAP_VELOCITY)) {
-        dockShown.set(false);
-        dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, { ...DOCK_SPRING, velocity: e.velocityY,
+        })
+        .onEnd((e) => {
+          if (!dockShown.get()) {
+            dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, DOCK_SPRING);
+            return;
+          }
+          const past = dockOff.value - dockRange;
+          if (
+            past > DOCK_DISMISS_PAST ||
+            (past > 0 && e.velocityY > DOCK_SNAP_VELOCITY)
+          ) {
+            dockShown.set(false);
+            dockOff.value = withSpring(DOCK_H + DOCK_HIDDEN_EXTRA, {
+              ...DOCK_SPRING,
+              velocity: e.velocityY,
             });
-        runOnJS(dismissByGesture)();
-        return;
-      }
-      const expand = e.velocityY < -DOCK_SNAP_VELOCITY || (dockOff.value < dockRange / 2 && e.velocityY < DOCK_SNAP_VELOCITY);
-      dockOff.value = withSpring(expand ? 0 : dockRange, DOCK_SPRING);
-    }), [dockRange, DOCK_H],
+            runOnJS(dismissByGesture)();
+            return;
+          }
+          const expand =
+            e.velocityY < -DOCK_SNAP_VELOCITY ||
+            (dockOff.value < dockRange / 2 && e.velocityY < DOCK_SNAP_VELOCITY);
+          dockOff.value = withSpring(expand ? 0 : dockRange, DOCK_SPRING);
+        }),
+    [dockRange, DOCK_H],
   );
 
   // Lift caps at 0 — the expanded sheet keeps its top on screen (title lives
@@ -331,7 +429,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       ? (1 - dockRevealProgress.value) * (DOCK_PEEK + DOCK_HIDDEN_EXTRA)
       : 0;
     return {
-      transform: [{ translateY: Math.max(dockOff.value - kbLift.value + revealOffset, 0),
+      transform: [
+        {
+          translateY: Math.max(dockOff.value - kbLift.value + revealOffset, 0),
         },
       ],
     };
@@ -376,7 +476,11 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       setNewStart(s);
       setNewEnd(new Date(s.getTime() + 3600_000));
     }
-  }, [docked, startingDate?.getTime(), endingDate?.getTime(), anchor?.getTime(),
+  }, [
+    docked,
+    startingDate?.getTime(),
+    endingDate?.getTime(),
+    anchor?.getTime(),
   ]);
 
   const baseline = useRef<Event | undefined>(event);
@@ -406,7 +510,9 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       {
         const rule = event?.id
           ? effectiveReminderRule(event)
-          : inheritedReminderRule({ id: "", calendars: [...(event?.calendars ?? [])],
+          : inheritedReminderRule({
+              id: "",
+              calendars: [...(event?.calendars ?? [])],
             });
         setReminderRule(rule);
       }
@@ -416,7 +522,7 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       setSavedUntil(rrule.match(/UNTIL=[^;]+/)?.[0] ?? null);
       const option = parseRRule(rrule || null);
       setNewRecurrence(option);
-      if (option === 'custom') {
+      if (option === "custom") {
         const adv = parseAdvanced(rrule);
         setAdvFreq(adv.freq);
         setAdvInterval(adv.interval);
@@ -440,18 +546,21 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
         setNewStart(newEnd);
       }
     }
-
   }, [newStart, newEnd]);
 
   const reminderKind = allDayToggle ? "allDay" : "timed";
-  const reminderValue = reminderKind === "timed"
-    ? timedValue(reminderRule)
-    : allDayValue(reminderRule);
+  const reminderValue =
+    reminderKind === "timed"
+      ? timedValue(reminderRule)
+      : allDayValue(reminderRule);
   const reminderChoices = optionsFor(reminderRule, reminderKind);
-  const reminderLabel = reminderChoices.find((choice) => choice.value === reminderValue)?.label ?? "Off";
-  const reminderEnabled = reminderKind === "timed"
-    ? reminderRule.minutesBefore !== null
-    : reminderRule.allDay !== null;
+  const reminderLabel =
+    reminderChoices.find((choice) => choice.value === reminderValue)?.label ??
+    "Off";
+  const reminderEnabled =
+    reminderKind === "timed"
+      ? reminderRule.minutesBefore !== null
+      : reminderRule.allDay !== null;
 
   const toggleCal = (id: string) => {
     setSelectedCals((prev) => {
@@ -466,7 +575,6 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   };
 
   function roundMinutes(date: Date) {
-
     date.setHours(date.getHours() + Math.round(date.getMinutes() / 60));
     date.setMinutes(0, 0, 0);
 
@@ -474,14 +582,21 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
   }
 
   function getDatePickerValue() {
-    const current = datePickerTarget === "start" ? new Date(newStart.getTime()) : new Date(newEnd.getTime());
+    const current =
+      datePickerTarget === "start"
+        ? new Date(newStart.getTime())
+        : new Date(newEnd.getTime());
     const final = datePickerMode === "date" ? current : roundMinutes(current);
     return final;
   }
 
   function setDateFromDatePicker(date: Date) {
-    const minutes = datePickerTarget === "start" ? newStart.getMinutes() : newEnd.getMinutes();
-    const hours = datePickerTarget === "start" ? newStart.getHours() : newEnd.getHours();
+    const minutes =
+      datePickerTarget === "start"
+        ? newStart.getMinutes()
+        : newEnd.getMinutes();
+    const hours =
+      datePickerTarget === "start" ? newStart.getHours() : newEnd.getHours();
 
     if (datePickerMode === "date") {
       const fixed_hours = new Date(date.setHours(hours));
@@ -524,27 +639,35 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
       // color follows the origin calendar; stored as a sensible default (render derives it live)
       color:
         event?.color ??
-        calendars.find((c) => c.id === originEffective)?.color ?? appColors[0].color,
+        calendars.find((c) => c.id === originEffective)?.color ??
+        appColors[0].color,
       start: allDayToggle ? allDayUTC(newStart) : newStart,
       end: allDayToggle ? allDayUTC(newEnd) : newEnd,
       isAllDay: allDayToggle,
       hasAttendees: attendeesToggle,
       isCanceled: event?.isCanceled ?? false,
-      description: newDescription === (event?.description ?? "")
+      description:
+        newDescription === (event?.description ?? "")
           ? event?.description
           : newDescription.trim() || null,
-      location: newLocation === (event?.location ?? "")
+      location:
+        newLocation === (event?.location ?? "")
           ? event?.location
           : newLocation.trim() || null,
       recurrence:
         event && !recurrenceEdited.current
           ? event.recurrence
-          : (unsupportedRecurrence ?? (() => {
-        let rule = buildRRule(newRecurrence, newStart, {
-          freq: advFreq, interval: advInterval, days: advDays,
-          endType: advEndType, count: advCount,
-        });
-        if (rule && savedUntil && !/UNTIL=|COUNT=/.test(rule)) rule += `;${savedUntil}`;
+          : (unsupportedRecurrence ??
+            (() => {
+              let rule = buildRRule(newRecurrence, newStart, {
+                freq: advFreq,
+                interval: advInterval,
+                days: advDays,
+                endType: advEndType,
+                count: advCount,
+              });
+              if (rule && savedUntil && !/UNTIL=|COUNT=/.test(rule))
+                rule += `;${savedUntil}`;
               return joinRecurrence(rule, recurrenceExtras);
             })()),
       url: newUrl === (event?.url ?? "") ? event?.url : newUrl.trim() || null,
@@ -1121,9 +1244,18 @@ export function AddEventModal({ visible, startingDate, endingDate, docked, ancho
                     accessibilityState={{ checked: active }}
                     style={active ? styles.pillActive : styles.pill}
                   >
-                    <Feather name={opt.icon as any} size={12} color={active ? colors.fg : colors.fg3} />
-                    <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: active ? colors.fg : colors.fg3,
-                      }}>
+                    <Feather
+                      name={opt.icon as any}
+                      size={12}
+                      color={active ? colors.fg : colors.fg3}
+                    />
+                    <Text
+                      style={{
+                        fontFamily: fonts.sans,
+                        fontSize: 12,
+                        color: active ? colors.fg : colors.fg3,
+                      }}
+                    >
                       {isWeekly ? `Weekly (${weekDay})` : opt.label}
                     </Text>
                   </Tap>

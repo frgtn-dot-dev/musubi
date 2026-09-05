@@ -1,5 +1,9 @@
 import { config, logger } from "@musubi/config";
-import { getOAuthAccountIDs, hasOAuthTaskScope, type EventContentPatch } from "@musubi/db";
+import {
+  getOAuthAccountIDs,
+  hasOAuthTaskScope,
+  type EventContentPatch,
+} from "@musubi/db";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import type { Event, Task } from "@musubi/types";
 import type {
@@ -13,7 +17,17 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
-import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, assertAcceptedEventEtag, assertProviderEventMutationResponse, requireEventEtag, requireEventPatch, strongEventEtag, ProviderEventWriteError } from "../event_write";
+import {
+  assertEventWriteEvidence,
+  assertEventWriteResponse,
+  assertOAuthEventWriteGrant,
+  assertAcceptedEventEtag,
+  assertProviderEventMutationResponse,
+  requireEventEtag,
+  requireEventPatch,
+  strongEventEtag,
+  ProviderEventWriteError,
+} from "../event_write";
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 const GTASKS = "https://tasks.googleapis.com/tasks/v1";
@@ -255,14 +269,21 @@ function toGoogleEvent(event: Event) {
 }
 
 /** Calendar PATCH preserves omitted properties (including HTML and rich provider state). */
-function toGoogleEventPatch(event: Event, patch: EventContentPatch | undefined) {
+function toGoogleEventPatch(
+  event: Event,
+  patch: EventContentPatch | undefined,
+) {
   const diff = requireEventPatch(patch);
   const next = { ...event, ...diff };
   const full = toGoogleEvent(next);
   const result: Record<string, unknown> = {};
   for (const [field, property] of [
-    ["title", "summary"], ["description", "description"], ["location", "location"],
-    ["recurrence", "recurrence"], ["start", "start"], ["end", "end"],
+    ["title", "summary"],
+    ["description", "description"],
+    ["location", "location"],
+    ["recurrence", "recurrence"],
+    ["start", "start"],
+    ["end", "end"],
   ] as const) {
     if (diff[field] !== undefined) result[property] = full[property];
   }
@@ -628,22 +649,30 @@ export const googleAdapter: CalendarAdapter = {
     // DELETE can cancel an organizer copy, but only removes an attendee copy.
     if (operation.action !== "create" && operation.external) {
       requireEventEtag(operation.external.etag);
-      if (operation.action === "update") toGoogleEventPatch(operation.event, operation.patch);
+      if (operation.action === "update")
+        toGoogleEventPatch(operation.event, operation.patch);
       const response = await fetch(
         `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(operation.external.externalEventId)}`,
         { headers },
       );
-      if (operation.action === "delete" && [404, 410].includes(response.status)) return;
+      if (operation.action === "delete" && [404, 410].includes(response.status))
+        return;
       assertEventWriteResponse(response);
       const current = await response.json();
       assertAcceptedEventEtag(operation.external.etag, current.etag);
       // Google documents self=false as the default on an organizer object.
       // An absent organizer object is not evidence of that default.
-      const self = typeof current.organizer?.self === "boolean"
-        ? current.organizer.self
-        : typeof current.organizer?.email === "string" && current.organizer.email
-          ? false : undefined;
-      assertEventWriteEvidence(operation.action === "delete" && self === false ? true : self, "organizer");
+      const self =
+        typeof current.organizer?.self === "boolean"
+          ? current.organizer.self
+          : typeof current.organizer?.email === "string" &&
+              current.organizer.email
+            ? false
+            : undefined;
+      assertEventWriteEvidence(
+        operation.action === "delete" && self === false ? true : self,
+        "organizer",
+      );
     }
   },
 
@@ -664,7 +693,11 @@ export const googleAdapter: CalendarAdapter = {
     assertProviderEventMutationResponse(res);
     const data = await res.json().catch(() => null);
     if (typeof data?.id !== "string" || !data.id) {
-      throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", res.status);
+      throw new ProviderEventWriteError(
+        "provider-write-failed",
+        "unconfirmed",
+        res.status,
+      );
     }
     return { externalEventId: data.id, etag: strongEventEtag(data.etag) };
   },
@@ -702,12 +735,22 @@ export const googleAdapter: CalendarAdapter = {
     return { etag: strongEventEtag(data?.etag) };
   },
 
-  async pushDelete(userID, accountId, externalCalendarId, externalEventId, ref) {
+  async pushDelete(
+    userID,
+    accountId,
+    externalCalendarId,
+    externalEventId,
+    ref,
+  ) {
     const etag = requireEventEtag(ref?.etag);
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
-      { method: "DELETE", redirect: "error", headers: { Authorization: `Bearer ${accessToken}`, "If-Match": etag } },
+      {
+        method: "DELETE",
+        redirect: "error",
+        headers: { Authorization: `Bearer ${accessToken}`, "If-Match": etag },
+      },
     );
     // 404/410 = already gone = success (idempotent)
     if (res.status !== 404 && res.status !== 410) {

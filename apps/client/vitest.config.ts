@@ -14,12 +14,15 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 // are run directly by tsx from the root script. One suffix per runner keeps
 // either from trying to execute the other's files.
 export default defineConfig({
-  plugins: [{
-    name: "expo-migration-sql",
-    load(id) {
-      if (id.endsWith(".sql")) return `export default ${JSON.stringify(readFileSync(id, "utf8"))}`;
+  plugins: [
+    {
+      name: "expo-migration-sql",
+      load(id) {
+        if (id.endsWith(".sql"))
+          return `export default ${JSON.stringify(readFileSync(id, "utf8"))}`;
+      },
     },
-  }],
+  ],
   resolve: {
     alias: { "@": root },
   },

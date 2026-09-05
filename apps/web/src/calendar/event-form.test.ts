@@ -12,11 +12,7 @@ import {
 describe("event form", () => {
   it("defaults quick create to a one-hour local event", () => {
     expect(
-      defaultEventFormValues(
-        "calendar-1",
-        "2026-07-26",
-        "09:30",
-      ),
+      defaultEventFormValues("calendar-1", "2026-07-26", "09:30"),
     ).toMatchObject({
       calendarId: "calendar-1",
       date: "2026-07-26",
@@ -37,12 +33,8 @@ describe("event form", () => {
       "#b3492f",
     );
 
-    expect(event.start.toISOString()).toBe(
-      "2026-07-26T00:00:00.000Z",
-    );
-    expect(event.end.toISOString()).toBe(
-      "2026-07-26T00:00:00.000Z",
-    );
+    expect(event.start.toISOString()).toBe("2026-07-26T00:00:00.000Z");
+    expect(event.end.toISOString()).toBe("2026-07-26T00:00:00.000Z");
   });
 
   it("creates a recurring multi-calendar, multi-day event", () => {
@@ -69,9 +61,7 @@ describe("event form", () => {
       recurrence: "FREQ=YEARLY",
       url: "https://example.com/camp",
     });
-    expect(event.end.toISOString()).toBe(
-      "2026-07-29T00:00:00.000Z",
-    );
+    expect(event.end.toISOString()).toBe("2026-07-29T00:00:00.000Z");
   });
 
   it("rejects timed events whose end is not after their start", () => {
@@ -176,7 +166,6 @@ describe("event form", () => {
   });
 });
 
-
 describe("timed end date validation", () => {
   it.each([
     ["2026-07-27", "01:00", null],
@@ -185,9 +174,19 @@ describe("timed end date validation", () => {
     ["2026-07-26", "23:00", "End time must be after start time."],
     ["", "01:00", "End time must be after start time."],
     ["2026-07-27", "invalid", "End time must be after start time."],
-  ])("validates end %s %s against the complete start", (endDate, endTime, error) => {
-    expect(validateEventForm({ ...defaultEventFormValues("calendar-1", "2026-07-26", "23:00"), title: "Night", endDate: endDate!, endTime: endTime! })).toBe(error);
-  });
+  ])(
+    "validates end %s %s against the complete start",
+    (endDate, endTime, error) => {
+      expect(
+        validateEventForm({
+          ...defaultEventFormValues("calendar-1", "2026-07-26", "23:00"),
+          title: "Night",
+          endDate: endDate!,
+          endTime: endTime!,
+        }),
+      ).toBe(error);
+    },
+  );
 });
 
 describe("K06 untouched nullable text", () => {

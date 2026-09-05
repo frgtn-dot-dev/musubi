@@ -124,7 +124,7 @@ export async function updateOAuthTokens(
       accessToken: tokens.accessToken,
       accessTokenExpiresAt: tokens.accessTokenExpiresAt,
       ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
-      ...(tokens.scope !== undefined ? { scope: tokens.scope } : {}),
+      ...(tokens.scope === undefined ? {} : { scope: tokens.scope }),
     })
     .where(and(
       eq(account.userId, userID),

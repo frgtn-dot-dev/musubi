@@ -41,7 +41,9 @@ type ReceiptGuard = (query: Query) => boolean;
 function upsertEvent(
   queryClient: QueryClient,
   userId: string,
-  event: Event, guard: ReceiptGuard) {
+  event: Event,
+  guard: ReceiptGuard,
+) {
   queryClient.setQueriesData<EventsResponse>(
     { queryKey: eventQueryPrefix(userId), predicate: guard },
     (current) =>
@@ -53,17 +55,17 @@ function upsertEvent(
           )
           ? current
           : {
-            ...current,
-            deletedIds: current.deletedIds.filter(
-              (eventId) => eventId !== event.id,
-            ),
-            events: [
-              ...current.events.filter(
-                (currentEvent) => currentEvent.id !== event.id,
+              ...current,
+              deletedIds: current.deletedIds.filter(
+                (eventId) => eventId !== event.id,
               ),
-              event,
-            ],
-          }
+              events: [
+                ...current.events.filter(
+                  (currentEvent) => currentEvent.id !== event.id,
+                ),
+                event,
+              ],
+            }
         : current,
   );
 }
@@ -80,13 +82,13 @@ function applyRemoval(
     (current) => {
       if (!current) return current;
       const cached = current.events.find((item) => item.id === result.id);
-      if ((cached?.revision ?? 0) > (result.revision ?? event.revision ?? 0)) return current;
+      if ((cached?.revision ?? 0) > (result.revision ?? event.revision ?? 0))
+        return current;
 
       if (result.removed) {
         return {
           ...current,
-          deletedIds: Array.from(
-            new Set([...current.deletedIds, result.id])),
+          deletedIds: Array.from(new Set([...current.deletedIds, result.id])),
           events: current.events.filter(
             (currentEvent) => currentEvent.id !== result.id,
           ),
@@ -97,8 +99,10 @@ function applyRemoval(
         ...current,
         events: current.events.map((currentEvent) =>
           currentEvent.id === result.id
-            ? (result.event ?? { ...event,
-                revision: result.revision, calendars: result.calendars,
+            ? (result.event ?? {
+                ...event,
+                revision: result.revision,
+                calendars: result.calendars,
               })
             : currentEvent,
         ),
@@ -126,7 +130,11 @@ export function useEventMutations(userId: string) {
 
   // Federated events live in the federation query, not the home event cache, so
   // a remote write refetches that server instead of patching local rows.
-  const applyWrite = (event: Event, guard: ReceiptGuard, connectionId?: string) => {
+  const applyWrite = (
+    event: Event,
+    guard: ReceiptGuard,
+    connectionId?: string,
+  ) => {
     if (connectionId) {
       void refreshFederated();
       return;
@@ -135,12 +143,26 @@ export function useEventMutations(userId: string) {
     void refreshEvents();
   };
 
-  const reconcileMutationFailure = (error: unknown, guard: ReceiptGuard, connectionId?: string) => {
+  const reconcileMutationFailure = (
+    error: unknown,
+    guard: ReceiptGuard,
+    connectionId?: string,
+  ) => {
     if (error instanceof EventMutationError && error.current && !connectionId) {
       const current = error.current;
-      if (current.deletedAt) applyRemoval(queryClient, userId, current, {
-        id: current.id, removed: true, calendars: [], revision: current.revision,
-      }, guard);
+      if (current.deletedAt)
+        applyRemoval(
+          queryClient,
+          userId,
+          current,
+          {
+            id: current.id,
+            removed: true,
+            calendars: [],
+            revision: current.revision,
+          },
+          guard,
+        );
       else upsertEvent(queryClient, userId, current, guard);
     }
     void refreshEvents();
@@ -151,9 +173,14 @@ export function useEventMutations(userId: string) {
   // Navigation may populate another range while this request is pending; that
   // newer snapshot (including absence) must never receive the old receipt.
   const captureReceiptGuard = (): ReceiptGuard => {
-    const snapshots = new Map(queryClient.getQueryCache().findAll({ queryKey: prefix })
-      .map(query => [query, query.state.data]));
-    return query => snapshots.has(query) && snapshots.get(query) === query.state.data;
+    const snapshots = new Map(
+      queryClient
+        .getQueryCache()
+        .findAll({ queryKey: prefix })
+        .map((query) => [query, query.state.data]),
+    );
+    return (query) =>
+      snapshots.has(query) && snapshots.get(query) === query.state.data;
   };
   const rejectReceipt: ReceiptGuard = () => false;
 
@@ -161,25 +188,48 @@ export function useEventMutations(userId: string) {
     onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       createEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input, guard) => reconcileMutationFailure(error, guard ?? rejectReceipt, connectionForEvent(connections, input)),
+    onError: (error, input, guard) =>
+      reconcileMutationFailure(
+        error,
+        guard ?? rejectReceipt,
+        connectionForEvent(connections, input),
+      ),
     onSuccess: (event, input, guard) => {
-      applyWrite(event, guard ?? rejectReceipt, connectionForEvent(connections, input));
+      applyWrite(
+        event,
+        guard ?? rejectReceipt,
+        connectionForEvent(connections, input),
+      );
     },
   });
   const update = useMutation({
     onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       updateEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input, guard) => reconcileMutationFailure(error, guard ?? rejectReceipt, connectionForEvent(connections, input)),
+    onError: (error, input, guard) =>
+      reconcileMutationFailure(
+        error,
+        guard ?? rejectReceipt,
+        connectionForEvent(connections, input),
+      ),
     onSuccess: (event, input, guard) => {
-      applyWrite(event, guard ?? rejectReceipt, connectionForEvent(connections, input));
+      applyWrite(
+        event,
+        guard ?? rejectReceipt,
+        connectionForEvent(connections, input),
+      );
     },
   });
   const remove = useMutation({
     onMutate: captureReceiptGuard,
     mutationFn: (event: Event) =>
       removeEvent(event, connectionForEvent(connections, event)),
-    onError: (error, input, guard) => reconcileMutationFailure(error, guard ?? rejectReceipt, connectionForEvent(connections, input)),
+    onError: (error, input, guard) =>
+      reconcileMutationFailure(
+        error,
+        guard ?? rejectReceipt,
+        connectionForEvent(connections, input),
+      ),
     onSuccess: (result, event, guard) => {
       const connectionId = connectionForEvent(connections, event);
       if (connectionId) {
@@ -207,10 +257,18 @@ export function useEventMutations(userId: string) {
         calendarId,
         connectionForCalendar(connections, calendarId),
       ),
-    onError: (error, input, guard) => reconcileMutationFailure(
-        error, guard ?? rejectReceipt, connectionForCalendar(connections, input.calendarId)),
+    onError: (error, input, guard) =>
+      reconcileMutationFailure(
+        error,
+        guard ?? rejectReceipt,
+        connectionForCalendar(connections, input.calendarId),
+      ),
     onSuccess: (event, { calendarId }, guard) => {
-      applyWrite(event, guard ?? rejectReceipt, connectionForCalendar(connections, calendarId));
+      applyWrite(
+        event,
+        guard ?? rejectReceipt,
+        connectionForCalendar(connections, calendarId),
+      );
     },
   });
   const fork = useMutation({
@@ -230,10 +288,18 @@ export function useEventMutations(userId: string) {
         calendarId,
         connectionForCalendar(connections, calendarId),
       ),
-    onError: (error, input, guard) => reconcileMutationFailure(
-        error, guard ?? rejectReceipt, connectionForCalendar(connections, input.calendarId)),
+    onError: (error, input, guard) =>
+      reconcileMutationFailure(
+        error,
+        guard ?? rejectReceipt,
+        connectionForCalendar(connections, input.calendarId),
+      ),
     onSuccess: (event, { calendarId }, guard) => {
-      applyWrite(event, guard ?? rejectReceipt, connectionForCalendar(connections, calendarId));
+      applyWrite(
+        event,
+        guard ?? rejectReceipt,
+        connectionForCalendar(connections, calendarId),
+      );
     },
   });
   const attendance = useMutation({

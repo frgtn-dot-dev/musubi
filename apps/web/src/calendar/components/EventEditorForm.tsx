@@ -189,9 +189,7 @@ export function EventEditorForm({
 		if (nextStart === null) return;
 
 		const previousDuration =
-			previousStart !== null &&
-			previousEnd !== null &&
-			previousEnd > previousStart
+			previousStart !== null && previousEnd !== null && previousEnd > previousStart
 				? previousEnd - previousStart
 				: 60;
 		const nextEnd = Math.min(
@@ -218,9 +216,7 @@ export function EventEditorForm({
 		setPlacementMessage(
 			switchedServer && change.removedCalendarCount > 0
 				? `${calendar.name} is now home. ${change.removedCalendarCount} ${
-						change.removedCalendarCount === 1
-							? "calendar was"
-							: "calendars were"
+						change.removedCalendarCount === 1 ? "calendar was" : "calendars were"
 					} removed because an event cannot span Musubi servers.`
 				: `${calendar.name} is now the home calendar.`,
 		);
@@ -314,12 +310,14 @@ export function EventEditorForm({
 						label="Date"
 						value={values.date}
 						weekStartsOn={weekStartsOn}
-						onChange={(date) => patch({
-							date,
-							...(!values.isAllDay && values.endDate === values.date
-								? { endDate: date }
-								: {}),
-						})}
+						onChange={(date) =>
+							patch({
+								date,
+								...(!values.isAllDay && values.endDate === values.date
+									? { endDate: date }
+									: {}),
+							})
+						}
 					/>
 				</div>
 
@@ -345,12 +343,16 @@ export function EventEditorForm({
 							disabled={saving}
 							label="End time"
 							max={LATEST_END_TIME}
-							min={values.endDate === values.date ? minutesToTime(
-								Math.min(
-									LAST_MINUTE,
-									(timeToMinutes(values.startTime) ?? 0) + TIME_SNAP_MINUTES,
-								),
-							) : undefined}
+							min={
+								values.endDate === values.date
+									? minutesToTime(
+											Math.min(
+												LAST_MINUTE,
+												(timeToMinutes(values.startTime) ?? 0) + TIME_SNAP_MINUTES,
+											),
+										)
+									: undefined
+							}
 							timeFormat={timeFormat}
 							value={values.endTime}
 							onChange={(endTime) => patch({ endTime })}
@@ -409,10 +411,7 @@ export function EventEditorForm({
 					className={`${styles.section} ${styles.detailsSection}`}
 					data-editor-section="details"
 				>
-					<SectionLabel
-						className={styles.sectionLabel}
-						id={`${id}-details-heading`}
-					>
+					<SectionLabel className={styles.sectionLabel} id={`${id}-details-heading`}>
 						Details
 					</SectionLabel>
 					<Checkbox
@@ -482,10 +481,7 @@ export function EventEditorForm({
 				className={`${styles.section} ${styles.calendarSection}`}
 				data-editor-section="calendars"
 			>
-				<SectionLabel
-					className={styles.sectionLabel}
-					id={`${id}-calendar-heading`}
-				>
+				<SectionLabel className={styles.sectionLabel} id={`${id}-calendar-heading`}>
 					Event calendars
 				</SectionLabel>
 
@@ -503,9 +499,7 @@ export function EventEditorForm({
 						type="button"
 						onClick={() => setCalendarPickerOpen((current) => !current)}
 					>
-						<CalendarDot
-							color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR}
-						/>
+						<CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} />
 						<span className={styles.calendarSummaryCopy}>
 							<strong>{selectedCalendar?.name ?? "Choose a calendar"}</strong>
 							{/* The "home" idea only means something once an event is in more
@@ -542,7 +536,9 @@ export function EventEditorForm({
 						data-ui="calendar-placement"
 						id={`${id}-calendar-list`}
 					>
-						<legend className={styles.visuallyHidden}>Calendars for this event</legend>
+						<legend className={styles.visuallyHidden}>
+							Calendars for this event
+						</legend>
 						<div aria-hidden="true" className={styles.calendarPlacementHeader}>
 							<span>Appears in</span>
 							<span>Home</span>
@@ -562,23 +558,15 @@ export function EventEditorForm({
 										const isHome = values.calendarId === calendar.id;
 										const compatible = calendarServer(calendar) === homeServer;
 										const membershipLocked =
-											saving ||
-											isHome ||
-											!compatible ||
-											!can(calendar.role, "editEvents");
+											saving || isHome || !compatible || !can(calendar.role, "editEvents");
 										const homeLocked =
-											saving ||
-											calendarLocked ||
-											!can(calendar.role, "editEvents");
+											saving || calendarLocked || !can(calendar.role, "editEvents");
 										const detail = !compatible
 											? "Choose as home to switch Musubi server"
 											: calendarSourceDetail(calendar);
 
 										return (
-											<li
-												className={styles.calendarPlacementRow}
-												key={calendar.id}
-											>
+											<li className={styles.calendarPlacementRow} key={calendar.id}>
 												<label
 													className={styles.calendarMembership}
 													data-disabled={membershipLocked ? "" : undefined}
@@ -590,19 +578,11 @@ export function EventEditorForm({
 														disabled={membershipLocked}
 														type="checkbox"
 														onChange={(event) =>
-															changeCalendarMembership(
-																calendar,
-																event.target.checked,
-															)
+															changeCalendarMembership(calendar, event.target.checked)
 														}
 													/>
-													<span
-														aria-hidden="true"
-														className={styles.calendarMembershipBox}
-													>
-														{checked ? (
-															<Check size={12} strokeWidth={2.2} />
-														) : null}
+													<span aria-hidden="true" className={styles.calendarMembershipBox}>
+														{checked ? <Check size={12} strokeWidth={2.2} /> : null}
 													</span>
 													<CalendarDot color={calendar.color} />
 													<span className={styles.calendarPlacementCopy}>
@@ -618,11 +598,7 @@ export function EventEditorForm({
 															className={styles.homeMark}
 															role="img"
 														>
-															<House
-																aria-hidden="true"
-																size={14}
-																strokeWidth={1.7}
-															/>
+															<House aria-hidden="true" size={14} strokeWidth={1.7} />
 														</span>
 													) : (
 														<span aria-hidden="true" />

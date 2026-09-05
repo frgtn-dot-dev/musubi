@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { CLIENT_VERSION_HEADER, PRODUCT_VERSION,
+import {
+  CLIENT_VERSION_HEADER,
+  PRODUCT_VERSION,
   EventMutationFailureSchema,
   EventMutationError,
   type EventWriteReason,
@@ -43,7 +45,11 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly status: number;
 
-  constructor(message: string, status: number, requestId?: string, readonly reason?: EventWriteReason,
+  constructor(
+    message: string,
+    status: number,
+    requestId?: string,
+    readonly reason?: EventWriteReason,
   ) {
     super(message);
     this.name = "ApiError";

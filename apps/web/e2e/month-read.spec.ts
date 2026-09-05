@@ -502,12 +502,28 @@ async function mockAuthenticatedReads(
 		}
 
 		const request = route.request().postDataJSON();
-		const previous = eventState.events.find(item => item.id === request.id);
-		if (["PATCH", "DELETE"].includes(method) && previous?.revision !== request.expectedRevision) return respond(route, {
-			error: "This event changed after editing began. Your draft was kept. Refresh and reconcile before saving again.",
-			code: "event-revision-conflict", localCommitted: false, current: previous, currentRevision: previous?.revision,
-		}, 409);
-		const body = (method === "PATCH" ? { ...previous, ...request.patch, revision: previous!.revision + 1 } : { ...request, revision: 1 }) as (typeof events.events)[number];
+		const previous = eventState.events.find((item) => item.id === request.id);
+		if (
+			["PATCH", "DELETE"].includes(method) &&
+			previous?.revision !== request.expectedRevision
+		)
+			return respond(
+				route,
+				{
+					error:
+						"This event changed after editing began. Your draft was kept. Refresh and reconcile before saving again.",
+					code: "event-revision-conflict",
+					localCommitted: false,
+					current: previous,
+					currentRevision: previous?.revision,
+				},
+				409,
+			);
+		const body = (
+			method === "PATCH"
+				? { ...previous, ...request.patch, revision: previous!.revision + 1 }
+				: { ...request, revision: 1 }
+		) as (typeof events.events)[number];
 		const homeCalendarId = body.originCalendarID ?? body.calendars?.[0];
 
 		if (failWritesForCalendarId && homeCalendarId === failWritesForCalendarId) {
@@ -1465,7 +1481,10 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await page.keyboard.press("Escape");
 	await expect(deleteDialog).toHaveCount(0);
 	await expect(recurringEvent).toBeFocused();
-	const deletionRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/events") && request.method() === "PUT");
+	const deletionRequest = page.waitForRequest(
+		(request) =>
+			request.url().endsWith("/api/v1/events") && request.method() === "PUT",
+	);
 	await recurringEvent.click();
 	await page.getByRole("button", { name: "Delete" }).click();
 	await page
@@ -1480,7 +1499,10 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(
 		0,
 	);
-	const undoRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/events") && request.method() === "PUT");
+	const undoRequest = page.waitForRequest(
+		(request) =>
+			request.url().endsWith("/api/v1/events") && request.method() === "PUT",
+	);
 	await page.getByRole("button", { name: "Undo", exact: true }).click();
 	const { scopeEdit: undoIntent, ...undo } = (await undoRequest).postDataJSON();
 	expect(undoIntent).toEqual({ updates: [undo], creates: [] });
@@ -5436,8 +5458,12 @@ test("offers the drawer toggle only where there is a drawer", async ({
 	).toBeVisible();
 });
 
-for (const [scopeLabel, width] of [["This event", 1280], ["This and following events", 390], ["All events", 1280]] as const) {
-  test(`K05 third occurrence title edit: ${scopeLabel}`, async ({ page }) => {
+for (const [scopeLabel, width] of [
+	["This event", 1280],
+	["This and following events", 390],
+	["All events", 1280],
+] as const) {
+	test(`K05 third occurrence title edit: ${scopeLabel}`, async ({ page }) => {
 		await page.setViewportSize({ width, height: 844 });
 		const master = event(
 			"weekly-review",
@@ -5497,7 +5523,12 @@ for (const [scopeLabel, width] of [["This event", 1280], ["This and following ev
 			updates: [update],
 			creates: writes.slice(1).map((write) => write.body),
 		});
-		expect({ ...master, start: new Date(master.start).toISOString(), end: new Date(master.end).toISOString(), ...(update.patch as object) }).toMatchObject({
+		expect({
+			...master,
+			start: new Date(master.start).toISOString(),
+			end: new Date(master.end).toISOString(),
+			...(update.patch as object),
+		}).toMatchObject({
 			start: new Date(master.start).toISOString(),
 			end: new Date(master.end).toISOString(),
 			title: scopeLabel === "All events" ? "Weekly retro" : master.title,
@@ -5514,7 +5545,8 @@ for (const [scopeLabel, width] of [["This event", 1280], ["This and following ev
 					? "EXDATE:20260720T090000Z"
 					: "UNTIL=20260720T085959Z",
 			);
-		} else expect((update.patch as Record<string, unknown>).recurrence).toBeUndefined();
+		} else
+			expect((update.patch as Record<string, unknown>).recurrence).toBeUndefined();
 		expect(
 			await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
 		).toBe(false);
@@ -5569,20 +5601,25 @@ for (const shift of [false, true]) {
 		);
 		expect(writes).toHaveLength(1);
 		expect(writes[0]!.expectedRevision).toBe(1);
-        expect(writes[0]!.patch).toEqual({
-          title: "Master draft",
-          ...(shift ? { start: "2026-07-06T11:00:00.000Z", end: "2026-07-06T12:00:00.000Z" } : {}),
-        });
+		expect(writes[0]!.patch).toEqual({
+			title: "Master draft",
+			...(shift
+				? { start: "2026-07-06T11:00:00.000Z", end: "2026-07-06T12:00:00.000Z" }
+				: {}),
+		});
 	});
 }
 
 for (const width of [1280, 390]) {
 	for (const reason of ["unsupported", "denied", "unknown"] as const) {
-		test(`K04 scope refusal ${reason} keeps draft and server reason at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 });
-      await mockAuthenticatedReads(page);
-      const requests: Array<{ method: string; body: Record<string, unknown> }> = [];
-      const message = `This recurrence operation is ${reason}. No changes were saved.`;
+		test(`K04 scope refusal ${reason} keeps draft and server reason at ${width}px`, async ({
+			page,
+		}) => {
+			await page.setViewportSize({ width, height: 800 });
+			await mockAuthenticatedReads(page);
+			const requests: Array<{ method: string; body: Record<string, unknown> }> =
+				[];
+			const message = `This recurrence operation is ${reason}. No changes were saved.`;
 			await page.route("**/api/v1/events", async (route) => {
 				const method = route.request().method();
 				if (method !== "PATCH" && method !== "POST") return route.fallback();
@@ -6005,7 +6042,9 @@ test("carries one session's edit into the other over the stream", async ({
 	const first = await context.newPage();
 	const second = await context.newPage();
 	await second.route("**/api/stream?clientVersion=*", async (route) => {
-		expect(new URL(route.request().url()).searchParams.get("clientVersion")).toBe(PRODUCT_VERSION);
+		expect(new URL(route.request().url()).searchParams.get("clientVersion")).toBe(
+			PRODUCT_VERSION,
+		);
 		for (let waited = 0; pending.length === 0 && waited < 10_000; waited += 50) {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 		}
@@ -7477,55 +7516,96 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 });
 
 for (const { provider, width, theme } of [
-  { provider: "google", width: 1280, theme: "light" },
-  { provider: "microsoft", width: 390, theme: "dark" },
+	{ provider: "google", width: 1280, theme: "light" },
+	{ provider: "microsoft", width: 390, theme: "dark" },
 ] as const) {
-  test(`optional Tasks consent: ${provider}, ${theme}, ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 850 });
-    await page.addInitScript((value) => localStorage.setItem("musubi-theme", value), theme);
-    await mockAuthenticatedReads(page);
-    await page.route("**/api/v1/server", (route) => respond(route, { syncProviders: ["google", "microsoft"] }));
-    const requests: { provider: string; scopes: string[]; callbackURL: string }[] = [];
-    await page.route("**/api/auth/link-social", (route) => {
-      requests.push(route.request().postDataJSON());
-      return respond(route, { redirect: false, url: "" });
-    });
-    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
-    await page.getByRole("button", { name: "Connections" }).click();
-    const dialog = page.getByRole("dialog", { name: "Connections" });
-    const checkbox = dialog.getByRole("checkbox", { name: /Include Tasks/ });
-    await expect(checkbox).toBeChecked();
-    await expect(dialog).toContainText("Previously granted access is not revoked.");
-    const connect = dialog.getByRole("button", { name: provider === "google" ? "Google Calendar" : "Outlook" });
-    const taskScope = provider === "google" ? "https://www.googleapis.com/auth/tasks" : "Tasks.ReadWrite";
-    await connect.click();
-    await expect.poll(() => requests.length).toBe(1);
-    expect(requests[0].scopes).toContain(taskScope);
-    await expect(checkbox).toBeEnabled();
-    await checkbox.focus();
-    await page.keyboard.press("Space");
-    await expect(checkbox).not.toBeChecked();
-    await connect.click();
-    await expect.poll(() => requests.length).toBe(2);
-    expect(requests[1]).toMatchObject({ provider, callbackURL: page.url() });
-    expect(requests[1].scopes).not.toContain(taskScope);
-    expect(requests[1].scopes).toContain(provider === "google" ? "https://www.googleapis.com/auth/calendar.events" : "Calendars.ReadWrite");
-    const accessibility = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
-    expect(accessibility.violations).toEqual([]);
-    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    await dialog.getByRole("button", { name: "Close connections" }).click();
-    await expect(dialog).toHaveCount(0);
-  });
+	test(`optional Tasks consent: ${provider}, ${theme}, ${width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width, height: 850 });
+		await page.addInitScript(
+			(value) => localStorage.setItem("musubi-theme", value),
+			theme,
+		);
+		await mockAuthenticatedReads(page);
+		await page.route("**/api/v1/server", (route) =>
+			respond(route, { syncProviders: ["google", "microsoft"] }),
+		);
+		const requests: {
+			provider: string;
+			scopes: string[];
+			callbackURL: string;
+		}[] = [];
+		await page.route("**/api/auth/link-social", (route) => {
+			requests.push(route.request().postDataJSON());
+			return respond(route, { redirect: false, url: "" });
+		});
+		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+		if (width < 600)
+			await page.getByRole("button", { name: "Open navigation" }).click();
+		await page.getByRole("button", { name: "Connections" }).click();
+		const dialog = page.getByRole("dialog", { name: "Connections" });
+		const checkbox = dialog.getByRole("checkbox", { name: /Include Tasks/ });
+		await expect(checkbox).toBeChecked();
+		await expect(dialog).toContainText(
+			"Previously granted access is not revoked.",
+		);
+		const connect = dialog.getByRole("button", {
+			name: provider === "google" ? "Google Calendar" : "Outlook",
+		});
+		const taskScope =
+			provider === "google"
+				? "https://www.googleapis.com/auth/tasks"
+				: "Tasks.ReadWrite";
+		await connect.click();
+		await expect.poll(() => requests.length).toBe(1);
+		expect(requests[0].scopes).toContain(taskScope);
+		await expect(checkbox).toBeEnabled();
+		await checkbox.focus();
+		await page.keyboard.press("Space");
+		await expect(checkbox).not.toBeChecked();
+		await connect.click();
+		await expect.poll(() => requests.length).toBe(2);
+		expect(requests[1]).toMatchObject({ provider, callbackURL: page.url() });
+		expect(requests[1].scopes).not.toContain(taskScope);
+		expect(requests[1].scopes).toContain(
+			provider === "google"
+				? "https://www.googleapis.com/auth/calendar.events"
+				: "Calendars.ReadWrite",
+		);
+		const accessibility = await new AxeBuilder({ page })
+			.include('[role="dialog"]')
+			.analyze();
+		expect(accessibility.violations).toEqual([]);
+		expect(
+			await dialog.evaluate(
+				(element) => element.scrollWidth <= element.clientWidth,
+			),
+		).toBe(true);
+		await dialog.getByRole("button", { name: "Close connections" }).click();
+		await expect(dialog).toHaveCount(0);
+	});
 }
 
-
-for (const [width, end] of [[1280, "2026-07-09T01:00:00+02:00"], [390, "2026-07-11T10:00:00+02:00"]] as const) {
-  test(`K05 timed title-only submission preserves independent end at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
-    const item = event("night", "Night shift", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", end);
-    await mockAuthenticatedReads(page, { ...events, events: [item] });
-    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/night?date=2026-07-08`,
+for (const [width, end] of [
+	[1280, "2026-07-09T01:00:00+02:00"],
+	[390, "2026-07-11T10:00:00+02:00"],
+] as const) {
+	test(`K05 timed title-only submission preserves independent end at ${width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width, height: 844 });
+		const item = event(
+			"night",
+			"Night shift",
+			"personal",
+			"#b3492f",
+			"2026-07-08T23:00:00+02:00",
+			end,
+		);
+		await mockAuthenticatedReads(page, { ...events, events: [item] });
+		await page.goto(
+			`/app/p/${DEFAULT_PAGE_ID}/month/event/night?date=2026-07-08`,
 		);
 		const title = page.getByRole("textbox", { name: "Event title" });
 		await expect(title).toBeFocused();
@@ -7539,7 +7619,11 @@ for (const [width, end] of [[1280, "2026-07-09T01:00:00+02:00"], [390, "2026-07-
 		);
 		await title.press("Control+Enter");
 		const body = (await write).postDataJSON();
-		expect(body).toEqual({ id: item.id, expectedRevision: 1, patch: { title: "Night renamed" } });
+		expect(body).toEqual({
+			id: item.id,
+			expectedRevision: 1,
+			patch: { title: "Night renamed" },
+		});
 		await expect(title).toHaveCount(0);
 		expect(
 			await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
@@ -7548,89 +7632,150 @@ for (const [width, end] of [[1280, "2026-07-09T01:00:00+02:00"], [390, "2026-07-
 }
 
 for (const editor of ["full", "handoff"] as const) {
-  test(`K06 two real ${editor} drafts keep original revision across SSE and reject stale title without restoring time`, async ({ browser }) => {
-    const context = await browser.newContext({ timezoneId: "Europe/Prague" });
-    const item = event("k06-night", "K06 night", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", "2026-07-10T02:00:00+02:00");
-    await mockAuthenticatedReads(context, { ...events, events: [item] });
-    const first = await context.newPage(); const second = await context.newPage();
-    let changed = false;
-    let readsAfterChange = 0;
-    await second.route("**/api/stream?clientVersion=*", async route => {
-      expect(new URL(route.request().url()).searchParams.get("clientVersion")).toBe(PRODUCT_VERSION);
-      while (!changed) await new Promise(resolve => setTimeout(resolve, 20));
-      await route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"event_updated","payload":{}}\n\n' });
-    });
-    await second.route(/\/api\/v1\/events(?:\?.*)?$/, async route => {
-      if (route.request().method() === "GET" && changed) readsAfterChange++;
-      return route.fallback();
-    });
-    const path = `/app/p/${DEFAULT_PAGE_ID}/month/event/k06-night?date=2026-07-08`;
-    await first.goto(path);
-    if (editor === "full") await second.goto(path);
-    else {
-      await second.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-08`);
-      await second.getByRole("button", { name: /K06 night/ }).first().click();
-      await second.getByRole("button", { name: "Edit", exact: true }).click();
-    }
-    const secondTitle = second.getByRole("textbox", { name: "Event title" });
-    await secondTitle.fill("K06 retained title");
-    const write = first.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith("/api/v1/events"));
-    await first.getByRole("combobox", { name: "Start time" }).fill("22:00");
-    await first.getByRole("combobox", { name: "Start time" }).press("Tab");
-    await first.getByRole("button", { name: "Save", exact: true }).click();
-    const firstResponse = await write; expect(firstResponse.status()).toBe(200);
-    const authoritative = await firstResponse.json(); expect(authoritative.revision).toBe(2);
-    expect(authoritative.start).not.toBe(item.start);
-    changed = true;
-    await expect.poll(() => readsAfterChange).toBeGreaterThan(0);
-    await expect(secondTitle).toHaveValue("K06 retained title");
-    if (editor === "handoff") await second.getByRole("button", { name: "More options" }).click();
-    const stale = second.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith("/api/v1/events"));
-    await second.getByRole("button", { name: "Save", exact: true }).click();
-    const response = await stale;
-    expect(response.request().postDataJSON()).toEqual({ id: item.id, expectedRevision: 1, patch: { title: "K06 retained title" } });
-    expect(response.status()).toBe(409);
-    expect((await response.json()).current.start).toBe(authoritative.start);
-    await expect(secondTitle).toHaveValue("K06 retained title");
-    await expect(second.getByRole("alert")).toContainText("Refresh and reconcile");
-    expect(second.url()).not.toContain("expectedRevision");
-    await context.close();
-  });
+	test(`K06 two real ${editor} drafts keep original revision across SSE and reject stale title without restoring time`, async ({
+		browser,
+	}) => {
+		const context = await browser.newContext({ timezoneId: "Europe/Prague" });
+		const item = event(
+			"k06-night",
+			"K06 night",
+			"personal",
+			"#b3492f",
+			"2026-07-08T23:00:00+02:00",
+			"2026-07-10T02:00:00+02:00",
+		);
+		await mockAuthenticatedReads(context, { ...events, events: [item] });
+		const first = await context.newPage();
+		const second = await context.newPage();
+		let changed = false;
+		let readsAfterChange = 0;
+		await second.route("**/api/stream?clientVersion=*", async (route) => {
+			expect(
+				new URL(route.request().url()).searchParams.get("clientVersion"),
+			).toBe(PRODUCT_VERSION);
+			while (!changed) await new Promise((resolve) => setTimeout(resolve, 20));
+			await route.fulfill({
+				contentType: "text/event-stream",
+				body: 'data: {"type":"event_updated","payload":{}}\n\n',
+			});
+		});
+		await second.route(/\/api\/v1\/events(?:\?.*)?$/, async (route) => {
+			if (route.request().method() === "GET" && changed) readsAfterChange++;
+			return route.fallback();
+		});
+		const path = `/app/p/${DEFAULT_PAGE_ID}/month/event/k06-night?date=2026-07-08`;
+		await first.goto(path);
+		if (editor === "full") await second.goto(path);
+		else {
+			await second.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-08`);
+			await second
+				.getByRole("button", { name: /K06 night/ })
+				.first()
+				.click();
+			await second.getByRole("button", { name: "Edit", exact: true }).click();
+		}
+		const secondTitle = second.getByRole("textbox", { name: "Event title" });
+		await secondTitle.fill("K06 retained title");
+		const write = first.waitForResponse(
+			(response) =>
+				response.request().method() === "PATCH" &&
+				response.url().endsWith("/api/v1/events"),
+		);
+		await first.getByRole("combobox", { name: "Start time" }).fill("22:00");
+		await first.getByRole("combobox", { name: "Start time" }).press("Tab");
+		await first.getByRole("button", { name: "Save", exact: true }).click();
+		const firstResponse = await write;
+		expect(firstResponse.status()).toBe(200);
+		const authoritative = await firstResponse.json();
+		expect(authoritative.revision).toBe(2);
+		expect(authoritative.start).not.toBe(item.start);
+		changed = true;
+		await expect.poll(() => readsAfterChange).toBeGreaterThan(0);
+		await expect(secondTitle).toHaveValue("K06 retained title");
+		if (editor === "handoff")
+			await second.getByRole("button", { name: "More options" }).click();
+		const stale = second.waitForResponse(
+			(response) =>
+				response.request().method() === "PATCH" &&
+				response.url().endsWith("/api/v1/events"),
+		);
+		await second.getByRole("button", { name: "Save", exact: true }).click();
+		const response = await stale;
+		expect(response.request().postDataJSON()).toEqual({
+			id: item.id,
+			expectedRevision: 1,
+			patch: { title: "K06 retained title" },
+		});
+		expect(response.status()).toBe(409);
+		expect((await response.json()).current.start).toBe(authoritative.start);
+		await expect(secondTitle).toHaveValue("K06 retained title");
+		await expect(second.getByRole("alert")).toContainText(
+			"Refresh and reconcile",
+		);
+		expect(second.url()).not.toContain("expectedRevision");
+		await context.close();
+	});
 }
 
 for (const code of ["provider-conflict", "committed-fallback", "401", "426", "network"] as const) {
-  test(`K06 actual full editor retains multiday draft after ${code}`, async ({ page }) => {
-    const item = event("k06-delivery", "Delivery draft", "personal", "#b3492f", "2026-07-08T23:00:00+02:00", "2026-07-10T02:00:00+02:00");
-    await mockAuthenticatedReads(page, { ...events, events: [item] });
-    const requests: unknown[] = [];
-    await page.route("**/api/v1/events", async route => {
-      if (route.request().method() !== "PATCH") return route.fallback();
-      requests.push(route.request().postDataJSON());
-      if (code === "network") return route.abort("failed");
-      return respond(route, (code === "provider-conflict" || code === "committed-fallback") ? {
-        error: "Saved locally, but remote delivery was not confirmed. Your draft was kept. Refresh and reconcile before any retry.",
-        code: code === "committed-fallback" ? "event-delivery-unconfirmed" : code, localCommitted: true, ...(code === "committed-fallback"
-          ? { committed: [{ ...item, title: "Keep delivery draft", revision: 2 }] }
-          : { current: { ...item, title: "Keep delivery draft", revision: 2 }, currentRevision: 2 }),
-        delivery: code === "committed-fallback"
-          ? { completed: false, status: "unconfirmed" }
-          : { completed: true, status: "conflict" },
-      } : { error: code === "401" ? "Sign in required" : "ClientUpgradeRequired" }, code === "provider-conflict" ? 409 : code === "committed-fallback" ? 502 : Number(code));
-    });
-    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/k06-delivery?date=2026-07-08`);
-    const title = page.getByRole("textbox", { name: "Event title" });
-    await title.fill("Keep delivery draft");
-    await title.press("Control+Enter");
-    await expect(page.getByRole("alert")).toBeVisible();
-    await expect(title).toHaveValue("Keep delivery draft");
-    expect(requests).toEqual([{ id: item.id, expectedRevision: 1, patch: { title: "Keep delivery draft" } }]);
-    if (code === "provider-conflict" || code === "committed-fallback") {
-      await expect(page.getByRole("alert")).toContainText("Saved locally");
-      await title.press("Control+Enter");
-      await expect.poll(() => requests.length).toBe(2);
-      expect(requests[1]).toEqual(requests[0]);
-    }
-  });
+	test(`K06 actual full editor retains multiday draft after ${code}`, async ({
+		page,
+	}) => {
+		const item = event(
+			"k06-delivery",
+			"Delivery draft",
+			"personal",
+			"#b3492f",
+			"2026-07-08T23:00:00+02:00",
+			"2026-07-10T02:00:00+02:00",
+		);
+		await mockAuthenticatedReads(page, { ...events, events: [item] });
+		const requests: unknown[] = [];
+		await page.route("**/api/v1/events", async (route) => {
+			if (route.request().method() !== "PATCH") return route.fallback();
+			requests.push(route.request().postDataJSON());
+			if (code === "network") return route.abort("failed");
+			return respond(
+				route,
+				(code === "provider-conflict" || code === "committed-fallback")
+					? {
+							error:
+								"Saved locally, but remote delivery was not confirmed. Your draft was kept. Refresh and reconcile before any retry.",
+							code: code === "committed-fallback" ? "event-delivery-unconfirmed" : code,
+							localCommitted: true,
+							...(code === "committed-fallback"
+                ? { committed: [{ ...item, title: "Keep delivery draft", revision: 2 }] }
+                : { current: { ...item, title: "Keep delivery draft", revision: 2 }, currentRevision: 2 }),
+							delivery: code === "committed-fallback"
+                ? { completed: false, status: "unconfirmed" }
+                : { completed: true, status: "conflict" },
+						}
+					: { error: code === "401" ? "Sign in required" : "ClientUpgradeRequired" },
+				code === "provider-conflict" ? 409 : code === "committed-fallback" ? 502 : Number(code),
+			);
+		});
+		await page.goto(
+			`/app/p/${DEFAULT_PAGE_ID}/month/event/k06-delivery?date=2026-07-08`,
+		);
+		const title = page.getByRole("textbox", { name: "Event title" });
+		await title.fill("Keep delivery draft");
+		await title.press("Control+Enter");
+		await expect(page.getByRole("alert")).toBeVisible();
+		await expect(title).toHaveValue("Keep delivery draft");
+		expect(requests).toEqual([
+			{
+				id: item.id,
+				expectedRevision: 1,
+				patch: { title: "Keep delivery draft" },
+			},
+		]);
+		if (code === "provider-conflict" || code === "committed-fallback") {
+			await expect(page.getByRole("alert")).toContainText("Saved locally");
+			await title.press("Control+Enter");
+			await expect.poll(() => requests.length).toBe(2);
+			expect(requests[1]).toEqual(requests[0]);
+		}
+	});
 }
 
 for (const override of ["description=Restored", "endTime=12%3A30", "recurrence=FREQ%3DDAILY", 'calendarIds=%5B%22personal%22%5D']) {

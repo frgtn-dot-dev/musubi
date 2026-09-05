@@ -28,12 +28,16 @@ import {
   NotFoundError,
 } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
-import { prepareEventWrites,
+import {
+  prepareEventWrites,
   type CalendarEventWrite,
 } from "../sync/engine";
 import { committedFailure } from "./event_commit";
 import { assertCanViewEvent } from "../permissions";
-import { assertEventCalendarAccess, assertEventContentAccess, hasEventCalendarAccess,
+import {
+  assertEventCalendarAccess,
+  assertEventContentAccess,
+  hasEventCalendarAccess,
 } from "../event_permissions";
 import {
   dropEventNotifications,
@@ -97,8 +101,7 @@ async function sendCommitted(
     try { current = await currentEvent(event.id); } catch { /* retained receipt below */ }
     return res.status(failure.status).json({
       ...failure.body,
-      ...(current ? { current,
-      currentRevision: current.revision } : {}),
+      ...(current ? { current, currentRevision: current.revision } : {}),
     });
   }
   return res.status(status).json(result);
@@ -108,16 +111,13 @@ function validateCalendars(event: Event) {
   event.id = requireUUID(event.id, "event.id");
   event.calendars = [
     ...new Set(
-      event.calendars.map((id) =>
-    requireUUID(id, "event.calendars[]")),
+      event.calendars.map((id) => requireUUID(id, "event.calendars[]")),
     ),
   ];
   if (!event.calendars.length)
     throw new BadRequestError("Event needs at least one calendar.");
   if (event.originCalendarID)
-    requireUUID(
-      event.originCalendarID,
-      "event.originCalendarID");
+    requireUUID(event.originCalendarID, "event.originCalendarID");
 }
 
 function plannedWrites(
@@ -127,7 +127,7 @@ function plannedWrites(
 ): CalendarEventWrite[] {
   const removed = previous.calendars.filter(
     (id) => !event.calendars.includes(id),
-    );
+  );
   const added = event.calendars.filter(
     (id) => !previous.calendars.includes(id),
   );
@@ -152,7 +152,8 @@ function plannedWrites(
   ];
 }
 
-async function prepareUpdate(userID: string,
+async function prepareUpdate(
+  userID: string,
   request: EventPatchRequest,
   previous: Event,
 ) {
@@ -166,29 +167,41 @@ async function prepareUpdate(userID: string,
   let create: Event | undefined;
   if (scope) {
     const { scopeEdit: _scope, ...update } = request;
-  if (JSON.stringify(scope.updates[0]) !== JSON.stringify(update))
-      throw new BadRequestError("Scope edit intent does not match the first update.",
+    if (JSON.stringify(scope.updates[0]) !== JSON.stringify(update))
+      throw new BadRequestError(
+        "Scope edit intent does not match the first update.",
       );
     create = scope.creates[0];
     if (create) {
       validateCalendars(create);
       if (
         create.id === event.id ||
-    (create.originCalendarID && !create.calendars.includes(create.originCalendarID)))
+        (create.originCalendarID &&
+          !create.calendars.includes(create.originCalendarID))
+      )
         throw new BadRequestError("Invalid scope create destination.");
-      for (const id of create.calendars) await assertEventCalendarAccess(userID, id);
+      for (const id of create.calendars)
+        await assertEventCalendarAccess(userID, id);
     }
   }
   const writes = plannedWrites(previous, event, Boolean(scope));
   // Even update-only recurrence intents must receive complete recurrence preflight.
   if (scope && !writes.some((write) => write.action === "update"))
-    writes.push({ event, previous,
-      patch: {}, calendarIDs: event.calendars, action: "update", scopeEditValidated: true,
+    writes.push({
+      event,
+      previous,
+      patch: {},
+      calendarIDs: event.calendars,
+      action: "update",
+      scopeEditValidated: true,
     });
   const scopeWrites = create
     ? [
         ...writes,
-        { event: create, calendarIDs: create.calendars, action: "create" as const,
+        {
+          event: create,
+          calendarIDs: create.calendars,
+          action: "create" as const,
         },
       ]
     : writes;
@@ -204,11 +217,14 @@ export async function handlerCreateEvent(req: Request, res: Response) {
     throw new BadRequestError(
       "originCalendarID must be one of the event's calendars.",
     );
-  for (const id of event.calendars) await assertEventCalendarAccess(req.user!.id, id);
-  const deliver = await prepareEventWrites([{ event, calendarIDs: event.calendars, action: "create" },
+  for (const id of event.calendars)
+    await assertEventCalendarAccess(req.user!.id, id);
+  const deliver = await prepareEventWrites([
+    { event, calendarIDs: event.calendars, action: "create" },
   ]);
   const created = await createEvent(
-    { ...event, creatorID: req.user!.id }, event.calendars,
+    { ...event, creatorID: req.user!.id },
+    event.calendars,
   );
 
   const result = { ...created, calendars: event.calendars };
@@ -235,11 +251,13 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   if (saved.status === "conflict") return conflict(res, saved.current);
   return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
   if (saved.changed) {
-    await notifyEvent([...saved.previous.calendars, ...saved.event.calendars], "event_updated",
+    await notifyEvent(
+      [...saved.previous.calendars, ...saved.event.calendars],
+      "event_updated",
       saved.event,
     );
     await queueEventChange(saved.previous, saved.event, req.user!.id);
-    }
+  }
 
   });
 }
@@ -273,7 +291,8 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   const previous = await currentEvent(request.id);
   if (previous.revision !== request.expectedRevision || previous.deletedAt)
     return conflict(res, previous);
-  const deliver = await prepareEventWrites([{ event: previous, calendarIDs: targets, action: "delete" },
+  const deliver = await prepareEventWrites([
+    { event: previous, calendarIDs: targets, action: "delete" },
   ]);
   const saved = await patchEventAndCalendarLinks(
     request.id,
@@ -285,9 +304,11 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   if (saved.status === "conflict") return conflict(res, saved.current);
   const removed = saved.event.deletedAt !== null;
 
-  const result = { id: request.id,
+  const result = {
+    id: request.id,
     revision: saved.event.revision,
-    calendars: saved.event.calendars, removed,
+    calendars: saved.event.calendars,
+    removed,
     event: saved.event,
   };
   return sendCommitted(res, deliver, saved.event, result, 200, async () => {
@@ -303,7 +324,8 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
 
 export async function handlerLinkEvent(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const { calendarID, expectedRevision } = EventLinkRequestSchema.parse(req.body,
+  const { calendarID, expectedRevision } = EventLinkRequestSchema.parse(
+    req.body,
   );
   const existing = await assertCanViewEvent(req.user!.id, eventID);
 
@@ -312,13 +334,15 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   if (previous.revision !== expectedRevision || previous.deletedAt)
     return conflict(res, previous);
   const calendars = [...new Set([...existing, calendarID])];
-    const deliver = await prepareEventWrites(
+  const deliver = await prepareEventWrites(
     existing.includes(calendarID)
       ? []
-      : [{
-      event: { ...previous, calendars },
-      calendarIDs: [calendarID], action: "create",
-    },
+      : [
+          {
+            event: { ...previous, calendars },
+            calendarIDs: [calendarID],
+            action: "create",
+          },
         ],
   );
   const saved = await patchEventAndCalendarLinks(eventID, expectedRevision, {
@@ -329,11 +353,12 @@ export async function handlerLinkEvent(req: Request, res: Response) {
   return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
     if (saved.changed) await notifyEvent(calendars, "event_updated", saved.event);
   });
-  }
+}
 
 export async function handlerForkEvent(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const { calendarID, expectedRevision } = EventForkRequestSchema.parse(req.body,
+  const { calendarID, expectedRevision } = EventForkRequestSchema.parse(
+    req.body,
   );
   const sourceCalendars = await assertCanViewEvent(req.user!.id, eventID);
   await assertEventCalendarAccess(req.user!.id, calendarID);
@@ -365,11 +390,15 @@ export async function handlerForkEvent(req: Request, res: Response) {
     revision: 1,
     calendars: [calendarID],
   } as Event;
-  const deliver = await prepareEventWrites([{
-    event: projected,
-    calendarIDs: [calendarID], action: "create" },
+  const deliver = await prepareEventWrites([
+    {
+      event: projected,
+      calendarIDs: [calendarID],
+      action: "create",
+    },
   ]);
-  const saved = await forkEventAtRevision(eventID, expectedRevision, newEvent, [calendarID,
+  const saved = await forkEventAtRevision(eventID, expectedRevision, newEvent, [
+    calendarID,
   ]);
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
