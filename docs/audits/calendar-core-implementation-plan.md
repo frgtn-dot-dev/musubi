@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je rozpracovaný; K10–K15 čekají; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je rozpracovaný; K11–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -28,7 +28,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `in_progress`; K10–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `in_progress`; K11–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -231,7 +231,7 @@ K09 se dodá v malých reviewovatelných řezech: read-only serverový kontrakt/
 
 **K09 web převzat (PR #128, squash `a8250b6`, 2026-09-07):** detail události otevře per-target stav; Connections nabízí dohledatelné nedokončené operace včetně smazání. Retry a náhled/potvrzení používají skutečný resource transport, owner-gated akce, scoped query cache a SSE/reconnect invalidaci. Náhled se pod rukama nemění; ztracená odpověď zachová mutation ID, stale-state odmítnutí vyžaduje nový náhled. Existující Row/SettingsSection/Dialog/ConfirmationDialog, bez nové závislosti či restylu. Čisté review celého `2ccebd6..ddc83e1` bez potvrzených nálezů, root check, web 386/386, Chromium 9/9 (K09 + K06 draft/SSE/postcommit) a všech 14 CI kontrol prošly. Mobilní napojení zůstává otevřené; tento řez neuzavírá celý K09.
 
-**K09 nativní klient — rozpracováno:** detail události a Sync a Calendar zpřístupňují per-target stav a vlastní nedokončené záměry včetně smazání. Striktní DTO parsing, server/user/connection keyed lifecycle, pořadí asynchronních čtení, SSE/reconnect/foreground invalidace; načtené stránky přežijí refresh. Náhled zůstává zmrazený, nativní Cancel nic neposílá a potvrzení po unmount/account switch je ignorováno. Síťové opakování používá stejný mutation ID; 409 vyžaduje nový náhled. Callback regrese vykonávají skutečné oba callery, useApi, wire schemas, nativní Alert a stream listener nad mockovanými nativními hosty. Není to důkaz fyzického telefonu ani živého providera.
+**K09 nativní klient převzat (PR #129, squash `39e0dca`, 2026-09-07):** detail události a Sync a Calendar zpřístupňují per-target stav a vlastní nedokončené záměry včetně smazání. Striktní DTO parsing, server/user/connection keyed lifecycle, pořadí asynchronních čtení, SSE/reconnect/foreground invalidace; načtené stránky přežijí refresh. Náhled zůstává zmrazený, nativní Cancel nic neposílá a potvrzení po unmount/account switch je ignorováno. Síťové opakování používá stejný mutation ID; 409 vyžaduje nový náhled. Callback regrese vykonávají skutečné oba callery, useApi, wire schemas, nativní Alert a stream listener nad mockovanými nativními hosty. Není to důkaz fyzického telefonu ani živého providera. Čisté review `a8250b6..1f127f6` opravilo polling starvation na pomalém připojení a souběh stránkování s refresh; finální diff bez potvrzených P0/P1/P2 nálezů. Root check, 199 nativních testů a všech 14 CI kontrol prošly. K09 je převzat; živá providerová certifikace zůstává samostatným K15 gate.
 
 Stav je per vzdálený cíl; agregovaný event může být částečně doručený. „Uloženo v Musubi“ odlišit od „Synchronizováno“. Uživatel vidí čekání, chybu, nutnost reconnectu nebo konflikt a může bezpečně opakovat/řešit konkrétní operaci.
 
@@ -244,6 +244,8 @@ Použít stávající cache, query invalidation, SSE a UI primitives. Retry endp
 ## Třetí série: věrný čas a opakování
 
 ### K10 — Časový model a identita výskytu
+
+**K10 kontrakt — rozpracováno:** [konkrétní návrh schématu a rollout](../sync/event-time-model.md), striktní samostatné kontrakty time model / original start / occurrence identity. Nezapojují se zatím do event DTO ani writable requestů. Následuje aditivní storage, sdílená expanze a atomické napojení čtení/zápisů; samotný kontrakt neuzavírá K10.
 
 Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migrace:
 
