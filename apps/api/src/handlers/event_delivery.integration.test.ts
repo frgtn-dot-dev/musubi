@@ -511,6 +511,39 @@ async function main() {
     );
     await db.delete(eventOutbox).where(eq(eventOutbox.id, retryJob.id));
 
+    // Exercise the HTTP handler's actual post-commit dispatcher/claim, without
+    // any registered provider or credentials capable of leaving the fixture.
+    const wakeupTarget = await destination(
+      owner,
+      "Immediate retry",
+      "fixture-unregistered",
+    );
+    const wakeupJob = await receipt(wakeupTarget, "blocked", 2);
+    await db
+      .update(eventOutbox)
+      .set({ remoteSnapshot: null, nextAttemptAt: new Date(0) })
+      .where(eq(eventOutbox.id, wakeupJob.id));
+    assert.equal((await retry(owner, value.id, wakeupJob.id)).status, 202);
+    let claimed = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const [observed] = await db
+        .select()
+        .from(eventOutbox)
+        .where(eq(eventOutbox.id, wakeupJob.id));
+      if (observed.attempts === 1 && observed.status === "blocked") {
+        assert.equal(observed.errorCode, "provider-write-unsupported");
+        claimed = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(
+      claimed,
+      true,
+      "HTTP retry must wake the real durable dispatcher after commit",
+    );
+    await db.delete(eventOutbox).where(eq(eventOutbox.id, wakeupJob.id));
+
     // Removing the local event does not erase the owner's undelivered deletion.
     const deleteReceipt = await receipt(google, "unconfirmed", 3, delivered.id);
     await db
