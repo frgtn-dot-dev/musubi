@@ -159,7 +159,7 @@ async function main() {
         googleEtags.set(`${req.headers.authorization}:${eventPath}`, etag);
         if (path.startsWith("/calendar/v3/")) {
           const key = `${req.headers.authorization}:${eventPath}`;
-          googleObjects.set(key, { ...googleObjects.get(key), ...JSON.parse(body), id: decodeURIComponent(eventPath.split("/").at(-1)!) });
+          googleObjects.set(key, { ...googleObjects.get(key), ...JSON.parse(body), id: decodeURIComponent(eventPath.split("/").pop()!) });
           googleDeleted.delete(key);
         }
         return json({ id, etag }, 201);
@@ -177,7 +177,7 @@ async function main() {
           path.startsWith("/v1.0")
             ? { isOrganizer: organizer }
             : {
-                id: decodeURIComponent(path.split("/").at(-1)!),
+                id: decodeURIComponent(path.split("/").pop()!),
                 summary: "Before", start: { dateTime: "2026-01-01T10:00:00Z" }, end: { dateTime: "2026-01-01T11:00:00Z" },
                 ...googleObjects.get(key),
                 etag:
