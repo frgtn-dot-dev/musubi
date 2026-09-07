@@ -18,6 +18,10 @@ import {
   forkEventAtRevision,
   claimEventOutbox,
   finishEventOutbox,
+  renewEventOutboxLease,
+  completeEventOutbox,
+  getEventOutboxExpectedRef,
+  externalCalendars,
   DuplicateEventMutationError,
   type EventOutboxIntent,
 } from "..";
@@ -54,6 +58,7 @@ async function main() {
         originCalendarID: home.id,
         calendars: [home.id],
       });
+    const linkIDs = new Map([[home.id, randomUUID()], [copy.id, randomUUID()]]);
     const intent = (
       event: ReturnType<typeof value>,
       action: EventOutboxIntent["action"] = "create",
@@ -65,7 +70,7 @@ async function main() {
       position: 0,
       eventID: event.id,
       calendarID: home.id,
-      externalCalendarLinkID: randomUUID(),
+      externalCalendarLinkID: linkIDs.get(extra.calendarID ?? home.id)!,
       userID: owner,
       provider: "google",
       accountID: "fixture-account",
@@ -210,7 +215,7 @@ async function main() {
       undefined,
       "ambiguous attempt must not be blindly re-sent",
     );
-    await finishEventOutbox(createIntent.id!, "completed");
+    await finishEventOutbox(createIntent.id!, claimed!.leaseToken!, "completed");
     assert.equal(await claimEventOutbox(createIntent.id!), undefined);
 
     const updateIntent = intent(initial, "update", {
@@ -368,6 +373,87 @@ async function main() {
       claimEventOutbox(forkIntent.id!),
     ]);
     assert.equal(claims.filter(Boolean).length, 1);
+
+    // A restarted worker must reconcile an expired attempt; the previous process
+    // cannot renew or acknowledge it, even before another worker claims it.
+    const leased = value();
+    const leasedIntent = intent(leased);
+    await createEvent(leased, [home.id], [leasedIntent]);
+    const first = (await claimEventOutbox(leasedIntent.id!))!;
+    assert.equal(first.reconciling, false);
+    assert.equal(await renewEventOutboxLease(first.id, first.leaseToken!), true);
+    await db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, first.id));
+    assert.equal(await renewEventOutboxLease(first.id, first.leaseToken!), false);
+    assert.equal(await finishEventOutbox(first.id, first.leaseToken!, "completed"), false);
+    assert.equal(await completeEventOutbox(first.id, first.leaseToken!, { externalEventId: "lease-resource" }, null), undefined);
+    const restarted = (await claimEventOutbox(first.id))!;
+    assert.equal(restarted.reconciling, true);
+    assert.equal(restarted.attempts, 2);
+    assert.notEqual(restarted.leaseToken, first.leaseToken);
+    assert.equal(await finishEventOutbox(first.id, first.leaseToken!, "completed"), false);
+    await db.insert(externalCalendars).values({
+      id: linkIDs.get(home.id), provider: "google", userID: owner,
+      accountID: "fixture-account", calendarID: home.id, externalCalendarID: "remote-calendar",
+    });
+    const accepted = { externalEventId: "lease-resource", etag: '"v1"', icalUid: "lease-uid" };
+    const acknowledged = await completeEventOutbox(first.id, restarted.leaseToken!, accepted, null);
+    assert.equal(acknowledged?.status, "completed");
+    assert.deepEqual(acknowledged?.resultRef, accepted);
+    const [mapped] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, leased.id));
+    assert.equal(mapped.externalEventID, accepted.externalEventId);
+    assert.equal(mapped.etag, accepted.etag);
+
+    // A queued successor advances through our own receipt, never a fresh remote ETag.
+    const successor = intent(leased, "update", { externalEventID: null, expectedEtag: null });
+    await patchEventAndCalendarLinks(leased.id, 1, { title: "Next" }, false, [successor]);
+    const second = (await claimEventOutbox(successor.id!))!;
+    assert.deepEqual(await getEventOutboxExpectedRef(second), accepted);
+    assert.equal((await completeEventOutbox(second.id, second.leaseToken!, { ...accepted, etag: '"v2"' }, accepted))?.status, "completed");
+    const [advanced] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, leased.id));
+    assert.equal(advanced.etag, '"v2"');
+    assert.deepEqual(await getEventOutboxExpectedRef({ ...second, externalEventID: accepted.externalEventId, expectedEtag: '"new-inbound"' }), {
+      externalEventId: accepted.externalEventId, etag: '"new-inbound"', icalUid: second.icalUid,
+    }, "an old predecessor receipt cannot replace a newer accepted inbound baseline");
+
+    // A provider mapping changed by another writer is not silently overwritten.
+    const thirdIntent = intent(leased, "update", { externalEventID: accepted.externalEventId, expectedEtag: '"v2"' });
+    await patchEventAndCalendarLinks(leased.id, 2, { title: "Third" }, false, [thirdIntent]);
+    const third = (await claimEventOutbox(thirdIntent.id!))!;
+    await db.update(externalEvents).set({ etag: '"remote-edit"' }).where(eq(externalEvents.id, advanced.id));
+    assert.equal((await completeEventOutbox(third.id, third.leaseToken!, { ...accepted, etag: '"v3"' }, { ...accepted, etag: '"v2"' }))?.status, "conflict");
+    const [preserved] = await db.select().from(externalEvents).where(eq(externalEvents.id, advanced.id));
+    assert.equal(preserved.etag, '"remote-edit"');
+
+    const delayed = value();
+    const delayedIntent = intent(delayed);
+    await createEvent(delayed, [home.id], [delayedIntent]);
+    const delayedClaim = (await claimEventOutbox(delayedIntent.id!))!;
+    let locked!: () => void;
+    const lockAcquired = new Promise<void>((resolve) => { locked = resolve; });
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    const holder = db.transaction(async (tx) => {
+      await tx.select().from(events).where(eq(events.id, delayed.id)).for("update");
+      locked();
+      await released;
+    });
+    await lockAcquired;
+    const delayedAck = completeEventOutbox(delayedClaim.id, delayedClaim.leaseToken!, { externalEventId: "too-late" }, null);
+    try {
+      let waiting = false;
+      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+        const result = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity
+          where wait_event_type = 'Lock' and query like '%"events"%for update%') as waiting`);
+        waiting = result.rows[0].waiting;
+        if (!waiting) await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(waiting, "ACK has started its transaction and is waiting on the event lock");
+      await db.update(eventOutbox).set({ leaseUntil: sql`clock_timestamp() + interval '100 milliseconds'` }).where(eq(eventOutbox.id, delayedClaim.id));
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    } finally { release(); }
+    await holder;
+    assert.equal(await delayedAck, undefined, "transaction start time cannot extend a lease while waiting for a lock");
+    assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.eventID, delayed.id)), []);
     console.log(
       "K07 transactional outbox rollback, revision, unlink/delete retention, duplicate fork and single-attempt claim: OK",
     );

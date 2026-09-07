@@ -84,6 +84,8 @@ async function main() {
   let remoteCalendarCreates = 0;
   const davEtags = new Map<string, string>();
   const googleEtags = new Map<string, string>();
+  const googleObjects = new Map<string, Record<string, unknown>>();
+  const googleDeleted = new Set<string>();
   let version = 0;
   let davData = [
     "BEGIN:VCALENDAR",
@@ -139,6 +141,10 @@ async function main() {
         }
         if (method === "DELETE") {
           davEtags.delete(path);
+          if (path.startsWith("/calendar/v3/")) {
+            const key = `${req.headers.authorization}:${path}`;
+            googleObjects.delete(key); googleEtags.delete(key); googleDeleted.add(key);
+          }
           res.writeHead(204);
           return res.end();
         }
@@ -151,6 +157,11 @@ async function main() {
         const eventPath = method === "POST" ? `${path}/${id}` : path;
         const etag = `"google-${++version}"`;
         googleEtags.set(`${req.headers.authorization}:${eventPath}`, etag);
+        if (path.startsWith("/calendar/v3/")) {
+          const key = `${req.headers.authorization}:${eventPath}`;
+          googleObjects.set(key, { ...googleObjects.get(key), ...JSON.parse(body), id: decodeURIComponent(eventPath.split("/").pop()!) });
+          googleDeleted.delete(key);
+        }
         return json({ id, etag }, 201);
       }
       reads.push({ path, auth: req.headers.authorization });
@@ -159,11 +170,16 @@ async function main() {
         return json({ accessRole: path.endsWith("/denied") ? "reader" : role });
       if (path.startsWith("/v1.0/me/calendars/") && !path.includes("/events/"))
         return json({ canEdit });
-      if (path.includes("/events/"))
+      if (path.includes("/events/")) {
+        const key = `${req.headers.authorization}:${path}`;
+        if (googleDeleted.has(key)) return json({}, 404);
         return json(
           path.startsWith("/v1.0")
             ? { isOrganizer: organizer }
             : {
+                id: decodeURIComponent(path.split("/").pop()!),
+                summary: "Before", start: { dateTime: "2026-01-01T10:00:00Z" }, end: { dateTime: "2026-01-01T11:00:00Z" },
+                ...googleObjects.get(key),
                 etag:
                   googleEtags.get(`${req.headers.authorization}:${path}`) ??
                   '"current"',
@@ -172,6 +188,7 @@ async function main() {
                   : { self: organizer },
               },
         );
+      }
       if (
         method === "GET" &&
         path.startsWith("/dav/") &&

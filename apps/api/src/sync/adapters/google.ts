@@ -209,6 +209,7 @@ function toNormalized(item: any): NormalizedEvent {
     externalId: item.id,
     etag: strongEventEtag(item.etag),
     status: "active",
+    creationOperationID: typeof item.extendedProperties?.private?.musubiOperationID === "string" ? item.extendedProperties.private.musubiOperationID : undefined,
     title: item.summary ?? "(untitled)",
     start,
     end,
@@ -539,6 +540,7 @@ export async function fetchGoogleChanges(
 
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
+  projectEvent(event) { return toNormalized({ ...toGoogleEvent(event), id: event.id }); },
 
   async listAccounts(
     userID: string,
@@ -636,7 +638,7 @@ export const googleAdapter: CalendarAdapter = {
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(
       `${GCAL}/users/me/calendarList/${encodeURIComponent(externalCalendarId)}`,
-      { headers },
+      { headers, signal: operation.signal },
     );
     assertEventWriteResponse(response);
     const calendar = await response.json();
@@ -654,7 +656,7 @@ export const googleAdapter: CalendarAdapter = {
         toGoogleEventPatch(operation.event, operation.patch);
       const response = await fetch(
         `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(operation.external.externalEventId)}`,
-        { headers },
+        { headers, signal: operation.signal },
       );
       if (operation.action === "delete" && [404, 410].includes(response.status))
         return;
@@ -677,6 +679,20 @@ export const googleAdapter: CalendarAdapter = {
     }
   },
 
+  async readEvent(userID, accountId, externalCalendarId, ref, signal) {
+    const response = await fetch(
+      `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}`,
+      { headers: { Authorization: `Bearer ${await getAccessToken(userID, accountId)}`, "Cache-Control": "no-cache" }, redirect: "error", signal },
+    );
+    if ([404, 410].includes(response.status)) return null;
+    assertCompleteEventReadResponse(response);
+    const data = await response.json();
+    if (data.id !== ref.externalEventId) throw new ProviderEventWriteError("provider-conflict");
+    if (data.status === "cancelled") return null;
+    const event = assertCreatedEventEvidence(toNormalized(data));
+    return { ref: { externalEventId: data.id, etag: strongEventEtag(data.etag) }, event };
+  },
+
   async findCreatedEvent(userID, accountId, externalCalendarId, identity) {
     const id = googleEventCreateID(identity);
     const response = await fetch(
@@ -687,6 +703,7 @@ export const googleAdapter: CalendarAdapter = {
           "Cache-Control": "no-cache",
         },
         redirect: "error",
+        signal: identity?.signal,
       },
     );
     if (response.status === 404) return null;
@@ -737,6 +754,7 @@ export const googleAdapter: CalendarAdapter = {
             : {}),
         }),
         redirect: "error",
+        signal: identity?.signal,
       },
     );
     assertProviderEventMutationResponse(res);
@@ -763,6 +781,7 @@ export const googleAdapter: CalendarAdapter = {
     event: Event,
     ref,
     patch,
+    signal,
   ) {
     const etag = requireEventEtag(ref?.etag);
     const payload = toGoogleEventPatch(event, patch);
@@ -778,6 +797,7 @@ export const googleAdapter: CalendarAdapter = {
           "If-Match": etag,
         },
         body: JSON.stringify(payload),
+        signal,
         redirect: "error", // Never turn a conditional mutation into a redirected GET.
       },
     );
@@ -794,6 +814,7 @@ export const googleAdapter: CalendarAdapter = {
     externalCalendarId,
     externalEventId,
     ref,
+    signal,
   ) {
     const etag = requireEventEtag(ref?.etag);
     const accessToken = await getAccessToken(userID, accountId);
@@ -801,6 +822,7 @@ export const googleAdapter: CalendarAdapter = {
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
       {
         method: "DELETE",
+        signal,
         redirect: "error",
         headers: { Authorization: `Bearer ${accessToken}`, "If-Match": etag },
       },

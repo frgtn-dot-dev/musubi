@@ -624,6 +624,9 @@ async function main() {
       cleared.etag,
     );
     const deleteEvent = { ...googleEvent, id: randomUUID() };
+    remote.set(key("Bearer primary-access", "/calendar/v3/calendars/same-calendar/events/delete-conflict"), {
+      etag: cleared.etag, json: { ...googleJson, id: "delete-conflict" },
+    });
     await createEvent(deleteEvent, deleteEvent.calendars);
     await importExternalEvent(
       "google",

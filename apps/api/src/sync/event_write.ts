@@ -17,6 +17,7 @@ export class ProviderEventWriteError extends Error {
     readonly code: ProviderEventWriteCode,
     readonly outcome: "not-written" | "unconfirmed" = "not-written",
     readonly providerStatus?: number,
+    readonly retryAfterMs?: number,
   ) {
     super(`Event delivery: ${code}.`);
     this.name = "ProviderEventWriteError";
@@ -61,7 +62,17 @@ export function assertProviderEventMutationResponse(response: Response) {
     response.status === 412 ? "provider-conflict" : "provider-write-failed",
     response.ok || response.status >= 500 ? "unconfirmed" : "not-written",
     response.status,
+    providerRetryAfterMs(response),
   );
+}
+
+export function providerRetryAfterMs(response: Response, now = Date.now()) {
+  const value = response.headers.get("retry-after");
+  if (!value) return undefined;
+  const milliseconds = /^\d+$/.test(value)
+    ? Number(value) * 1000
+    : Date.parse(value) - now;
+  return Number.isFinite(milliseconds) ? Math.max(0, milliseconds) : undefined;
 }
 
 /** Read AFTER token refresh: an ACL grant cannot replace the OAuth write grant. */
@@ -94,6 +105,17 @@ export function assertEventWriteEvidence(
 
 export function assertEventWriteResponse(response: Response) {
   if (!response.ok) {
+    if (
+      response.status === 429 ||
+      response.status === 408 ||
+      response.status >= 500
+    )
+      throw new ProviderEventWriteError(
+        "provider-write-failed",
+        "not-written",
+        response.status,
+        providerRetryAfterMs(response),
+      );
     throw new EventWriteError(
       "event-write",
       response.status === 401 || response.status === 403 ? "denied" : "unknown",

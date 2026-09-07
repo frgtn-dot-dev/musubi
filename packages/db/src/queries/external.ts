@@ -1,4 +1,7 @@
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
+import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
+import { appendInboundEventFanout } from "./event-outbox-fanout";
+import { retainUnmappedEventDeletion, lockExternalEventAddress } from "./event-outbox-deletions";
 import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logger } from "@musubi/config";
@@ -614,9 +617,11 @@ export async function upsertExternalEvent(
   values: EventValues,
   etag: string | null = null,
   icalUid: string | null = null,
+  creationOperationID?: string,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     const map = await mappedEventForUpdate(
       tx,
       provider,
@@ -627,6 +632,7 @@ export async function upsertExternalEvent(
     if (map) {
       if (etag !== null && map.etag === etag && map.event.deletedAt === null)
         return false;
+      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, values, etag, icalUid)) return false;
       if (map.event.originCalendarID !== calendarID) {
         const changedFields = (
           Object.keys(values) as (keyof EventValues)[]
@@ -673,8 +679,10 @@ export async function upsertExternalEvent(
         .update(externalEvents)
         .set({ etag, icalUid: icalUid ?? map.icalUid })
         .where(eq(externalEvents.id, map.id));
+      if (changed) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
       return changed;
     } else {
+      if (await retainUnmappedCreatePull(tx, provider, userID, calendarID, externalCalendarID, externalEventID, values, etag, icalUid, creationOperationID)) return false;
       const [ev] = await tx
         .insert(events)
         // Home calendar = the mirror it was imported into (matches createEvent's
@@ -698,7 +706,7 @@ export async function upsertExternalEvent(
       });
     }
     return true;
-  });
+  }).catch(() => { throw new Error("External event observation could not be persisted."); });
 }
 
 /**
@@ -714,13 +722,19 @@ export async function deleteExternalEvent(
 ): Promise<boolean> {
   let unlinked: { id: string; revision: number } | undefined;
   const changed = await db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     const mapped = await mappedEventForUpdate(
       tx,
       provider,
       calendarID,
       externalEventID,
     );
-    if (!mapped) return false;
+    if (!mapped) {
+      await retainUnmappedEventDeletion(tx, provider, calendarID, externalEventID);
+      return false;
+    }
+    if (await retainPendingEventPull(tx, mapped.event.id, calendarID, provider, externalEventID, null, null, mapped.icalUid)) return false;
 
     if (mapped.event.originCalendarID !== calendarID) {
       await unlinkEventFromCalendarsInTransaction(tx, mapped.event.id, [
@@ -739,8 +753,9 @@ export async function deleteExternalEvent(
       .update(events)
       .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
       .where(eq(events.id, mapped.event.id));
+    await appendInboundEventFanout(tx, mapped.event.id, calendarID, "delete");
     return true;
-  });
+  }).catch(() => { throw new Error("External event deletion could not be persisted."); });
   // Emit receipts only after commit, never for rolled-back link changes.
   if (unlinked) onUnlink?.(unlinked.id, unlinked.revision);
   return changed;

@@ -50,6 +50,26 @@ const scheduledTaskSkips = new Counter({
   registers: [registry],
 });
 
+const eventOutboxBacklog = new Gauge({
+  name: "musubi_event_outbox_operations", help: "Unresolved EVENT deliveries by provider and state.",
+  labelNames: ["provider", "status"] as const, registers: [registry],
+});
+const eventOutboxAge = new Gauge({
+  name: "musubi_event_outbox_oldest_seconds", help: "Age of the oldest unresolved EVENT delivery.",
+  labelNames: ["provider", "status"] as const, registers: [registry],
+});
+
+export function recordEventOutboxBacklog(rows: { provider: string; status: string; count: number; ageSeconds: number }[]) {
+  eventOutboxBacklog.reset();
+  eventOutboxAge.reset();
+  for (const row of rows) {
+    const labels = { provider: KNOWN_SYNC_PROVIDERS.has(row.provider) ? row.provider : "unknown",
+      status: ["pending", "attempting", "retry", "unconfirmed", "conflict", "blocked", "not-written"].includes(row.status) ? row.status : "unknown" };
+    eventOutboxBacklog.set(labels, row.count);
+    eventOutboxAge.set(labels, row.ageSeconds);
+  }
+}
+
 const reminderPushes = new Counter({
   name: "musubi_reminder_pushes_total",
   help: "Web push reminders the dispatcher attempted, by outcome.",
@@ -69,6 +89,7 @@ export function recordReminderPush(outcome: ReminderPushOutcome, count = 1) {
 export type ScheduledTaskName =
   | "cleanup"
   | "external_sync"
+  | "event_outbox"
   | "notifications"
   | "reminders";
 

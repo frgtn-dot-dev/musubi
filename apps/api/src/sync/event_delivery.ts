@@ -1,0 +1,391 @@
+import { EventSchema, EventWriteError, type Event } from "@musubi/types";
+import {
+  matchesEventProviderProjection,
+  claimEventOutbox,
+  completeEventOutbox,
+  finishEventOutbox,
+  getEventOutboxExpectedRef,
+  getEventOutboxRow,
+  getExternalLinkForCalendar,
+  hasEventOutboxRevisionCoverage,
+  renewEventOutboxLease,
+  setEventOutboxProjection,
+  getEventOutboxDeletion,
+  type EventOutboxRow,
+  type EventContentPatch,
+} from "@musubi/db";
+import type {
+  CalendarAdapter,
+  CreatedEventEvidence,
+  ExternalEventRef,
+  NormalizedEvent,
+} from "./adapter";
+import { ProviderAuthError } from "./errors";
+import {
+  caldavEventCreateIdentity,
+  googleEventCreateID,
+} from "./event_create_identity";
+import { ProviderEventWriteError, strongEventEtag } from "./event_write";
+
+/** Only fields actually projected by EVENT serializers. Provider-owned URLs,
+ * organizer and local appearance are not evidence of our write. */
+export function matchesDeliveredEvent(
+  provider: string,
+  expected: Event,
+  actual: NormalizedEvent,
+) {
+  return (
+    actual.status === "active" &&
+    matchesEventProviderProjection(provider, expected, actual)
+  );
+}
+
+function snapshot(
+  ref: ExternalEventRef,
+  evidence: CreatedEventEvidence | null,
+): EventOutboxRow["remoteSnapshot"] {
+  return {
+    externalEventId: ref.externalEventId,
+    etag: evidence?.ref.etag ?? null,
+    icalUid: evidence?.ref.icalUid ?? ref.icalUid,
+    deleted: !evidence,
+    observedAt: new Date().toISOString(),
+    ...(evidence ? { values: JSON.parse(JSON.stringify(evidence.event)) } : {}),
+  };
+}
+
+function revivePatch(
+  patch: Record<string, unknown> | undefined,
+): EventContentPatch | undefined {
+  if (!patch) return undefined;
+  return {
+    ...patch,
+    ...(patch.start === undefined
+      ? {}
+      : { start: new Date(patch.start as string) }),
+    ...(patch.end === undefined ? {} : { end: new Date(patch.end as string) }),
+  };
+}
+
+/** Shared request/background executor. Provider calls never run inside a DB
+ * transaction. A timed-out or crashed attempt must reconcile before retrying. */
+export async function deliverEventOutbox(
+  id: string,
+  adapterFor: (provider: string) => CalendarAdapter | null,
+  options: { timeoutMs?: number } = {},
+): Promise<EventOutboxRow | undefined> {
+  const row = await claimEventOutbox(id);
+  if (!row) return getEventOutboxRow(id);
+  const token = row.leaseToken!;
+  const adapter = adapterFor(row.provider);
+  const controller = new AbortController();
+  const signal = controller.signal;
+  let mutationStarted = false;
+  let remoteSnapshot: EventOutboxRow["remoteSnapshot"] = null;
+  let expectedRef: ExternalEventRef | null = null;
+  let resultRef: ExternalEventRef | null = null;
+  let heartbeatBusy = false;
+  const heartbeat = setInterval(() => {
+    if (heartbeatBusy || signal.aborted) return;
+    heartbeatBusy = true;
+    void renewEventOutboxLease(row.id, token)
+      .then(
+        (ok) => {
+          if (!ok) controller.abort();
+        },
+        () => controller.abort(),
+      )
+      .finally(() => {
+        heartbeatBusy = false;
+      });
+  }, 20_000);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const run = async () => {
+      const event = EventSchema.parse(row.payload.event);
+      if (!adapter?.assertEventWrite)
+        throw new EventWriteError("event-write", "unsupported");
+      const projected = adapter.projectEvent?.(event);
+      const expected = projected
+        ? {
+            ...event,
+            title: projected.title,
+            start: projected.start,
+            end: projected.end,
+            isAllDay: projected.isAllDay,
+            description: projected.description,
+            location: projected.location,
+            recurrence: projected.recurrence,
+          }
+        : event;
+      if (
+        projected &&
+        !(await setEventOutboxProjection(row.id, token, projected))
+      )
+        return;
+      const checkDestination = async () => {
+        signal.throwIfAborted();
+        const link = await getExternalLinkForCalendar(row.calendarID);
+        if (
+          !link ||
+          link.id !== row.externalCalendarLinkID ||
+          link.userID !== row.userID ||
+          link.accountID !== row.accountID ||
+          link.provider !== row.provider ||
+          link.externalCalendarID !== row.externalCalendarID ||
+          link.disabled ||
+          !link.supportsEvents
+        ) {
+          await finishEventOutbox(
+            row.id,
+            token,
+            "cancelled",
+            "destination-disconnected",
+            { uncertain: row.reconciling },
+          );
+          return false;
+        }
+        return true;
+      };
+      if (!(await checkDestination())) return;
+      if (
+        row.action !== "delete" &&
+        !(await hasEventOutboxRevisionCoverage(row))
+      )
+        throw new ProviderEventWriteError(
+          "provider-write-failed",
+          row.reconciling ? "unconfirmed" : "not-written",
+        );
+      expectedRef = await getEventOutboxExpectedRef(row);
+      const identity =
+        row.payload.createIdentityVersion === 1
+          ? { operationID: row.id, signal }
+          : undefined;
+      if (identity && row.action === "create") {
+        const knownID =
+          row.provider === "google"
+            ? googleEventCreateID(identity)
+            : row.provider === "caldav"
+              ? caldavEventCreateIdentity(row.externalCalendarID, identity).url
+              : undefined;
+        if (knownID && (await getEventOutboxDeletion(row, knownID))) {
+          remoteSnapshot = snapshot({ externalEventId: knownID }, null);
+          throw new ProviderEventWriteError("provider-conflict");
+        }
+      }
+      const patch = revivePatch(row.payload.patch);
+      let recovered = false;
+      if (row.reconciling || row.action === "delete") {
+        if (row.action === "create") {
+          if (!identity || !adapter.findCreatedEvent) {
+            await finishEventOutbox(
+              row.id,
+              token,
+              "blocked",
+              "create-recovery-unavailable",
+              { uncertain: true },
+            );
+            return;
+          }
+          const evidence = await adapter.findCreatedEvent(
+            row.userID,
+            row.accountID,
+            row.externalCalendarID,
+            identity,
+          );
+          if (evidence) {
+            remoteSnapshot = snapshot(evidence.ref, evidence);
+            if (!matchesDeliveredEvent(row.provider, expected, evidence.event))
+              throw new ProviderEventWriteError("provider-conflict");
+            resultRef = evidence.ref;
+            remoteSnapshot = null;
+            recovered = true;
+          } else if (row.provider !== "google" && row.provider !== "caldav") {
+            await finishEventOutbox(
+              row.id,
+              token,
+              "blocked",
+              "create-outcome-unknown",
+              { uncertain: true },
+            );
+            return;
+          }
+        } else if (expectedRef) {
+          if (!adapter.readEvent)
+            throw new EventWriteError("event-write", "unsupported");
+          const evidence = await adapter.readEvent(
+            row.userID,
+            row.accountID,
+            row.externalCalendarID,
+            expectedRef,
+            signal,
+          );
+          remoteSnapshot = snapshot(expectedRef, evidence);
+          if (!evidence && row.action === "delete") recovered = true;
+          else if (
+            evidence &&
+            strongEventEtag(expectedRef.etag) &&
+            evidence.ref.etag === expectedRef.etag
+          ) {
+            // The accepted remote version still exists: conditional retry only.
+          } else if (
+            evidence &&
+            row.action === "update" &&
+            matchesDeliveredEvent(row.provider, expected, evidence.event)
+          ) {
+            resultRef = evidence.ref;
+            recovered = true;
+          } else throw new ProviderEventWriteError("provider-conflict");
+          remoteSnapshot = null;
+        } else if (row.predecessorID) {
+          throw new ProviderEventWriteError("provider-version-unavailable");
+        }
+      }
+      if (!recovered) {
+        if (row.action !== "create" && !expectedRef) {
+          if (row.predecessorID)
+            throw new ProviderEventWriteError("provider-version-unavailable");
+          await completeEventOutbox(row.id, token, null, null);
+          return;
+        }
+        await adapter.assertEventWrite(
+          row.userID,
+          row.accountID,
+          row.externalCalendarID,
+          {
+            action: row.action,
+            event,
+            patch,
+            external: expectedRef ?? undefined,
+            scopeEditValidated: row.payload.scopeEditValidated,
+            signal,
+          },
+        );
+        if (!(await checkDestination())) return;
+        signal.throwIfAborted();
+        mutationStarted = true;
+        if (row.action === "create") {
+          resultRef = await adapter.pushCreate(
+            row.userID,
+            row.accountID,
+            row.externalCalendarID,
+            event,
+            identity,
+          );
+        } else if (row.action === "update") {
+          const result = await adapter.pushUpdate(
+            row.userID,
+            row.accountID,
+            row.externalCalendarID,
+            expectedRef!.externalEventId,
+            event,
+            expectedRef!,
+            patch,
+            signal,
+          );
+          resultRef = result
+            ? {
+                externalEventId: expectedRef!.externalEventId,
+                etag: result.etag ?? null,
+                icalUid: result.icalUid ?? expectedRef!.icalUid,
+              }
+            : expectedRef;
+        } else {
+          await adapter.pushDelete(
+            row.userID,
+            row.accountID,
+            row.externalCalendarID,
+            expectedRef!.externalEventId,
+            expectedRef!,
+            signal,
+          );
+        }
+      }
+      signal.throwIfAborted();
+      await completeEventOutbox(row.id, token, resultRef, expectedRef);
+    };
+    await Promise.race([
+      run().catch(async (error) => {
+        if (
+          error instanceof ProviderEventWriteError &&
+          error.code === "provider-conflict" &&
+          !remoteSnapshot &&
+          expectedRef &&
+          adapter?.readEvent &&
+          !signal.aborted
+        ) {
+          try {
+            const observed = await adapter.readEvent(
+              row.userID,
+              row.accountID,
+              row.externalCalendarID,
+              expectedRef,
+              signal,
+            );
+            remoteSnapshot = snapshot(expectedRef, observed);
+          } catch {
+            /* Keep the conflict; absence of readable evidence is not resolution. */
+          }
+        }
+        throw error;
+      }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(
+            new ProviderEventWriteError("provider-write-failed", "unconfirmed"),
+          );
+        }, options.timeoutMs ?? 45_000);
+      }),
+    ]);
+  } catch (error) {
+    const providerError =
+      error instanceof ProviderEventWriteError ? error : undefined;
+    const uncertain =
+      row.reconciling ||
+      (mutationStarted && providerError?.outcome !== "not-written");
+    const conflict = providerError?.code === "provider-conflict";
+    const retryableStatus =
+      providerError?.providerStatus === 429 ||
+      providerError?.providerStatus === 408 ||
+      (providerError?.providerStatus ?? 0) >= 500;
+    const blocked =
+      error instanceof EventWriteError ||
+      (error instanceof ProviderAuthError && error.reconnectRequired) ||
+      (providerError &&
+        !conflict &&
+        !retryableStatus &&
+        providerError.outcome !== "unconfirmed");
+    const delay = Math.max(
+      providerError?.retryAfterMs ?? 0,
+      Math.min(3_600_000, 1_000 * 2 ** Math.min(row.attempts, 12)) *
+        (0.75 + Math.random() * 0.5),
+    );
+    await finishEventOutbox(
+      row.id,
+      token,
+      conflict
+        ? "conflict"
+        : blocked
+          ? "blocked"
+          : uncertain
+            ? "unconfirmed"
+            : "retry",
+      providerError?.code ??
+        (blocked ? "provider-permission-unavailable" : "provider-write-failed"),
+      {
+        uncertain,
+        nextAttemptAt: new Date(
+          Date.now() + Math.min(delay, 8.64e15 - Date.now()),
+        ),
+        ...(remoteSnapshot ? { remoteSnapshot } : {}),
+        ...(resultRef ? { resultRef } : {}),
+      },
+    );
+  } finally {
+    clearInterval(heartbeat);
+    if (timeout) clearTimeout(timeout);
+    controller.abort();
+  }
+  return getEventOutboxRow(row.id);
+}

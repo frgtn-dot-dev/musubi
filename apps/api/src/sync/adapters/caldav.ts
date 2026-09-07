@@ -845,9 +845,11 @@ async function readEventResource(
   authorization: string,
   externalEventId: string,
   ref?: ExternalEventRef,
+  signal?: AbortSignal,
 ) {
   const etag = requireEventEtag(ref?.etag);
   const response = await caldavFetch(externalEventId, {
+    signal,
     headers: {
       authorization,
       accept: "text/calendar",
@@ -871,6 +873,7 @@ async function readEventResource(
 
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
+  projectEvent(event) { return icalToNormalized({ url: event.id, data: toIcal(event) })!; },
 
   async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
     const accounts = await getCaldavAccountsByUser(userID);
@@ -1006,7 +1009,7 @@ export const caldavAdapter: CalendarAdapter = {
       operation.action === "update" && operation.external
         ? operation.external.externalEventId
         : externalCalendarId;
-    const privileges = await caldavEventPrivileges(target, authorization);
+    const privileges = await caldavEventPrivileges(target, authorization, operation.signal);
     assertEventWriteEvidence(
       caldavAllows(privileges, operation.action),
       "event-write",
@@ -1017,6 +1020,7 @@ export const caldavAdapter: CalendarAdapter = {
           authorization,
           operation.external.externalEventId,
           operation.external,
+          operation.signal,
         );
         // Exercise the exact preserving path before any DB or provider mutation.
         if (operation.action === "update")
@@ -1041,6 +1045,7 @@ export const caldavAdapter: CalendarAdapter = {
           const collectionPrivileges = await caldavEventPrivileges(
             externalCalendarId,
             authorization,
+            operation.signal,
           );
           const canCreate = caldavAllows(collectionPrivileges, "create");
           if (canCreate !== true)
@@ -1055,6 +1060,7 @@ export const caldavAdapter: CalendarAdapter = {
           const addresses = await caldavOrganizerAddresses(
             externalCalendarId,
             authorization,
+            operation.signal,
           );
           const self = addresses?.includes(
             organizer.replace(/^mailto:/i, "").toLowerCase(),
@@ -1070,12 +1076,31 @@ export const caldavAdapter: CalendarAdapter = {
     }
   },
 
+  async readEvent(_userID, accountId, _externalCalendarId, ref, signal) {
+    const response = await caldavFetch(ref.externalEventId, {
+      headers: { authorization: await basicAuthForAccount(accountId), accept: "text/calendar", "Cache-Control": "no-cache" }, signal,
+    });
+    if (response.status === 404) return null;
+    assertCompleteEventReadResponse(response);
+    const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
+    const selected = eventMaster(data, ref.icalUid);
+    replaceEventProperties(data, selected.index, new Map());
+    if (componentString(selected.master, "status")?.toUpperCase() === "CANCELLED")
+      throw new ProviderEventWriteError("provider-conflict");
+    const fields = veventToFields(selected.master);
+    if (!fields) throw new ProviderEventWriteError("provider-write-failed");
+    const etag = strongEventEtag(response.headers.get("etag"));
+    const event = assertCreatedEventEvidence({ ...fields, externalId: ref.externalEventId, etag, icalUid: selected.uid, url: null, status: "active" });
+    return { ref: { externalEventId: ref.externalEventId, etag, icalUid: selected.uid }, event };
+  },
+
   async findCreatedEvent(_userID, accountId, externalCalendarId, identity) {
     const { url, uid } = caldavEventCreateIdentity(
       externalCalendarId,
       identity,
     );
     const response = await caldavFetch(url, {
+        signal: identity.signal,
       headers: {
         authorization: await basicAuthForAccount(accountId),
         accept: "text/calendar",
@@ -1121,6 +1146,7 @@ export const caldavAdapter: CalendarAdapter = {
         identity,
       );
       const response = await caldavFetch(url, {
+        signal: identity.signal,
         method: "PUT",
         headers: {
           authorization: await basicAuthForAccount(accountId),
@@ -1165,6 +1191,7 @@ export const caldavAdapter: CalendarAdapter = {
     event: Event,
     ref,
     patch,
+    signal,
   ) {
     requireEventPatch(patch);
     requireEventEtag(ref?.etag);
@@ -1173,10 +1200,12 @@ export const caldavAdapter: CalendarAdapter = {
       authorization,
       externalEventId,
       ref,
+      signal,
     );
     const data = patchEventIcal(current.data, event, current.uid, patch);
     if (data === current.data) return; // Known no-op; retain accepted validator.
     const res = await caldavFetch(externalEventId, {
+      signal,
       method: "PUT",
       headers: {
         authorization,
@@ -1198,10 +1227,12 @@ export const caldavAdapter: CalendarAdapter = {
     _externalCalendarId,
     externalEventId,
     ref,
+    signal,
   ) {
     const etag = requireEventEtag(ref?.etag);
     const authorization = await basicAuthForAccount(accountId);
     const res = await caldavFetch(externalEventId, {
+      signal,
       method: "DELETE",
       headers: { authorization, "If-Match": etag },
     });

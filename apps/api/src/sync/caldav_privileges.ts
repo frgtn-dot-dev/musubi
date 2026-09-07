@@ -4,17 +4,17 @@ import { createGuardedCaldavFetch } from "./caldav_client";
 const fetch = createGuardedCaldavFetch();
 
 /** Only successful propstats for the requested resource are permission evidence. */
-async function properties(url: string, authorization: string, props: Record<string, unknown>) {
+async function properties(url: string, authorization: string, props: Record<string, unknown>, signal?: AbortSignal) {
   const responses = await propfind({
-    url, depth: "0", props, headers: { authorization }, fetch,
+    url, depth: "0", props, headers: { authorization }, fetch: (input, init) => fetch(input, { ...init, signal }),
   });
   return responses.find((response) =>
     response.ok && response.href && new URL(response.href, url).href === new URL(url).href,
   )?.props;
 }
 
-export async function caldavEventPrivileges(url: string, authorization: string) {
-  const props = await properties(url, authorization, { "d:current-user-privilege-set": {} });
+export async function caldavEventPrivileges(url: string, authorization: string, signal?: AbortSignal) {
+  const props = await properties(url, authorization, { "d:current-user-privilege-set": {} }, signal);
   const value = props?.currentUserPrivilegeSet;
   if (value == null) return undefined;
   const privileges = value.privilege == null ? []
@@ -32,14 +32,14 @@ export function caldavAllows(
   );
 }
 
-export async function caldavOrganizerAddresses(url: string, authorization: string) {
-  const props = await properties(url, authorization, { "d:current-user-principal": {} });
+export async function caldavOrganizerAddresses(url: string, authorization: string, signal?: AbortSignal) {
+  const props = await properties(url, authorization, { "d:current-user-principal": {} }, signal);
   const href = props?.currentUserPrincipal?.href;
   if (typeof href !== "string") return undefined;
   const principal = new URL(href, url);
   // Do not send credentials to an unrelated principal origin.
   if (principal.origin !== new URL(url).origin) return undefined;
-  const addresses = await properties(principal.href, authorization, { "c:calendar-user-address-set": {} });
+  const addresses = await properties(principal.href, authorization, { "c:calendar-user-address-set": {} }, signal);
   const values = addresses?.calendarUserAddressSet?.href;
   if (values == null) return undefined;
   return (Array.isArray(values) ? values : [values])

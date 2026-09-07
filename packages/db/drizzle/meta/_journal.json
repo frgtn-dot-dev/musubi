@@ -421,6 +421,20 @@
       "when": 1788774150459,
       "tag": "0059_event_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788777099248,
+      "tag": "0060_event_outbox_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1788779245607,
+      "tag": "0061_external_event_tombstones",
+      "breakpoints": true
     }
   ]
 }

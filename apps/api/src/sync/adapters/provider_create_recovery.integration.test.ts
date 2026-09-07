@@ -8,6 +8,8 @@ import {
   db,
   saveCaldavAccount,
   user,
+  createCalendar, createEvent, externalCalendars, eventOutbox, externalEvents,
+  claimEventOutbox, upsertExternalEvent, getEvent,
 } from "@musubi/db";
 import { EventSchema } from "@musubi/types";
 import { encryptSecret } from "../crypto";
@@ -19,6 +21,7 @@ import {
   googleEventCreateID,
 } from "../event_create_identity";
 import { ProviderEventWriteError } from "../event_write";
+import { deliverEventOutbox } from "../event_delivery";
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
@@ -58,6 +61,8 @@ async function main() {
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(value));
       };
+      if (req.method === "GET" && url.pathname.includes("/users/me/calendarList/"))
+        return json({ accessRole: "owner" });
       if (
         req.method === "GET" &&
         url.pathname.startsWith("/v1.0/") &&
@@ -380,6 +385,45 @@ async function main() {
       1,
       "Graph recovery is read-only; no assumed unlimited transactionId replay window",
     );
+    for (const adapter of [googleAdapter, microsoftAdapter, caldavAdapter]) {
+      for (const isAllDay of [false, true]) {
+      const local = await createCalendar({ creatorID: owner, name: "Worker recovery", color: "#112233" });
+      const remoteCalendar = adapter.provider === "caldav" ? `${origin}/worker-${local.id}/` : `worker-${local.id}`;
+      const accountID = adapter.provider === "caldav" ? dav.id : "primary";
+      const [link] = await db.insert(externalCalendars).values({
+        provider: adapter.provider, userID: owner, accountID, calendarID: local.id, externalCalendarID: remoteCalendar,
+      }).returning();
+      const value = { ...event, isAllDay, start: new Date("2026-01-01T09:00:00.123Z"), end: new Date("2026-01-01T10:00:00.456Z"), description: "  Preserve whitespace  ", id: randomUUID(), originCalendarID: local.id, calendars: [local.id] };
+      const operationID = randomUUID();
+      await createEvent(value, [local.id], [{
+        id: operationID, actorID: owner, mutationID: randomUUID(), position: 0,
+        eventID: value.id, calendarID: local.id, externalCalendarLinkID: link.id,
+        provider: adapter.provider, userID: owner, accountID, externalCalendarID: remoteCalendar,
+        action: "create", payload: { event: value, createIdentityVersion: 1 },
+      }]);
+      await claimEventOutbox(operationID);
+      loseResponse = true;
+      await assert.rejects(() => adapter.pushCreate(owner, accountID, remoteCalendar, value, { operationID }));
+      const remote = await adapter.findCreatedEvent!(owner, accountID, remoteCalendar, { operationID });
+      assert.ok(remote);
+      // Pull races the lost ACK. It must not import a second local event.
+      await upsertExternalEvent(adapter.provider, owner, local.id, remoteCalendar, remote.ref.externalEventId, {
+        ...remote.event, color: "#112233", organizer: remote.event.organizer ?? "",
+      }, remote.ref.etag ?? null, remote.ref.icalUid ?? null, operationID);
+      assert.equal((await getEvent(value.id)).revision, 1);
+      assert.equal((await db.select().from(externalEvents).where(eq(externalEvents.calendarID, local.id))).length, 0);
+      await db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, operationID));
+      const writesBeforeRecovery = writes;
+      const results = await Promise.all([
+        deliverEventOutbox(operationID, () => adapter), deliverEventOutbox(operationID, () => adapter),
+      ]);
+      assert.ok(results.some((result) => result?.status === "completed"));
+      assert.equal(writes, writesBeforeRecovery, "restart reconciliation never sends a second create");
+      const [mapping] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, value.id));
+      assert.equal(mapping.externalEventID, remote.ref.externalEventId);
+      assert.equal(mapping.etag, remote.ref.etag);
+      }
+    }
     console.log(
       "K08a provider create identity and lost-response recovery: Google, Graph paging, CalDAV conditional resource OK",
     );
