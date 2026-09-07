@@ -18,6 +18,7 @@ import {
 import {
   BadRequestError,
   type Event,
+  EventSchema,
   EventCreateRequestSchema,
   EventDeleteRequestSchema,
   EventUnlinkRequestSchema,
@@ -377,13 +378,8 @@ export async function handlerForkEvent(req: Request, res: Response) {
 
   const newEvent: NewEvent = {
     ...EventCreateRequestSchema.parse(
-      (({
-        revision: _revision,
-        deletedAt: _deletedAt,
-        updatedAt: _updatedAt,
-        createdAt: _createdAt,
-        ...event
-      }) => event)(source),
+      // Project supported event content, not every database metadata column.
+      EventSchema.omit({ revision: true }).parse(source),
     ),
     id: randomUUID(),
     creatorID: req.user!.id,

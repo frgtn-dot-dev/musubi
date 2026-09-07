@@ -11,6 +11,8 @@ import {
   uuid,
   integer,
   unique,
+  uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
   DEFAULT_NOTIFICATION_EMAILS,
@@ -19,6 +21,8 @@ import {
   type ReminderRule,
   type TaskStatus,
   type Event,
+  type EventTimeModel,
+  type OccurrenceStart,
 } from "@musubi/types";
 
 // drizzle has no built-in bytea — minimal custom type
@@ -265,6 +269,11 @@ export const events = pgTable("events", {
   hasAttendees: boolean("has_attendees").notNull().default(false),
   organizer: text("organizer").notNull(),
   recurrence: text("recurrence"),
+  // Null is unresolved legacy semantics, never the database/server timezone.
+  // Writers remain disabled until revision-CAS and provider projections support it.
+  timeModel: jsonb("time_model").$type<EventTimeModel>(),
+  seriesID: uuid("series_id").references((): AnyPgColumn => events.id),
+  originalStart: jsonb("original_start").$type<OccurrenceStart>(),
   url: text("url"),
   // home calendar — where the event was created / claimed. Edit-content is gated by
   // editEvents on THIS calendar; links into other calendars are read-only shares.
@@ -273,7 +282,11 @@ export const events = pgTable("events", {
     onDelete: "set null",
   }),
   deletedAt: timestamp("deleted_at"), // soft-delete tombstone for delta sync (null = live)
-});
+}, (t) => [
+  check("events_occurrence_pair_check", sql`(${t.seriesID} is null) = (${t.originalStart} is null)`),
+  check("events_occurrence_not_self_check", sql`${t.seriesID} is null or ${t.seriesID} <> ${t.id}`),
+  uniqueIndex("events_series_original_start_unique").on(t.seriesID, t.originalStart).where(sql`${t.seriesID} is not null`),
+]);
 
 export type NewEvent = typeof events.$inferInsert;
 
@@ -805,8 +818,15 @@ export const externalEvents = pgTable(
     etag: text("etag"),
     // Resource URL addresses the object; iCalendar UID is its stable identity.
     icalUid: text("ical_uid"),
+    // Destination-scoped recurrence identity; never a cross-account UID join.
+    externalSeriesID: text("external_series_id"),
+    originalStart: jsonb("original_start").$type<OccurrenceStart>(),
   },
-  (t) => [unique().on(t.provider, t.calendarID, t.externalEventID)],
+  (t) => [
+    unique().on(t.provider, t.calendarID, t.externalEventID),
+    check("external_events_occurrence_series_check", sql`${t.originalStart} is null or ${t.externalSeriesID} is not null`),
+    index("external_events_series_idx").on(t.provider, t.calendarID, t.externalSeriesID).where(sql`${t.externalSeriesID} is not null`),
+  ],
 );
 
 export type NewExternalEvent = typeof externalEvents.$inferInsert;

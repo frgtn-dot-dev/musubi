@@ -245,7 +245,9 @@ Použít stávající cache, query invalidation, SSE a UI primitives. Retry endp
 
 ### K10 — Časový model a identita výskytu
 
-**K10 kontrakt — rozpracováno:** [konkrétní návrh schématu a rollout](../sync/event-time-model.md), striktní samostatné kontrakty time model / original start / occurrence identity. Nezapojují se zatím do event DTO ani writable requestů. Následuje aditivní storage, sdílená expanze a atomické napojení čtení/zápisů; samotný kontrakt neuzavírá K10.
+**K10 kontrakt převzat (PR #130, squash `5cc7a08`, 2026-09-07):** [konkrétní návrh schématu a rollout](../sync/event-time-model.md), striktní samostatné kontrakty time model / original start / occurrence identity. Nezapojují se zatím do event DTO ani writable requestů. Čisté review `39e0dca..863e47e` bez nálezů; root check, kontrakt testovaný v UTC/Prague/New_York a všech 14 CI kontrol prošly. Následuje aditivní storage, sdílená expanze a atomické napojení čtení/zápisů; samotný kontrakt neuzavírá K10.
+
+**K10 storage — rozpracováno:** migrace0063 přidává nullable metadata a strukturální vazby výskytu, bez změny starých instantů/revizí a bez outbox zápisů. Skutečný upgrade0062→0063 zachoval všechny staré hodnoty časované i all-day události. Zápis známé metadata, ownership/nesting kontrola a providerová rehydratace se teprve napojí; CalDAV komponenty sdílející resource vyžadují v K11 samostatné component mapping.
 
 Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migrace:
 
