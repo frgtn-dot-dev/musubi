@@ -135,6 +135,7 @@ export function toNormalized(item: any): NormalizedEvent {
     // Opaque provider metadata only. changeKey is NOT an If-Match guarantee.
     etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
     status: "active",
+    creationOperationID: typeof item.transactionId === "string" ? item.transactionId : undefined,
     title: item.subject ?? "(untitled)",
     start,
     end,
@@ -589,6 +590,7 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 
 export const microsoftAdapter: CalendarAdapter = {
   provider: "microsoft",
+  projectEvent(event) { return toNormalized({ ...toGraphEvent(event), id: event.id }); },
 
   async listAccounts(
     userID: string,
@@ -688,7 +690,7 @@ export const microsoftAdapter: CalendarAdapter = {
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}?$select=canEdit`,
-      { headers },
+      { headers, signal: operation.signal },
     );
     assertEventWriteResponse(response);
     const calendar = await response.json();
@@ -696,7 +698,7 @@ export const microsoftAdapter: CalendarAdapter = {
     if (operation.action !== "create" && operation.external) {
       const response = await fetch(
         `${GRAPH}${microsoftEventPath(externalCalendarId, operation.external.externalEventId)}?$select=isOrganizer`,
-        { headers },
+        { headers, signal: operation.signal },
       );
       assertEventWriteResponse(response);
       const current = await response.json();
@@ -736,6 +738,7 @@ export const microsoftAdapter: CalendarAdapter = {
           "Cache-Control": "no-cache",
         },
         redirect: "error",
+        signal: identity?.signal,
       });
       assertCompleteEventReadResponse(response);
       const data: { value: unknown; "@odata.nextLink"?: string } =
@@ -794,6 +797,7 @@ export const microsoftAdapter: CalendarAdapter = {
             : {}),
         }),
         redirect: "error",
+        signal: identity?.signal,
       },
     );
     assertProviderEventMutationResponse(res);

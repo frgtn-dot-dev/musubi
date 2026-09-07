@@ -811,6 +811,15 @@ export const externalEvents = pgTable(
 
 export type NewExternalEvent = typeof externalEvents.$inferInsert;
 
+/** A delete delta may precede an outbound create mapping. Retain the remote
+ * address until its connection is removed; cursor advancement cannot erase it. */
+export const externalEventTombstones = pgTable("external_event_tombstones", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  externalCalendarLinkID: uuid("external_calendar_link_id").notNull().references(() => externalCalendars.id, { onDelete: "cascade" }),
+  externalEventID: text("external_event_id").notNull(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [unique().on(t.externalCalendarLinkID, t.externalEventID)]);
+
 /** Internal EVENT provider intent. Remote addresses deliberately outlive mapping
  * and event deletion; owner deletion purges private payloads. No credentials. */
 export const eventOutbox = pgTable(
@@ -841,6 +850,7 @@ export const eventOutbox = pgTable(
         patch?: Record<string, unknown>;
         scopeEditValidated?: boolean;
         createIdentityVersion?: 1;
+        providerProjection?: Pick<Event, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
       }>()
       .notNull(),
     status: text("status")
@@ -852,11 +862,32 @@ export const eventOutbox = pgTable(
         | "conflict"
         | "not-written"
         | "unconfirmed"
+        | "retry"
+        | "blocked"
+        | "cancelled"
       >()
       .notNull()
       .default("pending"),
     attempts: integer("attempts").notNull().default(0),
     attemptedAt: timestamp("attempted_at"),
+    leaseToken: uuid("lease_token"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    uncertain: boolean("uncertain").notNull().default(false),
+    resultRef: jsonb("result_ref").$type<{
+      externalEventId: string;
+      etag?: string | null;
+      icalUid?: string | null;
+    }>(),
+    remoteSnapshot: jsonb("remote_snapshot").$type<{
+      isEcho?: boolean;
+      externalEventId: string;
+      values?: Record<string, unknown>;
+      etag: string | null;
+      icalUid?: string | null;
+      deleted: boolean;
+      observedAt: string;
+    }>(),
     errorCode: text("error_code"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -869,8 +900,8 @@ export const eventOutbox = pgTable(
     ),
     index("event_outbox_event_revision_idx").on(t.eventID, t.revision),
     index("event_outbox_pending_idx")
-      .on(t.createdAt, t.id)
-      .where(sql`${t.status} = 'pending'`),
+      .on(t.nextAttemptAt, t.id)
+      .where(sql`${t.status} in ('pending', 'retry', 'attempting', 'unconfirmed')`),
     check("event_outbox_revision_check", sql`${t.revision} > 0`),
     check(
       "event_outbox_attempts_check",
@@ -882,7 +913,7 @@ export const eventOutbox = pgTable(
     ),
     check(
       "event_outbox_status_check",
-      sql`${t.status} in ('pending', 'attempting', 'completed', 'not-needed', 'conflict', 'not-written', 'unconfirmed')`,
+      sql`${t.status} in ('pending', 'attempting', 'completed', 'not-needed', 'conflict', 'not-written', 'unconfirmed', 'retry', 'blocked', 'cancelled')`,
     ),
   ],
 );

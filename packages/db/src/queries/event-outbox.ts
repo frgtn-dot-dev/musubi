@@ -1,4 +1,5 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Event } from "@musubi/types";
 import { db } from "..";
 import { eventOutbox } from "../schema";
@@ -42,7 +43,9 @@ export async function reserveEventMutation(
   eventID: string,
   intents: readonly EventOutboxIntent[],
 ) {
-  const selected = intents.filter((intent) => intent.eventID.toLowerCase() === eventID?.toLowerCase());
+  const selected = intents.filter(
+    (intent) => intent.eventID.toLowerCase() === eventID?.toLowerCase(),
+  );
   if (!selected.length) return;
   const first = selected[0];
   if (
@@ -78,7 +81,9 @@ export async function appendEventOutbox(
   event: Event,
   intents: readonly EventOutboxIntent[],
 ) {
-  for (const intent of intents.filter((item) => item.eventID.toLowerCase() === event.id.toLowerCase())) {
+  for (const intent of intents.filter(
+    (item) => item.eventID.toLowerCase() === event.id.toLowerCase(),
+  )) {
     const [predecessor] = await tx
       .select({ id: eventOutbox.id })
       .from(eventOutbox)
@@ -86,6 +91,7 @@ export async function appendEventOutbox(
         and(
           eq(eventOutbox.eventID, event.id),
           eq(eventOutbox.calendarID, intent.calendarID),
+          eq(eventOutbox.externalCalendarLinkID, intent.externalCalendarLinkID),
         ),
       )
       .orderBy(
@@ -116,40 +122,147 @@ export async function appendEventOutbox(
   }
 }
 
-/** K07 only makes the request's first attempt durable. A crash after this claim
- * is an ambiguous attempt, NEVER automatically claimed again. K08 owns recovery. */
+export type EventOutboxRow = typeof eventOutbox.$inferSelect;
+export const EVENT_OUTBOX_LEASE_MS = 120_000;
+
+function eligibleEventOutbox() {
+  return sql`${eventOutbox.nextAttemptAt} <= clock_timestamp() and (
+    ${eventOutbox.status} in ('pending', 'retry', 'unconfirmed') or
+    (${eventOutbox.status} = 'attempting' and (${eventOutbox.leaseUntil} is null or ${eventOutbox.leaseUntil} <= clock_timestamp()))
+  ) and (${eventOutbox.predecessorID} is null or exists (
+    select 1 from event_outbox predecessor where predecessor.id = ${eventOutbox.predecessorID}
+    and predecessor.status in ('completed', 'not-needed')
+  ))`;
+}
+
+export async function getDueEventOutboxIDs(limit = 50) {
+  return db
+    .select({ id: eventOutbox.id })
+    .from(eventOutbox)
+    .where(eligibleEventOutbox())
+    .orderBy(
+      asc(eventOutbox.nextAttemptAt),
+      asc(eventOutbox.createdAt),
+      asc(eventOutbox.id),
+    )
+    .limit(limit);
+}
+
+export async function getEventOutboxBacklog() {
+  return db
+    .select({
+      provider: eventOutbox.provider,
+      status: eventOutbox.status,
+      count: sql<number>`count(*)::int`,
+      ageSeconds: sql<number>`greatest(0, extract(epoch from clock_timestamp() - min(${eventOutbox.createdAt})))::float`,
+    })
+    .from(eventOutbox)
+    .where(
+      sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`,
+    )
+    .groupBy(eventOutbox.provider, eventOutbox.status);
+}
+
+/** Short claim transaction; no network and no event/map locks. Every completion
+ * is fenced by this claim's token. Expired attempts require reconciliation. */
 export async function claimEventOutbox(id: string) {
-  const [row] = await db
+  return db.transaction(async (tx) => {
+    const [previous] = await tx
+      .select()
+      .from(eventOutbox)
+      .where(and(eq(eventOutbox.id, id), eligibleEventOutbox()))
+      .for("update", { skipLocked: true });
+    if (!previous) return undefined;
+    const [row] = await tx
+      .update(eventOutbox)
+      .set({
+        status: "attempting",
+        attempts: sql`${eventOutbox.attempts} + 1`,
+        attemptedAt: new Date(),
+        updatedAt: new Date(),
+        uncertain: true,
+        leaseToken: randomUUID(),
+        leaseUntil: sql`clock_timestamp() + interval '120 seconds'`,
+      })
+      .where(eq(eventOutbox.id, id))
+      .returning();
+    return {
+      ...row,
+      reconciling:
+        previous.uncertain ||
+        previous.status === "attempting" ||
+        previous.status === "unconfirmed",
+    };
+  });
+}
+
+export async function renewEventOutboxLease(id: string, leaseToken: string) {
+  const rows = await db
+    .update(eventOutbox)
+    .set({ leaseUntil: sql`clock_timestamp() + interval '120 seconds'` })
+    .where(
+      and(
+        eq(eventOutbox.id, id),
+        eq(eventOutbox.status, "attempting"),
+        eq(eventOutbox.leaseToken, leaseToken),
+        sql`${eventOutbox.leaseUntil} > clock_timestamp()`,
+      ),
+    )
+    .returning({ id: eventOutbox.id });
+  return rows.length === 1;
+}
+
+export async function setEventOutboxProjection(
+  id: string,
+  leaseToken: string,
+  projection: NonNullable<EventOutboxRow["payload"]["providerProjection"]>,
+) {
+  const rows = await db
     .update(eventOutbox)
     .set({
-      status: "attempting",
-      attempts: sql`${eventOutbox.attempts} + 1`,
-      attemptedAt: new Date(),
-      updatedAt: new Date(),
+      payload: sql`jsonb_set(${eventOutbox.payload}, '{providerProjection}', ${JSON.stringify(projection)}::jsonb)`,
     })
     .where(
       and(
         eq(eventOutbox.id, id),
-        eq(eventOutbox.status, "pending"),
-        sql`(
-    ${eventOutbox.predecessorID} is null or exists (
-      select 1 from event_outbox predecessor where predecessor.id = ${eventOutbox.predecessorID}
-      and predecessor.status in ('completed', 'not-needed')
-    ))`,
+        eq(eventOutbox.status, "attempting"),
+        eq(eventOutbox.leaseToken, leaseToken),
+        sql`${eventOutbox.leaseUntil} > clock_timestamp()`,
       ),
     )
-    .returning();
-  return row;
+    .returning({ id: eventOutbox.id });
+  return rows.length === 1;
 }
 
 export async function finishEventOutbox(
   id: string,
-  status:
-    "completed" | "not-needed" | "conflict" | "not-written" | "unconfirmed",
+  leaseToken: string,
+  status: Exclude<EventOutboxRow["status"], "pending" | "attempting">,
   errorCode: string | null = null,
+  details: Pick<
+    Partial<EventOutboxRow>,
+    "uncertain" | "nextAttemptAt" | "resultRef" | "remoteSnapshot"
+  > = {},
 ) {
-  await db
+  const rows = await db
     .update(eventOutbox)
-    .set({ status, errorCode, updatedAt: new Date() })
-    .where(and(eq(eventOutbox.id, id), eq(eventOutbox.status, "attempting")));
+    .set({
+      status,
+      errorCode,
+      updatedAt: new Date(),
+      leaseToken: null,
+      leaseUntil: null,
+      uncertain: status === "unconfirmed",
+      ...details,
+    })
+    .where(
+      and(
+        eq(eventOutbox.id, id),
+        eq(eventOutbox.status, "attempting"),
+        eq(eventOutbox.leaseToken, leaseToken),
+        sql`${eventOutbox.leaseUntil} > clock_timestamp()`,
+      ),
+    )
+    .returning({ id: eventOutbox.id });
+  return rows.length === 1;
 }

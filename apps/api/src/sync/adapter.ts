@@ -4,6 +4,7 @@ import type { EventContentPatch } from "@musubi/db";
 // A calendar event reduced to what Musubi stores, provider-agnostic.
 // Adapters translate their own format (Google JSON / Graph JSON / iCal) <-> this.
 export type NormalizedEvent = {
+  creationOperationID?: string;
   externalId: string;
   status: "active" | "cancelled"; // cancelled => delete locally
   title: string;
@@ -50,7 +51,7 @@ export type ExternalEventRef = {
 };
 
 /** Identity of one persisted create intent, never a new ID on retry. */
-export type EventCreateIdentity = { operationID: string };
+export type EventCreateIdentity = { operationID: string; signal?: AbortSignal };
 export type CreatedEventEvidence = {
   ref: ExternalEventRef;
   event: NormalizedEvent;
@@ -63,6 +64,7 @@ export type ExternalTaskRef = {
 };
 
 export type EventWriteOperation = {
+  signal?: AbortSignal;
   action: "create" | "update" | "delete";
   event: Event;
   previous?: Event;
@@ -102,6 +104,7 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   provider: string;
+  projectEvent?(event: Event): Pick<NormalizedEvent, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
 
   // Connected accounts for this provider (id = Better Auth account.accountId for
   // OAuth / caldav_accounts.id for CalDAV; label = human name e.g. email/username).
@@ -151,6 +154,14 @@ export type CalendarAdapter = {
     externalCalendarId: string,
     identity: EventCreateIdentity,
   ): Promise<CreatedEventEvidence | null>;
+  // Read current content without accepting its validator as a write baseline.
+  readEvent?(
+    userID: string,
+    accountId: string,
+    externalCalendarId: string,
+    ref: ExternalEventRef,
+    signal?: AbortSignal,
+  ): Promise<CreatedEventEvidence | null>;
   pushUpdate(
     userID: string,
     accountId: string,
@@ -159,6 +170,7 @@ export type CalendarAdapter = {
     event: Event,
     ref?: ExternalEventRef,
     patch?: EventContentPatch,
+    signal?: AbortSignal,
   ): Promise<{ etag?: string | null; icalUid?: string | null } | void>;
   pushDelete(
     userID: string,
@@ -166,6 +178,7 @@ export type CalendarAdapter = {
     externalCalendarId: string,
     externalEventId: string,
     ref?: ExternalEventRef,
+    signal?: AbortSignal,
   ): Promise<void>;
 
   pushTaskCreate?(

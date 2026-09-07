@@ -7,6 +7,7 @@ import {
 	calendarMembers,
 	calendars,
 	events,
+	eventOutbox,
 	externalCalendars,
 	memberTokens,
 	type NewCalendar,
@@ -149,6 +150,12 @@ export async function removeCalendarInTransaction(
 			.where(eq(events.id, event.id));
 	}
 	const eIDs = affected.map(({ event }) => ({ eventID: event.id }));
+	await tx.update(eventOutbox).set({
+		status: "cancelled", errorCode: "destination-disconnected",
+		leaseToken: null, leaseUntil: null, updatedAt: new Date(),
+		uncertain: sql`${eventOutbox.uncertain} or ${eventOutbox.status} = 'attempting'`,
+	}).where(and(eq(eventOutbox.calendarID, calendarID),
+		sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`));
 	const [result] = await tx
 		.delete(calendars)
 		.where(eq(calendars.id, calendarID))

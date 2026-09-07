@@ -131,7 +131,7 @@ import {
   handlerFederationConnect,
   handlerFederationPreview,
 } from "./handlers/federation";
-import { syncUser } from "./sync/engine";
+import { syncUser, drainEventOutbox } from "./sync/engine";
 import { getExternalSyncUserIDs } from "@musubi/db";
 import {
   middlewareMetrics,
@@ -643,6 +643,11 @@ const runExternalSync = nonOverlapping(syncExternalAccounts, () => {
   logger.warn("sync.scheduler.skipped", { reason: "previous_run_active" });
 });
 
+const runEventOutbox = nonOverlapping(async () => {
+  try { await drainEventOutbox(); }
+  catch { logger.error("sync.event_outbox.scheduler_failed", { code: "delivery-state-unavailable" }); }
+}, () => { recordScheduledTaskSkip("event_outbox"); });
+
 const runReminders = nonOverlapping(dispatchReminders, () => {
   recordScheduledTaskSkip("reminders");
   logger.warn("reminders.dispatch.skipped", { reason: "previous_run_active" });
@@ -709,6 +714,8 @@ async function start() {
   }
 
   if (config.api.externalSyncIntervalMin > 0) {
+    void runEventOutbox();
+    setInterval(() => void runEventOutbox(), 15_000);
     logger.info("sync.scheduler.enabled", {
       intervalMin: config.api.externalSyncIntervalMin,
     });
