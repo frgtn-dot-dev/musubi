@@ -88,6 +88,10 @@ async function main() {
     await assert.rejects(() => createEvent({ ...uppercase, id: uppercase.id.toLowerCase() }, [home.id],
       [{ ...uppercaseIntent, eventID: uppercase.id.toLowerCase(), mutationID: uppercaseIntent.mutationID.toUpperCase() }]),
       DuplicateEventMutationError);
+    const caseOnly = await patchEventAndCalendarLinks(uppercase.id, 1, { calendars: [home.id.toUpperCase()] });
+    assert.equal(caseOnly.status, "saved");
+    if (caseOnly.status === "saved") assert.equal(caseOnly.changed, false);
+    assert.equal((await getEvent(uppercase.id)).revision, 1);
     await db.transaction(async (tx) => {
       await lockCalendarLifecycle(tx, [home.id, home.id.toUpperCase()], "shared");
       const locks = await tx.execute<{ count: string }>(sql`select count(*)::text as count from pg_locks

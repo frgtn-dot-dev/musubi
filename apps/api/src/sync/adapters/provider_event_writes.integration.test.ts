@@ -1456,6 +1456,41 @@ async function main() {
     assert.equal((await jobsFor(durableEvent.id))[0].status, "completed");
     assert.equal((await jobsFor(durableEvent.id))[0].attempts, 1);
 
+    const beforeCaseOnlyPatch = await getExternalEvent("google", durableEvent.id, "same-calendar", mirrors[0].id);
+    const beforeCaseOnlyRequests = mutationRequests().length;
+    const caseOnlyPatch = await sendDurable("/events", {
+      id: durableEvent.id, expectedRevision: 1,
+      patch: { calendars: [mirrors[0].id.toUpperCase()] },
+    }, randomUUID(), "PATCH");
+    assert.equal(caseOnlyPatch.status, 200);
+    assert.equal((await getEvent(durableEvent.id)).revision, 1, "case-only calendar patch is a no-op");
+    assert.deepEqual(await getExternalEvent("google", durableEvent.id, "same-calendar", mirrors[0].id), beforeCaseOnlyPatch);
+    assert.equal((await jobsFor(durableEvent.id)).length, 1);
+    assert.equal(mutationRequests().length, beforeCaseOnlyRequests);
+
+    const caseOnlyLink = await sendDurable(`/events/${durableEvent.id}/link`, {
+      calendarID: mirrors[0].id.toUpperCase(), expectedRevision: 1,
+    });
+    assert.equal(caseOnlyLink.status, 200);
+    assert.equal((await getEvent(durableEvent.id)).revision, 1);
+    assert.equal((await jobsFor(durableEvent.id)).length, 1);
+    assert.equal(mutationRequests().length, beforeCaseOnlyRequests);
+    const sameCalendarFork = await sendDurable(`/events/${durableEvent.id}/fork`, {
+      calendarID: mirrors[0].id.toUpperCase(), expectedRevision: 1,
+    });
+    assert.equal(sameCalendarFork.status, 400);
+    assert.equal(mutationRequests().length, beforeCaseOnlyRequests);
+
+    // Exercise the durable delivery guards directly, without API canonicalization.
+    const directUppercase = eventIn([mirrors[0].id.toUpperCase()]);
+    directUppercase.id = directUppercase.id.toUpperCase();
+    const directDelivery = await prepareEventWrites([{
+      event: directUppercase, calendarIDs: directUppercase.calendars, action: "create",
+    }], { actorID: owner, mutationID: randomUUID().toUpperCase() });
+    const directSaved = await createEvent(directUppercase, directUppercase.calendars, directDelivery.outbox);
+    await directDelivery(undefined, directSaved.revision);
+    assert.equal((await jobsFor(directUppercase.id))[0].status, "completed");
+
     const forkKey = randomUUID();
     const forkBody = { calendarID: mirrors[1].id, expectedRevision: 1 };
     const firstFork = await sendDurable(`/events/${durableEvent.id}/fork`, forkBody, forkKey);
@@ -1471,13 +1506,13 @@ async function main() {
     assert.equal(forkJobs[0].eventID, forkedEvent.id);
 
     const linkResponse = await sendDurable(`/events/${durableEvent.id}/link`, {
-      calendarID: mirrors[1].id, expectedRevision: 1,
+      calendarID: mirrors[1].id.toUpperCase(), expectedRevision: 1,
     });
     assert.equal(linkResponse.status, 200);
     const beforeUnlink = await getExternalEvent("google", durableEvent.id, "same-calendar", mirrors[1].id);
     assert.ok(beforeUnlink);
     const unlinkResponse = await sendDurable("/events", {
-      id: durableEvent.id, expectedRevision: 2, unlinkCalendarID: mirrors[1].id,
+      id: durableEvent.id, expectedRevision: 2, unlinkCalendarID: mirrors[1].id.toUpperCase(),
     }, randomUUID(), "DELETE");
     assert.equal(unlinkResponse.status, 200);
     assert.equal(await getExternalEvent("google", durableEvent.id, "same-calendar", mirrors[1].id), null);
