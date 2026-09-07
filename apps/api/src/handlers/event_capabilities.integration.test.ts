@@ -146,7 +146,8 @@ async function main() {
           res.writeHead(201, { etag: davEtags.get(path)! });
           return res.end();
         }
-        const id = `created-${randomUUID()}`;
+        const id = method === "POST" && path.startsWith("/calendar/v3/")
+          ? (JSON.parse(body).id ?? `created-${randomUUID()}`) : `created-${randomUUID()}`;
         const eventPath = method === "POST" ? `${path}/${id}` : path;
         const etag = `"google-${++version}"`;
         googleEtags.set(`${req.headers.authorization}:${eventPath}`, etag);

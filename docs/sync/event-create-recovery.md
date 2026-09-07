@@ -55,9 +55,16 @@ remain null. Partial responses never count as complete recovery evidence.
 PostgreSQL credentials and local HTTP. It destroys the response after the fake
 provider has committed, then finds the same object without a new mutation.
 It also checks Google collision markers and sibling accounts, complete Graph
-pagination and hostile/failed next pages, CalDAV conditional PUT/UID and occupied
+pagination (including an empty continuation), selected meeting URL preservation,
+hostile/failed next pages, CalDAV conditional PUT/UID and occupied
 resources, and partial-read refusal. It is included in `pnpm test:db:sync`.
 The existing authenticated provider handler suite additionally checks that the
 first create request uses the identity already persisted in the claimed outbox.
 These fixtures do not certify live provider behavior. Test-account availability
 is still a separate K15 dependency.
+
+The first clean-context review found an empty Graph continuation being treated
+as completion and missing meeting URL fields in the lookup projection. Both have
+explicit regression fixtures; the URL fixture reproduced null instead of the
+existing URL before the fix. Final merge requires another clean-context review
+and green local/CI gates.

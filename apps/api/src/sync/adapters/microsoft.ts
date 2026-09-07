@@ -712,7 +712,7 @@ export const microsoftAdapter: CalendarAdapter = {
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}/events`,
     );
     let next: string | null =
-      `${base}?$select=id,transactionId,subject,start,end,isAllDay,isCancelled,body,location,organizer,recurrence&$top=100`;
+      `${base}?$select=id,transactionId,subject,start,end,isAllDay,isCancelled,body,location,organizer,recurrence,onlineMeeting,onlineMeetingUrl&$top=100`;
     const visited = new Set<string>();
     let found: Record<string, any> | undefined;
     // Do not assume transactionId supports $filter or has unlimited server-side
@@ -742,8 +742,8 @@ export const microsoftAdapter: CalendarAdapter = {
         await response.json();
       if (
         !Array.isArray(data.value) ||
-        (data["@odata.nextLink"] != null &&
-          typeof data["@odata.nextLink"] !== "string")
+        (data["@odata.nextLink"] !== undefined &&
+          (typeof data["@odata.nextLink"] !== "string" || !data["@odata.nextLink"] || data["@odata.nextLink"].trim() !== data["@odata.nextLink"]))
       )
         throw new ProviderEventWriteError("provider-write-failed");
       for (const item of data.value)

@@ -34,7 +34,8 @@ async function main() {
     ifNoneMatch?: string;
   }[] = [];
   let loseResponse = false;
-  let graphMode: "normal" | "duplicate" | "foreign" | "page-failure" = "normal";
+  let graphMode: "normal" | "duplicate" | "foreign" | "page-failure" | "empty" =
+    "normal";
   let writes = 0;
   let partialRead = false;
   const server = createServer((req, res) => {
@@ -64,7 +65,17 @@ async function main() {
       ) {
         const values = [...objects.entries()]
           .filter(([id]) => id.startsWith(`${key}/`))
-          .map(([, value]) => value.json);
+          .map(([, value]) => {
+            const selected = url.searchParams.get("$select")?.split(",");
+            return selected
+              ? Object.fromEntries(
+                  Object.entries(value.json).filter(
+                    ([name]) =>
+                      selected.includes(name) || name === "@odata.etag",
+                  ),
+                )
+              : value.json;
+          });
         if (url.searchParams.has("$skiptoken")) {
           if (graphMode === "page-failure") return json({}, 503);
           return json({
@@ -77,9 +88,11 @@ async function main() {
         return json({
           value: values,
           "@odata.nextLink":
-            graphMode === "foreign"
-              ? "https://attacker.invalid/events"
-              : `https://graph.microsoft.com${url.pathname}?$skiptoken=next`,
+            graphMode === "empty"
+              ? ""
+              : graphMode === "foreign"
+                ? "https://attacker.invalid/events"
+                : `https://graph.microsoft.com${url.pathname}?$skiptoken=next`,
         });
       }
       if (req.method === "GET") {
@@ -121,7 +134,12 @@ async function main() {
         const value = {
           ...data,
           id,
-          ...(google ? { etag } : { "@odata.etag": etag }),
+          ...(google
+            ? { etag }
+            : {
+                "@odata.etag": etag,
+                onlineMeeting: { joinUrl: "https://meeting.example.test/join" },
+              }),
         };
         objects.set(`${key}/${id}`, { json: value, etag });
         if (loseResponse) {
@@ -251,6 +269,7 @@ async function main() {
     );
     assert.equal(graphFound?.event.title, event.title);
     assert.ok(graphFound?.ref.externalEventId);
+    assert.equal(graphFound?.event.url, "https://meeting.example.test/join");
     assert.equal(
       await microsoftAdapter.findCreatedEvent!(owner, "primary", "remote", {
         operationID: randomUUID(),
@@ -265,6 +284,15 @@ async function main() {
         graphIdentity,
       ),
       null,
+    );
+    graphMode = "empty";
+    await assert.rejects(() =>
+      microsoftAdapter.findCreatedEvent!(
+        owner,
+        "primary",
+        "remote",
+        graphIdentity,
+      ),
     );
     graphMode = "page-failure";
     await assert.rejects(() =>
