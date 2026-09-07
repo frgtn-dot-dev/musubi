@@ -250,7 +250,7 @@ async function main() {
         }
         const id =
           method === "POST"
-            ? `created-${nextVersion}`
+            ? (JSON.parse(body).id ?? `created-${nextVersion}`)
             : (stored?.json?.id ?? "same-remote-id");
         remote.set(key(auth, method === "POST" ? `${path}/${id}` : path), {
           etag,
@@ -1448,6 +1448,8 @@ async function main() {
       assert.equal(jobs[0].status, "attempting", "durable claim precedes provider side effect");
       assert.equal(jobs[0].revision, 1);
       assert.equal(jobs[0].payload.event.revision, 1);
+      assert.equal(jobs[0].payload.createIdentityVersion, 1);
+      assert.equal(JSON.parse(mutationRequests()[mutationRequests().length - 1].body).id, `musubi${jobs[0].id.replace(/-/g, "")}`);
       assert.equal((await getEvent(durableEvent.id)).revision, 1, "local commit precedes HTTP");
     };
     const durableCreated = await sendDurable("/events", durableEvent);

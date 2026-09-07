@@ -19,7 +19,8 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
-import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, canonicalEventRecurrence } from "../event_write";
+import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, canonicalEventRecurrence, assertProviderEventMutationResponse, ProviderEventWriteError } from "../event_write";
+import { assertCompleteEventReadResponse, assertCreatedEventEvidence, eventCreateOperationID } from "../event_create_identity";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TASK_LIST_PREFIX = "musubi-microsoft-task-list:";
@@ -704,10 +705,78 @@ export const microsoftAdapter: CalendarAdapter = {
     }
   },
 
-  async pushCreate(userID, accountId, externalCalendarId, event: Event) {
+  async findCreatedEvent(userID, accountId, externalCalendarId, identity) {
+    const operationID = eventCreateOperationID(identity);
+    const accessToken = await getAccessToken(userID, accountId);
+    const base = new URL(
+      `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}/events`,
+    );
+    let next: string | null =
+      `${base}?$select=id,transactionId,subject,start,end,isAllDay,isCancelled,body,location,organizer,recurrence,onlineMeeting,onlineMeetingUrl&$top=100`;
+    const visited = new Set<string>();
+    let found: Record<string, any> | undefined;
+    // Do not assume transactionId supports $filter or has unlimited server-side
+    // retention. Inspect the complete scoped listing; missing is NOT retry proof.
+    while (next) {
+      const url: URL = new URL(next);
+      if (
+        url.origin !== base.origin ||
+        url.pathname !== base.pathname ||
+        url.username ||
+        url.password ||
+        visited.has(url.href) ||
+        visited.size >= 1000
+      )
+        throw new ProviderEventWriteError("provider-write-failed");
+      visited.add(url.href);
+      const response: Response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Prefer: 'outlook.timezone="UTC"',
+          "Cache-Control": "no-cache",
+        },
+        redirect: "error",
+      });
+      assertCompleteEventReadResponse(response);
+      const data: { value: unknown; "@odata.nextLink"?: string } =
+        await response.json();
+      if (
+        !Array.isArray(data.value) ||
+        (data["@odata.nextLink"] !== undefined &&
+          (typeof data["@odata.nextLink"] !== "string" || !data["@odata.nextLink"] || data["@odata.nextLink"].trim() !== data["@odata.nextLink"]))
+      )
+        throw new ProviderEventWriteError("provider-write-failed");
+      for (const item of data.value)
+        if (item.transactionId === operationID) {
+          if (found || typeof item.id !== "string" || !item.id)
+            throw new ProviderEventWriteError("provider-conflict");
+          found = item;
+        }
+      next = data["@odata.nextLink"] ?? null;
+    }
+    if (!found) return null;
+    if (found.isCancelled || found.recurrence)
+      throw new ProviderEventWriteError("provider-conflict");
+    const event = assertCreatedEventEvidence(toNormalized(found));
+    return {
+      ref: { externalEventId: found.id, etag: event.etag ?? null },
+      event,
+    };
+  },
+
+  async pushCreate(
+    userID,
+    accountId,
+    externalCalendarId,
+    event: Event,
+    identity,
+  ) {
     if (event.recurrence) {
-      throw new EventWriteError("recurrence", "unsupported",
-        "Outlook recurrence creation is not supported yet. No changes were saved.");
+      throw new EventWriteError(
+        "recurrence",
+        "unsupported",
+        "Outlook recurrence creation is not supported yet. No changes were saved.",
+      );
     }
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
@@ -718,12 +787,28 @@ export const microsoftAdapter: CalendarAdapter = {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(toGraphEvent(event)),
+        body: JSON.stringify({
+          ...toGraphEvent(event),
+          ...(identity
+            ? { transactionId: eventCreateOperationID(identity) }
+            : {}),
+        }),
+        redirect: "error",
       },
     );
-    if (!res.ok) throw await graphError(res);
-    const data = await res.json();
-    return { externalEventId: data.id, etag: typeof data["@odata.etag"] === "string" ? data["@odata.etag"] : null };
+    assertProviderEventMutationResponse(res);
+    const data = await res.json().catch(() => null);
+    if (typeof data?.id !== "string" || !data.id)
+      throw new ProviderEventWriteError(
+        "provider-write-failed",
+        "unconfirmed",
+        res.status,
+      );
+    return {
+      externalEventId: data.id,
+      etag:
+        typeof data["@odata.etag"] === "string" ? data["@odata.etag"] : null,
+    };
   },
 
   async pushUpdate() {

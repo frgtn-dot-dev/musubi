@@ -23,6 +23,7 @@ import type {
   NormalizedEvent,
   NormalizedTask,
 } from "../adapter";
+import { assertCompleteEventReadResponse, assertCreatedEventEvidence, caldavEventCreateIdentity } from "../event_create_identity";
 import { createCaldavClient, createGuardedCaldavFetch } from "../caldav_client";
 import { decryptSecret } from "../crypto";
 import {
@@ -1069,7 +1070,72 @@ export const caldavAdapter: CalendarAdapter = {
     }
   },
 
-  async pushCreate(_userID, accountId, externalCalendarId, event: Event) {
+  async findCreatedEvent(_userID, accountId, externalCalendarId, identity) {
+    const { url, uid } = caldavEventCreateIdentity(
+      externalCalendarId,
+      identity,
+    );
+    const response = await caldavFetch(url, {
+      headers: {
+        authorization: await basicAuthForAccount(accountId),
+        accept: "text/calendar",
+        "Cache-Control": "no-cache",
+      },
+    });
+    if (response.status === 404) return null;
+    assertCompleteEventReadResponse(response);
+    const data = new TextDecoder("utf-8", {
+      fatal: true,
+      ignoreBOM: true,
+    }).decode(await response.arrayBuffer());
+    const selected = eventMaster(data, uid);
+    replaceEventProperties(data, selected.index, new Map());
+    const fields = veventToFields(selected.master);
+    if (!fields) throw new ProviderEventWriteError("provider-write-failed");
+    const etag = strongEventEtag(response.headers.get("etag"));
+    const event = assertCreatedEventEvidence({
+      ...fields,
+      externalId: url,
+      etag,
+      icalUid: uid,
+      url: null,
+      status:
+        componentString(selected.master, "status")?.toUpperCase() ===
+        "CANCELLED"
+          ? "cancelled"
+          : "active",
+    });
+    return { ref: { externalEventId: url, etag, icalUid: uid }, event };
+  },
+
+  async pushCreate(
+    _userID,
+    accountId,
+    externalCalendarId,
+    event: Event,
+    identity,
+  ) {
+    if (identity) {
+      const { url, uid } = caldavEventCreateIdentity(
+        externalCalendarId,
+        identity,
+      );
+      const response = await caldavFetch(url, {
+        method: "PUT",
+        headers: {
+          authorization: await basicAuthForAccount(accountId),
+          "Content-Type": "text/calendar; charset=utf-8",
+          "If-None-Match": "*",
+        },
+        body: toIcal(event, uid),
+      });
+      assertProviderEventMutationResponse(response);
+      return {
+        externalEventId: url,
+        etag: strongEventEtag(response.headers.get("etag")),
+        icalUid: uid,
+      };
+    }
     const client = await clientForAccount(accountId);
     const filename = `${event.id}.ics`;
     const res = await client.createCalendarObject({

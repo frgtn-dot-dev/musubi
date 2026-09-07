@@ -551,6 +551,7 @@ export async function prepareEventWrites(
           event: operation.event,
           patch: operation.patch,
           scopeEditValidated: operation.scopeEditValidated,
+          createIdentityVersion: 1,
         },
       });
     }
@@ -572,6 +573,7 @@ export async function prepareEventWrites(
       let event = operation.event;
       let claimed = false;
       let predecessorID: string | null = null;
+      let createIdentity: { operationID: string } | undefined;
       if (onlyAction && action !== onlyAction) continue;
       // A closure is single-attempt; calling it again cannot retry a conflict
       // or re-send completed creates/deletes. Reconciliation is a new request.
@@ -591,6 +593,7 @@ export async function prepareEventWrites(
             );
           claimed = true;
           predecessorID = stored.predecessorID;
+          if (stored.payload.createIdentityVersion === 1) createIdentity = { operationID: stored.id };
           if (
             stored.action !== action ||
             stored.eventID !== event.id.toLowerCase() ||
@@ -664,6 +667,7 @@ export async function prepareEventWrites(
             link.accountID,
             link.externalCalendarID,
             event,
+            createIdentity,
           );
           receipt.externalEventID = external.externalEventId;
           const accepted = await importExternalEvent(

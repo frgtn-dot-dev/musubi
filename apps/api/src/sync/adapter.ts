@@ -49,6 +49,13 @@ export type ExternalEventRef = {
   icalUid?: string | null;
 };
 
+/** Identity of one persisted create intent, never a new ID on retry. */
+export type EventCreateIdentity = { operationID: string };
+export type CreatedEventEvidence = {
+  ref: ExternalEventRef;
+  event: NormalizedEvent;
+};
+
 export type ExternalTaskRef = {
   externalTaskId: string;
   etag?: string | null;
@@ -134,7 +141,16 @@ export type CalendarAdapter = {
     accountId: string,
     externalCalendarId: string,
     event: Event,
+    identity?: EventCreateIdentity,
   ): Promise<ExternalEventRef>;
+  // Read-only recovery. null means no matching live object was observed, not
+  // permission to repeat a POST (Graph does not promise an infinite dedup window).
+  findCreatedEvent?(
+    userID: string,
+    accountId: string,
+    externalCalendarId: string,
+    identity: EventCreateIdentity,
+  ): Promise<CreatedEventEvidence | null>;
   pushUpdate(
     userID: string,
     accountId: string,
