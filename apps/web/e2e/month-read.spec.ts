@@ -1274,49 +1274,54 @@ test("chooses an event time and duration from the time pickers", async ({
 	).toBe(30 * 60 * 1_000);
 });
 
-test("keeps the all-day toggle in one place when it is flipped", async ({
-	page,
-}) => {
-	await mockAuthenticatedReads(page);
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await openCreateEvent(page);
+for (const width of [1280, 390]) {
+	test(`keeps the all-day toggle in one place when it is flipped at ${width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width, height: 800 });
+		await mockAuthenticatedReads(page);
+		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+		await openCreateEvent(page);
 
-	const toggle = page.locator('[class*="toggleRow"]');
-	const label = page.getByText("All day", { exact: true });
-	await expect(toggle).toBeVisible();
-	// Let the popover finish arriving before measuring where anything sits.
-	await page
-		.locator('[class*="createPopover"]')
-		.evaluate((el) =>
-			Promise.all(el.getAnimations().map((animation) => animation.finished)),
-		);
+		const toggle = page.locator('[class*="toggleRow"]');
+		const label = page.getByText("All day", { exact: true });
+		await expect(toggle).toBeVisible();
+		// Let the popover finish arriving before measuring where anything sits.
+		await page
+			.locator('[class*="createPopover"]')
+			.evaluate((el) =>
+				Promise.all(el.getAnimations().map((animation) => animation.finished)),
+			);
 
-	const timed = (await toggle.boundingBox())!.y;
-	await label.click();
-	const datePickers = [
-		page.getByRole("button", { name: /^Date:/ }),
-		page.getByRole("button", { name: /^Ends:/ }),
-	];
-	await expect(datePickers[1]).toBeVisible();
-	for (const picker of datePickers) {
-		const [pickerBox, chevronBox] = await Promise.all([
-			picker.boundingBox(),
-			picker.locator("svg").boundingBox(),
-		]);
-		expect(
-			Math.abs(
-				pickerBox!.x + pickerBox!.width - (chevronBox!.x + chevronBox!.width),
-			),
-		).toBeLessThanOrEqual(1);
-	}
-	// All-day swaps the time range for an end date in the same slot, so the toggle
-	// under it does not hop a row.
-	expect((await toggle.boundingBox())!.y).toBe(timed);
+		const timed = (await toggle.boundingBox())!.y;
+		await label.click();
+		const datePickers = [
+			page.getByRole("button", { name: /^Date:/ }),
+			page.getByRole("button", { name: /^Ends:/ }),
+		];
+		await expect(datePickers[1]).toBeVisible();
+		for (const picker of datePickers) {
+			const [pickerBox, chevronBox] = await Promise.all([
+				picker.boundingBox(),
+				picker.locator("svg").boundingBox(),
+			]);
+			expect(
+				Math.abs(
+					pickerBox!.x + pickerBox!.width - (chevronBox!.x + chevronBox!.width),
+				),
+			).toBeLessThanOrEqual(1);
+		}
+		// The toggle stays on the anchored side of the conditional time row:
+		// above it in desktop popovers, below it in bottom-anchored sheets.
+		expect((await toggle.boundingBox())!.y).toBe(timed);
 
-	await label.click();
-	await expect(page.getByRole("combobox", { name: "Start time" })).toBeVisible();
-	expect((await toggle.boundingBox())!.y).toBe(timed);
-});
+		await label.click();
+		await expect(
+			page.getByRole("combobox", { name: "Start time" }),
+		).toBeVisible();
+		expect((await toggle.boundingBox())!.y).toBe(timed);
+	});
+}
 
 test("scrolls a long calendar list inside quick create", async ({ page }) => {
 	await page.setViewportSize({ width: 1890, height: 962 });
@@ -1483,7 +1488,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await expect(recurringEvent).toBeFocused();
 	const deletionRequest = page.waitForRequest(
 		(request) =>
-			request.url().endsWith("/api/v1/events") && request.method() === "PUT",
+			request.url().endsWith("/api/v1/events") && request.method() === "PATCH",
 	);
 	await recurringEvent.click();
 	await page.getByRole("button", { name: "Delete" }).click();
@@ -1501,7 +1506,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	);
 	const undoRequest = page.waitForRequest(
 		(request) =>
-			request.url().endsWith("/api/v1/events") && request.method() === "PUT",
+			request.url().endsWith("/api/v1/events") && request.method() === "PATCH",
 	);
 	await page.getByRole("button", { name: "Undo", exact: true }).click();
 	const { scopeEdit: undoIntent, ...undo } = (await undoRequest).postDataJSON();
@@ -1836,8 +1841,8 @@ test("moves and resizes an event by dragging it", async ({ page }) => {
 	// Record the write, then let the shared mock apply it to its event state —
 	// otherwise the refetch that follows would undo the move.
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") {
-			const body = route.request().postDataJSON() as {
+		if (route.request().method() === "PATCH") {
+			const body = route.request().postDataJSON().patch as {
 				end: string;
 				start: string;
 			};
@@ -1892,7 +1897,7 @@ test("moves and resizes an event by dragging it", async ({ page }) => {
 	);
 	expect(writes).toHaveLength(2);
 	const resized = writes[1]!;
-	expect(resized.start).toBe(moved.start);
+	expect(resized.start).toBeUndefined(); // PATCH must omit the unchanged start.
 	expect(new Date(resized.end).getTime()).toBeGreaterThan(
 		new Date(moved.end).getTime(),
 	);
@@ -2183,8 +2188,8 @@ test("moves an event to another day in the month grid", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	const writes: Array<{ end: string; start: string }> = [];
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") {
-			const body = route.request().postDataJSON() as {
+		if (route.request().method() === "PATCH") {
+			const body = route.request().postDataJSON().patch as {
 				end: string;
 				start: string;
 			};
@@ -2225,8 +2230,8 @@ test("moves an event with the keyboard", async ({ page }) => {
 	await mockAuthenticatedReads(page);
 	const writes: Array<{ end: string; start: string }> = [];
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") {
-			const body = route.request().postDataJSON() as {
+		if (route.request().method() === "PATCH") {
+			const body = route.request().postDataJSON().patch as {
 				end: string;
 				start: string;
 			};
@@ -2251,7 +2256,7 @@ test("moves an event with the keyboard", async ({ page }) => {
 	await block.focus();
 	await page.keyboard.press("Alt+Shift+ArrowDown");
 	expect(writes).toHaveLength(2);
-	expect(writes[1]!.start).toBe(writes[0]!.start);
+	expect(writes[1]!.start).toBeUndefined(); // Resizing only patches the end.
 	expect(new Date(writes[1]!.end).getTime()).toBeGreaterThan(
 		new Date(writes[0]!.end).getTime(),
 	);
@@ -2263,7 +2268,7 @@ test("cancels a drag with Escape and leaves the event alone", async ({
 	await mockAuthenticatedReads(page);
 	let writes = 0;
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") writes += 1;
+		if (route.request().method() === "PATCH") writes += 1;
 		return route.fallback();
 	});
 
@@ -3535,13 +3540,18 @@ test("routes federated event writes through the gateway", async ({ page }) => {
 				});
 			}
 			gatewayWrites.push(method);
-			const body = route.request().postDataJSON() as (typeof remoteEvents)[number];
-			if (method === "PUT") {
-				remoteEvents = remoteEvents.map((item) =>
-					item.id === body.id ? body : item,
-				);
-				return respond(route, body);
-			}
+			const request = route.request().postDataJSON();
+			const previous = remoteEvents.find((item) => item.id === request.id)!;
+			expect(method).toBe("PATCH");
+			expect(request.expectedRevision).toBe(previous.revision);
+			const body = {
+				...previous,
+				...request.patch,
+				revision: previous.revision + 1,
+			};
+			remoteEvents = remoteEvents.map((item) =>
+				item.id === body.id ? body : item,
+			);
 			return respond(route, body);
 		},
 	);
@@ -3566,7 +3576,7 @@ test("routes federated event writes through the gateway", async ({ page }) => {
 	await expect(page.locator('[class*="toastRegion"]')).toContainText(
 		"Event updated.",
 	);
-	expect(gatewayWrites).toEqual(["PUT"]);
+	expect(gatewayWrites).toEqual(["PATCH"]);
 	expect(homeWrites).toBe(0);
 	await expect(
 		page.getByRole("button", { name: /Book club — new venue/ }),
@@ -4014,7 +4024,7 @@ test("asks which occurrences a dragged series should change", async ({
 	const writes: Array<{ method: string; body: Record<string, unknown> }> = [];
 	await page.route("**/api/v1/events", async (route) => {
 		const method = route.request().method();
-		if (method === "PUT" || method === "POST") {
+		if (method === "PATCH" || method === "POST") {
 			writes.push({
 				body: route.request().postDataJSON() as Record<string, unknown>,
 				method,
@@ -4060,8 +4070,11 @@ test("asks which occurrences a dragged series should change", async ({
 	await expect(page.getByRole("status")).toContainText("Event moved.");
 	// The series keeps its rule minus this date, and the moved occurrence is a
 	// new standalone event.
-	const updated = writes.find((write) => write.method === "PUT")!;
-	expect(updated.body.recurrence).toContain("EXDATE:");
+	const updated = writes.find((write) => write.method === "PATCH")!;
+	expect((updated.body.patch as { recurrence: string }).recurrence).toContain(
+		"EXDATE:",
+	);
+	expect(updated.body.expectedRevision).toBe(1);
 	const created = writes.find((write) => write.method === "POST")!;
 	expect(created.body.recurrence).toBeNull();
 	expect(created.body.id).not.toBe("weekly-review");
@@ -4243,7 +4256,7 @@ test("says an event is unsettled while its write is in flight", async ({
 		release = resolve;
 	});
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") await held;
+		if (route.request().method() === "PATCH") await held;
 		return route.fallback();
 	});
 
@@ -4796,58 +4809,88 @@ test("asks for a name and a time first, the rest on request", async ({
 	await expect(page.getByRole("status")).toContainText("Event created.");
 });
 
-test("keeps event edits focused and moves details to a full page", async ({
-	page,
-}) => {
-	await mockAuthenticatedReads(page);
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+for (const reload of [false, true]) {
+	test(
+		reload
+			? "keeps a handed-off draft after reload without borrowing a revision"
+			: "keeps event edits focused and moves details to a full page",
+		async ({ page }) => {
+			await mockAuthenticatedReads(page);
+			const writes: unknown[] = [];
+			await page.route("**/api/v1/events", (route) => {
+				if (route.request().method() === "PATCH")
+					writes.push(route.request().postDataJSON());
+				return route.fallback();
+			});
+			await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-	await page
-		.getByRole("button", { name: /Client call/ })
-		.first()
-		.click();
-	await page.getByRole("button", { name: "Edit", exact: true }).click();
+			await page
+				.getByRole("button", { name: /Client call/ })
+				.first()
+				.click();
+			await page.getByRole("button", { name: "Edit", exact: true }).click();
 
-	// The popover is for the high-frequency edits, matching quick create.
-	await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
-	await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
-	await expect(page.getByLabel("Repeat")).toHaveCount(0);
-	await expect(
-		page.getByRole("button", { name: /^Choose calendars/ }),
-	).toBeVisible();
-	await page
-		.getByRole("textbox", { name: "Event title" })
-		.fill("Client call revised");
-	await expectNoAccessibilityViolations(page);
+			// The popover is for the high-frequency edits, matching quick create.
+			await expect(
+				page.getByRole("button", { name: "More options" }),
+			).toBeVisible();
+			await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
+			await expect(page.getByLabel("Repeat")).toHaveCount(0);
+			await expect(
+				page.getByRole("button", { name: /^Choose calendars/ }),
+			).toBeVisible();
+			await page
+				.getByRole("textbox", { name: "Event title" })
+				.fill("Client call revised");
+			await expectNoAccessibilityViolations(page);
 
-	await page.getByRole("button", { name: "More options" }).click();
-	await expect(page).toHaveURL(/\/event\/client-call\?/);
-	await expect(page).toHaveURL(/title=Client\+call\+revised/);
-	await expect(page.getByRole("heading", { name: "Edit event" })).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
-		"Client call revised",
+			await page.getByRole("button", { name: "More options" }).click();
+			await expect(page).toHaveURL(/\/event\/client-call\?/);
+			await expect(page).toHaveURL(/title=Client\+call\+revised/);
+			await expect(
+				page.getByRole("heading", { name: "Edit event" }),
+			).toBeVisible();
+			await expect(
+				page.getByRole("textbox", { name: "Event title" }),
+			).toHaveValue("Client call revised");
+
+			// The full editor keeps the original baseline handed off by the popover.
+			await expect(page.getByPlaceholder("Add location")).toBeVisible();
+			await expect(page.getByLabel("Repeat")).toBeVisible();
+			await expect(
+				page.getByRole("button", { name: "More options" }),
+			).toHaveCount(0);
+			await expectNoAccessibilityViolations(page);
+
+			if (reload) {
+				await page.reload();
+				await expect(
+					page.getByRole("textbox", { name: "Event title" }),
+				).toHaveValue("Client call revised");
+			}
+
+			await page.getByPlaceholder("Add location").fill("Studio C");
+			await page.getByRole("button", { exact: true, name: "Save" }).click();
+			if (reload) {
+				await expect(page.getByRole("alert")).toBeVisible();
+				await expect(
+					page.getByRole("textbox", { name: "Event title" }),
+				).toHaveValue("Client call revised");
+				await expect(page.getByPlaceholder("Add location")).toHaveValue(
+					"Studio C",
+				);
+				expect(writes).toEqual([]);
+				return;
+			}
+			expect(writes).toHaveLength(1);
+			await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
+			await expect(
+				page.getByRole("button", { name: /Client call revised/ }).first(),
+			).toBeVisible();
+			await expectNoAccessibilityViolations(page);
+		},
 	);
-
-	// The page is the deliberate, complete layer and survives a reload.
-	await expect(page.getByPlaceholder("Add location")).toBeVisible();
-	await expect(page.getByLabel("Repeat")).toBeVisible();
-	await expect(page.getByRole("button", { name: "More options" })).toHaveCount(
-		0,
-	);
-	await expectNoAccessibilityViolations(page);
-	await page.reload();
-	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
-		"Client call revised",
-	);
-
-	await page.getByPlaceholder("Add location").fill("Studio C");
-	await page.getByRole("button", { exact: true, name: "Save" }).click();
-	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
-	await expect(
-		page.getByRole("button", { name: /Client call revised/ }).first(),
-	).toBeVisible();
-	await expectNoAccessibilityViolations(page);
-});
+}
 
 test("makes the scope of a recurring event edit explicit", async ({ page }) => {
 	await mockAuthenticatedReads(page);
@@ -5283,8 +5326,8 @@ test("moves a bar grabbed by its middle to where the preview drew it", async ({
 	await mockAuthenticatedReads(page);
 	const writes: Array<{ end: string; start: string }> = [];
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") {
-			const body = route.request().postDataJSON() as {
+		if (route.request().method() === "PATCH") {
+			const body = route.request().postDataJSON().patch as {
 				end: string;
 				start: string;
 			};
@@ -5688,7 +5731,7 @@ test("edits a whole series without moving it onto one date", async ({
 	});
 	const writes: Array<Record<string, unknown>> = [];
 	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "PUT") {
+		if (route.request().method() === "PATCH") {
 			writes.push(route.request().postDataJSON() as Record<string, unknown>);
 		}
 		return route.fallback();
@@ -5702,6 +5745,10 @@ test("edits a whole series without moving it onto one date", async ({
 	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	await page.getByRole("textbox", { name: "Event title" }).fill("Weekly retro");
 	await page.getByRole("button", { name: "Save" }).click();
+	const savedResponse = page.waitForResponse((response) =>
+		response.url().endsWith("/api/v1/events") &&
+		response.request().method() === "PATCH",
+	);
 	await page
 		.getByRole("dialog", { name: "Change recurring event" })
 		.getByRole("button", { name: "All events" })
@@ -5711,15 +5758,18 @@ test("edits a whole series without moving it onto one date", async ({
 		"Recurring series updated.",
 	);
 	expect(writes).toHaveLength(1);
-	expect(writes[0]!.title).toBe("Weekly retro");
-	expect(writes[0]!.recurrence).toBe(recurrence);
+	expect(writes[0]!.patch).toEqual({ title: "Weekly retro" });
+	expect(writes[0]!.expectedRevision).toBe(1);
 	const { scopeEdit, ...update } = writes[0]!;
 	expect(scopeEdit).toEqual({ updates: [update], creates: [] });
 	// The master keeps its own first occurrence rather than jumping to the one
 	// that was edited.
-	expect(new Date(writes[0]!.start as string).toISOString()).toContain(
-		"2026-07-06",
-	);
+	expect(update.patch).not.toHaveProperty("start");
+	expect(update.patch).not.toHaveProperty("recurrence");
+	const saved = await (await savedResponse).json();
+	expect(saved.recurrence).toBe(recurrence);
+	expect(saved.start).toContain("2026-07-06");
+	expect(saved.revision).toBe(2);
 });
 
 test("asks the scope question above the layer that raised it", async ({

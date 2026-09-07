@@ -447,3 +447,26 @@ Rodič převzal celý K06 nad `78f9452145022b2420d47eefda32ee45640e6134` (2026-0
 Po převzetí `c42c701` rodič samostatně prověřil všech **52** odložených zdrojových cest. U 51 odpovídá TypeScript i emitovaný JavaScript AST, pořadí parserových tokenů a komentářů; jde pouze o formátování. U OAuth je jedinou změnou prohození ekvivalentních větví podmínky `scope === undefined`, se zachováním hodnot i počtu vyhodnocení getteru. Žádná další funkční změna ani neznámý soubor nebyly přidány či zahozeny. Ověřené úpravy jsou zachovány v odděleném stylovém commitu s tímto záznamem, nikoli přimíchány do funkčních oprav K06.
 
 Explicitní 52cestný manifest a důkazy: `/tmp/musubi-k06-parent-final-logs/residue-{manifest.json,equivalence-final.log,lexical-comments.log,final.diff}`. Zdrojové byty jsou přesně totožné s úspěšným rodičovským `pnpm check`; po této kontrole se produktový kód znovu neměnil. Závěrečný push této větve je schválen jako samostatný poslední krok, bez merge, release či nasazení.
+
+
+## PR #119 — oprava CI E2E (2026-09-07)
+
+CI nad `dc7ec08` prošlo DB integracemi, root checkem, Storybookem i buildy,
+ale 11 webových E2E scénářů selhalo. Zastaralé event interceptory nyní sledují
+PATCH s `expectedRevision` a `patch`; federovaný mock vrací úplný event s novou
+revizí. Resize ověřuje vynechání nezměněného začátku, title-only edit série
+zachování startu a celé recurrence v odpovědi. Také cancel-drag kontrola již
+nemůže falešně projít sledováním nepoužívaného PUT.
+
+Předání popover → full editor se ověřuje odděleně od reloadu: reload zachová URL
+draft, ale bez původní revize neodešle zápis. K06 ochrana se neobchází.
+Přepínač All day je na ukotvené straně měnících se časových polí: nad nimi
+na desktopu, pod nimi v mobilním spodním panelu. Používá jediný existující
+Checkbox a sdílený viewport hook, se shodným vizuálním a DOM pořadím.
+
+Lokální evidence: celá E2E sada 161 passed / 2 záměrně skipped (UI katalog,
+Radicale), poté finální cílené regrese 5/5 včetně 1280/390 px a reloadu.
+Plný běh předcházel poslední úpravě mobilního umístění přepínače; tuto úpravu
+ověřil cílený běh se screenshoty a znovu web 379/379, typecheck a lint.
+Logy a screenshoty: `/tmp/musubi-pr119-*`. Finální GitHub CI zůstává samostatným
+gatem. Žádná změna backendu, migrací, verzí ani rozsahu K07–K15.

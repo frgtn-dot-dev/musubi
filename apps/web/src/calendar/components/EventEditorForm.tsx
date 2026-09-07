@@ -24,6 +24,7 @@ import {
 	useId,
 	useState,
 } from "react";
+import { useNarrowViewport } from "~/design/use-narrow-viewport";
 import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
@@ -139,6 +140,7 @@ export function EventEditorForm({
 	when,
 }: EventEditorFormProps) {
 	const id = useId();
+	const narrow = useNarrowViewport();
 	// What the app knows, not what the browser guesses: a self-hosted server that
 	// is down looks online to `navigator`.
 	const { offline } = useSnapshot();
@@ -266,6 +268,18 @@ export function EventEditorForm({
 		}
 	}
 
+	// Popovers grow down; narrow sheets grow up. Keep the toggle on the
+	// anchored side of the conditional time row, with matching DOM/tab order.
+	const allDayToggle = (
+		<Checkbox
+			checked={values.isAllDay}
+			className={styles.toggleRow}
+			disabled={saving}
+			label="All day"
+			onChange={(event) => patch({ isAllDay: event.target.checked })}
+		/>
+	);
+
 	return (
 		<form
 			aria-busy={saving || undefined}
@@ -321,6 +335,8 @@ export function EventEditorForm({
 					/>
 				</div>
 
+				{!narrow ? allDayToggle : null}
+
 				{!values.isAllDay ? (
 					<div className={styles.timeRow}>
 						<Clock3 aria-hidden="true" size={17} strokeWidth={1.5} />
@@ -375,13 +391,7 @@ export function EventEditorForm({
 					/>
 				</div>
 
-				<Checkbox
-					checked={values.isAllDay}
-					className={styles.toggleRow}
-					disabled={saving}
-					label="All day"
-					onChange={(event) => patch({ isAllDay: event.target.checked })}
-				/>
+				{narrow ? allDayToggle : null}
 
 				{expanded ? (
 					<Field
