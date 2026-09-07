@@ -424,8 +424,9 @@ export function DeliveryBody({
                 <Btn
                   label="Load more"
                   variant="secondary"
-                  disabled={busy || loading}
+                  disabled={busy || settledRead?.key !== readKey}
                   onPress={() => {
+                    if (inFlightScope.current) return;
                     const current = sequence.current;
                     void run(async () => {
                       const page = await api.getEventDeliveryInbox(

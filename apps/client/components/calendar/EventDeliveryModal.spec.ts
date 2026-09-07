@@ -562,3 +562,24 @@ it("finishes a multi-page inbox refresh across polling intervals", async () => {
   expect(buttons(tree, "Retained second")).toHaveLength(1);
   expect(buttons(tree, "Refresh status")[0].disabled).toBe(false);
 });
+
+it("serializes Load more with a background inbox refresh", async () => {
+  h.request.mockResolvedValue(reply({
+    items: [{ eventId: id, savedTitle: "First" }], nextCursor: id,
+  }));
+  render(null);
+  await settle();
+  const previousButton = buttons(render(null), "Load more")[0];
+  let finish!: (value: unknown) => void;
+  h.request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  h.version++;
+  render(null);
+  expect(buttons(render(null), "Load more")[0].disabled).toBe(true);
+  previousButton.onPress();
+  expect(h.request).toHaveBeenCalledTimes(2);
+  finish(reply({ items: [{ eventId: id, savedTitle: "Refreshed" }], nextCursor: id }));
+  await settle();
+  const next = render(null);
+  expect(buttons(next, "Refreshed")).toHaveLength(1);
+  expect(buttons(next, "Load more")[0].disabled).toBe(false);
+});
