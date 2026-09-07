@@ -80,7 +80,7 @@ export function DeliveryBody({
   useEffect(() => {
     active.current = true;
     const timer = setInterval(() => {
-      if (AppState.currentState === "active") refresh();
+      if (AppState.currentState === "active" && !inFlightScope.current && !busyRef.current) refresh();
     }, 15_000);
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") refresh();

@@ -534,7 +534,7 @@ it("publishes a slow receipt despite the 15 second poll", async () => {
   const tree = render();
   expect(text(tree)).toContain("Remote changes need review");
   expect(buttons(tree, "Review changes")[0].disabled).toBe(false);
-  expect(h.request).toHaveBeenCalledTimes(2);
+  expect(h.request).toHaveBeenCalledTimes(1);
 });
 
 it("finishes a multi-page inbox refresh across polling intervals", async () => {
@@ -582,4 +582,24 @@ it("serializes Load more with a background inbox refresh", async () => {
   const next = render(null);
   expect(buttons(next, "Refreshed")).toHaveLength(1);
   expect(buttons(next, "Load more")[0].disabled).toBe(false);
+});
+
+
+it("makes pagination available after an inbox read slower than polling", async () => {
+  vi.useFakeTimers();
+  h.request.mockImplementation(() => new Promise((resolve) => {
+    setTimeout(() => resolve(reply({
+      items: [{ eventId: id, savedTitle: "Slow first page" }], nextCursor: id,
+    })), 16_000);
+  }));
+  render(null);
+  await vi.advanceTimersByTimeAsync(15_000);
+  render(null);
+  await vi.advanceTimersByTimeAsync(1_000);
+  const tree = render(null);
+  expect(buttons(tree, "Load more")[0].disabled).toBe(false);
+  buttons(tree, "Load more")[0].onPress();
+  await vi.advanceTimersByTimeAsync(14_000);
+  render(null);
+  expect(h.request).toHaveBeenCalledTimes(2);
 });
