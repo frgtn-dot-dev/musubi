@@ -260,7 +260,9 @@ Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migra
 
 **Test/hotovo:** stejné okamžiky v UTC/Prague/New_York; evropské a americké DST v různých týdnech; neexistující a dvojznačný lokální čas; all-day přes DST; floating čas podle definované semantiky. Stabilní ID výjimky po přesunu a restartu. Zvolenou politiku DST zdokumentovat, neimplementovat ad-hoc hodinovou aproximaci.
 
-**K10 převod času — rozpracováno:** sdílené přesné převody přes Temporal polyfill, oddělená explicitní/recurrence DST politika, testy v UTC/Prague/New_York včetně půlhodinového posunu a přeskočeného dne. Zoned model uchovává původní místní start/konec, protože instant neuchová neexistující02:30 po DST normalizaci. Dosavadní expanze se tím ještě nemění.
+**K10 převod času — implementováno a ověřeno (PR #132):** sdílené přesné převody přes Temporal polyfill, oddělená explicitní/recurrence DST politika, testy v UTC/Prague/New_York včetně půlhodinového posunu a přeskočeného dne. Zoned model uchovává původní místní start/konec, protože instant neuchová neexistující02:30 po DST normalizaci. Dosavadní expanze se tím ještě nemění. Root check, striktní kontrakty, storage regrese, frozen install a Android Metro/Hermes export prošly; čistý reviewer nezávisle spustil kontrakty i převody v UTC/Prague/New_York (6 běhů bez chyby). Stav finálního převzetí je v [PR #132](https://github.com/frgtn-dot-dev/musubi/pull/132).
+
+**Checkpoint na žádost vlastníka:** po uzavření PR #132 zastavit další implementaci. K10 zůstává `in_progress`; pokračování začíná sdílenou expanzí a jejím napojením. [Review aktuálního stavu](calendar-core-checkpoint-2026-09-07.md).
 
 ### K11 — Věrný import a zachování providerových výjimek
 
