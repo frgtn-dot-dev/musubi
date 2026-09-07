@@ -736,7 +736,7 @@ async function main() {
       .set({
         externalEventID: `${fixtureOrigin}/dav/cal/event.ics`,
         etag: '"current"',
-        icalUid: davEvent.id,
+        // Keep the UID returned by create when moving this fixture resource.
       })
       .where(eq(externalEvents.eventID, davEvent.id));
     await refuses(
