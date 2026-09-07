@@ -8,10 +8,11 @@
     "./rrule-editor": "./src/rrule-editor.ts"
   },
   "scripts": {
-    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/recurrence-edit.test.ts && tsx src/rrule-editor.test.ts && tsx src/reminders.test.ts && tsx src/note-links.test.ts"
+    "test": "tsx src/layout/layout.test.ts && tsx src/recurrence.test.ts && tsx src/time-zone.test.ts && tsx src/recurrence-edit.test.ts && tsx src/rrule-editor.test.ts && tsx src/reminders.test.ts && tsx src/note-links.test.ts"
   },
   "private": true,
   "dependencies": {
+    "@js-temporal/polyfill": "0.5.1",
     "@musubi/types": "workspace:*",
     "dayjs": "^1.11.23",
     "rrule": "^2.8.1"

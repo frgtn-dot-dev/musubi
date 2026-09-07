@@ -13,13 +13,23 @@ for (const timeZone of [
   "Australia/Lord_Howe",
 ]) {
   assert.equal(
-    EventTimeModelSchema.parse({ kind: "zoned", timeZone }).kind,
+    EventTimeModelSchema.parse({
+      kind: "zoned",
+      timeZone,
+      startLocal: "2026-09-07T09:00:00",
+      endLocal: "2026-09-07T10:00:00",
+    }).kind,
     "zoned",
   );
 }
 for (const timeZone of ["", "+01:00", "Mars/Olympus", "Europe/NotPrague"]) {
   assert.equal(
-    EventTimeModelSchema.safeParse({ kind: "zoned", timeZone }).success,
+    EventTimeModelSchema.safeParse({
+      kind: "zoned",
+      timeZone,
+      startLocal: "2026-09-07T09:00:00",
+      endLocal: "2026-09-07T10:00:00",
+    }).success,
     false,
   );
 }
@@ -137,4 +147,35 @@ assert.equal(
     originalStart: { kind: "date", value: "2026-09-07" },
   }),
 );
+
+assert.equal(
+  EventTimeModelSchema.safeParse({ kind: "zoned", timeZone: "Europe/Prague" })
+    .success,
+  false,
+);
+const gapModel = EventTimeModelSchema.parse({
+  kind: "zoned",
+  timeZone: "Europe/Prague",
+  startLocal: "2026-03-29T02:30:00",
+  endLocal: "2026-03-29T04:30:00",
+});
+assert.deepEqual(
+  EventTimeModelSchema.parse(JSON.parse(JSON.stringify(gapModel))),
+  gapModel,
+);
+assert.equal(
+  gapModel.kind === "zoned" && gapModel.startLocal,
+  "2026-03-29T02:30:00.000",
+);
+assert.equal(
+  EventTimeModelSchema.safeParse({
+    kind: "zoned",
+    timeZone: "America/New_York",
+    startLocal: "2026-11-01T01:45:00",
+    endLocal: "2026-11-01T01:15:00",
+  }).success,
+  true,
+  "zoned endpoint order is validated by instant across a fold",
+);
+
 console.log("Event time contracts: OK");
