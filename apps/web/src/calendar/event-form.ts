@@ -1,9 +1,6 @@
-import type { Event } from "@musubi/types";
+import { editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
 import { toDateKey } from "./date-key";
-import {
-  spansMultipleServers,
-  type ConnectionMap,
-} from "./federation-routing";
+import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
 export type EventFormValues = {
   calendarId: string;
@@ -49,9 +46,7 @@ function timedBoundary(date: string, time: string) {
 
 function allDayBoundary(date: string) {
   const [year, month, day] = date.split("-").map(Number);
-  return new Date(
-    Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1),
-  );
+  return new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
 }
 
 export function defaultEventFormValues(
@@ -93,13 +88,9 @@ export function eventFormValues(event: Event): EventFormValues {
   return {
     calendarId: event.originCalendarID ?? event.calendars[0] ?? "",
     calendarIds: event.calendars,
-    date: event.isAllDay
-      ? allDayDateKey(event.start)
-      : toDateKey(event.start),
+    date: event.isAllDay ? allDayDateKey(event.start) : toDateKey(event.start),
     description: event.description ?? "",
-    endDate: event.isAllDay
-      ? allDayDateKey(event.end)
-      : toDateKey(event.end),
+    endDate: event.isAllDay ? allDayDateKey(event.end) : toDateKey(event.end),
     endTime: toTimeInput(event.end),
     hasAttendees: event.hasAttendees,
     isAllDay: event.isAllDay,
@@ -120,10 +111,7 @@ export function validateEventForm(
     return "Add an event title.";
   }
 
-  if (
-    !values.calendarId ||
-    !values.calendarIds.includes(values.calendarId)
-  ) {
+  if (!values.calendarId || !values.calendarIds.includes(values.calendarId)) {
     return "Choose a calendar.";
   }
 
@@ -144,12 +132,12 @@ export function validateEventForm(
     return "End date must be on or after the start date.";
   }
 
-  if (
-    !values.isAllDay &&
-    timedBoundary(values.date, values.endTime) <=
-      timedBoundary(values.date, values.startTime)
-  ) {
-    return "End time must be after start time.";
+  if (!values.isAllDay) {
+    const start = timedBoundary(values.date, values.startTime).getTime();
+    const end = timedBoundary(values.endDate, values.endTime).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return "End time must be after start time.";
+    }
   }
 
   return null;
@@ -195,7 +183,7 @@ function eventBoundaries(values: EventFormValues) {
         start: allDayBoundary(values.date),
       }
     : {
-        end: timedBoundary(values.date, values.endTime),
+        end: timedBoundary(values.endDate, values.endTime),
         start: timedBoundary(values.date, values.startTime),
       };
 }
@@ -230,20 +218,34 @@ export function createEventFromForm(
 export function updateEventFromForm(
   event: Event,
   values: EventFormValues,
-): Event {
+): EventWriteRequest {
   const boundaries = eventBoundaries(values);
 
-  return {
+  const original = eventFormValues(event);
+  return editedEvent(event, {
     ...event,
     calendars: values.calendarIds,
-    description: values.description.trim() || null,
-    end: boundaries.end,
+    description: values.description === original.description
+      ? event.description : values.description.trim() || null,
+    end:
+      values.endDate === original.endDate &&
+      values.endTime === original.endTime &&
+      values.isAllDay === original.isAllDay
+        ? event.end
+        : boundaries.end,
     hasAttendees: values.hasAttendees,
     isAllDay: values.isAllDay,
-    location: values.location.trim() || null,
-    recurrence: values.recurrence || null,
-    start: boundaries.start,
-    title: values.title.trim(),
-    url: values.url.trim() || null,
-  };
+    location: values.location === original.location
+      ? event.location : values.location.trim() || null,
+    recurrence: values.recurrence === original.recurrence
+      ? event.recurrence : values.recurrence || null,
+    start:
+      values.date === original.date &&
+      values.startTime === original.startTime &&
+      values.isAllDay === original.isAllDay
+        ? event.start
+        : boundaries.start,
+    title: values.title === original.title ? event.title : values.title.trim(),
+    url: values.url === original.url ? event.url : values.url.trim() || null,
+  });
 }

@@ -129,6 +129,8 @@ describe("applySeriesEdit", () => {
     const [seriesWrite] = updateEvent.mock.calls[0]! as [Event];
     expect(seriesWrite.title).toBe("Standup (long)");
     expect(seriesWrite.start.toISOString()).toBe("2026-07-06T11:00:00.000Z");
+    const { scopeEdit, ...update } = JSON.parse(JSON.stringify(seriesWrite));
+    expect(scopeEdit).toEqual({ updates: [update], creates: [] });
     expect(addEvent).not.toHaveBeenCalled();
   });
 

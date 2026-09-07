@@ -18,6 +18,8 @@ export const notificationsTable = sqliteTable("notifications_table", {
 // a JSON string[]. Booleans as int (0/1).
 export const eventsTable = sqliteTable("events", {
   id: text().primaryKey(),
+  // Unknown in pre-revision caches; only a server snapshot can supply authority.
+  revision: int(),
   creatorID: text().notNull(),
   title: text().notNull(),
   color: text().notNull(),

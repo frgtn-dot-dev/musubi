@@ -1,4 +1,4 @@
-import { PageDocumentSchema, type PageDocument } from "@musubi/types";
+import { PageDocumentSchema, PRODUCT_VERSION, type PageDocument } from "@musubi/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { authClient, notifyAuthExpired } from "~/auth/auth-client";
@@ -151,7 +151,7 @@ export function useServerStream(userId: string) {
     function open() {
       if (closed) return;
 
-      source = new EventSource("/api/stream");
+      source = new EventSource(`/api/stream?clientVersion=${PRODUCT_VERSION}`);
       source.onmessage = handleMessage;
 
       source.onopen = () => {

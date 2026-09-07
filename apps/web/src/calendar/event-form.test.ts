@@ -12,11 +12,7 @@ import {
 describe("event form", () => {
   it("defaults quick create to a one-hour local event", () => {
     expect(
-      defaultEventFormValues(
-        "calendar-1",
-        "2026-07-26",
-        "09:30",
-      ),
+      defaultEventFormValues("calendar-1", "2026-07-26", "09:30"),
     ).toMatchObject({
       calendarId: "calendar-1",
       date: "2026-07-26",
@@ -37,12 +33,8 @@ describe("event form", () => {
       "#b3492f",
     );
 
-    expect(event.start.toISOString()).toBe(
-      "2026-07-26T00:00:00.000Z",
-    );
-    expect(event.end.toISOString()).toBe(
-      "2026-07-26T00:00:00.000Z",
-    );
+    expect(event.start.toISOString()).toBe("2026-07-26T00:00:00.000Z");
+    expect(event.end.toISOString()).toBe("2026-07-26T00:00:00.000Z");
   });
 
   it("creates a recurring multi-calendar, multi-day event", () => {
@@ -69,9 +61,7 @@ describe("event form", () => {
       recurrence: "FREQ=YEARLY",
       url: "https://example.com/camp",
     });
-    expect(event.end.toISOString()).toBe(
-      "2026-07-29T00:00:00.000Z",
-    );
+    expect(event.end.toISOString()).toBe("2026-07-29T00:00:00.000Z");
   });
 
   it("rejects timed events whose end is not after their start", () => {
@@ -174,4 +164,46 @@ describe("event form", () => {
       title: "After",
     });
   });
+});
+
+describe("timed end date validation", () => {
+  it.each([
+    ["2026-07-27", "01:00", null],
+    ["2026-07-29", "23:00", null],
+    ["2026-07-25", "23:59", "End time must be after start time."],
+    ["2026-07-26", "23:00", "End time must be after start time."],
+    ["", "01:00", "End time must be after start time."],
+    ["2026-07-27", "invalid", "End time must be after start time."],
+  ])(
+    "validates end %s %s against the complete start",
+    (endDate, endTime, error) => {
+      expect(
+        validateEventForm({
+          ...defaultEventFormValues("calendar-1", "2026-07-26", "23:00"),
+          title: "Night",
+          endDate: endDate!,
+          endTime: endTime!,
+        }),
+      ).toBe(error);
+    },
+  );
+});
+
+describe("K06 untouched nullable text", () => {
+  for (const text of ["  preserved text\n", "", "   "]) {
+    it(`preserves exact unchanged text ${JSON.stringify(text)} in a title-only PATCH`, async () => {
+      const { eventPatchRequest } = await import("@musubi/types");
+      const baseline = {
+        ...createEventFromForm({ ...defaultEventFormValues("calendar-1", "2026-07-26"), title: "Before" },
+          { userId: "user-1", email: "a@example.test" }, "#112233"),
+        revision: 1, description: text, location: text, url: text,
+      };
+      expect(eventPatchRequest(updateEventFromForm(baseline, {
+        ...eventFormValues(baseline), title: "After",
+      })).patch).toEqual({ title: "After" });
+      if (text !== "") expect(eventPatchRequest(updateEventFromForm(baseline, {
+        ...eventFormValues(baseline), description: "", location: "", url: "",
+      })).patch).toEqual({ description: null, location: null, url: null });
+    });
+  }
 });

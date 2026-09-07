@@ -1,14 +1,23 @@
-import { NextFunction, Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { logger } from "@musubi/config";
 import { httpErrorFor } from "./http_error";
+import { ProviderEventWriteError } from "../sync/event_write";
+import { EventWriteError } from "@musubi/types";
 
 export function middlewareErrorHandler(
   err: Error,
   req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ) {
-  const { statusCode, errorMessage } = httpErrorFor(err);
+  const { statusCode, errorMessage } =
+    err instanceof ProviderEventWriteError
+      ? {
+          statusCode: 409,
+          errorMessage:
+            "Remote event version changed or is unavailable. No changes were saved. Refresh and reconcile before retrying.",
+        }
+      : httpErrorFor(err);
   const fields = {
     requestId: req.requestId,
     method: req.method,
@@ -28,6 +37,12 @@ export function middlewareErrorHandler(
 
   res.status(statusCode).json({
     error: errorMessage,
+    ...(err instanceof ProviderEventWriteError
+      ? { code: err.code, localCommitted: false }
+      : {}),
+    ...(err instanceof EventWriteError
+      ? { reason: err.reason, capability: err.capability }
+      : {}),
     requestId: req.requestId,
   });
 }

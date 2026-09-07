@@ -1,3 +1,4 @@
+import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
 import {
@@ -11,17 +12,47 @@ import {
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+export const EVENT_CONTENT_FIELDS = [
+	"title", "color", "start", "end", "isAllDay", "description", "location",
+	"isCanceled", "hasAttendees", "organizer", "recurrence", "url",
+] as const;
+export type EventContentPatch = Partial<Pick<NewEvent, (typeof EVENT_CONTENT_FIELDS)[number]>>;
+
+/** Only modeled, explicitly supplied changes. Undefined is omission; null clears.
+ * Dates compare by instant, recurrence lines by set, not transport spelling.
+ */
+export function diffEventContent(current: EventContentPatch, incoming: EventContentPatch,
+): EventContentPatch {
+	const diff: EventContentPatch = {};
+	const comparable = (key: (typeof EVENT_CONTENT_FIELDS)[number], value: unknown,
+	) => {
+		if (value instanceof Date) return value.getTime();
+		if (key === "recurrence") return typeof value === "string" && value
+			? [...new Set(value.split("\n").filter(Boolean))].sort().join("\n") : null;
+		return value ?? null;
+	};
+	for (const key of EVENT_CONTENT_FIELDS) {
+		const value = incoming[key];
+		if (value !== undefined && comparable(key, current[key]) !== comparable(key, value)) {
+			Object.assign(diff, { [key]: value });
+		}
+	}
+	return diff;
+}
+
 export async function createEventInTransaction(
 	tx: Transaction,
 	event: NewEvent,
 	calendars: string[],
 ) {
+	// Caller holds the complete lifecycle admission fence before any event lock.
 	// Home calendar = where it's created (first picked). Edit-content is gated by
 	// editEvents on this calendar; the other picked calendars are read-only shares.
 	const [result] = await tx
 		.insert(events)
 		.values({
 			...event,
+			revision: 1, // New identity never inherits a draft/source revision.
 			originCalendarID: event.originCalendarID ?? calendars[0],
 		})
 		.onConflictDoNothing()
@@ -42,7 +73,10 @@ export async function createEventInTransaction(
 }
 
 export function createEvent(event: NewEvent, calendars: string[]) {
-	return db.transaction((tx) => createEventInTransaction(tx, event, calendars));
+	return db.transaction(async (tx) => {
+		await lockCalendarLifecycle(tx, [...calendars, ...(event.originCalendarID ? [event.originCalendarID] : [])], "shared");
+		return createEventInTransaction(tx, event, calendars);
+	});
 }
 
 // Who governs editing this event's shared content: its home calendar (+ creator
@@ -70,17 +104,19 @@ export async function getEventCalendars(eventID: string): Promise<string[]> {
 	return rows.map((r) => r.calendarID);
 }
 
-export async function getEvent(id: string) {
-	const [result] = await db.select().from(events).where(eq(events.id, id));
-	return result;
+/** Content and links from one PostgreSQL statement snapshot. */
+export async function getEventSnapshot(id: string) {
+  const row = await db.query.events.findFirst({
+    where: eq(events.id, id),
+    with: { calendarEvents: true },
+  });
+  if (!row) return undefined;
+  const { calendarEvents: links, ...event } = row;
+  return { ...event, calendars: links.map((link) => link.calendarID) };
 }
 
-export async function updateEvent(event: Partial<NewEvent> & { id: string }) {
-	const [result] = await db
-		.update(events)
-		.set(event)
-		.where(eq(events.id, event.id!))
-		.returning();
+export async function getEvent(id: string) {
+	const [result] = await db.select().from(events).where(eq(events.id, id));
 	return result;
 }
 
@@ -173,16 +209,4 @@ export async function purgeDeletedEvents(before: Date) {
 	await db
 		.delete(events)
 		.where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before)));
-}
-
-export async function removeEvent(eventID: string) {
-	// Soft-delete: keep the row as a tombstone so delta sync can tell clients to
-	// drop it. Bumps updatedAt via $onUpdate → picked up by `since` queries.
-	const [result] = await db
-		.update(events)
-		.set({ deletedAt: new Date() })
-		.where(eq(events.id, eventID))
-		.returning();
-
-	return result;
 }

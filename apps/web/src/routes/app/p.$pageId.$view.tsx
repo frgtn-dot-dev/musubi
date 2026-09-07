@@ -1,3 +1,4 @@
+import { handoffEventEditor } from "~/calendar/event-editor-draft";
 import {
   createFileRoute,
   Outlet,
@@ -331,6 +332,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
         };
 
         if (event) {
+          handoffEventEditor(event);
           void navigate({
             params: { eventId: event.id, pageId, view: activeView },
             search,

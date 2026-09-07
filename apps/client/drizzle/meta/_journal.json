@@ -50,6 +50,13 @@
       "when": 1786787393210,
       "tag": "0006_reminder_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788637546932,
+      "tag": "0007_event_revision",
+      "breakpoints": true
     }
   ]
 }

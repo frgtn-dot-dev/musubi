@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { seriesEditWrites } from "./recurrence-edit";
+import { seriesEditWrites, withSeriesEditIntent } from "./recurrence-edit";
 
 type TestEvent = {
   end: Date;
@@ -137,5 +137,17 @@ const moved: TestEvent = {
   assert.equal(updates[0]!.id, master.id);
   assert.equal(updates[0]!.recurrence, "FREQ=WEEKLY");
 }
+
+// Explicit intent describes the actual write-set even when there is no create.
+for (const scope of ["occurrence", "following", "series"] as const) {
+  const writes = seriesEditWrites({ edited: moved, master, occurrence, scope });
+  const request = JSON.parse(JSON.stringify(withSeriesEditIntent(writes)));
+  assert.deepEqual(request.updates[0].scopeEdit, JSON.parse(JSON.stringify(writes)));
+  assert.equal(request.updates[0].scopeEdit.updates[0].scopeEdit, undefined);
+  assert.equal(request.creates[0]?.scopeEdit, undefined);
+  assert.equal("scopeEdit" in writes.updates[0]!, false, "Never mutate the stored master or plan");
+}
+const deletion = { updates: [{ ...master, recurrence: "FREQ=WEEKLY;COUNT=1" }], creates: [] };
+assert.deepEqual(JSON.parse(JSON.stringify(withSeriesEditIntent(deletion))).updates[0].scopeEdit.creates, []);
 
 console.log("recurrence edit scope self-check: OK");

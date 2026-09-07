@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { diagnosticFetchFor, getServerDiagnostics } from "./serverDiagnostics";
 
 describe("server diagnostics", () => {
@@ -22,6 +23,8 @@ describe("server diagnostics", () => {
 			})),
 		);
 		await diagnosticFetchFor("https://dev.musubi.pro")("/api/v1/calendars");
+		const headers = new Headers(vi.mocked(fetch).mock.calls[0]?.[1]?.headers);
+		expect(headers.get(CLIENT_VERSION_HEADER)).toBe(PRODUCT_VERSION);
 		expect(getServerDiagnostics()).toContain(
 			"https://dev.musubi.pro/api/v1/calendars",
 		);

@@ -1,5 +1,6 @@
 import { getMusubiAccounts } from "@musubi/db";
-import { BadRequestError, NotFoundError } from "@musubi/types";
+import { BadRequestError, CLIENT_VERSION_HEADER, MIN_PEER_VERSION, NotFoundError } from "@musubi/types";
+import { peerTooOld } from "../federation_peer";
 import { Request, Response } from "express";
 import { logger } from "@musubi/config";
 import { assertPublicOrigin, canonicalHttpOrigin } from "../federation_origin";
@@ -68,6 +69,11 @@ export async function handlerFederationProxy(req: Request, res: Response) {
   const target = gatewayTarget(origin, upstreamPath(req), query);
 
   await assertPublicOrigin(origin);
+  const incompatible = await peerTooOld(origin);
+  if (incompatible) return res.status(426).json({
+    error: "PeerUpgradeRequired", message: incompatible,
+    minPeerVersion: MIN_PEER_VERSION, requestId: req.requestId,
+  });
 
   // Only what the origin needs. The home session cookie is deliberately dropped
   // and Authorization is replaced with the member token.
@@ -77,6 +83,8 @@ export async function handlerFederationProxy(req: Request, res: Response) {
     // longer own that lifecycle.
     authorization: `Bearer ${await connectionMemberToken(req.user!.id, account, origin)}`,
   });
+  const clientVersion = req.get(CLIENT_VERSION_HEADER);
+  if (clientVersion) headers.set(CLIENT_VERSION_HEADER, clientVersion);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   if (hasBody) headers.set("content-type", "application/json");
 

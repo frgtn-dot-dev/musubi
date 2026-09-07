@@ -1,3 +1,4 @@
+import { committedFailure } from "./event_commit";
 import type { Request, Response } from "express";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
@@ -25,14 +26,18 @@ import {
 	BadRequestError,
 	type Calendar,
 	CalendarSchema,
+	EventSchema,
+	EventWriteError,
 	ForbiddenError,
 	NotFoundError,
 	type User,
 } from "@musubi/types";
 import { notifyCalendarMembers } from "./stream";
 import { assertCan } from "../permissions";
-import { getAdapter, pushEventToProviders } from "../sync/engine";
+import { getAdapter, prepareEventWrites } from "../sync/engine";
 import { buildInvitePreview } from "../invite_preview";
+import { assertOAuthEventWriteGrant } from "../sync/event_write";
+import { ProviderAuthError } from "../sync/errors";
 
 // External mirror? Then only the person whose provider account backs it may
 // change/delete it — and the change must land on the provider FIRST (throwing
@@ -78,6 +83,9 @@ async function createCalendarAtDestination(
 		const adapter = getAdapter(input.provider);
 		if (!adapter)
 			throw new BadRequestError(`Unknown provider "${input.provider}".`);
+		if (input.provider === "google" || input.provider === "microsoft") {
+			await assertOAuthEventWriteGrant(user.id, input.provider, input.accountId);
+		}
 		const accounts = await adapter.listAccounts(user.id);
 		const account = accounts.find((a) => a.id === input.accountId);
 		if (!account)
@@ -90,6 +98,7 @@ async function createCalendarAtDestination(
 				color: input.color,
 			}));
 		} catch (error: unknown) {
+			if (error instanceof EventWriteError || error instanceof ProviderAuthError) throw error;
 			throw new BadRequestError(
 				error instanceof Error
 					? error.message
@@ -132,7 +141,7 @@ export async function handlerCreateCalendar(req: Request, res: Response) {
 	let calendar: Calendar;
 	try {
 		calendar = CalendarSchema.parse(req.body);
-	} catch (err) {
+	} catch {
 		throw new BadRequestError("Request is missing valid calendar data...");
 	}
 
@@ -149,7 +158,7 @@ export async function handlerRemoveCalendar(req: Request, res: Response) {
 	let calendar: Calendar;
 	try {
 		calendar = CalendarSchema.parse(req.body);
-	} catch (err) {
+	} catch {
 		throw new BadRequestError("Request is missing valid calendar data...");
 	}
 	const members = await getCalendarMembers(calendar.id);
@@ -190,7 +199,7 @@ export async function handlerUpdateCalendar(req: Request, res: Response) {
 	let calendar: Calendar;
 	try {
 		calendar = CalendarSchema.parse(req.body);
-	} catch (err) {
+	} catch {
 		throw new BadRequestError("Request missing valid calendar data...");
 	}
 
@@ -356,44 +365,44 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 	const accountId =
 		typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
-	const created = await createCalendarAtDestination(req.user!, {
-		accountId,
-		color,
-		name,
-		provider,
-	});
-
-	// ponytail: RECURRENCE-ID overrides (edited single occurrences) are skipped —
-	// the master VEVENT carries the series; per-occurrence edits need detached
-	// instances, which Musubi doesn't model yet. Also one createEvent per VEVENT
-	// (3 inserts each) — batch if huge imports ever matter.
-	let imported = 0;
-	for (const vevent of vevents) {
-		if (vevent.getFirstPropertyValue("recurrence-id")) continue;
-		const fields = veventToFields(vevent);
-		if (!fields) continue;
-		const event = await createEvent(
-			{
-				id: randomUUID(),
-				creatorID: req.user!.id,
-				organizer: req.user!.id,
-				title: fields.title,
-				color,
-				start: fields.start,
-				end: fields.end,
-				isAllDay: fields.isAllDay,
-				description: fields.description,
-				location: fields.location,
-				recurrence: fields.recurrence,
-				originCalendarID: created.id,
-			},
-			[created.id],
-		);
-		await pushEventToProviders({ ...event, calendars: [created.id] }, "create");
-		imported++;
+	// Detached import fidelity remains K11. Inspect every accepted master before
+	// creating a destination, so known unsupported content cannot partially import.
+	const fields = vevents.filter((event) => !event.getFirstPropertyValue("recurrence-id"))
+		.map(veventToFields).filter((event) => event !== null);
+	if (provider === "microsoft" && fields.some((event) => event.recurrence)) {
+		throw new EventWriteError("recurrence", "unsupported",
+			"Outlook recurring import is not supported yet. No calendar or events were created.");
 	}
-
-	res.status(201).json({ ...created, imported });
+	const created = await createCalendarAtDestination(req.user!, { accountId, color, name, provider });
+	const importedEvents = fields.map((event) => EventSchema.parse({
+		...event, id: randomUUID(), creatorID: req.user!.id, organizer: req.user!.id,
+		color, isCanceled: false, originCalendarID: created.id, calendars: [created.id],
+	}));
+	let deliver: Awaited<ReturnType<typeof prepareEventWrites>>;
+	try {
+		deliver = await prepareEventWrites(importedEvents.map((event) => ({
+			event, calendarIDs: [created.id], action: "create",
+		})));
+	} catch (error) {
+		if (error instanceof EventWriteError) {
+			throw new EventWriteError(error.capability, error.reason,
+				`The new calendar was created, but event writing is ${error.reason}. No events were imported; the calendar remains empty.`);
+		}
+		throw error;
+	}
+	const committed: import("@musubi/types").Event[] = [];
+	try {
+		for (const event of importedEvents) {
+			const saved = await createEvent(event, [created.id]);
+			committed.push({ ...saved, calendars: [created.id] });
+		}
+		await deliver(undefined, new Map(committed.map((event) => [event.id, event.revision!])));
+	} catch (error) {
+		if (!committed.length) throw error;
+		const failure = committedFailure(error, committed);
+		return res.status(failure.status).json({ ...failure.body, calendar: created, imported: committed.length });
+	}
+	res.status(201).json({ ...created, imported: importedEvents.length });
 }
 
 export function assertImportEventLimit(count: number) {

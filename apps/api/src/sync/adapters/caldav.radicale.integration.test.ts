@@ -63,7 +63,7 @@ async function main() {
       username,
       encryptSecret(password),
     );
-    const calendars = await caldavAdapter.listCalendars(userID, account.id);
+    const { calendars } = await caldavAdapter.listCalendars(userID, account.id);
     const calendar = calendars.find(
       (entry) => entry.externalId === collectionURL,
     );

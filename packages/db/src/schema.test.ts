@@ -5,6 +5,7 @@ import {
   calendarMembers,
   eventReminders,
   eventUsers,
+  events,
   externalCalendars,
   externalTasks,
   pages,
@@ -43,6 +44,9 @@ assert.ok(
   calendarEventUnique,
   "calendar_events must reject duplicate event/calendar links",
 );
+
+assert.equal(events.revision.default, 1);
+assert.equal(events.revision.notNull, true);
 
 assert.equal(tasks.status.default, "needs-action");
 assert.equal(tasks.percentComplete.default, 0);

@@ -1,8 +1,14 @@
 import {
   AnnouncementsResponseSchema,
+  CLIENT_VERSION_HEADER,
+  PRODUCT_VERSION,
   CalendarInvitePreviewSchema,
   CalendarSchema,
   EventSchema,
+  eventCreateRequest,
+  eventPatchRequest,
+  requireEventRevision,
+  EventMutationError,
   InviteSchema,
   RemindersDocumentSchema,
   SettingsDocumentSchema,
@@ -58,6 +64,12 @@ function throwOnError(
     status?: number | string;
     message?: string;
     statusText?: string;
+    error?: unknown;
+    reason?: unknown;
+    localCommitted?: unknown;
+    current?: unknown;
+    currentRevision?: unknown;
+    code?: unknown;
   } | null,
 ): asserts error is null {
   if (error) {
@@ -65,6 +77,14 @@ function throwOnError(
     // layout; a no-op on auth screens). Still throws so the caller fails loudly.
     if (error.status === 401) notifySessionExpired();
     console.error("API error", error);
+    if (typeof error.localCommitted === "boolean")
+      throw EventMutationError.from(error);
+    if (
+      ["unsupported", "denied", "unknown"].includes(String(error.reason)) &&
+      typeof error.error === "string"
+    ) {
+      throw new Error(error.error); // same server reason as web; keep the draft open
+    }
     throw new Error(`${error.status}: ${error.message ?? error.statusText}`);
   }
 }
@@ -185,7 +205,7 @@ export function useApi() {
           `/api/${apiVersion}/events`,
           {
             method: "POST",
-            body: JSON.stringify(event),
+            body: JSON.stringify(eventCreateRequest(event)),
           },
         );
         return readWire(EventSchema, data, "POST /events (federated)");
@@ -197,7 +217,7 @@ export function useApi() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(event),
+          body: JSON.stringify(eventCreateRequest(event)),
         },
       );
 
@@ -206,7 +226,11 @@ export function useApi() {
       return readWire(EventSchema, data, "POST /events");
     },
 
-    async linkEvent(eventID: string, calendarID: string) {
+    async linkEvent(
+      eventID: string,
+      calendarID: string,
+      expectedRevision: number,
+    ) {
       const remote = remoteOf(calendarID);
       if (remote) {
         const data = await fedFetch<Event>(
@@ -214,7 +238,7 @@ export function useApi() {
           `/api/${apiVersion}/events/${eventID}/link`,
           {
             method: "POST",
-            body: JSON.stringify({ calendarID }),
+            body: JSON.stringify({ calendarID, expectedRevision }),
           },
         );
         return readWire(EventSchema, data, "POST /events/:id/link (federated)");
@@ -224,7 +248,7 @@ export function useApi() {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ calendarID }),
+          body: JSON.stringify({ calendarID, expectedRevision }),
         },
       );
 
@@ -233,7 +257,11 @@ export function useApi() {
       return readWire(EventSchema, data, "POST /events/:id/link");
     },
 
-    async forkEvent(eventID: string, calendarID: string) {
+    async forkEvent(
+      eventID: string,
+      calendarID: string,
+      expectedRevision: number,
+    ) {
       const remote = remoteOf(calendarID);
       if (remote) {
         const data = await fedFetch<Event>(
@@ -241,7 +269,7 @@ export function useApi() {
           `/api/${apiVersion}/events/${eventID}/fork`,
           {
             method: "POST",
-            body: JSON.stringify({ calendarID }),
+            body: JSON.stringify({ calendarID, expectedRevision }),
           },
         );
         return readWire(EventSchema, data, "POST /events/:id/fork (federated)");
@@ -251,7 +279,7 @@ export function useApi() {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ calendarID }),
+          body: JSON.stringify({ calendarID, expectedRevision }),
         },
       );
 
@@ -322,50 +350,62 @@ export function useApi() {
         return readWire(
           EventSchema,
           await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
-            method: "PUT",
-            body: JSON.stringify(event),
+            method: "PATCH",
+            body: JSON.stringify(eventPatchRequest(event)),
           }),
-          "PUT /events (federated)",
+          "PATCH /events (federated)",
         );
       }
       const { error, data } = await authClient.$fetch<Event>(
         `${apiUrl}/api/${apiVersion}/events`,
         {
-          method: "PUT",
+          method: "PATCH",
           headers: {
             "content-type": "application/json",
           },
-          body: JSON.stringify(event),
+          body: JSON.stringify(eventPatchRequest(event)),
         },
       );
       throwOnError(error);
 
-      return readWire(EventSchema, data, "PUT /events");
+      return readWire(EventSchema, data, "PATCH /events");
     },
 
     async removeEvent(event: Event, unlinkCalendarID?: string) {
       const remote = remoteOf(eventHome(event));
       if (remote) {
-        return fedFetch<{ id: string; calendars: string[]; removed: boolean }>(
-          remote,
-          `/api/${apiVersion}/events`,
-          {
-            method: "DELETE",
-            body: JSON.stringify({ ...event, unlinkCalendarID }),
-          },
-        );
+        return fedFetch<{
+          id: string;
+          calendars: string[];
+          removed: boolean;
+          revision?: number;
+          event?: Event;
+        }>(remote, `/api/${apiVersion}/events`, {
+          method: "DELETE",
+          body: JSON.stringify({
+            id: event.id,
+            expectedRevision: requireEventRevision(event),
+            ...(unlinkCalendarID ? { unlinkCalendarID } : {}),
+          }),
+        });
       }
       const { error, data } = await authClient.$fetch<{
         id: string;
         calendars: string[];
         removed: boolean;
+        revision?: number;
+        event?: Event;
       }>(`${apiUrl}/api/${apiVersion}/events`, {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
         },
 
-        body: JSON.stringify({ ...event, unlinkCalendarID }),
+        body: JSON.stringify({
+          id: event.id,
+          expectedRevision: requireEventRevision(event),
+          ...(unlinkCalendarID ? { unlinkCalendarID } : {}),
+        }),
       });
       throwOnError(error);
 
@@ -487,6 +527,7 @@ export function useApi() {
           method: "POST",
           headers: {
             Authorization: `Bearer ${data?.session?.token}`,
+            [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
             "content-type": "text/calendar",
           },
           body: ics,
@@ -506,7 +547,10 @@ export function useApi() {
         : `/api/${apiVersion}/calendars/${calendarID}/export`;
       const token = (await baseAuthClient.getSession()).data?.session?.token;
       const res = await fetchWithTimeout(`${apiUrl}${path}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+        },
       });
       if (!res.ok) throw new Error(`${res.status}: export failed`);
       return res.text();
@@ -794,11 +838,14 @@ export function useApi() {
       return data;
     },
 
-    async getGoogleCalendars() {
+    async syncProviderCalendars(
+      input: { provider?: string; accountId?: string } = {},
+    ) {
       const { error } = await authClient.$fetch(
-        `${apiUrl}/api/${apiVersion}/calendars/google`,
+        `${apiUrl}/api/${apiVersion}/users/connections/sync`,
         {
-          method: "GET",
+          method: "POST",
+          body: input,
         },
       );
 

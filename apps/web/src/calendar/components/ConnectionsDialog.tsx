@@ -22,13 +22,13 @@ import {
   type ParsedInvite,
 } from "@musubi/types";
 import {
-  GOOGLE_CALENDAR_SCOPES,
-  MICROSOFT_CALENDAR_SCOPES,
+  providerConnectionScopes,
   useConnections,
   rememberProviderLink,
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
 import { Button, IconButton } from "~/ui/Button";
+import { Checkbox } from "~/ui/Checkbox";
 import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
@@ -117,6 +117,8 @@ export function ConnectionsDialog({
   const caldavReturnFocusRef = useRef<HTMLButtonElement>(null);
   const inviteInputRef = useRef<HTMLInputElement>(null);
   const [caldav, setCaldav] = useState<CaldavDraft>();
+  // Preserve the existing full-consent default; calendar-only is an explicit choice.
+  const [includeTasks, setIncludeTasks] = useState(true);
   const [inviteValue, setInviteValue] = useState("");
   const [invite, setInvite] = useState<{
     parsed: ParsedInvite;
@@ -132,16 +134,14 @@ export function ConnectionsDialog({
       setCaldav(undefined);
       setInvite(undefined);
       setInviteValue("");
+      setIncludeTasks(true);
       setError("");
       caldavReturnFocusRef.current = null;
     }
     onOpenChange(nextOpen);
   }
 
-  async function connectSocial(
-    provider: "google" | "microsoft",
-    scopes: string[],
-  ) {
+  async function connectSocial(provider: "google" | "microsoft") {
     // Better Auth redirects the page to the provider. Only an early error
     // returns to this dialog.
     await run(async () => {
@@ -151,7 +151,7 @@ export function ConnectionsDialog({
       const result = await authClient.linkSocial({
         callbackURL: window.location.href,
         provider,
-        scopes,
+        scopes: providerConnectionScopes(provider, includeTasks),
       });
       if (result?.error) throw new Error(result.error.message);
     }, "Could not start the connection.");
@@ -178,11 +178,11 @@ export function ConnectionsDialog({
     trigger: HTMLButtonElement,
   ) {
     if (account.provider === "google") {
-      void connectSocial("google", GOOGLE_CALENDAR_SCOPES);
+      void connectSocial("google");
       return;
     }
     if (account.provider === "microsoft") {
-      void connectSocial("microsoft", MICROSOFT_CALENDAR_SCOPES);
+      void connectSocial("microsoft");
       return;
     }
     openCaldav(
@@ -429,14 +429,22 @@ export function ConnectionsDialog({
               </p>
             ) : providers.length > 0 ? (
               <div className={styles.providerButtons}>
+                {providers.includes("google") || providers.includes("microsoft") ? (
+                  <Checkbox
+                    checked={includeTasks}
+                    className={styles.taskConsent}
+                    description="When off, no new Tasks permission is requested. Previously granted access is not revoked."
+                    disabled={busy}
+                    label="Include Tasks (optional)"
+                    onChange={(event) => setIncludeTasks(event.target.checked)}
+                  />
+                ) : null}
                 {providers.includes("google") ? (
                   <Button
                     disabled={busy}
                     icon={<ProviderGlyph provider="google" />}
                     variant="secondary"
-                    onClick={() =>
-                      void connectSocial("google", GOOGLE_CALENDAR_SCOPES)
-                    }
+                    onClick={() => void connectSocial("google")}
                   >
                     Google Calendar
                   </Button>
@@ -446,12 +454,7 @@ export function ConnectionsDialog({
                     disabled={busy}
                     icon={<ProviderGlyph provider="microsoft" />}
                     variant="secondary"
-                    onClick={() =>
-                      void connectSocial(
-                        "microsoft",
-                        MICROSOFT_CALENDAR_SCOPES,
-                      )
-                    }
+                    onClick={() => void connectSocial("microsoft")}
                   >
                     Outlook
                   </Button>

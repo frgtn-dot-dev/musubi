@@ -1,4 +1,6 @@
+import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { logger } from "@musubi/config";
 import {
   caldavAccounts,
   account,
@@ -14,7 +16,12 @@ import {
   type NewEvent,
   type NewTask,
 } from "..";
-import { type DbTransaction, removeCalendarInTransaction } from "./calendars";
+import { hasProviderSyncScopes } from "./oauth";
+import { type DbTransaction, removeCalendarInTransaction, lockCalendarRemovalEvents } from "./calendars";
+import {
+  createEventInTransaction,
+  diffEventContent, type EventContentPatch,
+} from "./events";
 
 // Column values written to the `events` row for a synced event.
 type EventValues = {
@@ -90,6 +97,7 @@ export async function importExternalCalendar(
   role: string = "owner", // "viewer" for provider-side read-only calendars (holidays, …)
 ) {
   return db.transaction(async (tx) => {
+    await lockUserLifecycle(tx, [userID], "shared");
     const [created] = await tx
       .insert(calendars)
       .values({ creatorID: userID, name: cal.name, color: cal.color })
@@ -142,6 +150,7 @@ export async function disableExternalCalendar(
   calendarID: string,
 ) {
   return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [calendarID], "exclusive");
     const [row] = await tx
       .update(externalCalendars)
       .set({ disabled: true, calendarID: null, cursor: null })
@@ -179,6 +188,8 @@ export async function removeExternalAccountData(
         ),
       );
 
+    await lockCalendarLifecycle(tx, links.map((link) => link.calendarID), "exclusive");
+    await lockCalendarRemovalEvents(tx, links.map((link) => link.calendarID));
     for (const link of links) {
       await removeCalendarInTransaction(tx, link.calendarID);
     }
@@ -292,20 +303,13 @@ export async function getExternalLinkForCalendar(calendarID: string) {
 // --- events ---
 
 export async function clearCalendarEvents(calendarID: string) {
-  // Soft-delete (tombstone) so the delta tells clients to drop them, and keep
-  // the external_events mapping — a following upsert revives still-present events
-  // with the SAME id (no churn); genuinely-gone ones stay tombstoned.
+  // Legacy reset helper: only the home calendar can tombstone shared content.
+  // Keep links/mappings so authoritative upserts revive the SAME local ID.
   await db
     .update(events)
-    .set({ deletedAt: new Date() })
+    .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
     .where(
-      inArray(
-        events.id,
-        db
-          .select({ id: calendarEvents.eventID })
-          .from(calendarEvents)
-          .where(eq(calendarEvents.calendarID, calendarID)),
-      ),
+      and(eq(events.originCalendarID, calendarID), isNull(events.deletedAt)),
     );
 }
 
@@ -323,27 +327,52 @@ async function linkEventToCalendarsInTransaction(
     });
 }
 
-// Delta sync filters on events.updatedAt, so link/unlink must bump the event row —
-// otherwise offline members never learn the event's calendar membership changed.
-async function touchEvent(tx: DbTransaction, eventID: string) {
-  await tx
-    .update(events)
-    .set({ updatedAt: new Date() })
-    .where(eq(events.id, eventID));
-}
-
-// Link an event into calendars (calendar_events rows). The added diff normally
-// contains only new links; the constraint + conflict handling also absorb
-// retries and concurrent requests. The link set and delta timestamp move
-// together.
+// Administrative/import link writer: lock and diff, so repeated links are no-ops.
 export async function linkEventToCalendars(
   eventID: string,
   calendarIDs: string[],
 ) {
-  if (calendarIDs.length === 0) return;
-  await db.transaction(async (tx) => {
-    await linkEventToCalendarsInTransaction(tx, eventID, calendarIDs);
-    await touchEvent(tx, eventID);
+  await reconcileEventLinks(eventID, calendarIDs, [], false);
+}
+
+async function reconcileEventLinks(
+  eventID: string,
+  add: string[],
+  remove: string[],
+  tombstone: boolean,
+) {
+  return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, add, "shared");
+    const [row] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID))
+      .for("update");
+    if (!row) return { remaining: [] as string[], removed: true };
+    const links = await tx
+      .select({ id: calendarEvents.calendarID })
+      .from(calendarEvents)
+      .where(eq(calendarEvents.eventID, eventID));
+    const calendars = [
+      ...new Set([
+        ...links.map((link) => link.id).filter((id) => !remove.includes(id)),
+        ...add,
+      ]),
+    ];
+    if (row.deletedAt) return { remaining: calendars, removed: true };
+    const result = await patchEventAndCalendarLinksInTransaction(
+      tx,
+      eventID,
+      row.revision,
+      { calendars },
+      tombstone,
+    );
+    if (result.status !== "saved")
+      throw new Error("Locked event revision changed unexpectedly");
+    return {
+      remaining: result.event.calendars,
+      removed: result.event.deletedAt !== null,
+    };
   });
 }
 
@@ -365,57 +394,158 @@ async function unlinkEventFromCalendarsInTransaction(
       ),
     );
 
-  const extCals = await tx
-    .select({ ext: externalCalendars.externalCalendarID })
-    .from(externalCalendars)
-    .where(inArray(externalCalendars.calendarID, calendarIDs));
-  const extIDs = extCals.map((e) => e.ext);
-  if (extIDs.length) {
-    await tx
-      .delete(externalEvents)
-      .where(
-        and(
-          eq(externalEvents.eventID, eventID),
-          inArray(externalEvents.externalCalendarID, extIDs),
-        ),
-      );
-  }
+  // Remote collection IDs can be shared across accounts/providers. Scope the
+  // removal to the actual local mirrors, just like calendar_events above.
+  await tx
+    .delete(externalEvents)
+    .where(
+      and(
+        eq(externalEvents.eventID, eventID),
+        inArray(externalEvents.calendarID, calendarIDs),
+      ),
+    );
 }
 
 export async function unlinkEventFromCalendars(
   eventID: string,
   calendarIDs: string[],
 ) {
-  if (calendarIDs.length === 0) return;
-  await db.transaction(async (tx) => {
-    await unlinkEventFromCalendarsInTransaction(tx, eventID, calendarIDs);
-    await touchEvent(tx, eventID);
+  await reconcileEventLinks(eventID, [], calendarIDs, false);
+}
+
+export type EventRevisionMutationResult =
+  | { status: "not_found" }
+  | {
+      status: "conflict";
+      current: typeof events.$inferSelect & { calendars: string[] };
+    }
+  | {
+      status: "saved";
+      changed: boolean;
+      previous: typeof events.$inferSelect & { calendars: string[] };
+      event: typeof events.$inferSelect & { calendars: string[] };
+      patch: EventContentPatch;
+      addedCalendarIDs: string[];
+      removedCalendarIDs: string[];
+    };
+
+/** Event-before-link lock order matches inbound reconciliation. The revision
+ * check, actual diff and every event/link/mapping write share this transaction.
+ * Callers authorize/preflight first and deliver only after a saved result.
+ */
+export async function patchEventAndCalendarLinks(
+  eventID: string,
+  expectedRevision: number,
+  input: EventContentPatch & { calendars?: string[] },
+  tombstoneIfOrphaned = false,
+): Promise<EventRevisionMutationResult> {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    throw new TypeError("A positive expected event revision is required");
+  }
+  return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, input.calendars ?? [], "shared");
+    return patchEventAndCalendarLinksInTransaction(
+      tx,
+      eventID,
+      expectedRevision,
+      input,
+      tombstoneIfOrphaned,
+    );
   });
 }
 
-// Persist an event edit and reconcile every local link/mapping as one unit.
-// Provider deletes happen before this call while their mapping is still present;
-// provider creates/updates happen afterwards and remain best-effort.
-export async function updateEventAndCalendarLinks(
-  event: Partial<NewEvent> & { id: string },
-  addedCalendarIDs: string[],
-  removedCalendarIDs: string[],
-) {
-  return db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(events)
-      .set(event)
-      .where(eq(events.id, event.id))
-      .returning();
-    if (!updated) return undefined;
-
-    await unlinkEventFromCalendarsInTransaction(
-      tx,
-      event.id,
+async function patchEventAndCalendarLinksInTransaction(
+  tx: DbTransaction,
+  eventID: string,
+  expectedRevision: number,
+  input: EventContentPatch & { calendars?: string[] },
+  tombstoneIfOrphaned = false,
+): Promise<EventRevisionMutationResult> {
+  const [current] = await tx
+    .select()
+    .from(events)
+    .where(eq(events.id, eventID))
+    .for("update");
+  if (!current) return { status: "not_found" };
+  const links = await tx
+    .select({ id: calendarEvents.calendarID })
+    .from(calendarEvents)
+    .where(eq(calendarEvents.eventID, eventID));
+  const existing = links.map((link) => link.id);
+  const previous = { ...current, calendars: existing };
+  // Even a stale patch that looks empty against newer content is a conflict.
+  if (current.revision !== expectedRevision || current.deletedAt !== null) {
+    return { status: "conflict", current: previous };
+  }
+  const incoming =
+    input.calendars === undefined ? existing : [...new Set(input.calendars)];
+  const addedCalendarIDs = incoming.filter((id) => !existing.includes(id));
+  const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
+  const patch = diffEventContent(current, input);
+  const deletedAt =
+    tombstoneIfOrphaned && incoming.length === 0 ? new Date() : null;
+  const changed =
+    Object.keys(patch).length > 0 ||
+    addedCalendarIDs.length > 0 ||
+    removedCalendarIDs.length > 0 ||
+    deletedAt !== null;
+  if (!changed)
+    return {
+      status: "saved",
+      changed,
+      previous,
+      event: previous,
+      patch,
+      addedCalendarIDs,
       removedCalendarIDs,
+    };
+  const [updated] = await tx
+    .update(events)
+    .set({
+      ...patch,
+      deletedAt,
+      revision: sql`${events.revision} + 1`,
+    })
+    .where(and(eq(events.id, eventID), eq(events.revision, expectedRevision)))
+    .returning();
+  if (!updated) throw new Error("Locked event revision changed unexpectedly");
+  await unlinkEventFromCalendarsInTransaction(tx, eventID, removedCalendarIDs);
+  await linkEventToCalendarsInTransaction(tx, eventID, addedCalendarIDs);
+  return {
+    status: "saved",
+    changed,
+    previous,
+    event: { ...updated, calendars: incoming },
+    patch,
+    addedCalendarIDs,
+    removedCalendarIDs,
+  };
+}
+
+/** Fork checks the source under the event lock in the same transaction that
+ * creates the independent identity. It never copies the source revision. */
+export async function forkEventAtRevision(
+  sourceID: string,
+  expectedRevision: number,
+  event: NewEvent,
+  calendarIDs: string[],
+) {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+    throw new TypeError("A positive expected event revision is required");
+  return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [...calendarIDs, ...(event.originCalendarID ? [event.originCalendarID] : [])], "shared");
+    const checked = await patchEventAndCalendarLinksInTransaction(
+      tx,
+      sourceID,
+      expectedRevision,
+      {},
     );
-    await linkEventToCalendarsInTransaction(tx, event.id, addedCalendarIDs);
-    return updated;
+    if (checked.status !== "saved") return checked;
+    const created = await createEventInTransaction(tx, event, calendarIDs);
+    return {
+      status: "saved" as const,
+      event: { ...created, calendars: calendarIDs },
+    };
   });
 }
 
@@ -425,27 +555,37 @@ export async function unlinkEventAndTombstoneIfOrphaned(
   eventID: string,
   calendarIDs: string[],
 ) {
-  return db.transaction(async (tx) => {
-    await unlinkEventFromCalendarsInTransaction(tx, eventID, calendarIDs);
+  return reconcileEventLinks(eventID, [], calendarIDs, true);
+}
 
-    const rows = await tx
-      .select({ calendarID: calendarEvents.calendarID })
-      .from(calendarEvents)
-      .where(eq(calendarEvents.eventID, eventID));
-    const remaining = rows.map((row) => row.calendarID);
-    const removed = remaining.length === 0;
-
-    if (removed) {
-      await tx
-        .update(events)
-        .set({ deletedAt: new Date() })
-        .where(eq(events.id, eventID));
-    } else {
-      await touchEvent(tx, eventID);
-    }
-
-    return { remaining, removed };
-  });
+// Lock shared content before mapping/link rows, just like local mutations.
+// Re-read the mapping after waiting: another unlink may have removed it while
+// the first SELECT's snapshot still contained it.
+async function mappedEventForUpdate(
+  tx: DbTransaction,
+  provider: string,
+  calendarID: string,
+  externalEventID: string,
+) {
+  const [mapped] = await tx
+    .select({ id: externalEvents.id, event: events })
+    .from(externalEvents)
+    .innerJoin(events, eq(externalEvents.eventID, events.id))
+    .where(
+      and(
+        eq(externalEvents.provider, provider),
+        eq(externalEvents.calendarID, calendarID),
+        eq(externalEvents.externalEventID, externalEventID),
+      ),
+    )
+    .for("update", { of: events });
+  if (!mapped) return undefined;
+  const [mapping] = await tx
+    .select()
+    .from(externalEvents)
+    .where(eq(externalEvents.id, mapped.id))
+    .for("update");
+  return mapping ? { ...mapping, event: mapped.event } : undefined;
 }
 
 /**
@@ -465,40 +605,64 @@ export async function upsertExternalEvent(
   icalUid: string | null = null,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const [map] = await tx
-      .select({
-        id: externalEvents.id,
-        eventID: externalEvents.eventID,
-        etag: externalEvents.etag,
-        icalUid: externalEvents.icalUid,
-        deletedAt: events.deletedAt,
-      })
-      .from(externalEvents)
-      .innerJoin(events, eq(externalEvents.eventID, events.id))
-      .where(
-        and(
-          eq(externalEvents.provider, provider),
-          // scope to THIS mirror — global calendars (Google holidays) share
-          // externalCalendarID across every user's account
-          eq(externalEvents.calendarID, calendarID),
-          eq(externalEvents.externalEventID, externalEventID),
-        ),
-      );
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    const map = await mappedEventForUpdate(
+      tx,
+      provider,
+      calendarID,
+      externalEventID,
+    );
 
     if (map) {
-      // etag match on a live event = nothing changed (CalDAV full-fetches
-      // everything every sync; without this check every poll looks "changed")
-      if (etag !== null && map.etag === etag && map.deletedAt === null)
+      if (etag !== null && map.etag === etag && map.event.deletedAt === null)
         return false;
-      // revive if it was tombstoned by a reset
-      await tx
-        .update(events)
-        .set({ ...values, deletedAt: null })
-        .where(eq(events.id, map.eventID));
+      if (map.event.originCalendarID !== calendarID) {
+        const changedFields = (
+          Object.keys(values) as (keyof EventValues)[]
+        ).filter((key) => {
+          // Mirror color is presentation, not provider event content.
+          if (key === "color") return false;
+          const incoming = values[key];
+          const current = map.event[key];
+          return incoming instanceof Date && current instanceof Date
+            ? incoming.getTime() !== current.getTime()
+            : incoming !== current;
+        });
+        // A linked copy is not a second writer, even when the same user owns
+        // both calendars. Unknown legacy origins must also fail closed. Leave
+        // its old ETag intact: rejecting content must not acknowledge it for a
+        // later conditional write. Log field names only, never provider data.
+        if (changedFields.length || map.event.deletedAt !== null) {
+          logger.warn("sync.event.non_origin_update_rejected", {
+            provider,
+            calendarId: calendarID,
+            eventId: map.event.id,
+            originCalendarId: map.event.originCalendarID,
+            changedFields,
+          });
+        }
+        return false;
+      }
+      // Provider version changes are not necessarily content changes. Persist
+      // the accepted validator without waking delta readers for identical polls.
+      const patch = diffEventContent(map.event, values);
+      const changed =
+        Object.keys(patch).length > 0 || map.event.deletedAt !== null;
+      if (changed) {
+        await tx
+          .update(events)
+          .set({
+            ...patch,
+            deletedAt: null,
+            revision: sql`${events.revision} + 1`,
+          })
+          .where(eq(events.id, map.event.id));
+      }
       await tx
         .update(externalEvents)
         .set({ etag, icalUid: icalUid ?? map.icalUid })
         .where(eq(externalEvents.id, map.id));
+      return changed;
     } else {
       const [ev] = await tx
         .insert(events)
@@ -527,86 +691,117 @@ export async function upsertExternalEvent(
 }
 
 /**
- * Provider says an event is gone. TOMBSTONE it (deletedAt) rather than hard
- * delete — the delta sync's `deletedIds` needs the tombstone to tell offline
- * clients to drop it (a hard delete just vanished and stale caches kept it).
- * Returns TRUE when a live event was actually tombstoned.
+ * A provider deletion is authoritative only in the event's home calendar.
+ * Other copies lose their own link/mapping, never the shared event. Returns
+ * TRUE for an actual unlink or tombstone; repeated deletions are no-ops.
  */
 export async function deleteExternalEvent(
   provider: string,
   calendarID: string,
   externalEventID: string,
+  onUnlink?: (eventID: string, revision: number) => void,
 ): Promise<boolean> {
-  const rows = await db
-    .update(events)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        isNull(events.deletedAt),
-        inArray(
-          events.id,
-          db
-            .select({ id: externalEvents.eventID })
-            .from(externalEvents)
-            .where(
-              and(
-                eq(externalEvents.provider, provider),
-                // scoped to the caller's mirror — never reach into another user's mirror
-                eq(externalEvents.calendarID, calendarID),
-                eq(externalEvents.externalEventID, externalEventID),
-              ),
-            ),
-        ),
-      ),
-    )
-    .returning({ id: events.id });
-  return rows.length > 0;
+  let unlinked: { id: string; revision: number } | undefined;
+  const changed = await db.transaction(async (tx) => {
+    const mapped = await mappedEventForUpdate(
+      tx,
+      provider,
+      calendarID,
+      externalEventID,
+    );
+    if (!mapped) return false;
+
+    if (mapped.event.originCalendarID !== calendarID) {
+      await unlinkEventFromCalendarsInTransaction(tx, mapped.event.id, [
+        calendarID,
+      ]);
+      await tx
+        .update(events)
+        .set({ revision: sql`${events.revision} + 1` })
+        .where(eq(events.id, mapped.event.id));
+      unlinked = { id: mapped.event.id, revision: mapped.event.revision + 1 };
+      return true;
+    }
+    if (mapped.event.deletedAt !== null) return false;
+    // Retain authoritative mappings/links for tombstone deltas and revival.
+    await tx
+      .update(events)
+      .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
+      .where(eq(events.id, mapped.event.id));
+    return true;
+  });
+  // Emit receipts only after commit, never for rolled-back link changes.
+  if (unlinked) onUnlink?.(unlinked.id, unlinked.revision);
+  return changed;
 }
 
-/**
- * Full-fetch reconciliation (CalDAV every sync, Google after a 410 reset):
- * tombstone the mirror's events whose external id was NOT in the fetched set —
- * they were deleted on the provider. Replaces the old tombstone-everything-
- * then-revive approach, which churned every event on every sync and made
- * "did anything change" undetectable. Returns the number tombstoned.
- */
+/** Reconcile a complete snapshot using the same authority rules as delta deletes. */
 export async function sweepExternalEvents(
   provider: string,
   calendarID: string,
   seenExternalEventIDs: string[],
+  onUnlink?: (eventID: string, revision: number) => void,
 ): Promise<number> {
   const mappings = await db
     .select({
-      eventID: externalEvents.eventID,
       externalEventID: externalEvents.externalEventID,
     })
     .from(externalEvents)
-    .innerJoin(events, eq(externalEvents.eventID, events.id))
     .where(
       and(
         eq(externalEvents.provider, provider),
         eq(externalEvents.calendarID, calendarID),
-        isNull(events.deletedAt),
       ),
     );
   const seen = new Set(seenExternalEventIDs);
-  const gone = mappings
-    .filter((m) => !seen.has(m.externalEventID))
-    .map((m) => m.eventID);
-  if (gone.length === 0) return 0;
-  await db
-    .update(events)
-    .set({ deletedAt: new Date() })
-    .where(inArray(events.id, gone));
-  return gone.length;
+  let changed = 0;
+  // ponytail: one transaction per missing resource; batch only if large reset
+  // sweeps are measurably slow. Delta and reset must share deletion semantics.
+  for (const mapping of mappings) {
+    if (
+      !seen.has(mapping.externalEventID) &&
+      (await deleteExternalEvent(
+        provider,
+        calendarID,
+        mapping.externalEventID,
+        onUnlink,
+      ))
+    )
+      changed++;
+  }
+  return changed;
 }
 
-/** Users with at least one provider mirror — the scheduled sync's work list. */
+/** Include connected accounts before their first mirror exists. */
 export async function getExternalSyncUserIDs(): Promise<string[]> {
   const rows = await db
     .selectDistinct({ userID: externalCalendars.userID })
     .from(externalCalendars);
-  return rows.map((r) => r.userID);
+  const caldav = await db
+    .selectDistinct({ userID: caldavAccounts.userID })
+    .from(caldavAccounts);
+  const oauth = await db
+    .select({
+      userID: account.userId,
+      provider: account.providerId,
+      scope: account.scope,
+      refreshToken: account.refreshToken,
+      syncStatus: account.syncStatus,
+      syncErrorCode: account.syncErrorCode,
+    })
+    .from(account)
+    .where(inArray(account.providerId, ["google", "microsoft"]));
+  const eligible = oauth.filter(
+    (row) =>
+      row.refreshToken &&
+      hasProviderSyncScopes(row.provider, row.scope ?? "") &&
+      (row.syncStatus === "active" ||
+        (row.syncStatus === "reconnect_required" &&
+          row.syncErrorCode === "insufficient_scope")),
+  );
+  return [
+    ...new Set([...rows, ...caldav, ...eligible].map((row) => row.userID)),
+  ];
 }
 
 // For push update/delete: find the external id of an already-synced Musubi event.
@@ -739,6 +934,7 @@ export async function getExternalEvent(
   provider: string,
   eventID: string,
   externalCalendarID: string,
+  calendarID?: string,
 ) {
   const [res] = await db
     .select({
@@ -752,6 +948,7 @@ export async function getExternalEvent(
         eq(externalEvents.provider, provider),
         eq(externalEvents.eventID, eventID),
         eq(externalEvents.externalCalendarID, externalCalendarID),
+        calendarID ? eq(externalEvents.calendarID, calendarID) : undefined,
       ),
     );
   return res ?? null;
@@ -762,20 +959,45 @@ export async function setExternalEventSyncData(
   eventID: string,
   externalCalendarID: string,
   data: { etag: string | null; icalUid: string | null },
+  calendarID?: string,
+  guard?: { revision: number; etag: string | null; externalEventID: string },
 ) {
-  await db
-    .update(externalEvents)
-    .set(data)
-    .where(
-      and(
-        eq(externalEvents.provider, provider),
-        eq(externalEvents.eventID, eventID),
-        eq(externalEvents.externalCalendarID, externalCalendarID),
-      ),
-    );
+  return db.transaction(async (tx) => {
+    const [event] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID))
+      .for("update");
+    if (
+      !event ||
+      (guard && (event.revision !== guard.revision || event.deletedAt))
+    )
+      return false;
+    const rows = await tx
+      .update(externalEvents)
+      .set(data)
+      .where(
+        and(
+          eq(externalEvents.provider, provider),
+          eq(externalEvents.eventID, eventID),
+          eq(externalEvents.externalCalendarID, externalCalendarID),
+          calendarID ? eq(externalEvents.calendarID, calendarID) : undefined,
+          guard
+            ? eq(externalEvents.externalEventID, guard.externalEventID)
+            : undefined,
+          guard
+            ? guard.etag === null
+              ? isNull(externalEvents.etag)
+              : eq(externalEvents.etag, guard.etag)
+            : undefined,
+        ),
+      )
+      .returning({ id: externalEvents.id });
+    return rows.length > 0;
+  });
 }
 
-// For push create: store the mapping after the provider returns the new id.
+// A delayed create response cannot restore a mapping after an inbound edit/unlink.
 export async function importExternalEvent(
   provider: string,
   eventID: string,
@@ -784,15 +1006,42 @@ export async function importExternalEvent(
   externalEventID: string,
   etag: string | null = null,
   icalUid: string | null = null,
+  expectedRevision?: number,
 ) {
-  await db.insert(externalEvents).values({
-    provider,
-    eventID,
-    calendarID,
-    externalCalendarID,
-    externalEventID,
-    etag,
-    icalUid,
+  return db.transaction(async (tx) => {
+    const [event] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID))
+      .for("update");
+    if (
+      !event ||
+      (expectedRevision !== undefined &&
+        (event.revision !== expectedRevision || event.deletedAt))
+    )
+      return false;
+    const [link] = await tx
+      .select()
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.eventID, eventID),
+          eq(calendarEvents.calendarID, calendarID),
+        ),
+      );
+    if (expectedRevision !== undefined && !link) return false;
+    await tx
+      .insert(externalEvents)
+      .values({
+        provider,
+        eventID,
+        calendarID,
+        externalCalendarID,
+        externalEventID,
+        etag,
+        icalUid,
+      });
+    return true;
   });
 }
 

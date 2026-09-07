@@ -245,6 +245,10 @@
 	padding: 0 var(--layer-inline);
 }
 
+.taskConsent {
+	grid-column: 1 / -1;
+}
+
 .providerButtons button {
 	justify-content: center;
 	min-height: 52px;

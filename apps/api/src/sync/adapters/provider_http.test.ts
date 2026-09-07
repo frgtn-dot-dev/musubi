@@ -248,7 +248,7 @@ async function main() {
         "@odata.nextLink": `${origin}/graph-page-2`,
       });
     }
-    if (url.pathname === "/graph/me/events/master-1") {
+    if (url.pathname === "/graph/me/calendars/calendar-graph/events/master-1") {
       graphMasterRequests++;
       return json(
         200,
@@ -304,7 +304,7 @@ async function main() {
         "google",
         "openid https://www.googleapis.com/auth/calendar.events",
       ),
-      false,
+      true,
     );
     assert.equal(
       hasProviderSyncScopes(
@@ -322,7 +322,7 @@ async function main() {
     );
     assert.equal(
       hasProviderSyncScopes("microsoft", "Calendars.ReadWrite"),
-      false,
+      true,
     );
 
     const {

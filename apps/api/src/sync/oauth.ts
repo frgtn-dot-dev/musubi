@@ -103,6 +103,9 @@ export async function getOAuthAccessToken(
     accessToken: await encryptToken(payload.access_token),
     accessTokenExpiresAt,
     refreshToken: payload.refresh_token ? await encryptToken(payload.refresh_token) : undefined,
+    // A returned grant is authoritative (including a narrowed Tasks grant).
+    // OAuth permits omitting scope when unchanged; preserve it in that case.
+    scope: typeof payload.scope === "string" ? payload.scope.split(/[\s,]+/).filter(Boolean).join(",") : undefined,
   });
   return payload.access_token;
 }
