@@ -53,6 +53,19 @@ export const EventDeliverySchema = z.object({
 export type EventDeliveryTarget = z.infer<typeof EventDeliveryTargetSchema>;
 export type EventDelivery = z.infer<typeof EventDeliverySchema>;
 
+/** Discovery only; opening an item loads current, authorized delivery receipts. */
+export const EventDeliveryInboxSchema = z.object({
+  items: z.array(
+    z.object({
+      eventId: z.uuid(),
+      // Last owned unresolved intent's title, never newer private event content.
+      savedTitle: z.string(),
+    }),
+  ),
+  nextCursor: z.uuid().nullable(),
+});
+export type EventDeliveryInbox = z.infer<typeof EventDeliveryInboxSchema>;
+
 export const EventDeliveryContentSchema = z.object({
   title: z.string(),
   start: z.coerce.date(),

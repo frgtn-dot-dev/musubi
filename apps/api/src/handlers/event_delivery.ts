@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
   getEventDeliveryStatus,
+  getEventDeliveryInbox,
   requestEventDeliveryRetry,
   EventDeliveryRetryError,
   EventDeliveryResolutionError,
@@ -14,6 +15,20 @@ import {
 import { prepareEventDeliveryResolution } from "../sync/event_resolution";
 import { deliverEventOutboxAndNotify } from "../sync/engine";
 import { requireUUID } from "../request_validation";
+
+export async function handlerGetEventDeliveryInbox(
+  req: Request,
+  res: Response,
+) {
+  if (Object.keys(req.query).some((key) => key !== "cursor"))
+    throw new BadRequestError("Only a cursor may be supplied.");
+  const cursor =
+    req.query.cursor === undefined
+      ? undefined
+      : requireUUID(req.query.cursor, "cursor");
+  res.setHeader("Cache-Control", "private, no-store");
+  return res.json(await getEventDeliveryInbox(req.user!.id, cursor));
+}
 
 export async function handlerGetEventDelivery(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");

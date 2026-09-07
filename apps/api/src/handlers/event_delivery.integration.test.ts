@@ -20,12 +20,14 @@ import {
   PRODUCT_VERSION,
   EventSchema,
   EventDeliverySchema,
+  EventDeliveryInboxSchema,
 } from "@musubi/types";
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
 import { middlewareErrorHandler } from "../middleware/error_handler";
 import {
   handlerGetEventDelivery,
+  handlerGetEventDeliveryInbox,
   handlerRetryEventDelivery,
 } from "./event_delivery";
 
@@ -47,9 +49,15 @@ async function main() {
     const app = express();
     app.use(express.json());
     app.get(
+      "/api/v1/event-deliveries",
+      requireAuth,
+      handlerGetEventDeliveryInbox,
+    );
+    app.get(
       "/api/v1/events/:eventId/delivery",
       requireAuth,
       handlerGetEventDelivery,
+      handlerGetEventDeliveryInbox,
     );
     app.post(
       "/api/v1/events/:eventId/delivery/:operationId/retry",
@@ -68,6 +76,26 @@ async function main() {
   ) => {
     const response = await fetch(
       `http://127.0.0.1:${(server.address() as { port: number }).port}/api/v1/events/${eventID}/delivery`,
+      {
+        headers: {
+          ...(authenticated ? { authorization: `Bearer ${person.token}` } : {}),
+          [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+        },
+      },
+    );
+    return {
+      status: response.status,
+      cache: response.headers.get("cache-control"),
+      body: await response.json(),
+    };
+  };
+  const inbox = async (
+    person: typeof owner,
+    query = "",
+    authenticated = true,
+  ) => {
+    const response = await fetch(
+      `http://127.0.0.1:${(server.address() as { port: number }).port}/api/v1/event-deliveries${query}`,
       {
         headers: {
           ...(authenticated ? { authorization: `Bearer ${person.token}` } : {}),
@@ -206,6 +234,43 @@ async function main() {
     await receipt(hidden, "conflict");
     const blocker = await receipt(shared, "blocked");
     await receipt(shared, "pending", 2, blocker.id);
+
+    assert.equal((await inbox(owner, "", false)).status, 401);
+    for (const query of [
+      "?cursor=invalid",
+      "?cursor[]=bad",
+      "?cursor=a&cursor=b",
+    ]) {
+      assert.equal((await inbox(owner, query)).status, 400);
+    }
+    assert.deepEqual(
+      (await inbox(owner)).body,
+      { items: [], nextCursor: null },
+      "other members' unfinished receipts cannot enter the owner's inbox",
+    );
+    assert.deepEqual((await inbox(viewer)).body.items, []);
+    const otherInbox = await inbox(other);
+    assert.equal(otherInbox.cache, "private, no-store");
+    assert.deepEqual(
+      EventDeliveryInboxSchema.parse(otherInbox.body).items,
+      [{ eventId: value.id, savedTitle: value.title }],
+      "multiple targets deduplicate the event",
+    );
+    for (const forbidden of [
+      "private-account",
+      "private-resource",
+      "private-etag",
+      "Private remote",
+      "private-error",
+    ]) {
+      assert.equal(JSON.stringify(otherInbox.body).includes(forbidden), false);
+    }
+    // Discovery reads retained intent content, never a newer private event title.
+    await db
+      .update(events)
+      .set({ title: "New private content" })
+      .where(eq(events.id, value.id));
+    assert.deepEqual((await inbox(other)).body, otherInbox.body);
 
     assert.equal((await read(owner, value.id, false)).status, 401);
     assert.equal((await read(owner, "invalid")).status, 400);
@@ -559,6 +624,78 @@ async function main() {
     assert.equal(retained.targets[0].status, "unconfirmed");
     assert.equal(retained.targets[0].action, "delete");
     assert.equal((await read(stranger, value.id)).status, 404);
+    const retainedInbox = await inbox(owner);
+    assert.deepEqual(retainedInbox.body.items, [
+      { eventId: value.id, savedTitle: value.title },
+    ]);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = serve();
+    await new Promise<void>((resolve) => server.once("listening", resolve));
+    assert.deepEqual(
+      (await inbox(owner)).body,
+      retainedInbox.body,
+      "a restarted client can discover the deleted event without knowing its ID",
+    );
+
+    // Stable, bounded UUID pagination through multiple retained deletion intents.
+    const ids = Array.from({ length: 28 }, () => randomUUID()).sort();
+    await db.insert(eventOutbox).values(
+      ids.map((id) => ({
+        ...deleteReceipt,
+        id: randomUUID(),
+        eventID: id,
+        mutationID: randomUUID(),
+        predecessorID: null,
+        action: "delete" as const,
+        status: "unconfirmed" as const,
+        payload: { event: { ...value, id, title: `Saved ${id}` } },
+      })),
+    );
+    const firstPage = EventDeliveryInboxSchema.parse((await inbox(owner)).body);
+    assert.equal(firstPage.items.length, 25);
+    assert.ok(firstPage.nextCursor);
+    await db
+      .update(eventOutbox)
+      .set({ updatedAt: new Date(), status: "retry" })
+      .where(eq(eventOutbox.userID, owner.id));
+    const secondPage = EventDeliveryInboxSchema.parse(
+      (await inbox(owner, `?cursor=${firstPage.nextCursor.toUpperCase()}`))
+        .body,
+    );
+    assert.equal(secondPage.nextCursor, null);
+    assert.deepEqual(
+      [...firstPage.items, ...secondPage.items].map((item) => item.eventId),
+      [...ids, value.id].sort(),
+      "retry updates neither skip nor duplicate items",
+    );
+    await db
+      .update(eventOutbox)
+      .set({ status: "completed" })
+      .where(eq(eventOutbox.userID, owner.id));
+    assert.deepEqual((await inbox(owner)).body.items, []);
+    await db
+      .update(eventOutbox)
+      .set({ status: "cancelled" })
+      .where(eq(eventOutbox.id, deleteReceipt.id));
+    assert.equal(
+      (await inbox(owner)).body.items.length,
+      1,
+      "final cancelled operation stays discoverable",
+    );
+    await db.insert(eventOutbox).values({
+      ...deleteReceipt,
+      id: randomUUID(),
+      mutationID: randomUUID(),
+      revision: 4,
+      status: "completed",
+      predecessorID: null,
+    });
+    assert.deepEqual(
+      (await inbox(owner)).body.items,
+      [],
+      "completed resolution archives its cancellation",
+    );
+
     console.log(
       "event delivery status/retry: scoped receipts, authorization, preserved leases/uncertainty/Retry-After, reload and retained deletes passed",
     );

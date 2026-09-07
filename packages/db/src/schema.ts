@@ -907,6 +907,9 @@ export const eventOutbox = pgTable(
       t.position,
     ),
     index("event_outbox_event_revision_idx").on(t.eventID, t.revision),
+    index("event_outbox_inbox_idx")
+      .on(t.userID, t.eventID)
+      .where(sql`${t.status} not in ('completed', 'not-needed')`),
     index("event_outbox_pending_idx")
       .on(t.nextAttemptAt, t.id)
       .where(sql`${t.status} in ('pending', 'retry', 'attempting', 'unconfirmed')`),

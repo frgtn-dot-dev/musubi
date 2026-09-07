@@ -1,0 +1,1 @@
+CREATE INDEX "event_outbox_inbox_idx" ON "event_outbox" USING btree ("user_id","event_id") WHERE "event_outbox"."status" not in ('completed', 'not-needed');
