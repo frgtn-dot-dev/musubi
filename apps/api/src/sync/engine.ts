@@ -593,8 +593,8 @@ export async function prepareEventWrites(
           predecessorID = stored.predecessorID;
           if (
             stored.action !== action ||
-            stored.eventID !== event.id ||
-            stored.calendarID !== calendarID ||
+            stored.eventID !== event.id.toLowerCase() ||
+            stored.calendarID !== calendarID.toLowerCase() ||
             stored.provider !== link.provider
           )
             throw new ProviderEventWriteError(

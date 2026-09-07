@@ -42,19 +42,19 @@ export async function reserveEventMutation(
   eventID: string,
   intents: readonly EventOutboxIntent[],
 ) {
-  const selected = intents.filter((intent) => intent.eventID === eventID);
+  const selected = intents.filter((intent) => intent.eventID.toLowerCase() === eventID?.toLowerCase());
   if (!selected.length) return;
   const first = selected[0];
   if (
     selected.some(
       (intent) =>
         intent.actorID !== first.actorID ||
-        intent.mutationID !== first.mutationID,
+        intent.mutationID.toLowerCase() !== first.mutationID.toLowerCase(),
     )
   )
     throw new Error("An event mutation must have one actor and identity.");
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(
-    ${JSON.stringify(["musubi:event-mutation", first.actorID, first.mutationID])}, 0))`);
+    ${JSON.stringify(["musubi:event-mutation", first.actorID, first.mutationID.toLowerCase()])}, 0))`);
   for (const intent of selected) {
     const [existing] = await tx
       .select({ id: eventOutbox.id })
@@ -78,7 +78,7 @@ export async function appendEventOutbox(
   event: Event,
   intents: readonly EventOutboxIntent[],
 ) {
-  for (const intent of intents.filter((item) => item.eventID === event.id)) {
+  for (const intent of intents.filter((item) => item.eventID.toLowerCase() === event.id.toLowerCase())) {
     const [predecessor] = await tx
       .select({ id: eventOutbox.id })
       .from(eventOutbox)

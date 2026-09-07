@@ -118,7 +118,7 @@ function validateCalendars(event: Event) {
   if (!event.calendars.length)
     throw new BadRequestError("Event needs at least one calendar.");
   if (event.originCalendarID)
-    requireUUID(event.originCalendarID, "event.originCalendarID");
+    event.originCalendarID = requireUUID(event.originCalendarID, "event.originCalendarID");
 }
 
 function plannedWrites(

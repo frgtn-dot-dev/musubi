@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import {
   db,
   user,
@@ -78,6 +79,21 @@ async function main() {
     });
     const rows = (id: string) =>
       db.select().from(eventOutbox).where(eq(eventOutbox.eventID, id));
+
+    // Raw DB callers and lifecycle locks must use PostgreSQL UUID identity too.
+    const uppercase = value(randomUUID().toUpperCase());
+    const uppercaseIntent = intent(uppercase);
+    const uppercaseCreated = await createEvent(uppercase, [home.id.toUpperCase()], [uppercaseIntent]);
+    assert.equal((await rows(uppercaseCreated.id)).length, 1);
+    await assert.rejects(() => createEvent({ ...uppercase, id: uppercase.id.toLowerCase() }, [home.id],
+      [{ ...uppercaseIntent, eventID: uppercase.id.toLowerCase(), mutationID: uppercaseIntent.mutationID.toUpperCase() }]),
+      DuplicateEventMutationError);
+    await db.transaction(async (tx) => {
+      await lockCalendarLifecycle(tx, [home.id, home.id.toUpperCase()], "shared");
+      const locks = await tx.execute<{ count: string }>(sql`select count(*)::text as count from pg_locks
+        where pid = pg_backend_pid() and locktype = 'advisory'`);
+      assert.equal(locks.rows[0].count, "1", "UUID spelling cannot select a different lifecycle fence");
+    });
 
     // A failure in the outbox insert rolls back the event AND calendar links.
     const rejected = value();

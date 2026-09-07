@@ -1432,6 +1432,10 @@ async function main() {
 
     // K07: actual authenticated HTTP -> transaction -> durable claim -> provider HTTP.
     const durableEvent = eventIn([mirrors[0].id]);
+    // PostgreSQL canonicalizes UUIDs; valid uppercase input must still enqueue.
+    durableEvent.id = durableEvent.id.toUpperCase();
+    durableEvent.calendars = [mirrors[0].id.toUpperCase(), mirrors[0].id];
+    durableEvent.originCalendarID = mirrors[0].id.toUpperCase();
     const sendDurable = (path: string, body: unknown, mutationID = randomUUID(), method = "POST") =>
       fetch(`${apiOrigin}${path}`, { method, headers: {
         authorization: `Bearer ${token.raw}`, "content-type": "application/json",
