@@ -108,6 +108,9 @@ parallel delivery framework:
 - These remain **internal**. The API publishes only action, status and reason,
   never internal account/resource IDs or raw provider errors to collaborators.
 
+K08a adds [stable create identity and read-only recovery lookup](event-create-recovery.md)
+for new persisted intents. Automatic recovery still belongs to K08b.
+
 ## K07 transactional intent and first attempt
 
 - `deliver.outbox` is passed into the create/CAS/fork DB writer. It inserts the

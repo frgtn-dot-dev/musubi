@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08–K15 čekají; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je rozpracovaný; K09–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `in_progress`; K09–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -186,9 +186,13 @@ Regrese v `event-outbox.integration.test.ts` a skutečných HTTP/provider fixtur
 
 **Převzetí a nezávislé review K07 (2026-09-07):** vlastník schválil squash merge #120 (`eaf6a2b`) po všech 14 zelených CI kontrolách a pokračování až do konce plánu včetně jeho průběžných úprav. Každé další PR před mergem projde nezávislým agentem s čistým kontextem; nálezy se opraví a příslušné gates zopakují. Zpětné read-only review K07 našlo P1: uppercase UUID při create PostgreSQL normalizuje, ale case-sensitive filtr záměrů mohl commitnout event bez outboxu. Skutečný HTTP test nejdřív selhal 502 místo 201. Navazující oprava kanonizuje API UUID, srovnání outbox identit a calendar lifecycle/advisory mutation klíče; opaque user/account/provider ID zůstávají case-sensitive. Druhé čisté review rozšířilo nález na case-only PATCH (ztráta mappingu) a opakovaný link (duplicitní create). DB link diff i link/fork/unlink hranice proto porovnávají kanonická UUID; scope envelope se nepřepisuje před kontrolou jeho shody. Regrese pokrývá HTTP mixed-case event/calendar/origin, case-only PATCH/link bez změny revize nebo mappingu, fork refusal, uppercase unlink, přímé durable delivery guardy, raw DB enqueue, opakovanou mutation identitu a společný lifecycle zámek.
 
+UUID oprava prošla třetím čistým review bez nálezů, lokálními gates a všemi 14 CI joby; PR #121 je squash-mergnuté (`81f5265`).
+
 K08 bude dodán ve dvou reviewovatelných řezech: (a) stabilní provider create identity a dohledání nejasného výsledku, (b) worker/recovery a pull/push/lifecycle koordinace. Splnění celého K08 stále vyžaduje všechny acceptance scénáře níže, nikoli pouze první řez. K15 živé ověření potřebuje vyhrazené testovací účty; požadavek na jejich dostupnost byl vznesen, není nahrazen fake-provider výsledkem. Schválené pokračování zahrnuje implementaci, testy, PR a squash merge, nikoli implicitní živé mutace osobních účtů nebo produkční deploy.
 
 ### K08 — Worker, idempotence, konflikty a pull/push koordinace
+
+**K08a kandidát:** nové outbox create intenty mají explicitní protokolovou značku a používají stabilní Google event ID + private marker, Graph transactionId a CalDAV URL/UID + conditional PUT. Adaptéry umí read-only dohledat matching objekt po ztracené odpovědi; Graph absence není povolení slepého POST. Staré neoznačené operace se nepřeznačují. Důkaz tvoří skutečné adapter/DB/HTTP fixtures; [kontrakt a zdroje](../sync/event-create-recovery.md). Worker a celá níže uvedená K08 koordinace jsou stále další řez.
 
 Použít stávající proces/scheduler. Claim operace musí mít obnovitelný stav po pádu; zápisy do stejného vzdáleného objektu zachovat v pořadí. Starší pending změna nesmí po dokončení novější vrátit starý obsah.
 

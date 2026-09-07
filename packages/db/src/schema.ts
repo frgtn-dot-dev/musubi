@@ -840,6 +840,7 @@ export const eventOutbox = pgTable(
         event: Event;
         patch?: Record<string, unknown>;
         scopeEditValidated?: boolean;
+        createIdentityVersion?: 1;
       }>()
       .notNull(),
     status: text("status")

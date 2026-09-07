@@ -16,6 +16,7 @@ import type {
   NormalizedTask,
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
+import { assertCompleteEventReadResponse, assertCreatedEventEvidence, eventCreateOperationID, googleEventCreateID } from "../event_create_identity";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
 import {
   assertEventWriteEvidence,
@@ -676,7 +677,43 @@ export const googleAdapter: CalendarAdapter = {
     }
   },
 
-  async pushCreate(userID, accountId, externalCalendarId, event: Event) {
+  async findCreatedEvent(userID, accountId, externalCalendarId, identity) {
+    const id = googleEventCreateID(identity);
+    const response = await fetch(
+      `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${await getAccessToken(userID, accountId)}`,
+          "Cache-Control": "no-cache",
+        },
+        redirect: "error",
+      },
+    );
+    if (response.status === 404) return null;
+    if (response.status === 410)
+      throw new ProviderEventWriteError("provider-conflict");
+    assertCompleteEventReadResponse(response);
+    const data = await response.json();
+    if (
+      data.id !== id ||
+      data.extendedProperties?.private?.musubiOperationID !==
+        eventCreateOperationID(identity)
+    )
+      throw new ProviderEventWriteError("provider-conflict");
+    const event = assertCreatedEventEvidence(toNormalized(data));
+    return {
+      ref: { externalEventId: id, etag: strongEventEtag(data.etag) },
+      event,
+    };
+  },
+
+  async pushCreate(
+    userID,
+    accountId,
+    externalCalendarId,
+    event: Event,
+    identity,
+  ) {
     const accessToken = await getAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events`,
@@ -686,13 +723,29 @@ export const googleAdapter: CalendarAdapter = {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(toGoogleEvent(event)),
+        body: JSON.stringify({
+          ...toGoogleEvent(event),
+          ...(identity
+            ? {
+                id: googleEventCreateID(identity),
+                extendedProperties: {
+                  private: {
+                    musubiOperationID: eventCreateOperationID(identity),
+                  },
+                },
+              }
+            : {}),
+        }),
         redirect: "error",
       },
     );
     assertProviderEventMutationResponse(res);
     const data = await res.json().catch(() => null);
-    if (typeof data?.id !== "string" || !data.id) {
+    if (
+      typeof data?.id !== "string" ||
+      !data.id ||
+      (identity && data.id !== googleEventCreateID(identity))
+    ) {
       throw new ProviderEventWriteError(
         "provider-write-failed",
         "unconfirmed",
