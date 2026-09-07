@@ -43,9 +43,36 @@ Replacing a connection produces a distinct target. A previous generation's
 receipt cannot confirm the replacement. Removed generations remain visible only
 to their receipt owner, with `connected: false` and no current calendar name.
 
-This read-only slice does not expose retry or conflict overwrite actions. Those
-require their own authorization, fresh provider evidence and durable intent; K09
-also remains open until web and mobile consume the contract and pass acceptance.
+The optional `issue` is a bounded display reason, including reconnect, denied or
+unsupported writes. Raw provider errors are never included. Historical generic
+errors remain generic; they cannot be relabeled as a known reconnect requirement.
+
+## Explicit retry
+
+`POST /api/v1/events/:eventId/delivery/:operationId/retry` accepts no operation
+changes. It checks the receipt owner, current calendar ownership/membership and
+the exact live provider/account/calendar connection generation inside the
+calendar lifecycle and event transaction. A matching read receipt is not action
+authorization. Unknown/foreign operations return 404; disconnected/cancelled,
+conflicting or predecessor-blocked operations return 409 with a bounded code.
+
+Admission returns 202 and the current `EventDeliverySchema`. It does not confirm
+a remote write. Existing completed operations and active leases are idempotent;
+an active lease is never reset. The accepted payload, remote baseline, identity,
+uncertainty and persisted Retry-After are retained. Legacy `unconfirmed` status
+also forces reconciliation even if its stored uncertainty flag is false.
+
+The existing dispatcher receives a best-effort immediate wakeup after commit;
+the existing scheduler recovers persisted work after process termination. The
+worker claims due operations, rechecks provider permissions and uses the same
+lost-response reconciliation and conditional writes. Manual retry cannot shorten
+a provider delay. With automatic external sync disabled, future-due work still
+requires a later explicit retry or re-enabling the scheduler. Completion emits
+the existing `external_sync` invalidation to the receipt owner and current members.
+
+Retry never resolves a retained remote conflict or authorizes an overwrite.
+Explicit conflict resolution and both client integrations remain subsequent K09
+work; K09 stays open until their acceptance scenarios pass.
 
 ## Evidence
 
@@ -53,4 +80,8 @@ also remains open until web and mobile consume the contract and pass acceptance.
 authenticated HTTP handler and disposable PostgreSQL: per-target mixed outcomes,
 blocked predecessor visibility, untracked imports, private destination and payload
 isolation, membership revocation, fresh API instance reads, replacement generations
-and retained unconfirmed deletion after event purge. It runs in `test:db:events`.
+and retained unconfirmed deletion after event purge. Retry cases cover ownership,
+connection/capability replacement, concurrent requests, active leases, immutable
+payload/baseline, Retry-After, uncertainty and conflict refusal. It runs in
+`test:db:events`. The worker integration additionally verifies explicit recovery
+after a lost response, a still-denied permission, restored permission and 429.

@@ -372,7 +372,15 @@ export async function deliverEventOutbox(
             ? "unconfirmed"
             : "retry",
       providerError?.code ??
-        (blocked ? "provider-permission-unavailable" : "provider-write-failed"),
+        (error instanceof ProviderAuthError && error.reconnectRequired
+          ? "provider-reconnect-required"
+          : error instanceof EventWriteError
+            ? error.reason === "unknown"
+              ? "provider-permission-unknown"
+              : `provider-write-${error.reason}`
+            : blocked
+              ? "provider-permission-unavailable"
+              : "provider-write-failed"),
       {
         uncertain,
         nextAttemptAt: new Date(

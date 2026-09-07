@@ -27,6 +27,20 @@ export const EventDeliveryTargetSchema = z.object({
   latestRevision: z.number().int().positive().nullable(),
   updatedAt: z.coerce.date().nullable(),
   retryAt: z.coerce.date().nullable(),
+  issue: z
+    .enum([
+      "reconnect-required",
+      "write-denied",
+      "write-unsupported",
+      "permission-unknown",
+      "conflict",
+      "unconfirmed",
+      "destination-unavailable",
+      "recovery-unavailable",
+      "delivery-failed",
+    ])
+    .nullable()
+    .optional(),
 });
 
 export const EventDeliverySchema = z.object({
