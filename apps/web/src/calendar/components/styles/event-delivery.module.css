@@ -1,0 +1,5 @@
+/* Portaled delivery dialogs may be hosted by a calendar cell. Keep their React
+   events inside the delivery flow without adding a box to calendar geometry. */
+.layerBoundary {
+  display: contents;
+}

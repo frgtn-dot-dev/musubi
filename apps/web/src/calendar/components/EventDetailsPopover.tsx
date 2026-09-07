@@ -43,6 +43,7 @@ import {
 	groupAttendees,
 	type AttendanceChoice,
 } from "../attendance";
+import { EventDeliveryDialog } from "./EventDeliveryDialog";
 import { getEventAttendees } from "~/api/resources";
 import { Avatar } from "~/ui/Avatar";
 import { AvatarStack } from "~/ui/AvatarStack";
@@ -198,6 +199,7 @@ export function EventDetailsPopover({
 	const targetActionTitleId = useId();
 	const reminderTitleId = useId();
 	const [open, setOpen] = useState(false);
+	const [deliveryOpen, setDeliveryOpen] = useState(false);
 	const [editing, setEditing] = useState(false);
 	const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
 	// The edit waiting for its scope answer, kept whole so nothing typed is lost
@@ -695,6 +697,7 @@ export function EventDetailsPopover({
 							</header>
 
 							<div className={styles.detailsBody}>
+								<Button variant="ghost" size="compact" onClick={() => { setOpen(false); setDeliveryOpen(true); }}>Delivery details</Button>
 								<dl className={styles.whenList}>
 									<DetailRow
 										icon={<CalendarDays size={18} strokeWidth={1.5} />}
@@ -1122,6 +1125,10 @@ export function EventDetailsPopover({
 					)}
 				</PopoverContent>
 			</Popover>
+
+            {deliveryOpen ? <EventDeliveryDialog key={`${user.id}:${homeConnectionId ?? "home"}:${liveMaster.id}`}
+              eventId={liveMaster.id} userId={user.id} connectionId={homeConnectionId}
+              returnFocus={triggerElement} onClose={() => setDeliveryOpen(false)} /> : null}
 
 			{pendingEdit ? (
 				<RecurrenceScopeDialog

@@ -12,6 +12,9 @@ function sorted(values: readonly string[]) {
 }
 
 export const queryKeys = {
+  delivery: (serverOrigin: string, userId: string, connectionId?: string) =>
+    ["delivery", serverOrigin, userId, connectionId ?? "home"] as const,
+
   session: (serverOrigin: string) => ["session", serverOrigin] as const,
 
   settings: (serverOrigin: string, userId: string) =>
