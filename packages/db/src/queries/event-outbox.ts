@@ -125,6 +125,16 @@ export async function appendEventOutbox(
 export type EventOutboxRow = typeof eventOutbox.$inferSelect;
 export const EVENT_OUTBOX_LEASE_MS = 120_000;
 
+/** Cancelled history is terminal except where it still blocks a successor. */
+export function unresolvedEventOutbox() {
+  return sql`(${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled') or (
+    ${eventOutbox.status} = 'cancelled' and exists (
+      select 1 from event_outbox successor where successor.predecessor_id = ${eventOutbox.id}
+      and successor.status not in ('completed', 'not-needed', 'cancelled')
+    )
+  ))`;
+}
+
 function eligibleEventOutbox() {
   return sql`${eventOutbox.nextAttemptAt} <= clock_timestamp() and (
     ${eventOutbox.status} in ('pending', 'retry', 'unconfirmed') or

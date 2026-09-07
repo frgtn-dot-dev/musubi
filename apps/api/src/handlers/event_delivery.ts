@@ -3,8 +3,15 @@ import {
   getEventDeliveryStatus,
   requestEventDeliveryRetry,
   EventDeliveryRetryError,
+  EventDeliveryResolutionError,
+  getEventDeliveryResolutionReplay,
+  commitEventDeliveryResolution,
 } from "@musubi/db";
-import { BadRequestError } from "@musubi/types";
+import {
+  BadRequestError,
+  ResolveEventDeliveryRequestSchema,
+} from "@musubi/types";
+import { prepareEventDeliveryResolution } from "../sync/event_resolution";
 import { deliverEventOutboxAndNotify } from "../sync/engine";
 import { requireUUID } from "../request_validation";
 
@@ -13,6 +20,77 @@ export async function handlerGetEventDelivery(req: Request, res: Response) {
   const status = await getEventDeliveryStatus(req.user!.id, eventID);
   res.setHeader("Cache-Control", "private, no-store");
   return res.json(status);
+}
+
+export async function handlerGetEventDeliveryConflict(
+  req: Request,
+  res: Response,
+) {
+  const eventID = requireUUID(req.params.eventId, "eventId");
+  const operationID = requireUUID(req.params.operationId, "operationId");
+  res.setHeader("Cache-Control", "private, no-store");
+  try {
+    const { preview } = await prepareEventDeliveryResolution(
+      req.user!.id,
+      eventID,
+      operationID,
+    );
+    return res.json(preview);
+  } catch (error) {
+    if (!(
+      error instanceof EventDeliveryResolutionError ||
+      error instanceof EventDeliveryRetryError
+    ))
+      throw error;
+    return res.status(409).json({ error: error.message, code: error.code });
+  }
+}
+
+export async function handlerResolveEventDelivery(req: Request, res: Response) {
+  const eventID = requireUUID(req.params.eventId, "eventId");
+  const operationID = requireUUID(req.params.operationId, "operationId");
+  const parsed = ResolveEventDeliveryRequestSchema.safeParse(req.body);
+  if (!parsed.success)
+    throw new BadRequestError(
+      "A resolution requires the exact preview and a new mutation identity.",
+    );
+  const request = {
+    ...parsed.data,
+    mutationId: parsed.data.mutationId.toLowerCase(),
+    expectedLatestOperationId:
+      parsed.data.expectedLatestOperationId.toLowerCase(),
+  };
+  res.setHeader("Cache-Control", "private, no-store");
+  try {
+    let id = await getEventDeliveryResolutionReplay(
+      req.user!.id,
+      eventID,
+      operationID,
+      request,
+    );
+    if (!id) {
+      const { proof, preview } = await prepareEventDeliveryResolution(
+        req.user!.id,
+        eventID,
+        operationID,
+      );
+      if (!preview.canResolve)
+        throw new EventDeliveryResolutionError(
+          "delivery-resolution-unavailable",
+        );
+      id = await commitEventDeliveryResolution(req.user!.id, proof, request);
+    }
+    const status = await getEventDeliveryStatus(req.user!.id, eventID);
+    void deliverEventOutboxAndNotify(id);
+    return res.status(202).json(status);
+  } catch (error) {
+    if (!(
+      error instanceof EventDeliveryResolutionError ||
+      error instanceof EventDeliveryRetryError
+    ))
+      throw error;
+    return res.status(409).json({ error: error.message, code: error.code });
+  }
 }
 
 export async function handlerRetryEventDelivery(req: Request, res: Response) {

@@ -850,6 +850,14 @@ export const eventOutbox = pgTable(
         patch?: Record<string, unknown>;
         scopeEditValidated?: boolean;
         createIdentityVersion?: 1;
+        resolution?: {
+          operationID: string;
+          replacedOperationIDs: string[];
+          expectedLocalRevision: number | null;
+          expectedLatestOperationID: string;
+          expectedRemoteExists: boolean;
+          expectedRemoteEtag: string | null;
+        };
         providerProjection?: Pick<Event, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
       }>()
       .notNull(),

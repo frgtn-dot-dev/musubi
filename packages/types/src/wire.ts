@@ -12,7 +12,7 @@ import {
   ScopeEditIntentSchema,
 } from "./event";
 import { InviteSchema } from "./invite";
-import { EventDeliverySchema } from "./event_delivery";
+import { EventDeliverySchema, EventDeliveryConflictSchema, ResolveEventDeliveryRequestSchema } from "./event_delivery";
 import { PageDocumentSchema } from "./pages";
 import {
   PutReminderRequestSchema,
@@ -51,6 +51,8 @@ export const WIRE_CONTRACT: Record<
   },
   Event: { direction: "read", schema: EventSchema },
   EventDelivery: { direction: "read", schema: EventDeliverySchema },
+  EventDeliveryConflict: { direction: "read", schema: EventDeliveryConflictSchema },
+  ResolveEventDeliveryRequest: { direction: "write", schema: ResolveEventDeliveryRequestSchema },
   EventCreateRequest: { direction: "write", schema: EventCreateRequestSchema },
   EventPatchRequest: { direction: "write", schema: EventPatchRequestSchema },
   EventDeleteRequest: { direction: "write", schema: EventDeleteRequestSchema },

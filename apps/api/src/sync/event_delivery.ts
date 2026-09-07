@@ -224,17 +224,17 @@ export async function deliverEventOutbox(
           if (!evidence && row.action === "delete") recovered = true;
           else if (
             evidence &&
-            strongEventEtag(expectedRef.etag) &&
-            evidence.ref.etag === expectedRef.etag
-          ) {
-            // The accepted remote version still exists: conditional retry only.
-          } else if (
-            evidence &&
             row.action === "update" &&
             matchesDeliveredEvent(row.provider, expected, evidence.event)
           ) {
             resultRef = evidence.ref;
             recovered = true;
+          } else if (
+            evidence &&
+            strongEventEtag(expectedRef.etag) &&
+            evidence.ref.etag === expectedRef.etag
+          ) {
+            // A differing accepted version still needs the conditional write.
           } else throw new ProviderEventWriteError("provider-conflict");
           remoteSnapshot = null;
         } else if (row.predecessorID) {

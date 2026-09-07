@@ -1,0 +1,435 @@
+import { randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import {
+  EventSchema,
+  NotFoundError,
+  type ResolveEventDeliveryRequest,
+} from "@musubi/types";
+import { db } from "..";
+import {
+  events,
+  eventOutbox,
+  externalEvents,
+  externalEventTombstones,
+} from "../schema";
+import {
+  assertEventDeliveryDestination,
+  EventDeliveryRetryError,
+} from "./event-delivery-retry";
+import { unresolvedEventOutbox, type EventOutboxRow } from "./event-outbox";
+import type { DbTransaction } from "./calendars";
+import type { EventContentPatch } from "./events";
+import type { EventDeliveryRef } from "./event-outbox-delivery";
+import { lockCalendarLifecycle } from "./calendar-lifecycle";
+import { lockExternalEventIdentity } from "./event-outbox-deletions";
+
+export class EventDeliveryResolutionError extends Error {
+  constructor(
+    readonly code: "delivery-state-changed" | "delivery-resolution-unavailable",
+  ) {
+    super(
+      "Delivery changed or cannot be resolved with this preview. Refresh before confirming.",
+    );
+    this.name = "EventDeliveryResolutionError";
+  }
+}
+
+async function resolutionContext(
+  tx: DbTransaction,
+  userID: string,
+  eventID: string,
+  operationID: string,
+) {
+  const [row] = await tx
+    .select()
+    .from(eventOutbox)
+    .where(
+      and(
+        eq(eventOutbox.id, operationID),
+        eq(eventOutbox.eventID, eventID),
+        eq(eventOutbox.userID, userID),
+      ),
+    );
+  if (!row) throw new NotFoundError("Delivery operation not found.");
+  await assertEventDeliveryDestination(tx, row, userID);
+  const target = and(
+    eq(eventOutbox.eventID, eventID),
+    eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID),
+  );
+  const [latest] = await tx
+    .select()
+    .from(eventOutbox)
+    .where(target)
+    .orderBy(
+      desc(eventOutbox.revision),
+      desc(eventOutbox.createdAt),
+      desc(eventOutbox.position),
+      desc(eventOutbox.id),
+    )
+    .limit(1);
+  const pending = await tx
+    .select()
+    .from(eventOutbox)
+    .where(and(target, unresolvedEventOutbox()))
+    .orderBy(
+      asc(eventOutbox.revision),
+      asc(eventOutbox.createdAt),
+      asc(eventOutbox.position),
+      asc(eventOutbox.id),
+    )
+    .limit(1001);
+  const head = pending[0] ?? latest;
+  if (
+    row.id !== head.id ||
+    !["conflict", "blocked", "cancelled", "unconfirmed"].includes(row.status)
+  )
+    throw new EventDeliveryResolutionError("delivery-state-changed");
+  if (
+    pending.length > 1000 ||
+    pending.some((item) => item.status === "attempting")
+  )
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  const current = await tx.query.events.findFirst({
+    where: (table, { eq }) => eq(table.id, eventID),
+    with: { calendarEvents: true },
+  });
+  // An owner of retained receipts must not see later private edits after unlink.
+  const linked =
+    current &&
+    !current.deletedAt &&
+    current.calendarEvents.some((link) => link.calendarID === row.calendarID);
+  const local = EventSchema.parse(
+    linked
+      ? {
+          ...current,
+          calendars: current.calendarEvents.map((link) => link.calendarID),
+        }
+      : latest.payload.event,
+  );
+  const mappings = await tx
+    .select()
+    .from(externalEvents)
+    .where(
+      and(
+        eq(externalEvents.eventID, eventID),
+        eq(externalEvents.calendarID, row.calendarID),
+        eq(externalEvents.provider, row.provider),
+      ),
+    );
+  if (mappings.length > 1)
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  const [mapping] = mappings;
+  return {
+    row,
+    latest,
+    pending: pending.length ? pending : [row],
+    local,
+    localRevision: linked ? current.revision : null,
+    deleted: !linked,
+    mapping,
+  };
+}
+
+export type EventDeliveryResolutionContext = Awaited<
+  ReturnType<typeof resolutionContext>
+>;
+
+export async function getEventDeliveryResolutionContext(
+  userID: string,
+  eventID: string,
+  operationID: string,
+) {
+  return db.transaction(
+    (tx) => resolutionContext(tx, userID, eventID, operationID),
+    {
+      isolationLevel: "repeatable read",
+      accessMode: "read only",
+    },
+  );
+}
+
+export type EventDeliveryResolutionProof = {
+  context: EventDeliveryResolutionContext;
+  ref: EventDeliveryRef | null;
+  remoteExists: boolean;
+  action: EventOutboxRow["action"];
+  patch: EventContentPatch;
+  deletion: typeof externalEventTombstones.$inferSelect | undefined;
+};
+
+function sameResolution(
+  row: EventOutboxRow,
+  eventID: string,
+  operationID: string,
+  request: ResolveEventDeliveryRequest,
+) {
+  const accepted = row.payload.resolution;
+  return (
+    row.eventID === eventID &&
+    accepted?.operationID === operationID &&
+    accepted.expectedLocalRevision === request.expectedLocalRevision &&
+    accepted.expectedLatestOperationID === request.expectedLatestOperationId &&
+    accepted.expectedRemoteExists === request.expectedRemoteExists &&
+    accepted.expectedRemoteEtag === request.expectedRemoteEtag
+  );
+}
+
+export async function getEventDeliveryResolutionReplay(
+  userID: string,
+  eventID: string,
+  operationID: string,
+  request: ResolveEventDeliveryRequest,
+) {
+  const [row] = await db
+    .select()
+    .from(eventOutbox)
+    .where(
+      and(
+        eq(eventOutbox.actorID, userID),
+        eq(eventOutbox.mutationID, request.mutationId),
+        eq(eventOutbox.position, 0),
+      ),
+    );
+  if (!row) return undefined;
+  if (
+    row.userID !== userID ||
+    !sameResolution(row, eventID, operationID, request)
+  )
+    throw new EventDeliveryResolutionError("delivery-state-changed");
+  return row.id;
+}
+
+/** The user confirms the latest saved target state, not each obsolete queued
+ * intermediate edit. Archive that unresolved chain and append one explicit
+ * replacement intent. Mapping baseline, tombstone CAS and supersession commit
+ * together, after fresh provider evidence and without provider I/O in this tx. */
+export async function commitEventDeliveryResolution(
+  userID: string,
+  proof: EventDeliveryResolutionProof,
+  request: ResolveEventDeliveryRequest,
+) {
+  const { row } = proof.context;
+  try {
+    return await db.transaction(async (tx) => {
+      await lockCalendarLifecycle(tx, [row.calendarID], "shared");
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(
+        ${JSON.stringify(["musubi:event-mutation", userID, request.mutationId.toLowerCase()])}, 0))`);
+      const [replay] = await tx
+        .select()
+        .from(eventOutbox)
+        .where(
+          and(
+            eq(eventOutbox.actorID, userID),
+            eq(eventOutbox.mutationID, request.mutationId),
+            eq(eventOutbox.position, 0),
+          ),
+        );
+      if (replay) {
+        if (
+          replay.userID !== userID ||
+          !sameResolution(replay, row.eventID, row.id, request)
+        )
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+        return replay.id;
+      }
+      if (proof.ref)
+        await lockExternalEventIdentity(
+          tx,
+          row.externalCalendarLinkID,
+          proof.ref.externalEventId,
+        );
+      await tx
+        .select({ id: events.id })
+        .from(events)
+        .where(eq(events.id, row.eventID))
+        .for("update");
+      // Stabilize all target attempts before deciding which chain is superseded.
+      await tx
+        .select({ id: eventOutbox.id })
+        .from(eventOutbox)
+        .where(
+          and(
+            eq(eventOutbox.eventID, row.eventID),
+            eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID),
+            or(unresolvedEventOutbox(), eq(eventOutbox.id, row.id)),
+          ),
+        )
+        .orderBy(eventOutbox.id)
+        .for("update");
+      const current = await resolutionContext(tx, userID, row.eventID, row.id);
+      // A retry/pull can change uncertainty without changing the local revision
+      // or latest operation ID. In particular, never replace a newly ambiguous
+      // create with another identity based on an earlier absence observation.
+      if (
+        JSON.stringify(current.pending) !==
+        JSON.stringify(proof.context.pending)
+      )
+        throw new EventDeliveryResolutionError("delivery-state-changed");
+      if (
+        current.row.action === "create" &&
+        !proof.remoteExists &&
+        (current.row.uncertain ||
+          current.row.status === "unconfirmed" ||
+          current.row.remoteSnapshot)
+      )
+        throw new EventDeliveryResolutionError(
+          "delivery-resolution-unavailable",
+        );
+      if (
+        current.localRevision !== request.expectedLocalRevision ||
+        current.latest.id !== request.expectedLatestOperationId ||
+        current.localRevision !== proof.context.localRevision ||
+        current.latest.id !== proof.context.latest.id ||
+        current.deleted !== proof.context.deleted ||
+        proof.action !==
+          (current.deleted
+            ? "delete"
+            : proof.remoteExists
+              ? "update"
+              : "create") ||
+        proof.remoteExists !== request.expectedRemoteExists ||
+        (proof.remoteExists ? (proof.ref?.etag ?? null) : null) !==
+          request.expectedRemoteEtag
+      )
+        throw new EventDeliveryResolutionError("delivery-state-changed");
+      const mappingKey = (mapping: typeof current.mapping) =>
+        mapping
+          ? JSON.stringify([mapping.id, mapping.externalEventID, mapping.etag])
+          : null;
+      if (mappingKey(current.mapping) !== mappingKey(proof.context.mapping))
+        throw new EventDeliveryResolutionError("delivery-state-changed");
+      if (proof.ref) {
+        if (
+          current.mapping &&
+          current.mapping.externalEventID !== proof.ref.externalEventId
+        )
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+        const [deletion] = await tx
+          .select()
+          .from(externalEventTombstones)
+          .where(
+            and(
+              eq(
+                externalEventTombstones.externalCalendarLinkID,
+                row.externalCalendarLinkID,
+              ),
+              eq(
+                externalEventTombstones.externalEventID,
+                proof.ref.externalEventId,
+              ),
+            ),
+          );
+        if (
+          (deletion?.id ?? null) !== (proof.deletion?.id ?? null) ||
+          (deletion?.observedAt.getTime() ?? null) !==
+            (proof.deletion?.observedAt.getTime() ?? null)
+        )
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+        if (proof.remoteExists) {
+          const [occupied] = await tx
+            .select()
+            .from(externalEvents)
+            .where(
+              and(
+                eq(externalEvents.calendarID, row.calendarID),
+                eq(externalEvents.provider, row.provider),
+                eq(externalEvents.externalEventID, proof.ref.externalEventId),
+              ),
+            );
+          if (
+            (occupied && occupied.eventID !== row.eventID) ||
+            (current.mapping &&
+              current.mapping.externalEventID !== proof.ref.externalEventId)
+          )
+            throw new EventDeliveryResolutionError("delivery-state-changed");
+          if (deletion)
+            await tx
+              .delete(externalEventTombstones)
+              .where(eq(externalEventTombstones.id, deletion.id));
+          if (current.mapping)
+            await tx
+              .update(externalEvents)
+              .set({
+                etag: proof.ref.etag,
+                icalUid: proof.ref.icalUid ?? current.mapping.icalUid,
+              })
+              .where(eq(externalEvents.id, current.mapping.id));
+          else if (!current.deleted)
+            await tx.insert(externalEvents).values({
+              provider: row.provider,
+              eventID: row.eventID,
+              calendarID: row.calendarID,
+              externalCalendarID: row.externalCalendarID,
+              externalEventID: proof.ref.externalEventId,
+              etag: proof.ref.etag,
+              icalUid: proof.ref.icalUid,
+            });
+        } else if (proof.action === "create" && current.mapping) {
+          await tx
+            .delete(externalEvents)
+            .where(eq(externalEvents.id, current.mapping.id));
+        }
+      }
+      const replaced = current.pending.map((item) => item.id);
+      await tx
+        .update(eventOutbox)
+        .set({
+          status: "cancelled",
+          errorCode: "superseded-by-resolution",
+          leaseToken: null,
+          leaseUntil: null,
+          updatedAt: new Date(),
+        })
+        .where(inArray(eventOutbox.id, replaced));
+      const id = randomUUID();
+      await tx.insert(eventOutbox).values({
+        id,
+        actorID: userID,
+        mutationID: request.mutationId,
+        position: 0,
+        eventID: row.eventID,
+        revision: current.localRevision ?? current.latest.revision,
+        predecessorID: null,
+        calendarID: row.calendarID,
+        externalCalendarLinkID: row.externalCalendarLinkID,
+        provider: row.provider,
+        userID,
+        accountID: row.accountID,
+        externalCalendarID: row.externalCalendarID,
+        externalEventID:
+          proof.action === "create" ? null : proof.ref?.externalEventId,
+        expectedEtag: proof.action === "create" ? null : proof.ref?.etag,
+        icalUid: proof.action === "create" ? null : proof.ref?.icalUid,
+        action: proof.action,
+        uncertain: proof.action !== "create",
+        payload: {
+          event: current.local,
+          patch: proof.patch,
+          ...(proof.action === "create"
+            ? { createIdentityVersion: 1 as const }
+            : {}),
+          resolution: {
+            operationID: row.id,
+            replacedOperationIDs: replaced,
+            expectedLocalRevision: request.expectedLocalRevision,
+            expectedLatestOperationID: request.expectedLatestOperationId,
+            expectedRemoteExists: request.expectedRemoteExists,
+            expectedRemoteEtag: request.expectedRemoteEtag,
+          },
+        },
+      });
+      return id;
+    });
+  } catch (error) {
+    if (
+      error instanceof EventDeliveryResolutionError ||
+      error instanceof NotFoundError ||
+      error instanceof EventDeliveryRetryError
+    )
+      throw error;
+    // Drizzle errors can contain the full bound JSON event. Never log them.
+    throw new Error(
+      "Delivery resolution persistence failed; no resolution was committed.",
+    );
+  }
+}
