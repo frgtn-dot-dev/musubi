@@ -1,6 +1,7 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   customType,
   index,
   jsonb,
@@ -17,6 +18,7 @@ import {
   type NotificationEmails,
   type ReminderRule,
   type TaskStatus,
+  type Event,
 } from "@musubi/types";
 
 // drizzle has no built-in bytea — minimal custom type
@@ -808,6 +810,81 @@ export const externalEvents = pgTable(
 );
 
 export type NewExternalEvent = typeof externalEvents.$inferInsert;
+
+/** Internal EVENT provider intent. Remote addresses deliberately outlive mapping
+ * and event deletion; owner deletion purges private payloads. No credentials. */
+export const eventOutbox = pgTable(
+  "event_outbox",
+  {
+    id: uuid("id").primaryKey(),
+    actorID: text("actor_id").notNull(),
+    mutationID: uuid("mutation_id").notNull(),
+    position: integer("position").notNull(),
+    eventID: uuid("event_id").notNull(),
+    revision: integer("revision").notNull(),
+    predecessorID: uuid("predecessor_id"),
+    calendarID: uuid("calendar_id").notNull(),
+    externalCalendarLinkID: uuid("external_calendar_link_id").notNull(),
+    provider: text("provider").notNull(),
+    userID: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountID: text("account_id").notNull(),
+    externalCalendarID: text("external_calendar_id").notNull(),
+    externalEventID: text("external_event_id"),
+    expectedEtag: text("expected_etag"),
+    icalUid: text("ical_uid"),
+    action: text("action").$type<"create" | "update" | "delete">().notNull(),
+    payload: jsonb("payload")
+      .$type<{
+        event: Event;
+        patch?: Record<string, unknown>;
+        scopeEditValidated?: boolean;
+      }>()
+      .notNull(),
+    status: text("status")
+      .$type<
+        | "pending"
+        | "attempting"
+        | "completed"
+        | "not-needed"
+        | "conflict"
+        | "not-written"
+        | "unconfirmed"
+      >()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    attemptedAt: timestamp("attempted_at"),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique("event_outbox_mutation_position_unique").on(
+      t.actorID,
+      t.mutationID,
+      t.position,
+    ),
+    index("event_outbox_event_revision_idx").on(t.eventID, t.revision),
+    index("event_outbox_pending_idx")
+      .on(t.createdAt, t.id)
+      .where(sql`${t.status} = 'pending'`),
+    check("event_outbox_revision_check", sql`${t.revision} > 0`),
+    check(
+      "event_outbox_attempts_check",
+      sql`${t.attempts} >= 0 and ${t.position} >= 0`,
+    ),
+    check(
+      "event_outbox_action_check",
+      sql`${t.action} in ('create', 'update', 'delete')`,
+    ),
+    check(
+      "event_outbox_status_check",
+      sql`${t.status} in ('pending', 'attempting', 'completed', 'not-needed', 'conflict', 'not-written', 'unconfirmed')`,
+    ),
+  ],
+);
 
 export const externalTasks = pgTable(
   "external_tasks",

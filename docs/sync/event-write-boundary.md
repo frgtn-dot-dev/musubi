@@ -1,8 +1,8 @@
-# Conditional EVENT delivery boundary (K06 integrated candidate)
+# EVENT delivery boundary (K06 accepted, K07 candidate)
 
-This is **not whole-K06 acceptance or release readiness**: independent review and
-parent acceptance remain required. Local CAS, wire/client revision contracts,
-frozen drafts and truthful postcommit API responses are integrated. PRODUCT / MIN_CLIENT / MIN_PEER remain 0.1.8. Outlook existing mapped
+K06 was accepted and squash-merged in PR #119. K07 adds durable intent and the
+request's first claimed attempt; independent K07 review remains pending.
+PRODUCT / MIN_CLIENT / MIN_PEER remain 0.1.8. Outlook existing mapped
 EVENT update/delete remains refused in both preflight and the direct adapter:
 its event-specific conditional enforcement is **unknown**, not proven unsupported.
 Read/create and existing genuinely local unlink remain available. Tasks are not
@@ -68,7 +68,7 @@ parallel delivery framework:
    clear. Only existing provider-writable fields (title, description, location,
    time/all-day, recurrence) are projected. Local-only modeled fields are not
    invented as provider fields.
-2. `prepareEventWrites(writes)` clones each operation, resolves its account and
+2. `prepareEventWrites(writes, { actorID, mutationID })` clones each operation, resolves its account and
    mapping with the **local calendar scope**, and preflights the entire known
    set before returning a closure. It captures remote IDs, accepted validators
    and UID **before unlink can remove mappings**. Same remote IDs in different
@@ -77,8 +77,7 @@ parallel delivery framework:
    only when an actual server-read `previous` is supplied. This is payload
    preservation, **not local CAS**. A mapped update with neither is refused with
    `event-diff-unavailable`; it is never interpreted as an empty diff or a safe
-   full snapshot. The currently unused `pushEventToProviders` / `pushEventToCalendars`
-   update convenience wrappers therefore cannot bypass this requirement.
+   full snapshot. The old push convenience wrappers have been removed.
 4. `adapter.pushUpdate(userID, accountID, externalCalendarID, externalEventID,
    event, capturedRef, actualPatch)` receives the captured expected validator and
    actual diff. `pushDelete(..., capturedRef)` needs no mapping lookup at delivery.
@@ -108,6 +107,42 @@ parallel delivery framework:
   HTTP success is conservatively unconfirmed; this is not a distributed transaction.
 - These remain **internal**. The API publishes only action, status and reason,
   never internal account/resource IDs or raw provider errors to collaborators.
+
+## K07 transactional intent and first attempt
+
+- `deliver.outbox` is passed into the create/CAS/fork DB writer. It inserts the
+  target operations in the same transaction as the event and links, with the
+  committed snapshot/revision. An insert failure rolls back the local mutation.
+  ICS import retains its existing per-event transaction boundary. Local-only
+  changes and actual no-ops need no provider operation.
+- Each operation has a UUID, actor/mutation/position uniqueness, original target
+  owner/account/link identity, remote calendar/object/ETag/UID, patch/snapshot,
+  revision, predecessor ID, attempts and status. Delete addresses survive removal
+  of ordinary mappings and event tombstones. Target-owner deletion purges payloads;
+  deletion of a different actor does not erase the owner's pending work.
+- An optional UUID `Idempotency-Key` supplies mutation identity and passes through
+  federation proxy. Duplicate outbound slots return 409 `event-mutation-duplicate`
+  before committing another change, including a fork with a different generated ID.
+  There is no response replay. Missing headers generate a new identity; existing
+  revision CAS still applies. This is outbound operation deduplication, not a
+  universal receipt store for local-only writes or import-calendar creation.
+- Delivery atomically claims `pending` as `attempting` before any remote mutation
+  and executes the persisted snapshot/address/version. Only a completed/not-needed
+  predecessor permits a successor's first attempt. Unmapped update/delete behind
+  a pending create remains a durable intention, not a falsely completed no-op.
+  A changed local revision (create/update) or replaced/disabled target is refused
+  before attempting HTTP. Mapping acknowledgement retains K06 revision guards.
+- The closure's transient form is retained only for preflight-only checks and
+  direct adapter fixtures. Production event mutation handlers use durable intents;
+  there is no independent legacy inline push alongside them.
+- A process exit before claim leaves `pending`; an exit after claim leaves
+  `attempting`. Neither is automatically retried in K07. Conflicts, not-written
+  and unconfirmed attempts remain stored and conservatively block successors.
+  K08 must implement recovery, provider-specific create identity/reconciliation,
+  retry/backoff, pull coordination/fan-out and disconnect cleanup. Checks before
+  HTTP do not eliminate races during HTTP. K09 owns user-visible delivery state.
+  Completed payload retention also needs a deliberate cleanup policy; do not drop
+  pending rows or roll back to an outbox-unaware binary while writes are active.
 
 ## Integrated API / CAS / client ordering
 
@@ -144,11 +179,26 @@ parallel delivery framework:
   has already been purged, native requests authoritative full reconciliation.
 - PRODUCT / MIN_CLIENT / MIN_PEER stay 0.1.8, including member-token refusal and
   documented bootstrap exceptions. The wire snapshot is generated from the actual
-  integrated request schemas. K01–K05 restrictions remain; K07 durable retry/outbox
-  and K12 atomic scopes are explicitly absent. No live-provider certification,
-  production migration, release or push is implied.
+  integrated request schemas. K01–K05 restrictions remain; K08 recovery and K12
+  atomic scopes are absent. No live-provider certification, production migration
+  or release is implied.
 
 ## Regression gates
+
+K07 adds `packages/db/src/queries/event-outbox.integration.test.ts` to
+`pnpm test:db:events`: insert failure rollback, a separate process exiting after
+COMMIT, pending create→update→delete without mapping, stable mutation identity,
+concurrent single claim, unlink/tombstone address retention and owner/actor cleanup.
+The provider HTTP suite exercises actual create/link/unlink/fork routes, verifies
+that provider calls see an already committed/claimed operation, rejects a repeated
+fork key, persists subsequent HTTP update/delete after an ambiguous create, and
+injects an outbox DB trigger failure with zero local/remote effects.
+The final fresh PostgreSQL 18 migration and full DB gate are recorded in
+`/tmp/musubi-k07-migrate-verified.log` and `/tmp/musubi-k07-db-verified.log`;
+the final extended provider regression is in `/tmp/musubi-k07-provider-final.log`,
+and root check is in `/tmp/musubi-k07-check-final.log`. These are disposable local
+fixtures, not live-provider certification.
+
 
 `pnpm test:db:sync` includes
 `apps/api/src/sync/adapters/provider_event_writes.integration.test.ts`: actual
@@ -171,7 +221,7 @@ editors, SSE, More-options, overnight preservation and local/remote/network/auth
 version failures; native composer tests run actual host callbacks, transport,
 store and SSE handling with only native hosts/network/cache boundaries mocked.
 
-## Final review repairs (locally verified; parent acceptance pending)
+## K06 historical review evidence (subsequently accepted)
 
 - Every Event handler protects notification, cleanup and delivery after commit.
   A failed or purged latest read cannot erase `localCommitted:true`: `committed`

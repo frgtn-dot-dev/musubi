@@ -1,3 +1,4 @@
+import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
@@ -72,10 +73,13 @@ export async function createEventInTransaction(
 	return result;
 }
 
-export function createEvent(event: NewEvent, calendars: string[]) {
+export function createEvent(event: NewEvent, calendars: string[], outbox: readonly EventOutboxIntent[] = []) {
 	return db.transaction(async (tx) => {
 		await lockCalendarLifecycle(tx, [...calendars, ...(event.originCalendarID ? [event.originCalendarID] : [])], "shared");
-		return createEventInTransaction(tx, event, calendars);
+		await reserveEventMutation(tx, event.id!, outbox);
+		const created = await createEventInTransaction(tx, event, calendars);
+		await appendEventOutbox(tx, { ...created, calendars }, outbox);
+		return created;
 	});
 }
 

@@ -414,6 +414,13 @@
       "when": 1788616125190,
       "tag": "0058_classy_captain_america",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788774150459,
+      "tag": "0059_event_outbox",
+      "breakpoints": true
     }
   ]
 }

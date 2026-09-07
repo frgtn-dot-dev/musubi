@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07–K15 čekají; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 je implementovaný kandidát k revizi (2026-09-07), K08–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K06 jsou `completed`; K07–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K06 jsou `completed`; K07 je `in_review`; K08–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -175,6 +175,14 @@ Create/update/delete/link/unlink uloží lokální změnu a potřebné cílové 
 **Místa:** DB schema/migrace, event transakce, handlers, sync engine. Migrační číslo určit až při implementaci.
 
 **Test/hotovo:** rollback DB nevytvoří job; committed změna bez jobu není možná; pád po commitu zachová záměr; unlink neztratí adresu pro delete. Opakovaný klientský request se stejnou identitou mutace nepřidá druhou logickou operaci.
+
+**Implementační kandidát K07 (2026-09-07):** po squash merge PR #119 do `main` (`70c334f`) vlastník schválil pokračování. Migrace `0059_event_outbox` přidává jedinou interní tabulku. Create/update/delete/link/unlink/fork a event část ICS importu ukládají připravené operace ve stejné transakci jako lokální změnu; skutečný no-op nemá outbound operaci. Záznam uchovává cílový účet a původní link ID, remote adresu/ETag/UID, committed snapshot a patch, revizi, předchůdce, stav a pokusy. Smazání mapování ani tombstone purge neztrácí delete adresu; smazání vlastníka cíle maže jeho payloady, odchod jiného autora změny nikoli.
+
+První requestový pokus claimuje uložený řádek; odstraněné legacy push wrappers neposkytují druhou write cestu. Nedořešený předchůdce blokuje pozdější pokus, i když create zatím nemá remote mapping. Již změněná revize nebo nahrazený/odpojený cíl se před odesláním odmítne. To není úplná pull/push koordinace ani ochrana všech závodů během HTTP; ty patří K08. `pending`/`attempting` přežijí pád, ale K07 je automaticky neobnovuje.
+
+Volitelný UUID `Idempotency-Key` je předáván i federation proxy. Opakované outbound sloty stejného autora a mutace jsou pod transakčním zámkem odmítnuty 409 a druhá lokální změna se rollbackne (včetně forku s novým ID). Bez hlavičky vzniká nová identita a platí stávající CAS. Nejde o replay původní HTTP odpovědi ani obecnou idempotenci lokálních-only operací či vytvoření samotného importního kalendáře; tabulka eviduje event provider delivery.
+
+Regrese v `event-outbox.integration.test.ts` a skutečných HTTP/provider fixtures pokrývají atomický rollback, proces ukončený po commitu, zachování delete adresy, duplicitu identity, concurrent claim, pořadí create→update→delete bez mappingu a vlastnictví payloadů. Finální důkazy: čerstvá PG18 migrace a celý `pnpm test:db`, root `pnpm check`; viz také [hranice doručení](../sync/event-write-boundary.md). K07 tím není prohlášen za nezávisle převzatý. Worker/retry/reconciliation, disconnect cleanup a pull/fan-out jsou K08; UI stavu je K09. Produkční migrace, release a deploy neproběhly.
 
 ### K08 — Worker, idempotence, konflikty a pull/push koordinace
 

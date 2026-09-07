@@ -117,19 +117,22 @@ Most mutating handlers cover the same **five concerns**. This event path uses
 the common order:
 
 ```ts
-export async function handlerCreateEvent(req, res) {
-  const event = EventSchema.parse(req.body);                       // 1. validate  → 400
-  event.creatorID = req.user!.id;                                  //    identity is server-set
-  for (const cal of event.calendars)
-    await assertCan(req.user!.id, cal, "editEvents");              // 2. authorise → 403
-  const created = await createEvent(event, event.calendars);       // 3. persist   (packages/db)
-  await pushEventToProviders(created, "create");                   // 4. sync outward (Google/Outlook/CalDAV)
-  notifyCalendarMembers(memberIds, "event_created", created);      // 5. broadcast (SSE)
-  res.status(201).json(created);
-}
+// Outline: the real handler also enforces scope and publishes committed receipts.
+const deliver = await prepareEventWrites(
+  [{ event, calendarIDs: event.calendars, action: "create" }],
+  eventMutationIdentity(req),
+);
+const created = await createEvent(event, event.calendars, deliver.outbox);
+// Only after the local event + outbound intentions have committed:
+await deliver(undefined, created.revision);
 ```
 
-**validate → authorise → persist → sync outward → broadcast.** The server must
+Validate and authorize before preparing this write. The production handlers use
+`sendCommitted` to broadcast the local commit and preserve truthful
+`localCommitted`/revision/partial-delivery responses even when notification or
+provider delivery fails. Do not copy this outline as a complete HTTP handler.
+
+**validate → authorise/preflight → commit event + outbox → broadcast/deliver.** The server must
 re-establish every client-side guarantee; client checks are UX only
 ([details](/docs/architecture/api/#the-server-must-trust-nothing-from-the-client)).
 

@@ -45,34 +45,31 @@ semantics:
 
 ```mermaid
 flowchart LR
-    V["validate<br/>(BadRequest)"] --> A["authorise<br/>(Forbidden)"] --> P["persist<br/>(packages/db)"] --> S["sync outward<br/>(sync engine)"] --> B["broadcast<br/>(SSE)"]
+    V["validate"] --> A["authorise + preflight"] --> P["commit event + outbox"] --> B["broadcast local commit"] --> S["claim + deliver"]
 ```
 
 A representative handler (`handlerCreateEvent` in `handlers/events.ts`):
 
 ```ts
-export async function handlerCreateEvent(req: Request, res: Response) {
-  const event = parseEventOrBadRequest(req.body);            // 1. validate
-  for (const calendarID of event.calendars) {
-    await assertCan(req.user!.id, calendarID, "editEvents"); // 2. authorise all
-  }
-  const created = await createEvent(                        // 3. persist
-    { ...event, creatorID: req.user!.id },
-    event.calendars,
-  );
-  await pushEventToProviders(                               // 4. best-effort push
-    { ...created, calendars: event.calendars },
-    "create",
-  );
-  notifyCalendarMembers(memberIds, "event_created", created); // 5. broadcast
-  res.status(201).json(created);
-}
+// Outline: the real handler also enforces scope and publishes committed receipts.
+const deliver = await prepareEventWrites(
+  [{ event, calendarIDs: event.calendars, action: "create" }],
+  eventMutationIdentity(req),
+);
+const created = await createEvent(event, event.calendars, deliver.outbox);
+// Only after the local event + outbound intentions have committed:
+await deliver(undefined, created.revision);
 ```
 
-Conventions baked into that snippet:
+Validate and authorize before preparing this write. The production handlers use
+`sendCommitted` to broadcast the local commit and preserve truthful
+`localCommitted`/revision/partial-delivery responses even when notification or
+provider delivery fails. Do not copy this outline as a complete HTTP handler.
+
+Handler conventions:
 
 - **`req.user`** is set by the `requireAuth` middleware (type augmented in `apps/api/src/express.d.ts`). Public routes omit `requireAuth`.
-- **Identity fields (`creatorID`, `originCalendarID`) are set server-side**, never taken from the client body. `handlerUpdateEvent` strips them: `const { creatorID, originCalendarID, ...editable } = event`.
+- **Identity fields (`creatorID`, `originCalendarID`) are set server-side**, never trusted from the client body. Updates accept the strict content patch schema; they cannot rewrite ownership.
 - **Handlers throw; they don't return error responses.** A `wrap()` helper (`const wrap = h => (req,res,next) => Promise.resolve(h(req,res)).catch(next)`) funnels rejected promises into the error middleware. That's why every route is `wrap(handlerX)`.
 - **Multi-row database invariants belong in one `@musubi/db` query.** The query
   owns its Drizzle transaction; the handler authorizes first, calls the single
@@ -242,7 +239,7 @@ membership revokes token hashes transactionally.
 
 <Steps>
 
-1. **Write the handler** in the right `handlers/*.ts` file. Follow the five-beat rhythm — validate (throw `BadRequestError`), authorise (`assertCan*` → `ForbiddenError`), persist (a `@musubi/db` query, throw `NotFoundError` on missing), sync outward if it touches events (`pushEventToProviders`), broadcast (`notifyCalendarMembers`), respond (`201` create / `200` update).
+1. **Write the handler** in the right `handlers/*.ts` file. Follow the mutation boundary — validate (throw `BadRequestError`), authorise (`assertCan*` → `ForbiddenError`), persist (a `@musubi/db` query, throw `NotFoundError` on missing), prepare provider writes before commit, persist their `deliver.outbox` in the local transaction, then claim and deliver with truthful committed receipts, broadcast (`notifyCalendarMembers`), respond (`201` create / `200` update).
 
 2. **Add a query function** in `packages/db/src/queries/*.ts` if you need new DB access — never inline `db.select` in a handler.
 

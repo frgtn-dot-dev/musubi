@@ -85,6 +85,8 @@ export async function handlerFederationProxy(req: Request, res: Response) {
   });
   const clientVersion = req.get(CLIENT_VERSION_HEADER);
   if (clientVersion) headers.set(CLIENT_VERSION_HEADER, clientVersion);
+  const mutationID = req.get("Idempotency-Key");
+  if (mutationID) headers.set("Idempotency-Key", mutationID);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   if (hasBody) headers.set("content-type", "application/json");
 

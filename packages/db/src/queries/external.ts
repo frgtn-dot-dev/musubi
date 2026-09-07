@@ -1,3 +1,4 @@
+import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logger } from "@musubi/config";
@@ -272,6 +273,8 @@ export async function setCursor(calendarID: string, cursor: string | null) {
 export async function getExternalLinkForCalendar(calendarID: string) {
   const [res] = await db
     .select({
+      id: externalCalendars.id,
+      disabled: externalCalendars.disabled,
       provider: externalCalendars.provider,
       externalCalendarID: externalCalendars.externalCalendarID,
       supportsEvents: externalCalendars.supportsEvents,
@@ -438,19 +441,24 @@ export async function patchEventAndCalendarLinks(
   expectedRevision: number,
   input: EventContentPatch & { calendars?: string[] },
   tombstoneIfOrphaned = false,
+  outbox: readonly EventOutboxIntent[] = [],
 ): Promise<EventRevisionMutationResult> {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
     throw new TypeError("A positive expected event revision is required");
   }
   return db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, input.calendars ?? [], "shared");
-    return patchEventAndCalendarLinksInTransaction(
+    await reserveEventMutation(tx, eventID, outbox);
+    const result = await patchEventAndCalendarLinksInTransaction(
       tx,
       eventID,
       expectedRevision,
       input,
       tombstoneIfOrphaned,
     );
+    if (result.status === "saved" && result.changed)
+      await appendEventOutbox(tx, result.event, outbox);
+    return result;
   });
 }
 
@@ -529,11 +537,13 @@ export async function forkEventAtRevision(
   expectedRevision: number,
   event: NewEvent,
   calendarIDs: string[],
+  outbox: readonly EventOutboxIntent[] = [],
 ) {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
     throw new TypeError("A positive expected event revision is required");
   return db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, [...calendarIDs, ...(event.originCalendarID ? [event.originCalendarID] : [])], "shared");
+    await reserveEventMutation(tx, event.id!, outbox);
     const checked = await patchEventAndCalendarLinksInTransaction(
       tx,
       sourceID,
@@ -542,6 +552,7 @@ export async function forkEventAtRevision(
     );
     if (checked.status !== "saved") return checked;
     const created = await createEventInTransaction(tx, event, calendarIDs);
+    await appendEventOutbox(tx, { ...created, calendars: calendarIDs }, outbox);
     return {
       status: "saved" as const,
       event: { ...created, calendars: calendarIDs },

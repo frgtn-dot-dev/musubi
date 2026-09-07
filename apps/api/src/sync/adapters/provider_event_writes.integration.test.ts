@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import express from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   account,
   CALENDAR_SCOPE,
@@ -12,6 +12,7 @@ import {
   patchEventAndCalendarLinks,
   db,
   events,
+  eventOutbox,
   externalEvents,
   getEvent,
   getExternalEvent,
@@ -37,7 +38,7 @@ import { issueMemberToken } from "../../federation_tokens";
 import { requireAuth } from "../../middleware/require_auth";
 import { middlewareErrorHandler } from "../../middleware/error_handler";
 import { handlerImportCalendar } from "../../handlers/calendars";
-import { handlerUpdateEvent, handlerRemoveEvent } from "../../handlers/events";
+import { handlerCreateEvent, handlerForkEvent, handlerLinkEvent, handlerUpdateEvent, handlerRemoveEvent } from "../../handlers/events";
 
 // This fixture proves actual adapter/handler HTTP behavior, not provider-side
 // enforcement. Google Calendar docs and RFC 4791/9110 supply that contract.
@@ -272,6 +273,9 @@ async function main() {
   const origin = `http://127.0.0.1:${(fixture.address() as { port: number }).port}`;
   const app = express();
   app.use(express.json());
+  app.post("/events", requireAuth, handlerCreateEvent);
+  app.post("/events/:eventId/fork", requireAuth, handlerForkEvent);
+  app.post("/events/:eventId/link", requireAuth, handlerLinkEvent);
   app.patch("/events", requireAuth, handlerUpdateEvent);
   app.put("/events", requireAuth, handlerUpdateEvent);
   app.delete("/events", requireAuth, handlerRemoveEvent);
@@ -297,8 +301,11 @@ async function main() {
     );
   // Provider scenarios seed a fresh authoritative draft for each independent operation.
   // Stale/local-CAS races are exercised by event_revision.integration.test.ts.
-  const request = async (method: string, event: EventWriteRequest) =>
-    fetch(`${apiOrigin}/events`, {
+  const request = async (method: string, event: EventWriteRequest) => {
+    // These K06 cases intentionally reset provider state between independent
+    // scenarios. Reset their durable attempts too; K07 ordering has its own cases.
+    await db.delete(eventOutbox).where(eq(eventOutbox.eventID, event.id));
+    return fetch(`${apiOrigin}/events`, {
       method,
       headers: {
         authorization: `Bearer ${token.raw}`,
@@ -317,6 +324,7 @@ async function main() {
             }),
       ),
     });
+  };
   const snapshot = async () =>
     JSON.stringify([
       await db.select().from(events).orderBy(events.id),
@@ -1421,6 +1429,105 @@ async function main() {
       ),
       false,
     );
+
+    // K07: actual authenticated HTTP -> transaction -> durable claim -> provider HTTP.
+    const durableEvent = eventIn([mirrors[0].id]);
+    const sendDurable = (path: string, body: unknown, mutationID = randomUUID(), method = "POST") =>
+      fetch(`${apiOrigin}${path}`, { method, headers: {
+        authorization: `Bearer ${token.raw}`, "content-type": "application/json",
+        [CLIENT_VERSION_HEADER]: PRODUCT_VERSION, "Idempotency-Key": mutationID,
+      }, body: JSON.stringify(body) });
+    const jobsFor = (id: string) => db.select().from(eventOutbox).where(eq(eventOutbox.eventID, id));
+    beforeMutationResponse = async () => {
+      const jobs = await jobsFor(durableEvent.id);
+      assert.equal(jobs.length, 1);
+      assert.equal(jobs[0].status, "attempting", "durable claim precedes provider side effect");
+      assert.equal(jobs[0].revision, 1);
+      assert.equal(jobs[0].payload.event.revision, 1);
+      assert.equal((await getEvent(durableEvent.id)).revision, 1, "local commit precedes HTTP");
+    };
+    const durableCreated = await sendDurable("/events", durableEvent);
+    beforeMutationResponse = undefined;
+    assert.equal(durableCreated.status, 201, JSON.stringify(await durableCreated.json()));
+    assert.equal((await jobsFor(durableEvent.id))[0].status, "completed");
+    assert.equal((await jobsFor(durableEvent.id))[0].attempts, 1);
+
+    const forkKey = randomUUID();
+    const forkBody = { calendarID: mirrors[1].id, expectedRevision: 1 };
+    const firstFork = await sendDurable(`/events/${durableEvent.id}/fork`, forkBody, forkKey);
+    assert.equal(firstFork.status, 201);
+    const forkedEvent = await firstFork.json();
+    const beforeRetry = mutationRequests().length;
+    const secondFork = await sendDurable(`/events/${durableEvent.id}/fork`, forkBody, forkKey);
+    assert.equal(secondFork.status, 409);
+    assert.equal((await secondFork.json()).code, "event-mutation-duplicate");
+    assert.equal(mutationRequests().length, beforeRetry, "duplicate fork never reaches provider");
+    const forkJobs = await db.select().from(eventOutbox).where(eq(eventOutbox.mutationID, forkKey));
+    assert.equal(forkJobs.length, 1);
+    assert.equal(forkJobs[0].eventID, forkedEvent.id);
+
+    const linkResponse = await sendDurable(`/events/${durableEvent.id}/link`, {
+      calendarID: mirrors[1].id, expectedRevision: 1,
+    });
+    assert.equal(linkResponse.status, 200);
+    const beforeUnlink = await getExternalEvent("google", durableEvent.id, "same-calendar", mirrors[1].id);
+    assert.ok(beforeUnlink);
+    const unlinkResponse = await sendDurable("/events", {
+      id: durableEvent.id, expectedRevision: 2, unlinkCalendarID: mirrors[1].id,
+    }, randomUUID(), "DELETE");
+    assert.equal(unlinkResponse.status, 200);
+    assert.equal(await getExternalEvent("google", durableEvent.id, "same-calendar", mirrors[1].id), null);
+    const deleteJob = (await jobsFor(durableEvent.id)).find((job) => job.action === "delete")!;
+    assert.equal(deleteJob.externalEventID, beforeUnlink.externalEventId);
+    assert.equal(deleteJob.expectedEtag, beforeUnlink.etag);
+    assert.equal(deleteJob.status, "completed");
+
+    // Remote create commits but its response is unreadable. Later HTTP mutations
+    // must retain intent despite the missing mapping, with no blind second send.
+    const ambiguousEvent = eventIn([mirrors[0].id]);
+    malformedWrite = true;
+    const ambiguousCreate = await sendDurable("/events", ambiguousEvent);
+    malformedWrite = false;
+    assert.equal(ambiguousCreate.status, 502);
+    assert.equal((await ambiguousCreate.json()).localCommitted, true);
+    assert.equal((await jobsFor(ambiguousEvent.id))[0].status, "unconfirmed");
+    const attemptsAfterCreate = mutationRequests().length;
+    const queuedUpdate = await sendDurable("/events", {
+      id: ambiguousEvent.id, expectedRevision: 1, patch: { title: "Pending edit" },
+    }, randomUUID(), "PATCH");
+    assert.equal(queuedUpdate.status, 502);
+    assert.equal((await queuedUpdate.json()).localCommitted, true);
+    const queuedDelete = await sendDurable("/events", {
+      id: ambiguousEvent.id, expectedRevision: 2,
+    }, randomUUID(), "DELETE");
+    assert.equal(queuedDelete.status, 502);
+    assert.equal((await queuedDelete.json()).localCommitted, true);
+    assert.equal(mutationRequests().length, attemptsAfterCreate);
+    const queued = (await jobsFor(ambiguousEvent.id)).sort((a, b) => a.revision - b.revision);
+    assert.deepEqual(queued.map((job) => [job.action, job.status, job.attempts]), [
+      ["create", "unconfirmed", 1], ["update", "pending", 0], ["delete", "pending", 0],
+    ]);
+    assert.equal(queued[1].predecessorID, queued[0].id);
+    assert.equal(queued[2].predecessorID, queued[1].id);
+    assert.equal(queued[2].externalEventID, null);
+
+    // Fail the real outbox INSERT after the event INSERT: neither may commit.
+    const rollbackEvent = eventIn([mirrors[0].id]);
+    await db.execute(sql.raw(`create function k07_reject_outbox() returns trigger language plpgsql as $$
+      begin if NEW.event_id = '${rollbackEvent.id}'::uuid then raise exception 'fixture failure'; end if; return NEW; end $$`));
+    await db.execute(sql.raw("create trigger k07_reject_outbox before insert on event_outbox for each row execute function k07_reject_outbox()"));
+    try {
+      const before = mutationRequests().length;
+      const rejected = await sendDurable("/events", rollbackEvent);
+      assert.equal(rejected.status, 500);
+      assert.equal(mutationRequests().length, before);
+      assert.deepEqual(await db.select().from(events).where(eq(events.id, rollbackEvent.id)), []);
+      assert.deepEqual(await jobsFor(rollbackEvent.id), []);
+    } finally {
+      await db.execute(sql.raw("drop trigger k07_reject_outbox on event_outbox"));
+      await db.execute(sql.raw("drop function k07_reject_outbox()"));
+    }
+    console.log("K07 actual HTTP atomic enqueue/claim, duplicate fork and retained unlink destination: OK");
     console.log(
       "K06 authenticated provider race/partial412/localCommitted and scoped metadata acceptance guards: OK",
     );
