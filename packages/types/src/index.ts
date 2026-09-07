@@ -2,6 +2,7 @@ export * from "./errors";
 export * from "./user";
 export * from "./calendar";
 export * from "./event";
+export * from "./event_delivery";
 export * from "./task";
 export * from "./invite";
 export * from "./settings";

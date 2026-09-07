@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je rozpracovaný; K09–K15 čekají; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je rozpracovaný; K10–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -24,10 +24,11 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 5. Jedna zapisující větev/worktree na sdílený kus kódu. Providerové práce lze paralelizovat až po stabilizaci společného kontraktu; migrace a engine mají jednoho vlastníka.
 6. Neprovádět zápisy do skutečných účtů bez vyhrazených testovacích účtů a souhlasu s jejich použitím. DB integrační testy pouze nad disposable databází.
 7. Po každém balíčku zastavit rozšiřování rozsahu, projít diff a doložit jeho kritérium dokončení. Červené testy nejsou hotový krok.
+8. Každé PR před squash mergem posoudí nezávislý agent s čistým kontextem proti jeho skutečnému base/head diffu. Nálezy opravit, doplnit odpovídající regrese a nechat ověřit finální změnu; merge až po uzavření nálezů a zelených povinných kontrolách.
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `in_progress`; K09–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `in_progress`; K10–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -194,7 +195,7 @@ K08 bude dodán ve dvou reviewovatelných řezech: (a) stabilní provider create
 
 **K08a převzat (PR #122, squash `3551487`, 2026-09-07):** nové outbox create intenty mají explicitní protokolovou značku a používají stabilní Google event ID + private marker, Graph transactionId a CalDAV URL/UID + conditional PUT. Adaptéry umí read-only dohledat matching objekt po ztracené odpovědi; Graph absence není povolení slepého POST. Staré neoznačené operace se nepřeznačují. Důkaz tvoří skutečné adapter/DB/HTTP fixtures; [kontrakt a zdroje](../sync/event-create-recovery.md). Finální čisté review bylo bez nálezů a všech 14 CI kontrol prošlo. Worker a celá níže uvedená K08 koordinace jsou další řez.
 
-**K08b kandidát:** jeden durable dispatcher pro request i scheduler, obnovitelné lease s token fencingem a atomický ACK + mapping; read-before-retry po nejasném výsledku; `Retry-After`, blokovaná oprávnění a retained remote snapshots. Pull chrání pending obsah a páruje create echo s původním intentem. Autoritativní inbound enqueueuje pouze odvozené cíle; odstranění kalendáře ruší jeho nedokončené operace. Scheduler používá stávající API proces, batch 40/concurrency 4/15 s, respektuje vypnutí external sync. Průběžné nezávislé DB review našlo a opravilo expirovanou lease po čekání na lock a starý predecessor ETag přebíjející novější inbound baseline; oba mají regrese. K08 ještě není převzat: čeká finální nezávislé review a CI. [Kontrakt workeru](../sync/event-outbox-worker.md).
+**K08b kandidát:** jeden durable dispatcher pro request i scheduler, obnovitelné lease s token fencingem a atomický ACK + mapping; read-before-retry po nejasném výsledku; `Retry-After`, blokovaná oprávnění a retained remote snapshots. Pull chrání pending obsah a páruje create echo s původním intentem. Autoritativní inbound enqueueuje pouze odvozené cíle; odstranění kalendáře ruší jeho nedokončené operace. Scheduler používá stávající API proces, batch 40/concurrency 4/15 s, respektuje vypnutí external sync. Průběžné nezávislé DB review našlo a opravilo expirovanou lease po čekání na lock a starý predecessor ETag přebíjející novější inbound baseline; oba mají regrese. K08b je převzat: PR #123 squash `57eda59` po čistém review celého `3551487..d241867`, všech 14 zelených CI kontrolách, lokálním root checku, celé DB/sync sadě a migracích 0000–0061 od prázdné PG18 DB. Review opravilo i provider projekci (CalDAV milisekundy), uchování unmapped delete včetně opaque Graph ID před create ACK a nový create při fan-out revivalu; scénáře mají regrese. [Kontrakt workeru](../sync/event-outbox-worker.md).
 
 Použít stávající proces/scheduler. Claim operace musí mít obnovitelný stav po pádu; zápisy do stejného vzdáleného objektu zachovat v pořadí. Starší pending změna nesmí po dokončení novější vrátit starý obsah.
 
@@ -217,6 +218,8 @@ Další nutné chování:
 **Test/hotovo:** fake provider + skutečný disposable Postgres: timeout po remote commitu, pád před uložením mappingu, restart workeru, 429, 403, souběžný pull/update, create→update→delete, disconnect při pending jobu. Žádná tichá ztráta, duplicitní create ani resurrection smazané události.
 
 ### K09 — Pravdivé stavy na webu i mobilu
+
+K09 se dodá v malých reviewovatelných řezech: read-only serverový kontrakt/stav; autorizované retry a explicitní řešení konfliktu; potom napojení obou klientů přes existující cache/SSE/primitives. Celý K09 se převezme až po acceptance obou klientů níže.
 
 Stav je per vzdálený cíl; agregovaný event může být částečně doručený. „Uloženo v Musubi“ odlišit od „Synchronizováno“. Uživatel vidí čekání, chybu, nutnost reconnectu nebo konflikt a může bezpečně opakovat/řešit konkrétní operaci.
 
