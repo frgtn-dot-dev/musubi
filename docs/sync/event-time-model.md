@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: proposed implementation contract. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage checkpoint under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -21,7 +21,7 @@ Add nullable `events.series_id` referencing events and nullable `events.original
 
 Enforce unique `(series_id, original_start)` for exceptions; reject self references, nested exceptions and cross-owner/home-calendar relationships in the authoritative transaction. Do not allow cascading master deletion to bypass durable child delete intents: the scope transaction resolves descendants before removing the master. Existing unrelated detached events remain unrelated; no title/UID/time heuristic backfill.
 
-Use a shared `occurrenceKey(seriesId, originalStart)` for expansion, exception replacement and callers. Provider identity stays on `external_events`: nullable `external_series_id` and `original_start`, alongside resource id, calendar mapping, UID and ETag. Google/Graph provider-specific instance identity and CalDAV RECURRENCE-ID are normalized only within that destination mapping. Two accounts with the same UID never become one series. Existing synthetic IDs remain readable during rollout; write scope requires explicit original identity once supported.
+Use a shared `occurrenceKey(seriesId, originalStart)` for expansion, exception replacement and callers. Provider identity stays on `external_events`: nullable `external_series_id` and `original_start`, alongside resource id, calendar mapping, UID and ETag. Google/Graph provider-specific instance identity and CalDAV RECURRENCE-ID are normalized only within that destination mapping. Two accounts with the same UID never become one series. The existing unique resource mapping `(provider, calendar_id, external_event_id)` remains in the storage slice because current upserts depend on it. CalDAV can carry a master and exceptions inside one resource; K11 must add a separate component mapping (resource mapping ID + original start + local exception ID) before admitting those exceptions. Do not drop resource uniqueness or pretend multiple VEVENTs have different resource URLs. Existing synthetic IDs remain readable during rollout; write scope requires explicit original identity once supported.
 
 ## Expansion and DST
 
@@ -39,3 +39,12 @@ Source: [RFC5545](https://www.rfc-editor.org/rfc/rfc5545), sections3.3.5,3.3.10,
 4. Rehydrate provider zone/exception metadata in K11 into existing mappings. Under the same lifecycle lock and mapping/revision/pending-outbox guards as pull, compare source version and commit only if no newer local draft exists. No wipe/reimport, echo outbox or guessed local legacy zones. Record skipped conflicts for later reconciliation.
 
 Each slice needs an independent clean-context PR review and green relevant checks before merge. K10 closes only after all consumers and its acceptance scenarios pass; schema storage alone does not close it.
+
+
+## Storage checkpoint
+
+Migration0063 adds nullable time/series/original-start columns, a non-cascading master FK, paired identity/self-reference checks, one original occurrence per local series, and destination-scoped provider series metadata/index. Existing rows remain unresolved; application writers and backfill are not enabled. Structural relationship checks live in PostgreSQL; strict JSON/time validation and ownership/nesting guards must be applied by the later authoritative writer before any new metadata is populated. The migration alone does not authorize direct metadata writes through generic event PATCH.
+
+Local upgrade verification migrated a fresh database through0062, inserted a recurring timed event and a multi-day all-day event, then applied the exact0063 migration. Every previous column, revision and timestamp matched, all new metadata remained null, and the outbox remained empty. Integration tests exercise uniqueness, paired identity, self/orphan rejection, non-cascading master deletion, moved identity and destination isolation.
+
+The full HTTP regression suite also exposed fork creation feeding raw database metadata into a strict create request. Fork now projects the supported EventSchema content before strict write validation; existing authenticated CAS/fork tests exercise this path.
