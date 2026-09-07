@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { mock } from "node:test";
 import { eq } from "drizzle-orm";
 import { EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
@@ -191,7 +192,41 @@ async function main() {
 
     const timeout = await enqueue();
     mode = "timeout";
-    assert.equal((await deliver(timeout.id, 30))?.status, "unconfirmed");
+    // Expire the real worker deadline only after the fake provider committed.
+    // A 30ms wall-clock race could expire in DB preflight on a loaded runner,
+    // correctly producing retry instead of exercising ambiguous delivery.
+    const deadlineMs = 123_456;
+    const realSetTimeout = globalThis.setTimeout;
+    let expireDeadline: (() => void) | undefined;
+    const timer = mock.method(
+      globalThis,
+      "setTimeout",
+      (callback: (...args: any[]) => void, delay?: number, ...args: any[]) => {
+        if (delay === deadlineMs) {
+          expireDeadline = () => callback(...args);
+          // A genuine guard still fails a worker that never reaches the write.
+          return realSetTimeout(callback, 20_000, ...args);
+        }
+        return realSetTimeout(callback, delay, ...args);
+      },
+    );
+    writeGate = async () => {
+      assert.ok(expireDeadline, "worker deadline must be armed before writing");
+      expireDeadline();
+    };
+    try {
+      assert.equal(
+        (await deliver(timeout.id, deadlineMs))?.status,
+        "unconfirmed",
+      );
+      assert.ok(
+        remote.size > 0,
+        "the timeout follows a committed remote write",
+      );
+    } finally {
+      writeGate = undefined;
+      timer.mock.restore();
+    }
     const afterTimeout = calls;
     mode = "normal";
     await requestEventDeliveryRetry(owner, timeout.event.id, timeout.id);
