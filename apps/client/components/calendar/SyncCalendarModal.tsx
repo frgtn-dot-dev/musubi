@@ -1,3 +1,4 @@
+import EventDeliveryModal from "./EventDeliveryModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
@@ -43,6 +44,8 @@ type Props = {
 export default function SyncCalendarModal({ visible, onClose, onConnected, callbackURL = "/(tabs)" }: Props) {
   const { authClient, apiUrl } = useServer();
   const api = useApi();
+  const [deliveryVisible, setDeliveryVisible] = useState(false);
+  if (!visible && deliveryVisible) setDeliveryVisible(false);
 
   // Which providers this server can actually sync (same pattern as the welcome
   // screen's social buttons). null = unknown (old server / fetch failed) →
@@ -253,6 +256,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
             <ScrollView showsVerticalScrollIndicator={false}>
               {step === "providers" && (
                 <View style={styles.modalButtonsColumn}>
+                  <Btn label="Unfinished deliveries" variant="secondary" onPress={() => setDeliveryVisible(true)} />
                   {(shows("google") || shows("microsoft")) && (
                     <>
                       <SettingRowToggle
@@ -502,6 +506,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
           </Animated.View>
         </GestureDetector>
       </GestureHandlerRootView>
+      <EventDeliveryModal visible={visible && deliveryVisible} onClose={() => setDeliveryVisible(false)} />
     </Modal>
   );
 }

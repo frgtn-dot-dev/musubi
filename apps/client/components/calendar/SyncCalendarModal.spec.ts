@@ -18,6 +18,7 @@ vi.mock("react", async (original) => ({
 }));
 vi.mock("react-native", () => ({ Text: "Text", Pressable: "Pressable", ScrollView: "ScrollView", View: "View", TextInput: "TextInput", Alert: { alert }, Linking: {} }));
 vi.mock("@/constants/theme", () => ({ colors: {}, fonts: {}, styles: {} }));
+vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@/contexts/ServerContext", () => ({ useServer: () => ({ apiUrl: "https://home.example.test", authClient: { $fetch: request, linkSocial } }) }));
 vi.mock("@/hooks/useModalAnimation", () => ({ useModalAnimation: () => ({ handleClose: close }) }));
 vi.mock("@/components/ui/ModalPortal", () => ({ ModalPortal: "Modal" }));
@@ -119,4 +120,21 @@ it.each([
   expect(request).toHaveBeenCalledWith("https://home.example.test/api/v1/users/connections/sync", expect.objectContaining({ body: { provider } }));
   expect(onConnected).toHaveBeenCalledWith(provider);
   expect(close).toHaveBeenCalledOnce();
+});
+
+it("opens retained delivery discovery from the actual native connection screen", async () => {
+  const { default: DeliveryModal } = await import("./EventDeliveryModal");
+  const find = (node: ReactNode): any => {
+    if (Array.isArray(node)) return node.map(find).find(Boolean);
+    if (!isValidElement<{ children?: ReactNode; label?: string; onPress?: () => void }>(node)) return;
+    if (node.type === DeliveryModal) return node.props;
+    return find(node.props.children);
+  };
+  const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
+  control(render(), "Unfinished deliveries")!.onPress!();
+  const modal = find(render());
+  expect(modal.visible).toBe(true);
+  expect(modal.eventId).toBeUndefined();
+  modal.onClose();
+  expect(find(render()).visible).toBe(false);
 });
