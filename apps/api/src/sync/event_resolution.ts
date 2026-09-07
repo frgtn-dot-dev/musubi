@@ -1,0 +1,234 @@
+import {
+  diffEventContent,
+  getEventDeliveryResolutionContext,
+  getEventOutboxExpectedRef,
+  getEventOutboxDeletion,
+  EventDeliveryResolutionError,
+  type EventDeliveryResolutionProof,
+  type EventDeliveryResolutionContext,
+} from "@musubi/db";
+import {
+  EventWriteError,
+  type EventDeliveryConflict,
+  type EventDeliveryContent,
+  type Event,
+} from "@musubi/types";
+import { getAdapter } from "./engine";
+import type {
+  CalendarAdapter,
+  CreatedEventEvidence,
+  ExternalEventRef,
+} from "./adapter";
+import {
+  googleEventCreateID,
+  caldavEventCreateIdentity,
+} from "./event_create_identity";
+import { strongEventEtag } from "./event_write";
+import { ProviderAuthError } from "./errors";
+
+function content(
+  event: Pick<
+    Event,
+    | "title"
+    | "start"
+    | "end"
+    | "isAllDay"
+    | "description"
+    | "location"
+    | "recurrence"
+  >,
+): EventDeliveryContent {
+  return {
+    title: event.title,
+    start: event.start,
+    end: event.end,
+    isAllDay: event.isAllDay,
+    description: event.description ?? null,
+    location: event.location ?? null,
+    recurrence: event.recurrence ?? null,
+  };
+}
+
+function refusal(error: unknown): EventDeliveryConflict["reason"] {
+  if (error instanceof ProviderAuthError && error.reconnectRequired)
+    return "reconnect-required";
+  if (error instanceof EventWriteError)
+    return error.reason === "unknown"
+      ? "permission-unknown"
+      : `write-${error.reason}`;
+  return "recovery-unavailable";
+}
+
+/** Read-only preview and proof preparation. Only the receipt owner may reach
+ * provider reads. A later POST performs this again; client ETags are comparisons,
+ * never new resource addresses or instructions to bypass conditional writes. */
+export async function prepareEventDeliveryResolution(
+  userID: string,
+  eventID: string,
+  operationID: string,
+  adapterFor: (provider: string) => CalendarAdapter | null = getAdapter,
+): Promise<{
+  preview: EventDeliveryConflict;
+  proof: EventDeliveryResolutionProof;
+}> {
+  const context = await getEventDeliveryResolutionContext(
+    userID,
+    eventID,
+    operationID,
+  );
+  const adapter = adapterFor(context.row.provider);
+  if (!adapter)
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      prepare(context, adapter, controller.signal),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(
+            new EventDeliveryResolutionError("delivery-resolution-unavailable"),
+          );
+        }, 12_000);
+      }),
+    ]);
+  } catch {
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    controller.abort();
+  }
+}
+
+async function prepare(
+  context: EventDeliveryResolutionContext,
+  adapter: CalendarAdapter,
+  signal: AbortSignal,
+) {
+  const { row } = context;
+  let ref: ExternalEventRef | null = await getEventOutboxExpectedRef(row);
+  if (row.action === "create") {
+    if (row.payload.createIdentityVersion !== 1 || !adapter.findCreatedEvent)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const identity = { operationID: row.id, signal };
+    ref =
+      row.provider === "google"
+        ? { externalEventId: googleEventCreateID(identity) }
+        : row.provider === "caldav"
+          ? {
+              externalEventId: caldavEventCreateIdentity(
+                row.externalCalendarID,
+                identity,
+              ).url,
+            }
+          : null;
+  }
+  // Capture deletion evidence BEFORE the provider read, including deterministic
+  // create IDs which have no mapping yet. A newer pull delta invalidates the CAS.
+  const deletion = ref
+    ? await getEventOutboxDeletion(row, ref.externalEventId)
+    : undefined;
+  let remote: CreatedEventEvidence | null;
+  try {
+    if (row.action === "create") {
+      remote = await adapter.findCreatedEvent!(
+        row.userID,
+        row.accountID,
+        row.externalCalendarID,
+        { operationID: row.id, signal },
+      );
+    } else {
+      if (!ref || !adapter.readEvent)
+        throw new EventDeliveryResolutionError(
+          "delivery-resolution-unavailable",
+        );
+      remote = await adapter.readEvent(
+        row.userID,
+        row.accountID,
+        row.externalCalendarID,
+        ref,
+        signal,
+      );
+    }
+  } catch {
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  }
+  signal.throwIfAborted();
+  if (remote && ref && remote.ref.externalEventId !== ref.externalEventId)
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (remote) ref = remote.ref;
+  const action = context.deleted ? "delete" : remote ? "update" : "create";
+  const projected = adapter.projectEvent?.(context.local) ?? context.local;
+  const comparison = remote
+    ? diffEventContent(content(remote.event), content(projected))
+    : {};
+  const localContent = content(context.local);
+  // Compare actual provider projection, but retain original local values in the
+  // patch. Adapters still own serialization and preservation of provider fields.
+  const patch = Object.fromEntries(
+    Object.keys(comparison).map((key) => [
+      key,
+      localContent[key as keyof EventDeliveryContent],
+    ]),
+  );
+  let reason: EventDeliveryConflict["reason"] = null;
+  // Absence after an ambiguous create cannot authorize a second create identity
+  // or a claimed deletion: the original request may still arrive remotely.
+  if (
+    (row.action === "create" &&
+      !remote &&
+      (row.uncertain || row.status === "unconfirmed" || row.remoteSnapshot)) ||
+    (remote && !strongEventEtag(remote.ref.etag)) ||
+    (action === "delete" && !ref) ||
+    (row.provider === "microsoft" && row.action === "create")
+  ) {
+    reason = "recovery-unavailable";
+  } else {
+    try {
+      if (
+        !(action === "delete" && !remote) &&
+        !(action === "update" && remote && Object.keys(comparison).length === 0)
+      ) {
+        if (!adapter.assertEventWrite)
+          throw new EventWriteError("event-write", "unsupported");
+        await adapter.assertEventWrite(
+          row.userID,
+          row.accountID,
+          row.externalCalendarID,
+          {
+            action,
+            event: context.local,
+            patch,
+            ...(action !== "create" && ref ? { external: ref } : {}),
+            signal,
+          },
+        );
+      }
+    } catch (error) {
+      reason = refusal(error);
+    }
+  }
+  signal.throwIfAborted();
+  const preview: EventDeliveryConflict = {
+    eventId: row.eventID,
+    operationId: row.id,
+    latestOperationId: context.latest.id,
+    localRevision: context.localRevision,
+    local: context.deleted ? null : localContent,
+    remote: remote ? content(remote.event) : null,
+    remoteEtag: remote?.ref.etag ?? null,
+    action,
+    canResolve: reason === null,
+    reason,
+  };
+  const proof: EventDeliveryResolutionProof = {
+    context,
+    ref,
+    remoteExists: !!remote,
+    action,
+    patch,
+    deletion,
+  };
+  return { preview, proof };
+}

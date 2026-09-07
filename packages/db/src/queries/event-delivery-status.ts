@@ -13,6 +13,7 @@ import {
   eventOutbox,
   externalCalendars,
 } from "../schema";
+import { unresolvedEventOutbox } from "./event-outbox";
 
 function deliveryIssue(
   status: EventDeliveryTarget["status"],
@@ -132,15 +133,7 @@ export async function getEventDeliveryStatus(
           .where(
             and(
               visibleReceipt,
-              unresolved
-                ? sql`(${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled') or (
-                    ${eventOutbox.status} = 'cancelled' and exists (
-                      select 1 from event_outbox successor
-                      where successor.predecessor_id = ${eventOutbox.id}
-                      and successor.status not in ('completed', 'not-needed', 'cancelled')
-                    )
-                  ))`
-                : undefined,
+              unresolved ? unresolvedEventOutbox() : undefined,
             ),
           )
           .orderBy(

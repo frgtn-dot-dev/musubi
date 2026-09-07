@@ -52,3 +52,50 @@ export const EventDeliverySchema = z.object({
 
 export type EventDeliveryTarget = z.infer<typeof EventDeliveryTargetSchema>;
 export type EventDelivery = z.infer<typeof EventDeliverySchema>;
+
+export const EventDeliveryContentSchema = z.object({
+  title: z.string(),
+  start: z.coerce.date(),
+  end: z.coerce.date(),
+  isAllDay: z.boolean(),
+  description: z.string().nullable(),
+  location: z.string().nullable(),
+  recurrence: z.string().nullable(),
+});
+
+export const EventDeliveryConflictSchema = z.object({
+  eventId: z.uuid(),
+  operationId: z.uuid(),
+  latestOperationId: z.uuid(),
+  localRevision: z.number().int().positive().nullable(),
+  local: EventDeliveryContentSchema.nullable(),
+  remote: EventDeliveryContentSchema.nullable(),
+  remoteEtag: z.string().nullable(),
+  action: z.enum(["create", "update", "delete"]),
+  canResolve: z.boolean(),
+  reason: z
+    .enum([
+      "write-denied",
+      "write-unsupported",
+      "permission-unknown",
+      "reconnect-required",
+      "recovery-unavailable",
+    ])
+    .nullable(),
+});
+
+export const ResolveEventDeliveryRequestSchema = z
+  .object({
+    mutationId: z.uuid(),
+    expectedLocalRevision: z.number().int().positive().nullable(),
+    expectedLatestOperationId: z.uuid(),
+    expectedRemoteExists: z.boolean(),
+    expectedRemoteEtag: z.string().nullable(),
+  })
+  .strict();
+
+export type EventDeliveryContent = z.infer<typeof EventDeliveryContentSchema>;
+export type EventDeliveryConflict = z.infer<typeof EventDeliveryConflictSchema>;
+export type ResolveEventDeliveryRequest = z.infer<
+  typeof ResolveEventDeliveryRequestSchema
+>;

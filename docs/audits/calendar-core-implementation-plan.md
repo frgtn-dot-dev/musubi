@@ -223,6 +223,8 @@ K09 se dodá v malých reviewovatelných řezech: read-only serverový kontrakt/
 
 **K09 read-only stav převzat (PR #124, squash `19dc178`, 2026-09-07):** autentizované per-target receipts přežijí reload, novou instanci API i odstranění eventu; viditelnost každého cíle respektuje členství, soukromé payloady a providerové adresy se nevrací. Import bez receipt je `unknown`. Čisté review opravilo skrytý cancelled predecessor a uzavřelo finální diff `57eda590..408a709` bez dalších nálezů; lokální root check, celá DB sada, cílené opravené regrese a všech 14 CI kontrol prošly. [Kontrakt](../sync/event-delivery-status.md). Retry, explicitní řešení konfliktu a obě klientská UI jsou navazující práce.
 
+**K09 retry převzat (PR #125, squash `a0f6ea9`, 2026-09-07):** retry reautorizuje vlastníka a přesný živý cíl, zachovává payload/ETag/identitu, uncertainty, Retry-After i aktivní lease; konflikt a zrušený cíl odmítá. Používá stejný dispatcher a scoped SSE. Status má bezpečné důvody reconnect/denied/unsupported. Čisté review finálního `19dc178..11c3767` bez nálezů; root check, celá DB sada, přímý HTTP→commit→claim test a všech 14 CI kontrol prošly. Explicitní řešení konfliktů a obě klientská UI zůstávají otevřené.
+
 Stav je per vzdálený cíl; agregovaný event může být částečně doručený. „Uloženo v Musubi“ odlišit od „Synchronizováno“. Uživatel vidí čekání, chybu, nutnost reconnectu nebo konflikt a může bezpečně opakovat/řešit konkrétní operaci.
 
 Použít stávající cache, query invalidation, SSE a UI primitives. Retry endpoint musí znovu ověřit vlastnictví a cíle. Optimistický UI stav není potvrzení vzdáleného zápisu. Konflikt nezavře draft; explicitní přepsání vyžaduje novou kontrolu aktuální vzdálené verze.

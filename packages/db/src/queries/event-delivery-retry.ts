@@ -9,6 +9,8 @@ import {
   externalCalendars,
 } from "../schema";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
+import type { DbTransaction } from "./calendars";
+import type { EventOutboxRow } from "./event-outbox";
 
 export class EventDeliveryRetryError extends Error {
   constructor(
@@ -22,6 +24,40 @@ export class EventDeliveryRetryError extends Error {
     );
     this.name = "EventDeliveryRetryError";
   }
+}
+
+/** Shared action authorization; display receipt ownership alone is insufficient. */
+export async function assertEventDeliveryDestination(
+  tx: DbTransaction,
+  row: EventOutboxRow,
+  userID: string,
+) {
+  const [destination] = await tx
+    .select({ id: externalCalendars.id })
+    .from(externalCalendars)
+    .innerJoin(calendars, eq(calendars.id, externalCalendars.calendarID))
+    .innerJoin(
+      calendarMembers,
+      and(
+        eq(calendarMembers.calendarID, calendars.id),
+        eq(calendarMembers.userID, userID),
+      ),
+    )
+    .where(
+      and(
+        eq(externalCalendars.id, row.externalCalendarLinkID),
+        eq(externalCalendars.calendarID, row.calendarID),
+        eq(externalCalendars.userID, userID),
+        eq(calendars.creatorID, userID),
+        eq(externalCalendars.provider, row.provider),
+        eq(externalCalendars.accountID, row.accountID),
+        eq(externalCalendars.externalCalendarID, row.externalCalendarID),
+        eq(externalCalendars.disabled, false),
+        eq(externalCalendars.supportsEvents, true),
+      ),
+    );
+  if (!destination || row.userID !== userID)
+    throw new EventDeliveryRetryError("delivery-destination-unavailable");
 }
 
 /** Re-admit the exact committed intent, without changing its payload, accepted
@@ -54,31 +90,8 @@ export async function requestEventDeliveryRetry(
       .where(owned)
       .for("update");
     if (!row) throw new NotFoundError("Delivery operation not found.");
-    const [destination] = await tx
-      .select({ id: externalCalendars.id })
-      .from(externalCalendars)
-      .innerJoin(calendars, eq(calendars.id, externalCalendars.calendarID))
-      .innerJoin(
-        calendarMembers,
-        and(
-          eq(calendarMembers.calendarID, calendars.id),
-          eq(calendarMembers.userID, userID),
-        ),
-      )
-      .where(
-        and(
-          eq(externalCalendars.id, row.externalCalendarLinkID),
-          eq(externalCalendars.calendarID, row.calendarID),
-          eq(externalCalendars.userID, userID),
-          eq(calendars.creatorID, userID),
-          eq(externalCalendars.provider, row.provider),
-          eq(externalCalendars.accountID, row.accountID),
-          eq(externalCalendars.externalCalendarID, row.externalCalendarID),
-          eq(externalCalendars.disabled, false),
-          eq(externalCalendars.supportsEvents, true),
-        ),
-      );
-    if (!destination || row.status === "cancelled")
+    await assertEventDeliveryDestination(tx, row, userID);
+    if (row.status === "cancelled")
       throw new EventDeliveryRetryError("delivery-destination-unavailable");
     if (
       row.status === "conflict" ||

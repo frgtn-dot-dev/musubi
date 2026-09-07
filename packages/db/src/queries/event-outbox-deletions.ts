@@ -85,7 +85,8 @@ export async function retainUnmappedEventDeletion(
         externalEventTombstones.externalCalendarLinkID,
         externalEventTombstones.externalEventID,
       ],
-      set: { observedAt: new Date() },
+      // Each observation gets a distinct CAS version, even within one ms.
+      set: { id: sql`gen_random_uuid()`, observedAt: new Date() },
     });
   const candidates = await tx
     .select()
