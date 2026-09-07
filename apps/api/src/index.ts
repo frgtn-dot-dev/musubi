@@ -43,6 +43,7 @@ import {
   handlerSetAttendance,
   handlerUpdateEvent,
 } from "./handlers/events";
+import { handlerGetEventDelivery } from "./handlers/event_delivery";
 import {
   handlerCreateTask,
   handlerGetTask,
@@ -320,6 +321,7 @@ app.delete(
 
 // Events
 app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
+app.get("/api/v1/events/:eventId/delivery", requireAuth, wrap(handlerGetEventDelivery));
 app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
 app.patch("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
 // PUT deliberately uses the same strict PATCH contract: no legacy write bypass.

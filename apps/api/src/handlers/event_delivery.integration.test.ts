@@ -1,0 +1,340 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import express from "express";
+import { and, eq, inArray } from "drizzle-orm";
+import {
+  db,
+  user,
+  events,
+  calendarMembers,
+  externalCalendars,
+  eventOutbox,
+  createCalendar,
+  createEvent,
+  replaceMemberToken,
+  claimEventOutbox,
+  type EventOutboxRow,
+} from "@musubi/db";
+import {
+  CLIENT_VERSION_HEADER,
+  PRODUCT_VERSION,
+  EventSchema,
+  EventDeliverySchema,
+} from "@musubi/types";
+import { issueMemberToken } from "../federation_tokens";
+import { requireAuth } from "../middleware/require_auth";
+import { middlewareErrorHandler } from "../middleware/error_handler";
+import { handlerGetEventDelivery } from "./event_delivery";
+
+async function main() {
+  assert.equal(process.env.ENVIRONMENT, "test");
+  const people = await Promise.all(
+    ["owner", "other", "viewer", "stranger"].map(async (name) => {
+      const id = `delivery-${name}-${randomUUID()}`;
+      const token = issueMemberToken();
+      await db
+        .insert(user)
+        .values({ id, name, email: `${id}@example.test`, isExternal: true });
+      await replaceMemberToken(id, token.tokenHash);
+      return { id, token: token.raw };
+    }),
+  );
+  const [owner, other, viewer, stranger] = people;
+  function serve() {
+    const app = express();
+    app.get(
+      "/api/v1/events/:eventId/delivery",
+      requireAuth,
+      handlerGetEventDelivery,
+    );
+    app.use(middlewareErrorHandler);
+    return app.listen(0, "127.0.0.1");
+  }
+  let server = serve();
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const read = async (
+    person: typeof owner,
+    eventID: string,
+    authenticated = true,
+  ) => {
+    const response = await fetch(
+      `http://127.0.0.1:${(server.address() as { port: number }).port}/api/v1/events/${eventID}/delivery`,
+      {
+        headers: {
+          ...(authenticated ? { authorization: `Bearer ${person.token}` } : {}),
+          [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+        },
+      },
+    );
+    return {
+      status: response.status,
+      cache: response.headers.get("cache-control"),
+      body: await response.json(),
+    };
+  };
+  try {
+    const destination = async (
+      person: typeof owner,
+      name: string,
+      provider: string,
+    ) => {
+      const calendar = await createCalendar({
+        creatorID: person.id,
+        name,
+        color: "#112233",
+      });
+      const [link] = await db
+        .insert(externalCalendars)
+        .values({
+          calendarID: calendar.id,
+          userID: person.id,
+          provider,
+          accountID: `private-account-${randomUUID()}`,
+          externalCalendarID: `private-calendar-${randomUUID()}`,
+        })
+        .returning();
+      return { calendar, link };
+    };
+    const google = await destination(owner, "Google", "google");
+    const hidden = await destination(
+      other,
+      "Private calendar name",
+      "microsoft",
+    );
+    const shared = await destination(other, "Shared", "caldav");
+    const unknown = await destination(
+      owner,
+      "Imported without receipt",
+      "google",
+    );
+    await db.insert(calendarMembers).values(
+      [owner, viewer].map((person) => ({
+        userID: person.id,
+        calendarID: shared.calendar.id,
+        role: "viewer",
+      })),
+    );
+    const value = EventSchema.parse({
+      id: randomUUID(),
+      creatorID: owner.id,
+      organizer: owner.id,
+      title: "Private payload must stay in DB",
+      color: "#112233",
+      start: "2026-09-07T10:00:00Z",
+      end: "2026-09-07T11:00:00Z",
+      calendars: [
+        google.calendar.id,
+        hidden.calendar.id,
+        shared.calendar.id,
+        unknown.calendar.id,
+      ],
+      originCalendarID: google.calendar.id,
+      isAllDay: false,
+      isCanceled: false,
+    });
+    await createEvent(value, value.calendars);
+    await db.update(events).set({ revision: 2 }).where(eq(events.id, value.id));
+    const receipt = async (
+      target: typeof google,
+      status: EventOutboxRow["status"],
+      revision = 1,
+      predecessorID: string | null = null,
+    ) => {
+      const [row] = await db
+        .insert(eventOutbox)
+        .values({
+          id: randomUUID(),
+          actorID: owner.id,
+          mutationID: randomUUID(),
+          position: 0,
+          eventID: value.id,
+          revision,
+          predecessorID,
+          calendarID: target.calendar.id,
+          externalCalendarLinkID: target.link.id,
+          userID: target.link.userID,
+          provider: target.link.provider,
+          accountID: target.link.accountID,
+          externalCalendarID: target.link.externalCalendarID,
+          externalEventID: "private-resource",
+          expectedEtag: '"private-etag"',
+          action: "update",
+          status,
+          payload: { event: value },
+          errorCode: "provider-private-error-data",
+          remoteSnapshot: {
+            externalEventId: "private-resource",
+            etag: '"private-etag"',
+            deleted: false,
+            observedAt: new Date().toISOString(),
+            values: { title: "Private remote content" },
+          },
+        })
+        .returning();
+      return row;
+    };
+    const delivered = await receipt(google, "completed", 2);
+    await receipt(hidden, "conflict");
+    const blocker = await receipt(shared, "blocked");
+    await receipt(shared, "pending", 2, blocker.id);
+
+    assert.equal((await read(owner, value.id, false)).status, 401);
+    assert.equal((await read(owner, "invalid")).status, 400);
+    assert.equal((await read(stranger, value.id)).status, 404);
+    assert.equal((await read(owner, randomUUID())).status, 404);
+    const response = await read(owner, value.id.toUpperCase());
+    assert.equal(response.status, 200);
+    assert.equal(response.cache, "private, no-store");
+    const status = EventDeliverySchema.parse(response.body);
+    assert.equal(status.eventId, value.id);
+    assert.equal(status.localRevision, 2);
+    assert.equal(status.targets.length, 3);
+    assert.equal(
+      status.targets.find((row) => row.targetId === google.link.id)?.status,
+      "completed",
+    );
+    const pending = status.targets.find(
+      (row) => row.targetId === shared.link.id,
+    )!;
+    assert.equal(
+      pending.operationId,
+      blocker.id,
+      "queued successor must not hide its blocker",
+    );
+    assert.equal(pending.status, "blocked");
+    assert.equal(pending.revision, 1);
+    assert.equal(pending.latestRevision, 2);
+    assert.equal(pending.owned, false);
+    const untracked = status.targets.find(
+      (row) => row.targetId === unknown.link.id,
+    )!;
+    assert.equal(
+      untracked.status,
+      "unknown",
+      "mapping/import without a receipt is not outbound confirmation",
+    );
+    assert.equal(untracked.operationId, null);
+    const serialized = JSON.stringify(response.body);
+    for (const forbidden of [
+      "private-account",
+      "private-calendar",
+      "private-resource",
+      "private-etag",
+      "Private remote",
+      "Private payload",
+      "private-error",
+      "Private calendar name",
+      hidden.calendar.id,
+      hidden.link.id,
+    ]) {
+      assert.equal(
+        serialized.includes(forbidden),
+        false,
+        `private metadata leaked: ${forbidden}`,
+      );
+    }
+    assert.equal((await read(viewer, value.id)).body.targets.length, 1);
+    await db
+      .delete(calendarMembers)
+      .where(
+        and(
+          eq(calendarMembers.userID, viewer.id),
+          eq(calendarMembers.calendarID, shared.calendar.id),
+        ),
+      );
+    assert.equal(
+      (await read(viewer, value.id)).status,
+      404,
+      "membership revocation applies on the next read",
+    );
+
+    // A fresh API instance reconstructs receipt state from the same database.
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+    server = serve();
+    await new Promise<void>((resolve) => server.once("listening", resolve));
+    assert.deepEqual((await read(owner, value.id)).body, response.body);
+
+    // Replacing a connection cannot lend its private history to current viewers.
+    await db
+      .delete(externalCalendars)
+      .where(eq(externalCalendars.id, shared.link.id));
+    const [replacement] = await db
+      .insert(externalCalendars)
+      .values({
+        ...shared.link,
+        id: randomUUID(),
+        accountID: "replacement-account",
+      })
+      .returning();
+    const replaced = EventDeliverySchema.parse(
+      (await read(owner, value.id)).body,
+    );
+    assert.equal(
+      replaced.targets.some((row) => row.targetId === shared.link.id),
+      false,
+    );
+    assert.equal(
+      replaced.targets.find((row) => row.targetId === replacement.id)?.status,
+      "unknown",
+    );
+    const ownHistory = EventDeliverySchema.parse(
+      (await read(other, value.id)).body,
+    );
+    assert.equal(
+      ownHistory.targets.find((row) => row.targetId === shared.link.id)
+        ?.connected,
+      false,
+    );
+
+    // A capability loss may cancel a job without replacing the connection. A
+    // later edit still depends on it; only completed/not-needed unblock claims.
+    const cancelled = await receipt(unknown, "cancelled");
+    const waiting = await receipt(unknown, "pending", 2, cancelled.id);
+    assert.equal(await claimEventOutbox(waiting.id), undefined);
+    const blockedByCancellation = EventDeliverySchema.parse(
+      (await read(owner, value.id)).body,
+    ).targets.find((row) => row.targetId === unknown.link.id)!;
+    assert.equal(blockedByCancellation.status, "cancelled");
+    assert.equal(blockedByCancellation.operationId, cancelled.id);
+    assert.equal(blockedByCancellation.latestRevision, 2);
+    await db
+      .delete(eventOutbox)
+      .where(inArray(eventOutbox.id, [waiting.id, cancelled.id]));
+
+    // Removing the local event does not erase the owner's undelivered deletion.
+    const deleteReceipt = await receipt(google, "unconfirmed", 3, delivered.id);
+    await db
+      .update(eventOutbox)
+      .set({ action: "delete", uncertain: true })
+      .where(eq(eventOutbox.id, deleteReceipt.id));
+    await db.delete(events).where(eq(events.id, value.id));
+    const retained = EventDeliverySchema.parse(
+      (await read(owner, value.id)).body,
+    );
+    assert.equal(retained.localRevision, null);
+    assert.equal(retained.targets.length, 1);
+    assert.equal(retained.targets[0].status, "unconfirmed");
+    assert.equal(retained.targets[0].action, "delete");
+    assert.equal((await read(stranger, value.id)).status, 404);
+    console.log(
+      "event delivery status: scoped receipts, blockers, reload, connection replacement and retained deletes passed",
+    );
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await db.delete(user).where(
+      inArray(
+        user.id,
+        people.map((person) => person.id),
+      ),
+    );
+  }
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
