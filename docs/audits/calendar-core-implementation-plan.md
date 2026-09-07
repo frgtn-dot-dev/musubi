@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 je implementovaný kandidát k revizi (2026-09-07), K08–K15 čekají; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -27,7 +27,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K06 jsou `completed`; K07 je `in_review`; K08–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -183,6 +183,10 @@ První requestový pokus claimuje uložený řádek; odstraněné legacy push wr
 Volitelný UUID `Idempotency-Key` je předáván i federation proxy. Opakované outbound sloty stejného autora a mutace jsou pod transakčním zámkem odmítnuty 409 a druhá lokální změna se rollbackne (včetně forku s novým ID). Bez hlavičky vzniká nová identita a platí stávající CAS. Nejde o replay původní HTTP odpovědi ani obecnou idempotenci lokálních-only operací či vytvoření samotného importního kalendáře; tabulka eviduje event provider delivery.
 
 Regrese v `event-outbox.integration.test.ts` a skutečných HTTP/provider fixtures pokrývají atomický rollback, proces ukončený po commitu, zachování delete adresy, duplicitu identity, concurrent claim, pořadí create→update→delete bez mappingu a vlastnictví payloadů. Finální důkazy: čerstvá PG18 migrace a celý `pnpm test:db`, root `pnpm check`; viz také [hranice doručení](../sync/event-write-boundary.md). K07 tím není prohlášen za nezávisle převzatý. Worker/retry/reconciliation, disconnect cleanup a pull/fan-out jsou K08; UI stavu je K09. Produkční migrace, release a deploy neproběhly.
+
+**Převzetí a nezávislé review K07 (2026-09-07):** vlastník schválil squash merge #120 (`eaf6a2b`) po všech 14 zelených CI kontrolách a pokračování až do konce plánu včetně jeho průběžných úprav. Každé další PR před mergem projde nezávislým agentem s čistým kontextem; nálezy se opraví a příslušné gates zopakují. Zpětné read-only review K07 našlo P1: uppercase UUID při create PostgreSQL normalizuje, ale case-sensitive filtr záměrů mohl commitnout event bez outboxu. Skutečný HTTP test nejdřív selhal 502 místo 201. Navazující oprava kanonizuje API UUID, srovnání outbox identit a calendar lifecycle/advisory mutation klíče; opaque user/account/provider ID zůstávají case-sensitive. Druhé čisté review rozšířilo nález na case-only PATCH (ztráta mappingu) a opakovaný link (duplicitní create). DB link diff i link/fork/unlink hranice proto porovnávají kanonická UUID; scope envelope se nepřepisuje před kontrolou jeho shody. Regrese pokrývá HTTP mixed-case event/calendar/origin, case-only PATCH/link bez změny revize nebo mappingu, fork refusal, uppercase unlink, přímé durable delivery guardy, raw DB enqueue, opakovanou mutation identitu a společný lifecycle zámek.
+
+K08 bude dodán ve dvou reviewovatelných řezech: (a) stabilní provider create identity a dohledání nejasného výsledku, (b) worker/recovery a pull/push/lifecycle koordinace. Splnění celého K08 stále vyžaduje všechny acceptance scénáře níže, nikoli pouze první řez. K15 živé ověření potřebuje vyhrazené testovací účty; požadavek na jejich dostupnost byl vznesen, není nahrazen fake-provider výsledkem. Schválené pokračování zahrnuje implementaci, testy, PR a squash merge, nikoli implicitní živé mutace osobních účtů nebo produkční deploy.
 
 ### K08 — Worker, idempotence, konflikty a pull/push koordinace
 

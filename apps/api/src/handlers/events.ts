@@ -118,7 +118,7 @@ function validateCalendars(event: Event) {
   if (!event.calendars.length)
     throw new BadRequestError("Event needs at least one calendar.");
   if (event.originCalendarID)
-    requireUUID(event.originCalendarID, "event.originCalendarID");
+    event.originCalendarID = requireUUID(event.originCalendarID, "event.originCalendarID");
 }
 
 function plannedWrites(
@@ -275,7 +275,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   const existing = await assertCanViewEvent(req.user!.id, request.id);
   const unlinkCalendarID =
     "unlinkCalendarID" in request
-      ? (request.unlinkCalendarID as string)
+      ? requireUUID(request.unlinkCalendarID, "unlinkCalendarID")
       : undefined;
 
   let targets: string[];
@@ -311,7 +311,7 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
   const removed = saved.event.deletedAt !== null;
 
   const result = {
-    id: request.id,
+    id: saved.event.id,
     revision: saved.event.revision,
     calendars: saved.event.calendars,
     removed,
@@ -330,9 +330,9 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
 
 export async function handlerLinkEvent(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const { calendarID, expectedRevision } = EventLinkRequestSchema.parse(
-    req.body,
-  );
+  const parsed = EventLinkRequestSchema.parse(req.body);
+  const calendarID = requireUUID(parsed.calendarID, "calendarID");
+  const { expectedRevision } = parsed;
   const existing = await assertCanViewEvent(req.user!.id, eventID);
 
   await assertEventCalendarAccess(req.user!.id, calendarID);
@@ -364,9 +364,9 @@ export async function handlerLinkEvent(req: Request, res: Response) {
 
 export async function handlerForkEvent(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const { calendarID, expectedRevision } = EventForkRequestSchema.parse(
-    req.body,
-  );
+  const parsed = EventForkRequestSchema.parse(req.body);
+  const calendarID = requireUUID(parsed.calendarID, "calendarID");
+  const { expectedRevision } = parsed;
   const sourceCalendars = await assertCanViewEvent(req.user!.id, eventID);
   await assertEventCalendarAccess(req.user!.id, calendarID);
   if (sourceCalendars.includes(calendarID))

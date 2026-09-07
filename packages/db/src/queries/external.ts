@@ -486,7 +486,7 @@ async function patchEventAndCalendarLinksInTransaction(
     return { status: "conflict", current: previous };
   }
   const incoming =
-    input.calendars === undefined ? existing : [...new Set(input.calendars)];
+    input.calendars === undefined ? existing : [...new Set(input.calendars.map((id) => id.toLowerCase()))];
   const addedCalendarIDs = incoming.filter((id) => !existing.includes(id));
   const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
   const patch = diffEventContent(current, input);

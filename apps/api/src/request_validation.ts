@@ -8,7 +8,7 @@ export function requireUUID(value: unknown, field: string): string {
   if (typeof value !== "string" || !UUID.test(value)) {
     throw new BadRequestError(`${field} must be a valid UUID.`);
   }
-  return value;
+  return value.toLowerCase();
 }
 
 export function optionalDateQuery(value: unknown, field: string): Date | undefined {

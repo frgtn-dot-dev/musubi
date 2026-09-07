@@ -7,6 +7,7 @@ import { optionalDateQuery, optionalDateRangeQuery, requireUUID } from "./reques
 const uuid = "018f3f7e-2b4a-7cc1-9a2e-8e8c44ad9130";
 
 assert.equal(requireUUID(uuid, "eventId"), uuid);
+assert.equal(requireUUID(uuid.toUpperCase(), "eventId"), uuid);
 assert.throws(
   () => requireUUID("not-a-uuid", "eventId"),
   (error: unknown) => error instanceof BadRequestError && error.message === "eventId must be a valid UUID.",

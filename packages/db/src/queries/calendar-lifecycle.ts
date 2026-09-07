@@ -10,7 +10,7 @@ export async function lockCalendarLifecycle(
   calendarIDs: string[],
   mode: "shared" | "exclusive",
 ) {
-  return lockLifecycle(tx, calendarIDs, "musubi:calendar-lifecycle:", mode);
+  return lockLifecycle(tx, calendarIDs.map((id) => id.toLowerCase()), "musubi:calendar-lifecycle:", mode);
 }
 
 /** Stabilizes user-owned calendar admission/deletion, before calendar fences. */
