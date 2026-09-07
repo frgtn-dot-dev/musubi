@@ -12,7 +12,7 @@ import {
   ScopeEditIntentSchema,
 } from "./event";
 import { InviteSchema } from "./invite";
-import { EventDeliverySchema, EventDeliveryConflictSchema, ResolveEventDeliveryRequestSchema } from "./event_delivery";
+import { EventDeliveryInboxSchema, EventDeliverySchema, EventDeliveryConflictSchema, ResolveEventDeliveryRequestSchema } from "./event_delivery";
 import { PageDocumentSchema } from "./pages";
 import {
   PutReminderRequestSchema,
@@ -50,6 +50,7 @@ export const WIRE_CONTRACT: Record<
     schema: CalendarInvitePreviewSchema,
   },
   Event: { direction: "read", schema: EventSchema },
+  EventDeliveryInbox: { direction: "read", schema: EventDeliveryInboxSchema },
   EventDelivery: { direction: "read", schema: EventDeliverySchema },
   EventDeliveryConflict: { direction: "read", schema: EventDeliveryConflictSchema },
   ResolveEventDeliveryRequest: { direction: "write", schema: ResolveEventDeliveryRequestSchema },

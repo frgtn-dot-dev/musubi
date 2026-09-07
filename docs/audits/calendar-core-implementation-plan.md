@@ -225,6 +225,10 @@ K09 se dodá v malých reviewovatelných řezech: read-only serverový kontrakt/
 
 **K09 retry převzat (PR #125, squash `a0f6ea9`, 2026-09-07):** retry reautorizuje vlastníka a přesný živý cíl, zachovává payload/ETag/identitu, uncertainty, Retry-After i aktivní lease; konflikt a zrušený cíl odmítá. Používá stejný dispatcher a scoped SSE. Status má bezpečné důvody reconnect/denied/unsupported. Čisté review finálního `19dc178..11c3767` bez nálezů; root check, celá DB sada, přímý HTTP→commit→claim test a všech 14 CI kontrol prošly. Explicitní řešení konfliktů a obě klientská UI zůstávají otevřené.
 
+**K09 řešení konfliktů převzato (PR #126, squash `aaae1ca`, 2026-09-07):** explicitní náhled čte čerstvý providerový stav; potvrzení znovu ověří revizi, ETag, mapování, delete marker i celý čekající řetězec. Archivuje staré záměry a uloží nový, aniž změní lokální draft. Google/CalDAV conditional HTTP regrese zahrnují zachování cizích polí, ztracenou create odpověď, opakované potvrzení, souběžný pull/retry a neodpovídající OAuth refresh. Review opravilo P1 změnu uncertainty po náhledu a P2 timeout čekajícího refresh; nové čisté review celého `a0f6ea9..37ccf4b` bez nálezů. Root check, celá DB sada a všech 14 CI kontrol prošly.
+
+**K09 klientská dohledatelnost:** před napojením klientů doplnit owner-scoped stránkovaný seznam nedokončených doručení. Samotné GET podle event ID nestačí pro nedoručené smazání po reloadu, kdy event už není v kalendáři. Seznam vrací jen identifikátor a název z vlastního uloženého záměru; detail vždy znovu načte oprávnění a stav. Poté napojit oba klienty přes existující připojení, cache/SSE a UI primitives.
+
 Stav je per vzdálený cíl; agregovaný event může být částečně doručený. „Uloženo v Musubi“ odlišit od „Synchronizováno“. Uživatel vidí čekání, chybu, nutnost reconnectu nebo konflikt a může bezpečně opakovat/řešit konkrétní operaci.
 
 Použít stávající cache, query invalidation, SSE a UI primitives. Retry endpoint musí znovu ověřit vlastnictví a cíle. Optimistický UI stav není potvrzení vzdáleného zápisu. Konflikt nezavře draft; explicitní přepsání vyžaduje novou kontrolu aktuální vzdálené verze.

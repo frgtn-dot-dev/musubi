@@ -43,7 +43,7 @@ import {
   handlerSetAttendance,
   handlerUpdateEvent,
 } from "./handlers/events";
-import { handlerGetEventDelivery, handlerRetryEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "./handlers/event_delivery";
+import { handlerGetEventDeliveryInbox, handlerGetEventDelivery, handlerRetryEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "./handlers/event_delivery";
 import {
   handlerCreateTask,
   handlerGetTask,
@@ -320,6 +320,7 @@ app.delete(
 );
 
 // Events
+app.get("/api/v1/event-deliveries", requireAuth, wrap(handlerGetEventDeliveryInbox));
 app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
 app.get("/api/v1/events/:eventId/delivery", requireAuth, wrap(handlerGetEventDelivery));
 app.post("/api/v1/events/:eventId/delivery/:operationId/retry", requireAuth, rateLimit(30, 60_000, { byUser: true }), wrap(handlerRetryEventDelivery));

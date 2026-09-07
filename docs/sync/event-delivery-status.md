@@ -148,3 +148,28 @@ retained deletes, read-only matching acknowledgement, mapping/deletion observati
 CAS, preserving CalDAV fields/components and a stuck Google OAuth refresh. The
 ambiguous-create race found by independent DB review and the OAuth deadline found
 by independent API review both have regressions. It runs in `test:db:events`.
+
+
+## Discovering unfinished deliveries after restart
+
+`GET /api/v1/event-deliveries?cursor=<event UUID>` is authenticated and
+`private, no-store`. It returns `{ items: [{ eventId, savedTitle }], nextCursor }`
+with at most 25 distinct events per page. Pass `nextCursor` for the next page;
+null means the end of that read. Refresh starts at the first page. UUID order
+survives retry timestamp changes; concurrent new work can require a refresh.
+This is discovery, not a delivery confirmation or a cross-request snapshot.
+
+Only the caller's own unfinished receipts qualify, including final cancelled
+operations and retained deletes whose local event no longer exists. A completed
+replacement removes its archived cancellation from the list. Shared calendar
+membership does not expose another owner's inbox. `savedTitle` comes from an
+owned unfinished intent, never newer event content after unlink/access loss.
+No account IDs, remote addresses, snapshots, descriptions or raw errors are
+returned. Opening an item loads the existing authorized per-event status;
+resolution and retry still perform their full authorization independently.
+
+Migration `0062_event_delivery_inbox` adds a partial owner/event index; it does
+not rewrite receipts. The authenticated HTTP/DB regression covers isolation,
+retained deletes after a new API instance, immutable saved titles, duplicate
+calendars, cursor validation, pagination during retry, and completed resolution
+of a cancelled operation. The UI integration is the following K09 slice.
