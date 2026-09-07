@@ -24,7 +24,10 @@ import {
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
 import { middlewareErrorHandler } from "../middleware/error_handler";
-import { handlerGetEventDelivery } from "./event_delivery";
+import {
+  handlerGetEventDelivery,
+  handlerRetryEventDelivery,
+} from "./event_delivery";
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
@@ -42,10 +45,16 @@ async function main() {
   const [owner, other, viewer, stranger] = people;
   function serve() {
     const app = express();
+    app.use(express.json());
     app.get(
       "/api/v1/events/:eventId/delivery",
       requireAuth,
       handlerGetEventDelivery,
+    );
+    app.post(
+      "/api/v1/events/:eventId/delivery/:operationId/retry",
+      requireAuth,
+      handlerRetryEventDelivery,
     );
     app.use(middlewareErrorHandler);
     return app.listen(0, "127.0.0.1");
@@ -73,6 +82,26 @@ async function main() {
     };
   };
   try {
+    const retry = async (
+      person: typeof owner,
+      eventID: string,
+      operationID: string,
+      body: unknown = {},
+    ) => {
+      const response = await fetch(
+        `http://127.0.0.1:${(server.address() as { port: number }).port}/api/v1/events/${eventID}/delivery/${operationID}/retry`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${person.token}`,
+            [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+      );
+      return { status: response.status, body: await response.json() };
+    };
     const destination = async (
       person: typeof owner,
       name: string,
@@ -303,6 +332,218 @@ async function main() {
       .delete(eventOutbox)
       .where(inArray(eventOutbox.id, [waiting.id, cancelled.id]));
 
+    // Authenticated retry admits only the exact owned operation. A future
+    // Retry-After keeps this HTTP fixture away from any live provider transport.
+    const retryJob = await receipt(google, "blocked", 3, delivered.id);
+    const future = new Date(Date.now() + 3_600_000);
+    await db
+      .update(eventOutbox)
+      .set({ remoteSnapshot: null, nextAttemptAt: future })
+      .where(eq(eventOutbox.id, retryJob.id));
+    const storedRetry = async () =>
+      (
+        await db
+          .select()
+          .from(eventOutbox)
+          .where(eq(eventOutbox.id, retryJob.id))
+      )[0];
+    const beforeRetry = await storedRetry();
+    for (const [code, issue] of [
+      ["provider-reconnect-required", "reconnect-required"],
+      ["provider-write-denied", "write-denied"],
+      ["provider-write-unsupported", "write-unsupported"],
+      ["provider-permission-unknown", "permission-unknown"],
+    ]) {
+      await db
+        .update(eventOutbox)
+        .set({ errorCode: code })
+        .where(eq(eventOutbox.id, retryJob.id));
+      const receiptStatus = EventDeliverySchema.parse(
+        (await read(owner, value.id)).body,
+      );
+      assert.equal(
+        receiptStatus.targets.find((row) => row.operationId === retryJob.id)
+          ?.issue,
+        issue,
+      );
+    }
+    assert.equal((await retry(other, value.id, retryJob.id)).status, 404);
+    assert.equal((await retry(owner, randomUUID(), retryJob.id)).status, 404);
+    assert.equal(
+      (await retry(owner, value.id, retryJob.id, { expectedEtag: '"new"' }))
+        .status,
+      400,
+    );
+    const accepted = await retry(
+      owner,
+      value.id.toUpperCase(),
+      retryJob.id.toUpperCase(),
+    );
+    assert.equal(accepted.status, 202);
+    EventDeliverySchema.parse(accepted.body);
+    const afterRetry = await storedRetry();
+    assert.equal(afterRetry.status, "retry");
+    assert.equal(afterRetry.nextAttemptAt.getTime(), future.getTime());
+    assert.equal(afterRetry.attempts, 0);
+    assert.equal(afterRetry.expectedEtag, beforeRetry.expectedEtag);
+    assert.deepEqual(afterRetry.payload, beforeRetry.payload);
+    const repeats = await Promise.all(
+      Array.from({ length: 5 }, () => retry(owner, value.id, retryJob.id)),
+    );
+    assert.ok(repeats.every((response) => response.status === 202));
+    assert.equal((await storedRetry()).attempts, 0);
+    assert.equal(
+      (await storedRetry()).nextAttemptAt.getTime(),
+      future.getTime(),
+    );
+
+    await db
+      .update(eventOutbox)
+      .set({ status: "unconfirmed", uncertain: false })
+      .where(eq(eventOutbox.id, retryJob.id));
+    assert.equal((await retry(owner, value.id, retryJob.id)).status, 202);
+    assert.equal(
+      (await storedRetry()).uncertain,
+      true,
+      "legacy unconfirmed state cannot become a blind replay",
+    );
+    assert.equal((await storedRetry()).status, "unconfirmed");
+    const leaseToken = randomUUID();
+    await db
+      .update(eventOutbox)
+      .set({ status: "attempting", leaseToken, leaseUntil: future })
+      .where(eq(eventOutbox.id, retryJob.id));
+    assert.equal((await retry(owner, value.id, retryJob.id)).status, 202);
+    assert.equal((await storedRetry()).leaseToken, leaseToken);
+    assert.equal((await storedRetry()).leaseUntil?.getTime(), future.getTime());
+
+    await db
+      .update(eventOutbox)
+      .set({ status: "conflict", remoteSnapshot: retryJob.remoteSnapshot })
+      .where(eq(eventOutbox.id, retryJob.id));
+    assert.equal(
+      (await retry(owner, value.id, retryJob.id)).body.code,
+      "delivery-conflict-unresolved",
+    );
+    assert.equal((await storedRetry()).status, "conflict");
+    assert.deepEqual(
+      (await storedRetry()).remoteSnapshot,
+      retryJob.remoteSnapshot,
+    );
+    await db
+      .update(eventOutbox)
+      .set({ status: "cancelled", remoteSnapshot: null })
+      .where(eq(eventOutbox.id, retryJob.id));
+    assert.equal(
+      (await retry(owner, value.id, retryJob.id)).body.code,
+      "delivery-destination-unavailable",
+    );
+    await db
+      .update(eventOutbox)
+      .set({ status: "blocked", predecessorID: blocker.id })
+      .where(eq(eventOutbox.id, retryJob.id));
+    assert.equal(
+      (await retry(owner, value.id, retryJob.id)).body.code,
+      "delivery-predecessor-unresolved",
+    );
+    await db
+      .update(eventOutbox)
+      .set({ predecessorID: delivered.id })
+      .where(eq(eventOutbox.id, retryJob.id));
+    for (const unavailable of [
+      { disabled: true },
+      { supportsEvents: false },
+      { accountID: "changed-account" },
+    ]) {
+      await db
+        .update(externalCalendars)
+        .set(unavailable)
+        .where(eq(externalCalendars.id, google.link.id));
+      assert.equal(
+        (await retry(owner, value.id, retryJob.id)).body.code,
+        "delivery-destination-unavailable",
+      );
+      await db
+        .update(externalCalendars)
+        .set({
+          disabled: false,
+          supportsEvents: true,
+          accountID: google.link.accountID,
+        })
+        .where(eq(externalCalendars.id, google.link.id));
+    }
+    await db
+      .delete(calendarMembers)
+      .where(
+        and(
+          eq(calendarMembers.userID, owner.id),
+          eq(calendarMembers.calendarID, google.calendar.id),
+        ),
+      );
+    assert.equal(
+      (await retry(owner, value.id, retryJob.id)).body.code,
+      "delivery-destination-unavailable",
+    );
+    await db.insert(calendarMembers).values({
+      userID: owner.id,
+      calendarID: google.calendar.id,
+      role: "owner",
+    });
+    await db
+      .update(eventOutbox)
+      .set({ status: "completed" })
+      .where(eq(eventOutbox.id, retryJob.id));
+    assert.equal(
+      (await retry(owner, value.id, retryJob.id)).status,
+      202,
+      "a duplicate click after completion is harmless",
+    );
+    assert.equal((await storedRetry()).status, "completed");
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(eventOutbox)
+          .where(eq(eventOutbox.id, blocker.id))
+      )[0].status,
+      "blocked",
+      "retry does not change a sibling account",
+    );
+    await db.delete(eventOutbox).where(eq(eventOutbox.id, retryJob.id));
+
+    // Exercise the HTTP handler's actual post-commit dispatcher/claim, without
+    // any registered provider or credentials capable of leaving the fixture.
+    const wakeupTarget = await destination(
+      owner,
+      "Immediate retry",
+      "fixture-unregistered",
+    );
+    const wakeupJob = await receipt(wakeupTarget, "blocked", 2);
+    await db
+      .update(eventOutbox)
+      .set({ remoteSnapshot: null, nextAttemptAt: new Date(0) })
+      .where(eq(eventOutbox.id, wakeupJob.id));
+    assert.equal((await retry(owner, value.id, wakeupJob.id)).status, 202);
+    let claimed = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const [observed] = await db
+        .select()
+        .from(eventOutbox)
+        .where(eq(eventOutbox.id, wakeupJob.id));
+      if (observed.attempts === 1 && observed.status === "blocked") {
+        assert.equal(observed.errorCode, "provider-write-unsupported");
+        claimed = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(
+      claimed,
+      true,
+      "HTTP retry must wake the real durable dispatcher after commit",
+    );
+    await db.delete(eventOutbox).where(eq(eventOutbox.id, wakeupJob.id));
+
     // Removing the local event does not erase the owner's undelivered deletion.
     const deleteReceipt = await receipt(google, "unconfirmed", 3, delivered.id);
     await db
@@ -319,7 +560,7 @@ async function main() {
     assert.equal(retained.targets[0].action, "delete");
     assert.equal((await read(stranger, value.id)).status, 404);
     console.log(
-      "event delivery status: scoped receipts, blockers, reload, connection replacement and retained deletes passed",
+      "event delivery status/retry: scoped receipts, authorization, preserved leases/uncertainty/Retry-After, reload and retained deletes passed",
     );
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -221,6 +221,8 @@ Další nutné chování:
 
 K09 se dodá v malých reviewovatelných řezech: read-only serverový kontrakt/stav; autorizované retry a explicitní řešení konfliktu; potom napojení obou klientů přes existující cache/SSE/primitives. Celý K09 se převezme až po acceptance obou klientů níže.
 
+**K09 read-only stav převzat (PR #124, squash `19dc178`, 2026-09-07):** autentizované per-target receipts přežijí reload, novou instanci API i odstranění eventu; viditelnost každého cíle respektuje členství, soukromé payloady a providerové adresy se nevrací. Import bez receipt je `unknown`. Čisté review opravilo skrytý cancelled predecessor a uzavřelo finální diff `57eda590..408a709` bez dalších nálezů; lokální root check, celá DB sada, cílené opravené regrese a všech 14 CI kontrol prošly. [Kontrakt](../sync/event-delivery-status.md). Retry, explicitní řešení konfliktu a obě klientská UI jsou navazující práce.
+
 Stav je per vzdálený cíl; agregovaný event může být částečně doručený. „Uloženo v Musubi“ odlišit od „Synchronizováno“. Uživatel vidí čekání, chybu, nutnost reconnectu nebo konflikt a může bezpečně opakovat/řešit konkrétní operaci.
 
 Použít stávající cache, query invalidation, SSE a UI primitives. Retry endpoint musí znovu ověřit vlastnictví a cíle. Optimistický UI stav není potvrzení vzdáleného zápisu. Konflikt nezavře draft; explicitní přepsání vyžaduje novou kontrolu aktuální vzdálené verze.

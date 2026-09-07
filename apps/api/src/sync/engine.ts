@@ -61,25 +61,28 @@ export function getAdapter(provider: string): CalendarAdapter | null {
   return adapters[provider] ?? null;
 }
 
+export async function deliverEventOutboxAndNotify(id: string) {
+  try {
+    const result = await deliverEventOutbox(id, getAdapter);
+    if (!result) return;
+    if (!["completed", "not-needed", "cancelled"].includes(result.status))
+      recordExternalSyncFailure("push", result.provider);
+    const members = await getCalendarMembers(result.calendarID);
+    notifyCalendarMembers([...new Set([result.userID, ...members.map((member) => member.userID)])], "external_sync", { calendars: [result.calendarID] });
+  } catch {
+    // Never log driver-bound JSON or provider content. Persisted work survives.
+    recordExternalSyncFailure("push", "all");
+    logger.error("sync.event_outbox.persistence_failed", { code: "delivery-state-unavailable" });
+  }
+}
+
 export async function drainEventOutbox() {
   const candidates = await getDueEventOutboxIDs(40);
   let next = 0;
   await Promise.all(Array.from({ length: 4 }, async () => {
     while (next < candidates.length) {
       const { id } = candidates[next++];
-      try {
-        const result = await deliverEventOutbox(id, getAdapter);
-        if (!result) continue;
-        if (!["completed", "not-needed", "cancelled"].includes(result.status))
-          recordExternalSyncFailure("push", result.provider);
-        const members = await getCalendarMembers(result.calendarID);
-        notifyCalendarMembers(members.map((member) => member.userID), "external_sync", { calendars: [result.calendarID] });
-      } catch {
-        // Never log driver-bound JSON or provider content. The persisted claim
-        // remains recoverable when even failure acknowledgement cannot commit.
-        recordExternalSyncFailure("push", "all");
-        logger.error("sync.event_outbox.persistence_failed", { code: "delivery-state-unavailable" });
-      }
+      await deliverEventOutboxAndNotify(id);
     }
   }));
   recordEventOutboxBacklog(await getEventOutboxBacklog());

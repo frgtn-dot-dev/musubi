@@ -15,6 +15,7 @@ import {
   upsertExternalEvent,
   deleteExternalEvent,
   removeCalendar,
+  requestEventDeliveryRetry,
   type EventOutboxIntent,
 } from "@musubi/db";
 import { googleAdapter } from "./adapters/google";
@@ -22,6 +23,7 @@ import type { CalendarAdapter, CreatedEventEvidence } from "./adapter";
 import { deliverEventOutbox } from "./event_delivery";
 import { googleEventCreateID } from "./event_create_identity";
 import { ProviderEventWriteError, providerRetryAfterMs } from "./event_write";
+import { ProviderAuthError } from "./errors";
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
@@ -29,7 +31,8 @@ async function main() {
   await db
     .insert(user)
     .values({ id: owner, name: owner, email: `${owner}@example.test` });
-  let mode: "normal" | "timeout" | "lost" | "429" | "403" = "normal";
+  let mode: "normal" | "timeout" | "lost" | "429" | "403" | "reconnect" =
+    "normal";
   let calls = 0;
   let writeGate: (() => Promise<void>) | undefined;
   let version = 0;
@@ -69,6 +72,8 @@ async function main() {
     ...googleAdapter,
     async assertEventWrite() {
       if (mode === "403") throw new EventWriteError("event-write", "denied");
+      if (mode === "reconnect")
+        throw new ProviderAuthError("google", "invalid_grant", undefined, true);
     },
     async pushCreate(_u, _a, _c, event, identity) {
       calls++;
@@ -189,6 +194,7 @@ async function main() {
     assert.equal((await deliver(timeout.id, 30))?.status, "unconfirmed");
     const afterTimeout = calls;
     mode = "normal";
+    await requestEventDeliveryRetry(owner, timeout.event.id, timeout.id);
     await due(timeout.id);
     assert.equal((await deliver(timeout.id))?.status, "completed");
     assert.equal(
@@ -204,6 +210,11 @@ async function main() {
     assert.equal(retry?.uncertain, false);
     assert.ok(retry!.nextAttemptAt.getTime() >= Date.now() + 59_000);
     const after429 = calls;
+    await requestEventDeliveryRetry(owner, throttled.event.id, throttled.id);
+    assert.equal(
+      (await jobs(throttled.event.id))[0].nextAttemptAt.getTime(),
+      retry!.nextAttemptAt.getTime(),
+    );
     await deliver(throttled.id);
     assert.equal(
       calls,
@@ -223,7 +234,9 @@ async function main() {
     const denied = await enqueue();
     mode = "403";
     const before403 = calls;
-    assert.equal((await deliver(denied.id))?.status, "blocked");
+    const permissionFailure = await deliver(denied.id);
+    assert.equal(permissionFailure?.status, "blocked");
+    assert.equal(permissionFailure?.errorCode, "provider-write-denied");
     mode = "normal";
     await deliver(denied.id);
     assert.equal(
@@ -231,6 +244,31 @@ async function main() {
       before403,
       "blocked permission is not an automatic retry",
     );
+    await requestEventDeliveryRetry(owner, denied.event.id, denied.id);
+    await due(denied.id);
+    mode = "403";
+    assert.equal((await deliver(denied.id))?.status, "blocked");
+    assert.equal(
+      calls,
+      before403,
+      "retry must recheck a permission which is still denied",
+    );
+    mode = "normal";
+    await requestEventDeliveryRetry(owner, denied.event.id, denied.id);
+    await due(denied.id);
+    assert.equal((await deliver(denied.id))?.status, "completed");
+    assert.equal(
+      calls,
+      before403 + 1,
+      "explicit retry rechecks permission and writes once after it is restored",
+    );
+    const reconnect = await enqueue();
+    mode = "reconnect";
+    assert.equal(
+      (await deliver(reconnect.id))?.errorCode,
+      "provider-reconnect-required",
+    );
+    mode = "normal";
 
     const queued = await enqueue();
     const update = intent(queued.event, "update", {

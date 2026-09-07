@@ -14,6 +14,28 @@ import {
   externalCalendars,
 } from "../schema";
 
+function deliveryIssue(
+  status: EventDeliveryTarget["status"],
+  code: string | null,
+): EventDeliveryTarget["issue"] {
+  if (["unknown", "completed", "not-needed"].includes(status)) return null;
+  if (status === "conflict") return "conflict";
+  if (code === "provider-reconnect-required") return "reconnect-required";
+  if (code === "provider-write-denied") return "write-denied";
+  if (code === "provider-write-unsupported") return "write-unsupported";
+  if (code === "provider-permission-unknown") return "permission-unknown";
+  if (code === "destination-disconnected") return "destination-unavailable";
+  if (
+    code === "create-recovery-unavailable" ||
+    code === "create-outcome-unknown"
+  )
+    return "recovery-unavailable";
+  if (status === "unconfirmed") return "unconfirmed";
+  return ["blocked", "not-written", "retry"].includes(status)
+    ? "delivery-failed"
+    : null;
+}
+
 /** Authorization and receipts share one snapshot. Select only display metadata:
  * event payloads, remote snapshots, account IDs and resource addresses stay in DB.
  * Former destination owners may read their own retained deletion receipts; being
@@ -99,6 +121,7 @@ export async function getEventDeliveryStatus(
         revision: eventOutbox.revision,
         updatedAt: eventOutbox.updatedAt,
         nextAttemptAt: eventOutbox.nextAttemptAt,
+        errorCode: eventOutbox.errorCode,
       };
       const receipts = (unresolved: boolean) =>
         tx
@@ -155,15 +178,17 @@ export async function getEventDeliveryStatus(
             latestRevision: null,
             updatedAt: null,
             retryAt: null,
+            issue: null,
           },
         ]),
       );
       for (const last of latest) {
         const first = blockers.get(last.targetId) ?? last;
-        const { nextAttemptAt, ...display } = first;
+        const { nextAttemptAt, errorCode, ...display } = first;
         targets.set(first.targetId, {
           ...display,
           latestRevision: last.revision,
+          issue: deliveryIssue(first.status, errorCode),
           retryAt: ["pending", "retry", "unconfirmed"].includes(first.status)
             ? nextAttemptAt
             : null,

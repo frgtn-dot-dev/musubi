@@ -6,6 +6,7 @@ export * from './queries/users';
 export * from './queries/events';
 export * from './queries/event-outbox';
 export * from './queries/event-delivery-status';
+export * from './queries/event-delivery-retry';
 export * from './queries/event-outbox-delivery';
 export * from './queries/event-outbox-projection';
 export * from './queries/event-outbox-deletions';
