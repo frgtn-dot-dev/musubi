@@ -37,6 +37,7 @@ import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import { ProviderGlyph } from "~/ui/ProviderGlyph";
+import { EventDeliveryInboxDialog } from "./EventDeliveryInboxDialog";
 import { AccountMark, ProviderIcon } from "./ProviderIcon";
 import styles from "./styles/connections.module.css";
 
@@ -111,6 +112,7 @@ export function ConnectionsDialog({
   open,
   userId,
 }: ConnectionsDialogProps) {
+  const [deliveryTrigger, setDeliveryTrigger] = useState<HTMLElement | null>(null);
   const connections = useConnections(userId);
   const federated = useFederatedWorkspace(userId);
   const { busy, error, run, setError } = useAsyncAction();
@@ -131,6 +133,7 @@ export function ConnectionsDialog({
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
+      setDeliveryTrigger(null);
       setCaldav(undefined);
       setInvite(undefined);
       setInviteValue("");
@@ -360,7 +363,13 @@ export function ConnectionsDialog({
               }
             />
           )}
+          <Row
+            label="Saved event deliveries"
+            detail="Check pending changes, conflicts and undelivered deletions."
+            trailing={<Button variant="secondary" size="compact" onClick={(event) => setDeliveryTrigger(event.currentTarget)}>Unfinished deliveries</Button>}
+          />
         </section>
+        {deliveryTrigger ? <EventDeliveryInboxDialog key={userId} userId={userId} returnFocus={deliveryTrigger} onClose={() => setDeliveryTrigger(null)} /> : null}
 
         {/* Both sit in the side column, stacked at its top: placed in two rows of
             the outer grid, their heights came from the left column and left 130px

@@ -7851,3 +7851,70 @@ for (const override of ["description=Restored", "endTime=12%3A30", "recurrence=F
     expect(writes).toEqual([]);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K09 delivery review and retained deletion after reload: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem("musubi-theme", value), theme);
+    const id = "00000000-0000-4000-8000-000000000091";
+    const operation = "00000000-0000-4000-8000-000000000092";
+    const remoteCalendar = "00000000-0000-4000-8000-000000000093";
+    const targetId = "00000000-0000-4000-8000-000000000094";
+    const saved = event(id, "Delivery appointment", "personal", "#b3492f", "2026-07-23T07:30:00Z", "2026-07-23T08:30:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [saved] });
+    const writes: unknown[] = [];
+    let resolved = false;
+    const target = { targetId, calendarId: remoteCalendar, calendarName: "Work", provider: "google", connected: true, owned: true,
+      operationId: operation, action: "update", status: "conflict", revision: 1, latestRevision: 1,
+      updatedAt: "2026-07-23T09:00:00Z", retryAt: null, issue: "conflict" };
+    await page.route(`**/api/v1/events/${id}/delivery`, (route) => respond(route, {
+      eventId: id, localRevision: 1, targets: [{ ...target, ...(resolved ? { status: "pending", issue: null } : {}) }],
+    }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, (route) => respond(route, {
+      eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1,
+      local: { ...saved, description: null, location: null }, remote: { ...saved, title: "Changed at provider", description: "Remote notes", location: null },
+      remoteEtag: '"fresh"', action: "update", canResolve: true, reason: null,
+    }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, (route) => {
+      writes.push(route.request().postDataJSON()); resolved = true;
+      return respond(route, { eventId: id, localRevision: 1, targets: [{ ...target, status: "pending", issue: null }] }, 202);
+    });
+    const deleted = "00000000-0000-4000-8000-000000000095";
+    await page.route("**/api/v1/event-deliveries", (route) => respond(route, { items: [{ eventId: deleted, savedTitle: "Deleted appointment" }], nextCursor: null }));
+    await page.route(`**/api/v1/events/${deleted}/delivery`, (route) => respond(route, { eventId: deleted, localRevision: null,
+      targets: [{ ...target, action: "delete", status: "unconfirmed", issue: "unconfirmed" }] }));
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    const eventTrigger = page.getByRole("button", { name: /Delivery appointment/ }).first();
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    const delivery = page.getByRole("dialog", { name: "Delivery", exact: true });
+    await expect(delivery.getByText(/Remote changes need review/)).toBeVisible();
+    await delivery.getByRole("button", { name: "Review changes" }).click();
+    const comparison = page.getByRole("dialog", { name: "Review remote changes" });
+    await expect(comparison.getByText("Changed at provider")).toBeVisible();
+    await expect(comparison.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await comparison.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+    expect(writes).toHaveLength(0);
+    await expect(delivery.getByRole("button", { name: "Review changes" })).toBeFocused();
+    await delivery.getByRole("button", { name: "Review changes" }).press("Enter");
+    await expect(comparison.getByText("Remote notes")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    await comparison.screenshot({ path: `/tmp/musubi-k09-web-${theme}-comparison.png` });
+    await comparison.getByRole("button", { name: "Apply saved changes" }).click();
+    await expect(delivery.getByText(/Saved changes queued/)).toBeVisible();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ expectedLocalRevision: 1, expectedRemoteExists: true, expectedRemoteEtag: '"fresh"' });
+    await delivery.getByRole("button", { name: "Close delivery", exact: true }).click();
+    await expect(eventTrigger).toBeFocused();
+    await page.reload();
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    await page.getByRole("button", { name: "Unfinished deliveries", exact: true }).click();
+    await page.getByRole("button", { name: /Deleted appointment/ }).click();
+    await expect(delivery.getByText(/Delivery unconfirmed/)).toBeVisible();
+    await expect(delivery.getByText("Retained delivery records")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    await delivery.screenshot({ path: `/tmp/musubi-k09-web-${theme}-retained.png` });
+    expect(await delivery.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  });
+}

@@ -65,6 +65,7 @@ export function useServerStream(userId: string) {
     const calendarsKey = queryKeys.calendars(origin, userId);
     const federatedKey = queryKeys.federated(origin, userId);
     // Event ranges share this prefix; a prefix match invalidates every window.
+    const deliveryPrefix = ["delivery", origin, userId] as const;
     const eventsPrefix = ["events", origin, userId] as const;
 
     function applyPage(raw: unknown) {
@@ -108,21 +109,25 @@ export function useServerStream(userId: string) {
         // Something changed on a connected Musubi server. Its rows live in the
         // federation snapshot, so refetch that rather than patching local caches.
         case "federated_sync":
+          void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           void queryClient.invalidateQueries({ queryKey: federatedKey });
           break;
         case "calendar_updated":
         case "calendar_removed":
           void queryClient.invalidateQueries({ queryKey: calendarsKey });
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
+          void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           break;
         case "event_created":
         case "event_updated":
         case "event_removed":
         case "attendance_changed":
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
+          void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           break;
         case "external_sync":
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
+          void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           break;
         default:
           break;
@@ -143,6 +148,7 @@ export function useServerStream(userId: string) {
         pagesKey,
         settingsKey,
         eventsPrefix,
+        deliveryPrefix,
       ]) {
         void queryClient.invalidateQueries({ queryKey });
       }

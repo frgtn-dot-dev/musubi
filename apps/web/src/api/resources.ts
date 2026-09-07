@@ -1,4 +1,8 @@
 import {
+  EventDeliverySchema,
+  EventDeliveryInboxSchema,
+  EventDeliveryConflictSchema,
+  type ResolveEventDeliveryRequest,
   eventCreateRequest,
   eventPatchRequest,
   requireEventRevision,
@@ -634,5 +638,35 @@ export function removeAnnouncement(id: string) {
   return apiRequest(`/api/v1/admin/announcements/${id}`, {
     method: "DELETE",
     responseSchema: z.object({ deleted: z.boolean() }),
+  });
+}
+
+export function getEventDelivery(eventId: string, signal?: AbortSignal, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery`), {
+    responseSchema: EventDeliverySchema, signal,
+  });
+}
+
+export function getEventDeliveryInbox(cursor?: string, signal?: AbortSignal, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/event-deliveries${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`), {
+    responseSchema: EventDeliveryInboxSchema, signal,
+  });
+}
+
+export function retryEventDelivery(eventId: string, operationId: string, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/retry`), {
+    method: "POST", body: {}, responseSchema: EventDeliverySchema,
+  });
+}
+
+export function getEventDeliveryConflict(eventId: string, operationId: string, signal?: AbortSignal, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/conflict`), {
+    responseSchema: EventDeliveryConflictSchema, signal,
+  });
+}
+
+export function resolveEventDelivery(eventId: string, operationId: string, body: ResolveEventDeliveryRequest, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/resolve`), {
+    method: "POST", body, responseSchema: EventDeliverySchema,
   });
 }

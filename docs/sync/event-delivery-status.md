@@ -173,3 +173,22 @@ not rewrite receipts. The authenticated HTTP/DB regression covers isolation,
 retained deletes after a new API instance, immutable saved titles, duplicate
 calendars, cursor validation, pagination during retry, and completed resolution
 of a cancelled operation. The UI integration is the following K09 slice.
+
+
+## Web entry points
+
+Open **Delivery details** from an event preview to inspect its saved destinations.
+Open **Connections → Unfinished deliveries** to discover your retained operations,
+including local deletions. The list and detail are server reads; an optimistic
+calendar row is never promoted into provider confirmation. Query keys include
+origin, user and federation connection, and SSE/reconnect invalidates delivery
+queries. A refused or failed status refresh hides cached actions.
+
+**Review changes** loads a separate, fixed local/remote comparison. Cancel has
+initial focus. **Apply saved changes**, **Recreate remote copy** or **Delete remote
+copy** sends only the confirmation guards and mutation UUID. A network retry uses
+the same UUID; a 409 closes the stale comparison and requires another read.
+These actions do not modify an open event editor's draft. Client rendering tests
+exercise the real resource transport, and browser tests cover light/desktop and
+dark/narrow views, focus, cancellation, confirmation, reload and accessibility.
+Native client integration is still pending in K09.
