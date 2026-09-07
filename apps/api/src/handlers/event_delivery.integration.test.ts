@@ -12,6 +12,7 @@ import {
   createCalendar,
   createEvent,
   replaceMemberToken,
+  claimEventOutbox,
   type EventOutboxRow,
 } from "@musubi/db";
 import {
@@ -106,15 +107,13 @@ async function main() {
       "Imported without receipt",
       "google",
     );
-    await db
-      .insert(calendarMembers)
-      .values(
-        [owner, viewer].map((person) => ({
-          userID: person.id,
-          calendarID: shared.calendar.id,
-          role: "viewer",
-        })),
-      );
+    await db.insert(calendarMembers).values(
+      [owner, viewer].map((person) => ({
+        userID: person.id,
+        calendarID: shared.calendar.id,
+        role: "viewer",
+      })),
+    );
     const value = EventSchema.parse({
       id: randomUUID(),
       creatorID: owner.id,
@@ -288,6 +287,21 @@ async function main() {
         ?.connected,
       false,
     );
+
+    // A capability loss may cancel a job without replacing the connection. A
+    // later edit still depends on it; only completed/not-needed unblock claims.
+    const cancelled = await receipt(unknown, "cancelled");
+    const waiting = await receipt(unknown, "pending", 2, cancelled.id);
+    assert.equal(await claimEventOutbox(waiting.id), undefined);
+    const blockedByCancellation = EventDeliverySchema.parse(
+      (await read(owner, value.id)).body,
+    ).targets.find((row) => row.targetId === unknown.link.id)!;
+    assert.equal(blockedByCancellation.status, "cancelled");
+    assert.equal(blockedByCancellation.operationId, cancelled.id);
+    assert.equal(blockedByCancellation.latestRevision, 2);
+    await db
+      .delete(eventOutbox)
+      .where(inArray(eventOutbox.id, [waiting.id, cancelled.id]));
 
     // Removing the local event does not erase the owner's undelivered deletion.
     const deleteReceipt = await receipt(google, "unconfirmed", 3, delivered.id);

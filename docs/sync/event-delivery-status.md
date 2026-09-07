@@ -26,7 +26,9 @@ permission to mutate it. Every future action must authorize independently.
 
 `operationId`, `action`, `revision` and `status` describe the first unresolved
 operation for that destination. Thus a blocked write followed by a queued edit
-remains visibly blocked. If there is no unresolved operation, they describe its
+remains visibly blocked. A cancelled predecessor is also reported when a queued
+successor still depends on it: cancellation does not satisfy the worker's
+completed/not-needed prerequisite. If there is no unresolved operation, they describe its
 latest receipt. `latestRevision` additionally identifies the latest queued or
 settled local revision. `retryAt` is a scheduler due time, not a delivery promise.
 
@@ -34,8 +36,8 @@ settled local revision. `retryAt` is a scheduler due time, not a delivery promis
 that all targets, unseen private targets, or a newer local revision were delivered.
 There is deliberately no global `synchronized` boolean. `unknown` means the current
 destination has no outbound receipt, as with historical imports; a mapping alone
-cannot manufacture a successful receipt. An empty target list confirms no remote
-write. `localRevision` is null when only retained receipts are accessible.
+cannot manufacture a successful receipt. An empty target list does not confirm any
+remote write. `localRevision` is null when only retained receipts are accessible.
 
 Replacing a connection produces a distinct target. A previous generation's
 receipt cannot confirm the replacement. Removed generations remain visible only

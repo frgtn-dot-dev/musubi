@@ -110,7 +110,13 @@ export async function getEventDeliveryStatus(
             and(
               visibleReceipt,
               unresolved
-                ? sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`
+                ? sql`(${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled') or (
+                    ${eventOutbox.status} = 'cancelled' and exists (
+                      select 1 from event_outbox successor
+                      where successor.predecessor_id = ${eventOutbox.id}
+                      and successor.status not in ('completed', 'not-needed', 'cancelled')
+                    )
+                  ))`
                 : undefined,
             ),
           )
