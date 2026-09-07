@@ -1,3 +1,4 @@
+import { useDeliveryRefreshStore } from "@/store/useDeliveryRefreshStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import { CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { useEffect, useRef } from "react";
@@ -33,6 +34,7 @@ export function useConnectToEventStream() {
     refreshRef.current = refresh;
   });
   const silentRefresh = async (full = false) => {
+    useDeliveryRefreshStore.getState().refresh();
     try {
       await refreshRef.current({ providerSync: false, full });
     } catch (e) {
@@ -73,6 +75,9 @@ export function useConnectToEventStream() {
         console.warn("Ignoring malformed SSE message.");
         return;
       }
+
+      if (["event_created", "event_updated", "event_removed", "calendar_updated", "calendar_removed"].includes(data.type))
+        useDeliveryRefreshStore.getState().refresh();
 
       const toEvent = (p: any) => ({
         ...p,

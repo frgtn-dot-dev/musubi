@@ -1,3 +1,6 @@
+import EventDeliveryModal from "./EventDeliveryModal";
+import { Btn } from "@/components/ui/Btn";
+import { remoteForCalendar } from "@/services/federation";
 import { Event, can } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
@@ -71,6 +74,8 @@ export default function EventDetailModal({
 	const userID = session?.user.id;
 	const { events, linkEvent, forkEvent, removeEvent, updateEvent } =
 		useEventsStore();
+	const [delivery, setDelivery] = useState<{ eventId: string; connectionId?: string }>();
+	if (!visible && delivery) setDelivery(undefined);
 	const [linkVisible, setLinkVisible] = useState(false);
 	const [forkVisible, setForkVisible] = useState(false);
 	const [unlinkVisible, setUnlinkVisible] = useState(false);
@@ -306,6 +311,7 @@ export default function EventDetailModal({
 							style={{ flexShrink: 1 }}
 							showsVerticalScrollIndicator={false}
 						>
+              {event ? <View style={styles.container}><Btn label="Delivery details" variant="secondary" onPress={() => setDelivery({ eventId: event.id!, connectionId: remoteForCalendar(event.originCalendarID ?? event.calendars[0])?.id })} /></View> : null}
 							{/* Where it lives — quiet metadata under the identity block. No
                   bottom border when nothing follows (avoids an empty "section"). */}
 							<View
@@ -745,6 +751,7 @@ export default function EventDetailModal({
 					</Animated.View>
 				</GestureDetector>
 			</GestureHandlerRootView>
+            <EventDeliveryModal visible={visible && !!delivery} eventId={delivery?.eventId} connectionId={delivery?.connectionId} onClose={() => setDelivery(undefined)} />
 		</Modal>
 	);
 }

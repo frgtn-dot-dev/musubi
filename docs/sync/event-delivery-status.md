@@ -192,3 +192,26 @@ These actions do not modify an open event editor's draft. Client rendering tests
 exercise the real resource transport, and browser tests cover light/desktop and
 dark/narrow views, focus, cancellation, confirmation, reload and accessibility.
 Native client integration is still pending in K09.
+
+
+## Native entry points
+
+The event detail's **Delivery details** action opens the same per-target receipts.
+**Sync a Calendar → Unfinished deliveries** discovers the current account's owned
+operations on its home server. Federation identifies a separate shadow user;
+this is not the local account history of an owner on a connected server. An
+existing federated event's detail still routes through its exact connection.
+
+The modal mounts by server/user/connection/event identity and keeps content only
+in memory. Older responses and native confirmation callbacks after unmount do
+not update or submit the new account's state. SSE, reconnect and foreground
+refresh read current receipts; list refresh retains the loaded page count.
+Response schemas are strict even in production. Incomplete legacy responses
+show an unavailable state instead of unchecked confirmation.
+
+A fixed comparison precedes the platform's existing Cancel-first native
+confirmation. A lost response retains the same mutation UUID; 409 requires a new
+comparison. Neither retry nor resolution edits the event store or composer.
+Tests execute actual modal/caller/API/Alert and stream callbacks with native host
+and animation seams mocked. Physical-device rendering and live provider tests
+remain separate evidence, not implied by these callback tests.

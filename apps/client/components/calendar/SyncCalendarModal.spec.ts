@@ -120,3 +120,20 @@ it.each([
   expect(onConnected).toHaveBeenCalledWith(provider);
   expect(close).toHaveBeenCalledOnce();
 });
+
+it("opens retained delivery discovery from the actual native connection screen", async () => {
+  const { default: DeliveryModal } = await import("./EventDeliveryModal");
+  const find = (node: ReactNode): any => {
+    if (Array.isArray(node)) return node.map(find).find(Boolean);
+    if (!isValidElement<{ children?: ReactNode; label?: string; onPress?: () => void }>(node)) return;
+    if (node.type === DeliveryModal) return node.props;
+    return find(node.props.children);
+  };
+  const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
+  control(render(), "Unfinished deliveries")!.onPress!();
+  const modal = find(render());
+  expect(modal.visible).toBe(true);
+  expect(modal.eventId).toBeUndefined();
+  modal.onClose();
+  expect(find(render()).visible).toBe(false);
+});

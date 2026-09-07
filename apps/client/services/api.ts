@@ -5,6 +5,10 @@ import {
   CalendarInvitePreviewSchema,
   CalendarSchema,
   EventSchema,
+  EventDeliverySchema,
+  EventDeliveryInboxSchema,
+  EventDeliveryConflictSchema,
+  type ResolveEventDeliveryRequest,
   eventCreateRequest,
   eventPatchRequest,
   requireEventRevision,
@@ -89,6 +93,13 @@ function throwOnError(
   }
 }
 
+export class EventDeliveryRequestError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "EventDeliveryRequestError";
+  }
+}
+
 export function useApi() {
   const { authClient: baseAuthClient, apiUrl } = useServer();
   // Better Auth's facade has no request timeout. Wrap its fetch entry point so
@@ -136,7 +147,37 @@ export function useApi() {
     throwOnError(error);
   });
 
+  // Capture this hook's authenticated requester. Delivery must not use the
+  // module-global federation requester, which can belong to a newer identity.
+  async function deliveryRequest(path: string, connectionId?: string, body?: unknown) {
+    const routed = connectionId ? `/api/v1/federation/s/${encodeURIComponent(connectionId)}${path}` : path;
+    const { error, data } = await authClient.$fetch<unknown>(`${apiUrl}${routed}`, {
+      method: body === undefined ? "GET" : "POST",
+      ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { "Content-Type": "application/json" } }),
+    });
+    if (error) {
+      if (error.status === 401) notifySessionExpired();
+      throw new EventDeliveryRequestError(Number(error.status), "Could not verify or change this delivery. Refresh the status and check the connection.");
+    }
+    return data;
+  }
+
   return {
+    async getEventDelivery(eventId: string, connectionId?: string) {
+      return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery`, connectionId));
+    },
+    async getEventDeliveryInbox(cursor?: string, connectionId?: string) {
+      return EventDeliveryInboxSchema.parse(await deliveryRequest(`/api/v1/event-deliveries${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, connectionId));
+    },
+    async getEventDeliveryConflict(eventId: string, operationId: string, connectionId?: string) {
+      return EventDeliveryConflictSchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/conflict`, connectionId));
+    },
+    async retryEventDelivery(eventId: string, operationId: string, connectionId?: string) {
+      return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/retry`, connectionId, {}));
+    },
+    async resolveEventDelivery(eventId: string, operationId: string, request: ResolveEventDeliveryRequest, connectionId?: string) {
+      return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/resolve`, connectionId, request));
+    },
     async createCalendar(calendar: Calendar) {
       const { error, data } = await authClient.$fetch<Calendar>(
         `${apiUrl}/api/${apiVersion}/calendars`,
