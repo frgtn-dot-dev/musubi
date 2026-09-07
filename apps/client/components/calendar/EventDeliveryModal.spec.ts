@@ -152,7 +152,7 @@ beforeEach(() => {
     reply(url.endsWith("/conflict") ? preview : receipt),
   );
 });
-afterEach(unmount);
+afterEach(() => { unmount(); vi.useRealTimers(); });
 function render(eventId: string | null = id, connectionId?: string) {
   h.index = 0;
   const tree = DeliveryBody({
@@ -430,7 +430,7 @@ it("opens a scoped delivery modal from the actual event detail callback", async 
   });
 });
 
-it("ignores an older read that finishes after a newer status refresh", async () => {
+it("coalesces refreshes and reads the newest status after the active read settles", async () => {
   let finish!: (value: unknown) => void;
   h.request.mockImplementationOnce(
     () =>
@@ -454,6 +454,8 @@ it("ignores an older read that finishes after a newer status refresh", async () 
       targets: [{ ...target, status: "completed", issue: null }],
     }),
   );
+  await settle();
+  render();
   await settle();
   expect(text(render())).toContain("Delivery blocked");
   expect(text(render())).not.toContain("Delivery confirmed");
@@ -516,4 +518,47 @@ it("invalidates delivery from the actual native external_sync and reconnect list
   h.callbacks.open();
   h.callbacks.open();
   expect(h.version).toBe(initial + 2);
+});
+
+
+it("publishes a slow receipt despite the 15 second poll", async () => {
+  vi.useFakeTimers();
+  h.request.mockImplementation(() => new Promise((resolve) => {
+    setTimeout(() => resolve(reply(receipt)), 16_000);
+  }));
+  render();
+  await vi.advanceTimersByTimeAsync(15_000);
+  render();
+  expect(h.request).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+  const tree = render();
+  expect(text(tree)).toContain("Remote changes need review");
+  expect(buttons(tree, "Review changes")[0].disabled).toBe(false);
+  expect(h.request).toHaveBeenCalledTimes(2);
+});
+
+it("finishes a multi-page inbox refresh across polling intervals", async () => {
+  vi.useFakeTimers();
+  const second = "00000000-0000-4000-8000-000000000009";
+  let delay = 0;
+  h.request.mockImplementation((url: string) => new Promise((resolve) => {
+    setTimeout(() => resolve(reply(url.includes("cursor=")
+      ? { items: [{ eventId: second, savedTitle: "Retained second" }], nextCursor: null }
+      : { items: [{ eventId: id, savedTitle: "Retained first" }], nextCursor: id })), delay);
+  }));
+  render(null);
+  await vi.advanceTimersByTimeAsync(0);
+  buttons(render(null), "Load more")[0].onPress();
+  await vi.advanceTimersByTimeAsync(0);
+  render(null);
+  delay = 8_000;
+  h.version++;
+  render(null);
+  await vi.advanceTimersByTimeAsync(15_000);
+  render(null);
+  expect(h.request).toHaveBeenCalledTimes(4);
+  await vi.advanceTimersByTimeAsync(1_000);
+  const tree = render(null);
+  expect(buttons(tree, "Retained second")).toHaveLength(1);
+  expect(buttons(tree, "Refresh status")[0].disabled).toBe(false);
 });

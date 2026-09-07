@@ -63,8 +63,9 @@ export function DeliveryBody({
     connectionId ?? null,
     version,
   ]);
-  const [settledRead, setSettledRead] = useState<string | null>(null);
-  const loading = settledRead !== readKey;
+  const [settledRead, setSettledRead] = useState<{ key: string; scope: string } | null>(null);
+  const readScope = JSON.stringify([selectedId ?? null, connectionId ?? null]);
+  const loading = settledRead?.scope !== readScope;
   const [busy, setBusy] = useState(false);
   const [comparison, setComparison] = useState<{
     preview: EventDeliveryConflict;
@@ -73,6 +74,7 @@ export function DeliveryBody({
   const active = useRef(true);
   const busyRef = useRef(false);
   const sequence = useRef(0);
+  const inFlightScope = useRef<string | null>(null);
   const loadedPages = useRef(1);
   const refresh = () => useDeliveryRefreshStore.getState().refresh();
   useEffect(() => {
@@ -90,7 +92,12 @@ export function DeliveryBody({
     };
   }, []);
   useEffect(() => {
+    // Coalesce invalidations until the whole read (including inbox pages) settles.
+    // A slow response must still finish even when another poll arrives.
+    if (inFlightScope.current === readScope) return;
+    if (!inFlightScope.current && settledRead?.key === readKey) return;
     const current = ++sequence.current;
+    inFlightScope.current = readScope;
     void (async () => {
       try {
         if (selectedId) {
@@ -124,13 +131,15 @@ export function DeliveryBody({
           );
         }
       } finally {
-        if (active.current && current === sequence.current)
-          setSettledRead(readKey);
+        if (active.current && current === sequence.current) {
+          inFlightScope.current = null;
+          setSettledRead({ key: readKey, scope: readScope });
+        }
       }
     })();
     // useApi is a new facade every render; capture the facade for this scoped read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, connectionId, version, readKey]);
+  }, [selectedId, connectionId, version, readKey, readScope, settledRead]);
 
   async function run(action: () => Promise<void>, invalidate = true) {
     if (!active.current || busyRef.current) return;

@@ -18,6 +18,7 @@ vi.mock("react", async (original) => ({
 }));
 vi.mock("react-native", () => ({ Text: "Text", Pressable: "Pressable", ScrollView: "ScrollView", View: "View", TextInput: "TextInput", Alert: { alert }, Linking: {} }));
 vi.mock("@/constants/theme", () => ({ colors: {}, fonts: {}, styles: {} }));
+vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@/contexts/ServerContext", () => ({ useServer: () => ({ apiUrl: "https://home.example.test", authClient: { $fetch: request, linkSocial } }) }));
 vi.mock("@/hooks/useModalAnimation", () => ({ useModalAnimation: () => ({ handleClose: close }) }));
 vi.mock("@/components/ui/ModalPortal", () => ({ ModalPortal: "Modal" }));
