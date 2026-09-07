@@ -1,3 +1,4 @@
+import { eventMutationIdentity } from "./event_mutation";
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import {
@@ -156,6 +157,7 @@ async function prepareUpdate(
   userID: string,
   request: EventPatchRequest,
   previous: Event,
+  identity: ReturnType<typeof eventMutationIdentity>,
 ) {
   const event = { ...previous, ...request.patch };
   validateCalendars(event);
@@ -206,7 +208,7 @@ async function prepareUpdate(
       ]
     : writes;
   if (create) await prepareEventWrites(scopeWrites); // authorize future create now; not an atomic scope operation
-  return prepareEventWrites(writes);
+  return prepareEventWrites(writes, identity);
 }
 
 export async function handlerCreateEvent(req: Request, res: Response) {
@@ -221,10 +223,11 @@ export async function handlerCreateEvent(req: Request, res: Response) {
     await assertEventCalendarAccess(req.user!.id, id);
   const deliver = await prepareEventWrites([
     { event, calendarIDs: event.calendars, action: "create" },
-  ]);
+  ], eventMutationIdentity(req));
   const created = await createEvent(
     { ...event, creatorID: req.user!.id },
     event.calendars,
+    deliver.outbox,
   );
 
   const result = { ...created, calendars: event.calendars };
@@ -240,11 +243,13 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   const previous = await currentEvent(request.id);
   if (previous.revision !== request.expectedRevision || previous.deletedAt)
     return conflict(res, previous);
-  const deliver = await prepareUpdate(req.user!.id, request, previous);
+  const deliver = await prepareUpdate(req.user!.id, request, previous, eventMutationIdentity(req));
   const saved = await patchEventAndCalendarLinks(
     request.id,
     request.expectedRevision,
     request.patch,
+    false,
+    deliver.outbox,
   );
 
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
@@ -293,12 +298,13 @@ export async function handlerRemoveEvent(req: Request, res: Response) {
     return conflict(res, previous);
   const deliver = await prepareEventWrites([
     { event: previous, calendarIDs: targets, action: "delete" },
-  ]);
+  ], eventMutationIdentity(req));
   const saved = await patchEventAndCalendarLinks(
     request.id,
     request.expectedRevision,
     { calendars: existing.filter((id) => !targets.includes(id)) },
     true,
+    deliver.outbox,
   );
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
@@ -344,10 +350,11 @@ export async function handlerLinkEvent(req: Request, res: Response) {
             action: "create",
           },
         ],
+    eventMutationIdentity(req),
   );
   const saved = await patchEventAndCalendarLinks(eventID, expectedRevision, {
     calendars,
-  });
+  }, false, deliver.outbox);
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
   return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
@@ -396,10 +403,10 @@ export async function handlerForkEvent(req: Request, res: Response) {
       calendarIDs: [calendarID],
       action: "create",
     },
-  ]);
+  ], eventMutationIdentity(req));
   const saved = await forkEventAtRevision(eventID, expectedRevision, newEvent, [
     calendarID,
-  ]);
+  ], deliver.outbox);
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
   return sendCommitted(res, deliver, saved.event, saved.event, 201, () =>

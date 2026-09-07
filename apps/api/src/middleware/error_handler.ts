@@ -1,3 +1,4 @@
+import { DuplicateEventMutationError } from "@musubi/db";
 import type { NextFunction, Request, Response } from "express";
 import { logger } from "@musubi/config";
 import { httpErrorFor } from "./http_error";
@@ -11,7 +12,9 @@ export function middlewareErrorHandler(
   _next: NextFunction,
 ) {
   const { statusCode, errorMessage } =
-    err instanceof ProviderEventWriteError
+    err instanceof DuplicateEventMutationError
+      ? { statusCode: 409, errorMessage: err.message }
+      : err instanceof ProviderEventWriteError
       ? {
           statusCode: 409,
           errorMessage:
@@ -37,6 +40,8 @@ export function middlewareErrorHandler(
 
   res.status(statusCode).json({
     error: errorMessage,
+    ...(err instanceof DuplicateEventMutationError
+      ? { code: "event-mutation-duplicate", localCommitted: false } : {}),
     ...(err instanceof ProviderEventWriteError
       ? { code: err.code, localCommitted: false }
       : {}),

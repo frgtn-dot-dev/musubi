@@ -95,21 +95,23 @@ transactional: create commits the event, creator-attendee, and links together;
 update commits the event, link diff, and removed mappings together; delete
 commits unlinking and the possible final tombstone together.
 
-Provider calls remain outside PostgreSQL. `pushEventToCalendars()` counts and
-logs provider exceptions but intentionally catches them, so the local
-transaction still commits when a provider copy cannot be changed. Deletes for
-removed links run before the local transaction only because the external
-mapping is needed to address the provider copy; creates and updates run after
-commit. No durable retry outbox currently exists.
+Provider calls remain outside PostgreSQL. Event handlers preflight the full known
+intent, then commit local event/link changes and `event_outbox` rows together.
+Remote delete addresses are captured before unlink removes ordinary mappings.
+The request claims each persisted operation before its first conditional delivery;
+there is no second legacy inline sender. Postcommit failures return truthful
+`localCommitted`, revision and sanitized partial/unconfirmed receipts.
 
-This distinction matters during incidents:
+K07 preserves pending/attempting intent across process exit, but does not yet
+retry it. Unresolved predecessors block later attempts. K08 owns restart recovery,
+provider-specific idempotence/reconciliation, pull coordination and disconnect
+cleanup. This is not a distributed transaction or a guarantee of eventual delivery.
 
 | Mutation | Ordering | Current failure result |
 | --- | --- | --- |
 | Calendar create/update/delete | Provider, then local DB | Provider rejection aborts local change; later DB failure can diverge |
-| Event create | Local DB transaction, then provider(s) | Provider failure is logged; request continues |
-| Event update/delete | Provider delete for removed links, local DB transaction, then provider create/update | Provider failure is logged; local reconciliation continues |
-| Scheduled pull | Provider fetch, then local reconciliation | Account/provider failures are isolated and retried next cycle |
+| Event create/update/delete/link/unlink/fork | Preflight, local CAS + outbox transaction, claimed provider delivery | Precommit failure rolls back; postcommit conflict/unconfirmed response retains local revision and durable intent |
+| Scheduled pull | Provider fetch, then local reconciliation | Account/provider failures are isolated and retried next cycle; pending-write coordination remains K08 |
 
 Disconnecting one provider account uses `removeExternalAccountData()` to remove
 all of its local mirrors, events, opt-out tombstones, and (for CalDAV) stored
@@ -316,7 +318,7 @@ For setup and provider-specific debugging, use the dedicated guides:
 
 | File | Contents |
 | --- | --- |
-| `sync/engine.ts` | `syncProvider`, `syncUser`, `pushEventToCalendars`, registry |
+| `sync/engine.ts` | `syncProvider`, `syncUser`, `prepareEventWrites`, registry |
 | `sync/orchestrator.ts` | Provider/account failure boundary, strict/scoped selection |
 | `sync/adapter.ts` | `NormalizedEvent`, `ExternalCalendarInfo`, `FetchChangesResult`, `CalendarAdapter` |
 | `sync/adapters/google.ts` | Google Calendar adapter |

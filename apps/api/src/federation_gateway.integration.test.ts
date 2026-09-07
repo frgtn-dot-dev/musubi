@@ -17,6 +17,7 @@ type Recorded = {
   body: string;
   cookie?: string;
   clientVersion?: string;
+  mutationID?: string;
   method?: string;
   url?: string;
 };
@@ -55,11 +56,12 @@ function proxyRequest(input: {
   url: string;
   userId: string;
   clientVersion?: string;
+  mutationID?: string;
 }): Request {
   return {
     body: input.body,
     get: (name: string) =>
-      name.toLowerCase() === "accept" ? "application/json" : name === CLIENT_VERSION_HEADER ? input.clientVersion ?? PRODUCT_VERSION : undefined,
+      name.toLowerCase() === "accept" ? "application/json" : name === CLIENT_VERSION_HEADER ? input.clientVersion ?? PRODUCT_VERSION : name.toLowerCase() === "idempotency-key" ? input.mutationID : undefined,
     headers: { cookie: "musubi_session=home-secret" },
     method: input.method ?? "GET",
     originalUrl: input.url,
@@ -90,6 +92,7 @@ async function main() {
         return res.end(JSON.stringify({ version: peerVersion }));
       }
       recorded = {
+        mutationID: req.headers["idempotency-key"] as string | undefined,
         auth: req.headers.authorization,
         body: Buffer.concat(chunks).toString(),
         cookie: req.headers.cookie,
@@ -154,6 +157,7 @@ async function main() {
         proxyRequest({
           body: { attending: true },
           clientVersion: "0.1.10",
+          mutationID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           connectionId: account.id,
           method: "PUT",
           rest: ["api", "v1", "events", "e1", "attendance"],
@@ -164,6 +168,7 @@ async function main() {
       );
 
       assert.equal(recorded.method, "PUT");
+      assert.equal(recorded.mutationID, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
       assert.equal(recorded.clientVersion, "0.1.10", "gateway forwards the caller's version, never substitutes its own");
       assert.equal(recorded.url, "/api/v1/events/e1/attendance");
       assert.equal(recorded.body, JSON.stringify({ attending: true }));

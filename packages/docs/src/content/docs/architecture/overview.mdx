@@ -96,15 +96,17 @@ sequenceDiagram
     S->>API: createEvent()
     API->>H: POST /api/v1/events (requireAuth)
     H->>H: assertCan(user, cal, editEvents)
-    H->>DB: createEvent()
-    H->>P: pushEventToProviders()
+    H->>P: prepareEventWrites(intent, identity) / preflight
+    H->>DB: createEvent(event, calendars, deliver.outbox)
+    Note over DB: local event + outbound intent commit together
     Note over H: notifyCalendarMembers() broadcast (SSE)
+    H->>P: deliver() / claim persisted operation
     H-->>API: 201 + event JSON
     API-->>S: write store + local SQLite cache
 ```
 
 Most writes cover the same five concerns on the server — **validate → authorise
-→ persist → sync outward → broadcast**. Provider-backed calendar writes may
+→ preflight → commit event + outbox → broadcast/deliver**. Provider-backed calendar writes may
 order provider and database work differently; the exact failure semantics are
 in the [API guide](/docs/architecture/api/) and
 [sync guide](/docs/architecture/sync/#write-path-and-failure-semantics).

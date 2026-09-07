@@ -1,3 +1,4 @@
+import { eventMutationIdentity } from "./event_mutation";
 import { committedFailure } from "./event_commit";
 import type { Request, Response } from "express";
 import ICAL from "ical.js";
@@ -341,6 +342,7 @@ export async function handlerGetCalendar(req: Request, res: Response) {
 // real calendars); calendar details and optional account destination ride in
 // the query string.
 export async function handlerImportCalendar(req: Request, res: Response) {
+	const mutationIdentity = eventMutationIdentity(req);
 	const ics = req.body;
 	if (typeof ics !== "string" || !ics.trim())
 		throw new BadRequestError("Request body must be an iCalendar file...");
@@ -382,7 +384,7 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 	try {
 		deliver = await prepareEventWrites(importedEvents.map((event) => ({
 			event, calendarIDs: [created.id], action: "create",
-		})));
+		})), mutationIdentity);
 	} catch (error) {
 		if (error instanceof EventWriteError) {
 			throw new EventWriteError(error.capability, error.reason,
@@ -393,7 +395,7 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 	const committed: import("@musubi/types").Event[] = [];
 	try {
 		for (const event of importedEvents) {
-			const saved = await createEvent(event, [created.id]);
+			const saved = await createEvent(event, [created.id], deliver.outbox);
 			committed.push({ ...saved, calendars: [created.id] });
 		}
 		await deliver(undefined, new Map(committed.map((event) => [event.id, event.revision!])));

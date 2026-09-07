@@ -1,11 +1,16 @@
-import { EventWriteError, type Event, type Task } from "@musubi/types";
+import { randomUUID } from "node:crypto";
+import { EventSchema, EventWriteError, type Event, type Task } from "@musubi/types";
 import { logger } from "@musubi/config";
 import {
+  claimEventOutbox,
+  finishEventOutbox,
+  type EventOutboxIntent,
   deleteExternalEvent,
   deleteExternalTask,
   diffEventContent,
   getCalendarMembers,
   getEventCalendars,
+  getEventSnapshot,
   getExternalEvent,
   getExternalTask,
   getDisabledExternalCalendarIDs,
@@ -397,27 +402,6 @@ export async function syncUser(
   return changedCalendarIDs;
 }
 
-// Push a Musubi event out to every provider-linked calendar it belongs to.
-// For "delete", the caller MUST invoke this BEFORE removing the Musubi event,
-// so the external mapping is still present to look up.
-export async function pushEventToProviders(
-  event: Event,
-  action: "create" | "update" | "delete",
-) {
-  return pushEventToCalendars(event, event.calendars, action);
-}
-
-// Push an event to a specific set of calendars (used by update to reconcile the
-// diff: "delete" for removed calendars, "create" for added, "update" for kept).
-export async function pushEventToCalendars(
-  event: Event,
-  calendarIDs: string[],
-  action: "create" | "update" | "delete",
-) {
-  const deliver = await prepareEventWrites([{ event, calendarIDs, action }]);
-  await deliver();
-}
-
 export type CalendarEventWrite = Omit<EventWriteOperation, "external"> & {
   calendarIDs: string[];
 };
@@ -439,9 +423,8 @@ export type EventDeliveryReceipt = {
     | "unconfirmed";
 };
 
-/** Request-scoped delivery only. Handler must add localCommitted/current revision;
- * these receipts are neither a durable outbox nor proof of multi-target atomicity.
- */
+/** Sanitized by the handler; individual delivery receipts do not imply
+ * multi-target atomicity. Durable status is tracked separately in event_outbox. */
 export class EventDeliveryError extends Error {
   constructor(
     readonly receipts: EventDeliveryReceipt[],
@@ -454,10 +437,16 @@ export class EventDeliveryError extends Error {
 
 /** Validate the ENTIRE operation before returning a delivery function. Handlers
  * call this before touching event/link rows, including before removed-copy deletes.
- * It is deliberately request-scoped, not a reservation or an outbox.
+ * Mutating handlers pass a durable identity and store .outbox in their local
+ * transaction. The transient form is for capability-only preflight and adapter
+ * boundary probes; it must not be used to deliver a local API mutation.
  */
-export async function prepareEventWrites(writes: CalendarEventWrite[]) {
+export async function prepareEventWrites(
+  writes: CalendarEventWrite[],
+  durable?: { actorID: string; mutationID: string },
+) {
   const prepared: Array<{
+    outboxID?: string;
     operation: CalendarEventWrite;
     calendarID: string;
     link: NonNullable<Awaited<ReturnType<typeof getExternalLinkForCalendar>>>;
@@ -533,28 +522,142 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
       });
     }
   }
+  const outbox: EventOutboxIntent[] = [];
+  if (durable) {
+    for (const item of prepared) {
+      const { operation, link, external, calendarID } = item;
+      if (
+        operation.action === "update" &&
+        !Object.keys(operation.patch ?? {}).length
+      )
+        continue;
+      item.outboxID = randomUUID();
+      outbox.push({
+        id: item.outboxID,
+        ...durable,
+        position: outbox.length,
+        eventID: operation.event.id,
+        calendarID,
+        externalCalendarLinkID: link.id,
+        provider: link.provider,
+        userID: link.userID,
+        accountID: link.accountID,
+        externalCalendarID: link.externalCalendarID,
+        externalEventID: external?.externalEventId ?? null,
+        expectedEtag: external?.etag ?? null,
+        icalUid: external?.icalUid ?? null,
+        action: operation.action,
+        payload: {
+          event: operation.event,
+          patch: operation.patch,
+          scopeEditValidated: operation.scopeEditValidated,
+        },
+      });
+    }
+  }
   let failure: EventDeliveryError | undefined;
-  return async (
+  const deliver = async (
     onlyAction?: EventWriteOperation["action"],
     committedRevision?: number | ReadonlyMap<string, number>,
   ) => {
     if (failure) throw failure;
-    for (const {
-      operation,
-      calendarID,
-      link,
-      adapter,
-      external,
-      receipt,
-    } of prepared) {
-      const acceptedRevision = typeof committedRevision === "number"
-        ? committedRevision : committedRevision?.get(operation.event.id);
-      const { action, event } = operation;
+    for (const item of prepared) {
+      const { outboxID, operation, calendarID, adapter, receipt } = item;
+      let { link, external } = item;
+      let acceptedRevision =
+        typeof committedRevision === "number"
+          ? committedRevision
+          : committedRevision?.get(operation.event.id);
+      const { action } = operation;
+      let event = operation.event;
+      let claimed = false;
+      let predecessorID: string | null = null;
       if (onlyAction && action !== onlyAction) continue;
       // A closure is single-attempt; calling it again cannot retry a conflict
       // or re-send completed creates/deletes. Reconciliation is a new request.
       if (receipt.status !== "not-attempted") continue;
       try {
+        if (durable) {
+          if (!outboxID) {
+            receipt.status =
+              action === "update" && external ? "completed" : "not-needed";
+            continue;
+          }
+          const stored = await claimEventOutbox(outboxID);
+          if (!stored)
+            throw new ProviderEventWriteError(
+              "provider-write-failed",
+              "unconfirmed",
+            );
+          claimed = true;
+          predecessorID = stored.predecessorID;
+          if (
+            stored.action !== action ||
+            stored.eventID !== event.id ||
+            stored.calendarID !== calendarID ||
+            stored.provider !== link.provider
+          )
+            throw new ProviderEventWriteError(
+              "provider-write-failed",
+              "not-written",
+            );
+          link = {
+            ...link,
+            userID: stored.userID,
+            accountID: stored.accountID,
+            externalCalendarID: stored.externalCalendarID,
+          };
+          external = stored.externalEventID
+            ? {
+                externalEventId: stored.externalEventID,
+                etag: stored.expectedEtag,
+                icalUid: stored.icalUid,
+              }
+            : null;
+          // Execute the committed snapshot, not an optimistic preflight object.
+          event = EventSchema.parse(stored.payload.event);
+          acceptedRevision = stored.revision;
+          const patch = stored.payload.patch;
+          operation.patch = patch
+            ? {
+                ...patch,
+                ...(patch.start === undefined
+                  ? {}
+                  : { start: new Date(patch.start as string) }),
+                ...(patch.end === undefined
+                  ? {}
+                  : { end: new Date(patch.end as string) }),
+              }
+            : undefined;
+          if (action !== "delete") {
+            const current = await getEventSnapshot(event.id);
+            if (
+              !current ||
+              current.deletedAt ||
+              current.revision !== stored.revision
+            )
+              throw new ProviderEventWriteError(
+                "provider-write-failed",
+                "not-written",
+              );
+          }
+          // A disconnected/replaced destination cannot receive a late attempt.
+          const currentLink = await getExternalLinkForCalendar(calendarID);
+          if (
+            !currentLink ||
+            currentLink.id !== stored.externalCalendarLinkID ||
+            currentLink.accountID !== stored.accountID ||
+            currentLink.userID !== stored.userID ||
+            currentLink.provider !== stored.provider ||
+            currentLink.externalCalendarID !== stored.externalCalendarID ||
+            !currentLink.supportsEvents ||
+            currentLink.disabled
+          )
+            throw new ProviderEventWriteError(
+              "provider-write-failed",
+              "not-written",
+            );
+        }
         if (action === "create") {
           const external = await adapter.pushCreate(
             link.userID,
@@ -580,7 +683,15 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
             );
         } else {
           if (!external) {
+            // A prior create may have reached the provider without its mapping.
+            // Keep the intent for K08 reconciliation instead of calling it a no-op.
+            if (predecessorID)
+              throw new ProviderEventWriteError(
+                "provider-write-failed",
+                "not-written",
+              );
             receipt.status = "not-needed";
+            if (claimed) await finishEventOutbox(outboxID!, "not-needed");
             continue;
           }
           if (action === "update") {
@@ -628,6 +739,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
           }
         }
         receipt.status = "completed";
+        if (claimed) await finishEventOutbox(outboxID!, "completed");
       } catch (e) {
         receipt.status =
           e instanceof ProviderEventWriteError
@@ -635,6 +747,20 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
               ? "conflict"
               : e.outcome
             : "unconfirmed";
+        if (claimed) {
+          // If status persistence fails, retain attempting: the outcome is unknown.
+          try {
+            await finishEventOutbox(
+              outboxID!,
+              receipt.status as "conflict" | "not-written" | "unconfirmed",
+              e instanceof ProviderEventWriteError
+                ? e.code
+                : "provider-write-failed",
+            );
+          } catch {
+            /* K08 reconciliation */
+          }
+        }
         recordExternalSyncFailure("push", link.provider);
         logger.error("sync.push.failed", {
           action,
@@ -656,6 +782,7 @@ export async function prepareEventWrites(writes: CalendarEventWrite[]) {
     }
     return prepared.map(({ receipt }) => ({ ...receipt }));
   };
+  return Object.assign(deliver, { outbox });
 }
 
 export async function pushTaskToCalendar(
