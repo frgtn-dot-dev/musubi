@@ -100,7 +100,7 @@ it("routes the same atomic time draft through home and federated transports", as
   const { updateEvent } = await import("./resources");
   const event = EventSchema.parse({ ...resolveEventTimeEdit({ kind: "floating", startLocal: "2026-03-29T09:00:00", endLocal: "2026-03-29T10:00:00" }), id: "00000000-0000-4000-8000-000000000151", revision: 1, title: "Old", color: "red", creatorID: "owner", organizer: "owner", calendars: ["home"], isCanceled: false });
   const edited = editKnownEventTime(event, { ...event, title: "Together" }, { ...knownEventTimeDraft(event)!, date: "2026-03-30", endDate: "2026-03-30" });
-  const fetch = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) => new Response(JSON.stringify({ ...edited, revision: 2 }), { status: 200, headers: { "content-type": "application/json" } }));
+  const fetch = vi.fn<(url: RequestInfo | URL, options?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ ...edited, revision: 2 }), { status: 200, headers: { "content-type": "application/json" } }));
   vi.stubGlobal("fetch", fetch);
   for (const connection of [undefined, "connection"]) {
     const saved = await updateEvent(edited, connection);
