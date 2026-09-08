@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import {
   type AttendanceStatus,
   type NewEvent,
+  applyLocalEventScope,
   createEvent,
   createLocalEventWithTime,
   forkLocalEventWithTimeAtRevision,
@@ -299,6 +300,34 @@ export async function handlerEditEventTime(req: Request, res: Response) {
     await notifyEvent(saved.event.calendars, "event_updated", saved.event);
     await queueEventChange(saved.previous, saved.event, req.user!.id);
   });
+}
+
+/** One scope request commits one family. Clients reconcile IDs/revisions from
+ * the receipt through their normal delta read, including after a lost response. */
+export async function handlerEventScope(req: Request, res: Response) {
+  if (!config.api.eventTimeEditsEnabled)
+    throw new EventWriteError("event-write", "unsupported", "Scope editing is not enabled on this server. No changes were saved.");
+  const eventID = requireUUID(req.params.eventId, "eventId");
+  const result = await applyLocalEventScope(eventID, req.user!.id, req.body);
+  if (result.status === "not_found") throw new NotFoundError("Event not found.");
+  if (result.status === "conflict") return conflict(res, result.current);
+  if (result.status === "replayed") return res.json({ ...result.outcome, localCommitted: true, replayed: true });
+  try {
+    const previous = new Map(result.previous.map(event => [event.id, event]));
+    for (const event of result.events) {
+      const before = previous.get(event.id);
+      await notifyEvent(event.calendars, before ? "event_updated" : "event_created", event);
+      if (before) await queueEventChange(before, event, req.user!.id);
+    }
+    for (const deletion of result.outcome.deleted) {
+      const before = previous.get(deletion.id)!;
+      await notifyEvent(before.calendars, "event_removed", { ...deletion, calendars: before.calendars, removed: true });
+      await dropEventNotifications(deletion.id);
+    }
+  } catch {
+    return res.status(502).json({ ...result.outcome, localCommitted: true, error: "Saved locally, but follow-up work was not confirmed. Refresh to reconcile.", code: "event-scope-follow-up-unconfirmed" });
+  }
+  return res.json({ ...result.outcome, localCommitted: true, replayed: false });
 }
 
 export async function handlerRemoveEvent(req: Request, res: Response) {

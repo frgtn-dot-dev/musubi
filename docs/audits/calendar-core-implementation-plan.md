@@ -599,3 +599,5 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 **K11 upozornění převzato (PR #160, 2026-09-08):** všech 14 CI kontrol a čisté nezávislé review prošly, squash merge dokončen. Implementované importní řezy a viditelná hranice Outlook window jsou na main; explicitní providerová omezení a živé/device acceptance zůstávají uvedené v matici.
 
 **K12 atomická lokální transakce — rozpracovaný řez:** scope plán se ukládá s durable actor/operation receipt, master/child CAS a současnou kontrolou oprávnění. Externí historie/destinace jsou zatím odmítnuté. Review odhalilo kolizi průběžných originálů při posunu sousedních výjimek; odložená unikátnost kontroluje finální rodinu, regrese pokrývá i běžný create writer. Následují HTTP/client a providerové operace, K12 zatím není dokončená.
+
+**K12 HTTP scope — implementační řez:** jeden autentizovaný POST přijímá scope intent a vrací potvrzené ID/revize včetně replay po odstranění rodiny. Strict schema, gate, owner/viewer, 400/409 a opakovaný HTTP request mají integrační regresi. Nezávislé review bez nálezů; klientské zapojení a provider delivery stále následují.

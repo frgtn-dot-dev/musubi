@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { planEventScope } from "@musubi/calendar";
-import { can, EventSchema, EventScopeOutcomeSchema, EventScopeRequestSchema, EventWriteError, occurrenceKey, type Event, type EventScopeOutcome } from "@musubi/types";
+import { BadRequestError, can, EventSchema, EventScopeOutcomeSchema, EventScopeRequestSchema, EventWriteError, occurrenceKey, type Event, type EventScopeOutcome } from "@musubi/types";
 import { db } from "..";
 import { calendarEvents, calendarMembers, events, eventScopeOperations, externalCalendars, externalEvents, eventOutbox } from "../schema";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
@@ -25,7 +25,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     // serialize before any family or calendar lock is taken.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["musubi:event-scope", actorID, request.operationID])}, 0))`);
     const [receipt] = await tx.select().from(eventScopeOperations).where(and(eq(eventScopeOperations.actorID, actorID), eq(eventScopeOperations.operationID, request.operationID)));
-    if (receipt && receipt.fingerprint !== fingerprint) throw new Error("This scope operation ID was already used for another request.");
+    if (receipt && receipt.fingerprint !== fingerprint) throw new BadRequestError("This scope operation ID was already used for another request.");
     const discovered = await tx.select().from(events).where(or(eq(events.id, eventID), eq(events.seriesID, eventID)));
     const initialMaster = discovered.find(event => event.id === eventID);
     if (!initialMaster) return { status: "not_found" };
@@ -67,7 +67,12 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     // The unique original-start index includes tombstones. Reusing a deleted
     // definition's ID preserves identity when that generated slot is edited again.
     const revival = request.scope === "occurrence" ? childRows.find(child => child.deletedAt && child.originalStart && occurrenceKey({ seriesId: eventID, originalStart: child.originalStart }) === occurrenceKey({ seriesId: eventID, originalStart: request.originalStart! })) : undefined;
-    const plan = planEventScope(EventSchema.parse(master), liveChildren, request, () => revival?.id ?? randomUUID());
+    let plan;
+    try {
+      plan = planEventScope(EventSchema.parse(master), liveChildren, request, () => revival?.id ?? randomUUID());
+    } catch (error) {
+      throw new BadRequestError(error instanceof Error ? error.message : "Invalid scope operation.");
+    }
     const outcome: EventScopeOutcome = { operationID: request.operationID, changed: false, events: [], deleted: [] };
     const previous: Event[] = [];
     const saved: Event[] = [];
