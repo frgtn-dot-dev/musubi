@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -111,3 +111,10 @@ OS/receipt mutations run serially, including explicit cancellation and account r
 Before a metadata-aware write contract is available, local CAS and accepted provider upsert check their actual content diff under the event lock. A stored known time model or detached identity rejects changes to start, end, isAllDay or recurrence. This happens after stale-revision handling and before content/link updates or provider ETag acceptance, so the entire mutation rolls back. Identical temporal fields and non-temporal updates preserve metadata; missing/null and explicit legacy-unknown keep existing behavior.
 
 This preparatory guard does not make provider serializers, fork, deletion/cascade or explicit time conversion metadata-aware. They remain activation prerequisites. PostgreSQL tests cover zoned/floating/all-day/detached records, unchanged metadata/revisions/links after rejection, safe renames/no-ops, CAS precedence and rejected pull validator retention; authenticated HTTP verifies a clear 400 response before any save.
+
+
+## Anonymous preview checkpoint
+
+Invite preview passes stored time and original identity plus cancellation through the shared UTC expansion. It projects only the existing public DTO fields afterward and sets recurrence to null on every concrete result. Definition metadata, organizer and private description/location are not included in the response. Known invalid recurrence fails explicitly; legacy fallback remains constrained to the privacy window.
+
+The expansion starts at the first UTC midnight so inclusive legacy all-day ends survive a preview requested later that day. Final filtering retains exact instant bounds for timed occurrences and inclusive UTC date bounds for all-day occurrences. Tests cover DST across three host zones, cancelled masters and detached slots, moved-out/in exceptions, floating UTC policy, all-day dates and exact response keys. General EventSchema and write activation remain pending.

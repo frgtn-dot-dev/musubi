@@ -1,3 +1,4 @@
+import type { EventTimeModel, OccurrenceStart } from "@musubi/types";
 import { expandRecurringEvents } from "@musubi/calendar";
 
 const INVITE_PREVIEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -26,6 +27,10 @@ type PreviewEvent = {
     end: Date;
     isAllDay: boolean;
     recurrence?: string | null;
+    isCanceled?: boolean;
+    timeModel?: EventTimeModel | null;
+    seriesID?: string | null;
+    originalStart?: OccurrenceStart | null;
     deletedAt?: Date | null;
   };
 };
@@ -41,6 +46,11 @@ export function buildInvitePreview(
   now = new Date(),
 ) {
   const previewEndsAt = new Date(now.getTime() + INVITE_PREVIEW_WINDOW_MS);
+  // Include the whole first UTC date for legacy inclusive all-day ends. The
+  // final filter still enforces the exact instant window for timed events.
+  const expansionStartsAt = new Date(
+    `${now.toISOString().slice(0, 10)}T00:00:00.000Z`,
+  );
   const eventDefinitions = rows
     .map((row) => row.events)
     .filter((event) => !event.deletedAt)
@@ -52,13 +62,39 @@ export function buildInvitePreview(
       end: event.end,
       isAllDay: event.isAllDay,
       recurrence: event.recurrence ?? null,
+      isCanceled: event.isCanceled,
+      timeModel: event.timeModel,
+      seriesID: event.seriesID,
+      originalStart: event.originalStart,
     }));
-  const events = expandRecurringEvents(eventDefinitions, now, previewEndsAt, { consumerTimeZone: "UTC" })
-    // The recurrence helper deliberately falls back to the source event when
-    // an RRULE is malformed; retain the privacy window even in that case.
-    .filter((event) => event.end >= now && event.start <= previewEndsAt)
+  const events = expandRecurringEvents(
+    eventDefinitions,
+    expansionStartsAt,
+    previewEndsAt,
+    {
+      consumerTimeZone: "UTC",
+    },
+  )
+    // Legacy recurrence may fall back to the source event for malformed rules; retain the privacy window even in that case.
+    .filter(
+      (event) =>
+        !event.isCanceled &&
+        (event.isAllDay
+          ? event.end.toISOString().slice(0, 10) >=
+              now.toISOString().slice(0, 10) &&
+            event.start.toISOString().slice(0, 10) <=
+              previewEndsAt.toISOString().slice(0, 10)
+          : event.end >= now && event.start <= previewEndsAt),
+    )
     .map((event) => ({
-      ...event,
+      // Keep the anonymous preview DTO explicit: definition metadata and
+      // private event fields must not leak through a spread of expansion output.
+      id: event.id,
+      title: event.title,
+      color: event.color,
+      start: event.start,
+      end: event.end,
+      isAllDay: event.isAllDay,
       // These are already concrete occurrences. Sending the rule would make
       // the client expand each occurrence a second time.
       recurrence: null,
