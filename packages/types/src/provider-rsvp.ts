@@ -26,3 +26,13 @@ export function providerRsvpDesiredState(input: ProviderEventState, copyEmail: s
   self[0]!.response = response; state.ownResponse = response;
   return state;
 }
+
+/** Acceptance of a private intent; notification delivery remains unknowable. */
+export const ProviderRsvpReceiptSchema = z.object({
+  operationID: z.uuid(),
+  replayed: z.boolean(),
+  status: z.enum(["pending", "attempting", "completed", "not-needed", "not-written", "conflict", "unconfirmed", "retry", "blocked", "cancelled"]),
+  localCommitted: z.literal(true),
+  notificationDelivery: z.literal("unknown"),
+}).strict();
+export type ProviderRsvpReceiptResponse = z.infer<typeof ProviderRsvpReceiptSchema>;

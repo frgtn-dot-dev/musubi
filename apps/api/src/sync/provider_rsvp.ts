@@ -5,7 +5,7 @@ import { prepareProviderRsvpEdit, commitProviderRsvpEdit, matchesReminderEventPr
 import { googleAdapter, googleReminderEventEvidence } from "./adapters/google";
 import { googleEventState } from "./adapters/provider_event_state";
 
-/** Internal enqueue only until durable delivery is ready. Never call provider
+/** Prepare a durable intent without sending the RSVP in the HTTP request. Never call provider
  * mutation inside a DB transaction or replace a stale prepared baseline. */
 export async function queueGoogleRsvp(actorID: string, eventID: string, input: unknown) {
   if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");

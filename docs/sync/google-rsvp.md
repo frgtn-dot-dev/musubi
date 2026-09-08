@@ -160,3 +160,26 @@ even when only an attendee comment or another unprojected field changed; a later
 local timestamp cannot replace it. RSVP-only import preserves ordinary legacy
 reads of valid multi-zone events while withholding unsupported temporal evidence.
 Such a missing proof cannot satisfy pending RSVP echo comparison.
+
+## Authenticated HTTP enqueue
+
+`POST /api/v1/events/:eventId/provider-rsvp` accepts the strict
+`ProviderRsvpEditSchema`: a frozen operation UUID, revision and private state
+version, Google provider, accepted/tentative/declined response, and explicit
+`sendUpdates: "all"`. The endpoint uses normal authentication and client version
+checks. The source account must belong to the caller; editing a shared calendar
+never grants permission to respond for its owner.
+
+The default-off flag, source/revision/state checks and fresh OAuth/native evidence
+remain mandatory. A 202 response contains only operation ID, replay status,
+outbox status, `localCommitted: true` and `notificationDelivery: "unknown"`, with
+`Cache-Control: private, no-store`. It confirms durable intent acceptance, not
+canonical content change or email delivery. Identical replay returns the same
+receipt even after completion, without another provider read or send. Changing
+a request while retaining its UUID is refused.
+
+HTTP tests cover absent/invalid identity, obsolete client, malformed input,
+unsupported notification policy, disabled flag, viewer/shared editor denial,
+private receipt shape, unchanged canonical event and pending/completed replay.
+The worker still performs the actual conditional write. Client controls, native
+RSVP conflict resolution and live two-account acceptance remain follow-ups.

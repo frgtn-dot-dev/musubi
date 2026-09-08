@@ -1,3 +1,4 @@
+import { queueGoogleRsvp } from "../sync/provider_rsvp";
 import { prepareCaldavSeries } from "../sync/caldav_scope";
 import { ProviderEventWriteError } from "../sync/event_write";
 import { prepareGoogleOccurrence } from "../sync/google_scope";
@@ -625,4 +626,12 @@ export async function handlerProviderReminderEdit(req: Request, res: Response) {
   const id = requireUUID(req.params.eventId, "eventId");
   const receipt = await queueProviderReminderEdit(req.user!.id, id, req.body);
   res.status(202).json({ ...receipt, localCommitted: true });
+}
+
+/** A durable intent receipt is not proof that an organizer received an email. */
+export async function handlerProviderRsvpEdit(req: Request, res: Response) {
+  const id = requireUUID(req.params.eventId, "eventId");
+  const receipt = await queueGoogleRsvp(req.user!.id, id, req.body);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.status(202).json({ ...receipt, localCommitted: true, notificationDelivery: "unknown" });
 }
