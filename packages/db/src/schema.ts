@@ -6,6 +6,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -21,6 +22,7 @@ import {
   type ReminderRule,
   type TaskStatus,
   type Event,
+  type EventScopeOutcome,
   type EventTimeModel,
   type OccurrenceStart,
 } from "@musubi/types";
@@ -285,7 +287,8 @@ export const events = pgTable("events", {
 }, (t) => [
   check("events_occurrence_pair_check", sql`(${t.seriesID} is null) = (${t.originalStart} is null)`),
   check("events_occurrence_not_self_check", sql`${t.seriesID} is null or ${t.seriesID} <> ${t.id}`),
-  uniqueIndex("events_series_original_start_unique").on(t.seriesID, t.originalStart).where(sql`${t.seriesID} is not null`),
+  // Migration makes this constraint deferrable for atomic family identity shifts.
+  unique("events_series_original_start_unique").on(t.seriesID, t.originalStart),
 ]);
 
 export type NewEvent = typeof events.$inferInsert;
@@ -1102,3 +1105,14 @@ export const announcements = pgTable("announcements", {
 });
 
 export type NewAnnouncement = typeof announcements.$inferInsert;
+
+// A committed local family operation. The result contains only IDs/revisions,
+// so retry history does not retain a second copy of private event content.
+export const eventScopeOperations = pgTable("event_scope_operations", {
+  actorID: text("actor_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  operationID: uuid("operation_id").notNull(),
+  eventID: uuid("event_id").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  result: jsonb("result").$type<EventScopeOutcome>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [primaryKey({ columns: [table.actorID, table.operationID] })]);

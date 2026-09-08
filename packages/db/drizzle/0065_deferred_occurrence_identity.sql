@@ -1,0 +1,2 @@
+DROP INDEX "events_series_original_start_unique";--> statement-breakpoint
+ALTER TABLE "events" ADD CONSTRAINT "events_series_original_start_unique" UNIQUE("series_id","original_start") DEFERRABLE INITIALLY IMMEDIATE;
