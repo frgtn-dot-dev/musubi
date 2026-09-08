@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection accepted in PR141; inclusive all-day widget correction under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -125,3 +125,8 @@ The expansion starts at the first UTC midnight so inclusive legacy all-day ends 
 The dispatcher groups user-visible calendar membership rows into one reminder definition per event and preserves timeModel, seriesID and originalStart. The existing resolver therefore uses the event zone across DST, inherits the master's rule for a detached target UUID and suppresses canceled or moved-out original slots. The complete range query remains the source of definitions, including exceptions outside the reminder horizon.
 
 A PostgreSQL integration exercises this actual projection followed by shared resolution, membership deduplication and other-user isolation. It sends no web push messages and does not claim provider or device delivery certification. Web projection and general DTO admission remain pending.
+
+
+## Inclusive all-day widget correction
+
+Both the JavaScript snapshot and Android Kotlin agenda filter retain an all-day event on its final inclusive date. Calendar bars use that full end date; only timed positive-duration events subtract one millisecond to model exclusive midnight. The regression triggers the real debounced snapshot builder and verifies emitted JSON for legacy/known all-day events, ongoing spans and timed midnight. Each test explicitly sets and asserts its effective UTC/Prague/New_York zone because the normal Vitest config pins Prague. Kotlin was source-reviewed; this is not an Android build or physical-device verification claim.
