@@ -1,0 +1,37 @@
+# Provider meeting and reminder observations
+
+The Google, Microsoft and CalDAV readers retain a separate provider observation
+on the source mapping. It contains organizer evidence, participant roles and raw
+responses, the connected copy's own response when proven, native reminders, and
+raw availability/privacy/event-type values. Unknown enum values remain intact.
+This does not create Musubi social participants or schedule Musubi reminders.
+
+Authenticated `GET /api/v1/events/:eventId/provider-state` returns `{ state }`.
+Only the connected account's live source calendar membership can read a state;
+other calendar members and linked copies receive null. Disabled connections,
+removed membership and deleted events cannot expose this personal evidence.
+
+Observations are separate from the mapping's write validator. A pending content
+write retains incoming state durably; its accepted echo is promoted at ACK even
+when the resulting ETag differs. Observation timestamps prevent an older retained
+snapshot from replacing a newer accepted observation. Conflicting observations
+remain on the delivery record until reconciliation; the endpoint does not claim
+that pending state is accepted. Repeated identical observations neither increment
+the event revision nor fan out provider writes.
+
+Google uses explicit organizer/attendee `self` evidence. Microsoft retains
+`isOrganizer` and the account-copy `responseStatus`, without inferring attendee
+identity from calendar ownership. CalDAV needs separate scheduling identity proof
+before reporting the user's own response. Partial attendee lists are marked.
+CalDAV VALARM fields are summaries, not an editable reconstruction of the alarm;
+the original resource remains the preservation boundary for unknown properties.
+
+This is the read/preserve prerequisite for K13/K14. Provider RSVP, organizer
+notifications, native reminder edits, free/busy access redaction and client UI
+remain separate implementation work. It does not enable invitation delivery or
+claim live two-account acceptance. Version and activation gates are unchanged.
+
+Validation includes parser fixtures for all three providers and authenticated
+HTTP through PostgreSQL: same-ETag metadata adoption, personal access boundaries,
+no revision/fanout, pending conflict retention, ACK promotion, stale observation
+fencing and membership revocation.

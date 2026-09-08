@@ -1,0 +1,1 @@
+ALTER TABLE "external_events" ADD COLUMN "provider_state" jsonb;

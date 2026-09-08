@@ -1,0 +1,1 @@
+ALTER TABLE "external_events" ADD COLUMN "provider_state_observed_at" timestamp with time zone;

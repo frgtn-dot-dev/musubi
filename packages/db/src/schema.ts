@@ -23,6 +23,7 @@ import {
   type TaskStatus,
   type Event,
   type EventScopeOutcome,
+  type ProviderEventState,
   type EventTimeModel,
   type OccurrenceStart,
 } from "@musubi/types";
@@ -821,6 +822,8 @@ export const externalEvents = pgTable(
     etag: text("etag"),
     // Resource URL addresses the object; iCalendar UID is its stable identity.
     icalUid: text("ical_uid"),
+    providerState: jsonb("provider_state").$type<ProviderEventState>(),
+    providerStateObservedAt: timestamp("provider_state_observed_at", { withTimezone: true }),
     // Destination-scoped recurrence identity; never a cross-account UID join.
     externalSeriesID: text("external_series_id"),
     originalStart: jsonb("original_start").$type<OccurrenceStart>(),
@@ -912,6 +915,7 @@ export const eventOutbox = pgTable(
     }>(),
     remoteSnapshot: jsonb("remote_snapshot").$type<{
       isEcho?: boolean;
+      providerState?: ProviderEventState;
       externalEventId: string;
       values?: Record<string, unknown>;
       etag: string | null;

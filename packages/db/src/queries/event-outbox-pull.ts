@@ -1,3 +1,4 @@
+import type { ProviderEventState } from "@musubi/types";
 import { matchesEventProviderProjection } from "./event-outbox-projection";
 import { and, eq, sql } from "drizzle-orm";
 import { eventOutbox, events, externalCalendars } from "../schema";
@@ -36,6 +37,8 @@ export async function retainPendingEventPull(
   values: PullValues | null,
   etag: string | null,
   icalUid: string | null,
+  providerState?: ProviderEventState,
+  onlyReplaceObservation = false,
 ) {
   const rows = await tx
     .select()
@@ -49,7 +52,7 @@ export async function retainPendingEventPull(
       ),
     )
     .for("update");
-  if (!rows.length) return false;
+  if (!rows.length || (onlyReplaceObservation && !rows.some(row => row.remoteSnapshot))) return false;
   // Our in-flight echo is not permission to replace newer local content or ETag.
   const echo = rows.find(
     (row) =>
@@ -64,6 +67,7 @@ export async function retainPendingEventPull(
         .update(eventOutbox)
         .set({
           remoteSnapshot: {
+            ...(providerState ? { providerState } : {}),
             isEcho: true,
             externalEventId: externalEventID,
             etag,
@@ -80,6 +84,7 @@ export async function retainPendingEventPull(
     .update(eventOutbox)
     .set({
       remoteSnapshot: {
+        ...(providerState ? { providerState } : {}),
         externalEventId: externalEventID,
         etag,
         icalUid,
@@ -117,6 +122,7 @@ export async function retainUnmappedCreatePull(
   etag: string | null,
   icalUid: string | null,
   operationID?: string,
+  providerState?: ProviderEventState,
 ) {
   const candidate =
     provider === "caldav" && icalUid?.startsWith("musubi-")
@@ -182,12 +188,14 @@ export async function retainUnmappedCreatePull(
     values,
     etag,
     icalUid,
+    providerState,
   );
   if (!retained)
     await tx
       .update(eventOutbox)
       .set({
         remoteSnapshot: {
+          ...(providerState ? { providerState } : {}),
           isEcho: matchesProjection(row, values),
           externalEventId: externalEventID,
           etag,

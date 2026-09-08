@@ -463,6 +463,20 @@
       "when": 1788876474050,
       "tag": "0065_deferred_occurrence_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1788879150125,
+      "tag": "0066_provider_event_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1788879861448,
+      "tag": "0067_provider_state_observation",
+      "breakpoints": true
     }
   ]
 }

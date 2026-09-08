@@ -1,9 +1,10 @@
-import type { Event, Task, TaskStatus, EventTimeModel, OccurrenceStart } from "@musubi/types";
+import type { ProviderEventState, Event, Task, TaskStatus, EventTimeModel, OccurrenceStart } from "@musubi/types";
 import type { EventContentPatch } from "@musubi/db";
 
 // A calendar event reduced to what Musubi stores, provider-agnostic.
 // Adapters translate their own format (Google JSON / Graph JSON / iCal) <-> this.
 export type NormalizedEvent = {
+  providerState?: ProviderEventState;
   creationOperationID?: string;
   providerOccurrence?: { externalSeriesID: string; originalStart: OccurrenceStart };
   timeModel?: EventTimeModel;

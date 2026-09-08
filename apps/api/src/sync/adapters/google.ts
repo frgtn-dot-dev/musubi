@@ -1,3 +1,4 @@
+import { googleEventState } from "./provider_event_state";
 import { normalizeGoogleTime } from "./google_time";
 import { config, logger } from "@musubi/config";
 import {
@@ -210,6 +211,7 @@ function toNormalized(item: any): NormalizedEvent {
     externalId: item.id,
     etag: strongEventEtag(item.etag),
     status: "active",
+    providerState: googleEventState(item),
     creationOperationID: typeof item.extendedProperties?.private?.musubiOperationID === "string" ? item.extendedProperties.private.musubiOperationID : undefined,
     title: item.summary ?? "(untitled)",
     start,

@@ -1,3 +1,4 @@
+import { microsoftEventState } from "./provider_event_state";
 import { config, logger } from "@musubi/config";
 import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
 import {
@@ -136,6 +137,7 @@ export function toNormalized(item: any): NormalizedEvent {
     // Opaque provider metadata only. changeKey is NOT an If-Match guarantee.
     etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
     status: "active",
+    providerState: microsoftEventState(item),
     creationOperationID: typeof item.transactionId === "string" ? item.transactionId : undefined,
     title: item.subject ?? "(untitled)",
     start,

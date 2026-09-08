@@ -1,3 +1,4 @@
+import { caldavEventState } from "./provider_event_state";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
@@ -245,6 +246,7 @@ export function icalToNormalized(obj: {
   const uid = vevent.getFirstPropertyValue("uid");
 
   return {
+    providerState: caldavEventState(vevent),
     externalId: obj.url, // CalDAV addresses events by resource URL, not UID
     status:
       componentString(vevent, "status")?.toUpperCase() === "CANCELLED"

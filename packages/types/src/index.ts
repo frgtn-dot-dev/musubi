@@ -23,3 +23,4 @@ export {
   PRODUCT_VERSION,
 } from "./version";
 export * from "./event-scope";
+export * from "./provider-event-state";
