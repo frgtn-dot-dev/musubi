@@ -2,6 +2,7 @@ import { matchesGoogleOccurrence } from "./adapters/google_occurrence";
 import { config } from "@musubi/config";
 import { ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
+  confirmCaldavSeriesOutbox,
   matchesEventProviderProjection,
   claimEventOutbox,
   completeEventOutbox,
@@ -130,12 +131,26 @@ export async function deliverEventOutbox(
             token,
             "cancelled",
             "destination-disconnected",
-            { uncertain: row.reconciling },
+            { uncertain: row.reconciling || mutationStarted },
           );
           return false;
         }
         return true;
       };
+      if (row.payload.caldavSeries) {
+        if (!config.api.eventTimeEditsEnabled || row.provider !== "caldav" || row.action !== "update" || !adapter?.writeCaldavSeries)
+          throw new EventWriteError("event-write", "unsupported");
+        if (!(await checkDestination())) return;
+        if (!(await confirmCaldavSeriesOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
+        expectedRef = row.payload.caldavSeries.write.baseline.ref;
+        mutationStarted = true; // The resource executor reconciles before every conditional PUT.
+        const observed = await adapter.writeCaldavSeries(row.userID, row.accountID, row.externalCalendarID, row.payload.caldavSeries.write, signal);
+        resultRef = observed.ref;
+        signal.throwIfAborted();
+        if (!(await checkDestination())) return;
+        if (!(await confirmCaldavSeriesOutbox(row.id, token, resultRef))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        return;
+      }
       if (row.payload.googleOccurrence) {
         if (!config.api.eventTimeEditsEnabled || row.provider !== "google" || row.action !== "update" || !adapter?.readOccurrence || !adapter.writeOccurrence)
           throw new EventWriteError("event-write", "unsupported");
@@ -374,6 +389,7 @@ export async function deliverEventOutbox(
         if (
           error instanceof ProviderEventWriteError &&
           error.code === "provider-conflict" &&
+          !row.payload.caldavSeries &&
           !remoteSnapshot &&
           expectedRef &&
           adapter?.readEvent &&

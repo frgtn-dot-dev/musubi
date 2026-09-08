@@ -77,10 +77,50 @@ Radicale additionally exercises real adapter authorization, disabled feature gat
 content updates, child/extension/alarm preservation and repeated delivery against
 an actual calendar server. The adapter alone does not change local rows or mappings.
 
-The scope endpoint, atomic local family/outbox commit, worker integration, mapping
-acknowledgement for every component, and conflict handling remain to be implemented.
-The private input is ready for durable storage, but this slice does not yet persist
-it. Generic legacy delivery must not confirm a known temporal family or update only
-its master mapping. Occurrence/following/time/recurrence mutations require their own
-contracts. No generic guard, production flag or client minimum is relaxed. iCloud
-acceptance remains explicitly deferred by the user.
+## Scoped transaction and durable delivery
+
+The authenticated scope endpoint now accepts personal CalDAV `series/update`
+requests for master title, description and location behind the same default-off
+flag. It first reads the complete accepted resource outside a DB transaction.
+The commit then rechecks master/child revisions and content, complete membership,
+sole authoritative calendar links, connection identity, native component mappings
+and ETags. A changed context saves neither a local draft nor an operation receipt.
+A successful commit saves the master revision, one private resource outbox intent
+and the idempotent operation receipt together. Unchanged children keep their own
+content and revisions. Same-operation concurrent requests/replays create no second
+intent; a no-op produces no outbox row.
+
+Only a complete personal family owned by the connected user is supported. Shared
+copies, multiple target mappings, retained local child tombstones, unresolved
+family delivery and retained provider deletion observations are refused. Existing
+meeting/time/recurrence/following/occurrence refusals remain in force. This bounded
+contract does not claim every CalDAV series can already be edited.
+
+The typed worker rechecks the complete committed local context before delivery
+and after the provider confirms the complete desired resource. Short transactions
+lock calendar lifecycle, resource identity, master, sorted children, mappings and
+finally the leased outbox row. All component mapping validators and the completed
+receipt advance together. A stale local child, changed mapping/membership, retained
+deletion, disconnected destination or expired/replaced lease cannot produce a
+partial acknowledgement. Lease expiry at settlement rolls back mapping changes.
+Known temporal families cannot fall through the generic single-event ACK.
+
+Complete inbound resource sync still rejects a family with pending local delivery
+before updating any component or advancing its cursor. After the family ACK, the
+normal pull accepts the echo without duplicating definitions or revising unchanged
+children. Both the original and desired raw resource remain private outbox input;
+HTTP receipts and conflict endpoints do not expose them. Unexpected provider
+preparation errors are replaced with a safe typed error before reaching HTTP
+logging; raw parser lines, stacks and causes are not propagated. Generic conflict hydration
+and single-event conflict resolution are deliberately unavailable for this typed
+intent: they cannot prove anything about the rest of the resource. A conflict
+retains the saved local draft and requires the forthcoming full-resource resolution
+flow; automatic rebase is not supported.
+
+Authenticated HTTP/PostgreSQL tests cover concurrent replay, no-op, preparation
+races, zoned/all-day/floating delivery, applied-503 recovery, concurrent remote child
+changes, changed local children/mappings, replaced leases, retained tombstones,
+inbound refusal/echo and generic ACK/resolution refusal. Actual local Radicale also
+exercises scoped preparation, durable enqueue, worker delivery and all-component
+ACK through a real calendar server. No production flag, version or minimum client
+is changed; iCloud acceptance remains explicitly deferred by the user.

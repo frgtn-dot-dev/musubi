@@ -25,12 +25,14 @@ async function main() {
   }
 
   const { eq } = await import("drizzle-orm");
-  const { db, events, externalCalendars, externalEvents, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
+  const { db, events, eventOutbox, externalCalendars, externalEvents, applyLocalEventScope, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
   const { config } = await import("@musubi/config");
   const { syncProvider } = await import("../engine");
   const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
+  const { prepareCaldavSeries } = await import("../caldav_scope");
+  const { deliverEventOutbox } = await import("../event_delivery");
 
   const userID = `radicale-interop-${randomUUID()}`;
   const collectionURL = new URL(
@@ -237,6 +239,29 @@ async function main() {
     await sync();
     assert.ok((await rows()).every(event => event.deletedAt), "Resource deletion tombstones its complete family");
     console.log("Radicale VEVENT family HTTP delta/reset, revival, deletion and preservation: OK");
+    const scopedURL = new URL("scoped.ics", collectionURL).href;
+    const scopedData = ["BEGIN:VCALENDAR", "VERSION:2.0", master, moved, "END:VCALENDAR"].join("\r\n").split("UID:family").join("UID:scoped");
+    const seeded = await davFetch(scopedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar" }, body: scopedData });
+    assert.ok(seeded.ok);
+    await sync();
+    const scopedRoot = (await rows()).find(event => !event.deletedAt && !event.seriesID)!;
+    const scopeRequest = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: scopedRoot.revision, patch: { title: "Scope through outbox" } };
+    const candidate = await applyLocalEventScope(scopedRoot.id, userID, scopeRequest, { prepareProvider: true });
+    assert.equal(candidate.status, "caldav_required");
+    if (candidate.status !== "caldav_required") throw new Error("Missing scoped context");
+    const prepared = await prepareCaldavSeries(candidate.context, scopeRequest);
+    const saved = await applyLocalEventScope(scopedRoot.id, userID, scopeRequest, { caldav: prepared });
+    assert.equal(saved.status, "saved");
+    const [operation] = await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id));
+    const deliveredScope = await deliverEventOutbox(operation.id, () => caldavAdapter);
+    assert.equal(deliveredScope?.status, "completed");
+    const scopedMaps = (await db.select().from(externalEvents).where(eq(externalEvents.calendarID, link.calendarID))).filter(map => map.icalUid === "scoped");
+    assert.equal(scopedMaps.length, 2);
+    assert.ok(scopedMaps.every(map => map.etag === deliveredScope!.resultRef!.etag));
+    const acceptedRows = await rows();
+    await sync();
+    assert.deepEqual(await rows(), acceptedRows, "Confirmed Radicale echo preserves local revisions and identities");
+    console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {
     config.api.eventTimeEditsEnabled = enabled;
