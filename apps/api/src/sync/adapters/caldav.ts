@@ -1,10 +1,11 @@
 import { caldavEventState } from "./provider_event_state";
-import { caldavSeriesEvidence, caldavSeriesResourceURL } from "./caldav_series";
+import { caldavSeriesEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
   EventWriteError,
+  EventSchema,
   type Event,
   type Task,
   type TaskStatus,
@@ -12,6 +13,7 @@ import {
 import { normalizeCaldavResource } from "./caldav_time";
 import { config, logger } from "@musubi/config";
 import {
+  getExternalLinkForCalendar,
   getCaldavAccountById,
   getCaldavAccountsByUser,
   getUserExternalCalendars,
@@ -867,8 +869,9 @@ async function readEventResource(
   ref?: ExternalEventRef,
   signal?: AbortSignal,
   redirect: RequestRedirect = "follow",
+  observeCurrent = false,
 ) {
-  const etag = requireEventEtag(ref?.etag);
+  const acceptedEtag = requireEventEtag(ref?.etag);
   const response = await caldavFetch(externalEventId, {
     signal,
     redirect,
@@ -879,7 +882,8 @@ async function readEventResource(
     },
   });
   assertEventWriteResponse(response);
-  assertAcceptedEventEtag(etag, response.headers.get("etag"));
+  const etag = requireEventEtag(response.headers.get("etag"));
+  if (!observeCurrent) assertAcceptedEventEtag(acceptedEtag, etag);
   if (response.status !== 200 || response.headers.has("content-range")) {
     throw new ProviderEventWriteError("provider-write-failed");
   }
@@ -893,22 +897,89 @@ async function readEventResource(
   return { data, etag, master, uid };
 }
 
+/** Only content fields of the master may differ. Rebuilding from the original
+ * body prevents a persisted/client-supplied replacement from widening the write. */
+export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"]): CaldavSeriesWrite {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !["title", "description", "location"].includes(key)))
+    throw new EventWriteError("event-write", "unsupported");
+  caldavSeriesEvidence(evidence.data, baseline);
+  if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag)
+    throw new ProviderEventWriteError("provider-conflict");
+  const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
+  const desired = EventSchema.parse({ ...baseline.master, ...cleanPatch });
+  const after = patchEventIcal(evidence.data, desired, baseline.ref.icalUid!, cleanPatch);
+  caldavSeriesEvidence(after, { ...baseline, master: desired });
+  return { baseline, patch: cleanPatch, before: evidence.data, after };
+}
+
+async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal) {
+  if (!config.api.eventTimeEditsEnabled)
+    throw new EventWriteError("event-write", "unsupported");
+  const accounts = await getCaldavAccountsByUser(userID);
+  if (!accounts.some(account => account.id === accountId))
+    throw new EventWriteError("event-write", "denied");
+  const links = await getUserExternalCalendars("caldav", userID, accountId);
+  if (!links.some(link => link.supportsEvents && link.externalCalendarID === externalCalendarId && link.calendarID === intent.master.originCalendarID))
+    throw new EventWriteError("event-write", "denied");
+  const link = intent.master.originCalendarID ? await getExternalLinkForCalendar(intent.master.originCalendarID) : null;
+  if (!link || link.disabled || !link.supportsEvents || link.userID !== userID || link.provider !== "caldav" || link.accountID !== accountId || link.externalCalendarID !== externalCalendarId)
+    throw new EventWriteError("event-write", "denied");
+  const resource = caldavSeriesResourceURL(externalCalendarId, intent.ref.externalEventId);
+  const authorization = await basicAuthForAccount(accountId);
+  assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(resource.href, authorization, signal, "error"), "update"), "event-write");
+  return { resource, authorization };
+}
+
+export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal): Promise<CaldavSeriesEvidence> {
+  if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const { baseline } = write;
+  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch);
+  if (rebuilt.after !== write.after) throw new ProviderEventWriteError("provider-conflict");
+  const desired = { ...baseline, master: EventSchema.parse({ ...baseline.master, ...rebuilt.patch }) };
+  const resource = caldavSeriesResourceURL(externalCalendarId, baseline.ref.externalEventId);
+  const read = () => readEventResource(authorization, resource.href, baseline.ref, signal, "error", true);
+  const evidence = (current: Awaited<ReturnType<typeof read>>) => caldavSeriesEvidence(current.data, { ...desired, ref: { ...baseline.ref, etag: current.etag } });
+  const current = await read();
+  // Full desired resource proves a previous ambiguous PUT. Never repeat it,
+  // and never treat a master-only match as evidence about detached children.
+  if (sameCaldavResource(current.data, write.after)) return evidence(current);
+  if (current.etag !== baseline.ref.etag || !sameCaldavResource(current.data, write.before))
+    throw new ProviderEventWriteError("provider-conflict");
+  signal?.throwIfAborted();
+  let accepted = false;
+  try {
+    const response = await caldavFetch(resource.href, {
+      signal, redirect: "error", method: "PUT",
+      headers: { authorization, "Content-Type": "text/calendar; charset=utf-8", "If-Match": requireEventEtag(baseline.ref.etag) },
+      body: write.after,
+    });
+    assertProviderEventMutationResponse(response);
+    accepted = true;
+    // A successful PUT alone cannot confirm content after server transforms.
+    // Even a returned strong ETag is followed by a complete family GET.
+    const confirmed = await read();
+    if (!sameCaldavResource(confirmed.data, write.after))
+      throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+    return evidence(confirmed);
+  } catch (error) {
+    if (!accepted && error instanceof ProviderEventWriteError && error.providerStatus !== undefined) throw error;
+    if (error instanceof ProviderEventWriteError && error.outcome === "unconfirmed") throw error;
+    // Network errors, timeouts and failed post-write reads cannot prove that
+    // the PUT did not happen. Reconcile the same durable input on retry.
+    throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", error instanceof ProviderEventWriteError ? error.providerStatus : undefined);
+  }
+}
+
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
   async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal) {
-    if (!config.api.eventTimeEditsEnabled)
-      throw new EventWriteError("event-write", "unsupported");
-    const accounts = await getCaldavAccountsByUser(userID);
-    if (!accounts.some(account => account.id === accountId))
-      throw new EventWriteError("event-write", "denied");
-    const links = await getUserExternalCalendars("caldav", userID, accountId);
-    if (!links.some(link => link.supportsEvents && link.externalCalendarID === externalCalendarId && link.calendarID === intent.master.originCalendarID))
-      throw new EventWriteError("event-write", "denied");
-    const resource = caldavSeriesResourceURL(externalCalendarId, intent.ref.externalEventId);
-    const authorization = await basicAuthForAccount(accountId);
-    assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(resource.href, authorization, signal, "error"), "update"), "event-write");
+    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");
     return caldavSeriesEvidence(current.data, intent);
+  },
+  async writeCaldavSeries(userID, accountId, externalCalendarId, write, signal) {
+    const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, write.baseline, signal);
+    return deliverCaldavSeriesResource(externalCalendarId, write, authorization, signal);
   },
   projectEvent(event) { return icalToNormalized({ url: event.id, data: toIcal(event) })!; },
 
