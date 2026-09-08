@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import express from "express";
+import { expandRecurringEvents, editEventTimeDraft, knownEventTimeDraft, seriesEditWrites, withSeriesEditIntent } from "@musubi/calendar";
 import { eq } from "drizzle-orm";
 import { config } from "@musubi/config";
-import { EventSchema, CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
+import { eventUpdateOperation, EventSchema, CLIENT_VERSION_HEADER, PRODUCT_VERSION } from "@musubi/types";
 import { createCalendar, createEvent, db, calendarMembers, externalCalendars, getEventSnapshot, replaceMemberToken, user } from "@musubi/db";
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
@@ -73,6 +74,24 @@ async function main() {
 
     assert.equal((await send({ expectedRevision: 2, time, patch: { title: "Invalid draft", recurrence: "FREQ=HOURLY;COUNT=2" } })).status, 400);
     assert.deepEqual(await getEventSnapshot(event.id), before);
+
+    // Real authenticated CAS for the planner's whole-series civil shift.
+    const series = await createEvent({ id: randomUUID(), creatorID: owner, organizer: owner, title: "Civil series", color: "red", start: new Date("2026-03-28T08:30:17.123Z"), end: new Date("2026-03-28T09:30:19.456Z"), recurrence: "FREQ=DAILY;COUNT=4" }, [calendar.id]);
+    const adopted = await send({ expectedRevision: 1, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T09:30:17.123", endLocal: "2026-03-28T10:30:19.456" } }, token.raw, `/events/${series.id}/time`);
+    assert.equal(adopted.status, 200);
+    const master = EventSchema.parse(adopted.body);
+    const occurrence = expandRecurringEvents([master], new Date("2026-03-29T00:00Z"), new Date("2026-03-30T00:00Z"), { consumerTimeZone: "America/New_York" })[0]!;
+    const draft = editEventTimeDraft(occurrence, { ...occurrence, title: "Shifted together" }, { ...knownEventTimeDraft(occurrence)!, date: "2026-03-30", endDate: "2026-03-30" });
+    const operation = eventUpdateOperation(withSeriesEditIntent(seriesEditWrites({ master, occurrence, edited: draft, scope: "series" })).updates[0]!);
+    const shifted = await send(operation.body, token.raw, operation.path);
+    assert.equal(shifted.status, 200);
+    assert.equal(shifted.body.start, "2026-03-29T07:30:17.123Z");
+    assert.equal(shifted.body.title, "Shifted together");
+    assert.equal(shifted.body.recurrence, master.recurrence);
+    assert.equal(shifted.body.revision, 3);
+    const committed = await getEventSnapshot(master.id);
+    assert.equal((await send(operation.body, token.raw, operation.path)).status, 409);
+    assert.deepEqual(await getEventSnapshot(master.id), committed);
 
     // Notification failure after commit must retain an honest committed receipt.
     const query = db.$client.query.bind(db.$client);

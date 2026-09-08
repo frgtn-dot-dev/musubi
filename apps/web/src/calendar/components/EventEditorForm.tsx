@@ -684,7 +684,14 @@ export function EventEditorForm({
 					<Button
 						disabled={saving}
 						variant="secondary"
-						onClick={() => (onExpand ? onExpand(values) : setExpanded(true))}
+						onClick={() => {
+							try {
+								if (onExpand) onExpand(values);
+								else setExpanded(true);
+							} catch (error) {
+								setError(onError(error, values));
+							}
+						}}
 					>
 						More options
 					</Button>

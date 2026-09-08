@@ -748,3 +748,55 @@ it.each(["zoned", "floating", "all-day"] as const)("keeps the tapped %s occurren
   await saving;
   expect(useEventsStore.getState().events[0].timeModel).toEqual(series.timeModel);
 });
+
+
+it("saves a whole-series civil date shift across DST and schedules from the saved master", async () => {
+  const { expandRecurringEvents, resolveEventTimeEdit, knownEventTimeDraft } = await import("@musubi/calendar");
+  const series = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000154", recurrence: "FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T09:30:17.123", endLocal: "2026-03-28T10:30:19.456" }) });
+  const tapped = expandRecurringEvents([series], new Date("2026-03-29T00:00Z"), new Date("2026-03-30T00:00Z"), { consumerTimeZone: "America/New_York" }).find(item => knownEventTimeDraft(item)!.date === "2026-03-29")!;
+  useEventsStore.setState({ events: [series] });
+  presentEventDetail([series], tapped);
+  useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
+  const tree = renderComposer(true);
+  titleInput(tree)!.onChangeText("Civil series draft");
+  find(tree, props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  find(tree, props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  let saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
+  scopeAnswer("This event");
+  await saving;
+  expect(mocks.request).not.toHaveBeenCalled();
+  expect(mocks.close).not.toHaveBeenCalled();
+  expect(titleInput(renderComposer())!.value).toBe("Civil series draft");
+  mocks.alert.mockClear();
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    return { error: null, data: { ...series, ...body.patch, ...resolveEventTimeEdit(body.time), revision: 2 } };
+  });
+  saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
+  scopeAnswer("All events");
+  await saving;
+  expect(mocks.request).toHaveBeenCalledOnce();
+  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toEqual({ expectedRevision: 1, patch: { title: "Civil series draft" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:30:17.123", endLocal: "2026-03-29T10:30:19.456" } });
+  expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ revision: 2, start: new Date("2026-03-29T07:30:17.123Z"), recurrence: series.recurrence }), null);
+
+  // An old open occurrence must not borrow a newer master's revision for a shift.
+  const { liveEventDetail } = await import("@/lib/liveEvent");
+  const displayed = useEventDetailStore.getState().event!;
+  const live = liveEventDetail(useEventsStore.getState().events, displayed)!;
+  expect(live.revision).toBe(1);
+  useEditComposerStore.getState().open(live);
+  const reopened = renderComposer(true);
+  find(reopened, props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  find(reopened, props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  mocks.alert.mockClear();
+  mocks.request.mockClear();
+  mocks.close.mockClear();
+  saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
+  scopeAnswer("All events");
+  await saving;
+  expect(mocks.request).not.toHaveBeenCalled();
+  expect(mocks.close).not.toHaveBeenCalled();
+});
