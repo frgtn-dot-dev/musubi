@@ -1,6 +1,6 @@
 import type { CaldavSeriesPrepared } from "./queries/caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
-import type { ProviderReminderEdit } from "@musubi/types";
+import type { ProviderReminderEdit, ProviderRsvpIntent } from "@musubi/types";
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
@@ -879,6 +879,7 @@ export const eventOutbox = pgTable(
         patch?: Record<string, unknown>;
         scopeEditValidated?: boolean;
         reminderEdit?: ProviderReminderEdit;
+        rsvp?: ProviderRsvpIntent;
         googleOccurrence?: GoogleOccurrenceIntent;
         caldavSeries?: CaldavSeriesPrepared;
         createIdentityVersion?: 1;

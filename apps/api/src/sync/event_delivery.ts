@@ -177,6 +177,7 @@ export async function deliverEventOutbox(
         remoteSnapshot = null;
         return;
       }
+      if (row.payload.rsvp) throw new EventWriteError("event-write", "unsupported");
       if (row.payload.reminderEdit) {
         if (!config.api.providerReminderEditsEnabled || event.timeModel?.kind === "floating" || event.recurrence || event.seriesID || event.originalStart || event.isCanceled) throw new EventWriteError("event-write", "unsupported");
         const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);

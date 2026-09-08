@@ -572,7 +572,7 @@ export async function fetchGoogleChanges(
 
 /** The local explicit model has one zone for both endpoints. Do not erase
  * Google's independently specified end zone when proving a reminder ACK. */
-function googleReminderEventEvidence(data: any) {
+export function googleReminderEventEvidence(data: any) {
   if (data.end?.timeZone != null && data.end.timeZone !== data.start?.timeZone)
     throw new EventWriteError("event-write", "unsupported");
   return assertCreatedEventEvidence(normalizeGoogleTime(data, toNormalized(data)));

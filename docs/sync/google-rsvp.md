@@ -1,7 +1,8 @@
 # Google RSVP: evidence contract
 
 K13 has a pure evidence planner and an internal conditional Google transport.
-There is no public endpoint, durable queue or client RSVP control yet.
+There is no public endpoint, enabled RSVP worker or client RSVP control yet.
+Internal two-phase enqueue is described below.
 Production and live testing remain disabled/unimplemented.
 
 ## Native request
@@ -82,3 +83,34 @@ truncated successful PATCH plus full GET, lost response, applied/unapplied 503,
 reader is synthetic; this does not substitute for DB/account authorization,
 worker lease/replay, source ownership, or live organizer-visible acceptance.
 No external accounts are used by these tests.
+
+## Internal transactional preparation and enqueue
+
+`queueGoogleRsvp` is an internal service, gated by the same disabled RSVP flag.
+It first resolves the actor's own live source, editable membership, mapping,
+canonical revision and private state version under the established lifecycle /
+event / membership / mapping lock order. It returns an exact prior receipt before
+provider I/O on replay. Other pending or cancelled source history blocks a new
+operation. Floating, recurring, detached and cancelled events remain unsupported.
+
+A fresh OAuth-authorized native read must match both the stored canonical event
+(including known civil time) and imported private provider state. The commit then
+locks and reconstructs the full local context. Revision, role, link/account,
+map identity, ETag, state or calendar-link changes reject the stale preparation.
+Concurrent identical requests converge on one operation UUID/receipt. The private
+outbox contains the raw baseline and separate baseline/desired provider states;
+it does not alter canonical event content/revision, social attendance, accepted
+provider observation or local reminders.
+
+This is not yet a usable public RSVP flow: there is no route. The existing worker,
+generic ACK, content conflict resolution and generic pull-echo comparison
+explicitly refuse the new intent shape. A future specialized worker must replace
+those guards with proven identity/CAS, full-resource confirmation, pending-pull
+coordination and lease-fenced ACK. A private queue row alone is not delivery.
+
+`provider_rsvp.integration.test.ts` exercises actual token/account lookup,
+Google read adapter and PostgreSQL against a fake server: disabled/wrong-user/
+wrong-scope/viewer refusal before HTTP; concurrent replay; revision, role,
+mapping, native state and time races; legacy/zoned/all-day preservation; and no
+generic worker PATCH. It is part of `test:db:events` and `test:db:sync`.
+No live invitations, endpoint, migration, rollout or version change is included.
