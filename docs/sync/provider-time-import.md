@@ -16,7 +16,7 @@ Regression: `apps/api/src/sync/google_occurrences.integration.test.ts` uses real
 
 Sources: [Google recurring events](https://developers.google.com/workspace/calendar/api/guides/recurringevents), [Google event resource](https://developers.google.com/workspace/calendar/api/v3/reference/events).
 
-Graph bounded-window identity and the explicitly unsupported CalDAV forms remain K11 follow-up work. K12 scope writes, K13 meetings and K14 reminder/privacy semantics are not declared complete here.
+The documented K11 import contract is locally implemented, including Graph bounded-window identity and client coverage notices below. The explicitly refused CalDAV forms remain follow-up model work. K12 scope writes, K13 meetings and K14 reminder/privacy semantics are not declared complete here.
 
 ## CalDAV component slice
 
@@ -38,7 +38,7 @@ Graph's bounded `calendarView` remains provider-expanded: a fetched master suppl
 
 Exceptions and records lacking original identity are hydrated from their calendar-scoped instance endpoint before applying the fetch. An instance never inherits the master's ETag. Dependency failure and identity mismatch leave the cursor unchanged. ISO timestamps with redundant zero precision normalize to milliseconds; nonzero sub-millisecond occurrence identity is refused rather than collapsed. Repeated 410 on a fresh window terminates with an error instead of looping indefinitely.
 
-These are destination mapping fields, not a fabricated local master or event time zone. Native scope resolution and precise Graph recurrence conversion remain K12. Exposing the imported coverage window to web/mobile is the next K11 client slice; complete history is not promised.
+These are destination mapping fields, not a fabricated local master or event time zone. Native scope resolution and precise Graph recurrence conversion remain K12. Web/mobile expose the imported coverage limitation as described below; complete history is not promised.
 
 Evidence: `graph_occurrences.integration.test.ts` runs actual HTTP fixtures through the Graph adapter, sync engine and disposable DB. It covers legacy adoption, moved content/duration, no double expansion, master/instance ETag separation, repeated and 410/full resets, hydration failure, exact original identity and stable revival. No live Microsoft account was changed.
 
