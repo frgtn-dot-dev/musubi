@@ -280,7 +280,7 @@ export async function handlerEditEventTime(req: Request, res: Response) {
   const request = EventTimeEditRequestSchema.parse(req.body);
   await assertEventContentAccess(req.user!.id, eventID);
   const deliver = await prepareEventWrites([], eventMutationIdentity(req));
-  const saved = await replaceLocalEventTimeAtRevision(eventID, request.expectedRevision, request.time, req.user!.id);
+  const saved = await replaceLocalEventTimeAtRevision(eventID, request.expectedRevision, request.time, req.user!.id, request.patch);
   if (saved.status === "not_found") throw new NotFoundError("Event not found.");
   if (saved.status === "conflict") return conflict(res, saved.current);
   return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {

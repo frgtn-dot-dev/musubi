@@ -48,10 +48,15 @@ async function main() {
     assert.equal((await send({ expectedRevision: 1, time }, null)).status, 401);
     assert.equal((await send({ expectedRevision: 1, time }, viewerToken.raw)).status, 403);
     assert.equal((await send({ expectedRevision: 1, time, seriesID: randomUUID() })).status, 400);
-    const saved = await send({ expectedRevision: 1, time });
+    for (const field of ["calendars", "organizer", "hasAttendees", "isCanceled", "timeModel", "start"]) {
+      assert.equal((await send({ expectedRevision: 1, time, patch: { [field]: null } })).status, 400);
+    }
+    const saved = await send({ expectedRevision: 1, time, patch: { title: "Atomic draft", description: null } });
     assert.equal(saved.status, 200);
     const parsed = EventSchema.parse(saved.body);
     assert.equal(parsed.revision, 2);
+    assert.equal(parsed.title, "Atomic draft");
+    assert.equal(parsed.description, null);
     assert.equal(parsed.start.toISOString(), "2026-03-29T01:30:00.000Z");
     assert.equal(parsed.timeModel?.kind === "zoned" && parsed.timeModel.startLocal, "2026-03-29T02:30:00.000");
     const read = await send(undefined, token.raw, "/events", "GET");
@@ -66,6 +71,9 @@ async function main() {
     assert.equal((await send({ expectedRevision: 2, time: { ...time, endLocal: "2026-03-29T03:00:00" } })).status, 400);
     assert.deepEqual(await getEventSnapshot(event.id), before);
 
+    assert.equal((await send({ expectedRevision: 2, time, patch: { title: "Invalid draft", recurrence: "FREQ=HOURLY;COUNT=2" } })).status, 400);
+    assert.deepEqual(await getEventSnapshot(event.id), before);
+
     // Notification failure after commit must retain an honest committed receipt.
     const query = db.$client.query.bind(db.$client);
     let notificationFailed = false;
@@ -78,12 +86,13 @@ async function main() {
       return (query as any)(statement, ...args);
     };
     let failed;
-    try { failed = await send({ expectedRevision: 2, time: { kind: "floating", startLocal: "2026-03-30T09:00:00", endLocal: "2026-03-30T10:00:00" } }); }
+    try { failed = await send({ expectedRevision: 2, time: { kind: "floating", startLocal: "2026-03-30T09:00:00", endLocal: "2026-03-30T10:00:00" }, patch: { title: "Committed together" } }); }
     finally { db.$client.query = query; }
     assert.equal(notificationFailed, true);
     assert.equal(failed.status, 502);
     assert.equal(failed.body.localCommitted, true);
     assert.equal(failed.body.committed[0].revision, 3);
+    assert.equal(failed.body.committed[0].title, "Committed together");
     assert.equal(failed.body.committed[0].timeModel.kind, "floating");
     await db.insert(externalCalendars).values({ provider: "google", userID: owner, accountID: owner, externalCalendarID: "remote", calendarID: calendar.id });
     assert.equal((await send({ expectedRevision: 3, time })).status, 400);

@@ -74,9 +74,21 @@ export const EventPatchRequestSchema = patchRequest.extend({
   scopeEdit: ScopeEditIntentSchema.optional(),
 });
 export type EventPatchRequest = z.infer<typeof EventPatchRequestSchema>;
+// Content that can share the local time transaction. Membership, meeting
+// identity, cancellation and occurrence scope use their dedicated operations.
+export const EventTimeContentPatchSchema = EventPatchSchema.pick({
+  title: true,
+  color: true,
+  description: true,
+  location: true,
+  url: true,
+  recurrence: true,
+}).strict();
+export type EventTimeContentPatch = z.infer<typeof EventTimeContentPatchSchema>;
 export const EventTimeEditRequestSchema = z.object({
   expectedRevision: EventRevisionSchema,
   time: EventTimeEditSchema,
+  patch: EventTimeContentPatchSchema.optional(),
 }).strict();
 export type EventTimeEditRequest = z.infer<typeof EventTimeEditRequestSchema>;
 
