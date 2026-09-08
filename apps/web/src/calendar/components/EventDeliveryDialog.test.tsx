@@ -303,3 +303,52 @@ it("hides cached receipts and actions when refreshed authorization is refused", 
   expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
   expect(screen.queryByText(/Work · google/)).toBeNull();
 });
+
+it("shows occurrence cancellation and civil anchors and confirms the master revision", async () => {
+  let body: any;
+  const scoped = {
+    ...content,
+    isCanceled: true,
+    originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" },
+    timeModel: {
+      kind: "zoned",
+      timeZone: "Europe/Prague",
+      startLocal: "2026-09-07T12:00:00.000",
+      endLocal: "2026-09-07T13:00:00.000",
+    },
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/conflict"))
+        return json({
+          ...preview,
+          masterRevision: 7,
+          local: scoped,
+          remote: { ...scoped, isCanceled: false },
+        });
+      if (url.endsWith("/resolve")) {
+        body = JSON.parse(String(init?.body));
+        return json(receipt, 202);
+      }
+      return json(receipt);
+    }),
+  );
+  mount();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Review changes" }),
+  );
+  const comparison = await screen.findByRole("dialog", {
+    name: "Review remote changes",
+  });
+  expect(within(comparison).getByText("Cancelled")).toBeTruthy();
+  expect(within(comparison).getByText("Active")).toBeTruthy();
+  expect(
+    within(comparison).getAllByText(/Europe\/Prague · 2026-09-07T12:00:00.000/),
+  ).toHaveLength(2);
+  expect(within(comparison).queryByText("Does not repeat")).toBeNull();
+  fireEvent.click(
+    within(comparison).getByRole("button", { name: "Apply saved changes" }),
+  );
+  await waitFor(() => expect(body?.expectedMasterRevision).toBe(7));
+});

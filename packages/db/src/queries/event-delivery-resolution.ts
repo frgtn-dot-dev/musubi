@@ -11,12 +11,18 @@ import {
   eventOutbox,
   externalEvents,
   externalEventTombstones,
+  calendarEvents,
 } from "../schema";
 import {
   assertEventDeliveryDestination,
   EventDeliveryRetryError,
 } from "./event-delivery-retry";
-import { eventOutboxCreatedAt, unresolvedEventOutbox, type EventOutboxRow } from "./event-outbox";
+import {
+  eventOutboxCreatedAt,
+  unresolvedEventOutbox,
+  type EventOutboxRow,
+} from "./event-outbox";
+import type { GoogleOccurrenceIntent } from "./google-occurrence-scope";
 import type { DbTransaction } from "./calendars";
 import type { EventContentPatch } from "./events";
 import type { EventDeliveryRef } from "./event-outbox-delivery";
@@ -85,7 +91,9 @@ async function resolutionContext(
   )
     throw new EventDeliveryResolutionError("delivery-state-changed");
   if (
-    row.payload.reminderEdit || latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit) || row.payload.googleOccurrence || latest.payload.googleOccurrence || pending.some(item => item.payload.googleOccurrence) ||
+    row.payload.reminderEdit ||
+    latest.payload.reminderEdit ||
+    pending.some((item) => item.payload.reminderEdit) ||
     pending.length > 1000 ||
     pending.some((item) => item.status === "attempting")
   )
@@ -120,7 +128,62 @@ async function resolutionContext(
   if (mappings.length > 1)
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
+  let masterRevision: number | undefined;
+  if (row.payload.googleOccurrence) {
+    const intent = row.payload.googleOccurrence;
+    const master = await tx.query.events.findFirst({
+      where: (table, { eq }) => eq(table.id, intent.master.id),
+    });
+    const family = await tx
+      .select({ id: events.id, calendarID: calendarEvents.calendarID })
+      .from(events)
+      .leftJoin(calendarEvents, eq(calendarEvents.eventID, events.id))
+      .where(
+        or(
+          eq(events.id, intent.master.id),
+          eq(events.seriesID, intent.master.id),
+        ),
+      );
+    const [masterMapping] = await tx
+      .select()
+      .from(externalEvents)
+      .where(
+        and(
+          eq(externalEvents.eventID, intent.master.id),
+          eq(externalEvents.calendarID, row.calendarID),
+          eq(externalEvents.provider, "google"),
+        ),
+      );
+    if (
+      row.provider !== "google" ||
+      row.action !== "update" ||
+      !linked ||
+      latest.id !== row.id ||
+      pending.some((item) => item.id !== row.id) ||
+      !master ||
+      master.deletedAt ||
+      master.revision !== intent.master.revision ||
+      family.some((item) => item.calendarID !== row.calendarID) ||
+      !masterMapping ||
+      masterMapping.externalEventID !== intent.masterExternalID ||
+      masterMapping.etag !== intent.masterEtag ||
+      local.seriesID !== master.id ||
+      JSON.stringify(local.originalStart) !==
+        JSON.stringify(EventSchema.parse(row.payload.event).originalStart) ||
+      !mapping ||
+      mapping.externalEventID !== row.externalEventID ||
+      mapping.externalSeriesID !== intent.masterExternalID
+    )
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    masterRevision = master.revision;
+  } else if (
+    latest.payload.googleOccurrence ||
+    pending.some((item) => item.payload.googleOccurrence)
+  ) {
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  }
   return {
+    masterRevision,
     row,
     latest,
     pending: pending.length ? pending : [row],
@@ -155,6 +218,7 @@ export type EventDeliveryResolutionProof = {
   remoteExists: boolean;
   action: EventOutboxRow["action"];
   patch: EventContentPatch;
+  googleOccurrence?: GoogleOccurrenceIntent;
   deletion: typeof externalEventTombstones.$inferSelect | undefined;
 };
 
@@ -171,7 +235,8 @@ function sameResolution(
     accepted.expectedLocalRevision === request.expectedLocalRevision &&
     accepted.expectedLatestOperationID === request.expectedLatestOperationId &&
     accepted.expectedRemoteExists === request.expectedRemoteExists &&
-    accepted.expectedRemoteEtag === request.expectedRemoteEtag
+    accepted.expectedRemoteEtag === request.expectedRemoteEtag &&
+    accepted.expectedMasterRevision === request.expectedMasterRevision
   );
 }
 
@@ -239,6 +304,12 @@ export async function commitEventDeliveryResolution(
           row.externalCalendarLinkID,
           proof.ref.externalEventId,
         );
+      if (row.payload.googleOccurrence)
+        await tx
+          .select({ id: events.id })
+          .from(events)
+          .where(eq(events.id, row.payload.googleOccurrence.master.id))
+          .for("update");
       await tx
         .select({ id: events.id })
         .from(events)
@@ -277,6 +348,9 @@ export async function commitEventDeliveryResolution(
           "delivery-resolution-unavailable",
         );
       if (
+        current.masterRevision !== request.expectedMasterRevision ||
+        current.masterRevision !== proof.context.masterRevision ||
+        !!current.row.payload.googleOccurrence !== !!proof.googleOccurrence ||
         current.localRevision !== request.expectedLocalRevision ||
         current.latest.id !== request.expectedLatestOperationId ||
         current.localRevision !== proof.context.localRevision ||
@@ -371,7 +445,14 @@ export async function commitEventDeliveryResolution(
             .where(eq(externalEvents.id, current.mapping.id));
         }
       }
-      const replaced = current.pending.map((item) => item.id);
+      const replaced = [
+        ...new Set(
+          current.pending.flatMap((item) => [
+            item.id,
+            ...(item.payload.resolution?.replacedOperationIDs ?? []),
+          ]),
+        ),
+      ];
       await tx
         .update(eventOutbox)
         .set({
@@ -385,7 +466,10 @@ export async function commitEventDeliveryResolution(
       const id = randomUUID();
       await tx.insert(eventOutbox).values({
         id,
-        createdAt: eventOutboxCreatedAt(row.eventID, row.externalCalendarLinkID),
+        createdAt: eventOutboxCreatedAt(
+          row.eventID,
+          row.externalCalendarLinkID,
+        ),
         actorID: userID,
         mutationID: request.mutationId,
         position: 0,
@@ -407,6 +491,9 @@ export async function commitEventDeliveryResolution(
         payload: {
           event: current.local,
           patch: proof.patch,
+          ...(proof.googleOccurrence
+            ? { googleOccurrence: proof.googleOccurrence }
+            : {}),
           ...(proof.action === "create"
             ? { createIdentityVersion: 1 as const }
             : {}),
@@ -417,6 +504,7 @@ export async function commitEventDeliveryResolution(
             expectedLatestOperationID: request.expectedLatestOperationId,
             expectedRemoteExists: request.expectedRemoteExists,
             expectedRemoteEtag: request.expectedRemoteEtag,
+            expectedMasterRevision: request.expectedMasterRevision,
           },
         },
       });

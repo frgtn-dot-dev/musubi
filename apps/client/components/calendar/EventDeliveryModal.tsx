@@ -63,7 +63,10 @@ export function DeliveryBody({
     connectionId ?? null,
     version,
   ]);
-  const [settledRead, setSettledRead] = useState<{ key: string; scope: string } | null>(null);
+  const [settledRead, setSettledRead] = useState<{
+    key: string;
+    scope: string;
+  } | null>(null);
   const readScope = JSON.stringify([selectedId ?? null, connectionId ?? null]);
   const loading = settledRead?.scope !== readScope;
   const [busy, setBusy] = useState(false);
@@ -80,7 +83,12 @@ export function DeliveryBody({
   useEffect(() => {
     active.current = true;
     const timer = setInterval(() => {
-      if (AppState.currentState === "active" && !inFlightScope.current && !busyRef.current) refresh();
+      if (
+        AppState.currentState === "active" &&
+        !inFlightScope.current &&
+        !busyRef.current
+      )
+        refresh();
     }, 15_000);
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") refresh();
@@ -388,6 +396,12 @@ export function DeliveryBody({
                                       expectedRemoteExists:
                                         preview.remote !== null,
                                       expectedRemoteEtag: preview.remoteEtag,
+                                      ...(preview.masterRevision !== undefined
+                                        ? {
+                                            expectedMasterRevision:
+                                              preview.masterRevision,
+                                          }
+                                        : {}),
                                     },
                                   });
                               })
@@ -508,6 +522,22 @@ function DeliveryContent({
       <Text style={copy}>{content?.title ?? absent}</Text>
       {content ? (
         <>
+          {content.originalStart ? (
+            <Text style={copy}>
+              One occurrence · original {content.originalStart.value}
+            </Text>
+          ) : null}
+          {content.isCanceled !== undefined ? (
+            <Text style={copy}>
+              Status: {content.isCanceled ? "Cancelled" : "Active"}
+            </Text>
+          ) : null}
+          {content.timeModel?.kind === "zoned" ? (
+            <Text style={copy}>
+              Series time zone: {content.timeModel.timeZone} ·{" "}
+              {content.timeModel.startLocal} – {content.timeModel.endLocal}
+            </Text>
+          ) : null}
           <Text style={copy}>
             {content.isAllDay
               ? `All day: ${content.start.toISOString().slice(0, 10)} – ${content.end.toISOString().slice(0, 10)}`
@@ -516,7 +546,10 @@ function DeliveryContent({
           <Text style={copy}>Location: {content.location || "None"}</Text>
           <Text style={copy}>Description: {content.description || "None"}</Text>
           <Text style={copy}>
-            Recurrence: {content.recurrence || "Does not repeat"}
+            Recurrence:{" "}
+            {content.originalStart
+              ? "Occurrence of a series"
+              : content.recurrence || "Does not repeat"}
           </Text>
         </>
       ) : null}

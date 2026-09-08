@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EventTimeModelSchema, OccurrenceStartSchema } from "./event_time";
 
 /** A receipt describes one destination, never a global provider confirmation. */
 export const EventDeliveryTargetSchema = z.object({
@@ -74,6 +75,9 @@ export const EventDeliveryContentSchema = z.object({
   description: z.string().nullable(),
   location: z.string().nullable(),
   recurrence: z.string().nullable(),
+  isCanceled: z.boolean().optional(),
+  timeModel: EventTimeModelSchema.optional(),
+  originalStart: OccurrenceStartSchema.optional(),
 });
 
 export const EventDeliveryConflictSchema = z.object({
@@ -81,6 +85,7 @@ export const EventDeliveryConflictSchema = z.object({
   operationId: z.uuid(),
   latestOperationId: z.uuid(),
   localRevision: z.number().int().positive().nullable(),
+  masterRevision: z.number().int().positive().optional(),
   local: EventDeliveryContentSchema.nullable(),
   remote: EventDeliveryContentSchema.nullable(),
   remoteEtag: z.string().nullable(),
@@ -104,6 +109,7 @@ export const ResolveEventDeliveryRequestSchema = z
     expectedLatestOperationId: z.uuid(),
     expectedRemoteExists: z.boolean(),
     expectedRemoteEtag: z.string().nullable(),
+    expectedMasterRevision: z.number().int().positive().optional(),
   })
   .strict();
 

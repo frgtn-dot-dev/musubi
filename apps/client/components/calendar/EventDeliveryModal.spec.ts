@@ -152,7 +152,10 @@ beforeEach(() => {
     reply(url.endsWith("/conflict") ? preview : receipt),
   );
 });
-afterEach(() => { unmount(); vi.useRealTimers(); });
+afterEach(() => {
+  unmount();
+  vi.useRealTimers();
+});
 function render(eventId: string | null = id, connectionId?: string) {
   h.index = 0;
   const tree = DeliveryBody({
@@ -191,6 +194,8 @@ function text(node: ReactNode): string {
     }>(node)
   )
     return "";
+  if (typeof node.type === "function" && node.type.name === "DeliveryContent")
+    return text((node.type as (props: any) => ReactNode)(node.props));
   return text(node.props.children);
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -520,12 +525,14 @@ it("invalidates delivery from the actual native external_sync and reconnect list
   expect(h.version).toBe(initial + 2);
 });
 
-
 it("publishes a slow receipt despite the 15 second poll", async () => {
   vi.useFakeTimers();
-  h.request.mockImplementation(() => new Promise((resolve) => {
-    setTimeout(() => resolve(reply(receipt)), 16_000);
-  }));
+  h.request.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve(reply(receipt)), 16_000);
+      }),
+  );
   render();
   await vi.advanceTimersByTimeAsync(15_000);
   render();
@@ -541,11 +548,30 @@ it("finishes a multi-page inbox refresh across polling intervals", async () => {
   vi.useFakeTimers();
   const second = "00000000-0000-4000-8000-000000000009";
   let delay = 0;
-  h.request.mockImplementation((url: string) => new Promise((resolve) => {
-    setTimeout(() => resolve(reply(url.includes("cursor=")
-      ? { items: [{ eventId: second, savedTitle: "Retained second" }], nextCursor: null }
-      : { items: [{ eventId: id, savedTitle: "Retained first" }], nextCursor: id })), delay);
-  }));
+  h.request.mockImplementation(
+    (url: string) =>
+      new Promise((resolve) => {
+        setTimeout(
+          () =>
+            resolve(
+              reply(
+                url.includes("cursor=")
+                  ? {
+                      items: [
+                        { eventId: second, savedTitle: "Retained second" },
+                      ],
+                      nextCursor: null,
+                    }
+                  : {
+                      items: [{ eventId: id, savedTitle: "Retained first" }],
+                      nextCursor: id,
+                    },
+              ),
+            ),
+          delay,
+        );
+      }),
+  );
   render(null);
   await vi.advanceTimersByTimeAsync(0);
   buttons(render(null), "Load more")[0].onPress();
@@ -564,34 +590,56 @@ it("finishes a multi-page inbox refresh across polling intervals", async () => {
 });
 
 it("serializes Load more with a background inbox refresh", async () => {
-  h.request.mockResolvedValue(reply({
-    items: [{ eventId: id, savedTitle: "First" }], nextCursor: id,
-  }));
+  h.request.mockResolvedValue(
+    reply({
+      items: [{ eventId: id, savedTitle: "First" }],
+      nextCursor: id,
+    }),
+  );
   render(null);
   await settle();
   const previousButton = buttons(render(null), "Load more")[0];
   let finish!: (value: unknown) => void;
-  h.request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  h.request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
   h.version++;
   render(null);
   expect(buttons(render(null), "Load more")[0].disabled).toBe(true);
   previousButton.onPress();
   expect(h.request).toHaveBeenCalledTimes(2);
-  finish(reply({ items: [{ eventId: id, savedTitle: "Refreshed" }], nextCursor: id }));
+  finish(
+    reply({
+      items: [{ eventId: id, savedTitle: "Refreshed" }],
+      nextCursor: id,
+    }),
+  );
   await settle();
   const next = render(null);
   expect(buttons(next, "Refreshed")).toHaveLength(1);
   expect(buttons(next, "Load more")[0].disabled).toBe(false);
 });
 
-
 it("makes pagination available after an inbox read slower than polling", async () => {
   vi.useFakeTimers();
-  h.request.mockImplementation(() => new Promise((resolve) => {
-    setTimeout(() => resolve(reply({
-      items: [{ eventId: id, savedTitle: "Slow first page" }], nextCursor: id,
-    })), 16_000);
-  }));
+  h.request.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(
+          () =>
+            resolve(
+              reply({
+                items: [{ eventId: id, savedTitle: "Slow first page" }],
+                nextCursor: id,
+              }),
+            ),
+          16_000,
+        );
+      }),
+  );
   render(null);
   await vi.advanceTimersByTimeAsync(15_000);
   render(null);
@@ -602,4 +650,39 @@ it("makes pagination available after an inbox read slower than polling", async (
   await vi.advanceTimersByTimeAsync(14_000);
   render(null);
   expect(h.request).toHaveBeenCalledTimes(2);
+});
+
+it("confirms occurrence scope with the displayed master revision", async () => {
+  let body: any;
+  const scoped = {
+    ...content,
+    isCanceled: true,
+    originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" },
+    timeModel: {
+      kind: "zoned",
+      timeZone: "Europe/Prague",
+      startLocal: "2026-09-07T12:00:00.000",
+      endLocal: "2026-09-07T13:00:00.000",
+    },
+  };
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/resolve")) body = JSON.parse(options.body);
+    return reply(
+      url.endsWith("/conflict")
+        ? {
+            ...preview,
+            masterRevision: 7,
+            local: scoped,
+            remote: { ...scoped, isCanceled: false },
+          }
+        : receipt,
+    );
+  });
+  const tree = await review();
+  expect(text(tree)).toContain("Cancelled");
+  expect(text(tree)).toContain("Europe/Prague");
+  buttons(tree, "Apply saved changes")[0].onPress();
+  acceptNative();
+  await settle();
+  expect(body.expectedMasterRevision).toBe(7);
 });

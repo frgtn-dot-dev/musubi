@@ -1,3 +1,4 @@
+import { config } from "@musubi/config";
 import {
   diffEventContent,
   getEventDeliveryResolutionContext,
@@ -9,6 +10,7 @@ import {
 } from "@musubi/db";
 import {
   EventWriteError,
+  EventSchema,
   type EventDeliveryConflict,
   type EventDeliveryContent,
   type Event,
@@ -123,6 +125,71 @@ async function prepare(
               ).url,
             }
           : null;
+  }
+  if (row.payload.googleOccurrence) {
+    if (
+      !config.api.eventTimeEditsEnabled ||
+      !adapter.readOccurrence ||
+      !ref ||
+      context.deleted
+    )
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const intent = {
+      ...row.payload.googleOccurrence,
+      master: EventSchema.parse(row.payload.googleOccurrence.master),
+      baseline: EventSchema.parse(row.payload.googleOccurrence.baseline),
+    };
+    const deletion = await getEventOutboxDeletion(row, ref.externalEventId);
+    const observed = await adapter.readOccurrence(
+      row.userID,
+      row.accountID,
+      row.externalCalendarID,
+      intent,
+      ref,
+      signal,
+    );
+    if (
+      observed.ref.externalEventId !== ref.externalEventId ||
+      !strongEventEtag(observed.ref.etag)
+    )
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const baseline = EventSchema.parse({
+      ...context.local,
+      ...observed.event,
+      id: context.local.id,
+      organizer: context.local.organizer,
+      seriesID: intent.master.id,
+      calendars: context.local.calendars,
+    });
+    const scopeContent = (event: Event): EventDeliveryContent => ({
+      ...content(event),
+      isCanceled: !!event.isCanceled,
+      timeModel: event.timeModel ?? undefined,
+      originalStart: event.originalStart ?? undefined,
+    });
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID,
+      operationId: row.id,
+      latestOperationId: context.latest.id,
+      localRevision: context.localRevision,
+      masterRevision: context.masterRevision,
+      local: scopeContent(context.local),
+      remote: scopeContent(baseline),
+      remoteEtag: observed.ref.etag!,
+      action: "update",
+      canResolve: true,
+      reason: null,
+    };
+    const proof: EventDeliveryResolutionProof = {
+      context,
+      ref: observed.ref,
+      remoteExists: true,
+      action: "update",
+      patch: {},
+      deletion,
+      googleOccurrence: { ...intent, baseline },
+    };
+    return { preview, proof };
   }
   // Capture deletion evidence BEFORE the provider read, including deterministic
   // create IDs which have no mapping yet. A newer pull delta invalidates the CAS.

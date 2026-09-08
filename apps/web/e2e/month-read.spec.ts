@@ -7871,8 +7871,8 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       eventId: id, localRevision: 1, targets: [{ ...target, ...(resolved ? { status: "pending", issue: null } : {}) }],
     }));
     await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, (route) => respond(route, {
-      eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1,
-      local: { ...saved, description: null, location: null }, remote: { ...saved, title: "Changed at provider", description: "Remote notes", location: null },
+      eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1, masterRevision: 7,
+      local: { ...saved, description: null, location: null, isCanceled: true, originalStart: { kind: "instant", value: "2026-07-23T07:30:00.000Z" }, timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-23T09:30:00.000", endLocal: "2026-07-23T10:30:00.000" } }, remote: { ...saved, title: "Changed at provider", description: "Remote notes", location: null },
       remoteEtag: '"fresh"', action: "update", canResolve: true, reason: null,
     }));
     await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, (route) => {
@@ -7898,12 +7898,14 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(delivery.getByRole("button", { name: "Review changes" })).toBeFocused();
     await delivery.getByRole("button", { name: "Review changes" }).press("Enter");
     await expect(comparison.getByText("Remote notes")).toBeVisible();
+    await expect(comparison.getByText("Cancelled", { exact: true })).toBeVisible();
+    await expect(comparison.getByText(/Europe\/Prague ·/)).toBeVisible();
     await expectNoAccessibilityViolations(page);
     await comparison.screenshot({ path: `/tmp/musubi-k09-web-${theme}-comparison.png` });
     await comparison.getByRole("button", { name: "Apply saved changes" }).click();
     await expect(delivery.getByText(/Saved changes queued/)).toBeVisible();
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toMatchObject({ expectedLocalRevision: 1, expectedRemoteExists: true, expectedRemoteEtag: '"fresh"' });
+    expect(writes[0]).toMatchObject({ expectedLocalRevision: 1, expectedMasterRevision: 7, expectedRemoteExists: true, expectedRemoteEtag: '"fresh"' });
     await delivery.getByRole("button", { name: "Close delivery", exact: true }).click();
     await expect(eventTrigger).toBeFocused();
     await page.reload();
