@@ -7,6 +7,7 @@ WORKDIR /repo
 # like the API image. Only the build artifact reaches the runtime.
 FROM base AS build
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
+COPY patches patches
 COPY apps/web apps/web
 COPY packages/calendar packages/calendar
 COPY packages/design-system packages/design-system

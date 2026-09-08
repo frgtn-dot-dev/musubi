@@ -6,6 +6,7 @@ WORKDIR /repo
 # Corepack reads the exact pnpm version from the root manifest; the deployed
 # package has no partial-workspace state or global pnpm installation.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches patches
 COPY packages/docs packages/docs
 RUN pnpm --config.inject-workspace-packages=true --filter @musubi/docs \
       deploy --prod --frozen-lockfile /prod/docs
