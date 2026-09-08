@@ -632,6 +632,75 @@ async function mappedEventForUpdate(
  * write, no updatedAt bump, so the delta stays quiet too.
  */
 export async function upsertExternalEvent(
+  ...args: Parameters<typeof upsertExternalEventInTransaction> extends [DbTransaction, boolean, ...infer Rest] ? Rest : never
+): Promise<boolean> {
+  return db.transaction(tx => upsertExternalEventInTransaction(tx, false, ...args))
+    .catch(() => { throw new Error("External event observation could not be persisted."); });
+}
+
+export type ExternalEventResourceObservation = {
+  externalId: string;
+  values: EventValues;
+  etag: string | null;
+  icalUid: string;
+  time: ProviderTime;
+};
+
+/** A CalDAV GET replaces one whole resource, including omitted overrides. */
+export async function replaceExternalEventResource(
+  provider: string, userID: string, calendarID: string, externalCalendarID: string,
+  resourceID: string, observations: ExternalEventResourceObservation[],
+): Promise<boolean> {
+  return db.transaction(async tx => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await lockExternalEventAddress(tx, provider, calendarID, resourceID);
+    const master = observations.find(item => item.externalId === resourceID && !item.time.externalSeriesID);
+    if (!master || observations.filter(item => !item.time.externalSeriesID).length !== 1 || new Set(observations.map(item => item.externalId)).size !== observations.length)
+      throw new Error("Invalid complete event resource.");
+    if (observations.some(item => item.icalUid !== master.icalUid || (item !== master && item.time.externalSeriesID !== resourceID)))
+      throw new Error("Inconsistent event resource identity.");
+    const mappings = await tx.select().from(externalEvents).where(and(
+      eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID),
+      sql`(${externalEvents.externalEventID} = ${resourceID} or ${externalEvents.externalSeriesID} = ${resourceID})`,
+    ));
+    const addresses = [...new Set([...mappings.map(item => item.externalEventID), ...observations.map(item => item.externalId)])].sort();
+    for (const address of addresses) await lockExternalEventAddress(tx, provider, calendarID, address);
+    // Lock the complete family before checking pending writes; a concurrent CAS
+    // must not slip a new operation between this check and component updates.
+    await mappedEventForUpdate(tx, provider, calendarID, resourceID);
+    for (const mapping of [...mappings].sort((a, b) => a.eventID.localeCompare(b.eventID))) {
+      const current = await mappedEventForUpdate(tx, provider, calendarID, mapping.externalEventID);
+      if (current && (current.event.originCalendarID !== calendarID || current.event.creatorID !== userID)) throw new Error("Resource component is not authoritative.");
+    }
+    for (const mapping of mappings) {
+      if (mapping.icalUid && mapping.icalUid !== master.icalUid) throw new Error("CalDAV resource UID replacement requires explicit reconciliation.");
+      const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, mapping.eventID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`)).limit(1);
+      if (pending.length) throw new Error("CalDAV resource has pending local writes.");
+    }
+    let changed = false;
+    for (const item of [master, ...observations.filter(item => item !== master)]) {
+      changed = await upsertExternalEventInTransaction(tx, true, provider, userID, calendarID, externalCalendarID, item.externalId, item.values, item.etag, item.icalUid, undefined, item.time) || changed;
+    }
+    const seen = new Set(observations.map(item => item.externalId));
+    for (const mapping of mappings.filter(item => !seen.has(item.externalEventID))) {
+      const current = await mappedEventForUpdate(tx, provider, calendarID, mapping.externalEventID);
+      if (!current || current.event.deletedAt) continue;
+      if (current.event.originCalendarID !== calendarID || current.event.creatorID !== userID) throw new Error("Resource override is not authoritative.");
+      await tx.update(events).set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` }).where(eq(events.id, current.event.id));
+      await appendInboundEventFanout(tx, current.event.id, calendarID, "delete");
+      changed = true;
+    }
+    const parent = await mappedEventForUpdate(tx, provider, calendarID, resourceID);
+    if (!parent || parent.event.originCalendarID !== calendarID || parent.event.creatorID !== userID) throw new Error("Resource master is not authoritative.");
+    const children = await tx.select().from(events).where(and(eq(events.seriesID, parent.event.id), isNull(events.deletedAt))).orderBy(events.id).for("share");
+    expandRecurringEvents([parent.event, ...children].map(event => ({ ...event, calendars: [calendarID], isCanceled: false })), parent.event.start, parent.event.end, { consumerTimeZone: "UTC" });
+    return changed;
+  }).catch(() => { throw new Error("Complete external event resource could not be persisted."); });
+}
+
+async function upsertExternalEventInTransaction(
+  tx: DbTransaction,
+  deferFamilyValidation: boolean,
   provider: string,
   userID: string,
   calendarID: string,
@@ -643,7 +712,6 @@ export async function upsertExternalEvent(
   creationOperationID?: string,
   time?: ProviderTime,
 ): Promise<boolean> {
-  return db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     let temporal: { timeModel: EventTimeModel; seriesID: string | null; originalStart: OccurrenceStart | null; isCanceled: boolean } | undefined;
@@ -672,7 +740,7 @@ export async function upsertExternalEvent(
     );
 
     if (map) {
-      if (temporal && !temporal.seriesID) {
+      if (temporal && !temporal.seriesID && !deferFamilyValidation) {
         const children = await tx.select().from(events).where(eq(events.seriesID, map.event.id)).orderBy(events.id).for("share");
         if (children.length) expandRecurringEvents([
           { ...map.event, ...values, ...temporal, calendars: [calendarID], isCanceled: false },
@@ -766,7 +834,6 @@ export async function upsertExternalEvent(
       });
     }
     return true;
-  }).catch(() => { throw new Error("External event observation could not be persisted."); });
 }
 
 /**

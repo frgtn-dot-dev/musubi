@@ -343,7 +343,7 @@ async function main() {
     assert.equal(google.reset, true);
     assert.equal(google.nextCursor, "fresh-cursor");
     assert.deepEqual(
-      google.changes.map(({ data: { externalId, status } }) => ({
+      google.changes.filter(change => change.kind !== "event-resource").map(({ data: { externalId, status } }) => ({
         externalId,
         status,
       })),
@@ -353,7 +353,7 @@ async function main() {
       ],
     );
     assert.equal(
-      google.changes.some(
+      google.changes.filter(change => change.kind !== "event-resource").some(
         ({ data }) => data.externalId === "discard-before-410",
       ),
       false,
@@ -390,7 +390,7 @@ async function main() {
     assert.equal(googleTasks.reset, true);
     assert.equal(googleTasks.nextCursor, null);
     assert.deepEqual(
-      googleTasks.changes.map(({ data }) => ({
+      googleTasks.changes.filter(change => change.kind !== "event-resource").map(({ data }) => ({
         completed: data.status === "completed",
         deleted: "deleted" in data && data.deleted === true,
         due: "due" in data ? data.due?.toISOString() : undefined,
@@ -517,7 +517,7 @@ async function main() {
     );
     assert.equal(microsoft.reset, true);
     assert.deepEqual(
-      microsoft.changes.map(({ data: { externalId, title } }) => ({
+      microsoft.changes.filter(change => change.kind !== "event-resource").map(({ data: { externalId, title } }) => ({
         externalId,
         title,
       })),
@@ -527,7 +527,7 @@ async function main() {
       ],
     );
     assert.equal(
-      microsoft.changes.some(
+      microsoft.changes.filter(change => change.kind !== "event-resource").some(
         ({ data }) => data.externalId === "discard-before-410",
       ),
       false,
@@ -565,13 +565,13 @@ async function main() {
     assert.equal(microsoftTasks.reset, true);
     assert.equal(microsoftTasks.nextCursor, `${origin}/graph-task-delta-fresh`);
     assert.equal(
-      microsoftTasks.changes.some(
+      microsoftTasks.changes.filter(change => change.kind !== "event-resource").some(
         ({ data }) => data.externalId === "discard-task-before-410",
       ),
       false,
     );
     assert.deepEqual(
-      microsoftTasks.changes.map(({ data }) => ({
+      microsoftTasks.changes.filter(change => change.kind !== "event-resource").map(({ data }) => ({
         deleted: "deleted" in data && data.deleted === true,
         externalId: data.externalId,
         priority: "priority" in data ? data.priority : undefined,

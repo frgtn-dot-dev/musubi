@@ -28,6 +28,7 @@ import {
   sweepExternalEvents,
   sweepExternalTasks,
   upsertExternalEvent,
+  replaceExternalEventResource,
   upsertExternalTask,
 } from "@musubi/db";
 import { notifyCalendarMembers } from "../handlers/stream";
@@ -35,6 +36,7 @@ import type {
   CalendarAdapter,
   EventWriteOperation,
   NormalizedEvent,
+  NormalizedChange,
   NormalizedTask,
 } from "./adapter";
 import { googleAdapter } from "./adapters/google";
@@ -124,6 +126,7 @@ function toTaskValues(task: NormalizedTask) {
 }
 
 type ExternalChangeWriter = {
+  replaceResource?(externalID: string, events: NormalizedEvent[]): Promise<boolean>;
   deleteEvent(externalID: string): Promise<boolean>;
   deleteTask(externalID: string): Promise<boolean>;
   upsertEvent(event: NormalizedEvent): Promise<boolean>;
@@ -134,10 +137,7 @@ type ExternalChangeWriter = {
 
 /** Apply one complete provider collection delta without mixing VEVENT and VTODO sweeps. */
 export async function reconcileExternalChanges(
-  changes: Array<
-    | { kind: "event"; data: NormalizedEvent }
-    | { kind: "task"; data: NormalizedTask }
-  >,
+  changes: NormalizedChange[],
   reset: boolean | undefined,
   writer: ExternalChangeWriter,
 ): Promise<number> {
@@ -146,7 +146,11 @@ export async function reconcileExternalChanges(
   const seenTasks: string[] = [];
 
   for (const change of changes) {
-    if (change.kind === "event") {
+    if (change.kind === "event-resource") {
+      if (!writer.replaceResource) throw new Error("Complete event resource writer is unavailable.");
+      seenEvents.push(...change.events.map(event => event.externalId));
+      if (await writer.replaceResource(change.externalId, change.events)) changed++;
+    } else if (change.kind === "event") {
       if (change.data.status === "cancelled") {
         if (await writer.deleteEvent(change.data.externalId)) changed++;
       } else {
@@ -314,6 +318,10 @@ export async function syncProvider(
     let changed: number;
     try {
       changed = await reconcileExternalChanges(changes, reset, {
+        replaceResource: (resourceID, observations) => replaceExternalEventResource(provider, userID, link.calendarID, link.externalCalendarID, resourceID, observations.map(event => {
+          if (!event.timeModel || !event.icalUid) throw new Error("Resource observation requires a time model and UID.");
+          return { externalId: event.externalId, values: toEventValues(event, link.calColor), etag: event.etag ?? null, icalUid: event.icalUid, time: { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } };
+        })),
         deleteEvent: (externalID) =>
           deleteExternalEvent(provider, link.calendarID, externalID, onUnlink),
         deleteTask: (externalID) =>

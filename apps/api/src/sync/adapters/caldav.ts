@@ -7,7 +7,8 @@ import {
   type Task,
   type TaskStatus,
 } from "@musubi/types";
-import { logger } from "@musubi/config";
+import { normalizeCaldavResource } from "./caldav_time";
+import { config, logger } from "@musubi/config";
 import {
   getCaldavAccountById,
   getCaldavAccountsByUser,
@@ -725,11 +726,25 @@ function deletedObjectChanges(externalId: string): NormalizedChange[] {
   ];
 }
 
+function assertCompleteObjects(urls: string[], objects: DAVCalendarObject[]) {
+  const received = new Set(objects.map(object => object.url));
+  if (received.size !== objects.length || received.size !== new Set(urls).size || urls.some(url => !received.has(url)))
+    throw new Error("CalDAV resource fetch was incomplete; cursor remains unchanged.");
+}
+
 function normalizedObjectChanges(
   objects: DAVCalendarObject[],
 ): NormalizedChange[] {
   const changes: NormalizedChange[] = [];
   for (const object of objects) {
+    if (config.api.eventTimeEditsEnabled) {
+      const events = normalizeCaldavResource(object);
+      if (events.length) {
+        if (events[0]!.status === "cancelled") changes.push({ kind: "event", data: events[0]! });
+        else changes.push({ kind: "event-resource", externalId: object.url, events });
+        continue;
+      }
+    }
     const event = icalToNormalized(object);
     const task = icalToNormalizedTask(object);
     if (!event && !task) {
@@ -799,6 +814,7 @@ async function incrementalChanges(
         objectUrls: changedUrls,
       })
     : [];
+  assertCompleteObjects(changedUrls, objects);
   const changes = normalizedObjectChanges(objects);
   for (const response of objectResponses) {
     if (response.status === 404) {
@@ -990,6 +1006,7 @@ export const caldavAdapter: CalendarAdapter = {
     const objects = objectUrls.length
       ? await client.fetchCalendarObjects({ calendar: cal, objectUrls })
       : [];
+    assertCompleteObjects(objectUrls, objects);
     const changes = normalizedObjectChanges(objects);
     logger.debug("caldav.objects.fetched", {
       accountId,

@@ -426,6 +426,7 @@ async function main() {
       "same-calendar",
       null,
     );
+    assert.equal(pulled.changes[0].kind, "event");
     assert.equal(
       pulled.changes[0].data.etag,
       opaque,
