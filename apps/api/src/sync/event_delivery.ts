@@ -1,8 +1,14 @@
+import { googleRsvpEvidence } from "./adapters/google_rsvp";
+import { googleEventState } from "./adapters/provider_event_state";
+import { googleReminderEventEvidence } from "./adapters/google";
+import { isDeepStrictEqual } from "node:util";
 import { matchesGoogleOccurrence } from "./adapters/google_occurrence";
 import { config } from "@musubi/config";
-import { ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
+import { ProviderRsvpEditSchema, providerRsvpDesiredState, ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
   confirmCaldavSeriesOutbox,
+  hasProviderRsvpSource,
+  completeProviderRsvpOutbox,
   matchesReminderEventProjection,
   matchesGoogleReminderIntent,
   matchesEventProviderProjection,
@@ -177,7 +183,30 @@ export async function deliverEventOutbox(
         remoteSnapshot = null;
         return;
       }
-      if (row.payload.rsvp) throw new EventWriteError("event-write", "unsupported");
+      if (row.payload.rsvp) {
+        if (!config.api.providerRsvpEditsEnabled || row.provider !== "google" || row.action !== "update" || !adapter?.writeRsvp) throw new EventWriteError("event-write", "unsupported");
+        if (!(await checkDestination())) return;
+        const requireSource = async () => {
+          signal.throwIfAborted();
+          if (!(await hasProviderRsvpSource(row))) throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written");
+        };
+        await requireSource();
+        const intent = row.payload.rsvp;
+        const request = ProviderRsvpEditSchema.parse(intent.request);
+        if (request.expectedRevision !== row.revision || !isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, request.response))) throw new ProviderEventWriteError("provider-conflict");
+        expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag };
+        const evidence = googleRsvpEvidence(intent.baseline, { eventId: expectedRef.externalEventId, etag: expectedRef.etag ?? "", authenticatedCopyEmail: row.externalCalendarID }, intent.request.response);
+        const native = googleReminderEventEvidence(evidence.baseline);
+        if (!isDeepStrictEqual(intent.nativeTime, native.timeModel) || !isDeepStrictEqual(googleEventState(evidence.baseline), intent.baselineState) || !matchesReminderEvent(row.provider, event, native)) throw new ProviderEventWriteError("provider-conflict");
+        const observed = await adapter.writeRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, { sendUpdates: intent.request.sendUpdates }, signal, async () => {
+          await requireSource();
+          mutationStarted = true;
+        });
+        resultRef = { externalEventId: expectedRef.externalEventId, etag: observed.etag };
+        signal.throwIfAborted();
+        await completeProviderRsvpOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: resultRef.externalEventId, etag: observed.etag, deleted: false, providerState: intent.desiredState, observedAt: new Date().toISOString() });
+        return;
+      }
       if (row.payload.reminderEdit) {
         if (!config.api.providerReminderEditsEnabled || event.timeModel?.kind === "floating" || event.recurrence || event.seriesID || event.originalStart || event.isCanceled) throw new EventWriteError("event-write", "unsupported");
         const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);

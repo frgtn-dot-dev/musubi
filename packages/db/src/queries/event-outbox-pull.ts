@@ -1,4 +1,5 @@
-import type { Event, ProviderEventState } from "@musubi/types";
+import { isDeepStrictEqual } from "node:util";
+import { EventTimeModelSchema, type Event, type ProviderEventState } from "@musubi/types";
 import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection, matchesReminderEventProjection, matchesGoogleReminderIntent } from "./event-outbox-projection";
 import { and, eq, sql } from "drizzle-orm";
 import { eventOutbox, events, externalCalendars } from "../schema";
@@ -15,8 +16,15 @@ type PullValues = Partial<Pick<Event, "timeModel" | "originalStart" | "isCancele
   recurrence: string | null;
 };
 
+function matchesRsvpTime(row: EventOutboxRow, values: PullValues) {
+  const nativeTime = EventTimeModelSchema.safeParse(row.payload.rsvp?.nativeTime);
+  // Unknown canonical metadata cannot erase a known provider zone. Missing or
+  // still-unknown native time cannot establish a safe echo at all.
+  if (!nativeTime.success || !["zoned", "all-day"].includes(nativeTime.data.kind)) return false;
+  return matchesReminderEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values);
+}
 function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
-  if (row.payload.rsvp) return false;
+  if (row.payload.rsvp) return row.action === "update" && matchesRsvpTime(row, values) && isDeepStrictEqual(providerState, row.payload.rsvp.desiredState);
   if (row.payload.reminderEdit) return row.action === "update" && matchesReminderEventProjection(row.provider, row.payload.event, values) && matchesGoogleReminderIntent(row.payload.reminderEdit.reminders, providerState);
   if (row.payload.googleOccurrence) return values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.event, values);
   return (
@@ -59,6 +67,9 @@ export async function retainPendingEventPull(
   // A scope's local exception already contains the desired time/cancellation.
   // Its accepted pre-write provider baseline is still not a concurrent edit.
   if (values && rows.every(row => row.payload.googleOccurrence && row.expectedEtag === etag && values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.googleOccurrence.baseline, values)) && rows.every(row => !row.remoteSnapshot)) return true;
+  // An unchanged RSVP baseline is not a concurrent edit while its worker is
+  // preparing the conditional write. Never erase a previously retained conflict.
+  if (values && rows.every(row => row.payload.rsvp && row.expectedEtag === etag && matchesRsvpTime(row, values) && isDeepStrictEqual(providerState, row.payload.rsvp.baselineState) && !row.remoteSnapshot)) return true;
   // Our in-flight echo is not permission to replace newer local content or ETag.
   const echo = rows.find(
     (row) =>

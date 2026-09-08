@@ -118,7 +118,7 @@ export type FetchChangesResult = {
 export type CalendarAdapter = {
   provider: string;
   readRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal): Promise<GoogleRsvpEvidence>;
-  writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
+  writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
   readCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal): Promise<CaldavSeriesResolutionEvidence>;
   writeCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesWrite, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;

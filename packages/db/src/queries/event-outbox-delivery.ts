@@ -1,8 +1,11 @@
-import { ProviderEventStateSchema } from "@musubi/types";
+import { isDeepStrictEqual } from "node:util";
+import { providerStateVersion } from "./provider-reminders";
+import { ProviderEventStateSchema, providerRsvpDesiredState } from "@musubi/types";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "..";
 import {
   calendarEvents,
+  calendarMembers,
   eventOutbox,
   events,
   externalCalendars,
@@ -152,12 +155,19 @@ export async function hasEventOutboxRevisionCoverage(row: EventOutboxRow) {
 
 /** Acknowledgement and mapping acceptance are one transaction. Preserve lock
  * order lifecycle -> event -> mapping/outbox, and fence completion by live lease. */
-export async function completeEventOutbox(
+export async function completeEventOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef | null, expectedRef: EventDeliveryRef | null, observation?: EventOutboxRow["remoteSnapshot"]) {
+  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, false);
+}
+export async function completeProviderRsvpOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef, expectedRef: EventDeliveryRef, observation: EventOutboxRow["remoteSnapshot"]) {
+  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, true);
+}
+async function completeEventOutboxInternal(
   id: string,
   leaseToken: string,
   resultRef: EventDeliveryRef | null,
   expectedRef: EventDeliveryRef | null,
-  observation?: EventOutboxRow["remoteSnapshot"],
+  observation: EventOutboxRow["remoteSnapshot"] | undefined,
+  rsvpConfirmed: boolean,
 ) {
   try {
     return await db.transaction(async (tx) => {
@@ -165,7 +175,7 @@ export async function completeEventOutbox(
         .select()
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
-      if (!address || address.payload.caldavSeries || address.payload.rsvp) return undefined;
+      if (!address || address.payload.caldavSeries || !!address.payload.rsvp !== rsvpConfirmed) return undefined;
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);
@@ -195,6 +205,14 @@ export async function completeEventOutbox(
         )
         .for("update");
       if (!row) return undefined;
+      if (row.payload.rsvp) {
+        const intent = row.payload.rsvp;
+        const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID))).for("share");
+        if (!membership || !["owner", "editor"].includes(membership.role) || row.actorID !== row.userID || row.provider !== "google" || row.action !== "update" || !current || current.deletedAt || current.originCalendarID !== row.calendarID || current.revision !== row.revision)
+          return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
+        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !isDeepStrictEqual(observation.providerState, intent.desiredState) || !isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, intent.request.response)))
+          return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
+      }
       const [target] = await tx
         .select()
         .from(externalCalendars)
@@ -222,6 +240,13 @@ export async function completeEventOutbox(
         const [master] = await tx.select({ revision: events.revision, deletedAt: events.deletedAt }).from(events).where(eq(events.id, row.payload.googleOccurrence.master.id));
         if (!master || master.deletedAt || master.revision !== row.payload.googleOccurrence.master.revision)
           return settle(tx, row, "unconfirmed", "local-master-revision-changed", resultRef);
+      }
+      // A projected RSVP echo is only a candidate. Native fields omitted by
+      // the read DTO are proved by the worker's full GET at this exact ETag.
+      // Never replace another pulled version just because the ACK clock is later.
+      if (row.payload.rsvp && row.remoteSnapshot && (row.remoteSnapshot.deleted || row.remoteSnapshot.externalEventId !== resultRef?.externalEventId || row.remoteSnapshot.etag !== resultRef?.etag)) {
+        row.remoteSnapshot = { ...row.remoteSnapshot, isEcho: false };
+        return settle(tx, row, "conflict", "provider-conflict", resultRef);
       }
       if (observation?.isEcho && observation.externalEventId === resultRef?.externalEventId &&
           (!row.remoteSnapshot || row.remoteSnapshot.isEcho && observation.observedAt >= row.remoteSnapshot.observedAt))
@@ -315,6 +340,8 @@ export async function completeEventOutbox(
             resultRef,
           );
         const mapping = mappings[0];
+        if (row.payload.rsvp && (!mapping || mapping.id !== row.payload.rsvp.mappingID || providerStateVersion(mapping) !== row.payload.rsvp.request.expectedStateVersion))
+          return settle(tx, row, "conflict", "mapping-version-changed", resultRef);
         if (
           mapping &&
           (mapping.externalEventID !== resultRef.externalEventId ||

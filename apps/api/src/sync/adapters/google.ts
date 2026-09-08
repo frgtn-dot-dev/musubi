@@ -498,6 +498,7 @@ export async function fetchGoogleChanges(
     baseUrl?: string;
     timeModels?: boolean;
     reminderEvidence?: boolean;
+    rsvpEvidence?: boolean;
   } = {},
 ): Promise<FetchChangesResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -558,12 +559,17 @@ export async function fetchGoogleChanges(
     }
   }
   for (const item of items.filter(item => !options.timeModels || !item.recurringEventId || masters.get(item.recurringEventId)?.status !== "cancelled")) changes.push({ kind: "event", data: options.timeModels ? normalizeGoogleTime(item, toNormalized({ ...item, recurrence: undefined }), masters.get(item.recurringEventId)) : toNormalized(item) });
-  if (options.reminderEvidence && !options.timeModels) {
+  if ((options.reminderEvidence || options.rsvpEvidence) && !options.timeModels) {
     for (const change of changes) {
       if (change.kind !== "event") continue;
       const item = masters.get(change.data.externalId);
       if (!item || item.status === "cancelled" || item.recurringEventId || item.originalStartTime || item.recurrence?.length) continue;
-      change.data.reminderTimeEvidence = normalizeGoogleTime(item, change.data).timeModel;
+      try { change.data.reminderTimeEvidence = normalizeGoogleTime(item, change.data).timeModel; }
+      catch (error) {
+        // RSVP comparison fails closed without native time evidence. A valid
+        // unsupported time shape must not prevent ordinary legacy ingestion.
+        if (options.reminderEvidence) throw error;
+      }
     }
   }
   if (options.timeModels) changes.sort((a, b) => Number(a.kind === "event" && !!a.data.externalSeriesID) - Number(b.kind === "event" && !!b.data.externalSeriesID));
@@ -684,7 +690,7 @@ export const googleAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
-      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, reminderEvidence: config.api.providerReminderEditsEnabled });
+      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, reminderEvidence: config.api.providerReminderEditsEnabled, rsvpEvidence: config.api.providerRsvpEditsEnabled });
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {
