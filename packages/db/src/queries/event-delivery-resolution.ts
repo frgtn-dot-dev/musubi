@@ -91,6 +91,7 @@ async function resolutionContext(
   )
     throw new EventDeliveryResolutionError("delivery-state-changed");
   if (
+    row.payload.caldavSeries || latest.payload.caldavSeries || pending.some(item => item.payload.caldavSeries) ||
     row.payload.reminderEdit ||
     latest.payload.reminderEdit ||
     pending.some((item) => item.payload.reminderEdit) ||

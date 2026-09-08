@@ -1,3 +1,5 @@
+import { caldavSeriesContext, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { lockExternalEventAddress } from "./event-outbox-deletions";
 import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
@@ -9,6 +11,7 @@ import { lockCalendarLifecycle } from "./calendar-lifecycle";
 
 type Snapshot = typeof events.$inferSelect & { calendars: string[] };
 export type LocalEventScopeResult =
+  | { status: "caldav_required"; context: CaldavSeriesContext }
   | { status: "provider_required"; context: GoogleOccurrenceContext }
   | { status: "not_found" }
   | { status: "conflict"; current: Event }
@@ -18,7 +21,7 @@ export type LocalEventScopeResult =
 /** Internal local-only scope commit. Every event, tombstone and replay receipt
  * is committed together; no provider work or user notification is sent here.
  */
-export async function applyLocalEventScope(eventID: string, actorID: string, input: unknown, options: { prepareProvider?: boolean; provider?: GoogleOccurrencePrepared } = {}): Promise<LocalEventScopeResult> {
+export async function applyLocalEventScope(eventID: string, actorID: string, input: unknown, options: { prepareProvider?: boolean; provider?: GoogleOccurrencePrepared; caldav?: CaldavSeriesPrepared } = {}): Promise<LocalEventScopeResult> {
   const request = EventScopeRequestSchema.parse(input);
   eventID = eventID.toLowerCase();
   const fingerprint = createHash("sha256").update(JSON.stringify({ eventID, request })).digest("hex");
@@ -35,6 +38,10 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     const initialLinks = await tx.select().from(calendarEvents).where(inArray(calendarEvents.eventID, initialIDs));
     const fenced = [...new Set([...initialLinks.map(link => link.calendarID), ...discovered.flatMap(event => event.originCalendarID ? [event.originCalendarID] : [])])];
     await lockCalendarLifecycle(tx, fenced, "shared");
+    // Whole-resource import takes this fence before the master. Discover the
+    // address first, then recheck it in the locked provider context below.
+    const [caldavRoot] = initialMaster.originCalendarID ? await tx.select().from(externalEvents).where(and(eq(externalEvents.provider, "caldav"), eq(externalEvents.eventID, eventID), eq(externalEvents.calendarID, initialMaster.originCalendarID))) : [];
+    if (caldavRoot) await lockExternalEventAddress(tx, "caldav", caldavRoot.calendarID, caldavRoot.externalEventID);
     const [masterRow] = await tx.select().from(events).where(eq(events.id, eventID)).for("update");
     if (!masterRow) return { status: "not_found" };
     const childRows = await tx.select().from(events).where(eq(events.seriesID, eventID)).orderBy(events.id).for("update");
@@ -62,11 +69,22 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     const [mapping] = await tx.select({ id: externalEvents.id }).from(externalEvents).where(inArray(externalEvents.eventID, familyIDs)).limit(1);
     const [history] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(inArray(eventOutbox.eventID, familyIDs)).limit(1);
     let providerContext: GoogleOccurrenceContext | undefined;
+    let caldavContext: CaldavSeriesContext | undefined;
     if (target || mapping || history) {
-      if ((!options.prepareProvider && !options.provider) || request.scope !== "occurrence") throw new EventWriteError("event-write", "unsupported", "This family requires a provider-aware scope operation. No changes were saved.");
-      providerContext = await googleOccurrenceContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
-      if (options.provider && (options.provider.context.link.id !== providerContext.link.id || options.provider.context.link.accountID !== providerContext.link.accountID || options.provider.context.mapping.id !== providerContext.mapping.id || options.provider.context.mapping.etag !== providerContext.mapping.etag))
+      if (caldavRoot && request.scope === "series" && (options.prepareProvider || options.caldav)) {
+        if (request.action !== "update" || request.time !== undefined || Object.keys(request.patch).some(key => !["title", "description", "location"].includes(key)) || childRows.some(child => child.deletedAt))
+          throw new EventWriteError("event-write", "unsupported", "CalDAV series editing currently supports master content only. No changes were saved.");
+        caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.map(child => EventSchema.parse(snapshot(child))));
+        if (options.caldav && (!sameCaldavScopeContext(options.caldav.write.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children)))
+          return { status: "conflict", current: EventSchema.parse(master) };
+        if (caldavContext.mappings.find(item => item.eventID === eventID)?.externalEventID !== caldavRoot.externalEventID || options.caldav && !sameCaldavScopeContext(options.caldav.context, caldavContext))
+          return { status: "conflict", current: EventSchema.parse(master) };
+      } else {
+        if ((!options.prepareProvider && !options.provider) || request.scope !== "occurrence") throw new EventWriteError("event-write", "unsupported", "This family requires a provider-aware scope operation. No changes were saved.");
+        providerContext = await googleOccurrenceContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
+        if (options.provider && (options.provider.context.link.id !== providerContext.link.id || options.provider.context.link.accountID !== providerContext.link.accountID || options.provider.context.mapping.id !== providerContext.mapping.id || options.provider.context.mapping.etag !== providerContext.mapping.etag))
         return { status: "conflict", current: EventSchema.parse(master) };
+      }
     }
     const liveChildren = childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child)));
     const existing = request.originalStart ? liveChildren.find(child => child.originalStart && occurrenceKey({ seriesId: eventID, originalStart: child.originalStart }) === occurrenceKey({ seriesId: eventID, originalStart: request.originalStart! })) : undefined;
@@ -83,6 +101,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     }
     if (providerContext && (request.action === "update" && request.patch.url !== undefined || [...plan.creates, ...plan.updates].some(event => event.seriesID === master.id && (!["zoned", "all-day"].includes(event.timeModel?.kind ?? "") || event.timeModel?.kind !== master.timeModel?.kind))))
       throw new EventWriteError("event-write", "unsupported", "Google occurrence editing requires a supported time kind and provider content. No changes were saved.");
+    if (caldavContext && !options.caldav) return { status: "caldav_required", context: caldavContext };
     if (providerContext && !options.provider) return { status: "provider_required", context: providerContext };
     const outcome: EventScopeOutcome = { operationID: request.operationID, changed: false, events: [], deleted: [] };
     const previous: Event[] = [];
@@ -125,6 +144,16 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     if (providerContext && options.provider) {
       for (const event of saved.filter(event => event.seriesID === master.id))
         await appendGoogleOccurrence(tx, actorID, request.operationID, { ...providerContext, master: saved.find(item => item.id === master.id) ?? providerContext.master }, options.provider, event);
+    }
+    if (caldavContext && options.caldav) {
+      const changedMaster = saved.find(event => event.id === master.id);
+      if (changedMaster) {
+        // The provider preparation must describe exactly this planner result.
+        const intended = EventSchema.parse({ ...options.caldav.write.baseline.master, ...options.caldav.write.patch, revision: changedMaster.revision });
+        if (!sameCaldavScopeContext(intended, changedMaster) || saved.length !== 1 || outcome.deleted.length || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children))
+          throw new EventWriteError("event-write", "unsupported", "CalDAV preparation no longer matches the scope plan.");
+        await appendCaldavSeries(tx, actorID, request.operationID, options.caldav, changedMaster);
+      }
     }
     outcome.changed = outcome.events.length + outcome.deleted.length > 0;
     await tx.insert(eventScopeOperations).values({ actorID, operationID: request.operationID, eventID, fingerprint, result: outcome });

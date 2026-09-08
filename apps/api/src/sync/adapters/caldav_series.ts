@@ -23,12 +23,7 @@ export type CaldavSeriesEvidence = {
 
 /** Durable server-only input for one content-only resource replacement. The
  * accepted validator never advances merely because a newer GET was observed. */
-export type CaldavSeriesWrite = {
-  baseline: CaldavSeriesIntent;
-  patch: Pick<Partial<Event>, "title" | "description" | "location">;
-  before: string;
-  after: string;
-};
+export type CaldavSeriesWrite = import("@musubi/db").CaldavSeriesWriteIntent;
 
 /** Compare unfolded physical properties, never a lossy typed projection.
  * Only line folding/endings and ordering between different property names are

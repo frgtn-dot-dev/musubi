@@ -1,3 +1,4 @@
+import { prepareCaldavSeries } from "../sync/caldav_scope";
 import { ProviderEventWriteError } from "../sync/event_write";
 import { prepareGoogleOccurrence } from "../sync/google_scope";
 import { config } from "@musubi/config";
@@ -323,7 +324,17 @@ export async function handlerEventScope(req: Request, res: Response) {
       throw error;
     }
   }
-  if (result.status === "provider_required") throw new Error("Missing provider scope preparation.");
+  if (result.status === "caldav_required") {
+    try {
+      const caldav = await prepareCaldavSeries(result.context, req.body);
+      result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldav });
+    } catch (error) {
+      if (error instanceof ProviderEventWriteError && error.code === "provider-conflict")
+        return res.status(409).json({ error: "The provider series changed. Sync the calendar before retrying.", code: "provider-conflict", localCommitted: false });
+      throw error;
+    }
+  }
+  if (result.status === "provider_required" || result.status === "caldav_required") throw new Error("Missing provider scope preparation.");
   if (result.status === "not_found") throw new NotFoundError("Event not found.");
   if (result.status === "conflict") return conflict(res, result.current);
   if (result.status === "replayed") return res.json({ ...result.outcome, localCommitted: true, replayed: true });
