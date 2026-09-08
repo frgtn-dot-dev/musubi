@@ -329,6 +329,7 @@ export async function syncProvider(
             event.etag ?? null,
             event.icalUid ?? null,
             event.creationOperationID,
+            event.timeModel ? { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } : undefined,
           ),
         upsertTask: (task) =>
           upsertExternalTask(
