@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   BadRequestError,
@@ -241,4 +241,15 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
     .innerJoin(externalEvents, and(eq(externalEvents.id, intent.mappingID), eq(externalEvents.eventID, events.id), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider), eq(externalEvents.externalCalendarID, row.externalCalendarID), eq(externalEvents.externalEventID, row.externalEventID!)))
     .where(and(eq(events.id, row.eventID), eq(events.originCalendarID, row.calendarID), isNull(events.deletedAt)));
   return !!source && ["owner", "editor"].includes(source.role) && source.event.revision === row.revision && source.mapping.etag === row.expectedEtag && providerStateVersion(source.mapping) === intent.request.expectedStateVersion;
+}
+
+/** Opaque preview identity includes every native field, including unprojected
+ * attendee comments. JSON object key ordering is not a provider edit. */
+export function providerRsvpBaselineVersion(mappingID: string, baseline: Record<string, unknown>): string {
+  function ordered(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(ordered);
+    if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, ordered(item)]));
+    return value;
+  }
+  return createHash("sha256").update(JSON.stringify([mappingID, ordered(baseline)])).digest("hex");
 }

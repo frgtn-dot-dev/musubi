@@ -1,3 +1,7 @@
+import { prepareEventDeliveryResolution } from "./event_resolution";
+import { commitEventDeliveryResolution, getEventDeliveryResolutionReplay } from "@musubi/db";
+import { handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "../handlers/event_delivery";
+import { EventDeliveryConflictSchema } from "@musubi/types";
 import express from "express";
 import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, ProviderRsvpReceiptSchema } from "@musubi/types";
 import { replaceMemberToken } from "@musubi/db";
@@ -50,6 +54,8 @@ async function main() {
   const realFetch = globalThis.fetch;
   const app = express(); app.use(express.json());
   app.post("/api/v1/events/:eventId/provider-rsvp", requireAuth, handlerProviderRsvpEdit);
+  app.get("/api/v1/events/:eventId/delivery/:operationId/conflict", requireAuth, handlerGetEventDeliveryConflict);
+  app.post("/api/v1/events/:eventId/delivery/:operationId/resolve", requireAuth, handlerResolveEventDelivery);
   app.use(middlewareErrorHandler);
   const api = app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => api.once("listening", resolve));
@@ -224,6 +230,48 @@ async function main() {
           assert.equal(finalObservation.state?.ownResponse, status === "completed" ? "accepted" : "needsAction");
           assert.deepEqual(await getEventSnapshot(original.id), original);
           assert.equal((await db.select().from(externalEvents).where(eq(externalEvents.id, mapping!.id)))[0]!.etag, status === "completed" ? '\"v2\"' : '\"v1\"');
+          if (["pull-state-conflict", "pull-native-comment-conflict"].includes(scenario)) {
+            if (scenario === "pull-state-conflict") { remote.attendees[0].responseStatus = "declined"; remote.etag = '"own-changed"'; }
+            const path = `${apiOrigin}/api/v1/events/${original.id}/delivery/${row!.id}`;
+            const headers = { authorization: `Bearer ${credential.raw}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION, "Content-Type": "application/json" };
+            const beforePreview = patches;
+            const response = await realFetch(`${path}/conflict`, { headers });
+            assert.equal(response.status, 200);
+            assert.equal(response.headers.get("cache-control"), "private, no-store");
+            const preview = EventDeliveryConflictSchema.parse(await response.json());
+            assert.equal(preview.rsvpResolution?.desired, "accepted");
+            assert.equal(preview.rsvpResolution?.remote, remote.attendees[0].responseStatus);
+            for (const secret of ["Private attendee comment", "Concurrent native comment", "Private baseline", "guest@example.test", "https://meet.example.test/private"]) assert.ok(!JSON.stringify(preview).includes(secret));
+            assert.equal(patches, beforePreview, "Conflict preview is read-only");
+            const resolutionRequest = { mutationId: randomUUID(), expectedLocalRevision: original.revision, expectedLatestOperationId: row!.id, expectedRemoteExists: true, expectedRemoteEtag: remote.etag, expectedRsvpBaselineVersion: preview.rsvpResolution!.baselineVersion };
+            const prepared = await prepareEventDeliveryResolution(owner, original.id, row!.id);
+            await assert.rejects(commitEventDeliveryResolution(owner, prepared.proof, { ...resolutionRequest, expectedRsvpBaselineVersion: undefined }));
+            // Even an unprojected native comment at the same ETag invalidates the preview.
+            remote.attendees[0].comment = "Changed after preview";
+            const stale = await realFetch(`${path}/resolve`, { method: "POST", headers, body: JSON.stringify(resolutionRequest) });
+            assert.equal(stale.status, 409);
+            assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, original.id))).length, 1);
+            const refreshed = await prepareEventDeliveryResolution(owner, original.id, row!.id);
+            const accepted = { ...resolutionRequest, expectedRsvpBaselineVersion: refreshed.preview.rsvpResolution!.baselineVersion };
+            assert.notEqual(accepted.expectedRsvpBaselineVersion, resolutionRequest.expectedRsvpBaselineVersion);
+            await db.update(calendarMembers).set({ role: "viewer" }).where(member);
+            await assert.rejects(commitEventDeliveryResolution(owner, refreshed.proof, accepted));
+            await db.update(calendarMembers).set({ role: "owner" }).where(member);
+            const replacement = await commitEventDeliveryResolution(owner, refreshed.proof, accepted);
+            const beforeReplay = http;
+            assert.equal(await getEventDeliveryResolutionReplay(owner, original.id, row!.id, accepted), replacement);
+            assert.equal(http, beforeReplay);
+            await assert.rejects(getEventDeliveryResolutionReplay(owner, original.id, row!.id, resolutionRequest));
+            const [newRow] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, replacement));
+            assert.equal(newRow!.payload.rsvp!.baseline.attendees && (newRow!.payload.rsvp!.baseline.attendees as any[])[0].comment, "Changed after preview");
+            assert.equal(newRow!.payload.rsvp!.request.operationID, accepted.mutationId);
+            assert.equal((await deliverEventOutbox(replacement, () => googleAdapter))!.status, "completed");
+            assert.equal(patches, beforePreview + (scenario === "pull-state-conflict" ? 1 : 0));
+            assert.equal(remote.attendees[0].comment, "Changed after preview");
+            if (scenario === "pull-state-conflict") assert.equal(remote.attendees[1].responseStatus, "declined");
+            assert.deepEqual(await getEventSnapshot(original.id), original);
+          }
+
         }
       } finally { beforeRead = undefined; await db.delete(user).where(eq(user.id, owner)); }
     }

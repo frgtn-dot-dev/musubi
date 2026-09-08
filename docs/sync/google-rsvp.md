@@ -205,3 +205,27 @@ Client tests and mock-API Chromium checks cover explicit choice, no write on
 cancel, failed submission and exact retry, refreshed/revoked capability, narrow
 dark/light rendering and accessibility. Physical native QA and live two-account
 acceptance remain deferred; no production flag was enabled.
+
+## Explicit native RSVP conflict resolution
+
+The receipt owner can preview a supported one-off conflict against a fresh,
+authenticated native Google read. The preview exposes only saved/current own
+response and an opaque hash of the complete native baseline; attendee comments,
+private properties and conferences remain private. The hash includes fields
+outside the normal provider-state projection, so even a changed native comment
+at an unchanged ETag invalidates the old preview.
+
+Confirmation re-reads the native baseline and validates the exact preview,
+source/revision/mapping/private-state/permission context and pending chain under
+locks. It atomically supersedes the old receipt and enqueues the saved response
+against the current native baseline. Canonical content is unchanged. The normal
+conditional RSVP worker preserves all other current fields; if the desired
+response is already present it can confirm without another PATCH. Missing or
+stale preview identity, permission loss, another native change or unsupported
+time/series context prevents replacement.
+
+Web/native comparison shows only the two own responses and Google's notification
+policy, retaining the exact preview and mutation identity on retry. Tests cover
+private HTTP preview, same-ETag unprojected change, role loss, replay, conditional
+replacement preserving another attendee and recovery without duplicate PATCH.
+No live invitations or production capability activation are included.

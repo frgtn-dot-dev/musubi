@@ -1,3 +1,5 @@
+import { providerRsvpBaselineVersion } from "./provider-rsvp";
+import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
 import { matchesReminderEventProjection } from "./event-outbox-projection";
 import { randomUUID } from "node:crypto";
@@ -8,6 +10,8 @@ import {
   NotFoundError,
   type ResolveEventDeliveryRequest,
   type ProviderReminderEdit,
+  type ProviderRsvpIntent,
+  ProviderRsvpEditSchema, providerRsvpDesiredState,
   type ProviderEventState,
 } from "@musubi/types";
 import { db } from "..";
@@ -132,8 +136,9 @@ async function resolutionContext(
   if (mappings.length > 1)
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
-  if (row.payload.rsvp || latest.payload.rsvp || pending.some(item => item.payload.rsvp)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-  if (row.payload.reminderEdit) {
+  if (!row.payload.rsvp && (latest.payload.rsvp || pending.some(item => item.payload.rsvp))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.rsvp && (row.payload.reminderEdit || row.payload.googleOccurrence || row.payload.caldavSeries || local.recurrence || local.seriesID || local.originalStart || local.isCanceled || local.timeModel?.kind === "floating")) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.reminderEdit || row.payload.rsvp) {
     const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID)));
     if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
@@ -250,6 +255,7 @@ export type EventDeliveryResolutionProof = {
   patch: EventContentPatch;
   googleOccurrence?: GoogleOccurrenceIntent;
   caldavSeries?: CaldavSeriesPrepared;
+  rsvp?: { intent: ProviderRsvpIntent; baselineVersion: string };
   reminder?: { intent: ProviderReminderEdit; state: ProviderEventState; stateVersion: string };
   deletion: typeof externalEventTombstones.$inferSelect | undefined;
 };
@@ -269,7 +275,8 @@ function sameResolution(
     accepted.expectedRemoteExists === request.expectedRemoteExists &&
     accepted.expectedRemoteEtag === request.expectedRemoteEtag &&
     accepted.expectedMasterRevision === request.expectedMasterRevision &&
-    accepted.expectedReminderStateVersion === request.expectedReminderStateVersion
+    accepted.expectedReminderStateVersion === request.expectedReminderStateVersion &&
+    accepted.expectedRsvpBaselineVersion === request.expectedRsvpBaselineVersion
   );
 }
 
@@ -352,7 +359,7 @@ export async function commitEventDeliveryResolution(
         await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, row.eventID)).orderBy(events.id).for("update");
         await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.calendarID, row.calendarID), or(eq(externalEvents.externalEventID, row.externalEventID!), eq(externalEvents.externalSeriesID, row.externalEventID!)))).orderBy(externalEvents.eventID, externalEvents.id).for("update");
       }
-      if (row.payload.reminderEdit) {
+      if (row.payload.reminderEdit || row.payload.rsvp) {
         await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID))).for("share");
         await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.eventID, row.eventID), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider))).for("update");
       }
@@ -389,6 +396,8 @@ export async function commitEventDeliveryResolution(
           "delivery-resolution-unavailable",
         );
       if (
+        !!current.row.payload.rsvp !== !!proof.rsvp ||
+        proof.rsvp?.baselineVersion !== request.expectedRsvpBaselineVersion ||
         !!current.row.payload.reminderEdit !== !!proof.reminder ||
         proof.reminder?.stateVersion !== request.expectedReminderStateVersion ||
         current.masterRevision !== request.expectedMasterRevision ||
@@ -414,10 +423,19 @@ export async function commitEventDeliveryResolution(
         throw new EventDeliveryResolutionError("delivery-state-changed");
       const mappingKey = (mapping: typeof current.mapping) =>
         mapping
-          ? JSON.stringify([mapping.id, mapping.externalEventID, mapping.etag, ...(proof.reminder ? [providerStateVersion(mapping)] : [])])
+          ? JSON.stringify([mapping.id, mapping.externalEventID, mapping.etag, ...(proof.reminder || proof.rsvp ? [providerStateVersion(mapping)] : [])])
           : null;
       if (mappingKey(current.mapping) !== mappingKey(proof.context.mapping))
         throw new EventDeliveryResolutionError("delivery-state-changed");
+      if (proof.rsvp) {
+        const { intent, baselineVersion } = proof.rsvp;
+        if (!current.mapping || !proof.ref || intent.mappingID !== current.mapping.id ||
+            intent.baseline.id !== proof.ref.externalEventId || intent.baseline.etag !== proof.ref.etag ||
+            !intent.nativeTime || !isDeepStrictEqual(ProviderRsvpEditSchema.parse(intent.request), ProviderRsvpEditSchema.parse(current.row.payload.rsvp!.request)) ||
+            providerRsvpBaselineVersion(current.mapping.id, intent.baseline) !== baselineVersion ||
+            !isDeepStrictEqual(providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, intent.request.response), intent.desiredState))
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+      }
       if (proof.ref) {
         if (
           current.mapping &&
@@ -470,7 +488,7 @@ export async function commitEventDeliveryResolution(
             await tx
               .update(externalEvents)
               .set({
-                ...(proof.reminder ? { providerState: proof.reminder.state, providerStateObservedAt: new Date() } : {}),
+                ...(proof.reminder || proof.rsvp ? { providerState: proof.rsvp?.intent.baselineState ?? proof.reminder!.state, providerStateObservedAt: new Date() } : {}),
                 etag: proof.ref.etag,
                 icalUid: proof.ref.icalUid ?? current.mapping.icalUid,
               })
@@ -545,6 +563,7 @@ export async function commitEventDeliveryResolution(
         payload: {
           event: current.local,
           patch: proof.patch,
+          ...(proof.rsvp ? { rsvp: { ...proof.rsvp.intent, request: { ...proof.rsvp.intent.request, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: providerStateVersion({ id: current.mapping!.id, etag: proof.ref!.etag ?? null, providerState: proof.rsvp.intent.baselineState })! } } } : {}),
           ...(proof.reminder ? { reminderEdit: { ...proof.reminder.intent, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: proof.reminder.stateVersion } } : {}),
           ...(proof.caldavSeries ? { caldavSeries: proof.caldavSeries } : {}),
           ...(proof.googleOccurrence
@@ -562,6 +581,7 @@ export async function commitEventDeliveryResolution(
             expectedRemoteEtag: request.expectedRemoteEtag,
             expectedMasterRevision: request.expectedMasterRevision,
             expectedReminderStateVersion: request.expectedReminderStateVersion,
+            expectedRsvpBaselineVersion: request.expectedRsvpBaselineVersion,
           },
         },
       });

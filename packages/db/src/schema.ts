@@ -892,6 +892,7 @@ export const eventOutbox = pgTable(
           expectedRemoteEtag: string | null;
           expectedMasterRevision?: number;
           expectedReminderStateVersion?: string;
+          expectedRsvpBaselineVersion?: string;
         };
         providerProjection?: Pick<Event, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
       }>()

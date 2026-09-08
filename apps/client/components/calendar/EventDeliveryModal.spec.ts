@@ -713,3 +713,19 @@ it("confirms the displayed personal reminder state and preserves its retry ident
   expect(requests[0].expectedReminderStateVersion).toBe("b".repeat(64));
   expect(requests[0]).not.toHaveProperty("reminders");
 });
+
+it("confirms the saved own RSVP response and keeps the same native preview on retry", async () => {
+  const requests: any[] = [];
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(options.body)); if (requests.length === 1) throw new Error("Network unavailable"); }
+    return reply(url.endsWith("/conflict") ? { ...preview, rsvpResolution: { desired: "tentative", remote: "needsAction", baselineVersion: "d".repeat(64) } } : receipt);
+  });
+  let tree = await review();
+  expect(text(tree)).toMatch(/Saved Google response:\s+Tentative/);
+  expect(text(tree)).toContain("Awaiting response"); expect(text(tree)).toContain("Email delivery cannot be verified");
+  buttons(tree, "Send saved response")[0].onPress(); acceptNative(); await settle();
+  tree = render(null); buttons(tree, "Send saved response")[0].onPress(); acceptNative(); await settle();
+  expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]);
+  expect(requests[0].expectedRsvpBaselineVersion).toBe("d".repeat(64));
+  expect(requests[0]).not.toHaveProperty("attendees"); expect(requests[0]).not.toHaveProperty("response");
+});
