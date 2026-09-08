@@ -10,6 +10,7 @@ import {
 import {
   resolveReminderRule,
   resolveReminders,
+  toReminderEvent,
   type ReminderContext,
   type ResolvedReminder,
 } from "@musubi/calendar";
@@ -470,19 +471,7 @@ async function reconcileScheduledReminders(
   const now = new Date();
   const wanted = resolveReminders({
     context: ctx,
-    events: definitions.map((event) => ({
-      calendars: event.calendars ?? [],
-      end: new Date(event.end),
-      id: event.id,
-      isAllDay: event.isAllDay,
-      isCanceled: event.isCanceled,
-      recurrence: event.recurrence,
-      timeModel: event.timeModel,
-      seriesID: event.seriesID,
-      originalStart: event.originalStart,
-      start: new Date(event.start),
-      title: event.title,
-    })),
+    events: definitions.map(toReminderEvent),
     from: now,
     to: new Date(now.getTime() + HORIZON_DAYS * 24 * 3600 * 1000),
   });

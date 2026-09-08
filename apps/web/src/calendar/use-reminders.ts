@@ -1,4 +1,4 @@
-import { resolveReminders, type ReminderEvent } from "@musubi/calendar";
+import { resolveReminders, toReminderEvent } from "@musubi/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -120,18 +120,7 @@ export function useReminders(userId: string) {
         eventRules: reminders.data.events,
         timezone: settings.data?.timezone ?? browserTimezone(),
       },
-      events: events.data.events.map(
-        (event): ReminderEvent => ({
-          calendars: event.calendars ?? [],
-          end: new Date(event.end),
-          id: event.id,
-          isAllDay: event.isAllDay,
-          isCanceled: event.isCanceled,
-          recurrence: event.recurrence,
-          start: new Date(event.start),
-          title: event.title,
-        }),
-      ),
+      events: events.data.events.map(toReminderEvent),
       from: now,
       to: new Date(now.getTime() + HORIZON_DAYS * 24 * 3_600_000),
     });

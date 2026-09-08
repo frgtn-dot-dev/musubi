@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection accepted in PR141; inclusive all-day widget correction under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection accepted in PR141; inclusive all-day widget correction accepted in PR142; shared reminder projection under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -130,3 +130,8 @@ A PostgreSQL integration exercises this actual projection followed by shared res
 ## Inclusive all-day widget correction
 
 Both the JavaScript snapshot and Android Kotlin agenda filter retain an all-day event on its final inclusive date. Calendar bars use that full end date; only timed positive-duration events subtract one millisecond to model exclusive midnight. The regression triggers the real debounced snapshot builder and verifies emitted JSON for legacy/known all-day events, ongoing spans and timed midnight. Each test explicitly sets and asserts its effective UTC/Prague/New_York zone because the normal Vitest config pins Prague. Kotlin was source-reviewed; this is not an Android build or physical-device verification claim.
+
+
+## Shared reminder projection checkpoint
+
+Web, native and API now use the same toReminderEvent projection instead of three field lists. It retains original identity, time model and cancellation; calendar arrays and Date endpoints are copied. Existing known-model resolver regressions pass through this boundary, with native SQLite reconciliation and server PostgreSQL projection coverage retained. Web transport metadata admission is still subsequent work: EventSchema remains unchanged, as do writable contracts and consumer error handling.

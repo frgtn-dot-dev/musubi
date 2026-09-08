@@ -5,6 +5,7 @@ import {
   reminderDueAt,
   resolveReminderRule,
   resolveReminders,
+  toReminderEvent,
   type ReminderContext,
   type ReminderEvent,
 } from "./reminders";
@@ -66,7 +67,7 @@ function due(
 ) {
   return resolveReminders({
     context: ctx,
-    events,
+    events: events.map(toReminderEvent),
     from: new Date(from),
     to: new Date(to),
   }).map((reminder) => reminder.dueAt.toISOString());
@@ -375,7 +376,7 @@ function due(
   });
   const resolve = (events: ReminderEvent[], ctx = context()) =>
     resolveReminders({
-      events,
+      events: events.map(toReminderEvent),
       context: ctx,
       from: new Date("2026-01-01Z"),
       to: new Date("2026-01-07Z"),
