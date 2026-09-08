@@ -338,3 +338,11 @@ it("account/server reset fences even a server-assigned created identity", async 
   await expect(pending).rejects.toThrow("Saved locally");
   expect(useEventsStore.getState().events).toEqual([]);
 });
+
+it("reconciles a scope receipt and returns the new head rather than the old reminder target", async () => {
+  const { refreshEventData } = await import("@/hooks/useRefreshData");
+  const created = { ...event, id: "new-head", revision: 1, seriesID: null };
+  vi.mocked(refreshEventData).mockImplementationOnce(async () => { useEventsStore.setState({ events: [event, created] }); });
+  const result = await useEventsStore.getState().applyEventScope(event, { operationID: "00000000-0000-4000-8000-000000000173", expectedRevision: 1, action: "update", scope: "following", originalStart: { kind: "instant", value: "2026-07-20T09:00:00.000Z" }, expectedOccurrenceRevision: null, patch: { title: "Future" } }, { applyEventScope: vi.fn().mockResolvedValue({ events: [{ id: created.id, revision: 1 }, { id: event.id, revision: 2 }], deleted: [] }) } as any);
+  expect(result?.id).toBe(created.id);
+});

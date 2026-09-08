@@ -1,3 +1,5 @@
+import { hasKnownEventTime, type EventScopeRequest } from "@musubi/types";
+import { eventScopeRequest } from "@musubi/calendar";
 import {
 	requireEventRevision,
 	editedEvent,
@@ -111,6 +113,7 @@ type TargetMutation = {
 };
 
 export type EventActionHandlers = {
+	onApplyEventScope?: (event: Event, request: EventScopeRequest) => Promise<unknown>;
 	getEventMaster: (event: Event) => Event;
 	onForkEvent: (input: TargetMutation) => Promise<Event>;
 	onLinkEvent: (input: TargetMutation) => Promise<Event>;
@@ -185,6 +188,7 @@ export function EventDetailsPopover({
 	onRestoreEvent,
 	onSetAttendance,
 	onUpdateEvent,
+	onApplyEventScope,
 	reminders,
 	timeFormat,
 	user,
@@ -252,7 +256,7 @@ export function EventDetailsPopover({
 	const accentColor = homeCalendar?.color ?? calendar?.color ?? event.color;
 	const deleteConsequence = removeCalendar?.provider
 		? `This change will also be sent to ${providerDisplayName(removeCalendar)}.`
-		: master.recurrence
+		: master.recurrence && !hasKnownEventTime(master)
 			? "You can undo changes to individual occurrences after choosing."
 			: "This cannot be undone.";
 
@@ -323,6 +327,14 @@ export function EventDetailsPopover({
 
 		let savedMaster: Event | undefined;
 		try {
+			if (hasKnownEventTime(master)) {
+                if (!onApplyEventScope) throw new Error("Scope editing is unavailable. Refresh before saving.");
+                await onApplyEventScope(master, eventScopeRequest(master, occurrence, scope, edited));
+                onNotice("Recurring event updated.");
+                setPendingEdit(undefined);
+                handleOpenChange(false, true);
+                return;
+            }
 			const { creates, updates } = withSeriesEditIntent(
 				seriesEditWrites({
 					edited,
@@ -389,6 +401,13 @@ export function EventDetailsPopover({
 		setActionError(undefined);
 
 		try {
+            if (master.recurrence && hasKnownEventTime(master)) {
+                if (!onApplyEventScope) throw new Error("Scope editing is unavailable. Refresh before saving.");
+                await onApplyEventScope(master, eventScopeRequest(master, occurrence, scope));
+                onNotice("Recurring event removed.");
+                handleOpenChange(false, true);
+                return;
+            }
 			if (
 				master.recurrence &&
 				scope !== "series" &&

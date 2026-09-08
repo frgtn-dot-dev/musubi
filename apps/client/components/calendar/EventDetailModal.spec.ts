@@ -185,6 +185,7 @@ for (const scope of [
   it.each(["denied", "unknown", "unsupported", "success"])(
     `real native ${scope} callback awaits save and preserves detail on %s`,
     async (reason) => {
+      if (scope === "plain") useEventsStore.setState({ events: [{ ...master, recurrence: null }] });
       let complete!: (value: unknown) => void;
       mocks.request.mockImplementationOnce(
         () =>
@@ -308,3 +309,20 @@ for (const reconciliation of [
     expect(mocks.close).toHaveBeenCalledOnce();
   });
 }
+
+it("asks the scope before deleting a detached occurrence and submits only that occurrence", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const known = { ...master, id: "00000000-0000-4000-8000-000000000161", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-06T11:00:00", endLocal: "2026-07-06T12:00:00" }) };
+  const child = { ...known, id: "00000000-0000-4000-8000-000000000162", seriesID: known.id, originalStart: { kind: "instant" as const, value: "2026-07-20T09:00:00.000Z" }, recurrence: null, revision: 5 };
+  useEventsStore.setState({ events: [known, child] });
+  const apply = vi.spyOn(useEventsStore.getState(), "applyEventScope").mockResolvedValue(undefined);
+  try {
+    deleteButton(EventDetailModal({ visible: true, event: child, onClose: mocks.close, onEdit: vi.fn() }))!();
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.choose).toHaveBeenCalledWith("Delete recurring event", undefined, expect.any(Array));
+    const choices = mocks.choose.mock.lastCall![2] as { label: string; onPress: () => Promise<void> }[];
+    await choices.find(choice => choice.label === "This event only")!.onPress();
+    expect(apply).toHaveBeenCalledWith(known, expect.objectContaining({ action: "delete", scope: "occurrence", expectedRevision: 1, expectedOccurrenceRevision: 5, originalStart: child.originalStart }), expect.anything());
+    expect(mocks.close).toHaveBeenCalledOnce();
+  } finally { apply.mockRestore(); }
+});

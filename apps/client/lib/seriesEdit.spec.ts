@@ -180,3 +180,32 @@ describe("applySeriesEdit", () => {
     expect(setEventReminderRule).not.toHaveBeenCalled();
   });
 });
+
+it("commits a known series in one request and reuses the operation ID after a failed response", async () => {
+  const { EventSchema } = await import("@musubi/types");
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const known = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000111", revision: 2, creatorID: "owner", organizer: "", color: "red", isCanceled: false, ...resolveEventTimeEdit({ kind: "floating", startLocal: "2026-07-06T09:00:00", endLocal: "2026-07-06T10:00:00" }) });
+  const draft = { ...known, title: "Changed" };
+  const add = vi.fn(); const update = vi.fn();
+  const scope = vi.fn().mockRejectedValueOnce(new Error("Lost response")).mockResolvedValue(draft);
+  answer("This event");
+  const input = { addEvent: add, updateEvent: update, applyEventScope: scope, master: known, occurrence: known, edited: draft };
+  await expect(applySeriesEdit(input)).rejects.toThrow("Lost response");
+  await expect(applySeriesEdit({ ...input, edited: { ...draft } })).resolves.toEqual(draft);
+  expect(scope).toHaveBeenCalledTimes(2);
+  expect(scope.mock.calls[0][1]).toEqual(scope.mock.calls[1][1]);
+  expect(add).not.toHaveBeenCalled(); expect(update).not.toHaveBeenCalled();
+});
+
+it("returns the new scoped definition so the composer targets its reminder", async () => {
+  const { EventSchema } = await import("@musubi/types");
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const known = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000171", revision: 2, creatorID: "owner", organizer: "", color: "red", isCanceled: false, ...resolveEventTimeEdit({ kind: "floating", startLocal: "2026-07-06T09:00:00", endLocal: "2026-07-06T10:00:00" }) });
+  const created = { ...known, id: "00000000-0000-4000-8000-000000000172", revision: 1 };
+  const override = { minutesBefore: 15, allDay: null };
+  reminderRules.mockReturnValue({ events: { [known.id]: override } });
+  answer("This and following events");
+  const result = await applySeriesEdit({ addEvent: vi.fn(), updateEvent: vi.fn(), applyEventScope: vi.fn().mockResolvedValue(created), master: known, occurrence: known, edited: { ...known, title: "Future" } });
+  expect(result).toEqual(created);
+  expect(setEventReminderRule).toHaveBeenCalledWith(created, override);
+});

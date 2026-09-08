@@ -1,5 +1,6 @@
-import { EventMutationError, EventSchema, type Event, type EventWriteRequest } from "@musubi/types";
+import { hasKnownEventTime, type EventScopeRequest, EventMutationError, EventSchema, type Event, type EventWriteRequest } from "@musubi/types";
 import {
+    eventScopeRequest,
     EditScope,
     seriesEditWrites,
     withSeriesEditIntent,
@@ -17,11 +18,13 @@ import { reminderRules, setEventReminderRule } from "@/services/notifications";
  */
 export async function applySeriesEdit({
     addEvent,
+    applyEventScope,
     edited,
     master,
     occurrence,
     updateEvent,
 }: {
+    applyEventScope?: (event: Event, request: EventScopeRequest) => Promise<Event | undefined>;
     addEvent: (event: Event) => Promise<unknown>;
     edited: Event;
     /** The stored row, which carries the series' own anchor times. */
@@ -55,6 +58,16 @@ export async function applySeriesEdit({
     // Backing out of the question is not a decision to discard the edit.
     if (!scope) return false;
 
+    if (hasKnownEventTime(master)) {
+        if (!applyEventScope) throw new Error("Scope editing is unavailable. Refresh before saving.");
+        const saved = await applyEventScope(master, eventScopeRequest(master, occurrence, scope, edited, uuidv7, true));
+        if (!saved) throw new EventMutationError("Saved locally. Refresh to load the edited occurrence before setting its reminder.", true);
+        if (saved.id !== master.id && saved.id !== occurrence.id) {
+            const override = reminderRules()?.events[master.id];
+            if (override) await setEventReminderRule(saved, override);
+        }
+        return saved;
+    }
     const { creates, updates } = withSeriesEditIntent(
         seriesEditWrites({
             edited,

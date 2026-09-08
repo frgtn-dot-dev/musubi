@@ -60,7 +60,7 @@ export const useEditComposerStore = create<EditComposerStore>((set) => ({
                     event &&
                     useEventsStore
                         .getState()
-                        .events.find((e) => e.id === event.id);
+                        .events.find((e) => e.id === (event.seriesID ?? event.id));
                 return master && snapshotEvent(master);
             })(),
             visible: true,

@@ -11,6 +11,9 @@ import {
   type ResolveEventDeliveryRequest,
   eventCreateOperation,
   type EventWriteRequest,
+  EventScopeResponseSchema,
+  EventScopeRequestSchema,
+  type EventScopeRequest,
   eventUpdateOperation,
   requireEventRevision,
   EventMutationError,
@@ -385,6 +388,16 @@ export function useApi() {
       throwOnError(error);
 
       return data.id;
+    },
+
+    async applyEventScope(event: Event, request: EventScopeRequest) {
+      const path = `/api/${apiVersion}/events/${encodeURIComponent(event.id)}/scope`;
+      const body = JSON.stringify(EventScopeRequestSchema.parse(request));
+      const remote = remoteOf(eventHome(event));
+      if (remote) return readWire(EventScopeResponseSchema, await fedFetch(remote, path, { method: "POST", body }), "POST event scope (federated)");
+      const { error, data } = await authClient.$fetch(`${apiUrl}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      throwOnError(error);
+      return readWire(EventScopeResponseSchema, data, "POST event scope");
     },
 
     async updateEvent(event: Event) {

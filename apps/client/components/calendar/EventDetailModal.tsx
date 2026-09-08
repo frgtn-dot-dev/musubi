@@ -1,7 +1,8 @@
+import { uuidv7 } from "uuidv7";
 import EventDeliveryModal from "./EventDeliveryModal";
 import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
-import { Event, can } from "@musubi/types";
+import { Event, can, hasKnownEventTime } from "@musubi/types";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -38,6 +39,8 @@ import {
 import { chooseOption, confirm } from "@/lib/confirm";
 import { formatDateLong, formatTime } from "@/lib/datetimeFormat";
 import {
+	eventScopeRequest,
+	type EditScope,
 	excludeOccurrence,
 	endSeriesBefore,
 	withSeriesEditIntent,
@@ -167,10 +170,18 @@ export default function EventDetailModal({
 
 	// `event` carries the tapped occurrence's start/end; the store row holds the
 	// series master (true anchor times) — updates must be built from the master.
-	const master = events.find((e) => e.id === event?.id);
+	const master = events.find((e) => e.id === (event?.seriesID ?? event?.id));
+	const deleteScope = async (scope: EditScope) => {
+		if (!event || !master) return;
+		try {
+			await useEventsStore.getState().applyEventScope(master, eventScopeRequest(master, event, scope, undefined, uuidv7), api);
+			handleClose();
+		} catch (error) { showToast({ message: userFacingError(error, "This occurrence could not be removed.") }); }
+	};
 
 	const deleteAll = async () => {
 		if (!event) return;
+		if (master?.recurrence && hasKnownEventTime(master)) return deleteScope("series");
 		try {
 			await removeEvent(event, api); // cascade from origin
 			handleClose();
@@ -190,6 +201,7 @@ export default function EventDetailModal({
 	};
 	const deleteThisOccurrence = () => {
 		if (!event || !master?.recurrence) return deleteAll();
+		if (hasKnownEventTime(master)) return deleteScope("occurrence");
 		const updated = {
 			...master,
 			recurrence: excludeOccurrence(master.recurrence, event.start),
@@ -198,6 +210,7 @@ export default function EventDetailModal({
 	};
 	const deleteFollowing = () => {
 		if (!event || !master?.recurrence) return deleteAll();
+		if (hasKnownEventTime(master)) return deleteScope("following");
 		// Ending before the first occurrence would leave an invisible husk.
 		if (event.start.getTime() <= master.start.getTime()) return deleteAll();
 		const updated = {
@@ -682,7 +695,7 @@ export default function EventDetailModal({
 										disabled={event ? false : true}
 										onPress={() => {
 											if (!event) return;
-											if (event.recurrence) {
+											if (master?.recurrence) {
 												chooseOption("Delete recurring event", undefined, [
 													{
 														label: "This event only",

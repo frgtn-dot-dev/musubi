@@ -1,4 +1,4 @@
-import { editedEvent, EventMutationError } from "@musubi/types";
+import { type EventScopeRequest, editedEvent, EventMutationError } from "@musubi/types";
 import type {
   Calendar,
   CreatePageRequest,
@@ -180,6 +180,7 @@ type WorkspaceProps = {
     importing: boolean;
     linked: boolean;
   };
+  onApplyEventScope?: (event: Event, request: EventScopeRequest) => Promise<unknown>;
   onUpdateEvent: (event: Event) => Promise<Event>;
   onViewChange: (view: CalendarViewId) => void;
   pageId: string;
@@ -304,6 +305,7 @@ export function Workspace({
   onSignOut,
   providerLink,
   onUpdateEvent,
+  onApplyEventScope,
   onViewChange,
   pageId,
   pages,
@@ -521,7 +523,7 @@ export function Workspace({
     return masters;
   }, [sourceEvents, events]);
   const getEventMaster = useCallback(
-    (event: Event) => eventMasters.get(event.id) ?? event,
+    (event: Event) => eventMasters.get(event.seriesID ?? event.id) ?? event,
     [eventMasters],
   );
 
@@ -1108,6 +1110,7 @@ export function Workspace({
               onSetAttendance={onSetAttendance}
               reminders={reminders}
               onUpdateEvent={onUpdateEvent}
+              onApplyEventScope={onApplyEventScope}
               timeFormat={settings.timeFormat}
               user={user}
               weekStartsOn={settings.weekStartsOn}
@@ -1157,6 +1160,7 @@ export function Workspace({
               onSetAttendance={onSetAttendance}
               reminders={reminders}
               onUpdateEvent={onUpdateEvent}
+              onApplyEventScope={onApplyEventScope}
               timeFormat={settings.timeFormat}
               user={user}
               view={activeView}
@@ -1177,6 +1181,7 @@ export function Workspace({
               onSetAttendance={onSetAttendance}
               reminders={reminders}
               onUpdateEvent={onUpdateEvent}
+              onApplyEventScope={onApplyEventScope}
               timeFormat={settings.timeFormat}
               user={user}
               weeks={multiWeekBlocks}
@@ -1233,6 +1238,7 @@ export function Workspace({
               onSetAttendance={onSetAttendance}
               reminders={reminders}
               onUpdateEvent={onUpdateEvent}
+              onApplyEventScope={onApplyEventScope}
               timeFormat={settings.timeFormat}
               user={user}
               weekStartsOn={settings.weekStartsOn}

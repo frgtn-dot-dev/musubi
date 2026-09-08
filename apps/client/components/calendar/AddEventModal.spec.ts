@@ -155,6 +155,7 @@ vi.mock("expo-network", () => ({
 vi.mock("@/lib/serverDiagnostics", () => ({ recordServerDiagnostic: vi.fn() }));
 vi.mock("@/hooks/useRefreshData", () => ({
   useRefreshData: () => mocks.refresh,
+  refreshEventData: mocks.refresh,
 }));
 vi.mock("@/store/useAttendeesStore", () => ({
   useAttendeesStore: () => vi.fn(),
@@ -744,7 +745,8 @@ it.each(["zoned", "floating", "all-day"] as const)("keeps the tapped %s occurren
   await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledOnce());
   expect(useEventsStore.getState().events[0]).toMatchObject({ start: series.start, end: series.end, timeModel: series.timeModel });
   expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ expectedRevision: 2, patch: { title: "Rename whole series" } });
-  finish({ error: null, data: { ...renamed, title: "Rename whole series", revision: 3 } });
+  useEventsStore.setState({ events: [{ ...renamed, title: "Rename whole series", revision: 3 }] });
+  finish({ error: null, data: { operationID: JSON.parse(mocks.request.mock.lastCall![1].body).operationID, changed: true, events: [{ id: series.id, revision: 3 }], deleted: [], localCommitted: true, replayed: false } });
   await saving;
   expect(useEventsStore.getState().events[0].timeModel).toEqual(series.timeModel);
 });
@@ -761,24 +763,27 @@ it("saves a whole-series civil date shift across DST and schedules from the save
   titleInput(tree)!.onChangeText("Civil series draft");
   find(tree, props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
   find(tree, props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  mocks.request.mockResolvedValueOnce({ data: null, error: { status: 403, error: "Scope editing is not enabled" } });
   let saving = saveButton(renderComposer())!.onPress!();
   await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
   scopeAnswer("This event");
   await saving;
-  expect(mocks.request).not.toHaveBeenCalled();
+  expect(mocks.request).toHaveBeenCalledOnce();
   expect(mocks.close).not.toHaveBeenCalled();
   expect(titleInput(renderComposer())!.value).toBe("Civil series draft");
   mocks.alert.mockClear();
+  mocks.request.mockClear();
   mocks.request.mockImplementationOnce(async (_url, options) => {
     const body = JSON.parse(options.body);
-    return { error: null, data: { ...series, ...body.patch, ...resolveEventTimeEdit(body.time), revision: 2 } };
+    useEventsStore.setState({ events: [{ ...series, ...body.patch, ...resolveEventTimeEdit(body.time), revision: 2 }] });
+    return { error: null, data: { operationID: body.operationID, changed: true, events: [{ id: series.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false } };
   });
   saving = saveButton(renderComposer())!.onPress!();
   await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
   scopeAnswer("All events");
   await saving;
   expect(mocks.request).toHaveBeenCalledOnce();
-  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toEqual({ expectedRevision: 1, patch: { title: "Civil series draft" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:30:17.123", endLocal: "2026-03-29T10:30:19.456" } });
+  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ action: "update", scope: "series", expectedRevision: 1, patch: { title: "Civil series draft" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:30:17.123", endLocal: "2026-03-29T10:30:19.456" } });
   expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ revision: 2, start: new Date("2026-03-29T07:30:17.123Z"), recurrence: series.recurrence }), null);
 
   // An old open occurrence must not borrow a newer master's revision for a shift.
