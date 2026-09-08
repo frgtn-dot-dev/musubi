@@ -88,6 +88,31 @@ async function main() {
         await replaceMemberToken(owner, credential.tokenHash);
         const post = (body: unknown, token: string | null = credential.raw, id = original.id, version = PRODUCT_VERSION) => realFetch(`${apiOrigin}/api/v1/events/${id}/provider-rsvp`, { method: "POST", headers: { "Content-Type": "application/json", [CLIENT_VERSION_HEADER]: version, ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
         if (scenario === "queue") {
+          assert.equal(observation.rsvpEdit, undefined, "Capability defaults off");
+          assert.deepEqual((await getOwnProviderEventObservation(owner, original.id, false, true)).rsvpEdit, { provider: "google", expectedRevision: original.revision });
+          const state = googleEventState(remote);
+          for (const unsupported of [
+            { ...state, attendeesComplete: false },
+            { ...state, isOrganizer: true },
+            { ...state, organizer: { ...state.organizer!, address: "guest@example.test" } },
+            { ...state, attendees: state.attendees.map(item => ({ ...item, self: false })) },
+            { ...state, attendees: state.attendees.map(item => ({ ...item, self: true })) },
+            { ...state, attendees: state.attendees.map(item => item.self ? { ...item, address: "different@example.test" } : item) },
+            { ...state, attendees: [...state.attendees, ...Array.from({ length: 199 }, () => state.attendees[1]!)] },
+            { ...state, eventType: "outOfOffice" },
+            { ...state, status: "cancelled" },
+          ]) {
+            await db.update(externalEvents).set({ providerState: unsupported }).where(eq(externalEvents.id, mapping!.id));
+            assert.equal((await getOwnProviderEventObservation(owner, original.id, false, true)).rsvpEdit, undefined);
+          }
+          await db.update(externalEvents).set({ providerState: state, etag: 'W/"weak"' }).where(eq(externalEvents.id, mapping!.id));
+          assert.equal((await getOwnProviderEventObservation(owner, original.id, false, true)).rsvpEdit, undefined);
+          await db.update(externalEvents).set({ etag: remote.etag }).where(eq(externalEvents.id, mapping!.id));
+          for (const edit of [{ recurrence: "RRULE:FREQ=DAILY" }, { timeModel: { kind: "floating" as const, startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } }, { isCanceled: true }]) {
+            await db.update(events).set(edit).where(eq(events.id, original.id));
+            assert.equal((await getOwnProviderEventObservation(owner, original.id, false, true)).rsvpEdit, undefined);
+            await db.update(events).set({ recurrence: original.recurrence, timeModel: original.timeModel, isCanceled: original.isCanceled, updatedAt: original.updatedAt }).where(eq(events.id, original.id));
+          }
           const before = http;
           assert.equal((await post(request, null)).status, 401);
           assert.equal((await post(request, "invalid-token")).status, 401);

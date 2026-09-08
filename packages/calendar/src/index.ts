@@ -18,3 +18,5 @@ export * from "./scope-request";
 export { providerEventDetails, providerReminderDescription } from "./provider-event-details";
 
 export { providerReminderDraft, providerReminderRequest, providerReminderReceiptMessage, type ProviderReminderDraft } from "./provider-reminder-draft";
+
+export * from "./provider-rsvp-draft";

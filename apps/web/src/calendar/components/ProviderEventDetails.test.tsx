@@ -47,3 +47,18 @@ it("offers the editor only from the server contract and clears it on account cha
   expect(screen.queryByRole("dialog", { name: "Google reminders" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Edit Google reminders" })).toBeNull();
 });
+
+it("refreshes RSVP capability before handoff and refuses a revoked capability", async () => {
+  const google = { ...state, provider: "google", reminders: { provider: "google", useDefault: true, overrides: [] } };
+  const initial = { state: google, version: "a".repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 } };
+  const fresh = { ...initial, version: "b".repeat(64), rsvpEdit: { provider: "google", expectedRevision: 8 } };
+  fetchState.mockResolvedValueOnce(initial).mockResolvedValueOnce(fresh).mockResolvedValueOnce({ state: google, version: "c".repeat(64) });
+  const onRespond = vi.fn();
+  render(<ProviderEventDetails eventId="event" userId="owner" connectionId="remote" onRespond={onRespond} />);
+  const respond = await screen.findByRole("button", { name: "Respond in Google" });
+  await act(async () => respond.click());
+  expect(onRespond).toHaveBeenCalledWith(fresh);
+  await act(async () => screen.getByRole("button", { name: "Respond in Google" }).click());
+  expect(await screen.findByText(/unavailable in the refreshed state/)).toBeTruthy();
+  expect(onRespond).toHaveBeenCalledTimes(1);
+});

@@ -11,6 +11,7 @@ vi.mock("react", async original => ({ ...(await original<typeof import("react")>
 vi.mock("react-native", () => ({ Text: "Text", View: "View" }));
 vi.mock("@/constants/theme", () => ({ colors: {}, fonts: {}, styles: {} }));
 vi.mock("@/components/ui/Btn", () => ({ Btn: "Btn" }));
+vi.mock("./ProviderRsvpEditor", () => ({ ProviderRsvpEditor: "ProviderRsvpEditor" }));
 vi.mock("./ProviderReminderEditor", () => ({ ProviderReminderEditor: "ProviderReminderEditor" }));
 vi.mock("@/services/api", () => ({ useApi: () => ({ getProviderEventState: h.fetch }) }));
 vi.mock("@/services/federation", () => ({ remoteForCalendar: () => null }));

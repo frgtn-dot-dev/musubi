@@ -8321,3 +8321,45 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K13 Google RSVP editor preserves retry: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)")) errors.push(message.text()); });
+    const imported = event("00000000-0000-4000-8000-000000000192", "Google RSVP meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
+    let observations = 0;
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+      state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 },
+    }));
+    const writes: any[] = [];
+    await page.route(`**/api/v1/events/${imported.id}/provider-rsvp`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    const eventTrigger = page.getByRole("button", { name: /Google RSVP meeting/ }).first();
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Respond in Google", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Respond in Google", exact: true });
+    await expect(editor.getByRole("button", { name: "Send response" })).toBeDisabled();
+    await chooseSelectOption(page, "Your Google response", "Tentative");
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await editor.screenshot({ path: `/tmp/musubi-k13-rsvp-${theme}.png` });
+    await editor.getByRole("button", { name: "Send response" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+    await expect(editor.getByRole("combobox", { name: "Your Google response" })).toContainText("Tentative");
+    await editor.getByRole("button", { name: "Send response" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Google confirmation is still pending");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ operationID: expect.any(String), expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "google", response: "tentative", sendUpdates: "all" });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(eventTrigger).toBeFocused(); expect(errors).toEqual([]);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}

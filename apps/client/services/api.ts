@@ -1,3 +1,4 @@
+import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
 import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type ProviderReminderEdit } from "@musubi/types";
 import {
   AnnouncementsResponseSchema,
@@ -477,6 +478,14 @@ export function useApi() {
       const { error, data } = await authClient.$fetch(`${apiUrl}${path}`, { method: "POST", body: request });
       throwOnError(error);
       return readWire(ProviderReminderReceiptSchema, data, "POST provider reminders");
+    },
+    async editProviderRsvp(event: Event, request: ProviderRsvpEdit) {
+      const path = `/api/${apiVersion}/events/${encodeURIComponent(event.id)}/provider-rsvp`;
+      const remote = remoteOf(eventHome(event));
+      if (remote) return readWire(ProviderRsvpReceiptSchema, await fedFetch(remote, path, { method: "POST", body: JSON.stringify(request) }), "POST provider RSVP (federated)");
+      const { error, data } = await authClient.$fetch(`${apiUrl}${path}`, { method: "POST", body: request });
+      throwOnError(error);
+      return readWire(ProviderRsvpReceiptSchema, data, "POST provider RSVP");
     },
 
     async getProviderEventState(event: Event) {

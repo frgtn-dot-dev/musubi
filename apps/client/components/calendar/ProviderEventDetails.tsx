@@ -1,3 +1,4 @@
+import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
@@ -21,29 +22,32 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
   const targetID = event.id.replace(/_-?\d+$/, "");
   const key = JSON.stringify([targetID, userId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
-  const [editor, setEditor] = useState(false);
+  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp"; observation: ProviderEventStateResponse }>();
+  const readSequence = useRef(0);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
   const active = useRef(true);
   const refreshing = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  async function openEditor() {
+  async function openEditor(kind: "reminders" | "rsvp" = "reminders") {
     if (refreshing.current) return;
+    ++readSequence.current;
     refreshing.current = true; setOpening(true); setOpenError("");
     try {
       const observation = await api.getProviderEventState({ ...event, id: targetID });
       if (!active.current) return;
       setResult({ key, ...observation });
-      if (observation.reminderEdit && observation.state && observation.version) setEditor(true);
-      else setOpenError("Google reminders are not editable in the refreshed state.");
-    } catch { if (active.current) setOpenError("Could not refresh Google reminders. Retry to load current settings."); }
+      if ((kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) setEditor({ kind, observation });
+      else setOpenError("This Google action is unavailable in the refreshed state.");
+    } catch { if (active.current) setOpenError("Could not refresh Google details. Retry to load the current state."); }
     finally { refreshing.current = false; if (active.current) setOpening(false); }
   }
   useEffect(() => {
     let active = true;
+    const sequence = ++readSequence.current;
     api.getProviderEventState({ ...event, id: targetID }).then(observation => {
-      if (active) setResult({ key, ...observation });
-    }).catch(() => { if (active) setResult({ key, failed: true }); });
+      if (active && sequence === readSequence.current) setResult({ key, ...observation });
+    }).catch(() => { if (active && sequence === readSequence.current) setResult({ key, failed: true }); });
     return () => { active = false; };
     // API/event objects change on render; key includes the complete account route.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,14 +59,16 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
   return <View style={styles.fieldContainer}>
     <Text accessibilityRole="header" style={styles.fieldLabel}>{details ? `${details.provider} details` : "Provider details"}</Text>
     {details ? <>
-      <Text style={textStyle}>{event.recurrence && !event.seriesID ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit ? "Personal Google reminders can be edited here." : `Change these in ${details.provider}.`}</Text>
+      <Text style={textStyle}>{event.recurrence && !event.seriesID ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}</Text>
       {details.rows.map(row => <Text key={row.label} style={textStyle}>{row.label}: {row.value}</Text>)}
       <Text style={textStyle}>Provider notifications and Musubi reminders are separate. Both apps may notify you.</Text>
     </> : <Text accessibilityLiveRegion="polite" style={textStyle}>{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</Text>}
     {openError ? <Text accessibilityRole="alert" style={textStyle}>{openError}</Text> : null}
     {current?.reminderEdit && current.state && current.version && !event.recurrence && !event.seriesID ? <>
       <Btn label="Edit Google reminders" variant="secondary" loading={opening} onPress={() => void openEditor()} />
-      {editor ? <ProviderReminderEditor event={{ ...event, id: targetID }} observation={{ state: current.state, version: current.version, reminderEdit: current.reminderEdit }} onClose={() => setEditor(false)} /> : null}
     </> : null}
+    {current?.rsvpEdit && current.state && current.version && !event.recurrence && !event.seriesID ? <Btn label="Respond in Google" variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
+    {editor?.kind === "reminders" ? <ProviderReminderEditor event={{ ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
+    {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={{ ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
   </View>;
 }
