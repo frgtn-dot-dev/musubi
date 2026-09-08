@@ -1,3 +1,4 @@
+import { EventTimeEditSchema } from "./event_time";
 import assert from "node:assert/strict";
 import {
   CivilDateTimeSchema,
@@ -179,3 +180,17 @@ assert.equal(
 );
 
 console.log("Event time contracts: OK");
+
+for (const invalid of [
+  { kind: "legacy-unknown" },
+  { kind: "all-day", startDate: "2026-02-30", endDate: "2026-03-01" },
+  { kind: "all-day", startDate: "2026-03-02", endDate: "2026-03-01" },
+  { kind: "all-day", startDate: "2026-03-01", endDate: "2026-03-01", seriesID: "forged" },
+  { kind: "floating", startLocal: "2026-03-01T09:00:00Z", endLocal: "2026-03-01T10:00:00" },
+  { kind: "floating", startLocal: "2026-03-01T11:00:00", endLocal: "2026-03-01T10:00:00" },
+  { kind: "zoned", timeZone: "Invented/Zone", startLocal: "2026-03-01T09:00:00", endLocal: "2026-03-01T10:00:00" },
+  { kind: "zoned", timeZone: "UTC", startLocal: "2026-03-01T09:00:00.1234", endLocal: "2026-03-01T10:00:00" },
+]) assert.equal(EventTimeEditSchema.safeParse(invalid).success, false);
+assert.deepEqual(EventTimeEditSchema.parse({ kind: "floating", startLocal: "2026-03-01T09:00:00.1", endLocal: "2026-03-01T10:00:00" }), {
+  kind: "floating", startLocal: "2026-03-01T09:00:00.100", endLocal: "2026-03-01T10:00:00.000",
+});

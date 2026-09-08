@@ -94,3 +94,31 @@ export function occurrenceKey(identity: OccurrenceIdentity): string {
     parsed.originalStart.value,
   ]);
 }
+
+/** Explicit replacement of the complete time value, not a patch to its fields.
+ * No occurrence identity or unresolved legacy inference is writable here.
+ */
+export const EventTimeEditSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("zoned"),
+    timeZone: EventTimeZoneSchema,
+    startLocal: CivilDateTimeSchema,
+    endLocal: CivilDateTimeSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal("floating"),
+    startLocal: CivilDateTimeSchema,
+    endLocal: CivilDateTimeSchema,
+  }).strict().refine(value => value.startLocal <= value.endLocal, {
+    message: "Floating end must not precede start",
+  }),
+  z.object({
+    kind: z.literal("all-day"),
+    startDate: z.iso.date(),
+    /** Musubi's existing inclusive last date, not a provider's exclusive end. */
+    endDate: z.iso.date(),
+  }).strict().refine(value => value.startDate <= value.endDate, {
+    message: "All-day end must not precede start",
+  }),
+]);
+export type EventTimeEdit = z.infer<typeof EventTimeEditSchema>;

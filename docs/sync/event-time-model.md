@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection accepted in PR141; inclusive all-day widget correction accepted in PR142; shared reminder projection under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection accepted in PR141; inclusive all-day widget correction accepted in PR142; shared reminder projection accepted in PR143; web expansion errors accepted in PR144; web reminder inheritance accepted in PR145; native expansion errors accepted in PR146. Explicit time-edit contract under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -147,3 +147,11 @@ The event editor now passes seriesID through rule resolution. Its inherited base
 ### Native expansion error checkpoint
 
 Main calendar, agenda, calendar detail and invitation preview share a presentation boundary around expansion. A failed view returns no partial occurrences and shows a safe persistent message; main/agenda/invitation reuse existing refresh actions. Calendar and composer stay mounted, preserving draft state. Logic regressions cover recovery, immutable definitions, cancellation replacement and distant agenda events. This does not certify native rendering on a physical device or enable transport metadata.
+
+### Explicit time-edit contract
+
+`EventTimeEditSchema` replaces the complete time value: zoned civil endpoints plus an explicit zone, floating civil endpoints, or inclusive all-day start/end dates. It rejects unresolved legacy inference, offset-bearing civil values, unsupported zones, reversed civil floating/date ranges and extra fields such as occurrence identity. `resolveEventTimeEdit` derives start/end/isAllDay/timeModel together; it does not write to storage or attach itself to generic PATCH.
+
+Explicit zoned endpoints use the existing compatible policy (first fold instant and pre-transition gap offset), then validate actual instant order. A civil end after a civil start can still resolve before it across a gap and is rejected. Civil anchors remain unchanged after normalization; recurrence receives the original anchor rather than the shifted instant rendered back into the zone. This is a new explicit replacement intent, not a lossless conversion of an arbitrary existing second-fold instant. Title-only edits must retain the existing endpoints and metadata.
+
+New explicit floating intents project their compatibility instants in UTC deterministically, while the civil model remains authoritative and is resolved in each consumer's explicit zone. This does not infer a historical event's zone or convert existing rows. All-day dates remain UTC midnight with the inclusive end untouched. Before activation, the CAS writer must validate the full resulting definition/recurrence and scope, persist all four values in one transaction, and capture a faithful immutable outbound projection. Generic writes and EventSchema remain unchanged at this checkpoint.
