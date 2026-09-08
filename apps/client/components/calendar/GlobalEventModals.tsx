@@ -19,7 +19,7 @@ import {
 export function GlobalEventModals() {
   const api = useApi();
   const { calendars } = useCalendarsStore();
-  const { events, addEvent, updateEvent } = useEventsStore();
+  const { events, addEvent, updateEvent, applyEventScope } = useEventsStore();
   const detail = useEventDetailStore();
   const composer = useEditComposerStore();
 
@@ -40,6 +40,7 @@ export function GlobalEventModals() {
           // The composer was opened on one occurrence; which occurrences the
           // edit belongs to is the composer's last question, not its first.
           return await applySeriesEdit({
+            applyEventScope: (event, request) => applyEventScope(event, request, api),
             addEvent: (event) => addEvent(event, api),
             edited,
             master: composer.master,

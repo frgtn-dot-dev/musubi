@@ -1,3 +1,4 @@
+import { assertSeriesTimeEdit } from "./series-time-edit";
 import {
   editedEvent,
   EventTimeModelSchema,
@@ -6,7 +7,6 @@ import {
   type EventWriteRequest,
 } from "@musubi/types";
 import { resolveEventTimeEdit } from "./time-edit";
-import { assertSeriesTimeEdit } from "./series-time-edit";
 
 export type EventTimeDraft = {
   timeLabel?: string;
@@ -103,7 +103,7 @@ export function editEventTimeDraft(
     throw new Error(
       "Choose a consistent time type before saving. No changes were saved.",
     );
-  if ((event.recurrence ?? null) !== (edited.recurrence ?? null))
+  if (!event.recurrence && !event.seriesID && (event.recurrence ?? null) !== (edited.recurrence ?? null))
     throw new Error(
       "Changing this event's recurrence requires a time-aware scope edit. No changes were saved.",
     );
@@ -131,10 +131,6 @@ export function editEventTimeDraft(
       isAllDay: event.isAllDay,
       timeModel: event.timeModel,
     });
-  if (event.seriesID || event.originalStart)
-    throw new Error(
-      "This time change requires an occurrence-aware scope edit. No changes were saved.",
-    );
   let time: EventTimeEdit;
   if (kind === "all-day")
     time = { kind: "all-day", startDate: draft.date, endDate: draft.endDate };
@@ -168,6 +164,7 @@ export function editEventTimeDraft(
         ? { kind, timeZone: zone!.trim(), ...anchors }
         : { kind, ...anchors };
   }
+
   if (event.recurrence) assertSeriesTimeEdit(event, time);
   try {
     const resolved = resolveEventTimeEdit(time);

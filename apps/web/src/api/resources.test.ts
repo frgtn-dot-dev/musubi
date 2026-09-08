@@ -1,3 +1,4 @@
+import type { Event } from "@musubi/types";
 import { afterEach, expect, it, vi } from "vitest";
 import { getEvents, importCalendar } from "./resources";
 
@@ -112,4 +113,19 @@ it("routes the same atomic time draft through home and federated transports", as
     expect(options?.method).toBe("PUT");
     expect(JSON.parse(options!.body as string)).toEqual({ expectedRevision: 1, time: edited.timeEdit, patch: { title: "Together" } });
   }
+});
+
+it("posts one scope intent through home and federation routes", async () => {
+  const { applyEventScope } = await import("./resources");
+  const event = { id: "00000000-0000-4000-8000-000000000151" } as Event;
+  const request = { operationID: "00000000-0000-4000-8000-000000000152", expectedRevision: 3, action: "delete" as const, scope: "series" as const };
+  const receipt = { operationID: request.operationID, changed: true, events: [], deleted: [{ id: event.id, revision: 4 }], localCommitted: true, replayed: false };
+  const fetch = vi.fn(async () => new Response(JSON.stringify(receipt), { status: 200, headers: { "content-type": "application/json" } }));
+  vi.stubGlobal("fetch", fetch);
+  await applyEventScope(event, request);
+  await applyEventScope(event, request, "connection");
+  expect(fetch.mock.calls).toHaveLength(2);
+  for (const call of fetch.mock.calls as unknown as [string, RequestInit][]) expect(JSON.parse(call[1].body as string)).toEqual(request);
+  expect(fetch).toHaveBeenNthCalledWith(1, `/api/v1/events/${event.id}/scope`, expect.objectContaining({ method: "POST", body: expect.any(String) }));
+  expect(fetch).toHaveBeenNthCalledWith(2, `/api/v1/federation/s/connection/api/v1/events/${event.id}/scope`, expect.objectContaining({ method: "POST", body: expect.any(String) }));
 });

@@ -368,6 +368,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
         });
       }}
       onUpdateEvent={eventMutations.updateEvent}
+      onApplyEventScope={eventMutations.applyEventScope}
     />
   );
 }

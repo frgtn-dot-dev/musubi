@@ -1,8 +1,10 @@
 import {
+  occurrenceKey,
   EventSchema,
   EventMutationError,
   requireEventRevision,
   type Event,
+  type EventScopeRequest,
   type EventWriteRequest,
 } from "@musubi/types";
 import type { useApi } from "@/services/api";
@@ -15,6 +17,7 @@ import { cacheDeleteEvents, cacheUpsertEvents } from "@/services/eventsCache";
 
 type EventsStore = {
   events: Event[];
+  applyEventScope: (event: Event, request: EventScopeRequest, api: ReturnType<typeof useApi>) => Promise<Event | undefined>;
   resetEvents: () => void;
   addEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
   localAddEvent: (event: Event) => Promise<void>;
@@ -270,6 +273,29 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     ) {
       void cancelEventNotification(event.id).catch(() => {});
     }
+  },
+  applyEventScope: async (event, request, api) => {
+    const fence = captureReceiptFence();
+    try {
+      let receipt;
+      try { receipt = await api.applyEventScope(event, request); }
+      catch (error) {
+        if (error instanceof EventMutationError) await acceptMutationFailure(error, fence, api);
+        throw error;
+      }
+      if (fence.reset) throw supersededReceipt();
+      try { await reconcileReceipt(api); }
+      catch { throw new EventMutationError("Saved locally. Refresh to load the changed series.", true); }
+      if (request.action === "delete") return;
+      const current = get().events;
+      const target = request.scope === "occurrence"
+        ? current.find(candidate => candidate.seriesID === event.id && candidate.originalStart && occurrenceKey({ seriesId: event.id, originalStart: candidate.originalStart }) === occurrenceKey({ seriesId: event.id, originalStart: request.originalStart! }))
+        : request.scope === "following"
+          ? current.find(candidate => candidate.id !== event.id && !candidate.seriesID && receipt.events.some(row => row.id === candidate.id)) ?? current.find(candidate => candidate.id === event.id)
+          : current.find(candidate => candidate.id === event.id);
+      if (!target) throw new EventMutationError("Saved locally. Refresh to load the edited occurrence before setting its reminder.", true);
+      return target;
+    } finally { pendingReceipts.delete(fence); }
   },
   updateEvent: async (event, api) => {
     requireEventRevision(event);

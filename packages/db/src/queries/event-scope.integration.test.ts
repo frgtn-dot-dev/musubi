@@ -74,6 +74,16 @@ async function main() {
     const shifted = await applyLocalEventScope(shiftMaster.id, actor, { operationID: randomUUID(), expectedRevision: 1, scope: "series", action: "update", patch: {}, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:00:00", endLocal: "2026-03-29T10:00:00" } });
     assert.equal(shifted.status, "saved");
     if (shifted.status === "saved") assert.deepEqual(shifted.events.filter(event => event.seriesID).map(event => event.originalStart?.value).sort(), ["2026-03-30T07:00:00.000Z", "2026-03-31T07:00:00.000Z"]);
+    const [reminderMaster] = await db.insert(events).values({ ...master, id: randomUUID() }).returning();
+    await db.insert(calendarEvents).values({ eventID: reminderMaster.id, calendarID: calendar.id });
+    const reminderIntent = { ...request, operationID: randomUUID(), time: undefined, patch: {}, ensureDefinition: true };
+    const reminderResult = await applyLocalEventScope(reminderMaster.id, actor, reminderIntent);
+    assert.equal(reminderResult.status, "saved");
+    if (reminderResult.status === "saved") {
+      assert.equal(reminderResult.outcome.changed, true);
+      assert.equal(reminderResult.events.filter(event => event.seriesID).length, 1);
+    }
+    assert.equal((await applyLocalEventScope(reminderMaster.id, actor, reminderIntent)).status, "replayed");
     const editor = `scope-editor-${randomUUID()}`;
     await db.insert(user).values({ id: editor, name: editor, email: `${editor}@example.test` });
     try {

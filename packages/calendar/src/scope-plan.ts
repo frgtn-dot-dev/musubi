@@ -94,14 +94,14 @@ export function planEventScope(masterInput: Event, childrenInput: readonly Event
   if (request.scope === "occurrence") {
     const base = EventSchema.parse({ ...(existing ?? generated!), id: existing?.id ?? newID(), revision: existing?.revision, seriesID: master.id, originalStart: original, recurrence: null });
     const next = request.action === "delete" ? { ...base, isCanceled: true } : { ...edit(base, request), isCanceled: false };
-    if (unchanged(base, next)) return empty();
+    if (unchanged(base, next) && (existing || request.action !== "update" || !request.ensureDefinition)) return empty();
     return finish({ updates: existing ? [master, next] : [master], creates: existing ? [] : [next], deletes: [] });
   }
   // A single RRULE has an exact count partition. Dated additions/exclusions and
   // RANGE definitions need a richer partition, never a guessed UNTIL rewrite.
   if (!generated || /[\r\n]/.test(master.recurrence) || !/^(?:RRULE:)?FREQ=/i.test(master.recurrence))
     throw new Error("Following scope currently requires one RRULE and a generated cut point.");
-  if (request.action === "update" && unchanged(EventSchema.parse(generated), edit(EventSchema.parse(generated), request))) return empty();
+  if (request.action === "update" && !request.ensureDefinition && unchanged(EventSchema.parse(generated), edit(EventSchema.parse(generated), request))) return empty();
   const prior = expandRecurringEvents<Event & { occurrenceIdentity?: OccurrenceIdentity }>([master], master.start, date, { consumerTimeZone: "UTC" })
     .filter(event => event.occurrenceIdentity && originalDate(event.occurrenceIdentity.originalStart) < date);
   const futureChildren = children.filter(child => originalDate(child.originalStart!) >= date);

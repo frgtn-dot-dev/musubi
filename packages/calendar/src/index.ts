@@ -14,3 +14,4 @@ export * from "./time-edit";
 export * from "./time-draft";
 export * from "./sync-coverage";
 export * from "./scope-plan";
+export * from "./scope-request";

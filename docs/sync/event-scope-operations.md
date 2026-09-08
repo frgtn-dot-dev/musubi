@@ -25,3 +25,11 @@ The DB integration suite covers concurrent identical replay, distinct-operation 
 `POST /api/v1/events/:eventId/scope` accepts the strict scope request under the existing explicit-time feature gate. The target is the stored master UUID. A successful response returns operation ID, `changed`, committed `events`/`deleted` ID-revision pairs, `localCommitted: true` and `replayed`. Clients refresh their normal event data after this receipt; the response does not cache private historical snapshots. Replaying a deleted family still works while its tombstones and current authority are retained.
 
 Malformed or unsupported planner intent and operation-ID reuse with different input return 400; stale master/child revisions return 409 with `localCommitted: false`. A failure in post-commit publication returns 502 with the committed receipt and `localCommitted: true`. Retry uses the same request/operation ID. SSE publication uses existing revision-aware frames; provider or notification delivery is not implied by the durable local receipt.
+
+## Client scope submission
+
+Known-series edits and deletions in the web detail popover and native composer/detail use the scope endpoint. Native detached occurrences resolve their master and still ask for scope. Frozen occurrence identity and request content retain the same operation ID when a form reconstructs an unchanged draft for retry. Successful receipts refresh event data instead of installing partial optimistic family rows. A failed refresh preserves local commit truth and the draft.
+
+The native composer receives the reconciled target definition, so a reminder selected while splitting goes to the new head/exception. Its scope requests use `ensureDefinition` for occurrence/following edits: an unchanged event can still materialize the necessary personal-reminder target. Ordinary no-op scope requests stay no-op. First-occurrence following scope still targets the existing master. The web does not offer an unsafe inverse operation or promise Undo for these new deletions.
+
+Remaining client boundaries: legacy recurrence still uses the gated legacy path; full-editor whole-series time conversion retains its existing `/time` path and limitations. Known-model drag/resize remains gated where civil intent is unavailable. Provider scope writes are still refused by the local transaction.

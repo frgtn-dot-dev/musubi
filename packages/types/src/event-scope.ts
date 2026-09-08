@@ -12,7 +12,7 @@ const identity = {
   expectedOccurrenceRevision: EventRevisionSchema.nullable().optional(),
 };
 export const EventScopeRequestSchema = z.discriminatedUnion("action", [
-  z.object({ ...identity, action: z.literal("update"), patch: EventTimeContentPatchSchema, time: EventTimeEditSchema.optional() }).strict(),
+  z.object({ ...identity, action: z.literal("update"), patch: EventTimeContentPatchSchema, ensureDefinition: z.boolean().optional(), time: EventTimeEditSchema.optional() }).strict(),
   z.object({ ...identity, action: z.literal("delete") }).strict(),
 ]).superRefine((request, context) => {
   if (request.scope !== "series" && (!request.originalStart || request.expectedOccurrenceRevision === undefined))
@@ -32,3 +32,7 @@ export const EventScopeOutcomeSchema = z.object({
   deleted: z.array(committedRevision),
 }).strict();
 export type EventScopeOutcome = z.infer<typeof EventScopeOutcomeSchema>;
+export const EventScopeResponseSchema = EventScopeOutcomeSchema.extend({
+  localCommitted: z.literal(true),
+  replayed: z.boolean(),
+});

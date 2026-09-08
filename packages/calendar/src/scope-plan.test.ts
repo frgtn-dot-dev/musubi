@@ -93,3 +93,11 @@ assert.throws(() => planEventScope(master, [lateChild], { operationID, expectedR
 assert.throws(() => planEventScope(master, [lateChild], { ...following, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=1" } }, () => "00000000-0000-4000-8000-000000000003"), /orphan/);
 const gapChild = { ...moved, originalStart: { kind: "instant" as const, value: "2026-03-29T07:00:00.000Z" } };
 assert.throws(() => planEventScope(master, [gapChild], { operationID, expectedRevision: 4, scope: "series", action: "update", patch: {}, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T02:30:00", endLocal: "2026-03-28T03:30:00" } }), /orphan/);
+
+const materialized = planEventScope(master, [], { ...occurrence, action: "update", patch: {}, ensureDefinition: true }, newID);
+assert.equal(materialized.creates.length, 1, "a reminder target can materialize a generated occurrence without changing its content");
+assert.equal(materialized.creates[0]!.title, master.title);
+const materializedFollowing = planEventScope(master, [], { ...occurrence, scope: "following", action: "update", patch: {}, ensureDefinition: true }, newID);
+assert.equal(materializedFollowing.creates.length, 1, "reminder-only following has its own head");
+assert.equal(materializedFollowing.creates[0]!.recurrence, "RRULE:FREQ=DAILY;COUNT=3");
+assert.equal(planEventScope(master, [], { ...occurrence, action: "update", patch: {} }, newID).creates.length, 0, "ordinary no-op remains a no-op");

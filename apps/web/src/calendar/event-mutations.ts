@@ -2,6 +2,7 @@ import {
   EventMutationError,
   requireEventRevision,
   type Event,
+  type EventScopeRequest,
 } from "@musubi/types";
 import {
   useMutation,
@@ -15,6 +16,7 @@ import type {
   RemoveEventResponse,
 } from "~/api/contracts";
 import {
+  applyEventScope,
   createEvent,
   forkEvent,
   linkEvent,
@@ -325,7 +327,18 @@ export function useEventMutations(userId: string) {
     },
   });
 
+  const scope = useMutation({
+    mutationFn: async ({ event, request }: { event: Event; request: EventScopeRequest }) => {
+      const connectionId = connectionForEvent(connections, event);
+      const receipt = await applyEventScope(event, request, connectionId);
+      try { await (connectionId ? refreshFederated() : refreshEvents()); }
+      catch { throw new EventMutationError("Saved locally. Refresh to load the changed series.", true); }
+      return receipt;
+    },
+    onError: (error, { event }) => reconcileMutationFailure(error, rejectReceipt, connectionForEvent(connections, event)),
+  });
   return {
+    applyEventScope: (event: Event, request: EventScopeRequest) => scope.mutateAsync({ event, request }),
     createEvent: create.mutateAsync,
     forkEvent: fork.mutateAsync,
     linkEvent: link.mutateAsync,

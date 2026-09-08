@@ -1,4 +1,7 @@
 import {
+  EventScopeResponseSchema,
+  EventScopeRequestSchema,
+  type EventScopeRequest,
   EventDeliverySchema,
   EventDeliveryInboxSchema,
   EventDeliveryConflictSchema,
@@ -672,4 +675,8 @@ export function resolveEventDelivery(eventId: string, operationId: string, body:
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/resolve`), {
     method: "POST", body, responseSchema: EventDeliverySchema,
   });
+}
+
+export function applyEventScope(event: Event, request: EventScopeRequest, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(event.id)}/scope`), { body: EventScopeRequestSchema.parse(request), method: "POST", responseSchema: EventScopeResponseSchema });
 }
