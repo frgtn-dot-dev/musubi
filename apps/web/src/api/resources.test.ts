@@ -92,3 +92,24 @@ it("preserves explicit account scope and empty manual refresh scope", async () =
     { provider: "google", accountId: "work" }, {},
   ]);
 });
+
+
+it("routes the same atomic time draft through home and federated transports", async () => {
+  const { EventSchema } = await import("@musubi/types");
+  const { editKnownEventTime, knownEventTimeDraft, resolveEventTimeEdit } = await import("@musubi/calendar");
+  const { updateEvent } = await import("./resources");
+  const event = EventSchema.parse({ ...resolveEventTimeEdit({ kind: "floating", startLocal: "2026-03-29T09:00:00", endLocal: "2026-03-29T10:00:00" }), id: "00000000-0000-4000-8000-000000000151", revision: 1, title: "Old", color: "red", creatorID: "owner", organizer: "owner", calendars: ["home"], isCanceled: false });
+  const edited = editKnownEventTime(event, { ...event, title: "Together" }, { ...knownEventTimeDraft(event)!, date: "2026-03-30", endDate: "2026-03-30" });
+  const fetch = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) => new Response(JSON.stringify({ ...edited, revision: 2 }), { status: 200, headers: { "content-type": "application/json" } }));
+  vi.stubGlobal("fetch", fetch);
+  for (const connection of [undefined, "connection"]) {
+    const saved = await updateEvent(edited, connection);
+    expect(saved.timeModel).toEqual(edited.timeModel);
+    expect(saved).not.toHaveProperty("timeEdit");
+  }
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([`/api/v1/events/${event.id}/time`, `/api/v1/federation/s/connection/api/v1/events/${event.id}/time`]);
+  for (const [, options] of fetch.mock.calls) {
+    expect(options?.method).toBe("PUT");
+    expect(JSON.parse(options!.body as string)).toEqual({ expectedRevision: 1, time: edited.timeEdit, patch: { title: "Together" } });
+  }
+});

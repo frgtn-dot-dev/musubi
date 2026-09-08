@@ -4,7 +4,7 @@ import {
   EventDeliveryConflictSchema,
   type ResolveEventDeliveryRequest,
   eventCreateRequest,
-  eventPatchRequest,
+  eventUpdateOperation,
   requireEventRevision,
 } from "@musubi/types";
 import {
@@ -536,9 +536,10 @@ export function createEvent(event: Event, connectionId?: string) {
 }
 
 export function updateEvent(event: Event, connectionId?: string) {
-  return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: eventPatchRequest(event),
-    method: "PATCH",
+  const operation = eventUpdateOperation(event);
+  return apiRequest(route(connectionId, `/api/v1${operation.path}`), {
+    body: operation.body,
+    method: operation.method,
     responseSchema: EventSchema,
   });
 }

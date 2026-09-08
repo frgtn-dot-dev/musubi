@@ -10,7 +10,7 @@ import {
   EventDeliveryConflictSchema,
   type ResolveEventDeliveryRequest,
   eventCreateRequest,
-  eventPatchRequest,
+  eventUpdateOperation,
   requireEventRevision,
   EventMutationError,
   InviteSchema,
@@ -386,30 +386,31 @@ export function useApi() {
     },
 
     async updateEvent(event: Event) {
+      const operation = eventUpdateOperation(event);
       const remote = remoteOf(eventHome(event));
       if (remote) {
         return readWire(
           EventSchema,
-          await fedFetch<Event>(remote, `/api/${apiVersion}/events`, {
-            method: "PATCH",
-            body: JSON.stringify(eventPatchRequest(event)),
+          await fedFetch<Event>(remote, `/api/${apiVersion}${operation.path}`, {
+            method: operation.method,
+            body: JSON.stringify(operation.body),
           }),
-          "PATCH /events (federated)",
+          `${operation.method} ${operation.path} (federated)`,
         );
       }
       const { error, data } = await authClient.$fetch<Event>(
-        `${apiUrl}/api/${apiVersion}/events`,
+        `${apiUrl}/api/${apiVersion}${operation.path}`,
         {
-          method: "PATCH",
+          method: operation.method,
           headers: {
             "content-type": "application/json",
           },
-          body: JSON.stringify(eventPatchRequest(event)),
+          body: JSON.stringify(operation.body),
         },
       );
       throwOnError(error);
 
-      return readWire(EventSchema, data, "PATCH /events");
+      return readWire(EventSchema, data, `${operation.method} ${operation.path}`);
     },
 
     async removeEvent(event: Event, unlinkCalendarID?: string) {

@@ -109,6 +109,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     const {
       scopeEdit: _intent,
       contentPatch: _patch,
+      timeEdit: _time,
       ...snapshot
     } = event as EventWriteRequest;
     event = { ...snapshot, revision: undefined }; // a new identity has no source revision
@@ -277,6 +278,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     const {
       scopeEdit: _intent,
       contentPatch: _patch,
+      timeEdit: _time,
       ...snapshot
     } = event as EventWriteRequest;
     event = snapshot; // keep intent only on the API request
