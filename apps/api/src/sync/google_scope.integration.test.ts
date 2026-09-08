@@ -11,6 +11,7 @@ import {
   account,
   events,
   eventOutbox,
+  eventScopeOperations,
   externalEvents,
   externalCalendars,
   createCalendar,
@@ -337,6 +338,59 @@ async function main(
         true,
       );
       assert.deepEqual(observedMoved.state, googleEventState(moved));
+      // Live Google evidence (2026-09-08): a child edit does not invalidate the
+      // master ETag. A final master GET cannot turn this scan into a family CAS.
+      let childPageVisits = 0;
+      onPage = () => {
+        if (++childPageVisits === 2) {
+          moved.summary = "Concurrent exception title";
+          moved.etag = '\"concurrent-child\"';
+        }
+      };
+      const staleFamily = await read();
+      onPage = undefined;
+      assert.equal(staleFamily.master.ref.etag, intent.masterEtag);
+      const staleChild = staleFamily.exceptions.find(item => item.ref.externalEventId === moved.id)!;
+      assert.equal(staleChild.event.title, observedMoved.event.title);
+      assert.equal(staleChild.ref.etag, observedMoved.ref.etag);
+      const freshFamily = await read();
+      assert.equal(freshFamily.master.ref.etag, staleFamily.master.ref.etag);
+      const freshChild = freshFamily.exceptions.find(item => item.ref.externalEventId === moved.id)!;
+      assert.equal(freshChild.event.title, "Concurrent exception title");
+      assert.notEqual(freshChild.ref.etag, staleChild.ref.etag);
+
+      // Keep the real authenticated endpoint closed even with the time-edit
+      // flag enabled. An empty local child list is not a provider family lock.
+      for (const withChild of [false, true]) {
+        if (withChild) await observe(moved);
+        const childrenBefore = await db.select().from(events).where(eq(events.seriesID, localMaster.id));
+        const mappingsBefore = await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id));
+        const beforeSeriesReads = reads;
+        const response = await realFetch(`${origin}/events/${localMaster.id}/scope`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${credential.raw}`,
+            "content-type": "application/json",
+            [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+          },
+          body: JSON.stringify({
+            operationID: randomUUID(),
+            expectedRevision: localMaster.revision,
+            scope: "series",
+            action: "update",
+            patch: { title: "Unsafe whole-series rename" },
+          }),
+        });
+        assert.equal(response.status, 403);
+        await response.json();
+        assert.equal(reads, beforeSeriesReads);
+        assert.equal(patches, 0);
+        assert.deepEqual(await getEventSnapshot(localMaster.id), localMaster);
+        assert.deepEqual(await db.select().from(events).where(eq(events.seriesID, localMaster.id)), childrenBefore);
+        assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)), mappingsBefore);
+        assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.calendarID, calendar.id))).length, 0);
+        assert.equal((await db.select().from(eventScopeOperations).where(eq(eventScopeOperations.eventID, localMaster.id))).length, 0);
+      }
       seriesPages = { ...normalPages, two: { items: [moved] } };
       await assert.rejects(read, /conflict/);
       seriesPages = {

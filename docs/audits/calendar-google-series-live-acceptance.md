@@ -28,11 +28,41 @@ The native family ID set and original occurrence identities were preserved. Amon
 
 ## Implementation consequence
 
-A parent-only PATCH cannot implement Musubi's current planner contract, which preserves child content. Whole-series delivery needs durable child reconciliation or a separately specified user-visible contract change. Before enabling delivery, persist accepted child baselines and desired child content; account for the provider mutation of child ETags; distinguish the expected intermediate state from concurrent external changes; recover safely after partial delivery; and confirm the final family before acknowledging it. Do not adopt arbitrary fresh child state as an accepted baseline.
+A parent-only PATCH cannot implement Musubi's current planner contract, which preserves child content. The follow-up concurrency test below also rules out the initially proposed PATCH-then-restore approach under the strict preservation contract. Durable checkpoints can recover saved content after interruption, but cannot recover an unseen external edit that the parent PATCH already erased. Google whole-series writes therefore remain unsupported; reconciliation alone is not an implementation prerequisite that would make them safe.
 
 Title-only evidence does not establish time/recurrence mutation behaviour, following-scope behaviour, meeting semantics, atomic snapshots, or other providers. Those remain separate acceptance work.
 
 References: [Google Events PATCH](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch), [Google Calendars insert](https://developers.google.com/workspace/calendar/api/v3/reference/calendars/insert).
+
+## Follow-up: exception concurrency and product decision
+
+A second authorized zoned-series test created a custom exception, read an accepted master ETag, edited that exception again, then attempted a master-title PATCH using the previously accepted ETag. It observed:
+
+- The child ETag changed; the master ETag did not.
+- The conditional master PATCH succeeded.
+- The child's newer title was replaced by the master title.
+- The temporary calendar was deleted.
+
+Sanitized result:
+
+```json
+{
+  "scenario": "Child edit versus accepted master ETag, synthetic title-only writes",
+  "master_etag_changed_after_child_edit": false,
+  "child_etag_changed": true,
+  "master_patch_with_pre_child_edit_etag": "accepted",
+  "child_title_after_master_attempt": "Synthetic master update",
+  "cleanup": "temporary calendar deleted"
+}
+```
+
+This supplies a concrete counterexample: save child title A, external edit writes B, parent PATCH writes C, recovery restores A. B is lost before recovery can observe it. Scanning again, an application mutex, an empty exception list, and durable journaling cannot close the gap between the last read and the provider mutation. A child-level conditional restore only protects changes made after propagation; it does not protect B in this sequence.
+
+Google documents [resource-specific ETag checks](https://developers.google.com/workspace/calendar/api/guides/version-resources). Its [batch API](https://developers.google.com/workspace/calendar/api/guides/batch) processes separate requests and may execute them in any order; batching does not supply the missing family transaction. The conclusion about this writer follows from the observed counterexample; this is not a claim that every possible future Google capability has been ruled out.
+
+**User decision, 2026-09-08:** preserve exception content and leave Google whole-series operations unsupported for now. Continue other K12–K14 work. Do not silently replace this contract with Google's propagation semantics or treat an empty local child list as safe. Reconsider only with demonstrated family-wide protection or an explicitly approved different product contract. This does not mark Google whole-series implementation complete.
+
+The HTTP/DB regression covers zoned/all-day read scans that return a stale child despite a stable master ETag, and rejects a whole-series rename with the application time-edit gate enabled, both with and without an imported child. No provider call, local content/revision/mapping change, outbox row, or scope receipt is created by the rejected request. Existing single-occurrence support remains available behind its default-off gate.
 
 ## Sanitized observations
 
