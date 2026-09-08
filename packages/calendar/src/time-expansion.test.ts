@@ -403,6 +403,22 @@ assert.throws(
   /recurrence-budget-exceeded/,
   "pre-window candidates count toward budget",
 );
+assert.deepEqual(
+  expand(
+    [
+      zoned(
+        "2024-01-01T00:00:00.000",
+        "2024-01-01T01:00:00.000",
+        "UTC",
+        `FREQ=DAILY;BYHOUR=${Array.from({ length: 24 }, (_, i) => i).join(",")};BYMINUTE=0,15,30,45;UNTIL=20240102T000000Z`,
+      ),
+    ],
+    "2026-01-01Z",
+    "2026-01-02Z",
+  ),
+  [],
+  "UNTIL bounds pre-window work for expired series",
+);
 console.log(
   `Known time expansion through public API: OK (host TZ=${process.env.TZ ?? "default"})`,
 );

@@ -493,7 +493,12 @@ export function expandKnownTimeEvents<T extends ICalendarEventBase>(
         count != null
           ? secondAnchor
           : new Date(from.getTime() - lookback - DAY);
-      const upper = new Date(to.getTime() + DAY);
+      const upper = new Date(
+        Math.min(
+          to.getTime() + DAY,
+          until ? pseudo(until.civil).getTime() + DAY : Infinity,
+        ),
+      );
       // Count candidates before the visible window too: rrule otherwise
       // filters them internally before our callback and bypasses the budget.
       rule.between(secondAnchor, upper, true, (date) => {
