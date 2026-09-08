@@ -3,6 +3,7 @@ import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
 import {
   DEFAULT_CALENDAR_COLOR,
   EventWriteError,
+  OccurrenceStartSchema,
   type Event,
   nearestMicrosoftCalendarColor,
   type Task,
@@ -492,6 +493,7 @@ export async function fetchMicrosoftChanges(
     fetchImpl?: typeof fetch;
     graphBase?: string;
     now?: number;
+    timeModels?: boolean;
   } = {},
 ): Promise<FetchChangesResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -504,13 +506,14 @@ export async function fetchMicrosoftChanges(
   if (parsed && parsed.windowEnd - now < WINDOW_RENEW_MARGIN_DAYS * DAY_MS)
     parsed = null;
 
-  let reset = !parsed && !!cursor; // had a cursor but can't continue from it → wipe
+  let reset = !parsed && (!!cursor || !!options.timeModels); // had a cursor but can't continue from it → wipe
   let windowEnd = parsed?.windowEnd ?? now + WINDOW_FUTURE_DAYS * DAY_MS;
   let url =
     parsed?.link ??
     initialDeltaUrl(externalCalendarId, windowEnd, now, graphBase);
   let deltaLink: string | null = null;
   const seriesMasters = new Map<string, any>();
+  let restarted = false;
 
   while (!deltaLink) {
     const res = await graphGet(accessToken, url, fetchImpl);
@@ -518,6 +521,8 @@ export async function fetchMicrosoftChanges(
     // Delta token expired → discard partial incremental pages and restart as a
     // full set. The engine sweeps mappings missing from the completed result.
     if (res.status === 410) {
+      if (restarted || !parsed) throw new Error("Outlook rejected the initial calendar window.");
+      restarted = true;
       reset = true;
       changes.length = 0;
       seriesMasters.clear();
@@ -541,9 +546,31 @@ export async function fetchMicrosoftChanges(
           fetchImpl,
           graphBase,
         );
-        item = { ...master, ...item };
+        if (options.timeModels) {
+          if (!item.originalStart || item.type === "exception") {
+            const response = await graphGet(accessToken, `${graphBase}${microsoftEventPath(externalCalendarId, item.id)}`, fetchImpl);
+            if (!response.ok) throw await graphError(response);
+            const instance = await response.json();
+            if (instance.id !== item.id || instance.seriesMasterId !== item.seriesMasterId || instance["@removed"])
+              throw new Error("Outlook returned an invalid occurrence dependency.");
+            item = { ...item, ...instance };
+          }
+          if (typeof item.originalStart !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(item.originalStart) || /\.\d{3}\d*[1-9]\d*(?:Z|[+-]\d{2}:\d{2})$/i.test(item.originalStart))
+            throw new Error("Outlook occurrence identity requires an exact millisecond UTC instant.");
+          const originalStart = OccurrenceStartSchema.parse({ kind: "instant", value: parseGraphDate(item.originalStart).toISOString() });
+          const providerOccurrence = { externalSeriesID: item.seriesMasterId, originalStart };
+          // A master validator never authorizes a conditional instance write.
+          item = { ...master, ...item, "@odata.etag": item["@odata.etag"] ?? null, providerOccurrence };
+        } else item = { ...master, ...item };
       }
-      changes.push({ kind: "event", data: toNormalized(item) });
+      const event = toNormalized(item);
+      if (options.timeModels && !item["@removed"]) {
+        event.providerOccurrence = item.providerOccurrence;
+        // The provider expands this bounded view. Never attach its recurrence
+        // to local instances, which would generate the series a second time.
+        if (item.isCancelled) event.status = "cancelled";
+      }
+      changes.push({ kind: "event", data: event });
     }
 
     if (data["@odata.nextLink"]) {
@@ -670,7 +697,7 @@ export const microsoftAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
-      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor);
+      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled });
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {

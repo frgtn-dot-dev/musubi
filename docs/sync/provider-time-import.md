@@ -31,3 +31,15 @@ Reading does not serialize or write the resource: `VTIMEZONE`, alarms, attendee 
 Evidence: `caldav_time.test.ts` covers component order, content, dates/floating, DST durations and explicit refusals. `caldav_occurrences.integration.test.ts` covers atomic replacement, omitted overrides, stable revival, rollback including ETags and pending family members on disposable PostgreSQL. `caldav.radicale.integration.test.ts` exercises actual HTTP through Radicale, the adapter, sync engine and DB: reset/delta, deletion/revival, stable identity and unchanged server bytes including alarms/extensions. The local isolated Radicale 3.8.0 run passed; this does not certify iCloud or another live account.
 
 Sources: [CalDAV calendar object resources](https://www.rfc-editor.org/rfc/rfc4791#section-4.1), [iCalendar duration](https://www.rfc-editor.org/rfc/rfc5545#section-3.3.6).
+
+## Graph occurrence mapping slice
+
+Graph's bounded `calendarView` remains provider-expanded: a fetched master supplies inherited content but is never inserted as a second locally expanded RRULE. Each instance mapping retains `seriesMasterId` and its original UTC start independently of a moved start. Existing local UUIDs/revisions survive metadata adoption and reset. Cancellation/removal tombstones the provider-expanded row, so no generated local slot reappears. The existing limited history window is unchanged.
+
+Exceptions and records lacking original identity are hydrated from their calendar-scoped instance endpoint before applying the fetch. An instance never inherits the master's ETag. Dependency failure and identity mismatch leave the cursor unchanged. ISO timestamps with redundant zero precision normalize to milliseconds; nonzero sub-millisecond occurrence identity is refused rather than collapsed. Repeated 410 on a fresh window terminates with an error instead of looping indefinitely.
+
+These are destination mapping fields, not a fabricated local master or event time zone. Native scope resolution and precise Graph recurrence conversion remain K12. Exposing the imported coverage window to web/mobile is the next K11 client slice; complete history is not promised.
+
+Evidence: `graph_occurrences.integration.test.ts` runs actual HTTP fixtures through the Graph adapter, sync engine and disposable DB. It covers legacy adoption, moved content/duration, no double expansion, master/instance ETag separation, repeated and 410/full resets, hydration failure, exact original identity and stable revival. No live Microsoft account was changed.
+
+Source: [Microsoft Graph event resource](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0).
