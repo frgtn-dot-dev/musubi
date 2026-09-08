@@ -7918,3 +7918,25 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(await delivery.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
   });
 }
+
+test("retries a failed calendar read without a route crash", async ({ page }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await mockAuthenticatedReads(page);
+  let unavailable = true;
+  await page.route("**/api/v1/events**", (route) => {
+    if (route.request().method() !== "GET" || !unavailable) return route.fallback();
+    return respond(route, { message: "Calendar temporarily unavailable" }, 503);
+  });
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+  await expect(page.getByRole("heading", { name: "We could not open this calendar." })).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+  await page.screenshot({ path: testInfo.outputPath("calendar-error.png"), fullPage: true });
+  unavailable = false;
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Weekly review/ })).toHaveCount(5);
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("calendar-recovered.png"), fullPage: true });
+  expect(pageErrors).toEqual([]);
+});

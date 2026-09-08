@@ -1,3 +1,4 @@
+import { CalendarTimeError } from "./calendar-time-error";
 import { expandRecurringEvents } from "@musubi/calendar";
 import type { Event } from "@musubi/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -29,15 +30,19 @@ export function expandForView(
   view: CalendarViewId,
   consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ) {
-  const { expandsRecurringOnly } = viewDefinition(view);
-  const recurringEvents = expandRecurringEvents(
-    activeEvents,
-    range.start,
-    new Date(range.end.getTime() - 1),
-    { consumerTimeZone, includeAllNonRecurring: expandsRecurringOnly },
-  );
+  try {
+    const { expandsRecurringOnly } = viewDefinition(view);
+    const recurringEvents = expandRecurringEvents(
+      activeEvents,
+      range.start,
+      new Date(range.end.getTime() - 1),
+      { consumerTimeZone, includeAllNonRecurring: expandsRecurringOnly },
+    );
 
-  return recurringEvents.filter(event => !event.isCanceled);
+    return recurringEvents.filter((event) => !event.isCanceled);
+  } catch (cause) {
+    throw new CalendarTimeError("calendar", cause);
+  }
 }
 
 export function useWorkspaceQueries(
@@ -105,17 +110,34 @@ export function useWorkspaceQueries(
     () => [...(calendars.data ?? []), ...(federated.data?.calendars ?? [])],
     [calendars.data, federated.data],
   );
-  const mergedEvents = useMemo(() => {
+  const merged = useMemo(() => {
     const home = events.data;
     const remote = federated.data?.events ?? [];
-    if (!home) return undefined;
-    if (remote.length === 0) return home;
-
-    return {
-      ...home,
-      baseEvents: [...home.baseEvents, ...remote.filter(event => !event.isCanceled)],
-      events: [...home.events, ...expandForView(remote, range, view, consumerTimeZone)],
-    };
+    if (!home || remote.length === 0) return { data: home, error: undefined };
+    try {
+      return {
+        data: {
+          ...home,
+          baseEvents: [
+            ...home.baseEvents,
+            ...remote.filter((event) => !event.isCanceled),
+          ],
+          events: [
+            ...home.events,
+            ...expandForView(remote, range, view, consumerTimeZone),
+          ],
+        },
+        error: undefined,
+      };
+    } catch (cause) {
+      return {
+        data: undefined,
+        error:
+          cause instanceof CalendarTimeError
+            ? cause
+            : new CalendarTimeError("calendar", cause),
+      };
+    }
   }, [events.data, federated.data, range, view, consumerTimeZone]);
 
   return {
@@ -123,7 +145,8 @@ export function useWorkspaceQueries(
     events,
     federated,
     mergedCalendars,
-    mergedEvents,
+    mergedEvents: merged.data,
+    expansionError: merged.error,
     pages,
     range,
     settings,

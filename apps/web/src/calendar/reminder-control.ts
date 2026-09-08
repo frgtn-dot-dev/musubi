@@ -9,6 +9,9 @@ import type { ReminderRule, RemindersDocument } from "@musubi/types";
  * have to build a rules document to render an event.
  */
 export type ReminderControl = {
+  /** A failed resolution cancels local timers and is shown by the workspace. */
+  error?: Error;
+  retry?: () => Promise<void>;
   calendarOrder: readonly string[];
   document: RemindersDocument;
   /** Web push for THIS browser. Absent capability hides the choice entirely. */
