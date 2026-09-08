@@ -1,3 +1,5 @@
+import { expandCalendarView } from "@/lib/calendarExpansion";
+import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { styles } from "@/constants/theme";
 import { AddEventModal, DOCK_PEEK } from "@/components/calendar/AddEventModal";
 import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
@@ -17,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { BackHandler, Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { expandRecurringEvents, type Mode } from "@musubi/calendar";
+import { type Mode } from "@musubi/calendar";
 import dayjs from "dayjs";
 import { editedEvent, type Event } from "@musubi/types";
 import { useEventsStore } from "@/store/useEventsStore";
@@ -280,17 +282,15 @@ export default function MainTab() {
 
   // Expand ALL events over the range — the expensive rrule work. Deps are
   // [events, range] only, so toggling a calendar does NOT re-run it.
-  const expandedAll = useMemo(
+  const expansion = useMemo(
     () =>
-      expandRecurringEvents(events, rangeStart, rangeEnd, { consumerTimeZone }).sort(
-        (a, b) => a.start.getTime() - b.start.getTime(),
-      ),
+      expandCalendarView(events, rangeStart, rangeEnd, { consumerTimeZone }),
     [events, rangeStart, rangeEnd, consumerTimeZone],
   );
   const visibleEvents = useMemo(
     () =>
-      expandedAll.filter((e) => e.calendars.some((id) => activeCals.has(id))),
-    [expandedAll, activeCals],
+      expansion.events.filter((e) => e.calendars.some((id) => activeCals.has(id))),
+    [expansion.events, activeCals],
   );
 
   const calendarById = useMemo(
@@ -371,6 +371,7 @@ export default function MainTab() {
           onToggle={toggleCal}
           onSolo={soloCalendar}
         />
+        {expansion.error && <CalendarExpansionError message={expansion.error} onRetry={onRefresh} refreshing={refreshing} />}
         <CalendarDrillView
           calMode={calMode}
           base={base}

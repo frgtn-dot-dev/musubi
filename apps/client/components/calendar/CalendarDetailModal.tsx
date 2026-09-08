@@ -1,3 +1,5 @@
+import { expandCalendarView } from "@/lib/calendarExpansion";
+import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { colors, styles } from "@/constants/theme";
 import { type Calendar, type Event, can, editedEvent } from "@musubi/types";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
@@ -8,7 +10,7 @@ import { Text, Pressable, View, useWindowDimensions } from "react-native";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
-import { expandRecurringEvents, type Mode } from "@musubi/calendar";
+import { type Mode } from "@musubi/calendar";
 import dayjs from "dayjs";
 import {
   GestureDetector,
@@ -255,11 +257,9 @@ export default function CalendarDetail({
     ] as [Date, Date];
   }, [calMode, anchorMonth]);
 
-  const expandedEvents = useMemo(
+  const expansion = useMemo(
     () =>
-      expandRecurringEvents(visibleEvents, rangeStart, rangeEnd, { consumerTimeZone }).sort(
-        (a, b) => a.start.getTime() - b.start.getTime(),
-      ),
+      expandCalendarView(visibleEvents, rangeStart, rangeEnd, { consumerTimeZone }),
     [visibleEvents, rangeStart, rangeEnd, consumerTimeZone],
   );
 
@@ -331,10 +331,11 @@ export default function CalendarDetail({
                 drillProgress={monthTransition}
                 onTodayPress={onTodayPress}
               />
+              {expansion.error && <CalendarExpansionError message={expansion.error} />}
               <CalendarDrillView
                 calMode={calMode}
                 base={base}
-                events={expandedEvents}
+                events={expansion.events}
                 weekStartsOn={weekStartsOn === "sunday" ? 0 : 1}
                 eventColorOf={eventColorOf}
                 onDayPress={openDrill}

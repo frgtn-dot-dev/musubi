@@ -143,3 +143,7 @@ Home query selection and federated expansion expose safe presentation errors ins
 ### Web reminder inheritance checkpoint
 
 The event editor now passes seriesID through rule resolution. Its inherited baseline removes only the current event override, preserving a master rule; selecting the calendar value still writes an override when the series differs. Unit regressions exercise detached and master priorities without mutating the settings document; Chromium covers the existing PUT rule:null menu and refetched display. Transport admission remains pending.
+
+### Native expansion error checkpoint
+
+Main calendar, agenda, calendar detail and invitation preview share a presentation boundary around expansion. A failed view returns no partial occurrences and shows a safe persistent message; main/agenda/invitation reuse existing refresh actions. Calendar and composer stay mounted, preserving draft state. Logic regressions cover recovery, immutable definitions, cancellation replacement and distant agenda events. This does not certify native rendering on a physical device or enable transport metadata.

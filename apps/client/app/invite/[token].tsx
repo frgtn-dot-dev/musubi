@@ -1,6 +1,7 @@
 import { colors, fonts, styles } from "@/constants/theme";
 import { CalendarInvitePreview } from "@musubi/types";
-import { expandRecurringEvents } from "@musubi/calendar";
+import { expandCalendarView } from "@/lib/calendarExpansion";
+import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { useApi } from "@/services/api";
 import { useServer } from "@/contexts/ServerContext";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -101,13 +102,14 @@ export default function Invite() {
 
   // The server sends raw events — expand recurrences into real occurrences
   // (a daily event previews as separate days, like the agenda) and sort.
-  const previewEvents = useMemo(() => {
-    if (!calendarData?.events) return [];
+  const expansion = useMemo(() => {
+    if (!calendarData?.events) return { events: [], error: null };
     const from = new Date();
     const to = new Date(from.getTime() + PREVIEW_WINDOW_DAYS * 86400_000);
-    return expandRecurringEvents(calendarData.events, from, to, { consumerTimeZone })
-      .sort((a, b) => a.start.getTime() - b.start.getTime());
+    return expandCalendarView(calendarData.events, from, to, { consumerTimeZone });
   }, [calendarData, consumerTimeZone]);
+
+  const previewEvents = expansion.events;
 
   const closeInvite = () => {
     if (restoredAfterAuth || !router.canGoBack()) router.replace("/(tabs)");
@@ -166,6 +168,7 @@ export default function Invite() {
           </View>
         )}
 
+        {!loadError && expansion.error && <CalendarExpansionError message={expansion.error} onRetry={() => setLoadAttempt(v => v + 1)} refreshing={isLoading} />}
         {!loadError && previewEvents.length > 0 && <View style={styles.section}>
           <Text style={styles.sectionLabel}>WHAT&apos;S ON IT</Text>
           {previewEvents.map((event) => (
