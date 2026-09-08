@@ -22,3 +22,4 @@ export {
   MIN_PEER_VERSION,
   PRODUCT_VERSION,
 } from "./version";
+export * from "./event-scope";
