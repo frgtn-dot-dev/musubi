@@ -16,7 +16,12 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { notificationsTable } from "@/db/schema";
-import { cacheGetReminders, cacheSetReminders } from "./eventsCache";
+import {
+  cacheGetReminders,
+  cacheSetReminders,
+  cacheGetAllEvents,
+  type CachedEvent,
+} from "./eventsCache";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { deviceTimezone } from "@/lib/timezone";
 
@@ -157,7 +162,12 @@ let rules: RemindersDocument | null = null;
 
 /** Seed from the local cache. Safe to call repeatedly; the network still wins. */
 export async function loadCachedReminderRules() {
-  rules ??= await cacheGetReminders();
+  const generation = reminderGeneration;
+  if (!rules) {
+    const cached = await cacheGetReminders();
+    if (generation !== reminderGeneration) return null;
+    rules ??= cached;
+  }
   return rules;
 }
 
@@ -187,8 +197,12 @@ export function reminderRules() {
  * outlive the upgrade that makes it wrong. A real document, including one read
  * from the cache, always wins.
  */
-export async function adoptLegacyReminderRules(notificationsOnByDefault: boolean) {
+export async function adoptLegacyReminderRules(
+  notificationsOnByDefault: boolean,
+) {
+  const generation = reminderGeneration;
   if (await loadCachedReminderRules()) return false;
+  if (generation !== reminderGeneration) return false;
 
   rules = {
     calendars: {},
@@ -216,7 +230,11 @@ export function setReminderWriter(writer: ReminderWriter) {
   writeRemoteRule = writer;
 }
 
-function applyLocally(scope: "calendars" | "events", id: string, rule: ReminderRule | null) {
+function applyLocally(
+  scope: "calendars" | "events",
+  id: string,
+  rule: ReminderRule | null,
+) {
   if (!rules) return;
   const branch = { ...rules[scope] };
   if (rule) branch[id] = rule;
@@ -231,12 +249,16 @@ function applyLocally(scope: "calendars" | "events", id: string, rule: ReminderR
  * The server write happens first: it is the copy that roams, and a local
  * schedule the server never heard about would vanish on the next refresh.
  */
-export async function setEventReminderRule(event: Event, rule: ReminderRule | null) {
+export async function setEventReminderRule(
+  event: Event,
+  rule: ReminderRule | null,
+) {
   if (!writeRemoteRule) throw new Error("Reminder writer is not bound yet.");
+  const generation = reminderGeneration;
   await writeRemoteRule("events", event.id, rule);
+  if (generation !== reminderGeneration) return;
   applyLocally("events", event.id, rule);
 
-  await cancelEventNotification(event.id);
   await syncScheduledReminders([event], { onlyEventIDs: [event.id] });
 }
 
@@ -247,7 +269,9 @@ export async function setCalendarReminderRule(
   events: Event[],
 ) {
   if (!writeRemoteRule) throw new Error("Reminder writer is not bound yet.");
+  const generation = reminderGeneration;
   await writeRemoteRule("calendars", calendarID, rule);
+  if (generation !== reminderGeneration) return;
   applyLocally("calendars", calendarID, rule);
 
   await syncScheduledReminders(events);
@@ -271,11 +295,17 @@ function context(): ReminderContext | null {
  * The event form uses this to open on what will actually happen rather than on
  * a global default that a calendar rule may have overruled two levels up.
  */
-export function effectiveReminderRule(event: Pick<Event, "id" | "calendars">): ReminderRule {
+export function effectiveReminderRule(
+  event: Pick<CachedEvent, "id" | "calendars" | "seriesID">,
+): ReminderRule {
   const ctx = context();
   if (!ctx) return SILENT_REMINDER_RULE;
   return resolveReminderRule(
-    { id: event.id, calendars: event.calendars ?? [] },
+    {
+      id: event.id,
+      calendars: event.calendars ?? [],
+      seriesID: event.seriesID,
+    },
     ctx,
   );
 }
@@ -288,13 +318,19 @@ export function effectiveReminderRule(event: Pick<Event, "id" | "calendars">): R
  * calendar and a later change to that calendar still reaches it.
  */
 export function inheritedReminderRule(
-  event: Pick<Event, "id" | "calendars">,
+  event: Pick<CachedEvent, "id" | "calendars" | "seriesID">,
 ): ReminderRule {
   const ctx = context();
   if (!ctx) return SILENT_REMINDER_RULE;
+  const inherited = { ...ctx.eventRules };
+  delete inherited[event.id];
   return resolveReminderRule(
-    { id: event.id, calendars: event.calendars ?? [] },
-    { ...ctx, eventRules: {} },
+    {
+      id: event.id,
+      calendars: event.calendars ?? [],
+      seriesID: event.seriesID,
+    },
+    { ...ctx, eventRules: inherited },
   );
 }
 
@@ -333,7 +369,9 @@ async function schedule(reminder: ResolvedReminder): Promise<string> {
 }
 
 async function cancel(identifier: string) {
-  await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => undefined);
+  await Notifications.cancelScheduledNotificationAsync(identifier).catch(
+    () => undefined,
+  );
 }
 
 /**
@@ -344,32 +382,104 @@ async function cancel(identifier: string) {
  * minute, and on iOS that is a good way to hit the pending-notification cap
  * mid-rebuild and lose one.
  */
-export async function syncScheduledReminders(
-  events: Event[],
-  options?: {
-    /**
-     * Limit the pass to these events. Without it, every receipt this device
-     * holds is compared against `events` — so a single changed event must not
-     * be passed on its own, or every other reminder reads as gone.
-     */
-    onlyEventIDs?: string[];
-  },
+// Serialize OS/receipt mutations. A slower older pass must not win a race
+// against a newer pass (or a cancellation) after both read the same receipts.
+let reminderQueue: Promise<void> = Promise.resolve();
+let reminderGeneration = 0;
+function serializeReminders(work: () => Promise<void>) {
+  const run = reminderQueue.then(work);
+  reminderQueue = run.catch(() => undefined);
+  return run;
+}
+
+export function syncScheduledReminders(
+  events: CachedEvent[],
+  options?: { onlyEventIDs?: string[] },
 ) {
-  const ctx = context() ?? ((await loadCachedReminderRules()) ? context() : null);
-  if (!ctx) return;
+  const generation = reminderGeneration;
+  // Own the queued input: later edits must not mutate a pending snapshot.
+  const snapshot = events.map((event) => ({
+    ...event,
+    start: new Date(event.start),
+    end: new Date(event.end),
+    calendars: [...event.calendars],
+    timeModel: event.timeModel ? { ...event.timeModel } : event.timeModel,
+    originalStart: event.originalStart
+      ? { ...event.originalStart }
+      : event.originalStart,
+  }));
+  const scope = options?.onlyEventIDs ? [...options.onlyEventIDs] : undefined;
+  return serializeReminders(async () => {
+    if (generation !== reminderGeneration) return;
+    await reconcileScheduledReminders(
+      snapshot,
+      scope ? { onlyEventIDs: scope } : undefined,
+      generation,
+    );
+  });
+}
+
+async function reconcileScheduledReminders(
+  events: CachedEvent[],
+  options:
+    | {
+        /**
+         * Limit the pass to these events. Without it, every receipt this device
+         * holds is compared against `events` — so a single changed event must not
+         * be passed on its own, or every other reminder reads as gone.
+         */
+        onlyEventIDs?: string[];
+      }
+    | undefined,
+  generation: number,
+) {
+  const ctx =
+    context() ?? ((await loadCachedReminderRules()) ? context() : null);
+  if (!ctx || generation !== reminderGeneration) return;
 
   const scope = options?.onlyEventIDs ? new Set(options.onlyEventIDs) : null;
+
+  let definitions = events;
+  let families: Set<string> | null = null;
+  if (scope) {
+    const byID = new Map(
+      (await cacheGetAllEvents()).map((event) => [event.id, event]),
+    );
+    for (const event of events) {
+      const current = byID.get(event.id);
+      if (
+        !current ||
+        !(current.revision ?? 0) ||
+        (event.revision ?? 0) > (current.revision ?? 0)
+      )
+        byID.set(event.id, event);
+    }
+    // Refresh a whole family, including the master receipt when the changed
+    // definition is a newly created detached exception with the same slot.
+    families = new Set([...scope].map((id) => byID.get(id)?.seriesID ?? id));
+    for (const id of families) scope.add(id);
+    definitions = [...byID.values()].filter((event) => {
+      if (!families!.has(event.id) && !families!.has(event.seriesID ?? ""))
+        return false;
+      scope.add(event.id);
+      return true;
+    });
+  }
+  if (generation !== reminderGeneration) return;
 
   const now = new Date();
   const wanted = resolveReminders({
     context: ctx,
-    events: events.map((event) => ({
+    events: definitions.map((event) => ({
       calendars: event.calendars ?? [],
       end: new Date(event.end),
       id: event.id,
       isAllDay: event.isAllDay,
       isCanceled: event.isCanceled,
       recurrence: event.recurrence,
+      timeModel: event.timeModel,
+      seriesID: event.seriesID,
+      originalStart: event.originalStart,
       start: new Date(event.start),
       title: event.title,
     })),
@@ -378,21 +488,42 @@ export async function syncScheduledReminders(
   });
 
   const allRows = await db.select().from(notificationsTable);
-  const rows = scope ? allRows.filter((row) => scope.has(row.eventID)) : allRows;
+  const rows = scope
+    ? allRows.filter((row) => {
+        if (scope.has(row.eventID)) return true;
+        // Removed exceptions are absent from the cache, but their original
+        // occurrence key still identifies the family that owns the receipt.
+        try {
+          const key: unknown = JSON.parse(row.occurrenceID);
+          return Array.isArray(key) && families?.has(key[0]);
+        } catch {
+          return false;
+        }
+      })
+    : allRows;
   const scheduled = new Map(rows.map((row) => [row.occurrenceID, row]));
-  const wantedByID = new Map(wanted.map((reminder) => [reminder.occurrenceID, reminder]));
+  const wantedByID = new Map(
+    wanted.map((reminder) => [reminder.occurrenceID, reminder]),
+  );
 
-  // Gone, or moved: an event that shifted by an hour keeps its occurrence id
-  // only if its start did not change, so a moved event lands here.
+  // A stable original key can now point to a persisted detached event even
+  // when its time is unchanged. Refresh the OS navigation payload as well.
   const stale = rows.filter((row) => {
     const match = wantedByID.get(row.occurrenceID);
-    return !match || match.dueAt.toISOString() !== row.triggerDate;
+    return (
+      !match ||
+      match.eventID !== row.eventID ||
+      match.dueAt.toISOString() !== row.triggerDate
+    );
   });
   for (const row of stale) await cancel(row.identifier);
   if (stale.length) {
-    await db
-      .delete(notificationsTable)
-      .where(inArray(notificationsTable.id, stale.map((row) => row.id)));
+    await db.delete(notificationsTable).where(
+      inArray(
+        notificationsTable.id,
+        stale.map((row) => row.id),
+      ),
+    );
   }
 
   const staleIDs = new Set(stale.map((row) => row.occurrenceID));
@@ -401,6 +532,10 @@ export async function syncScheduledReminders(
     if (existing && !staleIDs.has(reminder.occurrenceID)) continue;
 
     const identifier = await schedule(reminder);
+    if (generation !== reminderGeneration) {
+      await cancel(identifier);
+      return;
+    }
     try {
       await db.insert(notificationsTable).values({
         eventID: reminder.eventID,
@@ -429,30 +564,44 @@ export async function syncScheduledReminders(
 async function forgetUntrackedNotifications() {
   const [pending, rows] = await Promise.all([
     Notifications.getAllScheduledNotificationsAsync().catch(() => []),
-    db.select({ identifier: notificationsTable.identifier }).from(notificationsTable),
+    db
+      .select({ identifier: notificationsTable.identifier })
+      .from(notificationsTable),
   ]);
 
   const known = new Set(rows.map((row) => row.identifier));
   for (const notification of pending) {
-    if (!known.has(notification.identifier)) await cancel(notification.identifier);
+    if (!known.has(notification.identifier))
+      await cancel(notification.identifier);
   }
 }
 
 /** One event's reminders, dropped now rather than at the next reconcile. */
-export async function cancelEventNotification(eventID: string) {
-  const rows = await db
-    .select()
-    .from(notificationsTable)
-    .where(eq(notificationsTable.eventID, eventID));
-  for (const row of rows) await cancel(row.identifier);
-  await db.delete(notificationsTable).where(eq(notificationsTable.eventID, eventID));
+export function cancelEventNotification(eventID: string) {
+  const generation = reminderGeneration;
+  return serializeReminders(async () => {
+    if (generation !== reminderGeneration) return;
+    const rows = await db
+      .select()
+      .from(notificationsTable)
+      .where(eq(notificationsTable.eventID, eventID));
+    for (const row of rows) await cancel(row.identifier);
+    await db
+      .delete(notificationsTable)
+      .where(eq(notificationsTable.eventID, eventID));
+  });
 }
 
-/** Sign-out / account deletion: the next account must not inherit reminders. */
-export async function clearAllEventNotifications() {
-  await Notifications.cancelAllScheduledNotificationsAsync().catch(() => undefined);
-  await db.delete(notificationsTable);
+/** Sign-out / account deletion: invalidate queued snapshots immediately. */
+export function clearAllEventNotifications() {
+  reminderGeneration++;
   rules = null;
+  return serializeReminders(async () => {
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(
+      () => undefined,
+    );
+    await db.delete(notificationsTable);
+  });
 }
 
 /** Ask only when the user is actively enabling/saving their first reminder. */
@@ -518,20 +667,29 @@ function importanceName(value: number) {
 /** A scheduled notification's fire time, whatever trigger shape it uses. */
 function triggerDate(trigger: unknown): string | null {
   if (!trigger || typeof trigger !== "object") return null;
-  const value = (trigger as { date?: unknown; value?: unknown }).date
-    ?? (trigger as { value?: unknown }).value;
+  const value =
+    (trigger as { date?: unknown; value?: unknown }).date ??
+    (trigger as { value?: unknown }).value;
   if (typeof value === "number") return new Date(value).toISOString();
   if (typeof value === "string") return new Date(value).toISOString();
   return null;
 }
 
 export async function reminderDiagnostics(): Promise<ReminderDiagnostics> {
-  const permission = await Notifications.getPermissionsAsync().catch(() => null);
-  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
-  const channels = Platform.OS === "android"
-    ? await Notifications.getNotificationChannelsAsync().catch(() => [])
-    : [];
-  const receipts = await db.select().from(notificationsTable).catch(() => []);
+  const permission = await Notifications.getPermissionsAsync().catch(
+    () => null,
+  );
+  const pending = await Notifications.getAllScheduledNotificationsAsync().catch(
+    () => [],
+  );
+  const channels =
+    Platform.OS === "android"
+      ? await Notifications.getNotificationChannelsAsync().catch(() => [])
+      : [];
+  const receipts = await db
+    .select()
+    .from(notificationsTable)
+    .catch(() => []);
 
   const upcoming = pending
     .map((item) => triggerDate(item.trigger))
@@ -562,7 +720,9 @@ export async function reminderDiagnostics(): Promise<ReminderDiagnostics> {
  *
  * Returns why it will not arrive, or null when it is on its way.
  */
-export async function sendTestReminder(afterSeconds = 5): Promise<string | null> {
+export async function sendTestReminder(
+  afterSeconds = 5,
+): Promise<string | null> {
   const granted = await requestEventNotificationPermission();
   if (!granted) {
     return "This device has not granted notification permission, so nothing can be delivered. Grant it in system settings and try again.";
