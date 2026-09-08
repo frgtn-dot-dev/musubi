@@ -1,0 +1,26 @@
+import { z } from "zod";
+import { ProviderEventStateSchema, type ProviderEventState } from "./provider-event-state";
+export const ProviderRsvpEditSchema = z.object({
+  operationID: z.uuid().transform(value => value.toLowerCase()),
+  expectedRevision: z.number().int().positive(),
+  expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  provider: z.literal("google"), response: z.enum(["accepted", "tentative", "declined"]),
+  sendUpdates: z.literal("all"),
+}).strict();
+export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
+/** Private outbox payload. Native raw evidence never belongs in a public DTO. */
+export type ProviderRsvpIntent = {
+  request: ProviderRsvpEdit;
+  baseline: Record<string, unknown>;
+  baselineState: ProviderEventState;
+  desiredState: ProviderEventState;
+  mappingID: string;
+};
+export function providerRsvpDesiredState(input: ProviderEventState, copyEmail: string, response: ProviderRsvpEdit["response"]): ProviderEventState {
+  const state = ProviderEventStateSchema.parse(input);
+  const self = state.attendees.filter(item => item.self === true);
+  if (state.provider !== "google" || !state.attendeesComplete || self.length !== 1 || !self[0]!.address || self[0]!.address.toLowerCase() !== copyEmail.toLowerCase() || state.isOrganizer === true || !state.organizer?.address || state.organizer.address.toLowerCase() === copyEmail.toLowerCase())
+    throw new Error("Unsupported provider RSVP identity");
+  self[0]!.response = response; state.ownResponse = response;
+  return state;
+}

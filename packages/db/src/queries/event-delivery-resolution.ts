@@ -132,6 +132,7 @@ async function resolutionContext(
   if (mappings.length > 1)
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
+  if (row.payload.rsvp || latest.payload.rsvp || pending.some(item => item.payload.rsvp)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.reminderEdit) {
     const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID)));
     if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local))

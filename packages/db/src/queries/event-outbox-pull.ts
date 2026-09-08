@@ -16,6 +16,7 @@ type PullValues = Partial<Pick<Event, "timeModel" | "originalStart" | "isCancele
 };
 
 function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
+  if (row.payload.rsvp) return false;
   if (row.payload.reminderEdit) return row.action === "update" && matchesReminderEventProjection(row.provider, row.payload.event, values) && matchesGoogleReminderIntent(row.payload.reminderEdit.reminders, providerState);
   if (row.payload.googleOccurrence) return values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.event, values);
   return (

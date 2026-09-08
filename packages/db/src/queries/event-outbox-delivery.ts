@@ -165,7 +165,7 @@ export async function completeEventOutbox(
         .select()
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
-      if (!address || address.payload.caldavSeries) return undefined;
+      if (!address || address.payload.caldavSeries || address.payload.rsvp) return undefined;
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);

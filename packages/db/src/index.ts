@@ -38,3 +38,5 @@ export * from "./queries/provider-reminders";
 export type { GoogleOccurrenceContext, GoogleOccurrencePrepared, GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
 
 export * from "./queries/caldav-series-scope";
+
+export * from "./queries/provider-rsvp";
