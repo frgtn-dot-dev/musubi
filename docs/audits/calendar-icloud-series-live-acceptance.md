@@ -57,6 +57,35 @@ The writer then sent its original accepted ETag and received 412 with
 child title and did not contain the attempted master title. This demonstrates
 resource-wide conditional protection for the tested iCloud fixtures.
 
+## Follow-up: authenticated scope acceptance is blocked
+
+A follow-up probe used the same implementation in a separate disposable
+PostgreSQL database and another temporary iCloud calendar. Discovery was limited
+to that synthetic calendar before the real sync engine fetched events; no personal
+calendar contents were imported into the test database. A synthetic user and
+member token exercised the real authentication middleware and scope handler.
+
+The zoned resource imported all three definitions successfully. The scope POST
+then returned HTTP 403, `reason: unknown`, `capability: event-write`. A direct
+resource PROPFIND for `DAV:current-user-privilege-set`, using the same guarded
+transport, normalized to a successful 207 response with the exact requested href
+but no properties. The resource and imported collection origins also matched.
+Thus the adapter had no affirmative write-permission evidence; it refused in
+`seriesAuthorization` before scope commit or outbox delivery. The direct transport
+helper tested above accepts authorization supplied by its caller and does not
+perform this account/privilege gate itself.
+
+The final diagnostic run was 20:09:58–20:10:09 UTC on 2026-09-08. Its temporary
+calendar DELETE returned 204, and the synthetic local user was removed. Earlier
+harness attempts were also cleaned up. Scope/outbox tests for all-day and floating
+were not reached. No privilege guard was weakened and no parent-calendar grant
+was assumed to authorize an individual resource.
+
+The remaining iCloud prerequisite is a trustworthy resource-write authorization
+strategy for this provider response, followed by successful authenticated
+scope/enqueue/worker/all-mapping ACK and echo acceptance. A successful direct PUT
+alone does not establish that Musubi's full write contract is supported.
+
 ## Acceptance boundary
 
 This accepts the bounded iCloud transport behavior for personal whole-resource

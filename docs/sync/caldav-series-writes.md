@@ -126,5 +126,8 @@ ACK through a real calendar server. No production flag, version or minimum clien
 is changed. A subsequent authorized [live iCloud probe](../audits/calendar-icloud-series-live-acceptance.md)
 confirmed the internal transport behavior for zoned, all-day and floating master
 content edits, complete-resource replay/recovery and concurrent child 412. It did
-not run the scope endpoint, authorization wrapper or DB/outbox ACK against iCloud;
-that end-to-end acceptance and resource-aware conflict resolution remain open.
+not establish end-to-end acceptance: a follow-up authenticated zoned scope request
+was refused with unknown write permission because resource PROPFIND yielded no
+`current-user-privilege-set` evidence. No scope commit or worker ACK followed.
+Trustworthy iCloud resource authorization, end-to-end acceptance and resource-aware
+conflict resolution remain open; the permission guard stays in place.
