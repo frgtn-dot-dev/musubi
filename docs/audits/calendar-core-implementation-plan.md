@@ -603,3 +603,7 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 **K12 HTTP scope — implementační řez:** jeden autentizovaný POST přijímá scope intent a vrací potvrzené ID/revize včetně replay po odstranění rodiny. Strict schema, gate, owner/viewer, 400/409 a opakovaný HTTP request mají integrační regresi. Nezávislé review bez nálezů; klientské zapojení a provider delivery stále následují.
 
 **K12 klientský POST — implementační řez:** web detail a nativní composer/delete používají pro explicitní série jediný scope request. Nezávislé review opravilo native detached delete, stabilitu retry napříč nově vytvořenými draft objekty a reminder targeting po splitu. Reminder-only scope může explicitně materializovat definici; obyčejný no-op zůstává no-op. Wide/narrow browser+axe, skutečné native callbacky a DB materializace mají regrese. Legacy/full-editor/drag a providerové hranice jsou uvedené v [scope kontraktu](../sync/event-scope-operations.md); nejde o dokončení celé K12.
+
+**K12 transakce převzata (PR #162, 2026-09-08):** všech 14 CI kontrol, celá DB sada a čisté nezávislé review. Planner #161 je také na main. HTTP #163 a klient #164 navazují ve vlastních PR.
+
+**K12 Graph recurrence kandidát:** čistý převod běžných RRULE patternů a COUNT/UNTIL zachovává explicitní hranice a odmítá neprokázané formy. Není ještě připojen k delivery; echo dedup a conditional-write proof zůstávají nezbytné pro povolení konkrétního Graph zápisu.

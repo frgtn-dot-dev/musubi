@@ -33,3 +33,11 @@ Known-series edits and deletions in the web detail popover and native composer/d
 The native composer receives the reconciled target definition, so a reminder selected while splitting goes to the new head/exception. Its scope requests use `ensureDefinition` for occurrence/following edits: an unchanged event can still materialize the necessary personal-reminder target. Ordinary no-op scope requests stay no-op. First-occurrence following scope still targets the existing master. The web does not offer an unsafe inverse operation or promise Undo for these new deletions.
 
 Remaining client boundaries: legacy recurrence still uses the gated legacy path; full-editor whole-series time conversion retains its existing `/time` path and limitations. Known-model drag/resize remains gated where civil intent is unavailable. Provider scope writes are still refused by the local transaction.
+
+## Graph recurrence candidates
+
+The pure `microsoft_recurrence.ts` converter maps one RRULE into the six documented Graph pattern forms and numbered/end-date/unbounded ranges. It explicitly supplies RFC's Monday week start. Inclusive Graph end dates are derived in the event zone; an UNTIL before that day's event start excludes that day. The original master must match the pattern so Graph cannot omit a DTSTART that local expansion includes.
+
+Unknown terms, dated additions/exclusions, floating time, multiple relative weekdays, fifth ordinals and unverified month-end behavior remain refused. This converter is deliberately not connected to remote delivery yet: native Graph create also needs master-echo deduplication, while update requires verified conditional-write behavior. A successful conversion alone is not a write capability.
+
+Primary references: [Graph recurrencePattern](https://learn.microsoft.com/en-us/graph/api/resources/recurrencepattern?view=graph-rest-1.0), [Graph recurrenceRange](https://learn.microsoft.com/en-us/graph/api/resources/recurrencerange?view=graph-rest-1.0). Candidate tests cover all six shapes, COUNT/UNTIL, week-start and zone-boundary behavior, plus lossless refusals.
