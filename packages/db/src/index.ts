@@ -29,3 +29,4 @@ export * from './schema';
 export * as schema from './schema';
 
 export const db = drizzle(config.db.databaseUrl, { schema });
+export * from './queries/event-time-edit';
