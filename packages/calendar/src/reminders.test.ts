@@ -45,7 +45,10 @@ function event(overrides: Partial<ReminderEvent> = {}): ReminderEvent {
 }
 
 /** All-day events are stored as UTC midnight of a timezone-invariant DATE. */
-function allDay(date: string, overrides: Partial<ReminderEvent> = {}): ReminderEvent {
+function allDay(
+  date: string,
+  overrides: Partial<ReminderEvent> = {},
+): ReminderEvent {
   return event({
     isAllDay: true,
     start: new Date(`${date}T00:00:00Z`),
@@ -55,7 +58,12 @@ function allDay(date: string, overrides: Partial<ReminderEvent> = {}): ReminderE
   });
 }
 
-function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: string) {
+function due(
+  events: ReminderEvent[],
+  ctx: ReminderContext,
+  from: string,
+  to: string,
+) {
   return resolveReminders({
     context: ctx,
     events,
@@ -72,7 +80,11 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
     calendarRules: { work: TWO_HOURS },
     eventRules: { "event-1": { minutesBefore: 5, allDay: AT_18 } },
   });
-  assert.equal(resolveReminderRule(event(), ctx).minutesBefore, 5, "override wins");
+  assert.equal(
+    resolveReminderRule(event(), ctx).minutesBefore,
+    5,
+    "override wins",
+  );
 
   const withoutOverride = context({ calendarRules: { work: TWO_HOURS } });
   assert.equal(
@@ -116,10 +128,17 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
   // devices holding the same data must not disagree about which one won.
   const ctx = context({
     calendarOrder: [],
-    calendarRules: { alpha: TWO_HOURS, zulu: { minutesBefore: 1, allDay: AT_18 } },
+    calendarRules: {
+      alpha: TWO_HOURS,
+      zulu: { minutesBefore: 1, allDay: AT_18 },
+    },
   });
   const inBoth = event({ calendars: ["zulu", "alpha"] });
-  assert.equal(resolveReminderRule(inBoth, ctx).minutesBefore, 120, "sorted, not insertion order");
+  assert.equal(
+    resolveReminderRule(inBoth, ctx).minutesBefore,
+    120,
+    "sorted, not insertion order",
+  );
 }
 
 {
@@ -132,11 +151,15 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
 
 {
   const declined = context({ attendance: { "event-1": "declined" } });
-  assert.deepEqual(due([event()], declined, "2026-08-01T00:00:00Z", "2026-08-31T00:00:00Z"), []);
+  assert.deepEqual(
+    due([event()], declined, "2026-08-01T00:00:00Z", "2026-08-31T00:00:00Z"),
+    [],
+  );
 
   const going = context({ attendance: { "event-1": "going" } });
   assert.equal(
-    due([event()], going, "2026-08-01T00:00:00Z", "2026-08-31T00:00:00Z").length,
+    due([event()], going, "2026-08-01T00:00:00Z", "2026-08-31T00:00:00Z")
+      .length,
     1,
     "any answer other than no still reminds",
   );
@@ -152,7 +175,10 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
 
 {
   const silent = context({ defaultRule: NEVER });
-  assert.deepEqual(due([event()], silent, "2026-08-01T00:00:00Z", "2026-08-31T00:00:00Z"), []);
+  assert.deepEqual(
+    due([event()], silent, "2026-08-01T00:00:00Z", "2026-08-31T00:00:00Z"),
+    [],
+  );
 }
 
 {
@@ -195,7 +221,11 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
     "2026-08-01T00:00:00Z",
     "2026-08-31T00:00:00Z",
   );
-  assert.deepEqual(prague, ["2026-08-19T16:00:00.000Z"], "18:00 in Prague, summer");
+  assert.deepEqual(
+    prague,
+    ["2026-08-19T16:00:00.000Z"],
+    "18:00 in Prague, summer",
+  );
 
   const newYork = due(
     [allDay("2026-08-20")],
@@ -203,7 +233,11 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
     "2026-08-01T00:00:00Z",
     "2026-08-31T00:00:00Z",
   );
-  assert.deepEqual(newYork, ["2026-08-19T22:00:00.000Z"], "18:00 in New York, summer");
+  assert.deepEqual(
+    newYork,
+    ["2026-08-19T22:00:00.000Z"],
+    "18:00 in New York, summer",
+  );
 }
 
 {
@@ -230,23 +264,42 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
 {
   // An offset rule cannot answer for an all-day event and must not pretend to.
   const offsetOnly: ReminderRule = { minutesBefore: 10, allDay: null };
-  assert.equal(reminderDueAt(new Date("2026-08-20T00:00:00Z"), true, offsetOnly, "UTC"), null);
+  assert.equal(
+    reminderDueAt(new Date("2026-08-20T00:00:00Z"), true, offsetOnly, "UTC"),
+    null,
+  );
 
   const allDayOnly: ReminderRule = { minutesBefore: null, allDay: AT_18 };
-  assert.equal(reminderDueAt(new Date("2026-08-20T09:00:00Z"), false, allDayOnly, "UTC"), null);
+  assert.equal(
+    reminderDueAt(new Date("2026-08-20T09:00:00Z"), false, allDayOnly, "UTC"),
+    null,
+  );
 }
 
 {
   // Same morning, not the evening before.
-  const sameDay: ReminderRule = { minutesBefore: null, allDay: { daysBefore: 0, atMinute: 9 * 60 } };
-  const dueAt = reminderDueAt(new Date("2026-08-20T00:00:00Z"), true, sameDay, "Europe/Prague");
+  const sameDay: ReminderRule = {
+    minutesBefore: null,
+    allDay: { daysBefore: 0, atMinute: 9 * 60 },
+  };
+  const dueAt = reminderDueAt(
+    new Date("2026-08-20T00:00:00Z"),
+    true,
+    sameDay,
+    "Europe/Prague",
+  );
   assert.equal(dueAt?.toISOString(), "2026-08-20T07:00:00.000Z");
 }
 
 {
   // A zone this runtime cannot resolve must still produce a real instant —
   // wrong by hours beats a NaN that silently never fires.
-  const dueAt = reminderDueAt(new Date("2026-08-20T00:00:00Z"), true, TEN_MINUTES, "Mars/Olympus");
+  const dueAt = reminderDueAt(
+    new Date("2026-08-20T00:00:00Z"),
+    true,
+    TEN_MINUTES,
+    "Mars/Olympus",
+  );
   assert.ok(dueAt instanceof Date && !Number.isNaN(dueAt.getTime()));
 }
 
@@ -274,7 +327,9 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
   );
   assert.deepEqual(
     reminders.map((reminder) => reminder.dueAt.getTime()),
-    [...reminders.map((reminder) => reminder.dueAt.getTime())].sort((a, b) => a - b),
+    [...reminders.map((reminder) => reminder.dueAt.getTime())].sort(
+      (a, b) => a - b,
+    ),
     "sorted by when they fire",
   );
 }
@@ -287,4 +342,124 @@ function due(events: ReminderEvent[], ctx: ReminderContext, from: string, to: st
   assert.equal(masterEventID("abc_def"), "abc_def");
 }
 
+// Known-model consumers keep exception tombstones through expansion, select
+// the recipient's floating zone, and tag notifications by original identity.
+{
+  const seriesID = "00000000-0000-4000-8000-000000000001";
+  const detachedID = "00000000-0000-4000-8000-000000000002";
+  const series = event({
+    id: seriesID,
+    start: new Date("2026-01-01T09:00:00Z"),
+    end: new Date("2026-01-01T10:00:00Z"),
+    recurrence: "FREQ=DAILY;COUNT=3",
+    timeModel: {
+      kind: "zoned",
+      timeZone: "UTC",
+      startLocal: "2026-01-01T09:00:00.000",
+      endLocal: "2026-01-01T10:00:00.000",
+    },
+  });
+  const moved = event({
+    id: detachedID,
+    seriesID,
+    originalStart: { kind: "instant", value: "2026-01-02T09:00:00.000Z" },
+    start: new Date("2026-01-05T12:00:00Z"),
+    end: new Date("2026-01-05T13:00:00Z"),
+    timeModel: {
+      kind: "zoned",
+      timeZone: "UTC",
+      startLocal: "2026-01-05T12:00:00.000",
+      endLocal: "2026-01-05T13:00:00.000",
+    },
+    title: "Moved meeting",
+  });
+  const resolve = (events: ReminderEvent[], ctx = context()) =>
+    resolveReminders({
+      events,
+      context: ctx,
+      from: new Date("2026-01-01Z"),
+      to: new Date("2026-01-07Z"),
+    });
+  const ordinary = resolve([series, moved]);
+  assert.deepEqual(
+    ordinary.map((r) => r.dueAt.toISOString()),
+    [
+      "2026-01-01T08:50:00.000Z",
+      "2026-01-03T08:50:00.000Z",
+      "2026-01-05T11:50:00.000Z",
+    ],
+  );
+  assert.equal(
+    ordinary[2].eventID,
+    detachedID,
+    "notification opens the persisted exception",
+  );
+  assert.equal(ordinary[2].title, "Moved meeting");
+  const canceled = resolve([series, { ...moved, isCanceled: true }]);
+  assert.deepEqual(
+    canceled.map((r) => r.occurrenceStart.toISOString()),
+    ["2026-01-01T09:00:00.000Z", "2026-01-03T09:00:00.000Z"],
+  );
+  assert.deepEqual(resolve([{ ...series, isCanceled: true }, moved]), []);
+  assert.deepEqual(
+    resolve(
+      [series, moved],
+      context({ attendance: { [seriesID]: "declined" } }),
+    ),
+    [],
+  );
+  assert.equal(
+    resolve(
+      [series, moved],
+      context({ attendance: { [detachedID]: "declined" } }),
+    ).length,
+    2,
+  );
+  const inherited = resolve(
+    [series, moved],
+    context({ eventRules: { [seriesID]: TWO_HOURS } }),
+  );
+  assert.equal(inherited[2].dueAt.toISOString(), "2026-01-05T10:00:00.000Z");
+  const overridden = resolve(
+    [series, moved],
+    context({ eventRules: { [seriesID]: TWO_HOURS, [detachedID]: NEVER } }),
+  );
+  assert.equal(overridden.length, 2);
+  const movedAgain = {
+    ...moved,
+    start: new Date("2026-01-06T12:00:00Z"),
+    end: new Date("2026-01-06T13:00:00Z"),
+    timeModel: {
+      kind: "zoned" as const,
+      timeZone: "UTC",
+      startLocal: "2026-01-06T12:00:00.000",
+      endLocal: "2026-01-06T13:00:00.000",
+    },
+  };
+  assert.equal(
+    resolve([series, movedAgain])[2].occurrenceID,
+    ordinary[2].occurrenceID,
+    "notification identity survives another move",
+  );
+  const floating = {
+    ...series,
+    timeModel: {
+      kind: "floating" as const,
+      startLocal: "2026-01-01T09:00:00.000",
+      endLocal: "2026-01-01T10:00:00.000",
+    },
+  };
+  const inUTC = resolve([floating], context({ timezone: "UTC" }));
+  const inNY = resolve([floating], context({ timezone: "America/New_York" }));
+  assert.equal(inUTC[0].dueAt.toISOString(), "2026-01-01T08:50:00.000Z");
+  assert.equal(inNY[0].dueAt.toISOString(), "2026-01-01T13:50:00.000Z");
+  assert.deepEqual(
+    inUTC.map((r) => r.occurrenceID),
+    inNY.map((r) => r.occurrenceID),
+  );
+  assert.deepEqual(
+    resolve([series], context({ timezone: "UTC" })),
+    resolve([series], context({ timezone: "America/New_York" })),
+  );
+}
 console.log("reminders.test.ts ok");

@@ -1,7 +1,8 @@
 import dayjs from "dayjs";
 import timezonePlugin from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import type { ReminderRule } from "@musubi/types";
+import { occurrenceKey, type ReminderRule } from "@musubi/types";
+import type { ICalendarEventBase } from "./interfaces";
 import { expandRecurringEvents } from "./recurrence";
 
 dayjs.extend(utc);
@@ -17,14 +18,8 @@ dayjs.extend(timezonePlugin);
  * implementations that disagree about a declined birthday.
  */
 
-export type ReminderEvent = {
+export type ReminderEvent = ICalendarEventBase & {
   id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  isAllDay?: boolean;
-  recurrence?: string | null;
-  isCanceled?: boolean;
   /** Every calendar this event appears in. */
   calendars: string[];
 };
@@ -46,7 +41,7 @@ export type ReminderContext = {
 
 export type ResolvedReminder = {
   eventID: string;
-  /** `${eventID}_${startMs}` — the id `expandRecurringEvents` already mints. */
+  /** Stable original identity for known models; legacy event/start key otherwise. */
   occurrenceID: string;
   occurrenceStart: Date;
   dueAt: Date;
@@ -67,10 +62,12 @@ const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;
  * other — saying nothing and saying no are different answers.
  */
 export function resolveReminderRule(
-  event: Pick<ReminderEvent, "id" | "calendars">,
+  event: Pick<ReminderEvent, "id" | "calendars" | "seriesID">,
   context: ReminderContext,
 ): ReminderRule {
-  const override = context.eventRules[event.id];
+  const override =
+    context.eventRules[event.id] ??
+    (event.seriesID ? context.eventRules[event.seriesID] : undefined);
   if (override) return override;
 
   const inEvent = new Set(event.calendars);
@@ -106,11 +103,15 @@ export function reminderDueAt(
 ): Date | null {
   if (!isAllDay) {
     if (rule.minutesBefore === null) return null;
-    return new Date(occurrenceStart.getTime() - rule.minutesBefore * MS_PER_MINUTE);
+    return new Date(
+      occurrenceStart.getTime() - rule.minutesBefore * MS_PER_MINUTE,
+    );
   }
 
   if (rule.allDay === null) return null;
-  const date = new Date(occurrenceStart.getTime() - rule.allDay.daysBefore * MS_PER_DAY);
+  const date = new Date(
+    occurrenceStart.getTime() - rule.allDay.daysBefore * MS_PER_DAY,
+  );
   const hour = Math.floor(rule.allDay.atMinute / 60);
   const minute = rule.allDay.atMinute % 60;
   const wallClock = `${date.toISOString().slice(0, 10)}T${pad(hour)}:${pad(minute)}:00`;
@@ -171,35 +172,46 @@ export function resolveReminders({
   to: Date;
 }): ResolvedReminder[] {
   const lead = maxLeadMs(context);
-  const live = events.filter((event) => !event.isCanceled);
-  // A declined event is an answer, and the answer was no.
-  const wanted = live.filter(
-    (event) => context.attendance?.[event.id] !== "declined",
-  );
-
+  // Cancellation and decline must be applied after exception replacement.
+  // Removing a detached definition first would resurrect its original slot.
   const occurrences = expandRecurringEvents(
-    wanted,
+    events,
     from,
     new Date(to.getTime() + lead),
+    { consumerTimeZone: context.timezone },
   );
 
   const reminders: ResolvedReminder[] = [];
   for (const occurrence of occurrences) {
-    // Expansion rewrites the id of a series instance to `${masterID}_${startMs}`;
-    // rules are keyed by the master, so strip the suffix before looking them up.
-    const eventID = masterEventID(occurrence.id);
+    const seriesID = occurrence.occurrenceIdentity?.seriesId;
+    const eventID = occurrence.seriesID
+      ? occurrence.id
+      : (seriesID ?? masterEventID(occurrence.id));
+    if (
+      occurrence.isCanceled ||
+      context.attendance?.[eventID] === "declined" ||
+      (seriesID && context.attendance?.[seriesID] === "declined")
+    )
+      continue;
     const rule = resolveReminderRule(
-      { id: eventID, calendars: occurrence.calendars },
+      { id: eventID, seriesID, calendars: occurrence.calendars },
       context,
     );
     const isAllDay = occurrence.isAllDay === true;
-    const dueAt = reminderDueAt(occurrence.start, isAllDay, rule, context.timezone);
+    const dueAt = reminderDueAt(
+      occurrence.start,
+      isAllDay,
+      rule,
+      context.timezone,
+    );
     if (!dueAt) continue;
     if (dueAt < from || dueAt > to) continue;
 
     reminders.push({
       eventID,
-      occurrenceID: `${eventID}_${occurrence.start.getTime()}`,
+      occurrenceID: occurrence.occurrenceIdentity
+        ? occurrenceKey(occurrence.occurrenceIdentity)
+        : `${eventID}_${occurrence.start.getTime()}`,
       occurrenceStart: occurrence.start,
       dueAt,
       title: occurrence.title,
@@ -207,7 +219,9 @@ export function resolveReminders({
     });
   }
 
-  return reminders.sort((left, right) => left.dueAt.getTime() - right.dueAt.getTime());
+  return reminders.sort(
+    (left, right) => left.dueAt.getTime() - right.dueAt.getTime(),
+  );
 }
 
 /** `"<uuid>_<ms>"` is one occurrence of `"<uuid>"`; anything else is already a master. */

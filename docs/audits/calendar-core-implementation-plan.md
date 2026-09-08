@@ -266,6 +266,8 @@ Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migra
 
 **K10 sdílená expanze — rozpracovaný balíček (2026-09-08):** veřejný `expandRecurringEvents` rozlišuje doložený zoned/floating/all-day model od legacy. Nová cesta zachovává původní identitu, nahrazuje přesunuté/zrušené výjimky, počítá COUNT až po vynechání neexistujících časů a vyhodnocuje civilní RRULE v zóně série. All-day překryv používá datum konzumenta; floating vyžaduje explicitní zónu. Neplatné a nepodporované pravidlo se hlásí chybou. Metadata dosud nejsou připuštěná v produkčním DTO/writerech, takže současné klienty tento slice nepřepíná. Následuje napojení konzumentů a konzistentní revision-CAS read/write kontrakt; K10 tím ještě není převzatý.
 
+**K10 konzument připomínek — rozpracovaný balíček (2026-09-08):** sdílený resolver dostává zónu příjemce, zachovává cancellation/declined definice až do náhrady výjimek a používá původní identitu jako tag oznámení. Výjimka má vlastní cílové UUID; její reminder override přebije override série. Regrese ve třech host zónách a čisté nezávislé review hotové; převzetí čeká na finální kontroly. Produkční reminder projekce ještě metadata vynechávají. Před jejich zapnutím musí mobilní receipt reconciliation porovnávat i `eventID` (nově vzniklá výjimka může mít stejný původní klíč a dueAt jako původní generovaný výskyt); zůstává také napojení DTO, kalendářových view, widgetů a preview a jejich hlášení chyb.
+
 ### K11 — Věrný import a zachování providerových výjimek
 
 Tři samostatné providerové řezy nad stejnými fixtures a kontraktem:
