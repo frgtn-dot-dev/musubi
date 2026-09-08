@@ -51,7 +51,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -77,7 +77,9 @@ async function main() {
         const outbox = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, owner));
         const original = await rows(), mappings = await maps();
         const root = original.find(event => !event.seriesID)!;
-        const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: root.revision, patch: scenario === "no-op" ? {} : { title: "Renamed" } };
+        const occurrence = scenario.startsWith("occurrence-");
+        const moved = original.find(event => event.seriesID && !event.isCanceled)!;
+        const request = { operationID: randomUUID(), scope: occurrence ? "occurrence" : "series", ...(occurrence ? { originalStart: moved.originalStart, expectedOccurrenceRevision: moved.revision } : {}), action: "update", expectedRevision: root.revision, patch: scenario === "no-op" ? {} : { title: "Renamed" } };
         const headers = { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION };
         const post = (body = request) => fetch(`${apiOrigin}/events/${root.id}/scope`, { method: "POST", headers, body: JSON.stringify(body) });
         if (scenario === "malformed-private") {
@@ -132,11 +134,16 @@ async function main() {
         assert.ok(!publicStatus.includes("Never disclose") && !publicStatus.includes("Private alarm") && !publicStatus.includes("BEGIN:VCALENDAR") && !publicStatus.includes(resource));
         const operation = operations[0]!;
         assert.equal((await getEventSnapshot(root.id))!.revision, root.revision + 1);
-        assert.deepEqual((await rows()).filter(event => event.seriesID), original.filter(event => event.seriesID));
+        if (occurrence) {
+          const current = (await rows()).find(event => event.id === moved.id)!;
+          assert.deepEqual(current, { ...moved, title: "Renamed", revision: moved.revision + 1, updatedAt: current.updatedAt });
+          assert.equal((await getEventSnapshot(root.id))!.title, "Master");
+          assert.deepEqual((await rows()).filter(event => event.seriesID && event.id !== moved.id), original.filter(event => event.seriesID && event.id !== moved.id));
+        } else assert.deepEqual((await rows()).filter(event => event.seriesID), original.filter(event => event.seriesID));
         assert.deepEqual(await maps(), mappings);
         await assert.rejects(persist, /resource could not be persisted/);
         assert.deepEqual(await maps(), mappings, "Pending pull cannot accept any component validator");
-        if (["lost", "race"].includes(scenario)) mode = scenario;
+        if (["lost", "race", "occurrence-lost", "occurrence-race"].includes(scenario)) mode = scenario.replace("occurrence-", "");
         if (scenario === "local-race") onPut = async () => { await db.update(events).set({ revision: sql`${events.revision} + 1`, title: "Newer local child" }).where(eq(events.id, original.find(event => event.seriesID)!.id)); };
         if (scenario === "mapping-race") onPut = async () => { await db.update(externalEvents).set({ etag: '"newer-map"' }).where(eq(externalEvents.id, mappings.find(map => map.eventID !== root.id)!.id)); };
         if (scenario === "lease-race") onPut = async () => { await db.update(eventOutbox).set({ leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 120000) }).where(eq(eventOutbox.id, operation.id)); };
@@ -182,6 +189,7 @@ async function main() {
           }
           const ids = await Promise.all([commitEventDeliveryResolution(owner, proof, resolveRequest), commitEventDeliveryResolution(owner, proof, resolveRequest)]);
           assert.equal(ids[0], ids[1]); assert.equal((await outbox()).length, 2);
+          if (occurrence) assert.ok(data.includes(master) && data.includes(cancelled), "Native master and unrelated cancellation bytes are untouched");
           assert.ok((await maps()).every(item => item.etag === '"remote-v2"'));
           assert.equal(await getEventDeliveryResolutionReplay(owner, root.id, operation.id, resolveRequest), ids[0]);
           if (scenario === "resolve-child-race") { data = data.replace("SUMMARY:Moved", "SUMMARY:New remote child"); etag = '"remote-v3"'; }
@@ -192,7 +200,8 @@ async function main() {
             const second = await commitEventDeliveryResolution(owner, again.proof, { ...resolveRequest, mutationId: randomUUID(), expectedLatestOperationId: again.preview.latestOperationId, expectedRemoteEtag: again.preview.remoteEtag });
             assert.equal((await deliverEventOutbox(second, () => caldavAdapter))?.status, "completed");
             assert.ok((await outbox()).filter(item => item.id !== second).every(item => item.status === "not-needed"));
-            assert.ok((await maps()).every(item => item.etag === '"after"')); console.log("CalDAV repeated conflict resolution releases exact history: OK"); continue;
+            if (occurrence) assert.ok(data.includes(master) && data.includes(cancelled), "Native master and unrelated cancellation bytes are untouched");
+          assert.ok((await maps()).every(item => item.etag === '"after"')); console.log("CalDAV repeated conflict resolution releases exact history: OK"); continue;
           }
           const resolved = await deliverEventOutbox(ids[0]!, () => caldavAdapter);
           if (scenario === "resolve-child-race") {
@@ -207,26 +216,27 @@ async function main() {
           continue;
         }
 
-        if (scenario === "lost") {
+        if (scenario === "lost" || scenario === "occurrence-lost") {
           assert.equal(result?.status, "unconfirmed"); assert.deepEqual(await maps(), mappings);
           mode = "ok";
           await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
           result = await deliverEventOutbox(operation.id, () => caldavAdapter);
         }
         assert.equal(puts, 1);
-        if (["zoned", "all-day", "floating", "no-children", "lost"].includes(scenario)) {
+        if (["zoned", "all-day", "floating", "no-children", "lost", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost"].includes(scenario)) {
           assert.equal(result?.status, "completed", JSON.stringify({ status: result?.status, error: result?.errorCode }));
+          if (occurrence) assert.ok(data.includes(master) && data.includes(cancelled), "Native master and unrelated cancellation bytes are untouched");
           assert.ok((await maps()).every(map => map.etag === '"after"'));
           const confirmedRows = await rows(); await persist(); assert.deepEqual(await rows(), confirmedRows, "Accepted echo neither duplicates nor revises children");
           assert.equal((await post()).status, 200); assert.equal((await outbox()).length, 1);
-          const next = await post({ ...request, operationID: randomUUID(), expectedRevision: root.revision + 1, patch: { title: "Next" } });
+          const next = await post({ ...request, operationID: randomUUID(), expectedRevision: root.revision + 1, ...(occurrence ? { expectedOccurrenceRevision: moved.revision + 1 } : {}), patch: { title: "Next" } });
           assert.equal(next.status, 200, await next.text()); assert.equal((await outbox()).length, 2);
         } else {
           assert.notEqual(result?.status, "completed");
           for (const map of await maps()) if (!(scenario === "mapping-race" && map.eventID !== root.id && map.etag === '"newer-map"')) assert.equal(map.etag, '"before"');
           const preview = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
           const text = await preview.text(); assert.equal(preview.status, 409); assert.equal(JSON.parse(text).code, ["lease-race", "local-race"].includes(scenario) ? "delivery-state-changed" : "delivery-resolution-unavailable"); assert.ok(!text.includes("Never disclose") && !text.includes("BEGIN:VCALENDAR"));
-          if (scenario === "race") {
+          if (scenario === "race" || scenario === "occurrence-race") {
             assert.ok(data.includes("SUMMARY:Remote child"));
             await db.update(eventOutbox).set({ status: "pending", nextAttemptAt: new Date(0), uncertain: false }).where(eq(eventOutbox.id, operation.id));
             const lease = await claimEventOutbox(operation.id); assert.ok(lease);

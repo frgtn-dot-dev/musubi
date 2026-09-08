@@ -18,6 +18,7 @@ export type CaldavSeriesContext = {
 export type CaldavSeriesWriteIntent = {
   baseline: { ref: Ref; master: Event; children: Event[] };
   patch: Pick<Partial<Event>, "title" | "description" | "location">;
+  targetEventID?: string;
   before: string;
   after: string;
 };
@@ -70,6 +71,16 @@ export async function appendCaldavSeries(tx: DbTransaction, actorID: string, ope
   }]);
 }
 
+/** Reconstruct the only permitted canonical change from the private input. */
+export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID">): CaldavSeriesWriteIntent["baseline"] {
+  if (!write.patch || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
+  const { baseline, targetEventID } = write;
+  if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
+  const target = baseline.children.filter(child => child.id === targetEventID);
+  if (target.length !== 1 || target[0]!.isCanceled || !target[0]!.originalStart) throw unsupported();
+  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch }) : child) };
+}
+
 class CaldavLeaseLost extends Error {}
 /** Short transaction, no provider calls. All component validators and the lease
  * receipt advance together, or every mapping update rolls back. */
@@ -89,6 +100,12 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id); }
       catch (error) { if (error instanceof EventWriteError) return false; throw error; }
       const expected = { ...address.payload.caldavSeries.context, master: EventSchema.parse(address.payload.event) };
+      const desired = caldavSeriesDesired(address.payload.caldavSeries.write);
+      if (!sameCaldavScopeContext(EventSchema.parse({ ...desired.master, revision: current.master.revision }), current.master) ||
+          desired.children.length !== current.children.length || desired.children.some(child => {
+            const actual = current.children.find(item => item.id === child.id);
+            return !actual || !sameCaldavScopeContext(EventSchema.parse({ ...child, revision: actual.revision }), actual);
+          })) return false;
       if (!sameCaldavScopeContext(current, expected) || address.provider !== "caldav" || address.action !== "update" || address.revision !== master.revision ||
           address.externalCalendarLinkID !== current.link.id || address.calendarID !== current.link.calendarID || address.accountID !== current.link.accountID || address.externalCalendarID !== current.link.externalCalendarID) return false;
       const [row] = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).for("update");

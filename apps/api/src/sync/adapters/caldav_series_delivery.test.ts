@@ -70,6 +70,17 @@ async function main() {
       assert.equal(confirmed.ref.etag, '"after"'); assert.equal(confirmed.master.title, "Renamed");
       assert.deepEqual(confirmed.exceptions.map(item => [item.title, item.timeModel, item.isCanceled]), evidence.exceptions.map(item => [item.title, item.timeModel, item.isCanceled]));
       await deliver(); assert.equal(puts, 1, "Repeated delivery recovers full desired resource without another PUT");
+      const movedID = baseline.children.find(item => !item.isCanceled)!.id;
+      const occurrenceWrite = prepareCaldavSeriesWrite(evidence, baseline, { title: "Only this occurrence", description: "Line one\nLine two", location: null }, movedID);
+      assert.ok(occurrenceWrite.after.includes(master) && occurrenceWrite.after.includes(cancelled));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "No" }, randomUUID()));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "No" }, baseline.children.find(item => item.isCanceled)!.id));
+      reset();
+      const occurrenceResult = await deliverCaldavSeriesResource(collection, occurrenceWrite, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      assert.equal(occurrenceResult.master.title, "Master");
+      assert.equal(occurrenceResult.exceptions.find(item => !item.isCanceled)!.title, "Only this occurrence");
+      await deliverCaldavSeriesResource(collection, occurrenceWrite, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      assert.equal(puts, 1, "Occurrence retry recognizes the complete desired family");
       for (const failure of ["lost", "applied-503"]) {
         reset(failure);
         await assert.rejects(deliver, (error: any) => error.outcome === "unconfirmed");

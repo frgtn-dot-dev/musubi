@@ -233,6 +233,13 @@ async function main() {
     assert.equal(recovered.data, delivered.data);
     assert.deepEqual(await rows(), initial, "Adapter evidence alone never acknowledges local family mappings or edits local content");
     assert.deepEqual((await db.select().from(externalEvents).where(eq(externalEvents.eventID, localMaster.id)))[0], familyMapping);
+    const occurrenceWrite = prepareCaldavSeriesWrite(comparison.evidence, comparison.baseline, { title: "Only the moved occurrence", location: "Native exception" }, comparison.baseline.children[0]!.id);
+    const occurrenceResult = await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, occurrenceWrite);
+    assert.equal(occurrenceResult.master.title, "Renamed series");
+    assert.equal(occurrenceResult.exceptions[0]!.title, "Only the moved occurrence");
+    assert.equal(occurrenceResult.exceptions[0]!.location, "Native exception");
+    assert.deepEqual(occurrenceResult.exceptions[0]!.timeModel, delivered.exceptions[0]!.timeModel);
+    assert.equal((await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, occurrenceWrite)).ref.etag, occurrenceResult.ref.etag);
     await put(moved, master); // Restore the synthetic fixture for the existing import regressions.
     await sync();
     console.log("Radicale complete series GET, accepted ETag, private-only evidence and concurrent-child CAS: OK");
