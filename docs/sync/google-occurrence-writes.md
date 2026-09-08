@@ -80,7 +80,11 @@ pages are refused. Unrelated calendar events do not become family evidence.
 
 This is read-only preparation for K12 whole-series operations. It is not yet
 called by the scope endpoint and does not authorize a series write. Sequential
-provider reads are not an atomic snapshot: any future writer must revalidate its
-family evidence and use conditional writes. The HTTP fixture covers zoned and
+provider reads are not an atomic snapshot. Even revalidation and conditional
+master writes do not protect concurrent exception edits: a child title mutation
+can leave the master ETag unchanged, and a subsequent master PATCH can overwrite
+that title. The user chose to retain the preservation contract and leave Google
+whole-series operations unsupported. PATCH-then-restore recovery does not solve
+this race. See the [live evidence and decision](../audits/calendar-google-series-live-acceptance.md#follow-up-exception-concurrency-and-product-decision). The HTTP fixture covers zoned and
 all-day families, moved and distant cancelled exceptions, pagination and refusal
 paths, plus the existing single-occurrence write/recovery regressions.
