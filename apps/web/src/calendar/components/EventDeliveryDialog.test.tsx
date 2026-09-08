@@ -352,3 +352,30 @@ it("shows occurrence cancellation and civil anchors and confirms the master revi
   );
   await waitFor(() => expect(body?.expectedMasterRevision).toBe(7));
 });
+
+it("shows personal reminders and keeps the exact confirmation after a failed request", async () => {
+  const requests: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/conflict")) return json({ ...preview, reminderResolution: {
+      desired: { useDefault: false, overrides: [{ method: "popup", minutes: 15 }] },
+      remote: { provider: "google", useDefault: true, overrides: [] }, stateVersion: "a".repeat(64),
+    } });
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(String(init?.body))); return requests.length === 1 ? json({ error: "Temporary failure" }, 503) : json(receipt, 202); }
+    return json(receipt);
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText("popup · 15 minutes before start")).toBeTruthy();
+  expect(within(comparison).getByText("Calendar defaults")).toBeTruthy();
+  expect(within(comparison).queryByText("Remote title")).toBeNull();
+  expect(within(comparison).getByText(/Musubi reminders stay unchanged/)).toBeTruthy();
+  fireEvent.click(within(comparison).getByRole("button", { name: "Apply saved reminders" }));
+  await screen.findByRole("alert");
+  fireEvent.click(within(comparison).getByRole("button", { name: "Apply saved reminders" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1]).toEqual(requests[0]);
+  expect(requests[0].expectedReminderStateVersion).toBe("a".repeat(64));
+  expect(requests[0]).not.toHaveProperty("reminders");
+});
