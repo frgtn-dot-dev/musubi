@@ -153,10 +153,17 @@ export function seriesEditWrites<T extends SeriesEditable>(
   if (!master.success) return writes;
   return {
     ...writes,
-    updates: writes.updates.map((update) => ({
-      ...update,
-      revision: master.data.revision,
-      contentPatch: eventContentPatch(master.data, EventSchema.parse(update)),
-    })),
+    updates: writes.updates.map((update) => {
+      const contentPatch = eventContentPatch(master.data, EventSchema.parse(update));
+      const unchangedTime = !["start", "end", "isAllDay", "recurrence"].some(key => key in contentPatch);
+      return {
+        ...update,
+        // A content-only whole-series edit returns the master's instants. Its
+        // optimistic snapshot must also return the master's civil anchors.
+        ...(unchangedTime && master.data.timeModel ? { timeModel: master.data.timeModel } : {}),
+        revision: master.data.revision,
+        contentPatch,
+      };
+    }),
   };
 }

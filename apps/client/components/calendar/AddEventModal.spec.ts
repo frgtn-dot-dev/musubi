@@ -225,7 +225,7 @@ vi.mock("@/store/useEventDetailStore", async (original) => {
 });
 const { GlobalEventModals } = await import("./GlobalEventModals");
 const { useEventsStore } = await import("@/store/useEventsStore");
-const { useEditComposerStore } = await import("@/store/useEventDetailStore");
+const { useEditComposerStore, useEventDetailStore, presentEventDetail } = await import("@/store/useEventDetailStore");
 const master = EventSchema.parse({
   revision: 1,
   id: "event",
@@ -703,4 +703,48 @@ it("keeps the displayed legacy all-day dates when adopting an explicit model", a
   const adopted = renderComposer();
   expect(find(adopted, props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.value).toBe("2026-07-25");
   expect(find(adopted, props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.value).toBe("2026-07-26");
+});
+
+
+it.each(["zoned", "floating", "all-day"] as const)("keeps the tapped %s occurrence's civil dates through detail refresh and edit", async kind => {
+  const { expandRecurringEvents, resolveEventTimeEdit, knownEventTimeDraft } = await import("@musubi/calendar");
+  const { liveEventDetail } = await import("@/lib/liveEvent");
+  const series = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000153", recurrence: "FREQ=DAILY;COUNT=4",
+    ...resolveEventTimeEdit(kind === "all-day" ? { kind, startDate: "2026-03-28", endDate: "2026-03-29" } : {
+      kind, ...(kind === "zoned" ? { timeZone: "Europe/Prague" } : {}), startLocal: "2026-03-28T09:30:17.123", endLocal: "2026-03-28T10:30:19.456",
+    }),
+  });
+  const expanded = expandRecurringEvents([series], new Date("2026-03-30T00:00:00Z"), new Date("2026-03-31T00:00:00Z"), { consumerTimeZone: "America/New_York" });
+  const tapped = expanded.find(item => knownEventTimeDraft(item)!.date === "2026-03-30")!;
+  expect(tapped).toBeDefined();
+  useEventsStore.setState({ events: [series] });
+  presentEventDetail([series], tapped);
+  const detail = useEventDetailStore.getState().event!;
+  expect(detail.id).toBe(series.id);
+  expect(detail.timeModel).toEqual(tapped.timeModel);
+  expect(detail.start).toEqual(tapped.start);
+  const renamed = { ...series, title: "Remote title", revision: 2 };
+  useEventsStore.setState({ events: [renamed] });
+  const live = liveEventDetail([renamed], detail)!;
+  expect(live.title).toBe("Remote title");
+  expect(live.timeModel).toEqual(tapped.timeModel);
+  useEditComposerStore.getState().open(live);
+  const tree = renderComposer(true);
+  expect(find(tree, props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.value).toBe("2026-03-30");
+  if (kind !== "all-day") expect(find(tree, props => props.accessibilityLabel === "Starts time (HH:mm)")!.value).toBe("09:30");
+  expect(useEditComposerStore.getState().master!.start).toEqual(series.start);
+  expect(useEditComposerStore.getState().master!.timeModel).toEqual(series.timeModel);
+  expect(useEditComposerStore.getState().prefilled!.timeModel).toEqual(tapped.timeModel);
+  titleInput(tree)!.onChangeText("Rename whole series");
+  let finish!: (value: unknown) => void;
+  mocks.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
+  scopeAnswer("All events");
+  await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledOnce());
+  expect(useEventsStore.getState().events[0]).toMatchObject({ start: series.start, end: series.end, timeModel: series.timeModel });
+  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ expectedRevision: 2, patch: { title: "Rename whole series" } });
+  finish({ error: null, data: { ...renamed, title: "Rename whole series", revision: 3 } });
+  await saving;
+  expect(useEventsStore.getState().events[0].timeModel).toEqual(series.timeModel);
 });
