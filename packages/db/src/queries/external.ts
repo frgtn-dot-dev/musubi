@@ -1,4 +1,5 @@
-import { hasKnownEventTime, BadRequestError } from "@musubi/types";
+import { expandRecurringEvents } from "@musubi/calendar";
+import { hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
 import { assertLegacyEventTimePatch } from "./event-time-write";
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
@@ -17,6 +18,7 @@ import {
   events,
   externalCalendars,
   externalEvents,
+  eventOutbox,
   externalTasks,
   tasks,
   type NewEvent,
@@ -30,6 +32,13 @@ import {
 } from "./events";
 
 // Column values written to the `events` row for a synced event.
+function sameTimeMetadata(a: unknown, b: unknown) {
+  const stable = (value: unknown) => JSON.stringify(value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value ?? null);
+  return stable(a) === stable(b);
+}
+
+type ProviderTime = { timeModel: EventTimeModel; externalSeriesID?: string | null; originalStart?: OccurrenceStart | null; isCanceled?: boolean };
+
 type EventValues = {
   title: string;
   color: string;
@@ -632,10 +641,29 @@ export async function upsertExternalEvent(
   etag: string | null = null,
   icalUid: string | null = null,
   creationOperationID?: string,
+  time?: ProviderTime,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    let temporal: { timeModel: EventTimeModel; seriesID: string | null; originalStart: OccurrenceStart | null; isCanceled: boolean } | undefined;
+    if (time) {
+      const model = EventTimeModelSchema.parse(time.timeModel);
+      const original = time.originalStart == null ? null : OccurrenceStartSchema.parse(time.originalStart);
+      if (!!time.externalSeriesID !== !!original || time.externalSeriesID === externalEventID)
+        throw new Error("Invalid provider occurrence identity.");
+      let parent;
+      if (time.externalSeriesID) {
+        parent = await mappedEventForUpdate(tx, provider, calendarID, time.externalSeriesID);
+        if (!parent || parent.event.deletedAt || parent.event.seriesID || !parent.event.recurrence || parent.event.originCalendarID !== calendarID || parent.event.creatorID !== userID)
+          throw new Error("Provider occurrence requires an authoritative local master.");
+        const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, parent.event.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`)).limit(1);
+        if (pending.length) throw new Error("Provider series has a pending local operation. Retry after reconciliation.");
+      }
+      temporal = { timeModel: model, seriesID: parent?.event.id ?? null, originalStart: original, isCanceled: time.isCanceled ?? false };
+      const candidate = { ...values, ...temporal, id: crypto.randomUUID(), creatorID: userID, calendars: [calendarID], hasAttendees: false, isCanceled: false };
+      expandRecurringEvents(parent ? [{ ...parent.event, calendars: [calendarID], isCanceled: false }, candidate] : [candidate], values.start, values.end, { consumerTimeZone: "UTC" });
+    }
     const map = await mappedEventForUpdate(
       tx,
       provider,
@@ -644,9 +672,17 @@ export async function upsertExternalEvent(
     );
 
     if (map) {
-      if (etag !== null && map.etag === etag && map.event.deletedAt === null)
+      if (temporal && !temporal.seriesID) {
+        const children = await tx.select().from(events).where(eq(events.seriesID, map.event.id)).orderBy(events.id).for("share");
+        if (children.length) expandRecurringEvents([
+          { ...map.event, ...values, ...temporal, calendars: [calendarID], isCanceled: false },
+          ...children.map(child => ({ ...child, calendars: [calendarID], isCanceled: false })),
+        ], values.start, values.end, { consumerTimeZone: "UTC" });
+      }
+
+      if (etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
         return false;
-      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, values, etag, icalUid)) return false;
+      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid)) return false;
       if (map.event.originCalendarID !== calendarID) {
         const changedFields = (
           Object.keys(values) as (keyof EventValues)[]
@@ -677,7 +713,14 @@ export async function upsertExternalEvent(
       // Provider version changes are not necessarily content changes. Persist
       // the accepted validator without waking delta readers for identical polls.
       const patch = diffEventContent(map.event, values);
-      assertLegacyEventTimePatch(map.event, patch);
+      const contentChanged = map.event.deletedAt !== null || Object.keys(patch).length > 0 || !!(temporal && map.event.isCanceled !== temporal.isCanceled);
+      if (!temporal) assertLegacyEventTimePatch(map.event, patch);
+      else {
+        if (map.event.seriesID && (map.event.seriesID !== temporal.seriesID || !sameTimeMetadata(map.event.originalStart, temporal.originalStart)))
+          throw new Error("Provider occurrence identity cannot change.");
+        for (const key of ["timeModel", "seriesID", "originalStart", "isCanceled"] as const)
+          if (!sameTimeMetadata(map.event[key], temporal[key])) Object.assign(patch, { [key]: temporal[key] });
+      }
       const changed =
         Object.keys(patch).length > 0 || map.event.deletedAt !== null;
       if (changed) {
@@ -692,12 +735,12 @@ export async function upsertExternalEvent(
       }
       await tx
         .update(externalEvents)
-        .set({ etag, icalUid: icalUid ?? map.icalUid })
+        .set({ etag, icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}) })
         .where(eq(externalEvents.id, map.id));
-      if (changed) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
+      if (changed && contentChanged) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
       return changed;
     } else {
-      if (await retainUnmappedCreatePull(tx, provider, userID, calendarID, externalCalendarID, externalEventID, values, etag, icalUid, creationOperationID)) return false;
+      if (await retainUnmappedCreatePull(tx, provider, userID, calendarID, externalCalendarID, externalEventID, { ...values, ...temporal }, etag, icalUid, creationOperationID)) return false;
       const [ev] = await tx
         .insert(events)
         // Home calendar = the mirror it was imported into (matches createEvent's
@@ -705,6 +748,7 @@ export async function upsertExternalEvent(
         .values({
           id: crypto.randomUUID(),
           ...values,
+          ...temporal,
           creatorID: userID,
           originCalendarID: calendarID,
         })
@@ -718,6 +762,7 @@ export async function upsertExternalEvent(
         externalEventID,
         etag,
         icalUid,
+        ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}),
       });
     }
     return true;
@@ -762,7 +807,20 @@ export async function deleteExternalEvent(
       unlinked = { id: mapped.event.id, revision: mapped.event.revision + 1 };
       return true;
     }
-    if (mapped.event.deletedAt !== null) return false;
+    // Deleting a provider master must not strand its visible exceptions. Keep
+    // mappings for stable revival and fail before any write if a child is pending.
+    const children = await tx.select().from(events).where(eq(events.seriesID, mapped.event.id)).orderBy(events.id).for("update");
+    for (const child of children) {
+      if (child.originCalendarID !== calendarID || child.creatorID !== mapped.event.creatorID)
+        throw new Error("Provider family removal crosses event authority.");
+      const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, child.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`)).limit(1);
+      if (pending.length) throw new Error("Provider family removal has a pending child. Retry after reconciliation.");
+    }
+    for (const child of children) if (child.deletedAt === null) {
+      await tx.update(events).set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` }).where(eq(events.id, child.id));
+      await appendInboundEventFanout(tx, child.id, calendarID, "delete");
+    }
+    if (mapped.event.deletedAt !== null) return children.some(child => child.deletedAt === null);
     // Retain authoritative mappings/links for tombstone deltas and revival.
     await tx
       .update(events)

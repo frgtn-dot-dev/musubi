@@ -1,3 +1,4 @@
+import { normalizeGoogleTime } from "./google_time";
 import { config, logger } from "@musubi/config";
 import {
   getOAuthAccountIDs,
@@ -491,19 +492,22 @@ export async function fetchGoogleChanges(
   options: {
     fetchImpl?: typeof fetch;
     baseUrl?: string;
+    timeModels?: boolean;
   } = {},
 ): Promise<FetchChangesResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const baseUrl = options.baseUrl ?? GCAL;
   const changes: NormalizedChange[] = [];
+  const items: any[] = [];
   let currentCursor = cursor;
   let pageToken: string | undefined;
   let nextSyncToken: string | undefined;
-  let reset = false;
+  let reset = options.timeModels === true && cursor === null;
   let done = false;
 
   while (!done) {
     const params = new URLSearchParams();
+    if (options.timeModels) params.set("showDeleted", "true");
     if (currentCursor) params.set("syncToken", currentCursor);
     if (pageToken) params.set("pageToken", pageToken);
 
@@ -515,17 +519,18 @@ export async function fetchGoogleChanges(
     // Cursor expired → discard any partial incremental pages and restart as a
     // full set. The engine will sweep provider mappings absent from that set.
     if (res.status === 410) {
+      if (!currentCursor) throw new Error("Google full event listing returned 410.");
       reset = true;
       currentCursor = null;
       pageToken = undefined;
       changes.length = 0;
+      items.length = 0;
       continue;
     }
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
 
     const data = await res.json();
-    for (const item of data.items ?? [])
-      changes.push({ kind: "event", data: toNormalized(item) });
+    for (const item of data.items ?? []) items.push(item);
 
     if (data.nextPageToken) {
       pageToken = data.nextPageToken;
@@ -535,6 +540,20 @@ export async function fetchGoogleChanges(
     }
   }
 
+  const masters = new Map(items.filter(item => !item.recurringEventId).map(item => [item.id, item]));
+  if (options.timeModels) {
+    for (const item of items) {
+      if (!item.recurringEventId || masters.has(item.recurringEventId)) continue;
+      const response = await fetchImpl(`${baseUrl}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(item.recurringEventId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) throw new Error(`Google series hydration ${response.status}`);
+      const master = await response.json();
+      if (master.id !== item.recurringEventId) throw new Error("Google series hydration returned another identity.");
+      masters.set(master.id, master);
+      items.push(master);
+    }
+  }
+  for (const item of items.filter(item => !options.timeModels || !item.recurringEventId || masters.get(item.recurringEventId)?.status !== "cancelled")) changes.push({ kind: "event", data: options.timeModels ? normalizeGoogleTime(item, toNormalized({ ...item, recurrence: undefined }), masters.get(item.recurringEventId)) : toNormalized(item) });
+  if (options.timeModels) changes.sort((a, b) => Number(a.kind === "event" && !!a.data.externalSeriesID) - Number(b.kind === "event" && !!b.data.externalSeriesID));
   return { changes, nextCursor: nextSyncToken ?? currentCursor, reset };
 }
 
@@ -629,7 +648,7 @@ export const googleAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
-      : fetchGoogleChanges(accessToken, externalCalendarId, cursor);
+      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled });
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {

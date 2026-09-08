@@ -28,7 +28,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11 je `in_progress`; K12–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -578,3 +578,5 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 
 
 **K10 uzavření lokální implementace:** generic unlink/tombstone nyní odmítá detached rodinu včetně masteru s tombstone child, aby se neobnovil původní slot ani neosiřely výjimky. Produkční startup kontroluje kompatibilní release a obě vynucená minima novější než vydané 0.1.8 ještě před migrací a listen. Flag i všechny verze zůstávají beze změny. Finální scope a důkazy jsou v [K10 acceptance](calendar-k10-acceptance.md); dalším bodem je K11.
+
+**K11 Google import — ověřovaný první providerový řez:** explicitní časový import zachová `recurringEventId` / `originalStartTime`, před zápisem dohledá chybějící master a seřadí závislosti. Cancellation-only výjimka je živá zrušená definice, nikoli tombstone obnovující původní slot. Transakční metadata writer zachová local UUID, source authority a pending guard; metadata adoption nevytvoří outbound echo. Master-only změna nesmí zneplatnit uložené children. Provider delete/revival zahrnuje rodinu a zachová durable fanout. Podrobnosti a hranice jsou v [provider time import](../sync/provider-time-import.md). Google HTTPfixture→engine→PostgreSQL pokrývá reorder, move/duration, DST, all-day cancellation, 503, reset, linked adoption a family delete/revival. Čisté nezávislé review našlo tři hrany; opravy mají regrese a závěrečná revize nemá blocker. Flag zůstává default-off; CalDAV a Graph následují.
