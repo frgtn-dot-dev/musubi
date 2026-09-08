@@ -629,3 +629,6 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 
 
 **K12 Google whole-series evidence — přípravný řez:** default-off adapter umí načíst master a úplný seznam nativních výjimek bez časového okna. Kontroluje stránkování, ETagy, původní identity, cancellation-only definice a osobní oprávnění; změněný master nebo neúplná rodina se odmítnou. Lokální HTTP regrese pokrývá zoned/all-day a zachování dosavadních occurrence cest. Nejde o atomický providerový snapshot ani o aktivovaný series writer; endpoint a durable whole-series kroky následují. Viz [Google scope kontrakt](../sync/google-occurrence-writes.md#whole-series-evidence-preparation).
+
+
+**K12 Google živé title-only ověření (2026-09-08):** schválený izolovaný test zoned a all-day série prokázal, že conditional PATCH názvu masteru přepisuje i vlastní název přesunuté výjimky a mění ETagy výjimek. Původní identity, přesuny a cancellation zůstaly zachované. Dočasný kalendář je smazaný; aplikační flagy zůstaly vypnuté. Parent-only writer proto nesplní současný kontrakt zachování child obsahu: následuje durable reconciliation výjimek včetně přerušení a souběžné externí změny. [Postup, důkazy a hranice](calendar-google-series-live-acceptance.md). Nejde o dokončení K12 ani o důkaz pro časové/recurrence změny.
