@@ -177,3 +177,12 @@ For a known local plain-RRULE series with unchanged kind and zone, All events ap
 The planner sends one revision-CAS time/content request without the legacy multi-write scope envelope. Master and displayed occurrence revisions must match; live native content refresh does not promote old civil coordinates to a newer revision. The saved master, rather than the occurrence draft, becomes the native reminder input. Web scope and full-editor handoff failures keep the draft; a new temporal save has no legacy Undo action.
 
 Occurrence/following edits, changing series kind/zone/recurrence, legacy series adoption, RDATE/EXDATE/DTSTART definitions, detached families and provider histories remain unsupported. Existing authoritative family/provider guards and the default-off endpoint remain in force. This does not activate rollout, physical-device QA, create/copy, or provider parity.
+
+
+### Local explicit creation and exact copy
+
+`POST /api/v1/events/time` accepts `{event, time}`. Its strict content object excludes stored timestamps, time metadata, revision and occurrence identity. The explicit time intent resolves the complete time tuple; the local transaction rechecks edit permission for every target under membership and lifecycle locks, rejects external calendars, validates recurrence and inserts revision 1 with all links. Authenticated actor owns the new event and organizer identity.
+
+Known-model `POST /api/v1/events/:id/fork` rechecks source visibility, destination edit permission and the source revision under locks. It copies the validated stored tuple verbatim, preserving even a second-fold instant, rather than re-resolving the visible civil value. Detached families (including tombstoned children), external calendars, mapping and outbox histories remain unsupported. The old generic create contract remains unchanged. All three operations—create, fork and time edit—share the default-off flag.
+
+Both clients send a request-only create time intent; read/cache snapshots strip it. Native recurrence presets and labels use the selected civil start date. No backfill, version minimum change or production activation is part of this checkpoint.

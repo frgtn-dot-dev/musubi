@@ -6,6 +6,8 @@ import {
   type AttendanceStatus,
   type NewEvent,
   createEvent,
+  createLocalEventWithTime,
+  forkLocalEventWithTimeAtRevision,
   diffEventContent,
   forkEventAtRevision,
   getCalendarMembers,
@@ -242,6 +244,15 @@ export async function handlerCreateEvent(req: Request, res: Response) {
     notifyEvent(event.calendars, "event_created", result));
 }
 
+export async function handlerCreateEventTime(req: Request, res: Response) {
+  if (!config.api.eventTimeEditsEnabled)
+    throw new EventWriteError("event-write", "unsupported", "Explicit time creation is not enabled on this server. No changes were saved.");
+  const deliver = await prepareEventWrites([], eventMutationIdentity(req));
+  const result = await createLocalEventWithTime(req.body, req.user!.id);
+  return sendCommitted(res, deliver, result, result, 201, () =>
+    notifyEvent(result.calendars, "event_created", result));
+}
+
 export async function handlerUpdateEvent(req: Request, res: Response) {
   const request = EventPatchRequestSchema.parse(req.body);
 
@@ -398,8 +409,16 @@ export async function handlerForkEvent(req: Request, res: Response) {
   if (source.revision !== expectedRevision || source.deletedAt)
     return conflict(res, source);
 
-  if (hasKnownEventTime(source))
-    throw new BadRequestError("This event requires a time-model-aware copy. No changes were saved.");
+  if (hasKnownEventTime(source)) {
+    if (!config.api.eventTimeEditsEnabled)
+      throw new EventWriteError("event-write", "unsupported", "Explicit time copying is not enabled on this server. No changes were saved.");
+    const deliver = await prepareEventWrites([], eventMutationIdentity(req));
+    const saved = await forkLocalEventWithTimeAtRevision(eventID, expectedRevision, calendarID, req.user!.id);
+    if (saved.status === "not_found") throw new NotFoundError("Event not found.");
+    if (saved.status === "conflict") return conflict(res, saved.current);
+    return sendCommitted(res, deliver, saved.event, saved.event, 201, () =>
+      notifyEvent(saved.event.calendars, "event_created", saved.event));
+  }
   const newEvent: NewEvent = {
     ...eventCreateRequest(EventSchema.parse(source)),
     id: randomUUID(),

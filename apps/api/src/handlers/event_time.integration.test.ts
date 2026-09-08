@@ -9,7 +9,7 @@ import { createCalendar, createEvent, db, calendarMembers, externalCalendars, ge
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
 import { middlewareErrorHandler } from "../middleware/error_handler";
-import { handlerEditEventTime, handlerGetEvents, handlerForkEvent, handlerUpdateEvent } from "./events";
+import { handlerCreateEventTime, handlerEditEventTime, handlerGetEvents, handlerForkEvent, handlerUpdateEvent } from "./events";
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
@@ -27,6 +27,7 @@ async function main() {
   const event = await createEvent({ id: randomUUID(), creatorID: owner, organizer: owner, title: "Keep title", color: "red", start: new Date("2026-03-28T09:00:00Z"), end: new Date("2026-03-28T10:00:00Z") }, [calendar.id]);
   const app = express();
   app.use(express.json());
+  app.post("/events/time", requireAuth, handlerCreateEventTime);
   app.put("/events/:eventId/time", requireAuth, handlerEditEventTime);
   app.get("/events", requireAuth, handlerGetEvents);
   app.patch("/events", requireAuth, handlerUpdateEvent);
@@ -66,8 +67,50 @@ async function main() {
     assert.equal((await send({ expectedRevision: 2, time })).body.revision, 2);
     assert.equal((await send({ id: event.id, expectedRevision: 2, patch: { timeModel: { kind: "all-day" } } }, token.raw, "/events", "PATCH")).status, 400);
     const fork = await send({ calendarID: copy.id, expectedRevision: 2 }, token.raw, `/events/${event.id}/fork`, "POST");
-    assert.equal(fork.status, 400);
-    assert.match(fork.body.error, /time-model-aware copy/);
+    assert.equal(fork.status, 201, JSON.stringify(fork.body));
+    assert.deepEqual(fork.body.timeModel, saved.body.timeModel);
+    assert.equal(fork.body.start, saved.body.start);
+    assert.equal(fork.body.revision, 1);
+    assert.notEqual(fork.body.id, event.id);
+    assert.deepEqual(fork.body.calendars, [copy.id]);
+    assert.equal((await send({ calendarID: copy.id, expectedRevision: 1 }, token.raw, `/events/${event.id}/fork`, "POST")).status, 409);
+    config.api.eventTimeEditsEnabled = false;
+    assert.equal((await send({ calendarID: copy.id, expectedRevision: 2 }, token.raw, `/events/${event.id}/fork`, "POST")).status, 403);
+    config.api.eventTimeEditsEnabled = true;
+
+    for (const intent of [time, { kind: "floating", startLocal: "2026-03-29T09:00:00", endLocal: "2026-03-29T10:00:00" }, { kind: "all-day", startDate: "2026-03-29", endDate: "2026-03-30" }]) {
+      const content = { id: randomUUID(), creatorID: "untrusted", organizer: "untrusted", title: "New civil series", color: "red", calendars: [calendar.id], isCanceled: false, hasAttendees: false, recurrence: "FREQ=DAILY;COUNT=3" };
+      const request = { event: content, time: intent };
+      config.api.eventTimeEditsEnabled = false;
+      assert.equal((await send(request, token.raw, "/events/time", "POST")).status, 403);
+      config.api.eventTimeEditsEnabled = true;
+      assert.equal((await send(request, viewerToken.raw, "/events/time", "POST")).status, 403);
+      assert.equal(await getEventSnapshot(content.id), undefined);
+      assert.equal((await send({ ...request, event: { ...content, timeModel: { kind: "all-day" } } }, token.raw, "/events/time", "POST")).status, 400);
+      const created = await send(request, token.raw, "/events/time", "POST");
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      assert.equal(created.body.timeModel.kind, intent.kind);
+      assert.equal(created.body.creatorID, owner);
+      assert.equal(created.body.organizer, owner);
+      assert.equal(created.body.revision, 1);
+      const cloned = await send({ calendarID: copy.id, expectedRevision: 1 }, token.raw, `/events/${content.id}/fork`, "POST");
+      assert.equal(cloned.status, 201);
+      assert.deepEqual(cloned.body.timeModel, created.body.timeModel);
+      assert.equal(cloned.body.start, created.body.start);
+      assert.equal(cloned.body.end, created.body.end);
+      assert.equal(cloned.body.recurrence, content.recurrence);
+    }
+    const folded = await createEvent({ id: randomUUID(), creatorID: owner, organizer: owner, title: "Second fold", color: "red", start: new Date("2026-10-25T01:30:00Z"), end: new Date("2026-10-25T02:30:00Z"), timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-25T02:30:00.000", endLocal: "2026-10-25T03:30:00.000" } }, [calendar.id]);
+    const foldCopy = await send({ calendarID: copy.id, expectedRevision: 1 }, token.raw, `/events/${folded.id}/fork`, "POST");
+    assert.equal(foldCopy.status, 201);
+    assert.equal(foldCopy.body.start, "2026-10-25T01:30:00.000Z");
+    assert.deepEqual(foldCopy.body.timeModel, folded.timeModel);
+    const deniedRequest = { event: { id: randomUUID(), creatorID: owner, organizer: owner, title: "Rejected", color: "red", calendars: [calendar.id], isCanceled: false, recurrence: "FREQ=HOURLY;COUNT=2" }, time };
+    assert.equal((await send(deniedRequest, token.raw, "/events/time", "POST")).status, 400);
+    assert.equal(await getEventSnapshot(deniedRequest.event.id), undefined);
+    const detached = await createEvent({ id: randomUUID(), creatorID: owner, organizer: owner, title: "Detached", color: "red", start: folded.start, end: folded.end, timeModel: folded.timeModel, seriesID: folded.id, originalStart: { kind: "instant", value: folded.start.toISOString() } }, [calendar.id]);
+    assert.equal((await send({ calendarID: copy.id, expectedRevision: 1 }, token.raw, `/events/${folded.id}/fork`, "POST")).status, 400);
+    assert.equal((await send({ calendarID: copy.id, expectedRevision: 1 }, token.raw, `/events/${detached.id}/fork`, "POST")).status, 400);
     const before = await getEventSnapshot(event.id);
     assert.equal((await send({ expectedRevision: 2, time: { ...time, endLocal: "2026-03-29T03:00:00" } })).status, 400);
     assert.deepEqual(await getEventSnapshot(event.id), before);
@@ -114,6 +157,10 @@ async function main() {
     assert.equal(failed.body.committed[0].title, "Committed together");
     assert.equal(failed.body.committed[0].timeModel.kind, "floating");
     await db.insert(externalCalendars).values({ provider: "google", userID: owner, accountID: owner, externalCalendarID: "remote", calendarID: calendar.id });
+    const externalCreate = { event: { ...deniedRequest.event, recurrence: null }, time };
+    assert.equal((await send(externalCreate, token.raw, "/events/time", "POST")).status, 400);
+    assert.equal(await getEventSnapshot(deniedRequest.event.id), undefined);
+    assert.equal((await send({ calendarID: copy.id, expectedRevision: 3 }, token.raw, `/events/${event.id}/fork`, "POST")).status, 400);
     assert.equal((await send({ expectedRevision: 3, time })).status, 400);
     assert.equal((await getEventSnapshot(event.id))?.revision, 3);
   } finally {

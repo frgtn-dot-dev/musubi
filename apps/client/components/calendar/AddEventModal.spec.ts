@@ -191,7 +191,7 @@ vi.mock("@/store/useCalendarsStore", () => ({
   useCalendarsStore: () => ({
     calendars: [
       {
-        id: "calendar",
+        id: "00000000-0000-4000-8000-000000000155",
         creatorID: "owner",
         role: "owner",
         name: "Calendar",
@@ -237,8 +237,8 @@ const master = EventSchema.parse({
   end: "2026-07-06T10:00:00Z",
   isAllDay: false,
   isCanceled: false,
-  calendars: ["calendar"],
-  originCalendarID: "calendar",
+  calendars: ["00000000-0000-4000-8000-000000000155"],
+  originCalendarID: "00000000-0000-4000-8000-000000000155",
   recurrence: "FREQ=WEEKLY",
 });
 const occurrence = {
@@ -799,4 +799,32 @@ it("saves a whole-series civil date shift across DST and schedules from the save
   await saving;
   expect(mocks.request).not.toHaveBeenCalled();
   expect(mocks.close).not.toHaveBeenCalled();
+});
+
+it("creates an explicit zoned draft after a missing-zone retry", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  useEditComposerStore.getState().open();
+  renderComposer(true);
+  titleInput(renderComposer())!.onChangeText("New zoned event");
+  find(renderComposer(), props => props.title === "Time model")!.onSelect("zoned");
+  await find(renderComposer(), props => props.label === "Create")!.onPress();
+  expect(mocks.request).not.toHaveBeenCalled();
+  expect(titleInput(renderComposer())!.value).toBe("New zoned event");
+  find(renderComposer(), props => props.accessibilityLabel === "Event time zone")!.onChangeText("Europe/Prague");
+  find(renderComposer(), props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.onChangeText("2026-07-21");
+  find(renderComposer(), props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.onChangeText("2026-07-21");
+  find(renderComposer(), props => props.accessibilityLabel === "Starts time (HH:mm)")!.onChangeText("09:00");
+  find(renderComposer(), props => props.accessibilityLabel === "Ends time (HH:mm)")!.onChangeText("10:00");
+  find(renderComposer(), props => props.accessibilityLabel === "Weekly recurrence")!.onPress();
+  expect(find(renderComposer(), props => props.accessibilityLabel === "Weekly on Tue recurrence")).toBeDefined();
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    expect(body.event.recurrence).toBe("FREQ=WEEKLY;BYDAY=TU");
+    return { error: null, data: { ...body.event, ...resolveEventTimeEdit(body.time), revision: 1 } };
+  });
+  await find(renderComposer(), props => props.label === "Create")!.onPress();
+  expect(mocks.request).toHaveBeenCalledOnce();
+  expect(mocks.request.mock.lastCall![0]).toMatch(/\/events\/time$/);
+  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ event: { title: "New zoned event" }, time: { kind: "zoned", timeZone: "Europe/Prague" } });
+  expect(useEventsStore.getState().events.find(e => e.title === "New zoned event")?.timeModel?.kind).toBe("zoned");
 });

@@ -8133,3 +8133,43 @@ for (const [width, theme, full] of [[390, "dark", false], [1280, "light", true]]
     expect(writes[0]).toEqual({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Moved civil series" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:30:17.123", endLocal: "2026-03-29T10:30:19.456" } } });
   });
 }
+
+for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
+  test(`explicit time creation retains draft on refusal ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000155";
+    await mockAuthenticatedReads(page, { ...events, events: [] }, [{ ...calendars[0]!, id: calendarID }]);
+    const writes: any[] = [];
+    let enabled = false;
+    await page.route("**/api/v1/events/time", route => {
+      const body = route.request().postDataJSON();
+      writes.push(body);
+      if (!enabled) return respond(route, { error: "Explicit time creation is not enabled on this server. No changes were saved.", capability: "event-write", reason: "unsupported" }, 403);
+      return respond(route, { ...body.event, revision: 1, start: "2026-07-30T07:30:00Z", end: "2026-07-30T08:30:00Z", isAllDay: false, timeModel: body.time }, 201);
+    });
+    await page.goto("/app/p/my-calendar/week?date=2026-07-30");
+    await openCreateEvent(page);
+    await page.getByRole("textbox", { name: "Event title" }).fill("New civil event");
+    await page.getByRole("button", { name: "More options" }).click();
+    await page.getByRole("combobox", { name: "Time model", exact: true }).click();
+    await page.getByRole("option", { name: "Event time zone", exact: true }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Enter a valid event time zone");
+    expect(writes).toHaveLength(0);
+    await page.getByRole("textbox", { name: "Event time zone", exact: true }).fill("Europe/Prague");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Explicit time creation is not enabled");
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("New civil event");
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath("create-time-retry.png"), fullPage: true });
+    enabled = true;
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+    expect(writes).toHaveLength(2);
+    expect(writes[1].event).toMatchObject({ title: "New civil event", calendars: [calendarID] });
+    expect(writes[1].time).toMatchObject({ kind: "zoned", timeZone: "Europe/Prague" });
+    expect(writes[1].event.timeModel).toBeUndefined();
+    expect(writes[1].event.start).toBeUndefined();
+  });
+}

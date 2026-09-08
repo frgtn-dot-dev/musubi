@@ -318,6 +318,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       onOpenFullEditor={(values, event) => {
         // The draft goes in the URL so the page survives a reload.
         const search = {
+          timeKind: values.timeKind,
+          timeZone: values.timeZone,
           allDay: values.isAllDay || undefined,
           attendees: values.hasAttendees || undefined,
           calendarId: values.calendarId,
