@@ -1,3 +1,4 @@
+import { caldavEventState } from "./provider_event_state";
 import ICAL from "ical.js";
 import { civilToInstant, instantToCivil, resolveEventTimeEdit } from "@musubi/calendar";
 import { EventTimeModelSchema, EventTimeZoneSchema, OccurrenceStartSchema, type OccurrenceStart } from "@musubi/types";
@@ -86,6 +87,7 @@ export function normalizeCaldavResource(object: { url: string; etag?: string; da
     if (originalStart && recurrence) throw new Error("CalDAV override cannot define another series.");
     const cancelled = text(component, "status")?.toUpperCase() === "CANCELLED";
     return {
+      providerState: caldavEventState(component),
       externalId: object.url + suffix, externalSeriesID: originalStart ? object.url : null, originalStart,
       status: cancelled && !originalStart ? "cancelled" : "active", isCanceled: cancelled && !!originalStart,
       ...times(component), title: text(component, "summary") ?? "(untitled)",

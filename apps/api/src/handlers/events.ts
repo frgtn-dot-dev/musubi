@@ -13,6 +13,7 @@ import {
   forkEventAtRevision,
   getCalendarMembers,
   getEventSnapshot,
+  getOwnProviderEventState,
   getEventAttendees,
   getEventOrigin,
   getUsersEvents,
@@ -585,4 +586,10 @@ export async function handlerGetEvents(req: Request, res: Response) {
     deletedIds: [...deletedIds],
     serverTime,
   });
+}
+
+export async function handlerGetProviderEventState(req: Request, res: Response) {
+  const id = requireUUID(req.params.eventId, "eventId");
+  await assertCanViewEvent(req.user!.id, id);
+  res.json({ state: await getOwnProviderEventState(req.user!.id, id) });
 }

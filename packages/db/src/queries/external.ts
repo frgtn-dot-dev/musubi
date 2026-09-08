@@ -1,5 +1,5 @@
 import { expandRecurringEvents } from "@musubi/calendar";
-import { hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
+import { ProviderEventStateSchema, type ProviderEventState, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
 import { assertLegacyEventTimePatch } from "./event-time-write";
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
@@ -645,6 +645,7 @@ export type ExternalEventResourceObservation = {
   etag: string | null;
   icalUid: string;
   time: ProviderTime;
+  providerState?: ProviderEventState;
 };
 
 /** A CalDAV GET replaces one whole resource, including omitted overrides. */
@@ -680,7 +681,7 @@ export async function replaceExternalEventResource(
     }
     let changed = false;
     for (const item of [master, ...observations.filter(item => item !== master)]) {
-      changed = await upsertExternalEventInTransaction(tx, true, provider, userID, calendarID, externalCalendarID, item.externalId, item.values, item.etag, item.icalUid, undefined, item.time) || changed;
+      changed = await upsertExternalEventInTransaction(tx, true, provider, userID, calendarID, externalCalendarID, item.externalId, item.values, item.etag, item.icalUid, undefined, item.time, undefined, item.providerState) || changed;
     }
     const seen = new Set(observations.map(item => item.externalId));
     for (const mapping of mappings.filter(item => !seen.has(item.externalEventID))) {
@@ -713,7 +714,10 @@ async function upsertExternalEventInTransaction(
   creationOperationID?: string,
   time?: ProviderTime,
   providerOccurrence?: ProviderOccurrence,
+  providerState?: ProviderEventState,
 ): Promise<boolean> {
+    const state = providerState === undefined ? undefined : ProviderEventStateSchema.parse(providerState);
+    if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     const expandedIdentity = providerOccurrence ? {
@@ -748,6 +752,7 @@ async function upsertExternalEventInTransaction(
     );
 
     if (map) {
+      const stateChanged = state !== undefined && JSON.stringify(map.providerState == null ? null : ProviderEventStateSchema.parse(map.providerState)) !== JSON.stringify(state);
       if (expandedIdentity && map.externalSeriesID && (map.externalSeriesID !== expandedIdentity.externalSeriesID || !sameTimeMetadata(map.originalStart, expandedIdentity.originalStart)))
         throw new Error("Provider-expanded occurrence identity cannot change.");
       if (expandedIdentity && !map.externalSeriesID) {
@@ -762,9 +767,14 @@ async function upsertExternalEventInTransaction(
         ], values.start, values.end, { consumerTimeZone: "UTC" });
       }
 
-      if ((!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
+      if (!stateChanged && (!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
+      {
+        // An unchanged baseline is not a conflict with a queued local write.
+        // It can still supersede a previously retained personal observation.
+        if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid, state, true);
         return false;
-      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid)) return false;
+      }
+      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid, state)) return false;
       if (map.event.originCalendarID !== calendarID) {
         const changedFields = (
           Object.keys(values) as (keyof EventValues)[]
@@ -817,12 +827,12 @@ async function upsertExternalEventInTransaction(
       }
       await tx
         .update(externalEvents)
-        .set({ etag, icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
+        .set({ etag, ...(state !== undefined ? { providerState: state, providerStateObservedAt: new Date() } : {}), icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
         .where(eq(externalEvents.id, map.id));
       if (changed && contentChanged) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
-      return changed;
+      return changed || stateChanged;
     } else {
-      if (await retainUnmappedCreatePull(tx, provider, userID, calendarID, externalCalendarID, externalEventID, { ...values, ...temporal }, etag, icalUid, creationOperationID)) return false;
+      if (await retainUnmappedCreatePull(tx, provider, userID, calendarID, externalCalendarID, externalEventID, { ...values, ...temporal }, etag, icalUid, creationOperationID, state)) return false;
       const [ev] = await tx
         .insert(events)
         // Home calendar = the mirror it was imported into (matches createEvent's
@@ -846,6 +856,7 @@ async function upsertExternalEventInTransaction(
         icalUid,
         ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}),
         ...expandedIdentity,
+        ...(state !== undefined ? { providerState: state, providerStateObservedAt: new Date() } : {}),
       });
     }
     return true;

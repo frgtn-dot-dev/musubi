@@ -1,3 +1,4 @@
+import { ProviderEventStateSchema } from "@musubi/types";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "..";
 import {
@@ -317,7 +318,19 @@ export async function completeEventOutbox(
             "mapping-version-changed",
             resultRef,
           );
+        // This is the last observed personal state, not a projection of our
+        // content write. Its observation may precede or follow the ACK version.
+        const observedState = row.remoteSnapshot?.isEcho &&
+          row.remoteSnapshot.externalEventId === resultRef.externalEventId &&
+          !row.remoteSnapshot.deleted && row.remoteSnapshot.providerState
+          ? ProviderEventStateSchema.parse(row.remoteSnapshot.providerState) : undefined;
+        if (observedState && observedState.provider !== row.provider)
+          throw new Error("Provider observation destination mismatch.");
+        const observedAt = row.remoteSnapshot ? new Date(row.remoteSnapshot.observedAt) : null;
+        const acceptState = observedState && observedAt && Number.isFinite(observedAt.getTime()) &&
+          (!mapping?.providerStateObservedAt || observedAt > mapping.providerStateObservedAt);
         const metadata = {
+          ...(acceptState ? { providerState: observedState, providerStateObservedAt: observedAt } : {}),
           etag: resultRef.etag ?? null,
           icalUid: resultRef.icalUid ?? mapping?.icalUid ?? null,
         };

@@ -46,6 +46,7 @@ import {
   handlerUpdateEvent,
   handlerEditEventTime,
   handlerEventScope,
+  handlerGetProviderEventState,
 } from "./handlers/events";
 import { handlerGetEventDeliveryInbox, handlerGetEventDelivery, handlerRetryEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "./handlers/event_delivery";
 import {
@@ -335,6 +336,7 @@ app.post("/api/v1/events/time", requireAuth, wrap(handlerCreateEventTime));
 app.patch("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
 app.put("/api/v1/events/:eventId/time", requireAuth, wrap(handlerEditEventTime));
 app.post("/api/v1/events/:eventId/scope", requireAuth, wrap(handlerEventScope));
+app.get("/api/v1/events/:eventId/provider-state", requireAuth, wrap(handlerGetProviderEventState));
 // PUT deliberately uses the same strict PATCH contract: no legacy write bypass.
 app.put("/api/v1/events", requireAuth, wrap(handlerUpdateEvent));
 app.delete("/api/v1/events", requireAuth, wrap(handlerRemoveEvent));

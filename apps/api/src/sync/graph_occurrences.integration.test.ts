@@ -75,7 +75,7 @@ async function main() {
     expire = true;
     await sync();
     assert.deepEqual(await rows(), initial);
-    assert.deepEqual((await mappings()).map(({ updatedAt: _updatedAt, ...mapping }) => mapping), mapped.map(({ updatedAt: _updatedAt, ...mapping }) => mapping), "Reset retains logical and original identity");
+    assert.deepEqual((await mappings()).map(({ updatedAt: _updatedAt, providerStateObservedAt: _observedAt, ...mapping }) => mapping), mapped.map(({ updatedAt: _updatedAt, providerStateObservedAt: _observedAt, ...mapping }) => mapping), "Reset retains logical and original identity");
     const cursorBefore = await getUserExternalCalendars("microsoft", userID, "account");
     failHydration = true;
     await assert.rejects(sync(), /503/);

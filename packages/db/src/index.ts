@@ -32,3 +32,4 @@ export const db = drizzle(config.db.databaseUrl, { schema });
 export * from './queries/event-time-edit';
 export * from "./queries/event-time-create";
 export * from './queries/event-scope';
+export * from './queries/provider-event-state';

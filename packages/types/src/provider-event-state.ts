@@ -1,0 +1,24 @@
+import { z } from "zod";
+
+const person = z.object({ address: z.string().nullable(), name: z.string().nullable(), self: z.boolean().nullable() }).strict();
+export const ProviderEventStateSchema = z.object({
+  provider: z.enum(["google", "microsoft", "caldav"]),
+  organizer: person.nullable(),
+  // null means provider evidence is absent; owning a mirror is not organizer proof.
+  isOrganizer: z.boolean().nullable(),
+  attendees: z.array(person.extend({ role: z.string().nullable(), response: z.string().nullable() }).strict()),
+  attendeesComplete: z.boolean(),
+  ownResponse: z.string().nullable(),
+  reminders: z.discriminatedUnion("provider", [
+    z.object({ provider: z.literal("google"), useDefault: z.boolean().nullable(), overrides: z.array(z.object({ method: z.string().nullable(), minutes: z.number().int().nullable() }).strict()) }).strict(),
+    z.object({ provider: z.literal("microsoft"), isOn: z.boolean().nullable(), minutesBeforeStart: z.number().int().nullable() }).strict(),
+    z.object({ provider: z.literal("caldav"), alarms: z.array(z.object({ action: z.string().nullable(), trigger: z.string().nullable(), related: z.string().nullable(), repeat: z.string().nullable(), duration: z.string().nullable() }).strict()) }).strict(),
+  ]),
+  // Provider-native values are intentionally not collapsed into another provider's enum.
+  availability: z.string().nullable(),
+  privacy: z.string().nullable(),
+  status: z.string().nullable(),
+  eventType: z.string().nullable(),
+  conferenceURLs: z.array(z.string()),
+}).strict();
+export type ProviderEventState = z.infer<typeof ProviderEventStateSchema>;
