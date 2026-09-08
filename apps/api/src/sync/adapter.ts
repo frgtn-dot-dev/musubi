@@ -5,6 +5,7 @@ import type { EventContentPatch } from "@musubi/db";
 // Adapters translate their own format (Google JSON / Graph JSON / iCal) <-> this.
 export type NormalizedEvent = {
   creationOperationID?: string;
+  providerOccurrence?: { externalSeriesID: string; originalStart: OccurrenceStart };
   timeModel?: EventTimeModel;
   externalSeriesID?: string | null;
   originalStart?: OccurrenceStart | null;

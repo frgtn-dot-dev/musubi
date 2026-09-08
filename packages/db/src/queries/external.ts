@@ -37,6 +37,7 @@ function sameTimeMetadata(a: unknown, b: unknown) {
   return stable(a) === stable(b);
 }
 
+type ProviderOccurrence = { externalSeriesID: string; originalStart: OccurrenceStart };
 type ProviderTime = { timeModel: EventTimeModel; externalSeriesID?: string | null; originalStart?: OccurrenceStart | null; isCanceled?: boolean };
 
 type EventValues = {
@@ -711,9 +712,16 @@ async function upsertExternalEventInTransaction(
   icalUid: string | null = null,
   creationOperationID?: string,
   time?: ProviderTime,
+  providerOccurrence?: ProviderOccurrence,
 ): Promise<boolean> {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    const expandedIdentity = providerOccurrence ? {
+      externalSeriesID: providerOccurrence.externalSeriesID,
+      originalStart: OccurrenceStartSchema.parse(providerOccurrence.originalStart),
+    } : undefined;
+    if (expandedIdentity && (provider !== "microsoft" || !expandedIdentity.externalSeriesID || expandedIdentity.externalSeriesID === externalEventID || time?.externalSeriesID || values.recurrence))
+      throw new Error("Invalid provider-expanded occurrence identity.");
     let temporal: { timeModel: EventTimeModel; seriesID: string | null; originalStart: OccurrenceStart | null; isCanceled: boolean } | undefined;
     if (time) {
       const model = EventTimeModelSchema.parse(time.timeModel);
@@ -740,6 +748,12 @@ async function upsertExternalEventInTransaction(
     );
 
     if (map) {
+      if (expandedIdentity && map.externalSeriesID && (map.externalSeriesID !== expandedIdentity.externalSeriesID || !sameTimeMetadata(map.originalStart, expandedIdentity.originalStart)))
+        throw new Error("Provider-expanded occurrence identity cannot change.");
+      if (expandedIdentity && !map.externalSeriesID) {
+        const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, map.event.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`)).limit(1);
+        if (pending.length) throw new Error("Occurrence identity adoption must wait for the pending source operation.");
+      }
       if (temporal && !temporal.seriesID && !deferFamilyValidation) {
         const children = await tx.select().from(events).where(eq(events.seriesID, map.event.id)).orderBy(events.id).for("share");
         if (children.length) expandRecurringEvents([
@@ -748,7 +762,7 @@ async function upsertExternalEventInTransaction(
         ], values.start, values.end, { consumerTimeZone: "UTC" });
       }
 
-      if (etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
+      if ((!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
         return false;
       if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid)) return false;
       if (map.event.originCalendarID !== calendarID) {
@@ -803,7 +817,7 @@ async function upsertExternalEventInTransaction(
       }
       await tx
         .update(externalEvents)
-        .set({ etag, icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}) })
+        .set({ etag, icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
         .where(eq(externalEvents.id, map.id));
       if (changed && contentChanged) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
       return changed;
@@ -831,6 +845,7 @@ async function upsertExternalEventInTransaction(
         etag,
         icalUid,
         ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}),
+        ...expandedIdentity,
       });
     }
     return true;
