@@ -35,6 +35,10 @@ export const eventsTable = sqliteTable("events", {
   url: text(),
   calendars: text().notNull(), // JSON string[]
   originCalendarID: text(),
+  // Nullable until an authoritative snapshot supplies time/exception metadata.
+  timeModel: text(), // strict EventTimeModel JSON
+  seriesID: text(),
+  originalStart: text(), // strict OccurrenceStart JSON
 });
 
 // key/value for sync bookkeeping (e.g. lastSync = server time of last delta).

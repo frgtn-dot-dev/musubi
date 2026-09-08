@@ -9,6 +9,7 @@ import m0004 from "./0004_fast_patch.sql";
 import m0005 from "./0005_drop_old_reminder_receipts.sql";
 import m0006 from "./0006_reminder_receipts.sql";
 import m0007 from "./0007_event_revision.sql";
+import m0008 from "./0008_event_time_cache.sql";
 
 export default {
   journal,
@@ -21,5 +22,6 @@ export default {
     m0005,
     m0006,
     m0007,
+    m0008,
   },
 };

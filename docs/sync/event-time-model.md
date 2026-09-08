@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -88,3 +88,12 @@ Before DTO admission, range reads must retain exceptions even when their moved a
 The user-scoped event query retains every visible master and detached definition, including cancellation and moved-out exceptions. It also retains floating definitions independently of their compatibility instants. All-day filtering is conservative: the lower bound starts at the previous UTC midnight, and the upper bound is padded one day. Flooring the lower bound before padding is necessary for inclusive all-day ends in a late-evening sub-day window west of UTC. The consumer performs the exact overlap check in its explicit zone.
 
 These branches stay inside the existing membership join and live-row predicate; they do not fetch another user's definitions or revive deleted rows. Delta reads still return tombstones. This deliberately expands the definition set for correctness; it does not claim provider metadata admission or a large-account performance benchmark. Range consumers and metadata projections must still be activated together.
+
+
+## Native cache checkpoint
+
+SQLite migration0008 adds nullable timeModel, seriesID and originalStart columns. Existing instants, content and revision values remain unchanged. Cache writers encode strict time models and canonical original identities; cache reads decode and validate them instead of relabeling malformed metadata as unresolved. Missing/NULL metadata remains omitted on cache reads for compatibility with old cache shapes.
+
+A newer saved revision wins over older/revisionless writes. A legacy projection with the same positive revision cannot remove any already saved time/identity field; retain the complete saved row instead of mixing timestamps with old metadata. A newer authoritative revision can clear metadata. Validation occurs within the existing synchronous transaction before replacement, so malformed batches do not erase the previous cache.
+
+Tests use real node:sqlite through the production Drizzle Expo driver and migrator: pre-revision and revision-bearing upgrade, idempotent migration, both cache writers, moved original identity, floating/all-day models, expansion after readback and transactional rejection. This is not a physical-device execution claim. CachedEvent is an additive storage-only type until EventSchema, all transport projections and authoritative writer guards are activated together.

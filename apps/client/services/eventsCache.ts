@@ -1,11 +1,51 @@
 import { eq, inArray } from "drizzle-orm";
-import { Calendar, Event, RemindersDocument, Settings } from "@musubi/types";
+import {
+  Calendar,
+  Event,
+  RemindersDocument,
+  Settings,
+  EventTimeModelSchema,
+  OccurrenceIdentitySchema,
+  type EventTimeModel,
+  type OccurrenceStart,
+} from "@musubi/types";
 import { db, sqlite } from "./db";
 import { eventsTable, syncMetaTable } from "@/db/schema";
 
+// Storage can preserve the additive fields before production EventSchema admits
+// them. This does not activate metadata in transports or writable requests.
+export type CachedEvent = Event & {
+  timeModel?: EventTimeModel | null;
+  seriesID?: string | null;
+  originalStart?: OccurrenceStart | null;
+};
+
+function timeMetadata(
+  e: Pick<CachedEvent, "id" | "timeModel" | "seriesID" | "originalStart">,
+) {
+  const timeModel =
+    e.timeModel == null ? undefined : EventTimeModelSchema.parse(e.timeModel);
+  const identity =
+    e.seriesID == null && e.originalStart == null
+      ? undefined
+      : OccurrenceIdentitySchema.parse({
+          seriesId: e.seriesID,
+          originalStart: e.originalStart,
+        });
+  if (identity?.seriesId === e.id.toLowerCase())
+    throw new Error("An event cannot be its own series.");
+  return {
+    ...(timeModel ? { timeModel } : {}),
+    ...(identity
+      ? { seriesID: identity.seriesId, originalStart: identity.originalStart }
+      : {}),
+  };
+}
+
 // Event <-> SQLite row. Dates as ISO text (new Date() accepts Date or string),
 // calendars as JSON. Read back as real Date objects.
-function toRow(e: Event) {
+function toRow(e: CachedEvent) {
+  const metadata = timeMetadata(e);
   // expo-sqlite on iOS throws on an `undefined` bind (Android coerces to null),
   // so EVERY column must get a concrete value. NOT NULL columns get a default,
   // nullable ones get null. (External/imported events often miss creatorID.)
@@ -27,6 +67,11 @@ function toRow(e: Event) {
     url: e.url ?? null,
     calendars: JSON.stringify(e.calendars ?? []),
     originCalendarID: e.originCalendarID ?? null,
+    timeModel: metadata.timeModel ? JSON.stringify(metadata.timeModel) : null,
+    seriesID: metadata.seriesID ?? null,
+    originalStart: metadata.originalStart
+      ? JSON.stringify(metadata.originalStart)
+      : null,
   };
 }
 
@@ -39,7 +84,7 @@ function parseArray<T>(value: string): T[] {
   }
 }
 
-function fromRow(r: typeof eventsTable.$inferSelect): Event {
+function fromRow(r: typeof eventsTable.$inferSelect): CachedEvent {
   return {
     id: r.id,
     revision: r.revision ?? undefined,
@@ -58,10 +103,17 @@ function fromRow(r: typeof eventsTable.$inferSelect): Event {
     url: r.url,
     calendars: parseArray<string>(r.calendars),
     originCalendarID: r.originCalendarID,
-  } as Event;
+    ...timeMetadata({
+      id: r.id,
+      timeModel: r.timeModel == null ? undefined : JSON.parse(r.timeModel),
+      seriesID: r.seriesID,
+      originalStart:
+        r.originalStart == null ? undefined : JSON.parse(r.originalStart),
+    }),
+  };
 }
 
-export async function cacheGetAllEvents(): Promise<Event[]> {
+export async function cacheGetAllEvents(): Promise<CachedEvent[]> {
   const rows = await db.select().from(eventsTable);
   return rows.map(fromRow);
 }
@@ -73,7 +125,7 @@ function hasValidDates(e: Event): boolean {
   );
 }
 
-export async function cacheUpsertEvents(events: Event[]) {
+export async function cacheUpsertEvents(events: CachedEvent[]) {
   // Skip events with malformed dates so one bad import can't crash the whole sync.
   const valid = events.filter((e) => {
     if (!e.id) {
@@ -91,7 +143,7 @@ export async function cacheUpsertEvents(events: Event[]) {
 // Expo's drizzle driver is synchronous: execute inside a synchronous transaction
 // (an async callback commits before its first await). Never erase a proven newer
 // row with an older or revisionless cache write, including a full snapshot.
-function writeEventRows(events: Event[], replace: boolean) {
+function writeEventRows(events: CachedEvent[], replace: boolean) {
   db.transaction((tx) => {
     const saved = new Map(
       tx
@@ -104,9 +156,20 @@ function writeEventRows(events: Event[], replace: boolean) {
     for (const event of events) {
       const incoming = toRow(event);
       const current = incomingRows.get(event.id) ?? saved.get(event.id);
+      // A legacy projection at the same proven revision cannot erase metadata
+      // already stored with that revision. Keep the complete consistent row.
+      const losesTimeMetadata =
+        current &&
+        (current.revision ?? 0) > 0 &&
+        current.revision === incoming.revision &&
+        ((current.timeModel !== null && incoming.timeModel === null) ||
+          (current.seriesID !== null && incoming.seriesID === null) ||
+          (current.originalStart !== null && incoming.originalStart === null));
       incomingRows.set(
         event.id,
-        current && (current.revision ?? 0) > (incoming.revision ?? 0)
+        current &&
+          ((current.revision ?? 0) > (incoming.revision ?? 0) ||
+            losesTimeMetadata)
           ? current
           : incoming,
       );
@@ -137,7 +200,7 @@ export async function cacheDeleteEvents(ids: string[]) {
 
 // Full sync is authoritative: replace the whole cache so any local drift
 // (e.g. stale ids accumulated from past resets) is dropped.
-export async function cacheReplaceAllEvents(events: Event[]) {
+export async function cacheReplaceAllEvents(events: CachedEvent[]) {
   writeEventRows(
     events.filter((e) => e.id && hasValidDates(e)),
     true,
