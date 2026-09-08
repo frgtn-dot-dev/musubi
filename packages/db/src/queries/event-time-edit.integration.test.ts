@@ -148,6 +148,49 @@ async function main() {
         "2026-03-30T00:00:00.000Z",
       );
     }
+    // One editor save is one revision: content and time cannot commit separately.
+    const combined = await make();
+    const combinedTime = { kind: "floating", startLocal: "2026-04-01T09:00:00", endLocal: "2026-04-01T10:00:00" };
+    const beforeCombined = await getEventSnapshot(combined.id);
+    await assert.rejects(() => replaceTime(combined.id, 1, combinedTime, userID, {
+      title: "Must roll back", recurrence: "FREQ=HOURLY;COUNT=3",
+    }), BadRequestError);
+    assert.deepEqual(await getEventSnapshot(combined.id), beforeCombined);
+    await assert.rejects(() => replaceTime(combined.id, 1, combinedTime, userID, { calendars: [] }));
+    assert.deepEqual(await getEventSnapshot(combined.id), beforeCombined);
+    const combinedSave = await replaceTime(combined.id, 1, combinedTime, userID, {
+      title: "Complete draft", description: null, location: undefined, recurrence: "FREQ=DAILY;COUNT=2",
+    });
+    assert.equal(combinedSave.status, "saved");
+    if (combinedSave.status !== "saved") throw new Error("Combined edit not saved");
+    assert.equal(combinedSave.event.revision, 2);
+    assert.equal(combinedSave.event.title, "Complete draft");
+    assert.equal(combinedSave.event.description, null);
+    assert.equal(combinedSave.event.location, combined.location);
+    assert.equal(combinedSave.event.recurrence, "FREQ=DAILY;COUNT=2");
+    assert.equal(combinedSave.event.timeModel?.kind, "floating");
+    const combinedNoop = await replaceTime(combined.id, 2, combinedTime, userID, {
+      title: "Complete draft", description: null, recurrence: "FREQ=DAILY;COUNT=2",
+    });
+    assert.equal(combinedNoop.status === "saved" && combinedNoop.changed, false);
+    const staleCombined = await replaceTime(combined.id, 1, combinedTime, userID, { title: "Stale" });
+    assert.equal(staleCombined.status, "conflict");
+    assert.deepEqual(await getEventSnapshot(combined.id), combinedSave.event);
+    // An existing unsupported rule can be explicitly replaced together with time.
+    const repaired = await make({ recurrence: "FREQ=HOURLY;COUNT=3" });
+    const repairedSave = await replaceTime(repaired.id, 1, combinedTime, userID, { recurrence: null });
+    assert.equal(repairedSave.status === "saved" && repairedSave.event.recurrence, null);
+    const drafts = [
+      { title: "Draft A", time: { ...combinedTime, startLocal: "2026-04-02T09:00:00", endLocal: "2026-04-02T10:00:00" } },
+      { title: "Draft B", time: { ...combinedTime, startLocal: "2026-04-03T09:00:00", endLocal: "2026-04-03T10:00:00" } },
+    ];
+    const raced = await Promise.all(drafts.map(draft => replaceTime(combined.id, 2, draft.time, userID, { title: draft.title })));
+    assert.deepEqual(raced.map(result => result.status).sort(), ["conflict", "saved"]);
+    const winnerIndex = raced.findIndex(result => result.status === "saved");
+    const coherent = await getEventSnapshot(combined.id);
+    assert.equal(coherent?.revision, 3);
+    assert.equal(coherent?.title, drafts[winnerIndex]!.title);
+    assert.equal(coherent?.timeModel?.kind === "floating" && coherent.timeModel.startLocal, `${drafts[winnerIndex]!.time.startLocal}.000`);
     await db
       .insert(externalCalendars)
       .values({

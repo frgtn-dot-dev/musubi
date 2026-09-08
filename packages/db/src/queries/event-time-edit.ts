@@ -1,5 +1,5 @@
 import { expandRecurringEvents, resolveEventTimeEdit } from "@musubi/calendar";
-import { BadRequestError, EventTimeModelSchema, EventWriteError, can } from "@musubi/types";
+import { BadRequestError, EventTimeModelSchema, EventTimeContentPatchSchema, EventWriteError, can } from "@musubi/types";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "..";
 import {
@@ -27,6 +27,7 @@ export async function replaceLocalEventTimeAtRevision(
   expectedRevision: number,
   intent: unknown,
   actorID: string,
+  contentPatch: unknown = {},
 ): Promise<LocalEventTimeEditResult> {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
     throw new TypeError("A positive expected event revision is required");
@@ -110,13 +111,19 @@ export async function replaceLocalEventTimeAtRevision(
         "This time change requires a time-model-aware provider write. No changes were saved.",
       );
 
+    // Parse inside the revision boundary and omit undefined exactly as generic
+    // PATCH does. Null remains an explicit clear; omitted fields retain storage.
+    const parsedPatch = EventTimeContentPatchSchema.parse(contentPatch);
+    const patch = Object.fromEntries(
+      Object.entries(parsedPatch).filter(([, value]) => value !== undefined),
+    ) as typeof parsedPatch;
     let time: ReturnType<typeof resolveEventTimeEdit>;
     try {
       time = resolveEventTimeEdit(intent);
-      // Validate even a cancelled definition. Keep the stored recurrence; never
+      // Validate even a cancelled definition against the resulting content; never
       // silently repair an embedded DTSTART or an unsupported legacy rule.
       expandRecurringEvents(
-        [{ ...current, ...time, isCanceled: false }],
+        [{ ...current, ...patch, ...time, isCanceled: false }],
         time.start,
         time.end,
         { consumerTimeZone: "UTC" },
@@ -134,12 +141,13 @@ export async function replaceLocalEventTimeAtRevision(
       current.start.getTime() !== time.start.getTime() ||
       current.end.getTime() !== time.end.getTime() ||
       current.isAllDay !== time.isAllDay ||
-      JSON.stringify(oldModel) !== JSON.stringify(time.timeModel);
+      JSON.stringify(oldModel) !== JSON.stringify(time.timeModel) ||
+      Object.entries(patch).some(([key, value]) => current[key as keyof typeof patch] !== value);
     if (!changed)
       return { status: "saved", changed: false, previous, event: previous };
     const [updated] = await tx
       .update(events)
-      .set({ ...time, revision: sql`${events.revision} + 1` })
+      .set({ ...patch, ...time, revision: sql`${events.revision} + 1` })
       .where(and(eq(events.id, eventID), eq(events.revision, expectedRevision)))
       .returning();
     if (!updated) throw new Error("Locked event revision changed unexpectedly");
