@@ -1,5 +1,6 @@
 import { snapshotEvent, type Event } from "@musubi/types";
 import { create } from "zustand";
+import { withOccurrenceTime } from "@/lib/liveEvent";
 import { useEventsStore } from "./useEventsStore";
 
 // Event-detail modal state, OUT of MainTab's useState on purpose: opening the
@@ -32,7 +33,7 @@ export function presentEventDetail(events: Event[], event: Event) {
         .getState()
         .open(
             original && original.id !== event.id
-                ? { ...original, start: event.start, end: event.end }
+                ? withOccurrenceTime(original, event)
                 : event,
         );
 }
