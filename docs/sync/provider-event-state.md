@@ -43,3 +43,20 @@ stored exceptions retain their own ID. Musubi attendance/reminders are named
 separately, and the panel explains that independent applications may both notify.
 Unavailable metadata is visible as a read failure with reopen-to-retry guidance.
 These controls remain read-only; no RSVP or native reminder mutation is enabled.
+
+## Google free/busy-only boundary
+
+Google's [`freeBusyReader`](https://developers.google.com/workspace/calendar/api/v3/reference/calendarList)
+provides busy intervals, not Events detail access. Musubi currently excludes that
+grant from its authoritative set of detail-calendar mirrors. Completed discovery
+therefore removes an existing downgraded mirror before fetching any events, even
+if a later event request fails. Restoring detail access permits a fresh import;
+this is not a user opt-out tombstone. No remote calendar or event is deleted.
+Incomplete calendar discovery retains the prior state and must be retried.
+
+This is an explicit unsupported boundary, not a free/busy visualization. A native
+busy-interval model using Google's [Freebusy API](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)
+still needs implementation. Other privacy downgrades (e.g. writer to reader for
+private events), Graph/CalDAV access evidence, and already exported independent
+copies require separate handling; this guard does not claim to revoke content
+from other applications or offline caches.

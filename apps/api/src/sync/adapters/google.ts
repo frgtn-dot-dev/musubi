@@ -607,7 +607,15 @@ export const googleAdapter: CalendarAdapter = {
       });
       if (!res.ok) throw await googleError(res);
       const data = await res.json();
-      for (const c of data.items ?? [])
+      for (const c of data.items ?? []) {
+        // An Events mirror cannot represent a free/busy-only grant. Exclude it
+        // from the authoritative detail-calendar set so a downgraded mirror is
+        // removed before any (possibly failing) event fetch retains old details.
+        // Busy interval reads require the separate Freebusy API/model.
+        if (c.accessRole === "freeBusyReader") {
+          logger.warn("sync.calendar.freebusy_unsupported", { provider: "google", calendarId: c.id });
+          continue;
+        }
         calendars.push({
           externalId: c.id,
           name: c.summary,
@@ -616,6 +624,7 @@ export const googleAdapter: CalendarAdapter = {
           supportsEvents: true,
           supportsTasks: false,
         });
+      }
       pageToken = data.nextPageToken;
     } while (pageToken);
     if (!(await hasOAuthTaskScope(userID, "google", accountId))) {
