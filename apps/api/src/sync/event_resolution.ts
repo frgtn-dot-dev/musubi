@@ -25,7 +25,8 @@ import {
   googleEventCreateID,
   caldavEventCreateIdentity,
 } from "./event_create_identity";
-import { strongEventEtag } from "./event_write";
+import { prepareCaldavSeriesWrite } from "./adapters/caldav";
+import { strongEventEtag, requireEventEtag } from "./event_write";
 import { ProviderAuthError } from "./errors";
 
 function content(
@@ -125,6 +126,25 @@ async function prepare(
               ).url,
             }
           : null;
+  }
+  if (row.payload.caldavSeries) {
+    if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSeriesResolution || !context.caldavContext || !ref || context.deleted)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const family = context.caldavContext;
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ref, master: family.master, children: family.children }, row.payload.caldavSeries.write.before, signal);
+    const patch = { title: context.local.title, description: context.local.description ?? null, location: context.local.location ?? null };
+    const prepared = {
+      context: { ...family, mappings: family.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) },
+      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch),
+    };
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
+      localRevision: context.localRevision, local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
+      remote: { ...content(observed.baseline.master), timeModel: observed.baseline.master.timeModel ?? undefined },
+      remoteEtag: observed.evidence.ref.etag!, action: "update", canResolve: true, reason: null,
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: observed.evidence.ref, remoteExists: true, action: "update", patch: {}, deletion: await getEventOutboxDeletion(row, ref.externalEventId), caldavSeries: prepared };
+    return { preview, proof };
   }
   if (row.payload.googleOccurrence) {
     if (

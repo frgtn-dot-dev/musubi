@@ -33,22 +33,26 @@ const unsupported = () => new EventWriteError("event-write", "unsupported", "Rec
 const strong = (value: unknown): value is string => typeof value === "string" && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value);
 
 /** Caller holds lifecycle, resource, master and sorted child locks, in that order. */
-export async function caldavSeriesContext(tx: DbTransaction, actorID: string, master: Event, children: Event[], ownOperationID?: string): Promise<CaldavSeriesContext> {
+export async function caldavSeriesContext(tx: DbTransaction, actorID: string, master: Event, children: Event[], ownOperationID?: string, readOnly = false): Promise<CaldavSeriesContext> {
   const family = [master, ...children];
   if (!master.originCalendarID || master.seriesID || master.originalStart || !master.recurrence || master.isCanceled ||
       family.some(event => event.creatorID !== actorID || event.originCalendarID !== master.originCalendarID || event.calendars.length !== 1 || event.calendars[0] !== master.originCalendarID || !["zoned", "floating", "all-day"].includes(event.timeModel?.kind ?? ""))) throw unsupported();
-  const [link] = await tx.select().from(externalCalendars).where(eq(externalCalendars.calendarID, master.originCalendarID)).for("share");
+  const linkQuery = tx.select().from(externalCalendars).where(eq(externalCalendars.calendarID, master.originCalendarID));
+  const [link] = await (readOnly ? linkQuery : linkQuery.for("share"));
   if (!link || link.provider !== "caldav" || link.userID !== actorID || link.disabled || !link.supportsEvents) throw unsupported();
   const ids = family.map(event => event.id);
-  const mappings = await tx.select().from(externalEvents).where(inArray(externalEvents.eventID, ids)).orderBy(externalEvents.eventID, externalEvents.id).for("update");
+  const mappingQuery = tx.select().from(externalEvents).where(inArray(externalEvents.eventID, ids)).orderBy(externalEvents.eventID, externalEvents.id);
+  const mappings = await (readOnly ? mappingQuery : mappingQuery.for("update"));
   const root = mappings.find(item => item.eventID === master.id);
   if (!root || !root.icalUid || !strong(root.etag) || root.externalSeriesID || root.originalStart || mappings.length !== family.length ||
       new Set(mappings.map(item => item.eventID)).size !== family.length || mappings.some(item => item.provider !== "caldav" || item.calendarID !== link.calendarID || item.externalCalendarID !== link.externalCalendarID || item.icalUid !== root.icalUid || item.etag !== root.etag ||
         (item !== root && (item.externalSeriesID !== root.externalEventID || !sameCaldavScopeContext(item.originalStart, family.find(event => event.id === item.eventID)?.originalStart))))) throw unsupported();
   const resourceMaps = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "caldav"), eq(externalEvents.calendarID, master.originCalendarID), or(eq(externalEvents.externalEventID, root.externalEventID), eq(externalEvents.externalSeriesID, root.externalEventID))));
   if (resourceMaps.length !== mappings.length || resourceMaps.some(item => !mappings.some(mapping => mapping.id === item.id))) throw unsupported();
-  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), sql`${eventOutbox.status} not in ('completed', 'not-needed')`, ...(ownOperationID ? [sql`${eventOutbox.id} <> ${ownOperationID}`] : []))).limit(1);
-  if (pending.length) throw unsupported();
+  const pending = await tx.select().from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), sql`${eventOutbox.status} not in ('completed', 'not-needed')`));
+  const own = pending.find(item => item.id === ownOperationID);
+  const replaced = new Set(own?.payload.resolution?.replacedOperationIDs ?? []);
+  if (pending.some(item => item.id !== ownOperationID && !(replaced.has(item.id) && item.status === "cancelled" && item.errorCode === "superseded-by-resolution" && item.eventID === master.id && item.externalCalendarLinkID === link.id && item.userID === actorID && item.payload.caldavSeries))) throw unsupported();
   const tombstones = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, link.id), inArray(externalEventTombstones.externalEventID, mappings.map(item => item.externalEventID)))).limit(1);
   if (tombstones.length) throw unsupported();
   return { master, children, link: { id: link.id, userID: link.userID, provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID, disabled: link.disabled, supportsEvents: link.supportsEvents, calendarID: master.originCalendarID }, mappings: mappings.map(({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag }) => ({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag })) };
@@ -97,6 +101,8 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       await tx.update(externalEvents).set({ etag: result.etag }).where(inArray(externalEvents.id, current.mappings.map(item => item.id)));
       const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: result, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
       if (!completed) throw new CaldavLeaseLost();
+      const replaced = row.payload.resolution?.replacedOperationIDs ?? [];
+      if (replaced.length) await tx.update(eventOutbox).set({ status: "not-needed", updatedAt: new Date() }).where(and(inArray(eventOutbox.id, replaced), eq(eventOutbox.eventID, row.eventID), eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID), eq(eventOutbox.status, "cancelled"), eq(eventOutbox.errorCode, "superseded-by-resolution")));
       return true;
     });
   } catch (error) { if (error instanceof CaldavLeaseLost) return false; throw error; }

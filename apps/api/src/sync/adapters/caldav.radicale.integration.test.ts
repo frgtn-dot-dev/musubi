@@ -31,6 +31,8 @@ async function main() {
   const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
+  const { prepareEventDeliveryResolution } = await import("../event_resolution");
+  const { commitEventDeliveryResolution } = await import("@musubi/db");
   const { prepareCaldavSeries } = await import("../caldav_scope");
   const { deliverEventOutbox } = await import("../event_delivery");
 
@@ -193,6 +195,7 @@ async function main() {
     assert.notEqual(afterChildResponse.headers.get("etag"), familyEvidence.ref.etag, "A child change invalidates the whole CalDAV resource ETag");
     const afterChild = await afterChildResponse.text();
     await assert.rejects(readSeries, /conflict/);
+    await assert.rejects(() => caldavAdapter.readCaldavSeriesResolution!(userID, account.id, collectionURL, intent, rawBefore), /conflict/);
     const staleMasterWrite = await davFetch(resourceURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "If-Match": familyEvidence.ref.etag! }, body: patchEventIcal(familyEvidence.data, localMaster, "family", { title: "Stale master rename" }) });
     assert.equal(staleMasterWrite.status, 412, "Resource CAS protects a concurrent exception edit");
     assert.equal(await (await davFetch(resourceURL, { headers: { authorization: basicAuth } })).text(), afterChild);
@@ -216,6 +219,15 @@ async function main() {
     assert.ok(delivered.data.includes("X-MUSUBI-FIXTURE:keep"));
     assert.ok(delivered.data.includes("DESCRIPTION:Keep alarm"));
     assert.notEqual(delivered.ref.etag, restored.ref.etag);
+    const comparison = await caldavAdapter.readCaldavSeriesResolution!(userID, account.id, collectionURL, intent, rawBefore);
+    assert.equal(comparison.baseline.master.title, "Renamed series");
+    assert.equal(comparison.evidence.data, delivered.data);
+    assert.equal(comparison.evidence.ref.etag, delivered.ref.etag);
+    assert.deepEqual(comparison.baseline.children, intent.children);
+    config.api.eventTimeEditsEnabled = false;
+    await assert.rejects(() => caldavAdapter.readCaldavSeriesResolution!(userID, account.id, collectionURL, intent, rawBefore));
+    config.api.eventTimeEditsEnabled = true;
+    await assert.rejects(() => caldavAdapter.readCaldavSeriesResolution!("other-user", account.id, collectionURL, intent, rawBefore));
     const recovered = await writeSeries();
     assert.equal(recovered.ref.etag, delivered.ref.etag);
     assert.equal(recovered.data, delivered.data);
@@ -253,7 +265,16 @@ async function main() {
     const saved = await applyLocalEventScope(scopedRoot.id, userID, scopeRequest, { caldav: prepared });
     assert.equal(saved.status, "saved");
     const [operation] = await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id));
-    const deliveredScope = await deliverEventOutbox(operation.id, () => caldavAdapter);
+    const remoteRead = await davFetch(scopedURL, { headers: { authorization: basicAuth } });
+    const remoteBody = (await remoteRead.text()).replace("SUMMARY:Master", "SUMMARY:Concurrent master");
+    const remoteWrite = await davFetch(scopedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "If-Match": remoteRead.headers.get("etag")! }, body: remoteBody });
+    assert.ok(remoteWrite.ok);
+    const conflicted = await deliverEventOutbox(operation.id, () => caldavAdapter);
+    assert.equal(conflicted?.status, "conflict");
+    const { preview, proof } = await prepareEventDeliveryResolution(userID, scopedRoot.id, operation.id, () => caldavAdapter);
+    assert.equal(preview.remote?.title, "Concurrent master"); assert.equal(preview.canResolve, true);
+    const replacement = await commitEventDeliveryResolution(userID, proof, { mutationId: randomUUID(), expectedLocalRevision: preview.localRevision, expectedLatestOperationId: preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: preview.remoteEtag });
+    const deliveredScope = await deliverEventOutbox(replacement, () => caldavAdapter);
     assert.equal(deliveredScope?.status, "completed");
     const scopedMaps = (await db.select().from(externalEvents).where(eq(externalEvents.calendarID, link.calendarID))).filter(map => map.icalUid === "scoped");
     assert.equal(scopedMaps.length, 2);

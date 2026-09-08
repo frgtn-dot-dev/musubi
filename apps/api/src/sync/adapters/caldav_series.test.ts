@@ -7,7 +7,7 @@ process.env.DATABASE_URL ??= "postgres://user:pass@localhost:5432/test";
 process.env.ENVIRONMENT ??= "test";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 async function main() {
-const { caldavSeriesEvidence, caldavSeriesResourceURL } = await import("./caldav_series");
+const { caldavSeriesEvidence, caldavSeriesResourceURL, caldavSeriesResolutionEvidence } = await import("./caldav_series");
 const collection = "https://dav.example/calendar/";
 assert.equal(caldavSeriesResourceURL(collection, collection + "normal%20name.ics").href, collection + "normal%20name.ics");
 for (const target of ["..%2Fother%2Ffamily.ics", "..%5cother%5cfamily.ics", "%252e%252e%252fother.ics", "%ZZ", "child.ics#occurrence", "child.ics?projection=1", "nested/child.ics", "%00.ics", "../outside.ics"])
@@ -36,6 +36,36 @@ for (const kind of ["zoned", "all-day", "floating"]) {
   assert.equal(evidence.exceptions.length, 2);
   assert.equal(evidence.exceptions.find(item => item.isCanceled)?.title, "Cancelled child");
   assert.equal(evidence.ref.etag, ref.etag);
+  const currentRef = { ...ref, etag: '"resource-v2"' };
+  const currentData = data.replace("SUMMARY:Master", "SUMMARY:Remote master\r\nDESCRIPTION:Remote description\r\nLOCATION:Remote location").replace("Keep folded", "Remote extension").replace("DESCRIPTION:Keep", "DESCRIPTION:Remote alarm");
+  const observed = caldavSeriesResolutionEvidence(currentData, intent, currentRef, data);
+  assert.equal(observed.baseline.master.title, "Remote master");
+  assert.equal(observed.baseline.master.description, "Remote description");
+  assert.equal(observed.baseline.master.location, "Remote location");
+  assert.equal(observed.evidence.data, currentData);
+  assert.equal(observed.evidence.ref.etag, currentRef.etag);
+  assert.deepEqual(observed.baseline.children, intent.children);
+  assert.equal(intent.master.title, "Master", "A read must not replace the saved local draft");
+  assert.equal(intent.ref.etag, ref.etag);
+  const timezone = ["BEGIN:VTIMEZONE", "TZID:Europe/Prague", "BEGIN:STANDARD", "DTSTART:20261025T030000", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "END:STANDARD", "END:VTIMEZONE"].join("\r\n");
+  const withZone = (value: string) => value.replace("VERSION:2.0", "VERSION:2.0\r\n" + timezone);
+  assert.equal(caldavSeriesResolutionEvidence(withZone(currentData), intent, currentRef, withZone(data)).evidence.data, withZone(currentData));
+  for (const changedZone of [withZone(currentData).replace("TZOFFSETTO:+0100", "TZOFFSETTO:+0300"), withZone(currentData).replace("DTSTART:20261025T030000", "DTSTART:20261018T030000"), currentData])
+    assert.throws(() => caldavSeriesResolutionEvidence(changedZone, intent, currentRef, withZone(data)));
+  assert.throws(() => caldavSeriesResolutionEvidence(withZone(currentData), intent, currentRef, data));
+
+  for (const modified of [
+    currentData.replace("SUMMARY:Custom child", "SUMMARY:Concurrent child"),
+    currentData.replace("STATUS:CANCELLED", "STATUS:CONFIRMED"),
+    currentData.replace("COUNT=4", "COUNT=5"),
+    currentData.replace(stamp("DTSTART", "28", "09"), stamp("DTSTART", "27", "09")),
+    currentData.replace("SUMMARY:Remote master", "SUMMARY:Remote master\r\nORGANIZER:mailto:other@example.test"),
+    currentData.replace("SUMMARY:Remote master", "SUMMARY:Remote master\r\nSUMMARY:Duplicate"),
+    resource(master, child),
+  ]) assert.throws(() => caldavSeriesResolutionEvidence(modified, intent, currentRef, data));
+  for (const invalid of [{ ...currentRef, etag: 'W/"weak"' }, { ...currentRef, externalEventId: collection + "other.ics" }, { ...currentRef, icalUid: "other" }])
+    assert.throws(() => caldavSeriesResolutionEvidence(currentData, intent, invalid, data));
+
   assert.throws(() => caldavSeriesEvidence(data, { ...intent, children: [] }), /conflict/);
   assert.throws(() => caldavSeriesEvidence(data, { ...intent, children: [...intent.children, intent.children[0]!] }), /conflict/);
   assert.throws(() => caldavSeriesEvidence(data, { ...intent, ref: { ...ref, icalUid: "other" } }), /conflict/);

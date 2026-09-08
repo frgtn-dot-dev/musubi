@@ -21,6 +21,44 @@ export type CaldavSeriesEvidence = {
   exceptions: NormalizedEvent[];
 };
 
+export type CaldavSeriesResolutionEvidence = {
+  baseline: CaldavSeriesIntent;
+  evidence: CaldavSeriesEvidence;
+};
+
+/** A fresh conflict comparison may adopt master content, but never silently
+ * accept changed time/recurrence or child definitions. Unknown resource data
+ * stays in the private evidence and must be preserved by the eventual write. */
+export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSeriesIntent, ref: ExternalEventRef, before: string): CaldavSeriesResolutionEvidence {
+  if (ref.externalEventId !== intent.ref.externalEventId || ref.icalUid !== intent.ref.icalUid)
+    throw new ProviderEventWriteError("provider-conflict");
+  // The civil model uses IANA rules and does not encode embedded VTIMEZONE
+  // definitions. Preserve their physical values across the accepted versions.
+  const timezones = (value: string) => {
+    replaceEventProperties(value, 0, new Map());
+    const selected: string[] = [];
+    let depth = 0;
+    for (const line of value.replace(/\r?\n[ \t]/g, "").split(/\r?\n/)) {
+      if (/^BEGIN:VTIMEZONE$/i.test(line)) depth++;
+      else if (depth && /^BEGIN:/i.test(line)) depth++;
+      if (depth) selected.push(line);
+      if (depth && /^END:/i.test(line)) depth--;
+    }
+    return selected;
+  };
+  if (JSON.stringify(timezones(data)) !== JSON.stringify(timezones(before)))
+    throw new ProviderEventWriteError("provider-conflict");
+  const etag = requireEventEtag(ref.etag);
+  const [observed] = normalizeCaldavResource({ url: ref.externalEventId, etag, data });
+  if (!observed) throw new ProviderEventWriteError("provider-conflict");
+  const baseline = {
+    ...intent,
+    ref,
+    master: EventSchema.parse({ ...intent.master, title: observed.title, description: observed.description ?? null, location: observed.location ?? null }),
+  };
+  return { baseline, evidence: caldavSeriesEvidence(data, baseline) };
+}
+
 /** Durable server-only input for one content-only resource replacement. The
  * accepted validator never advances merely because a newer GET was observed. */
 export type CaldavSeriesWrite = import("@musubi/db").CaldavSeriesWriteIntent;

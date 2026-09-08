@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   EventSchema,
+  EventWriteError,
   NotFoundError,
   type ResolveEventDeliveryRequest,
 } from "@musubi/types";
@@ -22,6 +23,7 @@ import {
   unresolvedEventOutbox,
   type EventOutboxRow,
 } from "./event-outbox";
+import { caldavSeriesContext, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./google-occurrence-scope";
 import type { DbTransaction } from "./calendars";
 import type { EventContentPatch } from "./events";
@@ -91,7 +93,6 @@ async function resolutionContext(
   )
     throw new EventDeliveryResolutionError("delivery-state-changed");
   if (
-    row.payload.caldavSeries || latest.payload.caldavSeries || pending.some(item => item.payload.caldavSeries) ||
     row.payload.reminderEdit ||
     latest.payload.reminderEdit ||
     pending.some((item) => item.payload.reminderEdit) ||
@@ -129,6 +130,23 @@ async function resolutionContext(
   if (mappings.length > 1)
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
+  let caldavContext: CaldavSeriesContext | undefined;
+  if (row.payload.caldavSeries) {
+    if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const childRows = await tx.query.events.findMany({ where: eq(events.seriesID, eventID), with: { calendarEvents: true }, orderBy: events.id });
+    if (childRows.some(child => child.deletedAt)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    try {
+      caldavContext = await caldavSeriesContext(tx, userID, local, childRows.map(child => EventSchema.parse({ ...child, calendars: child.calendarEvents.map(link => link.calendarID).sort() })), row.id, true);
+    } catch (error) {
+      if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+      throw error;
+    }
+    const expected = { ...row.payload.caldavSeries.context, master: EventSchema.parse(row.payload.event) };
+    if (!sameCaldavScopeContext(caldavContext, expected)) throw new EventDeliveryResolutionError("delivery-state-changed");
+  } else if (latest.payload.caldavSeries || pending.some(item => item.payload.caldavSeries)) {
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  }
   let masterRevision: number | undefined;
   if (row.payload.googleOccurrence) {
     const intent = row.payload.googleOccurrence;
@@ -185,6 +203,7 @@ async function resolutionContext(
   }
   return {
     masterRevision,
+    caldavContext,
     row,
     latest,
     pending: pending.length ? pending : [row],
@@ -220,6 +239,7 @@ export type EventDeliveryResolutionProof = {
   action: EventOutboxRow["action"];
   patch: EventContentPatch;
   googleOccurrence?: GoogleOccurrenceIntent;
+  caldavSeries?: CaldavSeriesPrepared;
   deletion: typeof externalEventTombstones.$inferSelect | undefined;
 };
 
@@ -316,6 +336,10 @@ export async function commitEventDeliveryResolution(
         .from(events)
         .where(eq(events.id, row.eventID))
         .for("update");
+      if (row.payload.caldavSeries) {
+        await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, row.eventID)).orderBy(events.id).for("update");
+        await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.calendarID, row.calendarID), or(eq(externalEvents.externalEventID, row.externalEventID!), eq(externalEvents.externalSeriesID, row.externalEventID!)))).orderBy(externalEvents.eventID, externalEvents.id).for("update");
+      }
       // Stabilize all target attempts before deciding which chain is superseded.
       await tx
         .select({ id: eventOutbox.id })
@@ -352,6 +376,8 @@ export async function commitEventDeliveryResolution(
         current.masterRevision !== request.expectedMasterRevision ||
         current.masterRevision !== proof.context.masterRevision ||
         !!current.row.payload.googleOccurrence !== !!proof.googleOccurrence ||
+        !!current.row.payload.caldavSeries !== !!proof.caldavSeries ||
+        !sameCaldavScopeContext(current.caldavContext, proof.context.caldavContext) ||
         current.localRevision !== request.expectedLocalRevision ||
         current.latest.id !== request.expectedLatestOperationId ||
         current.localRevision !== proof.context.localRevision ||
@@ -422,7 +448,7 @@ export async function commitEventDeliveryResolution(
             await tx
               .delete(externalEventTombstones)
               .where(eq(externalEventTombstones.id, deletion.id));
-          if (current.mapping)
+          if (current.mapping && !proof.caldavSeries)
             await tx
               .update(externalEvents)
               .set({
@@ -430,7 +456,7 @@ export async function commitEventDeliveryResolution(
                 icalUid: proof.ref.icalUid ?? current.mapping.icalUid,
               })
               .where(eq(externalEvents.id, current.mapping.id));
-          else if (!current.deleted)
+          else if (!current.mapping && !current.deleted)
             await tx.insert(externalEvents).values({
               provider: row.provider,
               eventID: row.eventID,
@@ -445,6 +471,14 @@ export async function commitEventDeliveryResolution(
             .delete(externalEvents)
             .where(eq(externalEvents.id, current.mapping.id));
         }
+      }
+      if (proof.caldavSeries) {
+        const family = current.caldavContext;
+        if (!family || !proof.ref || !proof.remoteExists || proof.action !== "update" ||
+            !sameCaldavScopeContext(proof.caldavSeries.context, { ...family, mappings: family.mappings.map(item => ({ ...item, etag: proof.ref!.etag })) }) ||
+            !sameCaldavScopeContext(proof.caldavSeries.write.baseline.ref, proof.ref))
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+        await tx.update(externalEvents).set({ etag: proof.ref.etag }).where(inArray(externalEvents.id, family.mappings.map(item => item.id)));
       }
       const replaced = [
         ...new Set(
@@ -492,6 +526,7 @@ export async function commitEventDeliveryResolution(
         payload: {
           event: current.local,
           patch: proof.patch,
+          ...(proof.caldavSeries ? { caldavSeries: proof.caldavSeries } : {}),
           ...(proof.googleOccurrence
             ? { googleOccurrence: proof.googleOccurrence }
             : {}),

@@ -111,11 +111,40 @@ normal pull accepts the echo without duplicating definitions or revising unchang
 children. Both the original and desired raw resource remain private outbox input;
 HTTP receipts and conflict endpoints do not expose them. Unexpected provider
 preparation errors are replaced with a safe typed error before reaching HTTP
-logging; raw parser lines, stacks and causes are not propagated. Generic conflict hydration
-and single-event conflict resolution are deliberately unavailable for this typed
-intent: they cannot prove anything about the rest of the resource. A conflict
-retains the saved local draft and requires the forthcoming full-resource resolution
-flow; automatic rebase is not supported.
+logging; raw parser lines, stacks and causes are not propagated. Generic
+single-event conflict hydration and ACK remain unavailable for this typed intent.
+
+## Explicit master-content conflict resolution
+
+The existing authorized conflict GET/confirmation POST now has a typed CalDAV
+branch. It reads the whole current resource with a strong ETag after rechecking
+account ownership, active destination and DAV resource write privilege. A fresh
+baseline can adopt only master title, description and location. Child definitions,
+cancellation, time model and recurrence must still match the complete saved local
+family. Embedded VTIMEZONE definitions are compared as unfolded physical lines
+against the durable original resource: the IANA civil projection alone cannot
+prove that embedded offsets or transition rules stayed unchanged. Changed, added
+or removed definitions are refused. New private alarms/extensions stay in the
+fresh resource bytes and are preserved by the eventual master-content patch.
+
+The public comparison contains only the existing master content/time DTO, never
+raw calendars, alarms or extensions. Confirming the displayed remote ETag keeps
+the latest saved local master content (title, description and location). The
+handler obtains fresh provider evidence again. A short transaction rechecks the
+whole local family, revisions, membership, mappings, retained deletions and exact
+outbox state; it advances all mapping baseline ETags and saves one replacement
+resource intent atomically. The local draft and child revisions remain unchanged.
+Concurrent confirmation with the same mutation ID returns the same replacement.
+A stale preview or changed local context does not supersede the original intent.
+
+The worker still conditionally writes the complete resource. A later provider
+change cannot silently rebase the replacement. Only verified whole-resource ACK
+settles all mappings and releases the explicitly superseded CalDAV history, so a
+later normal scope edit can proceed. Changed child content/time, removed resources,
+meetings, disconnected destinations and unsupported temporal changes remain
+unavailable for this bounded resolution; they require additional reconciliation,
+not a master-only overwrite. This does not bypass the iCloud unknown-permission
+blocker documented below.
 
 Authenticated HTTP/PostgreSQL tests cover concurrent replay, no-op, preparation
 races, zoned/all-day/floating delivery, applied-503 recovery, concurrent remote child
