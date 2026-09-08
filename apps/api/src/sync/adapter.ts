@@ -46,6 +46,7 @@ export type NormalizedTask = {
 
 export type NormalizedChange =
   | { kind: "event"; data: NormalizedEvent }
+  | { kind: "event-resource"; externalId: string; events: NormalizedEvent[] }
   | { kind: "task"; data: NormalizedTask };
 
 export type ExternalEventRef = {

@@ -16,4 +16,18 @@ Regression: `apps/api/src/sync/google_occurrences.integration.test.ts` uses real
 
 Sources: [Google recurring events](https://developers.google.com/workspace/calendar/api/guides/recurringevents), [Google event resource](https://developers.google.com/workspace/calendar/api/v3/reference/events).
 
-CalDAV component preservation and Graph bounded-window identity are the next K11 slices. K12 scope writes, K13 meetings and K14 reminder/privacy semantics are not declared complete here.
+Graph bounded-window identity and the explicitly unsupported CalDAV forms remain K11 follow-up work. K12 scope writes, K13 meetings and K14 reminder/privacy semantics are not declared complete here.
+
+## CalDAV component slice
+
+With the gate enabled, a complete CalDAV resource produces a master selected by absence of `RECURRENCE-ID` and detached definitions selected by original identity. Incoming component order is irrelevant. Overrides retain their own content and duration; cancellation remains a live suppression definition. IANA, UTC, floating and date values are explicit. All-day exclusive ends become inclusive dates. Accurate duration endpoints retain the second half of a DST fold; nominal days are applied before accurate hours for standalone durations.
+
+The original resource URL remains the master mapping. Override mapping keys combine that URL with the typed original start; their `externalSeriesID` remains the real resource URL. These internal keys are not outbound DAV addresses. Time-aware outbound writes remain blocked until K12 supplies the resource/component-aware writer.
+
+Each complete resource is stored in one transaction. Omitted overrides are tombstoned with their mappings retained, allowing the original generated slot to return and later revival to reuse the same local UUID. The complete family is locked before checking source pending operations. A pending master or omitted override blocks the entire observation. No component ETag is accepted on rollback. A recurrence can be removed together with all its overrides. Incomplete multiget responses fail before a cursor or reset sweep is accepted.
+
+Reading does not serialize or write the resource: `VTIMEZONE`, alarms, attendee properties and unknown extensions remain untouched at the provider. This is read/preserve evidence, not support for editing those fields. Mixed UIDs, duplicate masters/occurrence identities, unsupported TZIDs, masterless overrides, `RANGE` overrides and timed recurring nominal-day/week `DURATION` are explicitly refused. The last three are valid provider forms requiring follow-up model/scope work; they are not silently approximated or declared supported.
+
+Evidence: `caldav_time.test.ts` covers component order, content, dates/floating, DST durations and explicit refusals. `caldav_occurrences.integration.test.ts` covers atomic replacement, omitted overrides, stable revival, rollback including ETags and pending family members on disposable PostgreSQL. `caldav.radicale.integration.test.ts` exercises actual HTTP through Radicale, the adapter, sync engine and DB: reset/delta, deletion/revival, stable identity and unchanged server bytes including alarms/extensions. The local isolated Radicale 3.8.0 run passed; this does not certify iCloud or another live account.
+
+Sources: [CalDAV calendar object resources](https://www.rfc-editor.org/rfc/rfc4791#section-4.1), [iCalendar duration](https://www.rfc-editor.org/rfc/rfc5545#section-3.3.6).

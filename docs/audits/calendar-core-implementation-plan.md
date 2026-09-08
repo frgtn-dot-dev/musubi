@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je rozpracovaný; K11–K15 čekají; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je lokálně dokončený; K11 je rozpracovaný; K12–K15 čekají; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -580,3 +580,8 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 **K10 uzavření lokální implementace:** generic unlink/tombstone nyní odmítá detached rodinu včetně masteru s tombstone child, aby se neobnovil původní slot ani neosiřely výjimky. Produkční startup kontroluje kompatibilní release a obě vynucená minima novější než vydané 0.1.8 ještě před migrací a listen. Flag i všechny verze zůstávají beze změny. Finální scope a důkazy jsou v [K10 acceptance](calendar-k10-acceptance.md); dalším bodem je K11.
 
 **K11 Google import — ověřovaný první providerový řez:** explicitní časový import zachová `recurringEventId` / `originalStartTime`, před zápisem dohledá chybějící master a seřadí závislosti. Cancellation-only výjimka je živá zrušená definice, nikoli tombstone obnovující původní slot. Transakční metadata writer zachová local UUID, source authority a pending guard; metadata adoption nevytvoří outbound echo. Master-only změna nesmí zneplatnit uložené children. Provider delete/revival zahrnuje rodinu a zachová durable fanout. Podrobnosti a hranice jsou v [provider time import](../sync/provider-time-import.md). Google HTTPfixture→engine→PostgreSQL pokrývá reorder, move/duration, DST, all-day cancellation, 503, reset, linked adoption a family delete/revival. Čisté nezávislé review našlo tři hrany; opravy mají regrese a závěrečná revize nemá blocker. Flag zůstává default-off; CalDAV a Graph následují.
+
+
+**K11 Google převzat (PR #157, 2026-09-08):** věrný import výjimek, cancellation-only záznamů a hydratace masteru prošel nezávislým review, root checkem, celou DB sadou i čerstvou migrací a všemi 14 CI kontrolami. PR byl squash mergnut.
+
+**K11 CalDAV komponenty — implementační řez (2026-09-08):** master podle identity, vlastní obsah/délka detached výjimek, atomické nahrazení celého resource včetně odstraněných výjimek, rollback ETagů a blokace pending rodiny. Parser respektuje explicitní zóny a přesné DST fold endpoints. Izolovaný Radicale ověřuje HTTP → adapter → sync → DB reset/delta, revival/deletion a nezměněný resource včetně alarmů/extensions. Validní masterless/RANGE a recurring nominal-day duration formy zůstávají explicitně unsupported do navazujícího model/scope řezu; K11 jako celek není uzavřen. Matice a regrese: [provider time import](../sync/provider-time-import.md).

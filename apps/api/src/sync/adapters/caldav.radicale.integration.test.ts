@@ -25,7 +25,9 @@ async function main() {
   }
 
   const { eq } = await import("drizzle-orm");
-  const { db, saveCaldavAccount, user } = await import("@musubi/db");
+  const { db, events, externalEvents, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
+  const { config } = await import("@musubi/config");
+  const { syncProvider } = await import("../engine");
   const { caldavAdapter } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
@@ -38,6 +40,7 @@ async function main() {
   const basicAuth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
   const davFetch = createGuardedCaldavFetch({ allowPrivate: true });
   let collectionCreated = false;
+  const enabled = config.api.eventTimeEditsEnabled;
 
   await db.insert(user).values({
     id: userID,
@@ -141,8 +144,47 @@ async function main() {
       true,
     );
 
+    config.api.eventTimeEditsEnabled = true;
+    const resourceURL = new URL("family.ics", collectionURL).href;
+    const component = (...lines: string[]) => ["BEGIN:VEVENT", "UID:family", "DTSTAMP:20260908T000000Z", ...lines, "END:VEVENT"].join("\r\n");
+    const master = component("DTSTART;TZID=Europe/Prague:20260328T090000", "DTEND;TZID=Europe/Prague:20260328T100000", "RRULE:FREQ=DAILY;COUNT=4", "SUMMARY:Master", "X-MUSUBI-FIXTURE:keep", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Keep alarm", "END:VALARM");
+    const moved = component("RECURRENCE-ID;TZID=Europe/Prague:20260329T090000", "DTSTART;TZID=Europe/Prague:20260329T140000", "DTEND;TZID=Europe/Prague:20260329T160000", "SUMMARY:Moved");
+    const put = async (...components: string[]) => {
+      const result = await davFetch(resourceURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar" }, body: ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Musubi//Fixture//EN", ...components, "END:VCALENDAR"].join("\r\n") });
+      assert.ok(result.ok, `Fixture PUT: ${result.status}`);
+    };
+    const sync = () => syncProvider(caldavAdapter, userID, { id: account.id, label: "Fixture" });
+    const rows = () => db.select().from(events).where(eq(events.creatorID, userID)).orderBy(events.id);
+    await put(moved, master);
+    const rawBefore = await (await davFetch(resourceURL, { headers: { authorization: basicAuth } })).text();
+    await sync();
+    const initial = await rows();
+    assert.equal(initial.length, 2);
+    assert.equal(initial.find(event => event.title === "Moved")!.end.getTime() - initial.find(event => event.title === "Moved")!.start.getTime(), 7200000);
+    await sync();
+    assert.deepEqual(await rows(), initial);
+    const rawAfter = await (await davFetch(resourceURL, { headers: { authorization: basicAuth } })).text();
+    assert.equal(rawAfter, rawBefore, "Pull preserves the complete server resource, alarms and extensions");
+    const [link] = (await getUserExternalCalendars("caldav", userID, account.id)).filter(link => link.externalCalendarID === collectionURL);
+    assert.ok(link);
+    await setCursor(link.calendarID, null);
+    await sync();
+    assert.deepEqual(await rows(), initial, "Full reset preserves identity and revision");
+    await put(master);
+    await sync();
+    assert.ok((await rows()).find(event => event.title === "Moved")!.deletedAt, "Delta omits and tombstones removed override");
+    await put(master, moved);
+    await sync();
+    assert.deepEqual((await rows()).map(event => event.id), initial.map(event => event.id));
+    assert.equal((await db.select().from(externalEvents).where(eq(externalEvents.calendarID, link.calendarID))).length, 2);
+    const removed = await davFetch(resourceURL, { method: "DELETE", headers: { authorization: basicAuth } });
+    assert.ok(removed.ok);
+    await sync();
+    assert.ok((await rows()).every(event => event.deletedAt), "Resource deletion tombstones its complete family");
+    console.log("Radicale VEVENT family HTTP delta/reset, revival, deletion and preservation: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {
+    config.api.eventTimeEditsEnabled = enabled;
     if (collectionCreated) {
       const deleted = await davFetch(collectionURL, {
         method: "DELETE",
