@@ -1,8 +1,10 @@
+import { expandCalendarView } from "@/lib/calendarExpansion";
+import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { AddEventModal } from "@/components/calendar/AddEventModal";
 import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
 import { colors, fonts, styles } from "@/constants/theme";
 import { Event } from "@musubi/types";
-import { eventDay, expandRecurringEvents } from "@musubi/calendar";
+import { eventDay } from "@musubi/calendar";
 import { useApi } from "@/services/api";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
@@ -91,7 +93,7 @@ export default function AgendaTab() {
   const currentDay = useCurrentDay();
   const todayKey = useMemo(() => dateKey(currentDay), [currentDay]);
 
-  const groups = useMemo(() => {
+  const expansion = useMemo(() => {
     const now = new Date();
     const recurrenceStart = eventDay(now).startOf("day").toDate();
     const recurrenceEnd = new Date(recurrenceStart);
@@ -102,12 +104,13 @@ export default function AgendaTab() {
     // One-off events can remain visible however far away they are. Recurring
     // series need a finite window, so materialize their upcoming occurrences
     // for the next two years before applying the normal agenda filters.
-    const agendaEvents = expandRecurringEvents(
-      events, recurrenceStart, recurrenceEnd,
-      { consumerTimeZone, includeAllNonRecurring: true },
-    );
+    return expandCalendarView(events, recurrenceStart, recurrenceEnd,
+      { consumerTimeZone, includeAllNonRecurring: true });
+  }, [events, currentDay, consumerTimeZone]);
 
-    const sorted = agendaEvents
+  const groups = useMemo(() => {
+    const now = new Date();
+    const sorted = expansion.events
       .filter(
         (e) =>
           (e.isAllDay
@@ -134,7 +137,7 @@ export default function AgendaTab() {
       }
     }
     return result;
-  }, [events, activeCals, currentDay, consumerTimeZone]);
+  }, [expansion.events, activeCals, currentDay]);
 
   // Store write, not setState — opening the detail must not re-render the
   // (long) agenda list. The modal lives in GlobalEventModals.
@@ -364,7 +367,9 @@ export default function AgendaTab() {
         }}
         stickyHeaderIndices={stickyIndices}
       >
-        {groups.length === 0 ? (
+        {expansion.error ? (
+          <CalendarExpansionError message={expansion.error} onRetry={onRefresh} refreshing={refreshing} />
+        ) : groups.length === 0 ? (
           <Empty kanji="静" text="No events ahead" />
         ) : (
           rows
