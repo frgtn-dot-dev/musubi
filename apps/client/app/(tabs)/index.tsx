@@ -1,3 +1,4 @@
+import { CalendarCoverageNotice } from "@/components/calendar/CalendarCoverageNotice";
 import { expandCalendarView } from "@/lib/calendarExpansion";
 import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { styles } from "@/constants/theme";
@@ -371,6 +372,7 @@ export default function MainTab() {
           onToggle={toggleCal}
           onSolo={soloCalendar}
         />
+        <CalendarCoverageNotice calendars={calendars.filter(calendar => activeCals.has(calendar.id))} />
         {expansion.error && <CalendarExpansionError message={expansion.error} onRetry={onRefresh} refreshing={refreshing} />}
         <CalendarDrillView
           calMode={calMode}

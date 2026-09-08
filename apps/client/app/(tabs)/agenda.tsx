@@ -1,3 +1,4 @@
+import { CalendarCoverageNotice } from "@/components/calendar/CalendarCoverageNotice";
 import { expandCalendarView } from "@/lib/calendarExpansion";
 import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { AddEventModal } from "@/components/calendar/AddEventModal";
@@ -350,6 +351,7 @@ export default function AgendaTab() {
         onToggle={toggleCal}
         onSolo={soloCalendar}
       />
+      <CalendarCoverageNotice calendars={calendars.filter(calendar => activeCals.has(calendar.id))} />
       <ScrollView
         ref={scrollRef}
         style={{ paddingHorizontal: 16 }}
