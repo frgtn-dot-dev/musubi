@@ -15,6 +15,7 @@ import type {
   User,
 } from "@musubi/types";
 import {
+  calendarCoverageNotice,
   seriesEditWrites,
   withSeriesEditIntent,
   type EditScope,
@@ -35,7 +36,7 @@ import {
 } from "react";
 import { Button } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
-import { describeAge, StaleBanner, UpdateBanner } from "~/ui/StaleBanner";
+import { describeAge, StaleBanner, UpdateBanner, CoverageBanner } from "~/ui/StaleBanner";
 import { Toast, type ToastTone } from "~/ui/Toast";
 import {
   DEFAULT_MULTI_WEEK_WEEKS,
@@ -548,6 +549,7 @@ export function Workspace({
     () => calendarIdsForVisibility(workingConfig.calendarVisibility, calendars),
     [calendars, workingConfig.calendarVisibility],
   );
+  const coverageNotice = calendarCoverageNotice(calendars.filter(calendar => visibleCalendarIds.includes(calendar.id)));
 
   // Density lives in the Page config, so "this page shows time grids compactly"
   // is saved with the page rather than being a device preference.
@@ -1056,6 +1058,7 @@ export function Workspace({
           </section>
         ) : null}
 
+        {coverageNotice && activeView !== "tasks" ? <CoverageBanner message={coverageNotice} /> : null}
         <div
           className={`${styles.calendarArea} ${
             activeView === "month" ? styles.calendarAreaMonth : ""

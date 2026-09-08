@@ -1,3 +1,4 @@
+import { CalendarCoverageNotice } from "@/components/calendar/CalendarCoverageNotice";
 import { expandCalendarView } from "@/lib/calendarExpansion";
 import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
 import { colors, styles } from "@/constants/theme";
@@ -331,6 +332,7 @@ export default function CalendarDetail({
                 drillProgress={monthTransition}
                 onTodayPress={onTodayPress}
               />
+              <CalendarCoverageNotice calendars={calendar ? [calendar] : []} />
               {expansion.error && <CalendarExpansionError message={expansion.error} />}
               <CalendarDrillView
                 calMode={calMode}

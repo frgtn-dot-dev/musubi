@@ -1,4 +1,4 @@
-import { CloudOff, RefreshCw, Sparkles } from "lucide-react";
+import { CloudOff, Info, RefreshCw, Sparkles } from "lucide-react";
 import styles from "./primitives.module.css";
 
 /** "3 minutes ago" — enough to judge the data, without a clock's precision. */
@@ -84,6 +84,16 @@ export function UpdateBanner({ onReload }: { onReload: () => void }) {
       >
         Reload
       </button>
+    </div>
+  );
+}
+
+/** Persistent information about the completeness of a displayed calendar. */
+export function CoverageBanner({ message }: { message: string }) {
+  return (
+    <div className={styles.staleBanner} data-tone="refreshing" role="status">
+      <Info aria-hidden="true" size={14} strokeWidth={1.8} />
+      <span>{message}</span>
     </div>
   );
 }

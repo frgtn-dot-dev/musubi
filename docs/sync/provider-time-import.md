@@ -43,3 +43,9 @@ These are destination mapping fields, not a fabricated local master or event tim
 Evidence: `graph_occurrences.integration.test.ts` runs actual HTTP fixtures through the Graph adapter, sync engine and disposable DB. It covers legacy adoption, moved content/duration, no double expansion, master/instance ETag separation, repeated and 410/full resets, hydration failure, exact original identity and stable revival. No live Microsoft account was changed.
 
 Source: [Microsoft Graph event resource](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0).
+
+## Visible Graph coverage limitation
+
+Web calendar views and native calendar/agenda/detail display a persistent coverage notice when an active Outlook event calendar is included. The notice remains present for empty distant dates, so absence of imported rows is not represented as complete provider history. Hiding those calendars or showing task-only sources removes the notice. It deliberately does not invent exact coverage endpoints from the viewer's current date or a stale client cache.
+
+Evidence: the `explains bounded Outlook coverage on an empty distant calendar` Playwright scenario checks an empty 2035 month, wide/narrow layouts, axe and hiding the provider calendar. The shared banner has a Storybook status-region check. Native callers use the same coverage predicate and were typechecked; physical-device visual testing is still a release gate.

@@ -8173,3 +8173,17 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     expect(writes[1].event.start).toBeUndefined();
   });
 }
+
+test("explains bounded Outlook coverage on an empty distant calendar", async ({ page }) => {
+  await mockAuthenticatedReads(page, { ...events, events: [] }, calendars.map(calendar => calendar.id === "studio" ? { ...calendar, provider: "microsoft" } : calendar));
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2035-07-26`);
+  const notice = page.getByRole("status").filter({ hasText: "Outlook sync covers a limited date range" });
+  await expect(notice).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(notice).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await setCalendarVisibility(page, "Studio", false);
+  await expect(notice).toHaveCount(0);
+});
