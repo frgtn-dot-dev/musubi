@@ -35,3 +35,11 @@ Validation includes parser fixtures for all three providers and authenticated
 HTTP through PostgreSQL: same-ETag metadata adoption, personal access boundaries,
 no revision/fanout, pending conflict retention, ACK promotion, stale observation
 fencing and membership revocation.
+
+Web and native details now fetch the private observation when opened, without
+persisting it in shared event caches. Account/connection identity changes reject
+late responses. Imported series settings are explicitly labeled as series data;
+stored exceptions retain their own ID. Musubi attendance/reminders are named
+separately, and the panel explains that independent applications may both notify.
+Unavailable metadata is visible as a read failure with reopen-to-retry guidance.
+These controls remain read-only; no RSVP or native reminder mutation is enabled.

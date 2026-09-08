@@ -326,3 +326,16 @@ it("asks the scope before deleting a detached occurrence and submits only that o
     expect(mocks.close).toHaveBeenCalledOnce();
   } finally { apply.mockRestore(); }
 });
+
+it("reads provider settings from the event's federated source without a write", async () => {
+  const { useApi } = await import("@/services/api");
+  const { remoteForCalendar, fedFetch } = await import("@/services/federation");
+  const remote = { id: "connection", server: "https://peer.example.test", label: "Peer", userID: "shadow" };
+  vi.mocked(remoteForCalendar).mockReturnValue(remote);
+  vi.mocked(fedFetch).mockResolvedValue({ state: null });
+  try {
+    expect(await useApi().getProviderEventState(master)).toEqual({ state: null });
+    expect(fedFetch).toHaveBeenCalledWith(remote, `/api/v1/events/${master.id}/provider-state`, { method: "GET" });
+    expect(mocks.request).not.toHaveBeenCalled();
+  } finally { vi.mocked(remoteForCalendar).mockReset(); vi.mocked(fedFetch).mockReset(); }
+});
