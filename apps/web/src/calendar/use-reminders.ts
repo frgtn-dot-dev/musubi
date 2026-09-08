@@ -1,3 +1,4 @@
+import { CalendarTimeError } from "./calendar-time-error";
 import { resolveReminders, toReminderEvent } from "@musubi/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -108,23 +109,30 @@ export function useReminders(userId: string) {
     }),
   });
 
-  const due = useMemo(() => {
-    if (!reminders.data || !events.data) return [];
-
-    const now = new Date();
-    return resolveReminders({
-      context: {
-        calendarOrder: settings.data?.calendarOrder ?? [],
-        calendarRules: reminders.data.calendars,
-        defaultRule: reminders.data.default,
-        eventRules: reminders.data.events,
-        timezone: settings.data?.timezone ?? browserTimezone(),
-      },
-      events: events.data.events.map(toReminderEvent),
-      from: now,
-      to: new Date(now.getTime() + HORIZON_DAYS * 24 * 3_600_000),
-    });
+  const resolution = useMemo(() => {
+    if (!reminders.data || !events.data) return { due: [], error: undefined };
+    try {
+      const now = new Date();
+      return {
+        due: resolveReminders({
+          context: {
+            calendarOrder: settings.data?.calendarOrder ?? [],
+            calendarRules: reminders.data.calendars,
+            defaultRule: reminders.data.default,
+            eventRules: reminders.data.events,
+            timezone: settings.data?.timezone ?? browserTimezone(),
+          },
+          events: events.data.events.map(toReminderEvent),
+          from: now,
+          to: new Date(now.getTime() + HORIZON_DAYS * 24 * 3_600_000),
+        }),
+        error: undefined,
+      };
+    } catch (cause) {
+      return { due: [], error: new CalendarTimeError("reminders", cause) };
+    }
   }, [events.data, reminders.data, settings.data]);
+  const due = resolution.due;
 
   // When the server is pushing to this browser, the tab must NOT also schedule:
   // the two would race to announce the same occurrence and, being raised from
@@ -189,11 +197,20 @@ export function useReminders(userId: string) {
     [pushPublicKey, pushing, setPush],
   );
 
+  const { refetch: refetchEvents } = events;
+  const { refetch: refetchReminders } = reminders;
+  const { refetch: refetchSettings } = settings;
+  const retry = useCallback(async () => {
+    await Promise.all([refetchEvents(), refetchReminders(), refetchSettings()]);
+  }, [refetchEvents, refetchReminders, refetchSettings]);
+
   return useMemo(
     (): ReminderControl | undefined =>
       reminders.data
         ? {
             calendarOrder,
+            error: resolution.error,
+            retry,
             document: reminders.data,
             push,
             onCalendarChange: async (calendarId, rule) => {
@@ -212,7 +229,16 @@ export function useReminders(userId: string) {
             },
           }
         : undefined,
-    [calendarOrder, origin, push, queryClient, reminders.data, userId],
+    [
+      calendarOrder,
+      origin,
+      push,
+      queryClient,
+      reminders.data,
+      userId,
+      resolution.error,
+      retry,
+    ],
   );
 }
 

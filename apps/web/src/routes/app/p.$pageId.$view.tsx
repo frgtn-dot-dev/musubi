@@ -130,7 +130,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   // and filling it a frame later is worse than a moment of the loading state.
   const pending = queries.some((query) => query.isPending) || !snapshot.ready;
   const errorQuery = queries.find((query) => query.error);
-  const error = errorQuery?.error;
+  const error =
+    errorQuery?.error ?? workspace.expansionError ?? reminders?.error;
 
   // Resolve the URL page id against the loaded pages. Unknown ids (a stale
   // bookmark or the "default" sentinel from the initial redirect) fall back to
@@ -188,7 +189,11 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
         }
         kind={offline ? "offline" : "error"}
         onRetry={() => {
-          void Promise.all(queries.map((query) => query.refetch()));
+          void Promise.all([
+            ...queries.map((query) => query.refetch()),
+            workspace.federated.refetch(),
+            reminders?.retry?.(),
+          ]);
         }}
         requestId={requestId}
         title={

@@ -135,3 +135,7 @@ Both the JavaScript snapshot and Android Kotlin agenda filter retain an all-day 
 ## Shared reminder projection checkpoint
 
 Web, native and API now use the same toReminderEvent projection instead of three field lists. It retains original identity, time model and cancellation; calendar arrays and Date endpoints are copied. Existing known-model resolver regressions pass through this boundary, with native SQLite reconciliation and server PostgreSQL projection coverage retained. Web transport metadata admission is still subsequent work: EventSchema remains unchanged, as do writable contracts and consumer error handling.
+
+### Web expansion error checkpoint
+
+Home query selection and federated expansion expose safe presentation errors instead of throwing during rendering. Reminder resolution clears its due list on failure, cancelling previously scheduled browser timers; retry refetches event, rule and timezone sources. Existing workspace error UI presents these failures. Hook integration tests exercise known metadata and recovery; browser regression exercises the existing HTTP failure/retry route, editor draft roundtrip and peer outage isolation. EventSchema still does not admit known metadata, so this is not production activation or native error handling certification.
