@@ -1,8 +1,8 @@
 import type { Event } from "@musubi/types";
 import { afterEach, expect, it, vi } from "vitest";
-import { getEvents, importCalendar } from "./resources";
+import { connectCaldav, getEvents, importCalendar } from "./resources";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 function response() {
 	return new Response(
@@ -128,4 +128,21 @@ it("posts one scope intent through home and federation routes", async () => {
   for (const call of fetch.mock.calls as unknown as [string, RequestInit][]) expect(JSON.parse(call[1].body as string)).toEqual(request);
   expect(fetch).toHaveBeenNthCalledWith(1, `/api/v1/events/${event.id}/scope`, expect.objectContaining({ method: "POST", body: expect.any(String) }));
   expect(fetch).toHaveBeenNthCalledWith(2, `/api/v1/federation/s/connection/api/v1/events/${event.id}/scope`, expect.objectContaining({ method: "POST", body: expect.any(String) }));
+});
+
+
+it("allows CalDAV discovery and initial import to outlast an ordinary request", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException("signal timed out", "TimeoutError")), ms);
+    return controller.signal;
+  });
+  vi.stubGlobal("fetch", vi.fn((_input, init: RequestInit) => new Promise<Response>((resolve, reject) => {
+    const timer = setTimeout(() => resolve(new Response("null", { status: 200 })), 15_000);
+    init.signal?.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal!.reason); }, { once: true });
+  })));
+  const outcome = connectCaldav({ serverUrl: "https://caldav.example.test", username: "fixture", password: "fixture" }).then(() => "connected", () => "timed-out");
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(await outcome).toBe("connected");
 });
