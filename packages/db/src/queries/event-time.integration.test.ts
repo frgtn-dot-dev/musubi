@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { OccurrenceStartSchema } from "@musubi/types";
+import { BadRequestError, OccurrenceStartSchema } from "@musubi/types";
 import {
   createCalendar,
   db,
@@ -10,6 +10,10 @@ import {
   user,
   calendarEvents,
   getUsersEvents,
+  patchEventAndCalendarLinks,
+  getEventSnapshot,
+  upsertExternalEvent,
+  eventOutbox,
 } from "..";
 
 const constraint = (name: string) => (error: unknown) =>
@@ -244,6 +248,125 @@ async function main() {
       constraint("events_series_id_events_id_fk"),
       "master deletion cannot silently cascade exceptions",
     );
+    // Legacy writers cannot change temporal content while retaining metadata
+    // whose civil anchor or occurrence relationship would become stale.
+    for (const candidate of [series, floating, allDay, exception]) {
+      const before = (await getEventSnapshot(candidate.id))!;
+      for (const patch of [
+        { start: new Date("2026-10-01T09:00:00Z") },
+        { end: new Date("2026-10-02T09:00:00Z") },
+        { isAllDay: !before.isAllDay },
+        { recurrence: "FREQ=MONTHLY" },
+      ]) {
+        await assert.rejects(
+          () =>
+            patchEventAndCalendarLinks(candidate.id, before.revision, {
+              ...patch,
+              title: "must roll back",
+              calendars: [secondCalendar.id],
+            }),
+          (error: unknown) =>
+            error instanceof BadRequestError &&
+            /time-model-aware/.test(error.message),
+        );
+        assert.deepEqual(
+          await getEventSnapshot(candidate.id),
+          before,
+          "rejected time update preserves content, revision and calendar links",
+        );
+        assert.deepEqual(
+          await db
+            .select()
+            .from(eventOutbox)
+            .where(eq(eventOutbox.eventID, candidate.id)),
+          [],
+        );
+      }
+      const noop = await patchEventAndCalendarLinks(
+        candidate.id,
+        before.revision,
+        {
+          start: new Date(before.start),
+          end: new Date(before.end),
+          isAllDay: before.isAllDay,
+          recurrence: before.recurrence,
+        },
+      );
+      assert.equal(noop.status, "saved");
+      if (noop.status === "saved") assert.equal(noop.changed, false);
+      const renamed = await patchEventAndCalendarLinks(
+        candidate.id,
+        before.revision,
+        { title: "Renamed" },
+      );
+      assert.equal(renamed.status, "saved");
+      if (renamed.status === "saved") {
+        assert.deepEqual(renamed.event.timeModel, before.timeModel);
+        assert.deepEqual(renamed.event.originalStart, before.originalStart);
+      }
+      assert.equal(
+        (
+          await patchEventAndCalendarLinks(candidate.id, before.revision, {
+            start: new Date("2026-10-01T09:00:00Z"),
+          })
+        ).status,
+        "conflict",
+        "stale CAS still precedes time validation",
+      );
+    }
+    for (const timeModel of [null, { kind: "legacy-unknown" as const }]) {
+      await db
+        .update(events)
+        .set({ timeModel })
+        .where(eq(events.id, legacy.id));
+      const current = (await getEventSnapshot(legacy.id))!;
+      assert.equal(
+        (
+          await patchEventAndCalendarLinks(legacy.id, current.revision, {
+            start: new Date(current.start.getTime() + 3600000),
+          })
+        ).status,
+        "saved",
+        "unresolved legacy behavior remains available",
+      );
+    }
+
+    await db
+      .update(events)
+      .set({ originCalendarID: calendar.id })
+      .where(eq(events.id, series.id));
+    await db.insert(externalEvents).values({
+      provider: "google",
+      eventID: series.id,
+      calendarID: calendar.id,
+      externalCalendarID: "remote",
+      externalEventID: "guarded-series",
+      etag: "old",
+    });
+    const beforePull = (await getEventSnapshot(series.id))!;
+    await assert.rejects(() =>
+      upsertExternalEvent(
+        "google",
+        userID,
+        calendar.id,
+        "remote",
+        "guarded-series",
+        { ...beforePull, start: new Date("2026-10-01T09:00:00Z") },
+        "new",
+      ),
+    );
+    assert.deepEqual(await getEventSnapshot(series.id), beforePull);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(externalEvents)
+          .where(eq(externalEvents.eventID, series.id))
+      )[0].etag,
+      "old",
+      "rejected legacy pull cannot acknowledge the new provider validator",
+    );
+
     const mapping = {
       provider: "google",
       eventID: exception.id,

@@ -6,6 +6,7 @@ import {
   createCalendar,
   db,
   getEvent,
+  events,
   getEventCalendars,
   replaceMemberToken,
   user,
@@ -306,6 +307,27 @@ async function main() {
         assert.deepEqual(response.body.delivery, { completed: false, status: "unconfirmed" });
       }
     }
+    // Metadata remains read/write-gated, but legacy PATCH must already fail
+    // safely if storage contains a known model (for example after rehydration).
+    const knownTime = { ...input, id: randomUUID(), hasAttendees: false };
+    assert.equal((await send("POST", knownTime)).status, 201);
+    await db.update(events).set({ timeModel: {
+      kind: "zoned", timeZone: "UTC",
+      startLocal: "2026-09-01T23:00:00.000", endLocal: "2026-09-03T02:00:00.000",
+    } }).where(eq(events.id, knownTime.id));
+    const beforeKnown = await getEvent(knownTime.id);
+    const rejectedTime = await send("PATCH", { id: knownTime.id, expectedRevision: 1,
+      patch: { start: "2026-09-02T23:00:00Z", title: "must not save", calendars: [forkHome.id] },
+    });
+    assert.equal(rejectedTime.status, 400);
+    assert.match(rejectedTime.body.error, /time-model-aware/);
+    assert.deepEqual(await getEvent(knownTime.id), beforeKnown);
+    assert.deepEqual(await getEventCalendars(knownTime.id), [home.id]);
+    assert.equal((await send("PATCH", { id: knownTime.id, expectedRevision: 1,
+      patch: { title: "Safe title" },
+    })).status, 200);
+    assert.deepEqual((await getEvent(knownTime.id)).timeModel, beforeKnown.timeModel);
+
     // Ordinary reminder cleanup failure is intentionally best-effort already.
     const cleanupEvent = { ...input, id: randomUUID() };
     assert.equal((await send("POST", cleanupEvent)).status, 201);

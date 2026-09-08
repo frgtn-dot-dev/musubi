@@ -1,3 +1,4 @@
+import { assertLegacyEventTimePatch } from "./event-time-write";
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
 import { appendInboundEventFanout } from "./event-outbox-fanout";
@@ -493,6 +494,7 @@ async function patchEventAndCalendarLinksInTransaction(
   const addedCalendarIDs = incoming.filter((id) => !existing.includes(id));
   const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
   const patch = diffEventContent(current, input);
+  assertLegacyEventTimePatch(current, patch);
   const deletedAt =
     tombstoneIfOrphaned && incoming.length === 0 ? new Date() : null;
   const changed =
@@ -663,6 +665,7 @@ export async function upsertExternalEvent(
       // Provider version changes are not necessarily content changes. Persist
       // the accepted validator without waking delta readers for identical polls.
       const patch = diffEventContent(map.event, values);
+      assertLegacyEventTimePatch(map.event, patch);
       const changed =
         Object.keys(patch).length > 0 || map.event.deletedAt !== null;
       if (changed) {
