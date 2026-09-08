@@ -30,3 +30,9 @@ export const ProviderReminderEditSchema = z
   .strict();
 export type ProviderReminderEdit = z.infer<typeof ProviderReminderEditSchema>;
 export type GoogleReminderWrite = z.infer<typeof GoogleReminderWriteSchema>;
+
+
+export const ProviderReminderReceiptSchema = z.object({
+  operationID: z.uuid(), replayed: z.boolean(), status: z.string(), localCommitted: z.literal(true),
+}).strict();
+export type ProviderReminderReceipt = z.infer<typeof ProviderReminderReceiptSchema>;

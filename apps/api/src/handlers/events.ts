@@ -616,7 +616,8 @@ export async function handlerGetEvents(req: Request, res: Response) {
 export async function handlerGetProviderEventState(req: Request, res: Response) {
   const id = requireUUID(req.params.eventId, "eventId");
   await assertCanViewEvent(req.user!.id, id);
-  res.json(await getOwnProviderEventObservation(req.user!.id, id));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json(await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled));
 }
 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {

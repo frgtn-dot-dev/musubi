@@ -1,23 +1,48 @@
+import { ProviderReminderEditor } from "./ProviderReminderEditor";
+import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
-import type { Event, ProviderEventState } from "@musubi/types";
+import type { Event, ProviderEventStateResponse } from "@musubi/types";
 import { providerEventDetails } from "@musubi/calendar";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useApi } from "@/services/api";
 import { useServer } from "@/contexts/ServerContext";
 
 export function ProviderEventDetails({ event, userId }: { event: Event; userId: string }) {
-  const api = useApi();
   const { apiUrl } = useServer();
   const targetID = event.id.replace(/_-?\d+$/, "");
   const remoteID = remoteForCalendar(event.originCalendarID ?? event.calendars[0])?.id;
   const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID]);
-  const [result, setResult] = useState<{ key: string; state?: ProviderEventState | null; failed?: boolean }>();
+  return <ProviderEventDetailsBody key={key} event={event} userId={userId} />;
+}
+export function ProviderEventDetailsBody({ event, userId }: { event: Event; userId: string }) {
+  const api = useApi();
+  const targetID = event.id.replace(/_-?\d+$/, "");
+  const key = JSON.stringify([targetID, userId]);
+  const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
+  const [editor, setEditor] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState("");
+  const active = useRef(true);
+  const refreshing = useRef(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  async function openEditor() {
+    if (refreshing.current) return;
+    refreshing.current = true; setOpening(true); setOpenError("");
+    try {
+      const observation = await api.getProviderEventState({ ...event, id: targetID });
+      if (!active.current) return;
+      setResult({ key, ...observation });
+      if (observation.reminderEdit && observation.state && observation.version) setEditor(true);
+      else setOpenError("Google reminders are not editable in the refreshed state.");
+    } catch { if (active.current) setOpenError("Could not refresh Google reminders. Retry to load current settings."); }
+    finally { refreshing.current = false; if (active.current) setOpening(false); }
+  }
   useEffect(() => {
     let active = true;
-    api.getProviderEventState({ ...event, id: targetID }).then(({ state }) => {
-      if (active) setResult({ key, state });
+    api.getProviderEventState({ ...event, id: targetID }).then(observation => {
+      if (active) setResult({ key, ...observation });
     }).catch(() => { if (active) setResult({ key, failed: true }); });
     return () => { active = false; };
     // API/event objects change on render; key includes the complete account route.
@@ -30,9 +55,14 @@ export function ProviderEventDetails({ event, userId }: { event: Event; userId: 
   return <View style={styles.fieldContainer}>
     <Text accessibilityRole="header" style={styles.fieldLabel}>{details ? `${details.provider} details` : "Provider details"}</Text>
     {details ? <>
-      <Text style={textStyle}>{event.recurrence && !event.seriesID ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. Change these in {details.provider}.</Text>
+      <Text style={textStyle}>{event.recurrence && !event.seriesID ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit ? "Personal Google reminders can be edited here." : `Change these in ${details.provider}.`}</Text>
       {details.rows.map(row => <Text key={row.label} style={textStyle}>{row.label}: {row.value}</Text>)}
       <Text style={textStyle}>Provider notifications and Musubi reminders are separate. Both apps may notify you.</Text>
     </> : <Text accessibilityLiveRegion="polite" style={textStyle}>{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</Text>}
+    {openError ? <Text accessibilityRole="alert" style={textStyle}>{openError}</Text> : null}
+    {current?.reminderEdit && current.state && current.version && !event.recurrence && !event.seriesID ? <>
+      <Btn label="Edit Google reminders" variant="secondary" loading={opening} onPress={() => void openEditor()} />
+      {editor ? <ProviderReminderEditor event={{ ...event, id: targetID }} observation={{ state: current.state, version: current.version, reminderEdit: current.reminderEdit }} onClose={() => setEditor(false)} /> : null}
+    </> : null}
   </View>;
 }

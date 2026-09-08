@@ -42,7 +42,7 @@ late responses. Imported series settings are explicitly labeled as series data;
 stored exceptions retain their own ID. Musubi attendance/reminders are named
 separately, and the panel explains that independent applications may both notify.
 Unavailable metadata is visible as a read failure with reopen-to-retry guidance.
-These controls remain read-only; no RSVP or native reminder mutation is enabled.
+The meeting controls remain read-only. Personal Google reminder editing is separately gated as described below.
 
 ## Google free/busy-only boundary
 
@@ -105,8 +105,8 @@ Local fake HTTP plus PostgreSQL tests cover the disabled gate, authenticated
 queue, source ownership, CAS, concurrent/replayed intent, predecessor ordering,
 exact PATCH fields, guest-copy preservation, 503 recovery, incomplete successful
 responses, and concurrent remote content changes. These are not live provider
-acceptance. Editing UI,
-series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
+acceptance.
+Series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
 flag must remain off until these activation prerequisites are addressed.
 
 
@@ -132,8 +132,7 @@ worker and recovery path then confirm its result.
 Fake HTTP and disposable PostgreSQL cover the disabled flag, native preview,
 content-only confirmation refusal, stale personal state, local revision races,
 simultaneous confirmation, replay, unchanged canonical event and a later reminder
-edit after recovery. Legacy, zoned and all-day one-offs use the same flow. The
-reminder editor remains follow-up work; production activation and live account writes are not enabled.
+edit after recovery. Legacy, zoned and all-day one-offs use the same flow. Production activation and live account writes are not enabled.
 
 
 Web and native delivery comparisons display personal Google reminders separately
@@ -146,3 +145,31 @@ settings do not schedule Musubi notifications or promise cross-application
 deduplication. Client checks cover both renderers; Chromium light 1280/dark 390
 covers keyboard, focus, retry, axe, layout and console health. Physical native QA
 and live provider reminder acceptance remain outstanding.
+
+
+## Gated personal Google reminder editor
+
+The private state response optionally advertises `reminderEdit` with the source
+revision only when the server reminder flag is on, the caller owns a writable
+source membership, and native one-off settings fit the supported write contract.
+Unknown methods, missing settings/ETag, floating models, recurring/detached and
+cancelled definitions are not offered. This is queue eligibility, not a fresh
+provider grant; enqueue and delivery retain their independent checks.
+
+Web and native detail panels offer calendar defaults, off, or up to five custom
+email/popup settings with whole minutes 0–40320. A shared draft carries the frozen
+revision and opaque observation version; invalid input never submits. Network
+retry preserves both draft and operation identity. The typed receipt distinguishes
+queued, unconfirmed, conflicted and confirmed delivery. The editor neither changes
+canonical event fields nor schedules a Musubi reminder. It uses the event's home
+route, including federated origins, and identity changes discard the open editor.
+
+The web editor hands off from the event popover to the existing dialog layer,
+returning focus to the calendar event on close; its select popovers remain usable.
+Chromium light 1280/dark 390 tests cover native settings, validation, failed-request
+retry, exact payload, axe, visible layer hit testing, console health and focus.
+Native callback/transport tests cover the same intent and federated source. Live
+Google acceptance, physical native QA, series and other providers remain open;
+`PROVIDER_REMINDER_EDITS_ENABLED` stays off and versions/minima are unchanged.
+
+Before each editor opening, both clients refresh the private observation. A failed refresh cannot reopen a stale editor; an already-open draft keeps its frozen CAS. The native sheet uses the existing keyboard-avoiding modal pattern, a shrinking scroll area and explicit keyboard dismissal on close. Physical keyboard/device behavior still requires native QA.

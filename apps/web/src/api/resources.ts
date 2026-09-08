@@ -1,4 +1,4 @@
-import { ProviderEventStateResponseSchema } from "@musubi/types";
+import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type ProviderReminderEdit } from "@musubi/types";
 import {
   EventScopeResponseSchema,
   EventScopeRequestSchema,
@@ -686,4 +686,9 @@ export function applyEventScope(event: Event, request: EventScopeRequest, connec
 
 export function getProviderEventState(eventId: string, signal?: AbortSignal, connectionId?: string) {
   return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-state`), { responseSchema: ProviderEventStateResponseSchema, signal });
+}
+
+
+export function editProviderReminders(eventId: string, request: ProviderReminderEdit, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-reminders`), { method: "POST", body: request, responseSchema: ProviderReminderReceiptSchema });
 }

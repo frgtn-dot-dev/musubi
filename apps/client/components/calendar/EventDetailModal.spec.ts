@@ -339,3 +339,19 @@ it("reads provider settings from the event's federated source without a write", 
     expect(mocks.request).not.toHaveBeenCalled();
   } finally { vi.mocked(remoteForCalendar).mockReset(); vi.mocked(fedFetch).mockReset(); }
 });
+
+it("queues only the exact provider reminder intent at the event's federated origin", async () => {
+  const { useApi } = await import("@/services/api");
+  const { remoteForCalendar, fedFetch } = await import("@/services/federation");
+  const remote = { id: "connection", server: "https://peer.example.test", label: "Peer", userID: "shadow" };
+  const request = { operationID: "00000000-0000-4000-8000-000000000014", expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "google" as const, reminders: { useDefault: true as const } };
+  const receipt = { operationID: request.operationID, replayed: false, status: "pending", localCommitted: true };
+  vi.mocked(remoteForCalendar).mockReturnValue(remote);
+  vi.mocked(fedFetch).mockResolvedValue(receipt);
+  try {
+    expect(await useApi().editProviderReminders(master, request)).toEqual(receipt);
+    expect(fedFetch).toHaveBeenCalledWith(remote, `/api/v1/events/${master.id}/provider-reminders`, { method: "POST", body: JSON.stringify(request) });
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(mocks.reminders).not.toHaveBeenCalled();
+  } finally { vi.mocked(remoteForCalendar).mockReset(); vi.mocked(fedFetch).mockReset(); }
+});

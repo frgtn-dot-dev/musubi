@@ -1,4 +1,4 @@
-import { ProviderEventStateResponseSchema } from "@musubi/types";
+import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type ProviderReminderEdit } from "@musubi/types";
 import {
   AnnouncementsResponseSchema,
   CLIENT_VERSION_HEADER,
@@ -468,6 +468,15 @@ export function useApi() {
       throwOnError(error);
 
       return data;
+    },
+
+    async editProviderReminders(event: Event, request: ProviderReminderEdit) {
+      const path = `/api/${apiVersion}/events/${encodeURIComponent(event.id)}/provider-reminders`;
+      const remote = remoteOf(eventHome(event));
+      if (remote) return readWire(ProviderReminderReceiptSchema, await fedFetch(remote, path, { method: "POST", body: JSON.stringify(request) }), "POST provider reminders (federated)");
+      const { error, data } = await authClient.$fetch(`${apiUrl}${path}`, { method: "POST", body: request });
+      throwOnError(error);
+      return readWire(ProviderReminderReceiptSchema, data, "POST provider reminders");
     },
 
     async getProviderEventState(event: Event) {
