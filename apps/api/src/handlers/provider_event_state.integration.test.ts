@@ -45,9 +45,10 @@ async function main() {
     assert.equal(await observe(), false);
     assert.equal((await getEventSnapshot(mapping.eventID))!.revision, initial.revision);
     assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, mapping.eventID))).length, 0);
-    assert.deepEqual((await read()).body, { state });
+    assert.deepEqual((await read()).body.state, state);
+    assert.match((await read()).body.version, /^[0-9a-f]{64}$/);
     assert.equal((await read(null)).status, 401);
-    assert.deepEqual(await read(viewerToken.raw), { status: 200, body: { state: null } });
+    assert.deepEqual(await read(viewerToken.raw), { status: 200, body: { state: null, version: null } });
     await db.update(externalCalendars).set({ disabled: true }).where(eq(externalCalendars.id, link.id));
     assert.equal(await getOwnProviderEventState(owner, mapping.eventID), null);
     await db.update(externalCalendars).set({ disabled: false }).where(eq(externalCalendars.id, link.id));

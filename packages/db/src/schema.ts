@@ -1,3 +1,4 @@
+import type { ProviderReminderEdit } from "@musubi/types";
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
@@ -875,6 +876,7 @@ export const eventOutbox = pgTable(
         event: Event;
         patch?: Record<string, unknown>;
         scopeEditValidated?: boolean;
+        reminderEdit?: ProviderReminderEdit;
         createIdentityVersion?: 1;
         resolution?: {
           operationID: string;

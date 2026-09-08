@@ -101,7 +101,7 @@ async function coversCurrentRevision(
         eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID),
       ),
     )
-    .orderBy(desc(eventOutbox.revision), desc(eventOutbox.position))
+    .orderBy(desc(eventOutbox.revision), desc(eventOutbox.createdAt), desc(eventOutbox.position), desc(eventOutbox.id))
     .limit(1);
   if (
     !latest ||
@@ -157,6 +157,7 @@ export async function completeEventOutbox(
   leaseToken: string,
   resultRef: EventDeliveryRef | null,
   expectedRef: EventDeliveryRef | null,
+  observation?: EventOutboxRow["remoteSnapshot"],
 ) {
   try {
     return await db.transaction(async (tx) => {
@@ -215,6 +216,9 @@ export async function completeEventOutbox(
           "destination-disconnected",
           resultRef,
         );
+      if (observation?.isEcho && observation.externalEventId === resultRef?.externalEventId &&
+          (!row.remoteSnapshot || row.remoteSnapshot.isEcho && observation.observedAt >= row.remoteSnapshot.observedAt))
+        row.remoteSnapshot = observation;
       if (row.remoteSnapshot && !row.remoteSnapshot.isEcho)
         return settle(tx, row, "conflict", "provider-conflict", resultRef);
       if (row.action !== "delete" && resultRef) {

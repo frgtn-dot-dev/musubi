@@ -65,7 +65,7 @@ export async function appendInboundEventFanout(
           eq(eventOutbox.externalCalendarLinkID, target.id),
         ),
       )
-      .orderBy(desc(eventOutbox.revision), desc(eventOutbox.position))
+      .orderBy(desc(eventOutbox.revision), desc(eventOutbox.createdAt), desc(eventOutbox.position), desc(eventOutbox.id))
       .limit(1);
     if (action === "delete" && !mapping && !previous) continue;
     const deliveryAction =

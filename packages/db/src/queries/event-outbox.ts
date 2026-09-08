@@ -74,6 +74,13 @@ export async function reserveEventMutation(
   }
 }
 
+/** Same-revision personal operations must sort after their predecessor even
+ * when this transaction started earlier or the host clock moved backwards.
+ * Keep microsecond arithmetic in PostgreSQL, not a millisecond JS Date. */
+export function eventOutboxCreatedAt(eventID: string, linkID: string) {
+  return sql<Date>`greatest(clock_timestamp(), coalesce((select max(created_at) + interval '1 microsecond' from event_outbox where event_id = ${eventID} and external_calendar_link_id = ${linkID}), clock_timestamp()))`;
+}
+
 /** Must be called inside the event's local transaction, after its CAS and before
  * COMMIT. No FK to events/maps: delete delivery must survive their removal. */
 export async function appendEventOutbox(
@@ -106,6 +113,7 @@ export async function appendEventOutbox(
         .insert(eventOutbox)
         .values({
           ...intent,
+          createdAt: eventOutboxCreatedAt(event.id, intent.externalCalendarLinkID),
           revision: event.revision!,
           predecessorID: predecessor?.id ?? null,
           payload: { ...intent.payload, event },

@@ -6,7 +6,7 @@ import {
   hasOAuthTaskScope,
   type EventContentPatch,
 } from "@musubi/db";
-import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
+import { EventWriteError, GoogleReminderWriteSchema, DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import type { Event, Task } from "@musubi/types";
 import type {
   CalendarAdapter,
@@ -706,6 +706,46 @@ export const googleAdapter: CalendarAdapter = {
         operation.action === "delete" && self === false ? true : self,
         "organizer",
       );
+    }
+  },
+
+  async readReminderState(userID, accountId, externalCalendarId, ref, signal) {
+    const response = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}`, { headers: { Authorization: `Bearer ${await getAccessToken(userID, accountId)}`, "Cache-Control": "no-cache" }, redirect: "error", signal });
+    if ([404, 410].includes(response.status)) return null;
+    assertCompleteEventReadResponse(response);
+    const data = await response.json();
+    if (data.id !== ref.externalEventId) throw new ProviderEventWriteError("provider-conflict");
+    if (data.status === "cancelled") return null;
+    if (data.recurringEventId || data.originalStartTime || data.recurrence?.length)
+      throw new EventWriteError("event-write", "unsupported");
+    return { ref: { externalEventId: data.id, etag: requireEventEtag(strongEventEtag(data.etag)) }, state: googleEventState(data), event: assertCreatedEventEvidence(toNormalized(data)) };
+  },
+
+  async writeReminders(userID, accountId, externalCalendarId, ref, input, signal) {
+    if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const reminders = GoogleReminderWriteSchema.parse(input);
+    await assertOAuthEventWriteGrant(userID, "google", accountId);
+    const accessToken = await getAccessToken(userID, accountId);
+    const calendarResponse = await fetch(`${GCAL}/users/me/calendarList/${encodeURIComponent(externalCalendarId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, redirect: "error", signal });
+    assertEventWriteResponse(calendarResponse);
+    const calendar = await calendarResponse.json();
+    assertEventWriteEvidence(typeof calendar.accessRole === "string" ? ["owner", "writer"].includes(calendar.accessRole) : undefined, "event-write");
+    const baseline = await googleAdapter.readReminderState!(userID, accountId, externalCalendarId, ref, signal);
+    if (!baseline) throw new ProviderEventWriteError("provider-conflict");
+    assertAcceptedEventEtag(ref.etag, baseline.ref.etag);
+    // Only this authenticated copy's reminders change, never participants/time.
+    const response = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}?sendUpdates=none`, { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "If-Match": requireEventEtag(ref.etag) }, body: JSON.stringify({ reminders }), redirect: "error", signal });
+    assertProviderEventMutationResponse(response);
+    const data = await response.json().catch(() => null);
+    if (data?.id !== ref.externalEventId) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", response.status);
+    const etag = strongEventEtag(data.etag);
+    if (!etag) throw new ProviderEventWriteError("provider-version-unavailable", "unconfirmed", response.status);
+    try {
+      if (data.recurringEventId || data.originalStartTime || data.recurrence?.length)
+        throw new Error("Unsupported recurring reminder evidence");
+      return { ref: { externalEventId: data.id, etag }, state: googleEventState(data), event: assertCreatedEventEvidence(toNormalized(data)) };
+    } catch {
+      throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", response.status);
     }
   },
 
