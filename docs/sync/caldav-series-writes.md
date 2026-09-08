@@ -160,3 +160,31 @@ was refused with unknown write permission because resource PROPFIND yielded no
 `current-user-privilege-set` evidence. No scope commit or worker ACK followed.
 Trustworthy iCloud resource authorization, end-to-end acceptance and resource-aware
 conflict resolution remain open; the permission guard stays in place.
+
+## Existing detached occurrence content
+
+The authenticated scope operation also accepts content-only `occurrence`
+updates for an existing, active detached definition. The original occurrence
+identity and its revision must match the complete imported family. Generated
+occurrences, cancellation/revival, time edits and following splits remain
+unsupported by this slice.
+
+The private write identifies the target local definition and reconstructs only
+its SUMMARY/DESCRIPTION/LOCATION changes. The full resource is verified before
+and after editing; master, unrelated exceptions, cancellation, alarms, timezones
+and unknown physical properties retain their original bytes. No organizer or
+attendee scheduling resource is admitted. Complete resource write privileges
+and a strong ETag remain mandatory, including for iCloud.
+
+The scope transaction advances the family revision and selected child revision
+and queues one resource intent. Before send and at ACK, its canonical desired
+family must equal the actual locked family; all mapping validators advance
+atomically. An ambiguous applied PUT is recognized from the complete desired
+resource without another write. Existing master-content conflict resolution
+explicitly refuses occurrence intents until their own preview contract exists.
+
+Fake HTTP and scoped HTTP/DB tests cover zoned/all-day/floating moved definitions,
+concurrent replay, provider conflict, applied 503, preserved sibling cancellation
+and byte-for-byte master preservation. A real local Radicale round-trip verifies
+native occurrence content and retry. This is not live iCloud application
+acceptance and does not enable production flags.

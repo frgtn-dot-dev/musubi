@@ -14,6 +14,7 @@ import { normalizeCaldavResource } from "./caldav_time";
 import { config, logger } from "@musubi/config";
 import {
   getExternalLinkForCalendar,
+  caldavSeriesDesired,
   getCaldavAccountById,
   getCaldavAccountsByUser,
   getUserExternalCalendars,
@@ -899,17 +900,33 @@ async function readEventResource(
 
 /** Only content fields of the master may differ. Rebuilding from the original
  * body prevents a persisted/client-supplied replacement from widening the write. */
-export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"]): CaldavSeriesWrite {
+export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string): CaldavSeriesWrite {
   if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !["title", "description", "location"].includes(key)))
     throw new EventWriteError("event-write", "unsupported");
   caldavSeriesEvidence(evidence.data, baseline);
   if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag)
     throw new ProviderEventWriteError("provider-conflict");
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
-  const desired = EventSchema.parse({ ...baseline.master, ...cleanPatch });
-  const after = patchEventIcal(evidence.data, desired, baseline.ref.icalUid!, cleanPatch);
-  caldavSeriesEvidence(after, { ...baseline, master: desired });
-  return { baseline, patch: cleanPatch, before: evidence.data, after };
+  const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID });
+  let after: string;
+  if (targetEventID) {
+    const child = baseline.children.find(item => item.id === targetEventID)!;
+    const original = JSON.stringify(child.originalStart);
+    const ordinal = evidence.exceptions.findIndex(item => JSON.stringify(item.originalStart) === original);
+    const components = new ICAL.Component(ICAL.parse(evidence.data)).getAllSubcomponents("vevent");
+    const component = components.filter(item => item.hasProperty("recurrence-id"))[ordinal];
+    if (!component) throw new ProviderEventWriteError("provider-conflict");
+    const replacements = new Map<string, ICAL.Property[]>();
+    for (const [field, name] of [["title", "summary"], ["description", "description"], ["location", "location"]] as const) {
+      if (cleanPatch[field] === undefined) continue;
+      const replacement = new ICAL.Component("vevent");
+      if (cleanPatch[field] !== null) replacement.addPropertyWithValue(name, cleanPatch[field]);
+      replacements.set(name, replacement.getAllProperties(name));
+    }
+    after = replaceEventProperties(evidence.data, components.indexOf(component), replacements);
+  } else after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, cleanPatch);
+  caldavSeriesEvidence(after, desired);
+  return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), before: evidence.data, after };
 }
 
 async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal) {
@@ -933,9 +950,9 @@ async function seriesAuthorization(userID: string, accountId: string, externalCa
 export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal): Promise<CaldavSeriesEvidence> {
   if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const { baseline } = write;
-  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch);
+  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch, write.targetEventID);
   if (rebuilt.after !== write.after) throw new ProviderEventWriteError("provider-conflict");
-  const desired = { ...baseline, master: EventSchema.parse({ ...baseline.master, ...rebuilt.patch }) };
+  const desired = caldavSeriesDesired(rebuilt);
   const resource = caldavSeriesResourceURL(externalCalendarId, baseline.ref.externalEventId);
   const read = () => readEventResource(authorization, resource.href, baseline.ref, signal, "error", true);
   const evidence = (current: Awaited<ReturnType<typeof read>>) => caldavSeriesEvidence(current.data, { ...desired, ref: { ...baseline.ref, etag: current.etag } });

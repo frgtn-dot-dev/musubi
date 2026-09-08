@@ -1,4 +1,4 @@
-import { caldavSeriesContext, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import { lockExternalEventAddress } from "./event-outbox-deletions";
 import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
@@ -71,9 +71,10 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     let providerContext: GoogleOccurrenceContext | undefined;
     let caldavContext: CaldavSeriesContext | undefined;
     if (target || mapping || history) {
-      if (caldavRoot && request.scope === "series" && (options.prepareProvider || options.caldav)) {
+      if (caldavRoot && ["series", "occurrence"].includes(request.scope) && (options.prepareProvider || options.caldav)) {
         if (request.action !== "update" || request.time !== undefined || Object.keys(request.patch).some(key => !["title", "description", "location"].includes(key)) || childRows.some(child => child.deletedAt))
-          throw new EventWriteError("event-write", "unsupported", "CalDAV series editing currently supports master content only. No changes were saved.");
+          throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing currently supports master or existing exception content only. No changes were saved.");
+        if (request.scope === "occurrence" && !childRows.some(child => !child.deletedAt && !child.isCanceled && sameCaldavScopeContext(child.originalStart, request.originalStart))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.map(child => EventSchema.parse(snapshot(child))));
         if (options.caldav && (!sameCaldavScopeContext(options.caldav.write.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children)))
           return { status: "conflict", current: EventSchema.parse(master) };
@@ -149,10 +150,13 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
       const changedMaster = saved.find(event => event.id === master.id);
       if (changedMaster) {
         // The provider preparation must describe exactly this planner result.
-        const intended = EventSchema.parse({ ...options.caldav.write.baseline.master, ...options.caldav.write.patch, revision: changedMaster.revision });
-        if (!sameCaldavScopeContext(intended, changedMaster) || saved.length !== 1 || outcome.deleted.length || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children))
-          throw new EventWriteError("event-write", "unsupported", "CalDAV preparation no longer matches the scope plan.");
-        await appendCaldavSeries(tx, actorID, request.operationID, options.caldav, changedMaster);
+        const desired = caldavSeriesDesired(options.caldav.write);
+        const actualChildren = caldavContext.children.map(child => saved.find(item => item.id === child.id) ?? child);
+        if (!sameCaldavScopeContext(EventSchema.parse({ ...desired.master, revision: changedMaster.revision }), changedMaster) || saved.length !== (options.caldav.write.targetEventID ? 2 : 1) || outcome.deleted.length || desired.children.some(child => {
+          const actual = actualChildren.find(item => item.id === child.id)!;
+          return !sameCaldavScopeContext(EventSchema.parse({ ...child, revision: actual.revision }), actual);
+        })) throw new EventWriteError("event-write", "unsupported", "CalDAV preparation no longer matches the scope plan.");
+        await appendCaldavSeries(tx, actorID, request.operationID, { ...options.caldav, context: { ...options.caldav.context, children: actualChildren } }, changedMaster);
       }
     }
     outcome.changed = outcome.events.length + outcome.deleted.length > 0;
