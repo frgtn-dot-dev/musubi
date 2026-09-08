@@ -1,8 +1,10 @@
 import { editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
+import { knownEventTimeDraft, editKnownEventTime } from "@musubi/calendar";
 import { toDateKey } from "./date-key";
 import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
 export type EventFormValues = {
+  timeLabel?: string;
   calendarId: string;
   calendarIds: string[];
   date: string;
@@ -85,6 +87,7 @@ export function defaultEventFormValues(
 }
 
 export function eventFormValues(event: Event): EventFormValues {
+  const known = knownEventTimeDraft(event);
   return {
     calendarId: event.originCalendarID ?? event.calendars[0] ?? "",
     calendarIds: event.calendars,
@@ -99,6 +102,7 @@ export function eventFormValues(event: Event): EventFormValues {
     startTime: toTimeInput(event.start),
     title: event.title,
     url: event.url ?? "",
+    ...(known ?? {}),
   };
 }
 
@@ -132,7 +136,7 @@ export function validateEventForm(
     return "End date must be on or after the start date.";
   }
 
-  if (!values.isAllDay) {
+  if (!values.isAllDay && !values.timeLabel) {
     const start = timedBoundary(values.date, values.startTime).getTime();
     const end = timedBoundary(values.endDate, values.endTime).getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
@@ -222,7 +226,7 @@ export function updateEventFromForm(
   const boundaries = eventBoundaries(values);
 
   const original = eventFormValues(event);
-  return editedEvent(event, {
+  const edited = {
     ...event,
     calendars: values.calendarIds,
     description: values.description === original.description
@@ -247,5 +251,8 @@ export function updateEventFromForm(
         : boundaries.start,
     title: values.title === original.title ? event.title : values.title.trim(),
     url: values.url === original.url ? event.url : values.url.trim() || null,
-  });
+  };
+  return knownEventTimeDraft(event)
+    ? editKnownEventTime(event, edited, values)
+    : editedEvent(event, edited);
 }

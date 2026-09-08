@@ -5,6 +5,7 @@ import {
   Calendar,
   DEFAULT_REMINDER_RULE,
   Event,
+  EventSchema,
   ReminderRule,
   can,
   optionsFor,
@@ -61,7 +62,7 @@ import {
 } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from "uuidv7";
-import { joinRecurrence, splitRecurrence } from "@musubi/calendar";
+import { joinRecurrence, splitRecurrence, knownEventTimeDraft, editKnownEventTime, type EventTimeDraft } from "@musubi/calendar";
 import {
   AdvancedEndType,
   AdvancedFreq,
@@ -321,6 +322,7 @@ export function AddEventModal({
   // Same overlap as React state: pads the scroll content so bottom fields
   // (note/location/url) can scroll clear of the keyboard when expanded.
   const [kbPad, setKbPad] = useState(0);
+  const [timeDraft, setTimeDraft] = useState<EventTimeDraft | null>(null);
   useEffect(() => {
     if (!docked) return;
     const show = Keyboard.addListener(
@@ -488,6 +490,7 @@ export function AddEventModal({
   useEffect(() => {
     if (visible) {
       baseline.current = event && { ...event, calendars: [...event.calendars] };
+      setTimeDraft(event ? knownEventTimeDraft(event) : null);
       recurrenceEdited.current = false;
       setNewTitle(event?.title ?? "");
       // Docked mode owns its own start/end via the anchor effect above (the day
@@ -628,7 +631,7 @@ export function AddEventModal({
     const allDayUTC = (d: Date) =>
       new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 
-    const eventConstruct: Event = {
+    let eventConstruct: Event = {
       ...event,
       id: event?.id ?? uuidv7(),
       creatorID: userID!,
@@ -708,8 +711,9 @@ export function AddEventModal({
       if (event?.id) {
         // A recurring edit asks which occurrences it belongs to; backing out of
         // that question must leave the form as it was, not close it empty.
-        if ((await onEdit(editedEvent(event, eventConstruct))) === false)
-          return;
+        const request = timeDraft ? editKnownEventTime(event, eventConstruct, timeDraft) : editedEvent(event, eventConstruct);
+        if ((await onEdit(request)) === false) return;
+        eventConstruct = EventSchema.parse(request);
       } else {
         await onSave(eventConstruct);
       }
@@ -972,6 +976,9 @@ export function AddEventModal({
           />
         )}
 
+        {timeDraft && <Text style={styles.fieldValueText}>
+          {timeDraft.timeLabel}
+        </Text>}
         {/* One "When" block, platform-calendar style: Starts / Ends rows with
                   date+time chips, all-day inline, quick presets underneath. */}
         <View style={styles.fieldContainer}>
@@ -999,7 +1006,26 @@ export function AddEventModal({
                 <View
                   style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
                 >
-                  {Platform.OS === "ios" ? (
+                  {timeDraft ? (
+                    <>
+                      <TextInput
+                        accessibilityLabel={`${label} date (YYYY-MM-DD)`}
+                        style={styles.fieldValueText}
+                        value={target === "start" ? timeDraft.date : timeDraft.endDate}
+                        placeholder="YYYY-MM-DD"
+                        autoCorrect={false}
+                        onChangeText={text => setTimeDraft(current => current && ({ ...current, [target === "start" ? "date" : "endDate"]: text }))}
+                      />
+                      {!timeDraft.isAllDay && <TextInput
+                        accessibilityLabel={`${label} time (HH:mm)`}
+                        style={styles.fieldValueText}
+                        value={target === "start" ? timeDraft.startTime : timeDraft.endTime}
+                        placeholder="HH:mm"
+                        autoCorrect={false}
+                        onChangeText={text => setTimeDraft(current => current && ({ ...current, [target === "start" ? "startTime" : "endTime"]: text }))}
+                      />}
+                    </>
+                  ) : Platform.OS === "ios" ? (
                     // Native iOS compact picker — shows the date (and time, unless
                     // all-day) inline and opens Apple's own calendar/wheel popover
                     // on tap. Returns the full Date, so set it directly; set the
@@ -1094,11 +1120,12 @@ export function AddEventModal({
                 setAllDayToggle(v);
               }}
               value={allDayToggle}
+              disabled={Boolean(timeDraft)}
               accessibilityLabel="All-day event"
             />
           </View>
 
-          {!allDayToggle && (
+          {!allDayToggle && !timeDraft && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

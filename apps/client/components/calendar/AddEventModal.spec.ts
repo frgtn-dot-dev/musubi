@@ -606,3 +606,34 @@ it("K06 postcommit failure accepts server truth without closing or advancing the
   expect(mocks.close).not.toHaveBeenCalled();
   expect(mocks.reminder).not.toHaveBeenCalled();
 });
+
+
+it("saves a known civil date and title through one time request without losing hidden precision", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const known = EventSchema.parse({ ...master, recurrence: null, ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T02:30:17.123", endLocal: "2026-03-29T04:30:19.456" }) });
+  useEventsStore.setState({ events: [known] });
+  useEditComposerStore.getState().open(known);
+  const tree = renderComposer(true);
+  function field(node: ReactNode, label: string): { value: string; onChangeText: (value: string) => void } | undefined {
+    if (Array.isArray(node)) return node.map(child => field(child, label)).find(Boolean);
+    if (!isValidElement<{ accessibilityLabel?: string; value: string; onChangeText: (value: string) => void; children?: ReactNode }>(node)) return;
+    if (node.props.accessibilityLabel === label) return node.props;
+    return field(node.props.children, label);
+  }
+  expect(field(tree, "Starts time (HH:mm)")!.value).toBe("02:30");
+  titleInput(tree)!.onChangeText("Civil draft");
+  field(tree, "Starts date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  field(tree, "Ends date (YYYY-MM-DD)")!.onChangeText("2026-03-30");
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    return { error: null, data: { ...known, ...body.patch, ...resolveEventTimeEdit(body.time), revision: 2 } };
+  });
+  await saveButton(renderComposer())!.onPress!();
+  expect(mocks.request).toHaveBeenCalledOnce();
+  const [url, options] = mocks.request.mock.lastCall!;
+  expect(url).toContain(`/events/${known.id}/time`);
+  expect(options.method).toBe("PUT");
+  expect(JSON.parse(options.body)).toMatchObject({ expectedRevision: 1, patch: { title: "Civil draft" }, time: { startLocal: "2026-03-30T02:30:17.123", endLocal: "2026-03-30T04:30:19.456" } });
+  expect(useEventsStore.getState().events[0]).not.toHaveProperty("timeEdit");
+  expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ start: new Date("2026-03-30T00:30:17.123Z"), end: new Date("2026-03-30T02:30:19.456Z"), timeModel: expect.objectContaining({ startLocal: "2026-03-30T02:30:17.123" }) }), null);
+});

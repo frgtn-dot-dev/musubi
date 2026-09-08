@@ -274,7 +274,7 @@ export function EventEditorForm({
 		<Checkbox
 			checked={values.isAllDay}
 			className={styles.toggleRow}
-			disabled={saving}
+			disabled={saving || Boolean(values.timeLabel)}
 			label="All day"
 			onChange={(event) => patch({ isAllDay: event.target.checked })}
 		/>
@@ -289,6 +289,7 @@ export function EventEditorForm({
 			onKeyDown={handleKeyDown}
 			onSubmit={handleSubmit}
 		>
+			{values.timeLabel && <p className={styles.timeContext}>{values.timeLabel}</p>}
 			<Field
 				className={styles.titleField}
 				label="Event title"

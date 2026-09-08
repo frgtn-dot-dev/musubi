@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EventTimeModelSchema, OccurrenceStartSchema, EventTimeEditSchema, hasKnownEventTime } from "./event_time";
+import { EventTimeModelSchema, OccurrenceStartSchema, EventTimeEditSchema, type EventTimeEdit, hasKnownEventTime } from "./event_time";
 
 export const EventRevisionSchema = z
   .number()
@@ -113,6 +113,7 @@ export const EventForkRequestSchema = EventLinkRequestSchema;
 // EventSchema strips these fields before any cache, SSE or provider use.
 export type EventWriteRequest = Event & {
   contentPatch?: EventPatch;
+  timeEdit?: EventTimeEdit;
   scopeEdit?: { updates: EventWriteRequest[]; creates: Event[] };
 };
 
@@ -144,6 +145,7 @@ export function eventContentPatch(baseline: Event, edited: Event): EventPatch {
 }
 
 export function eventPatchRequest(event: EventWriteRequest): EventPatchRequest {
+  if (event.timeEdit) throw new Error("This draft requires an atomic time edit. No changes were saved.");
   const request = {
     id: event.id,
     expectedRevision: requireEventRevision(event),
@@ -171,6 +173,21 @@ export function eventPatchRequest(event: EventWriteRequest): EventPatchRequest {
         }
       : {}),
   };
+}
+
+/** Select the complete write before either home or federation transport runs. */
+export function eventUpdateOperation(event: EventWriteRequest): { path: `/events${string}`; method: "PATCH" | "PUT"; body: EventPatchRequest | EventTimeEditRequest } {
+  if (!event.timeEdit) return { path: "/events", method: "PATCH" as const, body: eventPatchRequest(event) };
+  if (event.scopeEdit || event.seriesID || event.originalStart || !event.contentPatch)
+    throw new Error("This time change requires an occurrence-aware scope edit. No changes were saved.");
+  const { start: _start, end: _end, isAllDay: _allDay, ...content } = event.contentPatch;
+  const parsed = EventTimeContentPatchSchema.safeParse(content);
+  if (!parsed.success)
+    throw new Error("Save calendar or meeting changes separately from time changes. No changes were saved.");
+  const body = EventTimeEditRequestSchema.parse({
+    expectedRevision: requireEventRevision(event), time: event.timeEdit, patch: parsed.data,
+  });
+  return { path: `/events/${encodeURIComponent(event.id)}/time`, method: "PUT" as const, body };
 }
 
 export function eventCreateRequest(

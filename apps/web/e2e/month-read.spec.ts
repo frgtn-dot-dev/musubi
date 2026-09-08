@@ -7994,3 +7994,45 @@ test("recovers from unsupported known time metadata after refresh", async ({ pag
   await page.screenshot({ path: testInfo.outputPath("known-time-recovered.png"), fullPage: true });
   expect(pageErrors).toEqual([]);
 });
+
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+ test(`saves known civil time and title atomically from the editor: ${theme} ${width}`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+  const known = event("00000000-0000-4000-8000-000000000151", "Gap appointment", "personal", "red", "2026-03-29T01:30:17.123Z", "2026-03-29T02:30:19.456Z", {
+    timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T02:30:17.123", endLocal: "2026-03-29T04:30:19.456" },
+  });
+  await mockAuthenticatedReads(page, { ...events, events: [known] });
+  const writes: unknown[] = [];
+  let enabled = false;
+  await page.route(`**/api/v1/events/${known.id}/time`, route => {
+    const body = route.request().postDataJSON();
+    writes.push({ method: route.request().method(), body });
+    if (!enabled) return respond(route, { error: "Explicit time editing is not enabled on this server. No changes were saved." }, 403);
+    return respond(route, { ...known, title: body.patch.title, revision: 2, start: "2026-03-29T01:00:00.000Z", end: "2026-03-29T03:00:00.000Z", timeModel: body.time });
+  });
+  await page.goto("/app/p/my-calendar/month?date=2026-03-29");
+  await page.getByRole("button", { name: /Gap appointment/ }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Start time", { exact: true })).toHaveValue("02:30");
+  await expect(page.getByText("Europe/Prague", { exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "Event title" }).fill("Saved civil draft");
+  // The existing control carries the displayed duration when moving the start.
+  await page.getByLabel("Start time", { exact: true }).fill("03:00");
+  await page.getByLabel("Start time", { exact: true }).press("Enter");
+  await expectNoAccessibilityViolations(page);
+  await page.screenshot({ path: testInfo.outputPath("known-time-editor.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Saved civil draft");
+  await expect(page.getByLabel("Start time", { exact: true })).toHaveValue("03:00");
+  enabled = true;
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Event updated.");
+  expect(writes).toHaveLength(2);
+  expect(writes[1]).toEqual(writes[0]);
+  expect(writes[0]).toMatchObject({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Saved civil draft" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T03:00:00.000" } } });
+});
+
+}

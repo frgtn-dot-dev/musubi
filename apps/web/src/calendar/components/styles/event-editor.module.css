@@ -292,7 +292,8 @@
 	transform: rotate(180deg);
 }
 
-.calendarHint {
+.calendarHint,
+.timeContext {
 	margin: 0;
 	padding: 0 var(--space-4) var(--space-3);
 	color: var(--text-secondary);
