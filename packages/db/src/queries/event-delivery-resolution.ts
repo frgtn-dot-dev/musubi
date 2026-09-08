@@ -16,7 +16,7 @@ import {
   assertEventDeliveryDestination,
   EventDeliveryRetryError,
 } from "./event-delivery-retry";
-import { unresolvedEventOutbox, type EventOutboxRow } from "./event-outbox";
+import { eventOutboxCreatedAt, unresolvedEventOutbox, type EventOutboxRow } from "./event-outbox";
 import type { DbTransaction } from "./calendars";
 import type { EventContentPatch } from "./events";
 import type { EventDeliveryRef } from "./event-outbox-delivery";
@@ -85,6 +85,7 @@ async function resolutionContext(
   )
     throw new EventDeliveryResolutionError("delivery-state-changed");
   if (
+    row.payload.reminderEdit || latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit) ||
     pending.length > 1000 ||
     pending.some((item) => item.status === "attempting")
   )
@@ -384,6 +385,7 @@ export async function commitEventDeliveryResolution(
       const id = randomUUID();
       await tx.insert(eventOutbox).values({
         id,
+        createdAt: eventOutboxCreatedAt(row.eventID, row.externalCalendarLinkID),
         actorID: userID,
         mutationID: request.mutationId,
         position: 0,

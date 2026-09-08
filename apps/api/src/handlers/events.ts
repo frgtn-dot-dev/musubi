@@ -13,7 +13,8 @@ import {
   forkEventAtRevision,
   getCalendarMembers,
   getEventSnapshot,
-  getOwnProviderEventState,
+  getOwnProviderEventObservation,
+  queueProviderReminderEdit,
   getEventAttendees,
   getEventOrigin,
   getUsersEvents,
@@ -591,5 +592,12 @@ export async function handlerGetEvents(req: Request, res: Response) {
 export async function handlerGetProviderEventState(req: Request, res: Response) {
   const id = requireUUID(req.params.eventId, "eventId");
   await assertCanViewEvent(req.user!.id, id);
-  res.json({ state: await getOwnProviderEventState(req.user!.id, id) });
+  res.json(await getOwnProviderEventObservation(req.user!.id, id));
+}
+
+export async function handlerProviderReminderEdit(req: Request, res: Response) {
+  if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const id = requireUUID(req.params.eventId, "eventId");
+  const receipt = await queueProviderReminderEdit(req.user!.id, id, req.body);
+  res.status(202).json({ ...receipt, localCommitted: true });
 }

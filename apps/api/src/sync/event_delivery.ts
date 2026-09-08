@@ -1,4 +1,5 @@
-import { hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
+import { config } from "@musubi/config";
+import { ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
   matchesEventProviderProjection,
   claimEventOutbox,
@@ -26,6 +27,13 @@ import {
   googleEventCreateID,
 } from "./event_create_identity";
 import { ProviderEventWriteError, strongEventEtag } from "./event_write";
+
+export function matchesReminderIntent(intent: GoogleReminderWrite, state: ProviderEventState) {
+  if (state.provider !== "google" || state.reminders.provider !== "google" || intent.useDefault !== state.reminders.useDefault) return false;
+  if (intent.useDefault) return true;
+  const canonical = (items: { method: string | null; minutes: number | null }[]) => JSON.stringify(items.map(item => [item.method, item.minutes]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  return canonical(intent.overrides) === canonical(state.reminders.overrides);
+}
 
 /** Only fields actually projected by EVENT serializers. Provider-owned URLs,
  * organizer and local appearance are not evidence of our write. */
@@ -103,28 +111,6 @@ export async function deliverEventOutbox(
   try {
     const run = async () => {
       const event = EventSchema.parse(row.payload.event);
-      if (hasKnownEventTime(event))
-        throw new EventWriteError("event-write", "unsupported");
-      if (!adapter?.assertEventWrite)
-        throw new EventWriteError("event-write", "unsupported");
-      const projected = adapter.projectEvent?.(event);
-      const expected = projected
-        ? {
-            ...event,
-            title: projected.title,
-            start: projected.start,
-            end: projected.end,
-            isAllDay: projected.isAllDay,
-            description: projected.description,
-            location: projected.location,
-            recurrence: projected.recurrence,
-          }
-        : event;
-      if (
-        projected &&
-        !(await setEventOutboxProjection(row.id, token, projected))
-      )
-        return;
       const checkDestination = async () => {
         signal.throwIfAborted();
         const link = await getExternalLinkForCalendar(row.calendarID);
@@ -149,6 +135,59 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.reminderEdit) {
+        if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+        const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);
+        if (row.action !== "update" || row.provider !== intent.provider || !adapter?.readReminderState || !adapter.writeReminders)
+          throw new EventWriteError("event-write", "unsupported");
+        if (!(await checkDestination())) return;
+        if (!(await hasEventOutboxRevisionCoverage(row))) throw new ProviderEventWriteError("provider-conflict");
+        expectedRef = await getEventOutboxExpectedRef(row);
+        if (!expectedRef) throw new ProviderEventWriteError("provider-version-unavailable");
+        let observed = await adapter.readReminderState(row.userID, row.accountID, row.externalCalendarID, expectedRef, signal);
+        remoteSnapshot = { externalEventId: expectedRef.externalEventId, etag: observed?.ref.etag ?? null, deleted: !observed, observedAt: new Date().toISOString(), ...(observed ? { providerState: observed.state, values: JSON.parse(JSON.stringify(observed.event)) } : {}) };
+        if (!observed || !matchesDeliveredEvent(row.provider, event, observed.event)) throw new ProviderEventWriteError("provider-conflict");
+        if (!matchesReminderIntent(intent.reminders, observed.state)) {
+          if (observed.ref.etag !== expectedRef.etag) throw new ProviderEventWriteError("provider-conflict");
+          if (!(await checkDestination())) return;
+          signal.throwIfAborted();
+          remoteSnapshot = null; // accepted baseline is not a remote conflict after an ambiguous write
+          mutationStarted = true;
+          observed = await adapter.writeReminders(row.userID, row.accountID, row.externalCalendarID, expectedRef, intent.reminders, signal);
+          if (!matchesReminderIntent(intent.reminders, observed.state)) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
+        }
+        if (!matchesDeliveredEvent(row.provider, event, observed.event)) {
+          remoteSnapshot = { externalEventId: observed.ref.externalEventId, etag: observed.ref.etag ?? null, deleted: false, providerState: observed.state, values: JSON.parse(JSON.stringify(observed.event)), observedAt: new Date().toISOString() };
+          throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written");
+        }
+        resultRef = observed.ref;
+        signal.throwIfAborted();
+        await completeEventOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: resultRef.externalEventId, etag: resultRef.etag ?? null, deleted: false, providerState: observed.state, observedAt: new Date().toISOString() });
+        remoteSnapshot = null;
+        return;
+      }
+      if (hasKnownEventTime(event))
+        throw new EventWriteError("event-write", "unsupported");
+      if (!adapter?.assertEventWrite)
+        throw new EventWriteError("event-write", "unsupported");
+      const projected = adapter.projectEvent?.(event);
+      const expected = projected
+        ? {
+            ...event,
+            title: projected.title,
+            start: projected.start,
+            end: projected.end,
+            isAllDay: projected.isAllDay,
+            description: projected.description,
+            location: projected.location,
+            recurrence: projected.recurrence,
+          }
+        : event;
+      if (
+        projected &&
+        !(await setEventOutboxProjection(row.id, token, projected))
+      )
+        return;
       if (!(await checkDestination())) return;
       if (
         row.action !== "delete" &&
