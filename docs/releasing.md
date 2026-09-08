@@ -16,6 +16,18 @@ The API and the web app, by contrast, are a redeploy away.
 So the rule is not "keep the clients current". It is **the server keeps working
 for clients it can no longer change**.
 
+## Explicit event-time activation
+
+K10 implementation is complete, but `EVENT_TIME_EDITS_ENABLED` remains false.
+Production startup rejects enabling it while the product or enforced client/peer
+minimums still admit released 0.1.8. That client can lose time metadata when
+copying an event into a new identity, which a generic create request cannot
+reconstruct. Coordinate compatible clients and peers before raising minimums
+and enabling the feature; changing the flag alone is insufficient.
+
+See [K10 acceptance and activation conditions](audits/calendar-k10-acceptance.md)
+for the implemented local scope and the separate K11/K12/K14/K15 gates.
+
 ## Order of deployment
 
 **API → web → store build.**

@@ -314,6 +314,20 @@ async function main() {
         "stale CAS still precedes time validation",
       );
     }
+    // Generic removal cannot silently resurrect an exception's original slot
+    // or strand visible children. No-op/content writes above remain valid.
+    for (const candidate of [series, exception]) {
+      const before = (await getEventSnapshot(candidate.id))!;
+      await assert.rejects(() => patchEventAndCalendarLinks(candidate.id, before.revision, { calendars: [] }, true), /occurrence-aware scope/);
+      assert.deepEqual(await getEventSnapshot(candidate.id), before);
+      await assert.rejects(() => patchEventAndCalendarLinks(candidate.id, before.revision, { calendars: [] }, false), /occurrence-aware scope/);
+      assert.deepEqual(await getEventSnapshot(candidate.id), before);
+    }
+    await db.update(events).set({ deletedAt: new Date() }).where(eq(events.id, exception.id));
+    const masterBefore = (await getEventSnapshot(series.id))!;
+    await assert.rejects(() => patchEventAndCalendarLinks(series.id, masterBefore.revision, { calendars: [] }, true), /occurrence-aware scope/);
+    assert.deepEqual(await getEventSnapshot(series.id), masterBefore);
+    await db.update(events).set({ deletedAt: null }).where(eq(events.id, exception.id));
     for (const timeModel of [null, { kind: "legacy-unknown" as const }]) {
       await db
         .update(events)
