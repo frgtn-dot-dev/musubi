@@ -97,7 +97,14 @@ export async function googleOccurrenceContext(
           eventOutbox.eventID,
           family.map((event) => event.id),
         ),
-        sql`${eventOutbox.status} not in ('completed', 'not-needed')`,
+        sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (
+          ${eventOutbox.status} = 'cancelled' and ${eventOutbox.errorCode} = 'superseded-by-resolution'
+          and exists (select 1 from event_outbox replacement
+            where replacement.event_id = ${eventOutbox.eventID}
+            and replacement.external_calendar_link_id = ${eventOutbox.externalCalendarLinkID}
+            and replacement.status in ('completed', 'not-needed')
+            and replacement.payload->'resolution'->'replacedOperationIDs' ? ${eventOutbox.id}::text)
+        ))`,
       ),
     )
     .limit(1);
@@ -142,19 +149,17 @@ export async function appendGoogleOccurrence(
       "Provider occurrence identity changed. Refresh before retrying.",
     );
   if (!occupied.length)
-    await tx
-      .insert(externalEvents)
-      .values({
-        provider: "google",
-        eventID: event.id,
-        calendarID: context.link.calendarID,
-        externalCalendarID: context.link.externalCalendarID,
-        externalEventID: prepared.externalEventID,
-        etag: prepared.etag,
-        externalSeriesID: context.mapping.externalEventID,
-        originalStart: event.originalStart,
-        providerState: prepared.providerState,
-      });
+    await tx.insert(externalEvents).values({
+      provider: "google",
+      eventID: event.id,
+      calendarID: context.link.calendarID,
+      externalCalendarID: context.link.externalCalendarID,
+      externalEventID: prepared.externalEventID,
+      etag: prepared.etag,
+      externalSeriesID: context.mapping.externalEventID,
+      originalStart: event.originalStart,
+      providerState: prepared.providerState,
+    });
   else if (
     occupied[0].etag !== prepared.etag ||
     occupied[0].externalSeriesID !== context.mapping.externalEventID ||

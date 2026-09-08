@@ -115,6 +115,9 @@ export function EventDeliveryDialog({
           expectedLatestOperationId: preview.latestOperationId,
           expectedRemoteExists: preview.remote !== null,
           expectedRemoteEtag: preview.remoteEtag,
+          ...(preview.masterRevision !== undefined
+            ? { expectedMasterRevision: preview.masterRevision }
+            : {}),
         },
       });
     });
@@ -329,10 +332,31 @@ function DeliveryContent({
   absent: string;
 }) {
   return (
-    <section aria-label={title}>
+    <section aria-label={title} tabIndex={0}>
       <Row label={title} detail={content?.title ?? absent} />
       {content ? (
         <>
+          {content.originalStart ? (
+            <Row
+              size="compact"
+              label="Scope"
+              detail={`One occurrence · original ${content.originalStart.value}`}
+            />
+          ) : null}
+          {content.isCanceled !== undefined ? (
+            <Row
+              size="compact"
+              label="Status"
+              detail={content.isCanceled ? "Cancelled" : "Active"}
+            />
+          ) : null}
+          {content.timeModel?.kind === "zoned" ? (
+            <Row
+              size="compact"
+              label="Series time zone"
+              detail={`${content.timeModel.timeZone} · ${content.timeModel.startLocal} – ${content.timeModel.endLocal}`}
+            />
+          ) : null}
           <Row
             size="compact"
             label={content.isAllDay ? "All day" : "Time"}
@@ -355,7 +379,11 @@ function DeliveryContent({
           <Row
             size="compact"
             label="Recurrence"
-            detail={content.recurrence || "Does not repeat"}
+            detail={
+              content.originalStart
+                ? "Occurrence of a series"
+                : content.recurrence || "Does not repeat"
+            }
           />
         </>
       ) : null}

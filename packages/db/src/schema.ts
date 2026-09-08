@@ -887,6 +887,7 @@ export const eventOutbox = pgTable(
           expectedLatestOperationID: string;
           expectedRemoteExists: boolean;
           expectedRemoteEtag: string | null;
+          expectedMasterRevision?: number;
         };
         providerProjection?: Pick<Event, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
       }>()

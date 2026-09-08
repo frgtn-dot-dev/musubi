@@ -17,6 +17,9 @@ import {
   getEventSnapshot,
   replaceMemberToken,
   upsertExternalEvent,
+  commitEventDeliveryResolution,
+  getEventDeliveryResolutionReplay,
+  EventDeliveryResolutionError,
 } from "@musubi/db";
 import { normalizeGoogleTime } from "./adapters/google_time";
 import { googleEventState } from "./adapters/provider_event_state";
@@ -26,6 +29,8 @@ import { deliverEventOutbox } from "./event_delivery";
 import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
 import { middlewareErrorHandler } from "../middleware/error_handler";
+import { prepareEventDeliveryResolution } from "./event_resolution";
+import { handlerGetEventDeliveryConflict } from "../handlers/event_delivery";
 import { handlerEventScope } from "../handlers/events";
 
 async function main(
@@ -34,6 +39,7 @@ async function main(
     | "cancel"
     | "ambiguous"
     | "conflict"
+    | "resolve-cancel"
     | "meeting"
     | "time"
     | "all-day"
@@ -43,6 +49,8 @@ async function main(
     | "identity",
 ) {
   assert.equal(process.env.ENVIRONMENT, "test");
+  const resolving = scenario === "conflict" || scenario === "resolve-cancel";
+  const cancelling = scenario === "cancel" || scenario === "resolve-cancel";
   const owner = `google-scope-${randomUUID()}`;
   const master: any = {
     id: "master",
@@ -67,7 +75,7 @@ async function main(
     start: { ...master.start, dateTime: "2026-09-11T09:00:00Z" },
     end: { ...master.end, dateTime: "2026-09-11T10:00:00Z" },
   };
-  if (scenario === "cancel") {
+  if (cancelling) {
     instance.summary = "Moved exception";
     instance.start.dateTime = "2026-09-11T12:00:00Z";
     instance.end.dateTime = "2026-09-11T13:00:00Z";
@@ -156,50 +164,49 @@ async function main(
   };
   const enabled = config.api.eventTimeEditsEnabled;
   const credential = issueMemberToken();
-  await db
-    .insert(user)
-    .values({
-      id: owner,
-      name: owner,
-      email: `${owner}@example.test`,
-      isExternal: true,
-    });
+  await db.insert(user).values({
+    id: owner,
+    name: owner,
+    email: `${owner}@example.test`,
+    isExternal: true,
+  });
   await replaceMemberToken(owner, credential.tokenHash);
   const app = express();
   app.use(express.json());
   app.post("/events/:eventId/scope", requireAuth, handlerEventScope);
+  app.get(
+    "/events/:eventId/delivery/:operationId/conflict",
+    requireAuth,
+    handlerGetEventDeliveryConflict,
+  );
   app.use(middlewareErrorHandler);
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try {
     config.api.eventTimeEditsEnabled = true;
-    await db
-      .insert(account)
-      .values({
-        id: randomUUID(),
-        userId: owner,
-        providerId: "google",
-        accountId: "fixture",
-        scope: "https://www.googleapis.com/auth/calendar.events",
-        accessToken: "fixture-access",
-        refreshToken: "fixture-refresh",
-        accessTokenExpiresAt: new Date(Date.now() + 3600000),
-      });
+    await db.insert(account).values({
+      id: randomUUID(),
+      userId: owner,
+      providerId: "google",
+      accountId: "fixture",
+      scope: "https://www.googleapis.com/auth/calendar.events",
+      accessToken: "fixture-access",
+      refreshToken: "fixture-refresh",
+      accessTokenExpiresAt: new Date(Date.now() + 3600000),
+    });
     const calendar = await createCalendar({
       creatorID: owner,
       name: "Google",
       color: "red",
     });
-    await db
-      .insert(externalCalendars)
-      .values({
-        provider: "google",
-        userID: owner,
-        accountID: "fixture",
-        calendarID: calendar.id,
-        externalCalendarID: "source",
-      });
+    await db.insert(externalCalendars).values({
+      provider: "google",
+      userID: owner,
+      accountID: "fixture",
+      calendarID: calendar.id,
+      externalCalendarID: "source",
+    });
     const observe = async (raw: any) => {
       const base: NormalizedEvent = {
         externalId: raw.id,
@@ -244,7 +251,7 @@ async function main(
       );
     };
     await observe(master);
-    if (scenario === "cancel") await observe(instance);
+    if (cancelling) await observe(instance);
     const [mapping] = await db
       .select()
       .from(externalEvents)
@@ -268,7 +275,7 @@ async function main(
           ? { kind: "date", value: "2026-09-11" }
           : { kind: "instant", value: "2026-09-11T09:00:00.000Z" },
       expectedOccurrenceRevision: existing?.revision ?? null,
-      ...(scenario === "cancel"
+      ...(cancelling
         ? { action: "delete" }
         : {
             action: "update",
@@ -422,7 +429,7 @@ async function main(
     );
     const child = (await getEventSnapshot(operation.eventID))!;
     assert.equal(child.seriesID, localMaster.id);
-    assert.equal(child.isCanceled, scenario === "cancel");
+    assert.equal(child.isCanceled, cancelling);
     assert.equal(
       (await getEventSnapshot(localMaster.id))!.recurrence,
       localMaster.recurrence,
@@ -433,7 +440,7 @@ async function main(
       .from(eventOutbox)
       .where(eq(eventOutbox.id, operation.id));
     assert.equal(afterBaseline.status, "pending");
-    if (scenario === "conflict") {
+    if (resolving) {
       instance.summary = "Concurrent remote change";
       instance.etag = '"remote"';
     } else if (scenario !== "ambiguous")
@@ -448,7 +455,7 @@ async function main(
       delivered?.status,
       scenario === "ambiguous"
         ? "unconfirmed"
-        : ["conflict", "precondition"].includes(scenario)
+        : ["conflict", "resolve-cancel", "precondition"].includes(scenario)
           ? "conflict"
           : "completed",
       JSON.stringify(delivered),
@@ -465,8 +472,137 @@ async function main(
     }
     assert.equal(
       patches,
-      ["conflict", "precondition"].includes(scenario) ? 0 : 1,
+      ["conflict", "resolve-cancel", "precondition"].includes(scenario) ? 0 : 1,
     );
+    if (resolving) {
+      const url = `${origin}/events/${child.id}/delivery/${operation.id}/conflict`;
+      const previewResponse = await realFetch(url, {
+        headers: {
+          authorization: `Bearer ${credential.raw}`,
+          [CLIENT_VERSION_HEADER]: PRODUCT_VERSION,
+        },
+      });
+      assert.equal(previewResponse.status, 200);
+      const preview = (await previewResponse.json()) as any;
+      assert.equal(preview.canResolve, true);
+      assert.equal(
+        preview.local.originalStart.value,
+        child.originalStart!.value,
+      );
+      assert.equal(preview.local.isCanceled, cancelling);
+      assert.equal(preview.local.timeModel.kind, "zoned");
+      assert.equal(preview.remote.title, "Concurrent remote change");
+      const prepared = await prepareEventDeliveryResolution(
+        owner,
+        child.id,
+        operation.id,
+        () => googleAdapter,
+      );
+      const resolution = {
+        mutationId: randomUUID(),
+        expectedLocalRevision: preview.localRevision,
+        expectedLatestOperationId: preview.latestOperationId,
+        expectedRemoteExists: true,
+        expectedRemoteEtag: preview.remoteEtag,
+        expectedMasterRevision: preview.masterRevision,
+      };
+      await assert.rejects(
+        commitEventDeliveryResolution(owner, prepared.proof, {
+          ...resolution,
+          expectedMasterRevision: undefined,
+        }),
+        EventDeliveryResolutionError,
+      );
+      await db
+        .update(events)
+        .set({ revision: sql`${events.revision} + 1` })
+        .where(eq(events.id, localMaster.id));
+      await assert.rejects(
+        commitEventDeliveryResolution(owner, prepared.proof, resolution),
+        EventDeliveryResolutionError,
+      );
+      await db
+        .update(events)
+        .set({ revision: preview.masterRevision })
+        .where(eq(events.id, localMaster.id));
+      instance.etag = '"remote-newer"';
+      const changed = await prepareEventDeliveryResolution(
+        owner,
+        child.id,
+        operation.id,
+        () => googleAdapter,
+      );
+      await assert.rejects(
+        commitEventDeliveryResolution(owner, changed.proof, resolution),
+        EventDeliveryResolutionError,
+      );
+      instance.etag = preview.remoteEtag;
+      const ids = await Promise.all([
+        commitEventDeliveryResolution(owner, prepared.proof, resolution),
+        commitEventDeliveryResolution(owner, prepared.proof, resolution),
+      ]);
+      assert.equal(ids[0], ids[1]);
+      assert.equal(
+        await getEventDeliveryResolutionReplay(
+          owner,
+          child.id,
+          operation.id,
+          resolution,
+        ),
+        ids[0],
+      );
+      const [replacement] = await db
+        .select()
+        .from(eventOutbox)
+        .where(eq(eventOutbox.id, ids[0]));
+      assert.equal(
+        replacement.payload.googleOccurrence!.baseline.title,
+        "Concurrent remote change",
+      );
+      assert.equal(replacement.expectedEtag, preview.remoteEtag);
+      instance.summary = "Changed again before delivery";
+      instance.etag = '\"remote-again\"';
+      assert.equal(
+        (await deliverEventOutbox(ids[0], () => googleAdapter))?.status,
+        "conflict",
+      );
+      assert.equal(patches, 0);
+      const again = await prepareEventDeliveryResolution(
+        owner,
+        child.id,
+        ids[0],
+        () => googleAdapter,
+      );
+      const lastID = await commitEventDeliveryResolution(owner, again.proof, {
+        ...resolution,
+        mutationId: randomUUID(),
+        expectedLatestOperationId: again.preview.latestOperationId,
+        expectedRemoteEtag: again.preview.remoteEtag,
+      });
+      assert.equal(
+        (await deliverEventOutbox(lastID, () => googleAdapter))?.status,
+        "completed",
+      );
+      assert.equal(patches, 1);
+      assert.equal(instance.status === "cancelled", cancelling);
+      if (!cancelling) assert.equal(instance.summary, child.title);
+      assert.deepEqual(
+        await getEventSnapshot(child.id),
+        child,
+        "resolution does not mutate the saved draft",
+      );
+      // Completed replacement releases the old cancelled receipt's family fence.
+      request.operationID = randomUUID();
+      request.expectedRevision = preview.masterRevision;
+      request.expectedOccurrenceRevision = child.revision;
+      Object.assign(request, {
+        action: "update",
+        patch: { title: "Next change after resolution" },
+      });
+      const next = await send();
+      assert.equal(next.status, 200, JSON.stringify(next));
+      return;
+    }
     if (scenario === "time") {
       assert.equal(instance.start.dateTime, "2026-09-11T14:00:00.000Z");
       assert.equal(instance.end.dateTime, "2026-09-11T16:00:00.000Z");
@@ -486,7 +622,7 @@ async function main(
       (await getEventSnapshot(localMaster.id))!.revision,
       localMaster.revision! + 1,
     );
-    if (scenario !== "cancel" && scenario !== "conflict") {
+    if (scenario !== "cancel") {
       assert.equal(instance.status, preserved.status);
       assert.deepEqual(instance.reminders, preserved.reminders);
       assert.equal(instance.visibility, preserved.visibility);
@@ -508,6 +644,7 @@ Promise.resolve()
   .then(() => main("cancel"))
   .then(() => main("ambiguous"))
   .then(() => main("conflict"))
+  .then(() => main("resolve-cancel"))
   .then(() => main("meeting"))
   .then(() => main("time"))
   .then(() => main("all-day"))

@@ -38,8 +38,19 @@ exception. Pending scope echoes compare the original identity and cancellation;
 active echoes additionally compare temporal model and content. Cancellation-only
 Google responses need not reproduce a formerly moved start or overridden title.
 ACK locks the master before the child and checks the committed master revision.
-Generic content conflict resolution refuses scope intents; dedicated scope
-conflict resolution remains a follow-up requirement before activation.
+Scope resolution uses a dedicated typed branch in the existing comparison flow.
+It re-reads the same personal native instance and accepted master, shows the
+original identity, cancellation and civil anchors, and requires the displayed
+master revision as well as the local revision and fresh remote ETag. A missing
+master confirmation (including older clients) is rejected. The transaction locks
+the master before the child, rechecks destination/family identity, archives the
+old intent and atomically appends one replacement retaining its native scope and
+fresh baseline. It does not edit the saved draft or turn an instance into a create.
+Concurrent confirmation/replay returns one operation. A completed replacement
+releases the superseded history's family fence; another conflict requires another
+fresh comparison. Provider master changes, absence/unreadable identity, meetings,
+and unavailable permissions remain refused. Accepting the provider version as a
+local replacement is not implemented by this apply-saved-version flow.
 
 `google_scope.integration.test.ts` exercises authenticated HTTP through
 PostgreSQL and a local fake Google server: concurrent replay, generated update,
@@ -48,3 +59,10 @@ actual 412, timed move, all-day exclusive-end conversion, tentative preservation
 preflight/local CAS race, wrong occurrence identity, and refusal of floating time
 and meetings. These tests do not replace live provider acceptance. This is one
 K12 slice, not completion of all provider scopes or K13/K14.
+
+Resolution evidence additionally covers stale master/remote comparisons,
+missing master confirmation, concurrent commit/replay, conflict cancellation of a
+moved exception, and another scope edit after successful resolution. Web
+1280-light/390-dark browser checks include keyboard focus/return and axe; the
+native callback test confirms the displayed master revision and state. These are
+local checks, not physical-device or live-provider acceptance.
