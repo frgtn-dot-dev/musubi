@@ -8080,3 +8080,56 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-25" } } });
   });
 }
+
+for (const [width, theme, full] of [[390, "dark", false], [1280, "light", true]] as const) {
+  test(`whole-series civil date shift ${theme} ${width} full=${full}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const known = event("00000000-0000-4000-8000-000000000154", "Civil series", "personal", "red", "2026-03-28T08:30:17.123Z", "2026-03-28T09:30:19.456Z", {
+      recurrence: "FREQ=DAILY;COUNT=4",
+      timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T09:30:17.123", endLocal: "2026-03-28T10:30:19.456" },
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [known] });
+    const writes: unknown[] = [];
+    let enabled = full;
+    await page.route(`**/api/v1/events/${known.id}/time`, route => {
+      const body = route.request().postDataJSON();
+      writes.push({ method: route.request().method(), body });
+      if (!enabled) return respond(route, { error: "Explicit time editing is not enabled on this server. No changes were saved.", reason: "unsupported", capability: "event-write" }, 403);
+      return respond(route, { ...known, title: body.patch.title, revision: 2, start: "2026-03-29T07:30:17.123Z", end: "2026-03-29T08:30:19.456Z", timeModel: body.time });
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-03-29");
+    await page.locator('[data-day-key="2026-03-29"]').getByRole("button", { name: /Civil series/ }).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("textbox", { name: "Event title" }).fill("Moved civil series");
+    await page.getByRole("button", { name: /^Date:/ }).click();
+    await page.getByRole("dialog", { name: "Choose date" }).getByRole("gridcell", { name: "Monday, March 30, 2026" }).click();
+    if (full) {
+      await page.getByRole("button", { name: "More options", exact: true }).click();
+      await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("March 29, 2026");
+    }
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    if (!full) {
+      await page.getByRole("button", { name: "This event", exact: true }).click();
+      await expect(page.getByRole("alert")).toContainText("Only the whole series");
+      expect(writes).toEqual([]);
+      await page.getByRole("button", { name: "All events", exact: true }).click();
+      await expect(page.getByRole("alert")).toContainText("Explicit time editing is not enabled");
+      expect(writes).toHaveLength(1);
+      await expectNoAccessibilityViolations(page);
+      await page.screenshot({ path: testInfo.outputPath("series-time-retry.png"), fullPage: true });
+      enabled = true;
+      await page.getByRole("button", { name: "All events", exact: true }).click();
+      await expect(page.getByRole("status")).toContainText("Recurring series updated.");
+      await expect(page.getByRole("button", { name: "Undo", exact: true })).toHaveCount(0);
+      expect(writes).toHaveLength(2);
+      expect(writes[1]).toEqual(writes[0]);
+    } else {
+      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+      expect(writes).toHaveLength(1);
+      await expectNoAccessibilityViolations(page);
+      await page.screenshot({ path: testInfo.outputPath("series-time-full-saved.png"), fullPage: true });
+    }
+    expect(writes[0]).toEqual({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Moved civil series" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:30:17.123", endLocal: "2026-03-29T10:30:19.456" } } });
+  });
+}

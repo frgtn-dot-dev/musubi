@@ -1,4 +1,5 @@
-import { eventContentPatch, EventSchema } from "@musubi/types";
+import { eventContentPatch, EventSchema, type EventWriteRequest } from "@musubi/types";
+import { wholeSeriesTimeEdit } from "./series-time-edit";
 import { endSeriesBefore, excludeOccurrence, remainderRule,
 } from "./recurrence";
 
@@ -30,6 +31,11 @@ export type SeriesEdit<T> = {
 export function withSeriesEditIntent<T extends SeriesEditable>(writes: SeriesEdit<T>,
 ): SeriesEdit<T> {
   if (!writes.updates.length) return writes;
+  if (writes.updates.some(event => (event as unknown as EventWriteRequest).timeEdit)) {
+    if (writes.updates.length !== 1 || writes.creates.length)
+      throw new Error("An atomic series time edit cannot be combined with other scope writes. No changes were saved.");
+    return writes;
+  }
   return {
     creates: writes.creates,
     updates: writes.updates.map((event, index) => index === 0 ? { ...event, scopeEdit: writes } : event,
@@ -148,6 +154,11 @@ function planSeriesEditWrites<T extends SeriesEditable>({
 export function seriesEditWrites<T extends SeriesEditable>(
   input: Parameters<typeof planSeriesEditWrites<T>>[0],
 ): SeriesEdit<T> {
+  const candidate = input.edited as unknown as EventWriteRequest;
+  if (candidate.timeEdit) return {
+    creates: [],
+    updates: [wholeSeriesTimeEdit(EventSchema.parse(input.master), EventSchema.parse(input.occurrence), candidate, input.scope) as unknown as T],
+  };
   const writes = planSeriesEditWrites(input);
   const master = EventSchema.safeParse(input.master);
   if (!master.success) return writes;

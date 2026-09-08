@@ -106,7 +106,7 @@ type Props = {
   onClose: () => void;
   onSave: (event: Event) => Promise<void>;
   /** Resolving `false` means the save was called off — keep the composer open. */
-  onEdit: (event: Event) => Promise<boolean | void>;
+  onEdit: (event: Event) => Promise<boolean | void | Event>;
   calendars: Calendar[];
   event?: Event;
 };
@@ -715,8 +715,9 @@ export function AddEventModal({
         // A recurring edit asks which occurrences it belongs to; backing out of
         // that question must leave the form as it was, not close it empty.
         const request = timeDraft ? editEventTimeDraft(event, eventConstruct, timeDraft) : editedEvent(event, eventConstruct);
-        if ((await onEdit(request)) === false) return;
-        eventConstruct = EventSchema.parse(request);
+        const saved = await onEdit(request);
+        if (saved === false) return;
+        eventConstruct = EventSchema.parse(typeof saved === "object" ? saved : request);
       } else {
         await onSave(eventConstruct);
       }

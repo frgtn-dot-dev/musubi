@@ -6,6 +6,7 @@ import {
   type EventWriteRequest,
 } from "@musubi/types";
 import { resolveEventTimeEdit } from "./time-edit";
+import { assertSeriesTimeEdit } from "./series-time-edit";
 
 export type EventTimeDraft = {
   timeLabel?: string;
@@ -130,7 +131,7 @@ export function editEventTimeDraft(
       isAllDay: event.isAllDay,
       timeModel: event.timeModel,
     });
-  if (event.recurrence || event.seriesID || event.originalStart)
+  if (event.seriesID || event.originalStart)
     throw new Error(
       "This time change requires an occurrence-aware scope edit. No changes were saved.",
     );
@@ -167,6 +168,7 @@ export function editEventTimeDraft(
         ? { kind, timeZone: zone!.trim(), ...anchors }
         : { kind, ...anchors };
   }
+  if (event.recurrence) assertSeriesTimeEdit(event, time);
   try {
     const resolved = resolveEventTimeEdit(time);
     return {

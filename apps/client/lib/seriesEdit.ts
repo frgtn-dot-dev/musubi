@@ -1,4 +1,4 @@
-import { EventMutationError, type Event } from "@musubi/types";
+import { EventMutationError, EventSchema, type Event, type EventWriteRequest } from "@musubi/types";
 import {
     EditScope,
     seriesEditWrites,
@@ -29,7 +29,7 @@ export async function applySeriesEdit({
     /** The occurrence as it was tapped, before the form touched it. */
     occurrence: Event;
     updateEvent: (event: Event) => Promise<unknown>;
-}): Promise<boolean> {
+}): Promise<boolean | Event> {
     if (!master?.recurrence) {
         await updateEvent(edited);
         return true;
@@ -66,6 +66,10 @@ export async function applySeriesEdit({
             scope,
         }),
     );
+
+    if ((edited as EventWriteRequest).timeEdit) {
+        return EventSchema.parse(await updateEvent(updates[0]));
+    }
 
     // Sequential: the update carries the exclusion that keeps the created event
     // from briefly showing twice.

@@ -321,17 +321,17 @@ export function EventDetailsPopover({
 		setPendingEditScope(scope);
 		setActionError(undefined);
 
-		const { creates, updates } = withSeriesEditIntent(
-			seriesEditWrites({
-				edited,
-				master,
-				occurrence,
-				scope,
-			}),
-		);
-
 		let savedMaster: Event | undefined;
 		try {
+			const { creates, updates } = withSeriesEditIntent(
+				seriesEditWrites({
+					edited,
+					master,
+					occurrence,
+					scope,
+				}),
+			);
+
 			// Sequential: the update carries the exclusion that keeps the created
 			// event from briefly showing twice.
 			for (const update of updates) {
@@ -348,7 +348,7 @@ export function EventDetailsPopover({
 					: scope === "following"
 						? "This and following events updated."
 						: "Occurrence updated.",
-				{
+				"timeEdit" in edited ? undefined : {
 					undo: async () => {
 						for (const event of created) {
 							await onRemoveEvent(event);

@@ -186,15 +186,7 @@ if (!process.env.MUSUBI_DRAFT_TZ_CHILD) {
       () => editEventTimeDraft(event, event, { ...draft, date: "invalid" }),
       /valid time zone/,
     );
-    assert.throws(
-      () =>
-        editEventTimeDraft(
-          { ...event, recurrence: "FREQ=DAILY" },
-          { ...event, recurrence: "FREQ=DAILY" },
-          { ...draft, startTime: "01:30" },
-        ),
-      /scope edit/,
-    );
+
   }
 }
 console.log("Civil editor drafts and atomic transport across host zones: OK");
