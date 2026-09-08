@@ -1,4 +1,5 @@
 import { caldavEventState } from "./provider_event_state";
+import { caldavSeriesEvidence, caldavSeriesResourceURL } from "./caldav_series";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
@@ -13,6 +14,7 @@ import { config, logger } from "@musubi/config";
 import {
   getCaldavAccountById,
   getCaldavAccountsByUser,
+  getUserExternalCalendars,
   type EventContentPatch,
 } from "@musubi/db";
 import type {
@@ -864,10 +866,12 @@ async function readEventResource(
   externalEventId: string,
   ref?: ExternalEventRef,
   signal?: AbortSignal,
+  redirect: RequestRedirect = "follow",
 ) {
   const etag = requireEventEtag(ref?.etag);
   const response = await caldavFetch(externalEventId, {
     signal,
+    redirect,
     headers: {
       authorization,
       accept: "text/calendar",
@@ -891,6 +895,21 @@ async function readEventResource(
 
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
+  async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal) {
+    if (!config.api.eventTimeEditsEnabled)
+      throw new EventWriteError("event-write", "unsupported");
+    const accounts = await getCaldavAccountsByUser(userID);
+    if (!accounts.some(account => account.id === accountId))
+      throw new EventWriteError("event-write", "denied");
+    const links = await getUserExternalCalendars("caldav", userID, accountId);
+    if (!links.some(link => link.supportsEvents && link.externalCalendarID === externalCalendarId && link.calendarID === intent.master.originCalendarID))
+      throw new EventWriteError("event-write", "denied");
+    const resource = caldavSeriesResourceURL(externalCalendarId, intent.ref.externalEventId);
+    const authorization = await basicAuthForAccount(accountId);
+    assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(resource.href, authorization, signal, "error"), "update"), "event-write");
+    const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");
+    return caldavSeriesEvidence(current.data, intent);
+  },
   projectEvent(event) { return icalToNormalized({ url: event.id, data: toIcal(event) })!; },
 
   async listAccounts(userID: string): Promise<{ id: string; label: string }[]> {
