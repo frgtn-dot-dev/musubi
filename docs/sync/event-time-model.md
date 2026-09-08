@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -97,3 +97,10 @@ SQLite migration0008 adds nullable timeModel, seriesID and originalStart columns
 A newer saved revision wins over older/revisionless writes. A legacy projection with the same positive revision cannot remove any already saved time/identity field; retain the complete saved row instead of mixing timestamps with old metadata. A newer authoritative revision can clear metadata. Validation occurs within the existing synchronous transaction before replacement, so malformed batches do not erase the previous cache.
 
 Tests use real node:sqlite through the production Drizzle Expo driver and migrator: pre-revision and revision-bearing upgrade, idempotent migration, both cache writers, moved original identity, floating/all-day models, expansion after readback and transactional rejection. This is not a physical-device execution claim. CachedEvent is an additive storage-only type until EventSchema, all transport projections and authoritative writer guards are activated together.
+
+
+## Native reminder receipt checkpoint
+
+The native scheduler passes cached time and original-identity metadata to the shared resolver. Scoped refresh reads the complete cached family, retaining cancellation siblings and newer saved revisions. Receipts also belong to their original-key family after a detached definition is removed; restoring the original slot replaces the old target UUID rather than colliding on its unique key. Form rule helpers inherit the master override consistently with scheduling.
+
+OS/receipt mutations run serially, including explicit cancellation and account reset. Reset invalidates queued snapshots immediately; an in-flight OS write is canceled before it can leave a receipt. Cached-rule reads and pending remote rule writes cannot resume an old account's scheduling after reset. Tests exercise actual SQLite receipts with a simulated OS API; real device behavior and OS notification limits remain K14 verification work. Web/API metadata projections, consumer error handling and authoritative writes are still required before metadata activation.
