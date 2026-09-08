@@ -24,6 +24,25 @@ export type ReminderEvent = ICalendarEventBase & {
   calendars: string[];
 };
 
+/** Keep the same definition fields at every resolver boundary. In particular,
+ * dropping cancellation or original identity here resurrects a replaced slot.
+ */
+export function toReminderEvent(event: ReminderEvent): ReminderEvent {
+  return {
+    calendars: [...(event.calendars ?? [])],
+    end: new Date(event.end),
+    id: event.id,
+    isAllDay: event.isAllDay,
+    isCanceled: event.isCanceled,
+    recurrence: event.recurrence,
+    timeModel: event.timeModel,
+    seriesID: event.seriesID,
+    originalStart: event.originalStart,
+    start: new Date(event.start),
+    title: event.title,
+  };
+}
+
 export type ReminderContext = {
   /** IANA zone. Decides where an all-day reminder lands on the clock. */
   timezone: string;

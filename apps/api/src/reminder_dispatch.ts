@@ -1,4 +1,4 @@
-import { resolveReminders, type ReminderEvent } from "@musubi/calendar";
+import { resolveReminders, toReminderEvent, type ReminderEvent } from "@musubi/calendar";
 import { config, logger } from "@musubi/config";
 import {
   deletePushSubscriptionsByEndpoint,
@@ -92,19 +92,7 @@ export async function reminderEventsFor(userID: string, from: Date, to: Date) {
       existing.calendars.push(calendarID);
       continue;
     }
-    byID.set(event.id, {
-      calendars: [calendarID],
-      end: event.end,
-      id: event.id,
-      isAllDay: event.isAllDay,
-      isCanceled: event.isCanceled,
-      recurrence: event.recurrence,
-      timeModel: event.timeModel,
-      seriesID: event.seriesID,
-      originalStart: event.originalStart,
-      start: event.start,
-      title: event.title,
-    });
+    byID.set(event.id, toReminderEvent({ ...event, calendars: [calendarID] }));
   }
 
   return [...byID.values()];
