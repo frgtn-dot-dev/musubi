@@ -4,17 +4,17 @@ import { createGuardedCaldavFetch } from "./caldav_client";
 const fetch = createGuardedCaldavFetch();
 
 /** Only successful propstats for the requested resource are permission evidence. */
-async function properties(url: string, authorization: string, props: Record<string, unknown>, signal?: AbortSignal) {
+async function properties(url: string, authorization: string, props: Record<string, unknown>, signal?: AbortSignal, redirect: RequestRedirect = "follow") {
   const responses = await propfind({
-    url, depth: "0", props, headers: { authorization }, fetch: (input, init) => fetch(input, { ...init, signal }),
+    url, depth: "0", props, headers: { authorization }, fetch: (input, init) => fetch(input, { ...init, signal, redirect }),
   });
   return responses.find((response) =>
     response.ok && response.href && new URL(response.href, url).href === new URL(url).href,
   )?.props;
 }
 
-export async function caldavEventPrivileges(url: string, authorization: string, signal?: AbortSignal) {
-  const props = await properties(url, authorization, { "d:current-user-privilege-set": {} }, signal);
+export async function caldavEventPrivileges(url: string, authorization: string, signal?: AbortSignal, redirect: RequestRedirect = "follow") {
+  const props = await properties(url, authorization, { "d:current-user-privilege-set": {} }, signal, redirect);
   const value = props?.currentUserPrivilegeSet;
   if (value == null) return undefined;
   const privileges = value.privilege == null ? []

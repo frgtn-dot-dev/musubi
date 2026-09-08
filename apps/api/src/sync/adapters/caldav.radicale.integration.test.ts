@@ -25,10 +25,10 @@ async function main() {
   }
 
   const { eq } = await import("drizzle-orm");
-  const { db, events, externalEvents, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
+  const { db, events, externalEvents, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
   const { config } = await import("@musubi/config");
   const { syncProvider } = await import("../engine");
-  const { caldavAdapter } = await import("./caldav");
+  const { caldavAdapter, patchEventIcal } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
 
@@ -167,6 +167,37 @@ async function main() {
     assert.equal(rawAfter, rawBefore, "Pull preserves the complete server resource, alarms and extensions");
     const [link] = (await getUserExternalCalendars("caldav", userID, account.id)).filter(link => link.externalCalendarID === collectionURL);
     assert.ok(link);
+    const localMaster = (await getEventSnapshot(initial.find(event => !event.seriesID)!.id))!;
+    const localChildren = await Promise.all(initial.filter(event => event.seriesID).map(event => getEventSnapshot(event.id)));
+    const [familyMapping] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, localMaster.id));
+    const intent = { master: localMaster, children: localChildren.map(child => child!), ref: { externalEventId: resourceURL, etag: familyMapping.etag, icalUid: "family" } };
+    const readSeries = () => caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, intent);
+    const familyEvidence = await readSeries();
+    assert.equal(familyEvidence.data, rawBefore);
+    assert.equal(familyEvidence.exceptions.length, 1);
+    assert.equal(familyEvidence.exceptions[0]!.title, "Moved");
+    config.api.eventTimeEditsEnabled = false;
+    await assert.rejects(readSeries);
+    config.api.eventTimeEditsEnabled = true;
+    await assert.rejects(() => caldavAdapter.readCaldavSeries!("other-user", account.id, collectionURL, intent));
+    await assert.rejects(() => caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, { ...intent, children: [] }));
+    await assert.rejects(() => caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, { ...intent, ref: { ...intent.ref, externalEventId: resourceURL + "#child" } }));
+
+    const concurrentlyEdited = familyEvidence.data.replace("SUMMARY:Moved", "SUMMARY:Concurrent child");
+    assert.notEqual(concurrentlyEdited, familyEvidence.data);
+    const childWrite = await davFetch(resourceURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "If-Match": familyEvidence.ref.etag! }, body: concurrentlyEdited });
+    assert.ok(childWrite.ok);
+    const afterChildResponse = await davFetch(resourceURL, { headers: { authorization: basicAuth } });
+    assert.notEqual(afterChildResponse.headers.get("etag"), familyEvidence.ref.etag, "A child change invalidates the whole CalDAV resource ETag");
+    const afterChild = await afterChildResponse.text();
+    await assert.rejects(readSeries, /conflict/);
+    const staleMasterWrite = await davFetch(resourceURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "If-Match": familyEvidence.ref.etag! }, body: patchEventIcal(familyEvidence.data, localMaster, "family", { title: "Stale master rename" }) });
+    assert.equal(staleMasterWrite.status, 412, "Resource CAS protects a concurrent exception edit");
+    assert.equal(await (await davFetch(resourceURL, { headers: { authorization: basicAuth } })).text(), afterChild);
+    assert.deepEqual(await rows(), initial, "Evidence and refused provider writes do not change local content");
+    await put(moved, master); // Restore the synthetic fixture for the existing import regressions.
+    await sync();
+    console.log("Radicale complete series GET, accepted ETag, private-only evidence and concurrent-child CAS: OK");
     await setCursor(link.calendarID, null);
     await sync();
     assert.deepEqual(await rows(), initial, "Full reset preserves identity and revision");

@@ -100,6 +100,10 @@ export function createGuardedCaldavFetch({
 				address!,
 			);
 			if (!REDIRECT_STATUSES.has(response.status)) return response;
+			if (requestInit.redirect === "error") {
+				await response.body?.cancel();
+				throw new Error("CalDAV scoped resource request cannot redirect.");
+			}
 			if (redirects >= 5) {
 				await response.body?.cancel();
 				throw new Error("Too many CalDAV redirects.");

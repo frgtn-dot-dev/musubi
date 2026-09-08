@@ -135,6 +135,21 @@ async function main() {
 		2,
 		"No redirected GET can masquerade as a conditional mutation",
 	);
+	for (const status of [301, 302, 303, 307, 308]) {
+		let scopedCalls = 0;
+		const scoped = createGuardedCaldavFetch({
+			allowPrivate: true,
+			fetchPinnedImpl: async () => {
+				scopedCalls++;
+				return new Response(null, { status, headers: { location: "http://127.0.0.1/other/identical-copy.ics" } });
+			},
+		});
+		for (const method of ["GET", "PROPFIND"])
+			await assert.rejects(() => scoped("http://127.0.0.1/imported/family.ics", {
+				method, redirect: "error", headers: { authorization: "Basic fixture" },
+			}), /scoped resource request cannot redirect/);
+		assert.equal(scopedCalls, 2, "Neither privileges nor resource evidence may follow a redirect outside the accepted target");
+	}
 
 	console.log("CalDAV SSRF self-check: OK");
 }
