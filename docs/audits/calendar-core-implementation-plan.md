@@ -669,3 +669,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K15 iCloud — ověření tří cest k resource oprávnění:** samostatný dočasný kalendář a minulá událost bez účastníků umožnily porovnat resource PROPFIND, parent Depth 1 PROPFIND a calendar-multiget REPORT. Všechny vrátily 207, ale požadované privilege/owner vlastnosti u přesného resource href byly v 404 propstat; žádná cesta nedoložila write grant. Kalendář byl odstraněn (204), běžící flagy zůstaly vypnuté. [Živá evidence](calendar-icloud-series-live-acceptance.md#follow-up-three-standard-dav-privilege-queries) proto drží iCloud aplikační acceptance jako odloženou podmínku; jiný dotaz ani úspěšný přímý PUT neopravňuje k povolení unknown oprávnění.
+
+
+**K13 Google RSVP — čistý důkazní řez:** interní planner připraví pouze odpověď jediného prokázaného self účastníka normální jednorázové události. Vyžaduje přesnou providerovou identitu a strong ETag; následné porovnání uchová všechny ostatní nativní údaje včetně konferencí, alarmů a cizích odpovědí. [Kontrakt a regrese](../sync/google-rsvp.md) oddělují tuto přípravu od dosud nezapojené autorizace účtu, HTTP zápisu, outboxu a klientů. Není to odeslaná ani živě ověřená RSVP; navazuje explicitní notification policy a bezpečná obnova.
