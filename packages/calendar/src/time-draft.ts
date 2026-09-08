@@ -56,7 +56,7 @@ function legacyCivil(value: Date) {
   const pad = (n: number, width = 2) => String(n).padStart(width, "0");
   return `${pad(value.getFullYear(), 4)}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${pad(value.getMilliseconds(), 3)}`;
 }
-export function legacyEventTimeDraft(event: Event): EventTimeDraft {
+export function legacyEventTimeDraft(event: Pick<Event, "start" | "end" | "isAllDay">): EventTimeDraft {
   return {
     timeKind: "legacy-unknown",
     ...fields(
@@ -180,4 +180,12 @@ export function editEventTimeDraft(
       "Enter a valid time zone, dates and times with the end on or after the start. No changes were saved.",
     );
   }
+}
+
+/** New definitions have no saved recurrence scope to transform. */
+export function createEventTimeDraft(event: Event, draft: EventTimeDraft): EventWriteRequest {
+  if (!draft.timeKind || draft.timeKind === "legacy-unknown") return event;
+  const baseline = { ...event, recurrence: null, timeModel: null, seriesID: null, originalStart: null, revision: undefined };
+  const { contentPatch, ...request } = editEventTimeDraft(baseline, baseline, draft);
+  return { ...request, recurrence: event.recurrence };
 }

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
   EventSchema,
   eventUpdateOperation,
+  eventCreateOperation,
   eventPatchRequest,
 } from "@musubi/types";
 import {
@@ -10,6 +11,7 @@ import {
   legacyEventTimeDraft,
   chooseEventTimeKind,
   editEventTimeDraft,
+  createEventTimeDraft,
 } from "./time-draft";
 import { resolveEventTimeEdit } from "./time-edit";
 
@@ -45,6 +47,18 @@ if (!process.env.MUSUBI_DRAFT_TZ_CHILD) {
     calendars: ["home"],
     isCanceled: false,
   });
+  for (const kind of ["zoned", "floating", "all-day"] as const) {
+    const created = createEventTimeDraft({ ...allDay, timeModel: null, recurrence: "FREQ=DAILY;COUNT=3", calendars: ["00000000-0000-4000-8000-000000000155"] }, {
+      timeKind: kind, timeZone: "Europe/Prague", date: "2026-03-29", endDate: "2026-03-30", startTime: "09:00", endTime: "10:00", isAllDay: kind === "all-day",
+    });
+    assert.equal(created.timeModel?.kind, kind);
+    assert.equal(created.revision, undefined);
+    assert.equal(created.contentPatch, undefined);
+    const operation = eventCreateOperation(created);
+    assert.equal(operation.path, "/events/time");
+    assert.equal("time" in operation.body && operation.body.time.kind, kind);
+    assert.throws(() => eventCreateOperation({ ...created, timeEdit: undefined }), /time-model-aware copy/);
+  }
   const dateWrite = editEventTimeDraft(allDay, allDay, {
     ...knownEventTimeDraft(allDay)!,
     endDate: "2026-03-30",

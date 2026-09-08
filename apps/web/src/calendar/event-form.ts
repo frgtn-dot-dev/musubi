@@ -1,5 +1,5 @@
 import { EventTimeZoneSchema, editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
-import { knownEventTimeDraft, editEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
+import { knownEventTimeDraft, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import { toDateKey } from "./date-key";
 import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
@@ -73,6 +73,8 @@ export function defaultEventFormValues(
   const end = new Date(start.getTime() + 60 * 60 * 1_000);
 
   return {
+    timeEditable: true,
+    timeKind: "legacy-unknown",
     calendarId,
     calendarIds: [calendarId],
     date,
@@ -204,10 +206,10 @@ export function createEventFromForm(
   values: EventFormValues,
   identity: NewEventIdentity,
   color: string,
-): Event {
+): EventWriteRequest {
   const boundaries = eventBoundaries(values);
 
-  return {
+  return createEventTimeDraft({
     calendars: values.calendarIds,
     color,
     creatorID: identity.userId,
@@ -224,7 +226,7 @@ export function createEventFromForm(
     start: boundaries.start,
     title: values.title.trim(),
     url: values.url.trim() || null,
-  };
+  }, values);
 }
 
 export function updateEventFromForm(

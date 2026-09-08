@@ -62,7 +62,7 @@ import {
 } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from "uuidv7";
-import { joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
+import { joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import {
   AdvancedEndType,
   AdvancedFreq,
@@ -323,6 +323,7 @@ export function AddEventModal({
   // (note/location/url) can scroll clear of the keyboard when expanded.
   const [kbPad, setKbPad] = useState(0);
   const [timeDraft, setTimeDraft] = useState<EventTimeDraft | null>(null);
+  const recurrenceStart = timeDraft ? new Date(`${timeDraft.date}T12:00:00`) : newStart;
   const [timeModelPicker, setTimeModelPicker] = useState(false);
   useEffect(() => {
     if (!docked) return;
@@ -502,7 +503,7 @@ export function AddEventModal({
         setNewStart(event?.isAllDay ? new Date(`${event.start.toISOString().slice(0, 10)}T00:00:00`) : event?.start ?? startingDate ?? new Date());
         setNewEnd(event?.isAllDay ? new Date(`${event.end.toISOString().slice(0, 10)}T00:00:00`) : event?.end ?? endingDate ?? startingDate ?? new Date());
       }
-      setSelectedCals(new Set(event?.calendars) ?? new Set<string>());
+      setSelectedCals(event ? new Set(event.calendars) : defaultCalSet());
       setOriginCal(event?.originCalendarID ?? null);
       setNewDescription(event?.description ?? "");
       setNewLocation(event?.location ?? "");
@@ -665,7 +666,7 @@ export function AddEventModal({
           ? event.recurrence
           : (unsupportedRecurrence ??
             (() => {
-              let rule = buildRRule(newRecurrence, newStart, {
+              let rule = buildRRule(newRecurrence, recurrenceStart, {
                 freq: advFreq,
                 interval: advInterval,
                 days: advDays,
@@ -719,7 +720,9 @@ export function AddEventModal({
         if (saved === false) return;
         eventConstruct = EventSchema.parse(typeof saved === "object" ? saved : request);
       } else {
-        await onSave(eventConstruct);
+        const request = timeDraft ? createEventTimeDraft(eventConstruct, timeDraft) : eventConstruct;
+        await onSave(request);
+        eventConstruct = EventSchema.parse(request);
       }
 
       // Permission is requested here, in the context of saving a reminder —
@@ -980,9 +983,9 @@ export function AddEventModal({
           />
         )}
 
-        {event && <SettingRowAction label="Time model" value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
+        <SettingRowAction label="Time model" value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
           detail="The selected model interprets the dates and times below. Changing it may change when the event occurs."
-          onPress={() => setTimeModelPicker(true)} />}
+          onPress={() => setTimeModelPicker(true)} />
         {timeDraft?.timeKind === "zoned" && <View style={styles.fieldContainer}>
           <Text style={styles.fieldValueText}>Event time zone</Text>
           <TextInput accessibilityLabel="Event time zone" style={styles.fieldValueText} value={timeDraft.timeZone ?? ""} placeholder="Europe/Prague" autoCorrect={false} autoCapitalize="none"
@@ -1253,7 +1256,7 @@ export function AddEventModal({
                   "Thu",
                   "Fri",
                   "Sat",
-                ][newStart.getDay()];
+                ][recurrenceStart.getDay()];
                 return (
                   <Tap
                     key={opt.value}
@@ -1271,7 +1274,7 @@ export function AddEventModal({
                         changeRecurrence(setAdvInterval, 1);
                         changeRecurrence(
                           setAdvDays,
-                          new Set([newStart.getDay() || 1]),
+                          new Set([recurrenceStart.getDay()]),
                         );
                         changeRecurrence(setAdvEndType, "never");
                         changeRecurrence(setAdvCount, 10);
@@ -1307,7 +1310,7 @@ export function AddEventModal({
               skips those months (and Feb 29 → leap years only). Spec-correct,
               but surprising — say it up front instead of letting users find out. */}
           {(() => {
-            const day = newStart.getDate();
+            const day = recurrenceStart.getDate();
             const monthlyRule =
               newRecurrence === "monthly" ||
               (newRecurrence === "custom" && advFreq === "MONTHLY");
@@ -1316,7 +1319,7 @@ export function AddEventModal({
                 ? `Repeats on day ${day} — months without it are skipped.`
                 : newRecurrence === "yearly" &&
                     day === 29 &&
-                    newStart.getMonth() === 1
+                    recurrenceStart.getMonth() === 1
                   ? "February 29 only exists in leap years — this repeats every 4 years."
                   : null;
             return (
@@ -1366,7 +1369,7 @@ export function AddEventModal({
                     setSavedUntil(null);
                     changeRecurrence(setAdvFreq, "WEEKLY");
                     changeRecurrence(setAdvInterval, 1);
-                    changeRecurrence(setAdvDays, new Set([newStart.getDay()]));
+                    changeRecurrence(setAdvDays, new Set([recurrenceStart.getDay()]));
                     changeRecurrence(setAdvEndType, "never");
                     changeRecurrence(setAdvCount, 10);
                   }}
@@ -1855,10 +1858,9 @@ export function AddEventModal({
         options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
         value={timeDraft?.timeKind}
         onSelect={value => {
-          if (!event) return;
           // The native picker values already represent the visible local date,
           // including the all-day projection above. Adopt those civil fields.
-          const current = timeDraft ?? legacyEventTimeDraft({ ...event, start: newStart, end: newEnd, isAllDay: false });
+          const current = timeDraft ?? legacyEventTimeDraft({ start: newStart, end: newEnd, isAllDay: false });
           const next = chooseEventTimeKind(current, value as "zoned" | "floating" | "all-day");
           setTimeDraft(next);
           setAllDayToggle(next.isAllDay);

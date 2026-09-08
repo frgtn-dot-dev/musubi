@@ -10,6 +10,8 @@ const optional = z.string().optional().catch(undefined);
  * Back action restores the calendar.
  */
 export const eventEditorSearchSchema = z.object({
+  timeKind: z.enum(["legacy-unknown", "zoned", "floating", "all-day"]).optional().catch(undefined),
+  timeZone: optional,
   allDay: z.boolean().optional().catch(undefined),
   attendees: z.boolean().optional().catch(undefined),
   calendarId: optional,
@@ -59,6 +61,8 @@ export function applyEventEditorSearch(
 
   return {
     ...base,
+    timeKind: search.timeKind ?? base.timeKind,
+    timeZone: search.timeZone ?? base.timeZone,
     calendarId,
     calendarIds: Array.from(new Set(calendarIds)),
     date: search.date ?? base.date,

@@ -9,7 +9,8 @@ import {
   EventDeliveryInboxSchema,
   EventDeliveryConflictSchema,
   type ResolveEventDeliveryRequest,
-  eventCreateRequest,
+  eventCreateOperation,
+  type EventWriteRequest,
   eventUpdateOperation,
   requireEventRevision,
   EventMutationError,
@@ -238,27 +239,28 @@ export function useApi() {
       );
     },
 
-    async createEvent(event: Event) {
+    async createEvent(event: EventWriteRequest) {
+      const operation = eventCreateOperation(event);
       const remote = remoteOf(eventHome(event));
       if (remote) {
         const data = await fedFetch<Event>(
           remote,
-          `/api/${apiVersion}/events`,
+          `/api/${apiVersion}${operation.path}`,
           {
             method: "POST",
-            body: JSON.stringify(eventCreateRequest(event)),
+            body: JSON.stringify(operation.body),
           },
         );
         return readWire(EventSchema, data, "POST /events (federated)");
       }
       const { error, data } = await authClient.$fetch<Event>(
-        `${apiUrl}/api/${apiVersion}/events`,
+        `${apiUrl}/api/${apiVersion}${operation.path}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(eventCreateRequest(event)),
+          body: JSON.stringify(operation.body),
         },
       );
 

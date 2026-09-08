@@ -92,6 +92,23 @@ export const EventTimeEditRequestSchema = z.object({
 }).strict();
 export type EventTimeEditRequest = z.infer<typeof EventTimeEditRequestSchema>;
 
+export const EventTimeCreateRequestSchema = z.object({
+  event: EventCreateRequestSchema.omit({ start: true, end: true, isAllDay: true }).extend({
+    id: z.string().uuid(),
+    calendars: z.array(z.string().uuid()).min(1).max(100),
+    originCalendarID: z.string().uuid().nullish(),
+  }).strict(),
+  time: EventTimeEditSchema,
+}).strict();
+
+export function eventCreateOperation(event: EventWriteRequest) {
+  if (!event.timeEdit) return { path: "/events" as const, body: eventCreateRequest(event) };
+  if (event.seriesID || event.originalStart || event.scopeEdit)
+    throw new Error("This draft requires an occurrence-aware create. No changes were saved.");
+  const { start, end, isAllDay, revision, timeModel, seriesID, originalStart, ...content } = EventSchema.parse(event);
+  return { path: "/events/time" as const, body: EventTimeCreateRequestSchema.parse({ event: content, time: event.timeEdit }) };
+}
+
 export const EventDeleteRequestSchema = z
   .object({
     id: z.string().uuid(),

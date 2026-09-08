@@ -3,7 +3,8 @@ import {
   EventDeliveryInboxSchema,
   EventDeliveryConflictSchema,
   type ResolveEventDeliveryRequest,
-  eventCreateRequest,
+  eventCreateOperation,
+  type EventWriteRequest,
   eventUpdateOperation,
   requireEventRevision,
 } from "@musubi/types";
@@ -527,9 +528,10 @@ export function deleteAccount() {
   });
 }
 
-export function createEvent(event: Event, connectionId?: string) {
-  return apiRequest(route(connectionId, "/api/v1/events"), {
-    body: eventCreateRequest(event),
+export function createEvent(event: EventWriteRequest, connectionId?: string) {
+  const operation = eventCreateOperation(event);
+  return apiRequest(route(connectionId, `/api/v1${operation.path}`), {
+    body: operation.body,
     method: "POST",
     responseSchema: EventSchema,
   });
