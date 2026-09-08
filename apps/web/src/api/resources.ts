@@ -477,6 +477,8 @@ export function connectCaldav(input: {
     body: input,
     method: "POST",
     responseSchema: z.unknown(),
+    // Connection includes provider discovery and the initial calendar import.
+    timeoutMs: 60_000,
   });
 }
 
