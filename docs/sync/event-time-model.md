@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -118,3 +118,10 @@ This preparatory guard does not make provider serializers, fork, deletion/cascad
 Invite preview passes stored time and original identity plus cancellation through the shared UTC expansion. It projects only the existing public DTO fields afterward and sets recurrence to null on every concrete result. Definition metadata, organizer and private description/location are not included in the response. Known invalid recurrence fails explicitly; legacy fallback remains constrained to the privacy window.
 
 The expansion starts at the first UTC midnight so inclusive legacy all-day ends survive a preview requested later that day. Final filtering retains exact instant bounds for timed occurrences and inclusive UTC date bounds for all-day occurrences. Tests cover DST across three host zones, cancelled masters and detached slots, moved-out/in exceptions, floating UTC policy, all-day dates and exact response keys. General EventSchema and write activation remain pending.
+
+
+## Server reminder projection checkpoint
+
+The dispatcher groups user-visible calendar membership rows into one reminder definition per event and preserves timeModel, seriesID and originalStart. The existing resolver therefore uses the event zone across DST, inherits the master's rule for a detached target UUID and suppresses canceled or moved-out original slots. The complete range query remains the source of definitions, including exceptions outside the reminder horizon.
+
+A PostgreSQL integration exercises this actual projection followed by shared resolution, membership deduplication and other-user isolation. It sends no web push messages and does not claim provider or device delivery certification. Web projection and general DTO admission remain pending.

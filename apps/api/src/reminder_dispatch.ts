@@ -81,7 +81,7 @@ function formatWhen(start: Date, isAllDay: boolean, timezone: string) {
 }
 
 /** The events one person can see in a window, in the shape the resolver wants. */
-async function reminderEventsFor(userID: string, from: Date, to: Date) {
+export async function reminderEventsFor(userID: string, from: Date, to: Date) {
   const rows = await getUsersEvents(userID, { end: to, start: from });
   const byID = new Map<string, ReminderEvent>();
 
@@ -99,6 +99,9 @@ async function reminderEventsFor(userID: string, from: Date, to: Date) {
       isAllDay: event.isAllDay,
       isCanceled: event.isCanceled,
       recurrence: event.recurrence,
+      timeModel: event.timeModel,
+      seriesID: event.seriesID,
+      originalStart: event.originalStart,
       start: event.start,
       title: event.title,
     });
