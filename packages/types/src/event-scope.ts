@@ -23,3 +23,12 @@ export const EventScopeRequestSchema = z.discriminatedUnion("action", [
     context.addIssue({ code: "custom", message: "An occurrence cannot define recurrence." });
 });
 export type EventScopeRequest = z.infer<typeof EventScopeRequestSchema>;
+
+const committedRevision = z.object({ id: z.string().uuid(), revision: EventRevisionSchema }).strict();
+export const EventScopeOutcomeSchema = z.object({
+  operationID: z.string().uuid(),
+  changed: z.boolean(),
+  events: z.array(committedRevision),
+  deleted: z.array(committedRevision),
+}).strict();
+export type EventScopeOutcome = z.infer<typeof EventScopeOutcomeSchema>;

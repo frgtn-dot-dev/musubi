@@ -56,7 +56,7 @@ export async function createEventInTransaction(
 			revision: 1, // New identity never inherits a draft/source revision.
 			originCalendarID: event.originCalendarID ?? calendars[0],
 		})
-		.onConflictDoNothing()
+		.onConflictDoNothing({ target: events.id })
 		.returning();
 	if (!result) throw new Error(`Event ${event.id} already exists.`);
 
