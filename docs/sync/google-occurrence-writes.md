@@ -66,3 +66,21 @@ moved exception, and another scope edit after successful resolution. Web
 1280-light/390-dark browser checks include keyboard focus/return and axe; the
 native callback test confirms the displayed master revision and state. These are
 local checks, not physical-device or live-provider acceptance.
+
+
+## Whole-series evidence preparation
+
+The default-off Google adapter can also read the accepted master and a complete,
+unexpanded `events.list` traversal (`singleEvents=false`, `showDeleted=true`, no
+time bounds). It retains only this master's native exceptions, including distant
+cancellation-only definitions, validates personal permissions, strong ETags and
+unique IDs/original starts, and checks the master again after pagination. Missing
+master/list data, repeated page tokens, duplicate identities and more than 100
+pages are refused. Unrelated calendar events do not become family evidence.
+
+This is read-only preparation for K12 whole-series operations. It is not yet
+called by the scope endpoint and does not authorize a series write. Sequential
+provider reads are not an atomic snapshot: any future writer must revalidate its
+family evidence and use conditional writes. The HTTP fixture covers zoned and
+all-day families, moved and distant cancelled exceptions, pagination and refusal
+paths, plus the existing single-occurrence write/recovery regressions.
