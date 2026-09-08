@@ -1,3 +1,4 @@
+import { chooseEventTimeKind } from "@musubi/calendar";
 import {
 	can,
 	DEFAULT_CALENDAR_COLOR,
@@ -29,6 +30,7 @@ import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
+import { Select } from "~/ui/Select";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { minutesToTime, TimePicker, timeToMinutes } from "~/ui/TimePicker";
 import { groupCalendars } from "../calendar-groups";
@@ -274,9 +276,9 @@ export function EventEditorForm({
 		<Checkbox
 			checked={values.isAllDay}
 			className={styles.toggleRow}
-			disabled={saving || Boolean(values.timeLabel)}
+			disabled={saving}
 			label="All day"
-			onChange={(event) => patch({ isAllDay: event.target.checked })}
+			onChange={(event) => patch(values.timeKind && values.timeKind !== "legacy-unknown" ? chooseEventTimeKind(values, event.target.checked ? "all-day" : "zoned") : { isAllDay: event.target.checked })}
 		/>
 	);
 
@@ -289,7 +291,6 @@ export function EventEditorForm({
 			onKeyDown={handleKeyDown}
 			onSubmit={handleSubmit}
 		>
-			{values.timeLabel && <p className={styles.timeContext}>{values.timeLabel}</p>}
 			<Field
 				className={styles.titleField}
 				label="Event title"
@@ -314,6 +315,18 @@ export function EventEditorForm({
 				<SectionLabel className={styles.sectionLabel} id={`${id}-when-heading`}>
 					When
 				</SectionLabel>
+			{values.timeEditable && expanded && <>
+				<Field label="Time model" variant="section">
+					<Select label="Time model" value={values.timeKind === "legacy-unknown" ? "" : values.timeKind ?? ""} placeholder="Not specified" disabled={saving}
+						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
+						onChange={kind => patch(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
+				</Field>
+				{values.timeKind === "zoned" && <Field label="Event time zone" description="For example Europe/Prague. Uses the dates and times shown below." variant="section">
+					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
+				</Field>}
+				<p className={styles.timeContext}>The selected model interprets the dates and times below. Changing it may change when the event occurs.</p>
+			</>}
+			{values.timeLabel && <p className={styles.timeContext}>{values.timeLabel}</p>}
 				<div className={styles.pickerRow}>
 					<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
 					<span aria-hidden="true" className={styles.pickerLabel}>

@@ -62,7 +62,7 @@ import {
 } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from "uuidv7";
-import { joinRecurrence, splitRecurrence, knownEventTimeDraft, editKnownEventTime, type EventTimeDraft } from "@musubi/calendar";
+import { joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import {
   AdvancedEndType,
   AdvancedFreq,
@@ -323,6 +323,7 @@ export function AddEventModal({
   // (note/location/url) can scroll clear of the keyboard when expanded.
   const [kbPad, setKbPad] = useState(0);
   const [timeDraft, setTimeDraft] = useState<EventTimeDraft | null>(null);
+  const [timeModelPicker, setTimeModelPicker] = useState(false);
   useEffect(() => {
     if (!docked) return;
     const show = Keyboard.addListener(
@@ -491,13 +492,15 @@ export function AddEventModal({
     if (visible) {
       baseline.current = event && { ...event, calendars: [...event.calendars] };
       setTimeDraft(event ? knownEventTimeDraft(event) : null);
+      setAllDayToggle(event?.isAllDay ?? false);
       recurrenceEdited.current = false;
       setNewTitle(event?.title ?? "");
       // Docked mode owns its own start/end via the anchor effect above (the day
       // in view + a sensible time) — don't clobber it here with `new Date()`.
       if (!docked) {
-        setNewStart(event?.start ?? startingDate ?? new Date());
-        setNewEnd(event?.end ?? endingDate ?? startingDate ?? new Date());
+        // Native pickers display local Dates; all-day storage encodes UTC dates.
+        setNewStart(event?.isAllDay ? new Date(`${event.start.toISOString().slice(0, 10)}T00:00:00`) : event?.start ?? startingDate ?? new Date());
+        setNewEnd(event?.isAllDay ? new Date(`${event.end.toISOString().slice(0, 10)}T00:00:00`) : event?.end ?? endingDate ?? startingDate ?? new Date());
       }
       setSelectedCals(new Set(event?.calendars) ?? new Set<string>());
       setOriginCal(event?.originCalendarID ?? null);
@@ -711,7 +714,7 @@ export function AddEventModal({
       if (event?.id) {
         // A recurring edit asks which occurrences it belongs to; backing out of
         // that question must leave the form as it was, not close it empty.
-        const request = timeDraft ? editKnownEventTime(event, eventConstruct, timeDraft) : editedEvent(event, eventConstruct);
+        const request = timeDraft ? editEventTimeDraft(event, eventConstruct, timeDraft) : editedEvent(event, eventConstruct);
         if ((await onEdit(request)) === false) return;
         eventConstruct = EventSchema.parse(request);
       } else {
@@ -976,6 +979,14 @@ export function AddEventModal({
           />
         )}
 
+        {event && <SettingRowAction label="Time model" value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
+          detail="The selected model interprets the dates and times below. Changing it may change when the event occurs."
+          onPress={() => setTimeModelPicker(true)} />}
+        {timeDraft?.timeKind === "zoned" && <View style={styles.fieldContainer}>
+          <Text style={styles.fieldValueText}>Event time zone</Text>
+          <TextInput accessibilityLabel="Event time zone" style={styles.fieldValueText} value={timeDraft.timeZone ?? ""} placeholder="Europe/Prague" autoCorrect={false} autoCapitalize="none"
+            onChangeText={value => setTimeDraft(current => current && ({ ...current, timeZone: value, timeLabel: value || "Choose an event time zone" }))} />
+        </View>}
         {timeDraft && <Text style={styles.fieldValueText}>
           {timeDraft.timeLabel}
         </Text>}
@@ -1118,9 +1129,9 @@ export function AddEventModal({
               ios_backgroundColor={colors.line}
               onValueChange={(v) => {
                 setAllDayToggle(v);
+                if (timeDraft) setTimeDraft(chooseEventTimeKind(timeDraft, v ? "all-day" : "zoned"));
               }}
               value={allDayToggle}
-              disabled={Boolean(timeDraft)}
               accessibilityLabel="All-day event"
             />
           </View>
@@ -1838,6 +1849,20 @@ export function AddEventModal({
           />
         </View>
       )}
+      <OptionPicker visible={timeModelPicker} title="Time model"
+        message="Uses the dates and times shown in the editor. No zone is inferred for older events."
+        options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
+        value={timeDraft?.timeKind}
+        onSelect={value => {
+          if (!event) return;
+          // The native picker values already represent the visible local date,
+          // including the all-day projection above. Adopt those civil fields.
+          const current = timeDraft ?? legacyEventTimeDraft({ ...event, start: newStart, end: newEnd, isAllDay: false });
+          const next = chooseEventTimeKind(current, value as "zoned" | "floating" | "all-day");
+          setTimeDraft(next);
+          setAllDayToggle(next.isAllDay);
+        }}
+        onClose={() => setTimeModelPicker(false)} />
       <OptionPicker
         visible={reminderPicker}
         title="Remind Me"

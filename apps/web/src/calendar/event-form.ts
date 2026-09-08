@@ -1,10 +1,13 @@
-import { editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
-import { knownEventTimeDraft, editKnownEventTime } from "@musubi/calendar";
+import { EventTimeZoneSchema, editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
+import { knownEventTimeDraft, editEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import { toDateKey } from "./date-key";
 import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
 export type EventFormValues = {
   timeLabel?: string;
+  timeKind?: EventTimeDraft["timeKind"];
+  timeZone?: string;
+  timeEditable?: boolean;
   calendarId: string;
   calendarIds: string[];
   date: string;
@@ -102,6 +105,8 @@ export function eventFormValues(event: Event): EventFormValues {
     startTime: toTimeInput(event.start),
     title: event.title,
     url: event.url ?? "",
+    timeEditable: true,
+    timeKind: "legacy-unknown",
     ...(known ?? {}),
   };
 }
@@ -125,6 +130,9 @@ export function validateEventForm(
     return "These calendars live on different servers. Pick calendars from one server.";
   }
 
+  if (values.timeKind === "zoned" && !EventTimeZoneSchema.safeParse(values.timeZone?.trim() ?? "").success)
+    return "Enter a valid event time zone, for example Europe/Prague.";
+
   if (!values.date) {
     return "Choose a date.";
   }
@@ -136,7 +144,7 @@ export function validateEventForm(
     return "End date must be on or after the start date.";
   }
 
-  if (!values.isAllDay && !values.timeLabel) {
+  if (!values.isAllDay && !(values.timeKind && values.timeKind !== "legacy-unknown")) {
     const start = timedBoundary(values.date, values.startTime).getTime();
     const end = timedBoundary(values.endDate, values.endTime).getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
@@ -252,7 +260,7 @@ export function updateEventFromForm(
     title: values.title === original.title ? event.title : values.title.trim(),
     url: values.url === original.url ? event.url : values.url.trim() || null,
   };
-  return knownEventTimeDraft(event)
-    ? editKnownEventTime(event, edited, values)
+  return knownEventTimeDraft(event) || (values.timeKind && values.timeKind !== "legacy-unknown")
+    ? editEventTimeDraft(event, edited, values)
     : editedEvent(event, edited);
 }
