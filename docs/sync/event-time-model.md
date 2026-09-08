@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage accepted in PR131; exact conversion checkpoint under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration is under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -72,3 +72,12 @@ Regression coverage includes the public API in three host zones, US/EU and half-
 The shared reminder resolver passes the recipient's explicit timezone to expansion, preserves cancelled and declined definitions until exception replacement, inherits series reminder overrides unless the detached event overrides them, and uses original occurrence keys as notification tags. Notification navigation still points to the persisted event UUID (the detached UUID for an exception). Existing unresolved events retain their old tags. The same resolver is used by web, mobile and API, but their DTO-to-reminder projections still omit new metadata, so activation remains subsequent work.
 
 Before admitting metadata, update mobile receipt reconciliation to compare `eventID` as well as stable occurrence key and due time: converting a generated slot into a detached exception can change the target UUID without changing either key or due time. Add adapter-level tests alongside metadata projection and error handling. The consumer checkpoint does not claim those integrations are complete.
+
+
+## Calendar view consumer checkpoint
+
+Every production expansion call passes an explicit consumer zone. Calendar views and native widgets use the device/browser zone because their existing layout and date formatting also use it; background reminders use the recipient's saved zone. Anonymous server invite preview uses an explicit UTC policy, independent of the server host environment.
+
+Agenda calls expansion once with `includeAllNonRecurring`: RRULE generation remains finite, while standalone and detached events beyond that horizon are retained and floating endpoints are still resolved. Splitting recurring/non-recurring input beforehand would disconnect exceptions and resurrect originals. Home/federated web queries preserve cancellation definitions until expansion and filter the final visible rows. The normal finite view path is unchanged for unresolved legacy data.
+
+Before DTO admission, range reads must retain exceptions even when their moved actual start/end is outside the requested window; otherwise the engine cannot suppress the original slot. Metadata projection, consumer error presentation and guarded authoritative writes remain pending. Pure shared and web-adapter regressions cover moved/cancelled exceptions and distant floating agenda events; this checkpoint does not claim end-to-end production metadata activation.

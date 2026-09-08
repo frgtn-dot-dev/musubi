@@ -31,6 +31,7 @@ const RECURRENCE_HORIZON_YEARS = 2;
 
 export default function AgendaTab() {
   const api = useApi();
+  const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { events, addEvent, updateEvent } = useEventsStore();
   const {
     calendars,
@@ -101,14 +102,10 @@ export default function AgendaTab() {
     // One-off events can remain visible however far away they are. Recurring
     // series need a finite window, so materialize their upcoming occurrences
     // for the next two years before applying the normal agenda filters.
-    const agendaEvents = [
-      ...events.filter((event) => !event.recurrence),
-      ...expandRecurringEvents(
-        events.filter((event) => !!event.recurrence),
-        recurrenceStart,
-        recurrenceEnd,
-      ),
-    ];
+    const agendaEvents = expandRecurringEvents(
+      events, recurrenceStart, recurrenceEnd,
+      { consumerTimeZone, includeAllNonRecurring: true },
+    );
 
     const sorted = agendaEvents
       .filter(
@@ -137,7 +134,7 @@ export default function AgendaTab() {
       }
     }
     return result;
-  }, [events, activeCals, currentDay]);
+  }, [events, activeCals, currentDay, consumerTimeZone]);
 
   // Store write, not setState — opening the detail must not re-render the
   // (long) agenda list. The modal lives in GlobalEventModals.

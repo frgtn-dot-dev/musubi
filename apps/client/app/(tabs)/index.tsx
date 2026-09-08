@@ -55,6 +55,7 @@ function getViewRange(mode: CalMode, monthStart: Date): [Date, Date] {
 
 export default function MainTab() {
   const api = useApi();
+  const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { events, addEvent, updateEvent } = useEventsStore();
   const { weekStartsOn, defaultCalendarView } = useSettingsStore();
 
@@ -281,10 +282,10 @@ export default function MainTab() {
   // [events, range] only, so toggling a calendar does NOT re-run it.
   const expandedAll = useMemo(
     () =>
-      expandRecurringEvents(events, rangeStart, rangeEnd).sort(
+      expandRecurringEvents(events, rangeStart, rangeEnd, { consumerTimeZone }).sort(
         (a, b) => a.start.getTime() - b.start.getTime(),
       ),
-    [events, rangeStart, rangeEnd],
+    [events, rangeStart, rangeEnd, consumerTimeZone],
   );
   const visibleEvents = useMemo(
     () =>

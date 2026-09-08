@@ -57,6 +57,7 @@ export default function CalendarDetail({
   const { height } = useWindowDimensions();
   const calendarSpace = height * 0.8;
   const api = useApi();
+  const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { events, addEvent, updateEvent } = useEventsStore();
   const { calendars, updateCalendar } = useCalendarsStore();
   // Read the calendar live from the store by id: an edit round-trip (and the SSE
@@ -256,10 +257,10 @@ export default function CalendarDetail({
 
   const expandedEvents = useMemo(
     () =>
-      expandRecurringEvents(visibleEvents, rangeStart, rangeEnd).sort(
+      expandRecurringEvents(visibleEvents, rangeStart, rangeEnd, { consumerTimeZone }).sort(
         (a, b) => a.start.getTime() - b.start.getTime(),
       ),
-    [visibleEvents, rangeStart, rangeEnd],
+    [visibleEvents, rangeStart, rangeEnd, consumerTimeZone],
   );
 
   const onPageChange = useCallback((date: Date) => setAnchorDate(date), []);

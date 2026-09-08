@@ -21,6 +21,7 @@ const PREVIEW_WINDOW_DAYS = 30;
 
 export default function Invite() {
   const api = useApi();
+  const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { authClient, apiUrl } = useServer();
   const { token, server, afterAuth } = useLocalSearchParams<{
     token?: string | string[];
@@ -104,9 +105,9 @@ export default function Invite() {
     if (!calendarData?.events) return [];
     const from = new Date();
     const to = new Date(from.getTime() + PREVIEW_WINDOW_DAYS * 86400_000);
-    return expandRecurringEvents(calendarData.events, from, to)
+    return expandRecurringEvents(calendarData.events, from, to, { consumerTimeZone })
       .sort((a, b) => a.start.getTime() - b.start.getTime());
-  }, [calendarData]);
+  }, [calendarData, consumerTimeZone]);
 
   const closeInvite = () => {
     if (restoredAfterAuth || !router.canGoBack()) router.replace("/(tabs)");

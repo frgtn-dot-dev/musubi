@@ -27,19 +27,17 @@ export function expandForView(
   activeEvents: Event[],
   range: { end: Date; start: Date },
   view: CalendarViewId,
+  consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ) {
   const { expandsRecurringOnly } = viewDefinition(view);
   const recurringEvents = expandRecurringEvents(
-    expandsRecurringOnly
-      ? activeEvents.filter((event) => event.recurrence)
-      : activeEvents,
+    activeEvents,
     range.start,
     new Date(range.end.getTime() - 1),
+    { consumerTimeZone, includeAllNonRecurring: expandsRecurringOnly },
   );
 
-  return expandsRecurringOnly
-    ? [...activeEvents.filter((event) => !event.recurrence), ...recurringEvents]
-    : recurringEvents;
+  return recurringEvents.filter(event => !event.isCanceled);
 }
 
 export function useWorkspaceQueries(
@@ -48,6 +46,7 @@ export function useWorkspaceQueries(
   view: CalendarViewId,
 ) {
   const enabled = typeof window !== "undefined";
+  const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const origin = getServerOrigin();
   // Memoized so downstream memos (and the event query key) see a stable object.
   const range = useMemo(() => getWorkspaceRange(date, view), [date, view]);
@@ -94,7 +93,7 @@ export function useWorkspaceQueries(
       return {
         ...response,
         baseEvents: activeEvents,
-        events: expandForView(activeEvents, range, view),
+        events: expandForView(response.events, range, view, consumerTimeZone),
       };
     },
   });
@@ -114,10 +113,10 @@ export function useWorkspaceQueries(
 
     return {
       ...home,
-      baseEvents: [...home.baseEvents, ...remote],
-      events: [...home.events, ...expandForView(remote, range, view)],
+      baseEvents: [...home.baseEvents, ...remote.filter(event => !event.isCanceled)],
+      events: [...home.events, ...expandForView(remote, range, view, consumerTimeZone)],
     };
-  }, [events.data, federated.data, range, view]);
+  }, [events.data, federated.data, range, view, consumerTimeZone]);
 
   return {
     calendars,
