@@ -1,5 +1,5 @@
 import { caldavEventState } from "./provider_event_state";
-import { caldavSeriesEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
+import { caldavSeriesEvidence, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
@@ -972,6 +972,11 @@ export async function deliverCaldavSeriesResource(externalCalendarId: string, wr
 
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
+  async readCaldavSeriesResolution(userID, accountId, externalCalendarId, intent, before, signal) {
+    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
+    const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error", true);
+    return caldavSeriesResolutionEvidence(current.data, intent, { ...intent.ref, etag: current.etag }, before);
+  },
   async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");

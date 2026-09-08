@@ -13,13 +13,15 @@ async function main() {
   const { caldavAdapter } = await import("./adapters/caldav");
   const { normalizeCaldavResource } = await import("./adapters/caldav_time");
   const { prepareCaldavSeries } = await import("./caldav_scope");
+  const { prepareEventDeliveryResolution } = await import("./event_resolution");
+  const { commitEventDeliveryResolution, getEventDeliveryResolutionReplay } = await import("@musubi/db");
   const { deliverEventOutbox } = await import("./event_delivery");
   const { encryptSecret } = await import("./crypto");
   const { issueMemberToken } = await import("../federation_tokens");
   const { requireAuth } = await import("../middleware/require_auth");
   const { middlewareErrorHandler } = await import("../middleware/error_handler");
   const { handlerEventScope } = await import("../handlers/events");
-  const { handlerGetEventDelivery, handlerGetEventDeliveryConflict } = await import("../handlers/event_delivery");
+  const { handlerGetEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } = await import("../handlers/event_delivery");
   let data = "", etag = '"before"', mode = "ok", puts = 0;
   let onPut: (() => Promise<void>) | undefined;
   const fixture = createServer(async (req, res) => {
@@ -42,13 +44,14 @@ async function main() {
   app.post("/events/:eventId/scope", requireAuth, handlerEventScope);
   app.get("/events/:eventId/delivery", requireAuth, handlerGetEventDelivery);
   app.get("/events/:eventId/delivery/:operationId/conflict", requireAuth, handlerGetEventDeliveryConflict);
+  app.post("/events/:eventId/delivery/:operationId/resolve", requireAuth, handlerResolveEventDelivery);
   app.use(middlewareErrorHandler);
   const api = app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => api.once("listening", resolve));
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op"]) {
+    for (const scenario of ["zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -59,7 +62,7 @@ async function main() {
         const collection = provider + "/collection/";
         const calendar = await importExternalCalendar("caldav", owner, account.id, "Fixture", { externalId: collection, name: "Fixture", color: "#7A8BA3", supportsEvents: true });
         const resource = collection + "family.ics";
-        const stamp = (name: string, day: string, hour: string) => scenario === "all-day" ? `${name};VALUE=DATE:202603${day}` : `${name}${scenario === "floating" ? "" : ";TZID=Europe/Prague"}:202603${day}T${hour}0000`;
+        const stamp = (name: string, day: string, hour: string) => scenario.endsWith("all-day") ? `${name};VALUE=DATE:202603${day}` : `${name}${scenario.endsWith("floating") ? "" : ";TZID=Europe/Prague"}:202603${day}T${hour}0000`;
         const component = (...lines: string[]) => ["BEGIN:VEVENT", "UID:family", ...lines, "END:VEVENT"].join("\r\n");
         const master = component(stamp("DTSTART", "28", "09"), stamp("DTEND", "29", "10"), "RRULE:FREQ=DAILY;COUNT=4", "SUMMARY:Master", "X-PRIVATE:Never disclose", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Private alarm", "END:VALARM");
         const child = component(stamp("RECURRENCE-ID", "29", "09"), stamp("DTSTART", "30", "14"), stamp("DTEND", "31", "16"), "SUMMARY:Moved");
@@ -138,7 +141,72 @@ async function main() {
         if (scenario === "mapping-race") onPut = async () => { await db.update(externalEvents).set({ etag: '"newer-map"' }).where(eq(externalEvents.id, mappings.find(map => map.eventID !== root.id)!.id)); };
         if (scenario === "lease-race") onPut = async () => { await db.update(eventOutbox).set({ leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 120000) }).where(eq(eventOutbox.id, operation.id)); };
         if (scenario === "tombstone") onPut = async () => { await db.insert(externalEventTombstones).values({ externalCalendarLinkID: operation.externalCalendarLinkID, externalEventID: resource }); };
+        if (scenario.startsWith("resolve")) { data = data.replace("SUMMARY:Master", "SUMMARY:Remote master").replace("X-PRIVATE:Never disclose", "X-PRIVATE:Fresh private extension"); etag = '"remote-v2"'; }
         let result = await deliverEventOutbox(operation.id, () => caldavAdapter);
+        if (scenario.startsWith("resolve")) {
+          assert.equal(result?.status, "conflict");
+          if (scenario === "resolve-timezone") {
+            data = data.replace("VERSION:2.0", "VERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Prague\r\nBEGIN:STANDARD\r\nDTSTART:20261025T030000\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0300\r\nEND:STANDARD\r\nEND:VTIMEZONE");
+            const refused = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
+            assert.equal(refused.status, 409); assert.equal((await outbox()).length, 1); assert.ok((await maps()).every(item => item.etag === '"before"')); continue;
+          }
+          const { preview, proof } = await prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter);
+          assert.equal(preview.canResolve, true); assert.equal(preview.local?.title, "Renamed"); assert.equal(preview.remote?.title, "Remote master");
+          const publicPreview = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
+          const publicText = await publicPreview.text(); assert.equal(publicPreview.status, 200); assert.ok(!publicText.includes("Fresh private extension") && !publicText.includes("BEGIN:VCALENDAR"));
+          const resolveRequest = { mutationId: randomUUID(), expectedLocalRevision: preview.localRevision, expectedLatestOperationId: preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: preview.remoteEtag };
+          const unchangedMaps = await maps();
+          if (scenario === "resolve-stale") {
+            etag = '"remote-v3"';
+            const fresh = await prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter);
+            await assert.rejects(() => commitEventDeliveryResolution(owner, fresh.proof, resolveRequest), (error: any) => error.code === "delivery-state-changed");
+            assert.deepEqual(await maps(), unchangedMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          if (scenario === "resolve-local-race") {
+            const child = (await rows()).find(item => item.seriesID)!;
+            await db.update(events).set({ title: "New local child", revision: sql`${events.revision} + 1` }).where(eq(events.id, child.id));
+            await assert.rejects(() => commitEventDeliveryResolution(owner, proof, resolveRequest), (error: any) => error.code === "delivery-state-changed");
+            assert.deepEqual(await maps(), unchangedMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          if (scenario === "resolve-http") {
+            const confirmed = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/resolve`, { method: "POST", headers, body: JSON.stringify(resolveRequest) });
+            assert.equal(confirmed.status, 202, await confirmed.text());
+            let replacement;
+            for (let attempt = 0; attempt < 100; attempt++) {
+              replacement = (await outbox()).find(item => item.id !== operation.id);
+              if (replacement?.status === "completed") break;
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            assert.equal(replacement?.status, "completed"); assert.ok((await maps()).every(item => item.etag === '"after"'));
+            console.log("CalDAV scope conflict authenticated HTTP confirmation/worker: OK"); continue;
+          }
+          const ids = await Promise.all([commitEventDeliveryResolution(owner, proof, resolveRequest), commitEventDeliveryResolution(owner, proof, resolveRequest)]);
+          assert.equal(ids[0], ids[1]); assert.equal((await outbox()).length, 2);
+          assert.ok((await maps()).every(item => item.etag === '"remote-v2"'));
+          assert.equal(await getEventDeliveryResolutionReplay(owner, root.id, operation.id, resolveRequest), ids[0]);
+          if (scenario === "resolve-child-race") { data = data.replace("SUMMARY:Moved", "SUMMARY:New remote child"); etag = '"remote-v3"'; }
+          if (scenario === "resolve-twice") {
+            data = data.replace("SUMMARY:Remote master", "SUMMARY:Changed again"); etag = '"remote-v3"';
+            assert.equal((await deliverEventOutbox(ids[0]!, () => caldavAdapter))?.status, "conflict");
+            const again = await prepareEventDeliveryResolution(owner, root.id, ids[0]!, () => caldavAdapter);
+            const second = await commitEventDeliveryResolution(owner, again.proof, { ...resolveRequest, mutationId: randomUUID(), expectedLatestOperationId: again.preview.latestOperationId, expectedRemoteEtag: again.preview.remoteEtag });
+            assert.equal((await deliverEventOutbox(second, () => caldavAdapter))?.status, "completed");
+            assert.ok((await outbox()).filter(item => item.id !== second).every(item => item.status === "not-needed"));
+            assert.ok((await maps()).every(item => item.etag === '"after"')); console.log("CalDAV repeated conflict resolution releases exact history: OK"); continue;
+          }
+          const resolved = await deliverEventOutbox(ids[0]!, () => caldavAdapter);
+          if (scenario === "resolve-child-race") {
+            assert.equal(resolved?.status, "conflict"); assert.ok((await maps()).every(item => item.etag === '"remote-v2"')); assert.ok(data.includes("SUMMARY:New remote child")); continue;
+          }
+          assert.equal(resolved?.status, "completed"); assert.ok((await maps()).every(item => item.etag === '"after"'));
+          assert.equal((await outbox()).find(item => item.id === operation.id)!.status, "not-needed");
+          assert.ok(data.includes("SUMMARY:Renamed") && data.includes("X-PRIVATE:Fresh private extension"));
+          const settled = await rows(); await persist(); assert.deepEqual(await rows(), settled);
+          const next = await post({ ...request, operationID: randomUUID(), expectedRevision: root.revision + 1, patch: { title: "After resolution" } });
+          assert.equal(next.status, 200, await next.text());
+          continue;
+        }
+
         if (scenario === "lost") {
           assert.equal(result?.status, "unconfirmed"); assert.deepEqual(await maps(), mappings);
           mode = "ok";
@@ -157,7 +225,7 @@ async function main() {
           assert.notEqual(result?.status, "completed");
           for (const map of await maps()) if (!(scenario === "mapping-race" && map.eventID !== root.id && map.etag === '"newer-map"')) assert.equal(map.etag, '"before"');
           const preview = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
-          const text = await preview.text(); assert.equal(preview.status, 409); assert.equal(JSON.parse(text).code, scenario === "lease-race" ? "delivery-state-changed" : "delivery-resolution-unavailable"); assert.ok(!text.includes("Never disclose") && !text.includes("BEGIN:VCALENDAR"));
+          const text = await preview.text(); assert.equal(preview.status, 409); assert.equal(JSON.parse(text).code, ["lease-race", "local-race"].includes(scenario) ? "delivery-state-changed" : "delivery-resolution-unavailable"); assert.ok(!text.includes("Never disclose") && !text.includes("BEGIN:VCALENDAR"));
           if (scenario === "race") {
             assert.ok(data.includes("SUMMARY:Remote child"));
             await db.update(eventOutbox).set({ status: "pending", nextAttemptAt: new Date(0), uncertain: false }).where(eq(eventOutbox.id, operation.id));
