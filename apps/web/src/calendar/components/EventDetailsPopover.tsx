@@ -88,6 +88,7 @@ import {
 import type { Notify } from "../notice";
 import {
 	eventReminder,
+	inheritedEventReminder,
 	type EventReminder,
 	type ReminderControl,
 } from "../reminder-control";
@@ -511,7 +512,7 @@ export function EventDetailsPopover({
 		try {
 			if (value === INHERIT) {
 				await reminders.onChange(master.id, null);
-				onNotice("Reminder follows the calendar again.");
+				onNotice("Reminder follows its inherited setting again.");
 				return;
 			}
 
@@ -521,11 +522,8 @@ export function EventDetailsPopover({
 					: withAllDay(reminder.rule, value);
 			// Only store an override where it actually differs. Writing one for
 			// every glance would make each event an exception, and a later change
-			// to the calendar rule would then reach none of them.
-			const base = eventReminder(
-				{ ...reminders, document: { ...reminders.document, events: {} } },
-				master,
-			).rule;
+			// to the inherited rule would then reach none of them.
+			const base = inheritedEventReminder(reminders, master).rule;
 			await reminders.onChange(master.id, sameRule(next, base) ? null : next);
 			onNotice("Reminder saved.");
 		} catch (error) {
@@ -841,7 +839,7 @@ export function EventDetailsPopover({
 													})}
 													{reminder.inherited ? null : (
 														<MenuItem onSelect={() => void handleReminder(INHERIT)}>
-															Use the calendar's setting
+															Use inherited setting
 														</MenuItem>
 													)}
 												</MenuContent>

@@ -7940,3 +7940,29 @@ test("retries a failed calendar read without a route crash", async ({ page }, te
   await page.screenshot({ path: testInfo.outputPath("calendar-recovered.png"), fullPage: true });
   expect(pageErrors).toEqual([]);
 });
+
+test("restores an event reminder's inherited setting from its menu", async ({ page }, testInfo) => {
+  await mockAuthenticatedReads(page);
+  const document = {
+    default: { minutesBefore: 10, allDay: null },
+    calendars: {},
+    events: { "project-check-in": { minutesBefore: 30, allDay: null } } as Record<string, { minutesBefore: number; allDay: null }>,
+  };
+  await page.route("**/api/v1/reminders", (route) => respond(route, document));
+  const writes: Array<{ method: string; body: unknown }> = [];
+  await page.route("**/api/v1/reminders/events/project-check-in", (route) => {
+    writes.push({ method: route.request().method(), body: route.request().postDataJSON() });
+    delete document.events["project-check-in"];
+    return route.fulfill({ status: 204, body: "" });
+  });
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+  await page.getByRole("button", { name: /Project check-in/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Project check-in" });
+  await dialog.getByRole("button", { name: "30 min", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Use inherited setting" }).click();
+  await expect(dialog.getByRole("button", { name: "10 min", exact: true })).toBeVisible();
+  await expect(page.locator('[class*="toastRegion"]')).toContainText("Reminder follows its inherited setting again.");
+  expect(writes).toEqual([{ method: "PUT", body: { rule: null } }]);
+  await expectNoAccessibilityViolations(page);
+  await page.screenshot({ path: testInfo.outputPath("inherited-reminder.png"), fullPage: true });
+});

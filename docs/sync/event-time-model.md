@@ -139,3 +139,7 @@ Web, native and API now use the same toReminderEvent projection instead of three
 ### Web expansion error checkpoint
 
 Home query selection and federated expansion expose safe presentation errors instead of throwing during rendering. Reminder resolution clears its due list on failure, cancelling previously scheduled browser timers; retry refetches event, rule and timezone sources. Existing workspace error UI presents these failures. Hook integration tests exercise known metadata and recovery; browser regression exercises the existing HTTP failure/retry route, editor draft roundtrip and peer outage isolation. EventSchema still does not admit known metadata, so this is not production activation or native error handling certification.
+
+### Web reminder inheritance checkpoint
+
+The event editor now passes seriesID through rule resolution. Its inherited baseline removes only the current event override, preserving a master rule; selecting the calendar value still writes an override when the series differs. Unit regressions exercise detached and master priorities without mutating the settings document; Chromium covers the existing PUT rule:null menu and refetched display. Transport admission remains pending.
