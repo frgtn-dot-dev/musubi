@@ -443,7 +443,7 @@ export function expandKnownTimeEvents<T extends ICalendarEventBase>(
         (names.has("BYMONTHDAY") && parsed.freq === RRule.WEEKLY) ||
         (byDay &&
           /[0-9]/.test(byDay) &&
-          (parsed.freq > RRule.MONTHLY || names.has("BYWEEKNO"))) ||
+          (parsed.freq! > RRule.MONTHLY || names.has("BYWEEKNO"))) ||
         (names.has("BYSETPOS") &&
           ![...names].some(
             (name) => name.startsWith("BY") && name !== "BYSETPOS",
