@@ -1,3 +1,4 @@
+import { config } from "@musubi/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import express from "express";
@@ -12,6 +13,8 @@ import { handlerGetProviderEventState } from "./events";
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
+  const previousReminderFlag = config.api.providerReminderEditsEnabled;
+  config.api.providerReminderEditsEnabled = false;
   const owner = `provider-state-${randomUUID()}`;
   const viewer = `provider-state-viewer-${randomUUID()}`;
   const token = issueMemberToken();
@@ -47,6 +50,18 @@ async function main() {
     assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, mapping.eventID))).length, 0);
     assert.deepEqual((await read()).body.state, state);
     assert.match((await read()).body.version, /^[0-9a-f]{64}$/);
+    assert.equal((await read()).body.reminderEdit, undefined, "disabled server cannot advertise editor");
+    config.api.providerReminderEditsEnabled = true;
+    assert.deepEqual((await read()).body.reminderEdit, { provider: "google", expectedRevision: initial.revision });
+    await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+    assert.equal((await read()).body.reminderEdit, undefined);
+    await db.update(calendarMembers).set({ role: "owner" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+    await db.update(events).set({ timeModel: { kind: "floating", startLocal: "2026-09-10T09:00:00.000", endLocal: "2026-09-10T10:00:00.000" } }).where(eq(events.id, initial.id));
+    assert.equal((await read()).body.reminderEdit, undefined);
+    await db.update(events).set({ timeModel: null }).where(eq(events.id, initial.id));
+    await observe({ ...state, reminders: { provider: "google", useDefault: false, overrides: [{ method: "unknown-native", minutes: 15 }] } });
+    assert.equal((await read()).body.reminderEdit, undefined, "unrepresentable preferences must not be silently replaced by a draft");
+    await observe(state);
     assert.equal((await read(null)).status, 401);
     assert.deepEqual(await read(viewerToken.raw), { status: 200, body: { state: null, version: null } });
     await db.update(externalCalendars).set({ disabled: true }).where(eq(externalCalendars.id, link.id));
@@ -89,6 +104,7 @@ async function main() {
     assert.equal(await getOwnProviderEventState(owner, initial.id), null);
     assert.equal((await read()).status, 403);
   } finally {
+    config.api.providerReminderEditsEnabled = previousReminderFlag;
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     for (const id of [owner, viewer]) await db.delete(user).where(eq(user.id, id));
   }

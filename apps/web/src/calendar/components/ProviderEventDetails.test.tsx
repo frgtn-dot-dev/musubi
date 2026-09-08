@@ -35,3 +35,15 @@ it("preserves unknown alarm semantics and negative offsets as raw CalDAV values"
   const details = providerEventDetails({ ...state, provider: "caldav", reminders: { provider: "caldav", alarms: [{ action: "X-CUSTOM", trigger: "PT15M", related: "END", repeat: "3", duration: "PT2M" }] } });
   expect(details.rows.find(row => row.label === "Provider alarms")?.value).toBe("X-CUSTOM · PT15M · END · repeat 3 · PT2M");
 });
+
+it("offers the editor only from the server contract and clears it on account change", async () => {
+  const google = { ...state, provider: "google", reminders: { provider: "google", useDefault: true, overrides: [] } };
+  fetchState.mockResolvedValueOnce({ state: google, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 } }).mockResolvedValueOnce({ state: google, version: "b".repeat(64), reminderEdit: { provider: "google", expectedRevision: 8 } }).mockResolvedValueOnce({ state: null });
+  const view = render(<ProviderEventDetails eventId="event" userId="owner" connectionId="one" />);
+  const edit = await screen.findByRole("button", { name: "Edit Google reminders" });
+  await act(async () => edit.click());
+  expect(await screen.findByRole("dialog", { name: "Google reminders" })).toBeTruthy();
+  view.rerender(<ProviderEventDetails eventId="event" userId="other" connectionId="two" />);
+  expect(screen.queryByRole("dialog", { name: "Google reminders" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit Google reminders" })).toBeNull();
+});

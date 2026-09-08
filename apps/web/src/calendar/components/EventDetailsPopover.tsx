@@ -1,3 +1,6 @@
+import { ProviderReminderEditor } from "./ProviderReminderEditor";
+import { getServerOrigin } from "~/api/query-keys";
+import type { ProviderEventStateResponse } from "@musubi/types";
 import { ProviderEventDetails } from "./ProviderEventDetails";
 import { hasKnownEventTime, type EventScopeRequest } from "@musubi/types";
 import { eventScopeRequest } from "@musubi/calendar";
@@ -206,6 +209,7 @@ export function EventDetailsPopover({
 	const reminderTitleId = useId();
 	const [open, setOpen] = useState(false);
 	const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [providerReminderEditor, setProviderReminderEditor] = useState<{ context: string; eventId: string; observation: ProviderEventStateResponse }>();
 	const [editing, setEditing] = useState(false);
 	const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
 	// The edit waiting for its scope answer, kept whole so nothing typed is lost
@@ -232,6 +236,8 @@ export function EventDetailsPopover({
 	// A primitive, so the attendees effect can depend on it without re-running on
 	// every re-render of the calendar list.
 	const homeConnectionId = connectionOfCalendar(homeCalendar);
+  const providerReminderContext = JSON.stringify([getServerOrigin(), user.id, homeConnectionId, event.id]);
+  if (providerReminderEditor && providerReminderEditor.context !== providerReminderContext) setProviderReminderEditor(undefined);
 	const removeCalendar =
 		getEditableCalendars(calendars).find((item) =>
 			master.calendars.includes(item.id),
@@ -818,7 +824,7 @@ export function EventDetailsPopover({
 									</section>
 								) : null}
 
-								{homeCalendar?.provider ? <ProviderEventDetails eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} /> : null}
+								{homeCalendar?.provider ? <ProviderEventDetails eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
 
 								{reminder ? (
 									<section aria-labelledby={reminderTitleId} className={styles.notes}>
@@ -1145,6 +1151,10 @@ export function EventDetailsPopover({
 					)}
 				</PopoverContent>
 			</Popover>
+
+            {providerReminderEditor?.context === providerReminderContext ? <ProviderReminderEditor
+              key={providerReminderEditor.context} eventId={providerReminderEditor.eventId} connectionId={homeConnectionId}
+              observation={providerReminderEditor.observation} returnFocus={triggerElement} onClose={() => setProviderReminderEditor(undefined)} /> : null}
 
             {deliveryOpen ? <EventDeliveryDialog key={`${user.id}:${homeConnectionId ?? "home"}:${liveMaster.id}`}
               eventId={liveMaster.id} userId={user.id} connectionId={homeConnectionId}
