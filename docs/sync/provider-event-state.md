@@ -69,9 +69,17 @@ No production activation or account write is part of this implementation.
 The read endpoint now returns `{ state, version }`; `version` is an opaque CAS
 value for the accepted source mapping, ETag and personal observation.
 
-This initial write slice accepts only legacy one-off events. Known civil-time
-models and recurring events are rejected before enqueue or provider calls: their
-zone and occurrence identity need additional version evidence before ACK.
+The writer accepts legacy one-offs and explicit zoned/all-day one-offs. Fresh
+Google GET and PATCH responses include native temporal normalization; known models
+require an exact civil model match as well as matching content/instants before
+write, no-op acknowledgement and uncertain recovery. Equal-offset IANA zones are
+not interchangeable. Timed Google resources with a separately specified different
+end zone cannot be represented by the single-zone local model and are refused.
+When time edits are disabled, reminder-enabled pulls carry observation-only
+temporal evidence into the pending comparison. That evidence never adopts a
+canonical time model or enables the time-edit feature.
+Floating, recurring, detached and cancelled definitions stay
+refused; series/occurrence evidence requires a separate capability.
 
 An intent supplies an operation UUID, expected event revision, expected state
 version, provider `google`, and either `useDefault: true` or `useDefault: false`
@@ -82,7 +90,10 @@ content writes even though a personal reminder edit does not increment the
 canonical revision. It does not create Musubi reminders or fan out to copies.
 
 Delivery reads fresh provider evidence, requires canonical content to match the
-accepted local event, checks the OAuth write grant and calendar role, and sends
+accepted local event. Pending pull uses the same temporal predicate and also
+requires the desired native reminder settings before classifying an observation
+as an echo. A newer zone or reminder choice observed before ACK remains a durable
+conflict rather than disappearing behind a cursor advance. Delivery checks the OAuth write grant and calendar role, and sends
 an ETag-conditional Google PATCH containing only `reminders`, with
 `sendUpdates=none`. Matching native preferences can confirm a recovered write
 only when canonical content also matches. An ambiguous response (including an
@@ -95,5 +106,5 @@ queue, source ownership, CAS, concurrent/replayed intent, predecessor ordering,
 exact PATCH fields, guest-copy preservation, 503 recovery, incomplete successful
 responses, and concurrent remote content changes. These are not live provider
 acceptance. Editing UI, dedicated native-reminder conflict resolution,
-known-time/series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
+series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
 flag must remain off until these activation prerequisites are addressed.

@@ -17,6 +17,7 @@ import {
   externalCalendars,
   externalEvents,
   eventOutbox,
+  events,
   getEventSnapshot,
   getOwnProviderEventObservation,
   getEventDeliveryResolutionContext,
@@ -33,12 +34,12 @@ import { handlerProviderReminderEdit } from "../handlers/events";
 
 async function main(
   scenario:
-    "normal" | "noop-content-conflict" | "recovery-content-conflict" | "legacy-detached" = "normal",
+    "normal" | "noop-content-conflict" | "recovery-content-conflict" | "legacy-detached" | "known-zoned" | "known-all-day" | "known-zone-conflict" | "known-recovery-zone-conflict" | "known-end-zone-conflict" | "known-recovery-end-zone-conflict" | "known-pull-zone-conflict" | "known-pull-reminder-conflict" | "known-pull-echo" = "normal",
 ) {
   assert.equal(process.env.ENVIRONMENT, "test");
   const owner = `google-reminder-${randomUUID()}`;
   const credential = issueMemberToken();
-  const remote = {
+  const remote: any = {
     id: "meeting",
     etag: '"v1"',
     summary: "Private meeting",
@@ -58,6 +59,10 @@ async function main(
       overrides?: { method: string; minutes: number }[];
     },
   };
+  if (scenario.startsWith("known-")) {
+    remote.start.timeZone = "Europe/Prague"; remote.end.timeZone = "Europe/Prague";
+    if (scenario === "known-all-day") { remote.start = { date: "2026-09-10" }; remote.end = { date: "2026-09-11" }; }
+  }
   const unchanged = structuredClone(remote);
   let requests = 0;
   let patches = 0;
@@ -74,6 +79,7 @@ async function main(
       assert.equal(req.method, "GET");
       return json({ accessRole: "owner" });
     }
+    if (url.pathname === "/calendar/v3/calendars/source/events") return json({ items: [remote], nextSyncToken: "next" });
     assert.equal(url.pathname, "/calendar/v3/calendars/source/events/meeting");
     if (req.method === "GET") return json(remote);
     assert.equal(req.method, "PATCH");
@@ -116,6 +122,7 @@ async function main(
     return realFetch(`${fixtureOrigin}${url.pathname}${url.search}`, init);
   };
   const enabled = config.api.providerReminderEditsEnabled;
+  const timeEnabled = config.api.eventTimeEditsEnabled;
   await db
     .insert(user)
     .values({
@@ -172,9 +179,9 @@ async function main(
       {
         title: remote.summary,
         color: "red",
-        start: new Date(remote.start.dateTime),
-        end: new Date(remote.end.dateTime),
-        isAllDay: false,
+        start: new Date(remote.start.dateTime ?? "2026-09-10T00:00:00Z"),
+        end: new Date(remote.end.dateTime ?? "2026-09-10T00:00:00Z"),
+        isAllDay: !!remote.start.date,
         description: null,
         location: null,
         organizer: remote.organizer.email,
@@ -192,6 +199,7 @@ async function main(
       .select()
       .from(externalEvents)
       .where(eq(externalEvents.calendarID, calendar.id));
+    if (scenario.startsWith("known-")) await db.update(events).set({ timeModel: scenario === "known-all-day" ? { kind: "all-day" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } }).where(eq(events.id, mapping.eventID));
     const event = (await getEventSnapshot(mapping.eventID))!;
     const send = async (body: unknown) => {
       const response = await realFetch(
@@ -249,6 +257,42 @@ async function main(
     const accepted = await send(first);
     assert.equal(accepted.status, 202);
     assert.equal(accepted.body.status, "pending");
+    if (scenario === "known-zone-conflict" || scenario === "known-end-zone-conflict") {
+      // Same civil minutes and instants, different zone. Even a reused ETag
+      // cannot turn that version into evidence for the saved explicit model.
+      remote.end.timeZone = "Europe/Berlin";
+      if (scenario === "known-zone-conflict") remote.start.timeZone = "Europe/Berlin";
+      assert.equal((await deliverEventOutbox(accepted.body.operationID, () => googleAdapter))?.status, scenario === "known-zone-conflict" ? "conflict" : "blocked");
+      assert.equal(patches, 0); assert.equal((await db.select().from(externalEvents).where(eq(externalEvents.id, mapping.id)))[0].etag, '"v1"'); return;
+    }
+    if (scenario.startsWith("known-pull-")) {
+      const concurrent = { ...googleAdapter, async writeReminders(...args: Parameters<NonNullable<typeof googleAdapter.writeReminders>>) {
+        const observed = await googleAdapter.writeReminders!(...args);
+        // Exercise the real fetch adapter with independent flags, not a
+        // fabricated timeModel which the disabled importer never supplies.
+        config.api.eventTimeEditsEnabled = false;
+        if (scenario === "known-pull-zone-conflict") { remote.start.timeZone = "Europe/Berlin"; remote.end.timeZone = "Europe/Berlin"; }
+        if (scenario === "known-pull-reminder-conflict") remote.reminders = { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] };
+        if (scenario !== "known-pull-echo") remote.etag = '"concurrent-pull"';
+        const fetched = await googleAdapter.fetchChanges(owner, "fixture", "source", "old");
+        const change = fetched.changes[0]; assert.equal(change.kind, "event");
+        if (change.kind !== "event") throw new Error("Expected event");
+        const pulled = change.data;
+        assert.equal(pulled.timeModel, undefined, "reminder flag cannot enable canonical time adoption");
+        assert.ok(pulled.reminderTimeEvidence);
+        await upsertExternalEvent("google", owner, calendar.id, "source", remote.id,
+          { title: pulled.title, color: event.color, start: pulled.start, end: pulled.end, isAllDay: pulled.isAllDay, description: pulled.description, location: pulled.location, organizer: pulled.organizer ?? "", recurrence: pulled.recurrence, url: pulled.url },
+          pulled.etag, null, undefined, undefined, undefined, pulled.providerState, pulled.reminderTimeEvidence);
+        return observed;
+      } };
+      const settled = await deliverEventOutbox(accepted.body.operationID, () => concurrent);
+      assert.equal(settled?.status, scenario === "known-pull-echo" ? "completed" : "conflict"); assert.equal(patches, 1);
+      const [retained] = await db.select().from(externalEvents).where(eq(externalEvents.id, mapping.id));
+      assert.equal(retained.etag, scenario === "known-pull-echo" ? '"v2"' : '"v1"');
+      assert.deepEqual(await getEventSnapshot(event.id), event);
+      if (scenario !== "known-pull-echo") { assert.ok(settled?.remoteSnapshot && !settled.remoteSnapshot.isEcho); assert.equal(settled.remoteSnapshot.etag, '"concurrent-pull"'); }
+      console.log(`Google known-time pending pull ${scenario}: OK`); return;
+    }
     const saved = await deliverEventOutbox(
       accepted.body.operationID,
       () => googleAdapter,
@@ -298,13 +342,15 @@ async function main(
       .update(eventOutbox)
       .set({ nextAttemptAt: new Date(0) })
       .where(eq(eventOutbox.id, second.body.operationID));
-    if (scenario === "recovery-content-conflict") {
-      remote.summary = "Changed after committed reminder";
+    if (scenario === "recovery-content-conflict" || scenario === "known-recovery-zone-conflict" || scenario === "known-recovery-end-zone-conflict") {
+      if (scenario === "known-recovery-end-zone-conflict") remote.end.timeZone = "Europe/Berlin";
+      else if (scenario === "known-recovery-zone-conflict") remote.start.timeZone = remote.end.timeZone = "Europe/Berlin";
+      else remote.summary = "Changed after committed reminder";
       remote.etag = '"remote-title-after-patch"';
       assert.equal(
         (await deliverEventOutbox(second.body.operationID, () => googleAdapter))
           ?.status,
-        "conflict",
+        scenario === "known-recovery-end-zone-conflict" ? "blocked" : "conflict",
       );
       const [retained] = await db
         .select()
@@ -422,6 +468,7 @@ async function main(
     );
   } finally {
     config.api.providerReminderEditsEnabled = enabled;
+    config.api.eventTimeEditsEnabled = timeEnabled;
     globalThis.fetch = realFetch;
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await new Promise<void>((resolve) => fixture.close(() => resolve()));
@@ -435,4 +482,13 @@ main()
   .then(() => main("noop-content-conflict"))
   .then(() => main("recovery-content-conflict"))
   .then(() => main("legacy-detached"))
+  .then(() => main("known-zoned"))
+  .then(() => main("known-all-day"))
+  .then(() => main("known-zone-conflict"))
+  .then(() => main("known-recovery-zone-conflict"))
+  .then(() => main("known-end-zone-conflict"))
+  .then(() => main("known-recovery-end-zone-conflict"))
+  .then(() => main("known-pull-zone-conflict"))
+  .then(() => main("known-pull-reminder-conflict"))
+  .then(() => main("known-pull-echo"))
   .finally(() => db.$client.end());

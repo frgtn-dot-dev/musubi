@@ -181,7 +181,7 @@ async function main() {
     // Different operations serialize on the same event, so only one is queued.
     await db.delete(eventOutbox).where(eq(eventOutbox.id, rows[0].id));
     for (const unsupported of [
-      { timeModel: { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" }, recurrence: null },
+      { timeModel: { kind: "floating" as const, startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" }, recurrence: null },
       { timeModel: null, recurrence: "RRULE:FREQ=DAILY" },
     ]) {
       await db.update(events).set(unsupported).where(eq(events.id, event.id));

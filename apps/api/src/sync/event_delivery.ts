@@ -3,6 +3,8 @@ import { config } from "@musubi/config";
 import { ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
   confirmCaldavSeriesOutbox,
+  matchesReminderEventProjection,
+  matchesGoogleReminderIntent,
   matchesEventProviderProjection,
   claimEventOutbox,
   completeEventOutbox,
@@ -31,10 +33,11 @@ import {
 import { ProviderEventWriteError, strongEventEtag } from "./event_write";
 
 export function matchesReminderIntent(intent: GoogleReminderWrite, state: ProviderEventState) {
-  if (state.provider !== "google" || state.reminders.provider !== "google" || intent.useDefault !== state.reminders.useDefault) return false;
-  if (intent.useDefault) return true;
-  const canonical = (items: { method: string | null; minutes: number | null }[]) => JSON.stringify(items.map(item => [item.method, item.minutes]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
-  return canonical(intent.overrides) === canonical(state.reminders.overrides);
+  return matchesGoogleReminderIntent(intent, state);
+}
+
+export function matchesReminderEvent(provider: string, expected: Event, actual: NormalizedEvent) {
+  return actual.status === "active" && matchesReminderEventProjection(provider, expected, actual);
 }
 
 /** Only fields actually projected by EVENT serializers. Provider-owned URLs,
@@ -175,7 +178,7 @@ export async function deliverEventOutbox(
         return;
       }
       if (row.payload.reminderEdit) {
-        if (!config.api.providerReminderEditsEnabled || hasKnownEventTime(event) || event.recurrence) throw new EventWriteError("event-write", "unsupported");
+        if (!config.api.providerReminderEditsEnabled || event.timeModel?.kind === "floating" || event.recurrence || event.seriesID || event.originalStart || event.isCanceled) throw new EventWriteError("event-write", "unsupported");
         const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);
         if (row.action !== "update" || row.provider !== intent.provider || !adapter?.readReminderState || !adapter.writeReminders)
           throw new EventWriteError("event-write", "unsupported");
@@ -185,7 +188,7 @@ export async function deliverEventOutbox(
         if (!expectedRef) throw new ProviderEventWriteError("provider-version-unavailable");
         let observed = await adapter.readReminderState(row.userID, row.accountID, row.externalCalendarID, expectedRef, signal);
         remoteSnapshot = { externalEventId: expectedRef.externalEventId, etag: observed?.ref.etag ?? null, deleted: !observed, observedAt: new Date().toISOString(), ...(observed ? { providerState: observed.state, values: JSON.parse(JSON.stringify(observed.event)) } : {}) };
-        if (!observed || !matchesDeliveredEvent(row.provider, event, observed.event)) throw new ProviderEventWriteError("provider-conflict");
+        if (!observed || !matchesReminderEvent(row.provider, event, observed.event)) throw new ProviderEventWriteError("provider-conflict");
         if (!matchesReminderIntent(intent.reminders, observed.state)) {
           if (observed.ref.etag !== expectedRef.etag) throw new ProviderEventWriteError("provider-conflict");
           if (!(await checkDestination())) return;
@@ -195,7 +198,7 @@ export async function deliverEventOutbox(
           observed = await adapter.writeReminders(row.userID, row.accountID, row.externalCalendarID, expectedRef, intent.reminders, signal);
           if (!matchesReminderIntent(intent.reminders, observed.state)) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
         }
-        if (!matchesDeliveredEvent(row.provider, event, observed.event)) {
+        if (!matchesReminderEvent(row.provider, event, observed.event)) {
           remoteSnapshot = { externalEventId: observed.ref.externalEventId, etag: observed.ref.etag ?? null, deleted: false, providerState: observed.state, values: JSON.parse(JSON.stringify(observed.event)), observedAt: new Date().toISOString() };
           throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written");
         }
