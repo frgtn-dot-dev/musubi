@@ -19,6 +19,7 @@ export type CaldavSeriesWriteIntent = {
   baseline: { ref: Ref; master: Event; children: Event[] };
   patch: Pick<Partial<Event>, "title" | "description" | "location">;
   targetEventID?: string;
+  cancelTarget?: true;
   before: string;
   after: string;
 };
@@ -72,13 +73,14 @@ export async function appendCaldavSeries(tx: DbTransaction, actorID: string, ope
 }
 
 /** Reconstruct the only permitted canonical change from the private input. */
-export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID">): CaldavSeriesWriteIntent["baseline"] {
-  if (!write.patch || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
+export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget">): CaldavSeriesWriteIntent["baseline"] {
+  if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
+  if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
   if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
   const target = baseline.children.filter(child => child.id === targetEventID);
   if (target.length !== 1 || target[0]!.isCanceled || !target[0]!.originalStart) throw unsupported();
-  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch }) : child) };
+  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, ...(write.cancelTarget ? { isCanceled: true } : {}) }) : child) };
 }
 
 class CaldavLeaseLost extends Error {}

@@ -900,14 +900,14 @@ async function readEventResource(
 
 /** Only content fields of the master may differ. Rebuilding from the original
  * body prevents a persisted/client-supplied replacement from widening the write. */
-export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string): CaldavSeriesWrite {
+export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string, cancelTarget?: true): CaldavSeriesWrite {
   if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !["title", "description", "location"].includes(key)))
     throw new EventWriteError("event-write", "unsupported");
   caldavSeriesEvidence(evidence.data, baseline);
   if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag)
     throw new ProviderEventWriteError("provider-conflict");
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
-  const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID });
+  const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID, cancelTarget });
   let after: string;
   if (targetEventID) {
     const child = baseline.children.find(item => item.id === targetEventID)!;
@@ -923,10 +923,14 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
       if (cleanPatch[field] !== null) replacement.addPropertyWithValue(name, cleanPatch[field]);
       replacements.set(name, replacement.getAllProperties(name));
     }
+    if (cancelTarget) {
+      const cancellation = new ICAL.Property("status"); cancellation.setValue("CANCELLED");
+      replacements.set("status", [cancellation]);
+    }
     after = replaceEventProperties(evidence.data, components.indexOf(component), replacements);
   } else after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, cleanPatch);
   caldavSeriesEvidence(after, desired);
-  return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), before: evidence.data, after };
+  return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), ...(cancelTarget ? { cancelTarget } : {}), before: evidence.data, after };
 }
 
 async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal) {
@@ -950,7 +954,7 @@ async function seriesAuthorization(userID: string, accountId: string, externalCa
 export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal): Promise<CaldavSeriesEvidence> {
   if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const { baseline } = write;
-  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch, write.targetEventID);
+  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch, write.targetEventID, write.cancelTarget);
   if (rebuilt.after !== write.after) throw new ProviderEventWriteError("provider-conflict");
   const desired = caldavSeriesDesired(rebuilt);
   const resource = caldavSeriesResourceURL(externalCalendarId, baseline.ref.externalEventId);
