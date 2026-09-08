@@ -637,3 +637,70 @@ it("saves a known civil date and title through one time request without losing h
   expect(useEventsStore.getState().events[0]).not.toHaveProperty("timeEdit");
   expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ start: new Date("2026-03-30T00:30:17.123Z"), end: new Date("2026-03-30T02:30:19.456Z"), timeModel: expect.objectContaining({ startLocal: "2026-03-30T02:30:17.123" }) }), null);
 });
+
+
+  function find(node: ReactNode, predicate: (props: Record<string, unknown>) => boolean): Record<string, any> | undefined {
+    if (Array.isArray(node)) return node.map(child => find(child, predicate)).find(Boolean);
+    if (!isValidElement<Record<string, any>>(node)) return;
+    if (predicate(node.props)) return node.props;
+    return find(node.props.children, predicate);
+  }
+it("requires an explicit zone when adopting a legacy event and commits the whole draft", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const legacy = EventSchema.parse({ ...master, recurrence: null });
+  useEventsStore.setState({ events: [legacy] });
+  useEditComposerStore.getState().open(legacy);
+  renderComposer(true);
+  const picker = find(renderComposer(), props => props.title === "Time model")!;
+  picker.onSelect("zoned");
+  const tree = renderComposer();
+  const zone = find(tree, props => props.accessibilityLabel === "Event time zone")!;
+  expect(zone.value).toBe("");
+  titleInput(tree)!.onChangeText("Adopted draft");
+  await saveButton(renderComposer())!.onPress!();
+  expect(mocks.request).not.toHaveBeenCalled();
+  expect(mocks.close).not.toHaveBeenCalled();
+  expect(titleInput(renderComposer())!.value).toBe("Adopted draft");
+  zone.onChangeText("Europe/Prague");
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    return { error: null, data: { ...legacy, ...body.patch, ...resolveEventTimeEdit(body.time), revision: 2 } };
+  });
+  await saveButton(renderComposer())!.onPress!();
+  expect(mocks.request).toHaveBeenCalledOnce();
+  const options = mocks.request.mock.lastCall![1];
+  expect(options.method).toBe("PUT");
+  expect(JSON.parse(options.body)).toMatchObject({ expectedRevision: 1, patch: { title: "Adopted draft" }, time: { kind: "zoned", timeZone: "Europe/Prague" } });
+});
+
+
+it("initializes the all-day switch from the event and converts on its first change", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const allDay = EventSchema.parse({ ...master, recurrence: null, ...resolveEventTimeEdit({ kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-26" }) });
+  useEventsStore.setState({ events: [allDay] });
+  useEditComposerStore.getState().open(allDay);
+  const toggle = find(renderComposer(true), props => props.accessibilityLabel === "All-day event")!;
+  expect(toggle.value).toBe(true);
+  toggle.onValueChange(false);
+  const tree = renderComposer();
+  expect(find(tree, props => props.accessibilityLabel === "All-day event")!.value).toBe(false);
+  expect(find(tree, props => props.accessibilityLabel === "Event time zone")!.value).toBe("");
+  expect(find(tree, props => props.accessibilityLabel === "Starts time (HH:mm)")!.value).toBe("00:00");
+});
+
+
+it("keeps the displayed legacy all-day dates when adopting an explicit model", async () => {
+  expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(process.env.MUSUBI_TEST_EXPECTED_ZONE ?? "Europe/Prague");
+  const legacy = EventSchema.parse({ ...master, recurrence: null, isAllDay: true, start: new Date("2026-07-25T00:00:00Z"), end: new Date("2026-07-26T00:00:00Z") });
+  useEventsStore.setState({ events: [legacy] });
+  useEditComposerStore.getState().open(legacy);
+  const tree = renderComposer(true);
+  // Actual picker state: assertions are independent of the process's offset.
+  const dates = state.values.filter((value): value is Date => value instanceof Date);
+  expect(dates.some(value => value.getDate() === 25 && value.getHours() === 0)).toBe(true);
+  expect(dates.some(value => value.getDate() === 26 && value.getHours() === 0)).toBe(true);
+  find(tree, props => props.title === "Time model")!.onSelect("all-day");
+  const adopted = renderComposer();
+  expect(find(adopted, props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.value).toBe("2026-07-25");
+  expect(find(adopted, props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.value).toBe("2026-07-26");
+});

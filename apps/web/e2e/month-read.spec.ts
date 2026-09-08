@@ -8036,3 +8036,47 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
 });
 
 }
+
+for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "all-day"]] as const) {
+  test(`explicit time model selection: ${target} ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const source = event("00000000-0000-4000-8000-000000000152", "Choose time model", "personal", "red", "2026-07-25T07:30:17.123Z", "2026-07-25T08:30:19.456Z", target === "all-day" ? {
+      timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-25T09:30:17.123", endLocal: "2026-07-25T10:30:19.456" },
+    } : {});
+    await mockAuthenticatedReads(page, { ...events, events: [source] });
+    const writes: unknown[] = [];
+    await page.route(`**/api/v1/events/${source.id}/time`, route => {
+      const body = route.request().postDataJSON();
+      writes.push({ method: route.request().method(), body });
+      return respond(route, { ...source, title: body.patch.title, revision: 2,
+        start: target === "zoned" ? "2026-07-25T13:30:17.123Z" : "2026-07-25T00:00:00Z",
+        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-25T00:00:00Z",
+        isAllDay: target === "all-day", timeModel: target === "zoned" ? body.time : { kind: "all-day" },
+      });
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Choose time model/ }).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("textbox", { name: "Event title" }).fill("Explicit complete draft");
+    await page.getByRole("button", { name: "More options", exact: true }).click();
+    await page.getByRole("combobox", { name: "Time model", exact: true }).click();
+    await page.getByRole("option", { name: target === "zoned" ? "Event time zone" : "All-day dates", exact: true }).click();
+    if (target === "zoned") {
+      await expect(page.getByRole("textbox", { name: "Event time zone", exact: true })).toHaveValue("");
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(page.getByRole("alert")).toContainText("Enter a valid event time zone");
+      expect(writes).toEqual([]);
+      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Explicit complete draft");
+      await page.getByRole("textbox", { name: "Event time zone", exact: true }).fill("America/New_York");
+    }
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath("explicit-time-model.png"), fullPage: true });
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toEqual({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Explicit complete draft" }, time: target === "zoned" ? {
+      kind: "zoned", timeZone: "America/New_York", startLocal: "2026-07-25T09:30:17.123", endLocal: "2026-07-25T10:30:19.456",
+    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-25" } } });
+  });
+}
