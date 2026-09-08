@@ -1,3 +1,4 @@
+import { googleOccurrenceMethods } from "./google_occurrence";
 import { googleEventState } from "./provider_event_state";
 import { normalizeGoogleTime } from "./google_time";
 import { config, logger } from "@musubi/config";
@@ -561,6 +562,7 @@ export async function fetchGoogleChanges(
 
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
+  ...googleOccurrenceMethods(getAccessToken, toNormalized),
   projectEvent(event) { return toNormalized({ ...toGoogleEvent(event), id: event.id }); },
 
   async listAccounts(

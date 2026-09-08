@@ -85,7 +85,7 @@ async function resolutionContext(
   )
     throw new EventDeliveryResolutionError("delivery-state-changed");
   if (
-    row.payload.reminderEdit || latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit) ||
+    row.payload.reminderEdit || latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit) || row.payload.googleOccurrence || latest.payload.googleOccurrence || pending.some(item => item.payload.googleOccurrence) ||
     pending.length > 1000 ||
     pending.some((item) => item.status === "attempting")
   )

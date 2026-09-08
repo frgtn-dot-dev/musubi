@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je lokálně dokončený; K11–K14 jsou rozpracované (dílčí převzaté řezy níže); K15 probíhá průběžně; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je lokálně dokončený; K11 je lokálně převzatý v dokumentovaném podporovaném rozsahu; K12–K14 jsou rozpracované (dílčí převzaté řezy níže); K15 probíhá průběžně; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -28,7 +28,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11–K14 jsou `in_progress`; K15 probíhá průběžně. Dílčí read model ani lokální scope neznamenají uzavření providerových zápisů nebo živé acceptance.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11 je `completed` (lokální podporovaný importní kontrakt); K12–K14 jsou `in_progress`; K15 probíhá průběžně. Dílčí read model ani lokální scope neznamenají uzavření providerových zápisů nebo živé acceptance.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -618,3 +618,8 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 **K14 Google native reminder — vypnutý implementační řez (2026-09-08):** vlastník výslovně schválil kód za samostatným `PROVIDER_REMINDER_EDITS_ENABLED=false`, bez produkční aktivace a bez skutečných účtů. Authenticated API ukládá osobní durable intent s revision/state CAS a idempotencí, bez změny obsahu/revize a fanoutu. Worker ověřuje čerstvý obsah i ETag a posílá pouze conditional `reminders` PATCH; po 503 nebo neúplné úspěšné odpovědi nejprve rekonciluje GET. Nezávislé review odhalilo chybnou adopci cizího content ETag a klasifikaci neúplného ACK; lokální HTTP/DB regrese pokrývají obě opravy. Stejnorevizní intenty mají monotónní pořadí vůči canonical outbox operacím. [Hranice a kontrakt](../sync/provider-event-state.md#default-off-google-reminder-writes): chybí editační UI, specializované řešení native konfliktu, Graph/CalDAV varianty a živá acceptance. K12 provider scope delivery a K13 meeting/RSVP writes zůstávají otevřené; tento řez neuzavírá K14.
 
 **Dodatečná hranice reminder ACK:** první vypnutý Google write řez přijímá pouze legacy jednorázové události. Známé civilní modely a série odmítne už enqueue i worker: samotné porovnání instantů neprokazuje shodu zóny ani původní identity výskytu. Jejich podpora vyžaduje plnou native temporal evidence a zůstává implementační úkol K14, nikoli hotová schopnost.
+
+**K12 Google occurrence — implementační řez:** vlastní osobní Google série bez attendees nově připraví skutečné instance ID/ETag podle původní identity, poté atomicky uloží výjimku, master revision, mapování, durable outbox a replay receipt. Worker provede pouze conditional instance PATCH; cancellation-only pull a 503 recovery mají vlastní temporal/identity matching. Generated výskyt se nevytváří jako nezávislá Google událost. HTTP/DB regrese pokrývají souběžný replay, zrušení přesunuté výjimky, baseline/echo sync, posun času, all-day konec, 412 a preflight CAS race. [Kontrakt a otevřené hranice](../sync/google-occurrence-writes.md): following/series, další provideři, meetingy, specializované řešení scope konfliktu a živá acceptance nejsou tímto dokončeny; aktivace zůstává vypnutá.
+
+
+**K11 — lokální převzetí (2026-09-08):** nezávislé review implementace a acceptance původního K11 potvrdilo Google identitu/přesuny/cancellation/reset, CalDAV výběr masteru a vlastní detached obsah s atomickým resetem, Graph mapping bez dvojí expanze a viditelné omezení coverage ve webu/mobilu. Důkazy jsou v [provider import kontraktu](../sync/provider-time-import.md); plná root/DB sada naposledy prošla nad navazujícím Google scope řezem. Převzetí nezahrnuje výslovně odmítané CalDAV masterless overrides, RANGE ani timed recurring nominal-day/week DURATION. Živá acceptance, fyzické native QA a produkční aktivace zůstávají otevřené; K12 providerové zápisy tím nejsou převzaté.

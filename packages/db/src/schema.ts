@@ -1,3 +1,4 @@
+import type { GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
 import type { ProviderReminderEdit } from "@musubi/types";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -877,6 +878,7 @@ export const eventOutbox = pgTable(
         patch?: Record<string, unknown>;
         scopeEditValidated?: boolean;
         reminderEdit?: ProviderReminderEdit;
+        googleOccurrence?: GoogleOccurrenceIntent;
         createIdentityVersion?: 1;
         resolution?: {
           operationID: string;

@@ -1,3 +1,4 @@
+import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { planEventScope } from "@musubi/calendar";
@@ -8,6 +9,7 @@ import { lockCalendarLifecycle } from "./calendar-lifecycle";
 
 type Snapshot = typeof events.$inferSelect & { calendars: string[] };
 export type LocalEventScopeResult =
+  | { status: "provider_required"; context: GoogleOccurrenceContext }
   | { status: "not_found" }
   | { status: "conflict"; current: Event }
   | { status: "replayed"; outcome: EventScopeOutcome }
@@ -16,7 +18,7 @@ export type LocalEventScopeResult =
 /** Internal local-only scope commit. Every event, tombstone and replay receipt
  * is committed together; no provider work or user notification is sent here.
  */
-export async function applyLocalEventScope(eventID: string, actorID: string, input: unknown): Promise<LocalEventScopeResult> {
+export async function applyLocalEventScope(eventID: string, actorID: string, input: unknown, options: { prepareProvider?: boolean; provider?: GoogleOccurrencePrepared } = {}): Promise<LocalEventScopeResult> {
   const request = EventScopeRequestSchema.parse(input);
   eventID = eventID.toLowerCase();
   const fingerprint = createHash("sha256").update(JSON.stringify({ eventID, request })).digest("hex");
@@ -59,7 +61,13 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     const [target] = fenced.length ? await tx.select({ id: externalCalendars.id }).from(externalCalendars).where(inArray(externalCalendars.calendarID, fenced)).limit(1) : [];
     const [mapping] = await tx.select({ id: externalEvents.id }).from(externalEvents).where(inArray(externalEvents.eventID, familyIDs)).limit(1);
     const [history] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(inArray(eventOutbox.eventID, familyIDs)).limit(1);
-    if (target || mapping || history) throw new EventWriteError("event-write", "unsupported", "This family requires a provider-aware scope operation. No changes were saved.");
+    let providerContext: GoogleOccurrenceContext | undefined;
+    if (target || mapping || history) {
+      if ((!options.prepareProvider && !options.provider) || request.scope !== "occurrence") throw new EventWriteError("event-write", "unsupported", "This family requires a provider-aware scope operation. No changes were saved.");
+      providerContext = await googleOccurrenceContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
+      if (options.provider && (options.provider.context.link.id !== providerContext.link.id || options.provider.context.link.accountID !== providerContext.link.accountID || options.provider.context.mapping.id !== providerContext.mapping.id || options.provider.context.mapping.etag !== providerContext.mapping.etag))
+        return { status: "conflict", current: EventSchema.parse(master) };
+    }
     const liveChildren = childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child)));
     const existing = request.originalStart ? liveChildren.find(child => child.originalStart && occurrenceKey({ seriesId: eventID, originalStart: child.originalStart }) === occurrenceKey({ seriesId: eventID, originalStart: request.originalStart! })) : undefined;
     if (request.scope !== "series" && (existing?.revision ?? null) !== request.expectedOccurrenceRevision)
@@ -73,6 +81,9 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     } catch (error) {
       throw new BadRequestError(error instanceof Error ? error.message : "Invalid scope operation.");
     }
+    if (providerContext && (request.action === "update" && request.patch.url !== undefined || [...plan.creates, ...plan.updates].some(event => event.seriesID === master.id && (!["zoned", "all-day"].includes(event.timeModel?.kind ?? "") || event.timeModel?.kind !== master.timeModel?.kind))))
+      throw new EventWriteError("event-write", "unsupported", "Google occurrence editing requires a supported time kind and provider content. No changes were saved.");
+    if (providerContext && !options.provider) return { status: "provider_required", context: providerContext };
     const outcome: EventScopeOutcome = { operationID: request.operationID, changed: false, events: [], deleted: [] };
     const previous: Event[] = [];
     const saved: Event[] = [];
@@ -110,6 +121,10 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
       previous.push(EventSchema.parse(snapshot(current)));
       const [row] = await tx.update(events).set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` }).where(eq(events.id, id)).returning();
       outcome.deleted.push({ id: row.id, revision: row.revision });
+    }
+    if (providerContext && options.provider) {
+      for (const event of saved.filter(event => event.seriesID === master.id))
+        await appendGoogleOccurrence(tx, actorID, request.operationID, { ...providerContext, master: saved.find(item => item.id === master.id) ?? providerContext.master }, options.provider, event);
     }
     outcome.changed = outcome.events.length + outcome.deleted.length > 0;
     await tx.insert(eventScopeOperations).values({ actorID, operationID: request.operationID, eventID, fingerprint, result: outcome });
