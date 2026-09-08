@@ -47,7 +47,12 @@ async function main() {
         ...base,
         id: randomUUID(),
         recurrence: "FREQ=WEEKLY",
-        timeModel: { kind: "zoned", timeZone: "Europe/Prague" },
+        timeModel: {
+          kind: "zoned",
+          timeZone: "Europe/Prague",
+          startLocal: "2026-09-07T11:00:00.000",
+          endLocal: "2026-09-07T12:00:00.000",
+        },
       })
       .returning();
     const originalStart = OccurrenceStartSchema.parse({

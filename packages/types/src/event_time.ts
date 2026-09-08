@@ -31,7 +31,14 @@ export const EventTimeModelSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("legacy-unknown") }).strict(),
   z.object({ kind: z.literal("all-day") }).strict(),
   z
-    .object({ kind: z.literal("zoned"), timeZone: EventTimeZoneSchema })
+    .object({
+      kind: z.literal("zoned"),
+      timeZone: EventTimeZoneSchema,
+      // Preserve civil anchors: a gap's resolved instant round-trips to a
+      // different wall clock, which must not become the recurrence anchor.
+      startLocal: CivilDateTimeSchema,
+      endLocal: CivilDateTimeSchema,
+    })
     .strict(),
   z
     .object({

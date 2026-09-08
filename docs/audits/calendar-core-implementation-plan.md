@@ -247,7 +247,7 @@ Použít stávající cache, query invalidation, SSE a UI primitives. Retry endp
 
 **K10 kontrakt převzat (PR #130, squash `5cc7a08`, 2026-09-07):** [konkrétní návrh schématu a rollout](../sync/event-time-model.md), striktní samostatné kontrakty time model / original start / occurrence identity. Nezapojují se zatím do event DTO ani writable requestů. Čisté review `39e0dca..863e47e` bez nálezů; root check, kontrakt testovaný v UTC/Prague/New_York a všech 14 CI kontrol prošly. Následuje aditivní storage, sdílená expanze a atomické napojení čtení/zápisů; samotný kontrakt neuzavírá K10.
 
-**K10 storage — rozpracováno:** migrace0063 přidává nullable metadata a strukturální vazby výskytu, bez změny starých instantů/revizí a bez outbox zápisů. Skutečný upgrade0062→0063 zachoval všechny staré hodnoty časované i all-day události. Zápis známé metadata, ownership/nesting kontrola a providerová rehydratace se teprve napojí; CalDAV komponenty sdílející resource vyžadují v K11 samostatné component mapping.
+**K10 storage převzat (PR #131, squash `207372d`, 2026-09-07):** migrace0063 přidává nullable metadata a strukturální vazby výskytu, bez změny starých instantů/revizí a bez outbox zápisů. Skutečný upgrade0062→0063 zachoval všechny staré hodnoty časované i all-day události. Root check, celá DB sada, čisté review `5cc7a08..37f227b` a všech 14 CI kontrol prošly. Opravená HTTP fork projekce a deterministický deadline-after-write test nahrazují raw-row kopii a flaky30ms čekání. Zápis známé metadata, ownership/nesting kontrola a providerová rehydratace se teprve napojí; CalDAV komponenty sdílející resource vyžadují v K11 samostatné component mapping.
 
 Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migrace:
 
@@ -259,6 +259,10 @@ Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migra
 **Migrace:** zóny a vztahy znovu načíst od providerů do stávajících mapování, bez wipe kalendářů a bez echo zápisů. Lokální historické zóny nehádat jako „správné“ podle serverového TZ. Uchovat legacy stav, nabídnout explicitní doplnění tam, kde je potřeba. Zabránit souběžnému backfillu v přepsání novějšího draftu.
 
 **Test/hotovo:** stejné okamžiky v UTC/Prague/New_York; evropské a americké DST v různých týdnech; neexistující a dvojznačný lokální čas; all-day přes DST; floating čas podle definované semantiky. Stabilní ID výjimky po přesunu a restartu. Zvolenou politiku DST zdokumentovat, neimplementovat ad-hoc hodinovou aproximaci.
+
+**K10 převod času — implementováno a ověřeno (PR #132):** sdílené přesné převody přes Temporal polyfill, oddělená explicitní/recurrence DST politika, testy v UTC/Prague/New_York včetně půlhodinového posunu a přeskočeného dne. Zoned model uchovává původní místní start/konec, protože instant neuchová neexistující02:30 po DST normalizaci. Dosavadní expanze se tím ještě nemění. Root check, striktní kontrakty, storage regrese, frozen install a Android Metro/Hermes export prošly; čistý reviewer nezávisle spustil kontrakty i převody v UTC/Prague/New_York (6 běhů bez chyby). Stav finálního převzetí je v [PR #132](https://github.com/frgtn-dot-dev/musubi/pull/132).
+
+**Checkpoint na žádost vlastníka:** po uzavření PR #132 zastavit další implementaci. K10 zůstává `in_progress`; pokračování začíná sdílenou expanzí a jejím napojením. [Review aktuálního stavu](calendar-core-checkpoint-2026-09-07.md).
 
 ### K11 — Věrný import a zachování providerových výjimek
 

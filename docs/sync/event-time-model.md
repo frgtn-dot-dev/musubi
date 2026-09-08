@@ -1,12 +1,12 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage checkpoint under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage accepted in PR131; exact conversion checkpoint under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
 Keep existing `start_at` / `end_at` instants and Musubi's inclusive all-day end convention. Add nullable `events.time_model` JSONB, exposed as optional `timeModel` on read DTOs for old caches. Missing/null means **legacy-unknown**, never the server's timezone. A known model is a strict tagged union:
 
-- `{ kind: "zoned", timeZone: "Europe/Prague" }`: start/end remain instants; recurrence advances civil time in this event zone. UTC is the explicit `UTC` zone.
+- `{ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-07T09:00:00", endLocal: "2026-09-07T10:00:00" }`: start/end remain instants; recurrence advances the original civil start in this event zone. Store both civil endpoints because resolving a nonexistent local time moves its instant forward: deriving the next recurrence anchor back from that instant would incorrectly turn02:30 into03:30. Zoned civil end may precede civil start across a fold; validate actual instant order and endpoint consistency in the authoritative writer instead of comparing civil strings. UTC is the explicit `UTC` zone.
 - `{ kind: "floating", startLocal: "2026-09-07T09:00:00", endLocal: "2026-09-07T10:00:00" }`: civil values are authoritative; existing instants are a compatibility projection. Expansion requires an explicit viewer zone; background consumers require the recipient's configured zone.
 - `{ kind: "all-day" }`: existing start/end encode inclusive calendar dates, independent of viewer zone. Provider adapters alone convert exclusive end dates.
 - `{ kind: "legacy-unknown" }`: explicit unresolved historical semantics. Do not infer an IANA zone from offset, machine locale, account location or server TZ.
@@ -48,3 +48,9 @@ Migration0063 adds nullable time/series/original-start columns, a non-cascading 
 Local upgrade verification migrated a fresh database through0062, inserted a recurring timed event and a multi-day all-day event, then applied the exact0063 migration. Every previous column, revision and timestamp matched, all new metadata remained null, and the outbox remained empty. Integration tests exercise uniqueness, paired identity, self/orphan rejection, non-cascading master deletion, moved identity and destination isolation.
 
 The full HTTP regression suite also exposed fork creation feeding raw database metadata into a strict create request. Fork now projects the supported EventSchema content before strict write validation; existing authenticated CAS/fork tests exercise this path.
+
+## Exact conversion checkpoint
+
+Shared `instantToCivil` / `civilToInstant` helpers use `@js-temporal/polyfill`0.5.1 as a domain dependency; they do not install globals or change existing expansion. The polyfill resolves transitions from timezone data, while the shared strict contracts reject invalid civil dates, offsets, unknown zones and precision loss. Explicit timestamps use compatible disambiguation (first fold occurrence, gap resolved using the earlier offset); generated recurrence candidates additionally round-trip their civil fields and omit gaps. Source: [Temporal ZonedDateTime](https://tc39.es/proposal-temporal/docs/zoneddatetime.html) and [polyfill implementation](https://github.com/js-temporal/temporal-polyfill).
+
+Tests run under UTC, Europe/Prague and America/New_York host zones and cover separate US/EU transition weeks, folds, gaps, Lord Howe's half-hour changes, Apia's skipped date and millisecond round-trips. Android Metro/Hermes export verifies dependency bundling; it is not a physical-device execution claim. Shared expansion, caller zone selection, COUNT handling and durable exception replacement are still subsequent work.
