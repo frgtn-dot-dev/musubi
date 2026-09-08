@@ -32,14 +32,15 @@
     "test:db:sync": "pnpm --filter @musubi/api exec tsx src/sync/graph_occurrences.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/caldav_occurrences.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/google_occurrences.integration.test.ts && pnpm test:db:events && pnpm --filter @musubi/api exec tsx src/handlers/event_capabilities.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/adapters/provider_event_writes.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/adapters/provider_create_recovery.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/event_delivery.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/optional_tasks.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/microsoft_hydration.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/google_discovery.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/bootstrap.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/external_tasks.integration.test.ts && pnpm --filter @musubi/api exec tsx src/sync/external_events.integration.test.ts",
     "test:caldav:radicale": "pnpm --filter @musubi/api exec tsx src/sync/adapters/caldav.radicale.integration.test.ts",
     "test:db": "pnpm test:db:versions && pnpm test:db:oauth && pnpm test:db:pages && pnpm test:federation-db && pnpm test:db:federation-gateway && pnpm test:provider-db && pnpm test:db:sync",
-    "check": "pnpm release:verify && pnpm check:contracts && pnpm peers:check && pnpm typecheck && pnpm test && pnpm lint && pnpm build",
+    "check": "pnpm release:verify && pnpm check:contracts && pnpm peers:check && pnpm test:query-runtime && pnpm typecheck && pnpm test && pnpm lint && pnpm build",
     "test:e2e": "pnpm --filter @musubi/web test:e2e",
     "test:e2e:radicale": "bash scripts/test-radicale-e2e.sh",
     "verify": "pnpm check && pnpm test:e2e",
     "lint": "pnpm --filter @musubi/client lint && pnpm --filter @musubi/web lint",
     "db:generate": "pnpm -F @musubi/db exec drizzle-kit generate",
     "db:migrate": "pnpm -F @musubi/db exec drizzle-kit migrate",
-    "wire:snapshot": "tsx scripts/snapshot-wire.mjs"
+    "wire:snapshot": "tsx scripts/snapshot-wire.mjs",
+    "test:query-runtime": "node scripts/test-query-string-runtime.mjs"
   },
   "keywords": [],
   "author": "frgtn.dev",
@@ -51,14 +52,14 @@
     "@storybook/addon-docs": "10.5.5",
     "@storybook/addon-vitest": "10.5.5",
     "@storybook/tanstack-react": "10.5.5",
-    "@vitest/browser-playwright": "4.1.10",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/browser-playwright": "4.1.11",
+    "@vitest/coverage-v8": "4.1.11",
     "chromatic": "16.10.0",
     "expo": "catalog:",
     "expo-router": "catalog:",
     "storybook": "10.5.5",
     "turbo": "^2.10.11",
     "typescript": "~5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   }
 }

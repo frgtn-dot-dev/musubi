@@ -11,6 +11,7 @@ WORKDIR /repo
 # and boot-time migrations.
 FROM base AS deploy
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
+COPY patches patches
 COPY apps/api apps/api
 COPY packages/calendar packages/calendar
 COPY packages/db packages/db
