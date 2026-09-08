@@ -1,3 +1,4 @@
+import { hasKnownEventTime, BadRequestError } from "@musubi/types";
 import { assertLegacyEventTimePatch } from "./event-time-write";
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
@@ -556,6 +557,8 @@ export async function forkEventAtRevision(
       {},
     );
     if (checked.status !== "saved") return checked;
+    if (hasKnownEventTime(checked.event))
+      throw new BadRequestError("This event requires a time-model-aware copy. No changes were saved.");
     const created = await createEventInTransaction(tx, event, calendarIDs);
     await appendEventOutbox(tx, { ...created, calendars: calendarIDs }, outbox);
     return {

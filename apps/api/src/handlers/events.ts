@@ -1,3 +1,4 @@
+import { config } from "@musubi/config";
 import { eventMutationIdentity } from "./event_mutation";
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
@@ -13,12 +14,16 @@ import {
   getEventOrigin,
   getUsersEvents,
   patchEventAndCalendarLinks,
+  replaceLocalEventTimeAtRevision,
   setAttendance,
 } from "@musubi/db";
 import {
   BadRequestError,
   type Event,
   EventSchema,
+  EventTimeEditRequestSchema,
+  hasKnownEventTime,
+  eventCreateRequest,
   EventCreateRequestSchema,
   EventDeleteRequestSchema,
   EventUnlinkRequestSchema,
@@ -268,6 +273,23 @@ export async function handlerUpdateEvent(req: Request, res: Response) {
   });
 }
 
+export async function handlerEditEventTime(req: Request, res: Response) {
+  if (!config.api.eventTimeEditsEnabled)
+    throw new EventWriteError("event-write", "unsupported", "Explicit time editing is not enabled on this server. No changes were saved.");
+  const eventID = requireUUID(req.params.eventId, "eventId");
+  const request = EventTimeEditRequestSchema.parse(req.body);
+  await assertEventContentAccess(req.user!.id, eventID);
+  const deliver = await prepareEventWrites([], eventMutationIdentity(req));
+  const saved = await replaceLocalEventTimeAtRevision(eventID, request.expectedRevision, request.time, req.user!.id);
+  if (saved.status === "not_found") throw new NotFoundError("Event not found.");
+  if (saved.status === "conflict") return conflict(res, saved.current);
+  return sendCommitted(res, deliver, saved.event, saved.event, 200, async () => {
+    if (!saved.changed) return;
+    await notifyEvent(saved.event.calendars, "event_updated", saved.event);
+    await queueEventChange(saved.previous, saved.event, req.user!.id);
+  });
+}
+
 export async function handlerRemoveEvent(req: Request, res: Response) {
   const request =
     req.body?.unlinkCalendarID === undefined
@@ -376,11 +398,10 @@ export async function handlerForkEvent(req: Request, res: Response) {
   if (source.revision !== expectedRevision || source.deletedAt)
     return conflict(res, source);
 
+  if (hasKnownEventTime(source))
+    throw new BadRequestError("This event requires a time-model-aware copy. No changes were saved.");
   const newEvent: NewEvent = {
-    ...EventCreateRequestSchema.parse(
-      // Project supported event content, not every database metadata column.
-      EventSchema.omit({ revision: true }).parse(source),
-    ),
+    ...eventCreateRequest(EventSchema.parse(source)),
     id: randomUUID(),
     creatorID: req.user!.id,
     organizer: req.user!.id,

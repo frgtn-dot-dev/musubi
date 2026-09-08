@@ -1,3 +1,4 @@
+import { prepareEventWrites } from "./engine";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mock } from "node:test";
@@ -189,6 +190,15 @@ async function main() {
       await createEvent(event, event.calendars, [job]);
       return { event, id: job.id! };
     };
+
+    const known = { ...value(), timeModel: { kind: "zoned" as const, timeZone: "UTC", startLocal: "2026-01-01T09:00:00.000", endLocal: "2026-01-01T10:00:00.000" } };
+    await assert.rejects(() => prepareEventWrites([{ event: known, calendarIDs: known.calendars, action: "create" }]), /time-model-aware provider write/);
+    const knownJob = intent(known);
+    await createEvent(known, known.calendars, [knownJob]);
+    const callsBeforeKnown = calls;
+    assert.equal((await deliver(knownJob.id!))?.status, "blocked");
+    assert.equal(calls, callsBeforeKnown, "a durable known-model snapshot must never reach a legacy provider serializer");
+    assert.equal(remote.size, 0);
 
     const timeout = await enqueue();
     mode = "timeout";

@@ -1,4 +1,4 @@
-import { EventSchema, EventWriteError, type Event } from "@musubi/types";
+import { hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
   matchesEventProviderProjection,
   claimEventOutbox,
@@ -103,6 +103,8 @@ export async function deliverEventOutbox(
   try {
     const run = async () => {
       const event = EventSchema.parse(row.payload.event);
+      if (hasKnownEventTime(event))
+        throw new EventWriteError("event-write", "unsupported");
       if (!adapter?.assertEventWrite)
         throw new EventWriteError("event-write", "unsupported");
       const projected = adapter.projectEvent?.(event);

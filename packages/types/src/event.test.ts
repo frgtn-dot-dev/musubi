@@ -113,3 +113,16 @@ assert.equal(
 console.log(
   "Event request contracts: positive frozen revision, omission/null, distinct create/PATCH/delete/link/unlink/fork and no metadata leakage OK",
 );
+
+const known = EventSchema.parse({ ...event, timeModel: {
+  kind: "zoned", timeZone: "UTC", startLocal: "2026-09-01T23:00:00", endLocal: "2026-09-03T02:00:00",
+}, seriesID: "00000000-0000-4000-8000-000000000001", originalStart: { kind: "instant", value: "2026-09-01T23:00:00Z" } });
+assert.equal(known.timeModel?.kind, "zoned");
+assert.equal(known.originalStart?.value, "2026-09-01T23:00:00.000Z");
+for (const field of ["timeModel", "seriesID", "originalStart"] as const) {
+  assert.equal(EventPatchSchema.safeParse({ [field]: known[field] }).success, false);
+  assert.equal(EventCreateRequestSchema.safeParse({ ...eventCreateRequest(event), [field]: known[field] }).success, false);
+}
+assert.throws(() => eventCreateRequest(known), /time-model-aware copy/);
+assert.deepEqual(eventCreateRequest({ ...event, timeModel: null, seriesID: null, originalStart: null }), eventCreateRequest(event));
+assert.deepEqual(eventPatchRequest(editedEvent(known, { ...known, title: "New title" })).patch, { title: "New title" });

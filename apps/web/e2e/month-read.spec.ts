@@ -7966,3 +7966,31 @@ test("restores an event reminder's inherited setting from its menu", async ({ pa
   await expectNoAccessibilityViolations(page);
   await page.screenshot({ path: testInfo.outputPath("inherited-reminder.png"), fullPage: true });
 });
+
+
+test("recovers from unsupported known time metadata after refresh", async ({ page }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
+  const known = event("00000000-0000-4000-8000-000000000149", "Known zoned series", "personal", "red", "2026-07-25T07:00:00Z", "2026-07-25T08:00:00Z", {
+    recurrence: "FREQ=DAILY;COUNT=2",
+    timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-25T09:00:00.000", endLocal: "2026-07-25T10:00:00.000" },
+    seriesID: null, originalStart: null,
+  });
+  await mockAuthenticatedReads(page, { ...events, events: [known] });
+  let unsupported = true;
+  await page.route("**/api/v1/events**", route => {
+    if (route.request().method() !== "GET" || !unsupported || new URL(route.request().url()).pathname !== "/api/v1/events") return route.fallback();
+    return respond(route, { ...events, events: [{ ...known, recurrence: "FREQ=HOURLY;COUNT=2" }] });
+  });
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+  await expect(page.getByRole("heading", { name: "We could not open this calendar." })).toBeVisible();
+  await expect(page.getByText(/FREQ=HOURLY/)).toHaveCount(0);
+  await expectNoAccessibilityViolations(page);
+  await page.screenshot({ path: testInfo.outputPath("known-time-error.png"), fullPage: true });
+  unsupported = false;
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("button", { name: /Known zoned series/ })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("known-time-recovered.png"), fullPage: true });
+  expect(pageErrors).toEqual([]);
+});
