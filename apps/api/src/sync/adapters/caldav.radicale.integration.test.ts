@@ -25,10 +25,10 @@ async function main() {
   }
 
   const { eq } = await import("drizzle-orm");
-  const { db, events, externalEvents, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
+  const { db, events, externalCalendars, externalEvents, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
   const { config } = await import("@musubi/config");
   const { syncProvider } = await import("../engine");
-  const { caldavAdapter, patchEventIcal } = await import("./caldav");
+  const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
 
@@ -195,6 +195,30 @@ async function main() {
     assert.equal(staleMasterWrite.status, 412, "Resource CAS protects a concurrent exception edit");
     assert.equal(await (await davFetch(resourceURL, { headers: { authorization: basicAuth } })).text(), afterChild);
     assert.deepEqual(await rows(), initial, "Evidence and refused provider writes do not change local content");
+    await put(moved, master);
+    const restored = await readSeries();
+    const write = prepareCaldavSeriesWrite(restored, intent, { title: "Renamed series", description: "Content-only description", location: "Test location" });
+    const writeSeries = () => caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, write);
+    config.api.eventTimeEditsEnabled = false;
+    await assert.rejects(writeSeries);
+    config.api.eventTimeEditsEnabled = true;
+    await assert.rejects(() => caldavAdapter.writeCaldavSeries!("other-user", account.id, collectionURL, write));
+    await db.update(externalCalendars).set({ disabled: true }).where(eq(externalCalendars.calendarID, link.calendarID));
+    await assert.rejects(writeSeries);
+    await db.update(externalCalendars).set({ disabled: false }).where(eq(externalCalendars.calendarID, link.calendarID));
+    const delivered = await writeSeries();
+    assert.equal(delivered.master.title, "Renamed series");
+    assert.equal(delivered.master.description, "Content-only description");
+    assert.equal(delivered.master.location, "Test location");
+    assert.deepEqual(delivered.exceptions.map(item => [item.title, item.timeModel]), restored.exceptions.map(item => [item.title, item.timeModel]));
+    assert.ok(delivered.data.includes("X-MUSUBI-FIXTURE:keep"));
+    assert.ok(delivered.data.includes("DESCRIPTION:Keep alarm"));
+    assert.notEqual(delivered.ref.etag, restored.ref.etag);
+    const recovered = await writeSeries();
+    assert.equal(recovered.ref.etag, delivered.ref.etag);
+    assert.equal(recovered.data, delivered.data);
+    assert.deepEqual(await rows(), initial, "Adapter evidence alone never acknowledges local family mappings or edits local content");
+    assert.deepEqual((await db.select().from(externalEvents).where(eq(externalEvents.eventID, localMaster.id)))[0], familyMapping);
     await put(moved, master); // Restore the synthetic fixture for the existing import regressions.
     await sync();
     console.log("Radicale complete series GET, accepted ETag, private-only evidence and concurrent-child CAS: OK");

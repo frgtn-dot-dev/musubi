@@ -21,6 +21,46 @@ export type CaldavSeriesEvidence = {
   exceptions: NormalizedEvent[];
 };
 
+/** Durable server-only input for one content-only resource replacement. The
+ * accepted validator never advances merely because a newer GET was observed. */
+export type CaldavSeriesWrite = {
+  baseline: CaldavSeriesIntent;
+  patch: Pick<Partial<Event>, "title" | "description" | "location">;
+  before: string;
+  after: string;
+};
+
+/** Compare unfolded physical properties, never a lossy typed projection.
+ * Only line folding/endings and ordering between different property names are
+ * ignored. Unknown values, parameter spelling/order, repeated-property order
+ * and subcomponent order stay exact and therefore fail closed on transforms. */
+export function sameCaldavResource(left: string, right: string): boolean {
+  type Component = { name: string; properties: { name: string; line: string }[]; children: Component[] };
+  const canonical = (data: string): unknown => {
+    // The shared span reader rejects malformed boundaries and trailing content.
+    replaceEventProperties(data, 0, new Map());
+    const lines = data.replace(/\r?\n[ \t]/g, "").split(/\r?\n/);
+    const roots: Component[] = [], stack: Component[] = [];
+    for (const line of lines) {
+      const boundary = /^(BEGIN|END):([A-Z0-9-]+)$/i.exec(line);
+      if (boundary) {
+        if (boundary[1].toUpperCase() === "BEGIN") {
+          const component: Component = { name: boundary[2].toLowerCase(), properties: [], children: [] };
+          (stack.length ? stack[stack.length - 1].children : roots).push(component);
+          stack.push(component);
+        } else stack.pop(); // Already validated by the physical span reader.
+      } else if (stack.length) {
+        const name = /^([A-Z0-9-]+)[:;]/i.exec(line)?.[1];
+        if (!name) throw new ProviderEventWriteError("provider-conflict");
+        stack[stack.length - 1].properties.push({ name: name.toLowerCase(), line });
+      }
+    }
+    const sort = (component: Component): unknown => [component.name, component.properties.sort((a, b) => a.name.localeCompare(b.name)).map(property => property.line), component.children.map(sort)];
+    return roots.map(sort);
+  };
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
 /** Refuse ambiguous path encodings before sending account credentials. Some
  * DAV servers decode escaped separators or a second percent-encoding layer. */
 export function caldavSeriesResourceURL(collectionID: string, resourceID: string): URL {
