@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration is under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -81,3 +81,10 @@ Every production expansion call passes an explicit consumer zone. Calendar views
 Agenda calls expansion once with `includeAllNonRecurring`: RRULE generation remains finite, while standalone and detached events beyond that horizon are retained and floating endpoints are still resolved. Splitting recurring/non-recurring input beforehand would disconnect exceptions and resurrect originals. Home/federated web queries preserve cancellation definitions until expansion and filter the final visible rows. The normal finite view path is unchanged for unresolved legacy data.
 
 Before DTO admission, range reads must retain exceptions even when their moved actual start/end is outside the requested window; otherwise the engine cannot suppress the original slot. Metadata projection, consumer error presentation and guarded authoritative writes remain pending. Pure shared and web-adapter regressions cover moved/cancelled exceptions and distant floating agenda events; this checkpoint does not claim end-to-end production metadata activation.
+
+
+## Complete range read checkpoint
+
+The user-scoped event query retains every visible master and detached definition, including cancellation and moved-out exceptions. It also retains floating definitions independently of their compatibility instants. All-day filtering is conservative: the lower bound starts at the previous UTC midnight, and the upper bound is padded one day. Flooring the lower bound before padding is necessary for inclusive all-day ends in a late-evening sub-day window west of UTC. The consumer performs the exact overlap check in its explicit zone.
+
+These branches stay inside the existing membership join and live-row predicate; they do not fetch another user's definitions or revive deleted rows. Delta reads still return tombstones. This deliberately expands the definition set for correctness; it does not claim provider metadata admission or a large-account performance benchmark. Range consumers and metadata projections must still be activated together.

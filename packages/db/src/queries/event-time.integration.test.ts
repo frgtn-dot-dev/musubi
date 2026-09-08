@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { OccurrenceStartSchema } from "@musubi/types";
-import { createCalendar, db, events, externalEvents, user } from "..";
+import {
+  createCalendar,
+  db,
+  events,
+  externalEvents,
+  user,
+  calendarEvents,
+  getUsersEvents,
+} from "..";
 
 const constraint = (name: string) => (error: unknown) =>
   (error as { cause?: { constraint?: string } }).cause?.constraint === name;
@@ -78,6 +86,118 @@ async function main() {
       moved.originalStart,
       originalStart,
       "moving does not change the original identity",
+    );
+    // Range readers must provide definitions needed to replace an original
+    // slot even when an exception has moved beyond the queried actual dates.
+    await db.insert(calendarEvents).values(
+      [legacy, series, exception].map((event) => ({
+        eventID: event.id,
+        calendarID: calendar.id,
+      })),
+    );
+    const originalWindow = {
+      start: new Date("2026-09-14T00:00:00Z"),
+      end: new Date("2026-09-15T00:00:00Z"),
+    };
+    let ranged = await getUsersEvents(userID, originalWindow);
+    assert.ok(
+      ranged.some((row) => row.event.id === exception.id),
+      "moved-out exception is included",
+    );
+    assert.ok(
+      ranged.some((row) => row.event.id === series.id),
+      "master is included",
+    );
+    assert.ok(
+      !ranged.some((row) => row.event.id === legacy.id),
+      "unrelated out-of-window timed event stays excluded",
+    );
+    await db
+      .update(events)
+      .set({ isCanceled: true })
+      .where(eq(events.id, exception.id));
+    ranged = await getUsersEvents(userID, originalWindow);
+    assert.ok(
+      ranged.some(
+        (row) => row.event.id === exception.id && row.event.isCanceled,
+      ),
+      "cancellation definition survives range read",
+    );
+    assert.deepEqual(
+      await getUsersEvents(`unrelated-${randomUUID()}`, originalWindow),
+      [],
+      "range completeness cannot bypass membership",
+    );
+    await db
+      .update(events)
+      .set({ deletedAt: new Date() })
+      .where(eq(events.id, exception.id));
+    assert.ok(
+      !(await getUsersEvents(userID, originalWindow)).some(
+        (row) => row.event.id === exception.id,
+      ),
+      "range read still excludes soft-deleted definitions",
+    );
+    assert.ok(
+      (await getUsersEvents(userID, { since: new Date(0) })).some(
+        (row) => row.event.id === exception.id && row.event.deletedAt,
+      ),
+      "delta read still returns deletion tombstones",
+    );
+    await db
+      .update(events)
+      .set({ deletedAt: null, isCanceled: false })
+      .where(eq(events.id, exception.id));
+
+    const [floating] = await db
+      .insert(events)
+      .values({
+        ...base,
+        id: randomUUID(),
+        timeModel: {
+          kind: "floating",
+          startLocal: "2026-09-14T09:00:00.000",
+          endLocal: "2026-09-14T10:00:00.000",
+        },
+      })
+      .returning();
+    const [allDay] = await db
+      .insert(events)
+      .values({
+        ...base,
+        id: randomUUID(),
+        isAllDay: true,
+        start: new Date("2026-09-14T00:00:00Z"),
+        end: new Date("2026-09-14T00:00:00Z"),
+        timeModel: { kind: "all-day" },
+      })
+      .returning();
+    await db.insert(calendarEvents).values(
+      [floating, allDay].map((event) => ({
+        eventID: event.id,
+        calendarID: calendar.id,
+      })),
+    );
+    const viewerWindow = {
+      start: new Date("2026-09-14T04:00:00Z"),
+      end: new Date("2026-09-15T04:00:00Z"),
+    };
+    ranged = await getUsersEvents(userID, viewerWindow);
+    assert.ok(
+      ranged.some((row) => row.event.id === floating.id),
+      "floating civil dates are not pruned by compatibility instants",
+    );
+    assert.ok(
+      ranged.some((row) => row.event.id === allDay.id),
+      "inclusive all-day date is retained in western viewer window",
+    );
+    const lateEvening = await getUsersEvents(userID, {
+      start: new Date("2026-09-15T02:00:00Z"),
+      end: new Date("2026-09-15T03:00:00Z"),
+    });
+    assert.ok(
+      lateEvening.some((row) => row.event.id === allDay.id),
+      "inclusive all-day date survives a late-evening New York sub-day window",
     );
     await assert.rejects(
       () =>

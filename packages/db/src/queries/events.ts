@@ -1,6 +1,6 @@
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
-import { and, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
 import {
 	type NewEvent,
@@ -129,7 +129,11 @@ export async function getUsersEvents(
 	{ since, start, end }: { since?: Date; start?: Date; end?: Date } = {},
 ) {
 	// Delta reads include tombstones. Range reads keep every recurring master so
-	// occurrence expansion remains client-side, plus one-offs overlapping the window.
+	// occurrence expansion remains client-side. Keep every visible exception too:
+	// its moved dates may be outside the window while its original slot is inside.
+	// Floating compatibility instants cannot determine overlap for another viewer.
+	// All-day inclusive ends start at UTC midnight: floor the lower boundary
+	// before offset padding so late-evening sub-day windows retain that date.
 	const eventFilter = since
 		? gt(events.updatedAt, since)
 		: and(
@@ -137,6 +141,11 @@ export async function getUsersEvents(
 				start && end
 					? or(
 							isNotNull(events.recurrence),
+							isNotNull(events.seriesID),
+							sql`${events.timeModel}->>'kind' = 'floating'`,
+							and(eq(events.isAllDay, true),
+								lt(events.start, new Date(end.getTime() + 86_400_000)),
+								gte(events.end, new Date((Math.floor(start.getTime() / 86_400_000) - 1) * 86_400_000))),
 							and(lt(events.start, end), gt(events.end, start)),
 						)
 					: undefined,
