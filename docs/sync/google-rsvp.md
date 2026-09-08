@@ -1,7 +1,8 @@
 # Google RSVP: evidence contract
 
 K13 has a pure evidence planner and an internal conditional Google transport.
-There is no public endpoint, enabled RSVP worker or client RSVP control yet.
+There is no public endpoint or client RSVP control yet. The specialized worker
+is behind the default-off RSVP flag.
 Internal two-phase enqueue is described below.
 Production and live testing remain disabled/unimplemented.
 
@@ -102,15 +103,60 @@ outbox contains the raw baseline and separate baseline/desired provider states;
 it does not alter canonical event content/revision, social attendance, accepted
 provider observation or local reminders.
 
-This is not yet a usable public RSVP flow: there is no route. The existing worker,
-generic ACK, content conflict resolution and generic pull-echo comparison
-explicitly refuse the new intent shape. A future specialized worker must replace
-those guards with proven identity/CAS, full-resource confirmation, pending-pull
-coordination and lease-fenced ACK. A private queue row alone is not delivery.
+This is not yet a usable public RSVP flow: there is no route. The generic ACK and content conflict resolution explicitly refuse the new intent
+shape. The specialized worker and pull comparison described below use their own
+proofs. A private queue row alone is not delivery.
 
 `provider_rsvp.integration.test.ts` exercises actual token/account lookup,
 Google read adapter and PostgreSQL against a fake server: disabled/wrong-user/
 wrong-scope/viewer refusal before HTTP; concurrent replay; revision, role,
 mapping, native state and time races; legacy/zoned/all-day preservation; and no
-generic worker PATCH. It is part of `test:db:events` and `test:db:sync`.
+generic worker PATCH; the specialized worker tests below extend these fixtures. It is part of `test:db:events` and `test:db:sync`.
 No live invitations, endpoint, migration, rollout or version change is included.
+
+## Specialized durable delivery and pull coordination
+
+The RSVP worker validates the private request/baseline and exact live source,
+OAuth identity and claimed lease before provider work. A callback immediately
+before the conditional PATCH rechecks the local membership, mapping/state,
+revision and lease after the provider read. Recovery uses the saved native
+baseline; it never rebuilds intent from a newer local event.
+
+Only `completeProviderRsvpOutbox` can confirm this payload. Inside the existing
+lifecycle/event/outbox/mapping transaction it fences the lease, locks editable
+membership, requires the exact source revision and original mapping/state CAS,
+and verifies the desired private state. Generic ACK remains unavailable.
+Canonical event content/revision is unchanged; the accepted ETag and private
+provider state advance together. Permission/revision loss after PATCH remains
+unconfirmed, and a lost lease cannot ACK another worker's operation.
+
+An unchanged accepted native baseline during preparation is retained without
+creating a false conflict. After an attempt, exact native desired state plus
+canonical time/content identifies an echo; another attendee response, reminder
+or time-zone change remains a retained conflict. RSVP alone enables temporal
+evidence for this comparison without enabling canonical time-model adoption.
+Generic content conflict resolution remains refused; native RSVP conflict
+resolution is a follow-up.
+
+The HTTP/DB suite additionally covers confirmation, replay after applied 503 and
+connection loss, lease recovery without duplicate PATCH, permission loss before
+PATCH/at ACK, blocked generic ACK, private Delivery projection, and real fetch
+adapter → pending pull for baseline/echo/state/zone cases with only RSVP enabled.
+No endpoint, client flow, real invitation or live organizer-visible acceptance
+is provided by this worker slice. Notification delivery remains unverified.
+
+Review regression: the intent also stores the normalized time of the **native**
+baseline. Pull echo matching uses that proof even when the canonical event is
+legacy-unknown. A Prague→Berlin change with equal instants after confirmation
+must remain a conflict. Missing/unknown native time cannot establish an echo;
+it fails closed. The worker checks the saved proof against raw baseline before
+writing. The canonical time model is not adopted by this comparison. A dedicated
+legacy regression reproduced the erroneous completion before this fix.
+
+Further preservation checks: projected pull equality is only an echo candidate.
+The ACK requires any retained candidate to have the exact resource ID/ETag of
+the full native confirmation GET. Another pulled version remains a conflict,
+even when only an attendee comment or another unprojected field changed; a later
+local timestamp cannot replace it. RSVP-only import preserves ordinary legacy
+reads of valid multi-zone events while withholding unsupported temporal evidence.
+Such a missing proof cannot satisfy pending RSVP echo comparison.

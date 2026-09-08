@@ -35,7 +35,7 @@ export function googleRsvpMethods(getAuthorizedToken: (user: string, account: st
       const ctx = await context(user, account, calendar, ref, signal);
       return googleRsvpEvidence(await ctx.read(), { eventId: ref.externalEventId, etag: ref.etag ?? "", authenticatedCopyEmail: ctx.email }, response);
     },
-    async writeRsvp(user, account, calendar, evidence, policy, signal) {
+    async writeRsvp(user, account, calendar, evidence, policy, signal, beforeWrite) {
       if (policy.sendUpdates !== "all") throw new EventWriteError("event-write", "unsupported");
       const ref = { externalEventId: evidence.baseline.id, etag: evidence.baseline.etag };
       const ctx = await context(user, account, calendar, ref, signal);
@@ -47,6 +47,8 @@ export function googleRsvpMethods(getAuthorizedToken: (user: string, account: st
         return { ...confirmed, recovered: true, notificationDelivery: "unknown" as const };
       } catch { /* An unchanged baseline may still permit one conditional PATCH. */ }
       if (!isDeepStrictEqual(current, intent.baseline)) throw new ProviderEventWriteError("provider-conflict");
+      await beforeWrite?.();
+      signal?.throwIfAborted();
       let result: Response;
       try {
         result = await fetch(`${ctx.url}?sendUpdates=all&conferenceDataVersion=1`, { method: "PATCH", headers: { ...ctx.headers, "Content-Type": "application/json", "If-Match": ref.etag }, body: JSON.stringify(intent.patch), redirect: "error", signal });

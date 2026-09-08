@@ -5,6 +5,7 @@ import {
   EventSchema,
   EventWriteError,
   ForbiddenError,
+  EventTimeModelSchema, type EventTimeModel,
   ProviderEventStateSchema,
   ProviderRsvpEditSchema, providerRsvpDesiredState, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
 } from "@musubi/types";
@@ -27,8 +28,8 @@ export type ProviderRsvpPreparation = { kind: "replay"; receipt: ProviderRsvpRec
 export async function prepareProviderRsvpEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
   return rsvpTransaction(actorID, eventID, input);
 }
-export async function commitProviderRsvpEdit(prepared: ProviderRsvpContext, baseline: Record<string, unknown>): Promise<ProviderRsvpReceipt> {
-  const result = await rsvpTransaction(prepared.actorID, prepared.eventID, prepared.request, { context: prepared, baseline });
+export async function commitProviderRsvpEdit(prepared: ProviderRsvpContext, baseline: Record<string, unknown>, nativeTime: EventTimeModel): Promise<ProviderRsvpReceipt> {
+  const result = await rsvpTransaction(prepared.actorID, prepared.eventID, prepared.request, { context: prepared, baseline, nativeTime: EventTimeModelSchema.parse(nativeTime) });
   if (result.kind !== "replay") throw new Error("RSVP commit did not produce a receipt");
   return result.receipt;
 }
@@ -39,7 +40,7 @@ async function rsvpTransaction(
   actorID: string,
   eventID: string,
   input: unknown,
-  prepared?: { context: ProviderRsvpContext; baseline: Record<string, unknown> },
+  prepared?: { context: ProviderRsvpContext; baseline: Record<string, unknown>; nativeTime: EventTimeModel },
 ): Promise<ProviderRsvpPreparation> {
   const request = ProviderRsvpEditSchema.parse(input);
   eventID = eventID.toLowerCase();
@@ -201,7 +202,7 @@ async function rsvpTransaction(
     // Raw evidence is server-internal and was normalized/compared by preflight.
     if (prepared.baseline.id !== mapping.externalEventID || prepared.baseline.etag !== mapping.etag)
       throw new BadRequestError("RSVP provider identity changed.");
-    const rsvp: ProviderRsvpIntent = { request, baseline: prepared.baseline, baselineState: state, desiredState, mappingID: mapping.id };
+    const rsvp: ProviderRsvpIntent = { request, baseline: prepared.baseline, nativeTime: prepared.nativeTime, baselineState: state, desiredState, mappingID: mapping.id };
     const id = randomUUID();
     await appendEventOutbox(tx, snapshot, [
       {
@@ -225,4 +226,19 @@ async function rsvpTransaction(
     ]);
     return { kind: "replay", receipt: { operationID: id, replayed: false, status: "pending" } };
   });
+}
+
+/** Recheck a claimed intent's exact live source before provider work. */
+export async function hasProviderRsvpSource(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
+  const intent = row.payload.rsvp;
+  if (!intent || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
+  const [source] = await db.select({ event: events, mapping: externalEvents, role: calendarMembers.role })
+    .from(events)
+    .innerJoin(eventOutbox, and(eq(eventOutbox.id, row.id), eq(eventOutbox.leaseToken, row.leaseToken), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`))
+    .innerJoin(calendarEvents, and(eq(calendarEvents.eventID, events.id), eq(calendarEvents.calendarID, row.calendarID)))
+    .innerJoin(calendarMembers, and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID)))
+    .innerJoin(externalCalendars, and(eq(externalCalendars.id, row.externalCalendarLinkID), eq(externalCalendars.calendarID, row.calendarID), eq(externalCalendars.userID, row.userID), eq(externalCalendars.accountID, row.accountID), eq(externalCalendars.provider, row.provider), eq(externalCalendars.externalCalendarID, row.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true)))
+    .innerJoin(externalEvents, and(eq(externalEvents.id, intent.mappingID), eq(externalEvents.eventID, events.id), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider), eq(externalEvents.externalCalendarID, row.externalCalendarID), eq(externalEvents.externalEventID, row.externalEventID!)))
+    .where(and(eq(events.id, row.eventID), eq(events.originCalendarID, row.calendarID), isNull(events.deletedAt)));
+  return !!source && ["owner", "editor"].includes(source.role) && source.event.revision === row.revision && source.mapping.etag === row.expectedEtag && providerStateVersion(source.mapping) === intent.request.expectedStateVersion;
 }

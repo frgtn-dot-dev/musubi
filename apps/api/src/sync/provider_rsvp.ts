@@ -13,7 +13,8 @@ export async function queueGoogleRsvp(actorID: string, eventID: string, input: u
   if (prepared.kind === "replay") return prepared.receipt;
   const context = prepared.context;
   const evidence = await googleAdapter.readRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag }, context.request.response);
-  if (!matchesReminderEventProjection("google", context.event, googleReminderEventEvidence(evidence.baseline)) || !isDeepStrictEqual(context.state, googleEventState(evidence.baseline)))
+  const native = googleReminderEventEvidence(evidence.baseline);
+  if (!matchesReminderEventProjection("google", context.event, native) || !isDeepStrictEqual(context.state, googleEventState(evidence.baseline)))
     throw new BadRequestError("Provider meeting changed. Sync and reopen before responding.");
-  return commitProviderRsvpEdit(context, evidence.baseline);
+  return commitProviderRsvpEdit(context, evidence.baseline, native.timeModel!);
 }

@@ -1,3 +1,4 @@
+import type { EventTimeModel } from "./event_time";
 import { z } from "zod";
 import { ProviderEventStateSchema, type ProviderEventState } from "./provider-event-state";
 export const ProviderRsvpEditSchema = z.object({
@@ -12,6 +13,7 @@ export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
 export type ProviderRsvpIntent = {
   request: ProviderRsvpEdit;
   baseline: Record<string, unknown>;
+  nativeTime?: EventTimeModel;
   baselineState: ProviderEventState;
   desiredState: ProviderEventState;
   mappingID: string;
