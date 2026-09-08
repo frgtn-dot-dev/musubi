@@ -1,6 +1,6 @@
 import { deliverEventOutbox } from "./event_delivery";
 import { randomUUID } from "node:crypto";
-import { EventWriteError, type Event, type Task } from "@musubi/types";
+import { hasKnownEventTime, EventWriteError, type Event, type Task } from "@musubi/types";
 import { logger } from "@musubi/config";
 import {
   getDueEventOutboxIDs, getEventOutboxBacklog,
@@ -495,6 +495,8 @@ export async function prepareEventWrites(
     for (const calendarID of new Set(operation.calendarIDs)) {
       const link = await getExternalLinkForCalendar(calendarID);
       if (!link) continue;
+      if (hasKnownEventTime(operation.event))
+        throw new EventWriteError("event-write", "unsupported", "This event requires a time-model-aware provider write. No changes were saved.");
       if (!link.supportsEvents)
         throw new EventWriteError("event-write", "unsupported");
       const adapter = getAdapter(link.provider);

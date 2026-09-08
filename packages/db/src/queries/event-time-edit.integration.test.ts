@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { BadRequestError } from "@musubi/types";
+import { BadRequestError, EventWriteError } from "@musubi/types";
 import {
+  calendarMembers,
   createCalendar,
   createEvent,
   db,
@@ -10,7 +11,7 @@ import {
   externalCalendars,
   eventOutbox,
   getEventSnapshot,
-  replaceLocalEventTimeAtRevision,
+  replaceLocalEventTimeAtRevision as replaceTime,
   user,
 } from "..";
 
@@ -20,6 +21,7 @@ async function main() {
   await db
     .insert(user)
     .values({ id: userID, name: userID, email: `${userID}@example.test` });
+  const replaceLocalEventTimeAtRevision = (id: string, revision: number, intent: unknown) => replaceTime(id, revision, intent, userID);
   try {
     const calendar = await createCalendar({
       creatorID: userID,
@@ -48,6 +50,11 @@ async function main() {
       startLocal: "2026-03-29T02:30:00",
       endLocal: "2026-03-29T04:30:00",
     };
+    // A permission decision made before the transaction cannot authorize a revoked role.
+    await db.update(calendarMembers).set({ role: "viewer" }).where(eq(calendarMembers.calendarID, calendar.id));
+    await assert.rejects(() => replaceTime(event.id, 1, intent, userID), EventWriteError);
+    assert.deepEqual(await getEventSnapshot(event.id), { ...event, calendars: [calendar.id] });
+    await db.update(calendarMembers).set({ role: "owner" }).where(eq(calendarMembers.calendarID, calendar.id));
     const first = await replaceLocalEventTimeAtRevision(event.id, 1, intent);
     assert.equal(first.status, "saved");
     if (first.status !== "saved") throw new Error("Time edit not saved");

@@ -77,6 +77,8 @@ function parseMetricsPort(value: string | undefined) {
 }
 
 type APIConfig = {
+  // Opt-in until both editors and the release compatibility gate are ready.
+  eventTimeEditsEnabled: boolean;
   port: number;
   environment: Environment;
   url: string;
@@ -231,6 +233,7 @@ export function parseMediaConfig(
 const mediaConfig = parseMediaConfig(process.env);
 
 const apiConfig: APIConfig = {
+  eventTimeEditsEnabled: process.env.EVENT_TIME_EDITS_ENABLED === "true",
   port: Number(process.env.API_SERVER_PORT) || 7531,
   environment,
   url: envOrThrow("BETTER_AUTH_URL"),

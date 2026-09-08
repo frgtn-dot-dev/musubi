@@ -1,9 +1,10 @@
 import { expandRecurringEvents, resolveEventTimeEdit } from "@musubi/calendar";
-import { BadRequestError, EventTimeModelSchema } from "@musubi/types";
+import { BadRequestError, EventTimeModelSchema, EventWriteError, can } from "@musubi/types";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "..";
 import {
   calendarEvents,
+  calendarMembers,
   events,
   externalCalendars,
   externalEvents,
@@ -17,14 +18,15 @@ export type LocalEventTimeEditResult =
   | { status: "conflict"; current: Snapshot }
   | { status: "saved"; changed: boolean; previous: Snapshot; event: Snapshot };
 
-/** Internal local-only writer. The future API caller must authorize first and
- * publish the returned committed snapshot afterward. Not wired to public PATCH.
+/** Internal local-only writer. The API caller must preflight access and
+ * publish the returned committed snapshot afterward. The actor is rechecked within the transaction.
  * Provider histories and occurrence families require the later scope/outbox path.
  */
 export async function replaceLocalEventTimeAtRevision(
   eventID: string,
   expectedRevision: number,
   intent: unknown,
+  actorID: string,
 ): Promise<LocalEventTimeEditResult> {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
     throw new TypeError("A positive expected event revision is required");
@@ -59,6 +61,16 @@ export async function replaceLocalEventTimeAtRevision(
       .where(eq(calendarEvents.eventID, eventID));
     const calendarIDs = links.map((link) => link.id);
     const previous = { ...current, calendars: calendarIDs };
+    // Recheck the authenticated actor after acquiring the lifecycle/event locks.
+    // Sharing rows stay locked until commit, so concurrent revocation cannot
+    // invalidate a permission check midway through the write.
+    const authority = current.originCalendarID ? [current.originCalendarID] : calendarIDs;
+    const grants = authority.length ? await tx.select({ role: calendarMembers.role })
+      .from(calendarMembers).where(and(eq(calendarMembers.userID, actorID), inArray(calendarMembers.calendarID, authority)))
+      .orderBy(calendarMembers.calendarID).for("share") : [];
+    if (!(current.originCalendarID === null && current.creatorID === actorID) &&
+        !grants.some(grant => can(grant.role, "editEvents")))
+      throw new EventWriteError("event-write", "denied");
     if (
       current.revision !== expectedRevision ||
       current.deletedAt !== null ||

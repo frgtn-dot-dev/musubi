@@ -122,3 +122,13 @@ export const EventTimeEditSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type EventTimeEdit = z.infer<typeof EventTimeEditSchema>;
+
+/** True when a legacy writer would lose known temporal or occurrence semantics. */
+export function hasKnownEventTime(event: {
+  timeModel?: EventTimeModel | null;
+  seriesID?: string | null;
+  originalStart?: OccurrenceStart | null;
+}): boolean {
+  return (event.timeModel != null && event.timeModel.kind !== "legacy-unknown") ||
+    event.seriesID != null || event.originalStart != null;
+}

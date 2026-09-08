@@ -9,6 +9,7 @@ import {
   EventUnlinkRequestSchema,
   EventLinkRequestSchema,
   EventForkRequestSchema,
+  EventTimeEditRequestSchema,
   ScopeEditIntentSchema,
 } from "./event";
 import { InviteSchema } from "./invite";
@@ -56,6 +57,7 @@ export const WIRE_CONTRACT: Record<
   ResolveEventDeliveryRequest: { direction: "write", schema: ResolveEventDeliveryRequestSchema },
   EventCreateRequest: { direction: "write", schema: EventCreateRequestSchema },
   EventPatchRequest: { direction: "write", schema: EventPatchRequestSchema },
+  EventTimeEditRequest: { direction: "write", schema: EventTimeEditRequestSchema },
   EventDeleteRequest: { direction: "write", schema: EventDeleteRequestSchema },
   EventUnlinkRequest: { direction: "write", schema: EventUnlinkRequestSchema },
   EventLinkRequest: { direction: "write", schema: EventLinkRequestSchema },

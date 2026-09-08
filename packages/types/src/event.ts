@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EventTimeModelSchema, OccurrenceStartSchema, EventTimeEditSchema, hasKnownEventTime } from "./event_time";
 
 export const EventRevisionSchema = z
   .number()
@@ -10,6 +11,9 @@ export const EventSchema = z.object({
   id: z.string(),
   // Optional only for old disk caches. Absence never grants a writable revision.
   revision: EventRevisionSchema.optional(),
+  timeModel: EventTimeModelSchema.nullish(),
+  seriesID: z.string().uuid().transform(value => value.toLowerCase()).nullish(),
+  originalStart: OccurrenceStartSchema.nullish(),
   creatorID: z.string(),
   organizer: z.string(),
   title: z.string(),
@@ -32,7 +36,7 @@ export type Event = z.infer<typeof EventSchema>;
 const eventWriteDate = z
   .union([z.date(), z.iso.datetime({ offset: true })])
   .pipe(z.coerce.date());
-export const EventCreateRequestSchema = EventSchema.omit({ revision: true })
+export const EventCreateRequestSchema = EventSchema.omit({ revision: true, timeModel: true, seriesID: true, originalStart: true })
   .extend({ start: eventWriteDate, end: eventWriteDate })
   .strict();
 export const EventPatchSchema = EventSchema.omit({
@@ -40,6 +44,9 @@ export const EventPatchSchema = EventSchema.omit({
   revision: true,
   creatorID: true,
   originCalendarID: true,
+  timeModel: true,
+  seriesID: true,
+  originalStart: true,
 })
   .extend({
     // Read defaults must never turn an omitted PATCH field into a write.
@@ -67,6 +74,12 @@ export const EventPatchRequestSchema = patchRequest.extend({
   scopeEdit: ScopeEditIntentSchema.optional(),
 });
 export type EventPatchRequest = z.infer<typeof EventPatchRequestSchema>;
+export const EventTimeEditRequestSchema = z.object({
+  expectedRevision: EventRevisionSchema,
+  time: EventTimeEditSchema,
+}).strict();
+export type EventTimeEditRequest = z.infer<typeof EventTimeEditRequestSchema>;
+
 export const EventDeleteRequestSchema = z
   .object({
     id: z.string().uuid(),
@@ -151,7 +164,9 @@ export function eventPatchRequest(event: EventWriteRequest): EventPatchRequest {
 export function eventCreateRequest(
   event: Event,
 ): z.infer<typeof EventCreateRequestSchema> {
-  const { revision: _revision, ...create } = EventSchema.parse(event);
+  if (hasKnownEventTime(event))
+    throw new Error("This event requires a time-model-aware copy. No changes were saved.");
+  const { revision: _revision, timeModel: _timeModel, seriesID: _seriesID, originalStart: _originalStart, ...create } = EventSchema.parse(event);
   return EventCreateRequestSchema.parse(create);
 }
 
