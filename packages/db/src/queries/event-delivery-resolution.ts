@@ -1,3 +1,5 @@
+import { providerStateVersion } from "./provider-reminders";
+import { matchesReminderEventProjection } from "./event-outbox-projection";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
@@ -5,6 +7,8 @@ import {
   EventWriteError,
   NotFoundError,
   type ResolveEventDeliveryRequest,
+  type ProviderReminderEdit,
+  type ProviderEventState,
 } from "@musubi/types";
 import { db } from "..";
 import {
@@ -13,6 +17,7 @@ import {
   externalEvents,
   externalEventTombstones,
   calendarEvents,
+  calendarMembers,
 } from "../schema";
 import {
   assertEventDeliveryDestination,
@@ -93,9 +98,6 @@ async function resolutionContext(
   )
     throw new EventDeliveryResolutionError("delivery-state-changed");
   if (
-    row.payload.reminderEdit ||
-    latest.payload.reminderEdit ||
-    pending.some((item) => item.payload.reminderEdit) ||
     pending.length > 1000 ||
     pending.some((item) => item.status === "attempting")
   )
@@ -130,6 +132,13 @@ async function resolutionContext(
   if (mappings.length > 1)
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
+  if (row.payload.reminderEdit) {
+    const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID)));
+    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local))
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  } else if (latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit)) {
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  }
   let caldavContext: CaldavSeriesContext | undefined;
   if (row.payload.caldavSeries) {
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
@@ -240,6 +249,7 @@ export type EventDeliveryResolutionProof = {
   patch: EventContentPatch;
   googleOccurrence?: GoogleOccurrenceIntent;
   caldavSeries?: CaldavSeriesPrepared;
+  reminder?: { intent: ProviderReminderEdit; state: ProviderEventState; stateVersion: string };
   deletion: typeof externalEventTombstones.$inferSelect | undefined;
 };
 
@@ -257,7 +267,8 @@ function sameResolution(
     accepted.expectedLatestOperationID === request.expectedLatestOperationId &&
     accepted.expectedRemoteExists === request.expectedRemoteExists &&
     accepted.expectedRemoteEtag === request.expectedRemoteEtag &&
-    accepted.expectedMasterRevision === request.expectedMasterRevision
+    accepted.expectedMasterRevision === request.expectedMasterRevision &&
+    accepted.expectedReminderStateVersion === request.expectedReminderStateVersion
   );
 }
 
@@ -340,6 +351,10 @@ export async function commitEventDeliveryResolution(
         await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, row.eventID)).orderBy(events.id).for("update");
         await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.calendarID, row.calendarID), or(eq(externalEvents.externalEventID, row.externalEventID!), eq(externalEvents.externalSeriesID, row.externalEventID!)))).orderBy(externalEvents.eventID, externalEvents.id).for("update");
       }
+      if (row.payload.reminderEdit) {
+        await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID))).for("share");
+        await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.eventID, row.eventID), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider))).for("update");
+      }
       // Stabilize all target attempts before deciding which chain is superseded.
       await tx
         .select({ id: eventOutbox.id })
@@ -373,6 +388,8 @@ export async function commitEventDeliveryResolution(
           "delivery-resolution-unavailable",
         );
       if (
+        !!current.row.payload.reminderEdit !== !!proof.reminder ||
+        proof.reminder?.stateVersion !== request.expectedReminderStateVersion ||
         current.masterRevision !== request.expectedMasterRevision ||
         current.masterRevision !== proof.context.masterRevision ||
         !!current.row.payload.googleOccurrence !== !!proof.googleOccurrence ||
@@ -396,7 +413,7 @@ export async function commitEventDeliveryResolution(
         throw new EventDeliveryResolutionError("delivery-state-changed");
       const mappingKey = (mapping: typeof current.mapping) =>
         mapping
-          ? JSON.stringify([mapping.id, mapping.externalEventID, mapping.etag])
+          ? JSON.stringify([mapping.id, mapping.externalEventID, mapping.etag, ...(proof.reminder ? [providerStateVersion(mapping)] : [])])
           : null;
       if (mappingKey(current.mapping) !== mappingKey(proof.context.mapping))
         throw new EventDeliveryResolutionError("delivery-state-changed");
@@ -452,6 +469,7 @@ export async function commitEventDeliveryResolution(
             await tx
               .update(externalEvents)
               .set({
+                ...(proof.reminder ? { providerState: proof.reminder.state, providerStateObservedAt: new Date() } : {}),
                 etag: proof.ref.etag,
                 icalUid: proof.ref.icalUid ?? current.mapping.icalUid,
               })
@@ -526,6 +544,7 @@ export async function commitEventDeliveryResolution(
         payload: {
           event: current.local,
           patch: proof.patch,
+          ...(proof.reminder ? { reminderEdit: { ...proof.reminder.intent, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: proof.reminder.stateVersion } } : {}),
           ...(proof.caldavSeries ? { caldavSeries: proof.caldavSeries } : {}),
           ...(proof.googleOccurrence
             ? { googleOccurrence: proof.googleOccurrence }
@@ -541,6 +560,7 @@ export async function commitEventDeliveryResolution(
             expectedRemoteExists: request.expectedRemoteExists,
             expectedRemoteEtag: request.expectedRemoteEtag,
             expectedMasterRevision: request.expectedMasterRevision,
+            expectedReminderStateVersion: request.expectedReminderStateVersion,
           },
         },
       });

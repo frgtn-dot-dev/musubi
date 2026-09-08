@@ -1,6 +1,8 @@
 import { config } from "@musubi/config";
 import {
   diffEventContent,
+  matchesReminderEventProjection,
+  providerStateVersion,
   getEventDeliveryResolutionContext,
   getEventOutboxExpectedRef,
   getEventOutboxDeletion,
@@ -11,6 +13,7 @@ import {
 import {
   EventWriteError,
   EventSchema,
+  ProviderReminderEditSchema,
   type EventDeliveryConflict,
   type EventDeliveryContent,
   type Event,
@@ -126,6 +129,25 @@ async function prepare(
               ).url,
             }
           : null;
+  }
+  if (row.payload.reminderEdit) {
+    if (!config.api.providerReminderEditsEnabled || !adapter.readReminderState || !ref || context.deleted || !context.mapping)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const deletion = await getEventOutboxDeletion(row, ref.externalEventId);
+    const observed = await adapter.readReminderState(row.userID, row.accountID, row.externalCalendarID, ref, signal);
+    if (!observed || observed.ref.externalEventId !== ref.externalEventId || !strongEventEtag(observed.ref.etag) || observed.event.status !== "active" || !matchesReminderEventProjection("google", context.local, observed.event) || observed.state.provider !== "google" || observed.state.reminders.provider !== "google")
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);
+    const stateVersion = providerStateVersion({ id: context.mapping.id, etag: observed.ref.etag!, providerState: observed.state })!;
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
+      localRevision: context.localRevision, local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
+      remote: { ...content(observed.event), timeModel: observed.event.timeModel }, remoteEtag: observed.ref.etag!,
+      action: "update", canResolve: true, reason: null,
+      reminderResolution: { desired: intent.reminders, remote: observed.state.reminders, stateVersion },
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: observed.ref, remoteExists: true, action: "update", patch: {}, deletion, reminder: { intent, state: observed.state, stateVersion } };
+    return { preview, proof };
   }
   if (row.payload.caldavSeries) {
     if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSeriesResolution || !context.caldavContext || !ref || context.deleted)

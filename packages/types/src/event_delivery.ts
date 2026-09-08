@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { GoogleReminderWriteSchema } from "./provider-reminders";
+import { ProviderEventStateSchema } from "./provider-event-state";
 import { EventTimeModelSchema, OccurrenceStartSchema } from "./event_time";
 
 /** A receipt describes one destination, never a global provider confirmation. */
@@ -90,6 +92,11 @@ export const EventDeliveryConflictSchema = z.object({
   remote: EventDeliveryContentSchema.nullable(),
   remoteEtag: z.string().nullable(),
   action: z.enum(["create", "update", "delete"]),
+  reminderResolution: z.object({
+    desired: GoogleReminderWriteSchema,
+    remote: ProviderEventStateSchema.shape.reminders,
+    stateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  }).strict().optional(),
   canResolve: z.boolean(),
   reason: z
     .enum([
@@ -110,6 +117,7 @@ export const ResolveEventDeliveryRequestSchema = z
     expectedRemoteExists: z.boolean(),
     expectedRemoteEtag: z.string().nullable(),
     expectedMasterRevision: z.number().int().positive().optional(),
+    expectedReminderStateVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   })
   .strict();
 

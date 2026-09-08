@@ -20,7 +20,7 @@ import {
   events,
   getEventSnapshot,
   getOwnProviderEventObservation,
-  getEventDeliveryResolutionContext,
+  commitEventDeliveryResolution,
   replaceMemberToken,
   upsertExternalEvent,
 } from "@musubi/db";
@@ -31,6 +31,8 @@ import { issueMemberToken } from "../federation_tokens";
 import { requireAuth } from "../middleware/require_auth";
 import { middlewareErrorHandler } from "../middleware/error_handler";
 import { handlerProviderReminderEdit } from "../handlers/events";
+import { handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "../handlers/event_delivery";
+import { prepareEventDeliveryResolution } from "./event_resolution";
 
 async function main(
   scenario:
@@ -139,6 +141,8 @@ async function main(
     requireAuth,
     handlerProviderReminderEdit,
   );
+  app.get("/events/:eventId/delivery/:operationId/conflict", requireAuth, handlerGetEventDeliveryConflict);
+  app.post("/events/:eventId/delivery/:operationId/resolve", requireAuth, handlerResolveEventDelivery);
   app.use(middlewareErrorHandler);
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
@@ -324,6 +328,7 @@ async function main(
         '"v2"',
         "native no-op must not accept an unseen content version",
       );
+      await assert.rejects(prepareEventDeliveryResolution(owner, event.id, queued.body.operationID, () => googleAdapter));
       assert.equal(patches, 1);
       assert.deepEqual(await getEventSnapshot(event.id), event);
       return;
@@ -443,14 +448,59 @@ async function main(
       "conflict",
     );
     assert.equal(patches, 4);
-    await assert.rejects(
-      getEventDeliveryResolutionContext(
-        owner,
-        event.id,
-        third.body.operationID,
-      ),
-      /cannot be resolved/,
-    );
+    const resolutionHTTP = async (action: "conflict" | "resolve", body?: unknown) => {
+      const response = await realFetch(`${origin}/events/${event.id}/delivery/${third.body.operationID}/${action}`, {
+        method: action === "conflict" ? "GET" : "POST", headers: { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      assert.equal(response.headers.get("cache-control"), "private, no-store");
+      return { status: response.status, body: await response.json() };
+    };
+    config.api.providerReminderEditsEnabled = false;
+    assert.equal((await resolutionHTTP("conflict")).status, 409);
+    config.api.providerReminderEditsEnabled = true;
+    const preview = await resolutionHTTP("conflict");
+    assert.equal(preview.status, 200);
+    assert.deepEqual(preview.body.reminderResolution.desired, { useDefault: true });
+    assert.deepEqual(preview.body.reminderResolution.remote, { provider: "google", useDefault: false, overrides: [] });
+    const request = {
+      mutationId: randomUUID(), expectedLocalRevision: event.revision,
+      expectedLatestOperationId: third.body.operationID, expectedRemoteExists: true,
+      expectedRemoteEtag: preview.body.remoteEtag,
+      expectedReminderStateVersion: preview.body.reminderResolution.stateVersion,
+    };
+    const { expectedReminderStateVersion: _omitted, ...oldClientRequest } = request;
+    assert.equal((await resolutionHTTP("resolve", oldClientRequest)).status, 409, "a content-only confirmation cannot authorize reminder replacement");
+    remote.reminders = { useDefault: false, overrides: [{ method: "popup", minutes: 7 }] };
+    assert.equal((await resolutionHTTP("resolve", request)).status, 409, "same-ETag personal changes invalidate the exact preview");
+    const latest = await resolutionHTTP("conflict");
+    request.expectedReminderStateVersion = latest.body.reminderResolution.stateVersion;
+    const prepared = await prepareEventDeliveryResolution(owner, event.id, third.body.operationID, () => googleAdapter);
+    await db.update(events).set({ revision: event.revision + 1 }).where(eq(events.id, event.id));
+    await assert.rejects(commitEventDeliveryResolution(owner, prepared.proof, request));
+    await db.update(events).set({ revision: event.revision, updatedAt: event.updatedAt }).where(eq(events.id, event.id));
+    assert.equal(patches, 4, "preview and stale confirmations are read-only");
+    const confirmed = await Promise.all([resolutionHTTP("resolve", request), resolutionHTTP("resolve", request)]);
+    assert.deepEqual(confirmed.map(item => item.status), [202, 202]);
+    const replacements = (await db.select().from(eventOutbox).where(eq(eventOutbox.mutationID, request.mutationId)));
+    assert.equal(replacements.length, 1);
+    const replacement = replacements[0];
+    assert.deepEqual(replacement.payload.reminderEdit?.reminders, { useDefault: true });
+    assert.deepEqual(replacement.payload.patch, {});
+    let settled;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      settled = (await db.select().from(eventOutbox).where(eq(eventOutbox.id, replacement.id)))[0];
+      if (settled.status === "completed") break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(settled?.status, "completed");
+    assert.equal(patches, 5);
+    assert.equal((await resolutionHTTP("resolve", request)).status, 202);
+    assert.equal((await resolutionHTTP("resolve", { ...request, expectedReminderStateVersion: "0".repeat(64) })).status, 409);
+    assert.deepEqual(await getEventSnapshot(event.id), event);
+    const next = await send(await intent({ useDefault: false, overrides: [] }));
+    assert.equal(next.status, 202, "confirmed resolution does not strand the next personal edit");
+    assert.equal((await deliverEventOutbox(next.body.operationID, () => googleAdapter))?.status, "completed");
     const {
       reminders: _initialReminder,
       etag: _initialTag,
