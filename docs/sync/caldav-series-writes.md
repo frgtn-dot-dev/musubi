@@ -123,4 +123,8 @@ changes, changed local children/mappings, replaced leases, retained tombstones,
 inbound refusal/echo and generic ACK/resolution refusal. Actual local Radicale also
 exercises scoped preparation, durable enqueue, worker delivery and all-component
 ACK through a real calendar server. No production flag, version or minimum client
-is changed; iCloud acceptance remains explicitly deferred by the user.
+is changed. A subsequent authorized [live iCloud probe](../audits/calendar-icloud-series-live-acceptance.md)
+confirmed the internal transport behavior for zoned, all-day and floating master
+content edits, complete-resource replay/recovery and concurrent child 412. It did
+not run the scope endpoint, authorization wrapper or DB/outbox ACK against iCloud;
+that end-to-end acceptance and resource-aware conflict resolution remain open.
