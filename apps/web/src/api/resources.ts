@@ -1,3 +1,4 @@
+import { ProviderEventStateResponseSchema } from "@musubi/types";
 import {
   EventScopeResponseSchema,
   EventScopeRequestSchema,
@@ -679,4 +680,8 @@ export function resolveEventDelivery(eventId: string, operationId: string, body:
 
 export function applyEventScope(event: Event, request: EventScopeRequest, connectionId?: string) {
   return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(event.id)}/scope`), { body: EventScopeRequestSchema.parse(request), method: "POST", responseSchema: EventScopeResponseSchema });
+}
+
+export function getProviderEventState(eventId: string, signal?: AbortSignal, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-state`), { responseSchema: ProviderEventStateResponseSchema, signal });
 }

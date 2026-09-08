@@ -1,3 +1,4 @@
+import { ProviderEventDetails } from "./ProviderEventDetails";
 import { uuidv7 } from "uuidv7";
 import EventDeliveryModal from "./EventDeliveryModal";
 import { Btn } from "@/components/ui/Btn";
@@ -450,6 +451,7 @@ export default function EventDetailModal({
 									</View>
 								</View>
 							)}
+							{visible && event && userID && calendars.find(calendar => calendar.id === (event.originCalendarID ?? event.calendars[0]))?.provider ? <ProviderEventDetails event={event} userId={userID} /> : null}
 							{event?.hasAttendees && attendees && (
 								// paddingHorizontal 26 (not the container's 16) — optically lines
 								// up with the title block above; circles at 16 read wider than text.
@@ -485,7 +487,7 @@ export default function EventDetailModal({
 													{ fontFamily: fonts.sans, marginBottom: 0 },
 												]}
 											>
-												Attendees · {going.length}
+												{calendars.find(calendar => calendar.id === (event?.originCalendarID ?? event?.calendars[0]))?.provider ? "Musubi attendees" : "Attendees"} · {going.length}
 											</Text>
 											<Feather
 												name={attendeesOpen ? "chevron-up" : "chevron-down"}

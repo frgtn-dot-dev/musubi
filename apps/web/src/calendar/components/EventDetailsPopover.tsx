@@ -1,3 +1,4 @@
+import { ProviderEventDetails } from "./ProviderEventDetails";
 import { hasKnownEventTime, type EventScopeRequest } from "@musubi/types";
 import { eventScopeRequest } from "@musubi/calendar";
 import {
@@ -817,12 +818,14 @@ export function EventDetailsPopover({
 									</section>
 								) : null}
 
+								{homeCalendar?.provider ? <ProviderEventDetails eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} /> : null}
+
 								{reminder ? (
 									<section aria-labelledby={reminderTitleId} className={styles.notes}>
 										<div className={styles.sectionHeading}>
 											<BellRing aria-hidden="true" size={17} />
 											<SectionLabel id={reminderTitleId} level={3}>
-												Remind me
+												{homeCalendar?.provider ? "Musubi reminder" : "Remind me"}
 											</SectionLabel>
 											<Menu>
 												<MenuTrigger asChild>
@@ -895,7 +898,7 @@ export function EventDetailsPopover({
 													variant="secondary"
 													onClick={() => setAttendeesOpen((open) => !open)}
 												>
-													{attendees ? `Attendees · ${going.length}` : "Attendees"}
+													{attendees ? `${homeCalendar?.provider ? "Musubi attendees" : "Attendees"} · ${going.length}` : "Attendees"}
 													{attendeesOpen ? (
 														<ChevronUp aria-hidden="true" size={14} />
 													) : (

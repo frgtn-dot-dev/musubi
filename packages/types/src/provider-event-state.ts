@@ -22,3 +22,4 @@ export const ProviderEventStateSchema = z.object({
   conferenceURLs: z.array(z.string()),
 }).strict();
 export type ProviderEventState = z.infer<typeof ProviderEventStateSchema>;
+export const ProviderEventStateResponseSchema = z.object({ state: ProviderEventStateSchema.nullable() }).strict();

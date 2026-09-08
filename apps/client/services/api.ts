@@ -1,3 +1,4 @@
+import { ProviderEventStateResponseSchema } from "@musubi/types";
 import {
   AnnouncementsResponseSchema,
   CLIENT_VERSION_HEADER,
@@ -467,6 +468,15 @@ export function useApi() {
       throwOnError(error);
 
       return data;
+    },
+
+    async getProviderEventState(event: Event) {
+      const path = `/api/${apiVersion}/events/${encodeURIComponent(event.id)}/provider-state`;
+      const remote = remoteOf(eventHome(event));
+      if (remote) return readWire(ProviderEventStateResponseSchema, await fedFetch(remote, path, { method: "GET" }), "GET provider state (federated)");
+      const { error, data } = await authClient.$fetch(`${apiUrl}${path}`, { method: "GET" });
+      throwOnError(error);
+      return readWire(ProviderEventStateResponseSchema, data, "GET provider state");
     },
 
     async getEventAttendees(event: Event) {

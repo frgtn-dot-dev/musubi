@@ -8188,3 +8188,21 @@ test("explains bounded Outlook coverage on an empty distant calendar", async ({ 
   await setCalendarVisibility(page, "Studio", false);
   await expect(notice).toHaveCount(0);
 });
+
+for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
+  test(`provider details remain separate ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const imported = event("00000000-0000-4000-8000-000000000166", "Provider meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z", { recurrence: "FREQ=DAILY;COUNT=2" });
+    await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Provider meeting/ }).first().click();
+    await expect(page.getByRole("heading", { name: "Outlook details" })).toBeVisible();
+    await expect(page.getByText(/These settings describe the series/)).toBeVisible();
+    await expect(page.getByText("Availability: workingElsewhere", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Both apps may notify/)).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath("provider-details.png"), fullPage: true });
+  });
+}
