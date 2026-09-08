@@ -340,6 +340,7 @@ export async function syncProvider(
             event.timeModel ? { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } : undefined,
             event.providerOccurrence,
             event.providerState,
+            event.reminderTimeEvidence,
           ),
         upsertTask: (task) =>
           upsertExternalTask(

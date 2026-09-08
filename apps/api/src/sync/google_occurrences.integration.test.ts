@@ -87,6 +87,11 @@ async function main() {
     await sync();
     assert.deepEqual(await rows(), before, "Full reset keeps hydrated master and cancellation definitions");
     const validFamily = await rows();
+    const beforeZoneCursor = await getUserExternalCalendars("google", userID, "account");
+    items = [{ ...master, end: { ...master.end, timeZone: "Europe/Berlin" } }];
+    await assert.rejects(sync(), /endpoint zones/);
+    assert.deepEqual(await rows(), validFamily);
+    assert.deepEqual(await getUserExternalCalendars("google", userID, "account"), beforeZoneCursor, "Unsupported endpoint zones cannot advance the import cursor");
     for (const broken of [
       { ...master, etag: '"not-recurring"', recurrence: undefined },
       { ...master, etag: '"changed-kind"', start: { date: "2026-03-28" }, end: { date: "2026-03-29" } },

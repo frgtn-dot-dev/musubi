@@ -1,5 +1,5 @@
 import type { Event, ProviderEventState } from "@musubi/types";
-import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection } from "./event-outbox-projection";
+import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection, matchesReminderEventProjection, matchesGoogleReminderIntent } from "./event-outbox-projection";
 import { and, eq, sql } from "drizzle-orm";
 import { eventOutbox, events, externalCalendars } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -15,7 +15,8 @@ type PullValues = Partial<Pick<Event, "timeModel" | "originalStart" | "isCancele
   recurrence: string | null;
 };
 
-function matchesProjection(row: EventOutboxRow, values: PullValues) {
+function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
+  if (row.payload.reminderEdit) return row.action === "update" && matchesReminderEventProjection(row.provider, row.payload.event, values) && matchesGoogleReminderIntent(row.payload.reminderEdit.reminders, providerState);
   if (row.payload.googleOccurrence) return values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.event, values);
   return (
     row.action !== "delete" &&
@@ -61,7 +62,7 @@ export async function retainPendingEventPull(
   const echo = rows.find(
     (row) =>
       row.attempts > 0 &&
-      (values ? matchesProjection(row, values) : row.action === "delete"),
+      (values ? matchesProjection(row, values, providerState) : row.action === "delete"),
   );
   if (echo) {
     // Keep provider-owned metadata too, even when the projected content is our
@@ -200,7 +201,7 @@ export async function retainUnmappedCreatePull(
       .set({
         remoteSnapshot: {
           ...(providerState ? { providerState } : {}),
-          isEcho: matchesProjection(row, values),
+          isEcho: matchesProjection(row, values, providerState),
           externalEventId: externalEventID,
           etag,
           icalUid,

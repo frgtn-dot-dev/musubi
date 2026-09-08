@@ -496,6 +496,7 @@ export async function fetchGoogleChanges(
     fetchImpl?: typeof fetch;
     baseUrl?: string;
     timeModels?: boolean;
+    reminderEvidence?: boolean;
   } = {},
 ): Promise<FetchChangesResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -556,8 +557,24 @@ export async function fetchGoogleChanges(
     }
   }
   for (const item of items.filter(item => !options.timeModels || !item.recurringEventId || masters.get(item.recurringEventId)?.status !== "cancelled")) changes.push({ kind: "event", data: options.timeModels ? normalizeGoogleTime(item, toNormalized({ ...item, recurrence: undefined }), masters.get(item.recurringEventId)) : toNormalized(item) });
+  if (options.reminderEvidence && !options.timeModels) {
+    for (const change of changes) {
+      if (change.kind !== "event") continue;
+      const item = masters.get(change.data.externalId);
+      if (!item || item.status === "cancelled" || item.recurringEventId || item.originalStartTime || item.recurrence?.length) continue;
+      change.data.reminderTimeEvidence = normalizeGoogleTime(item, change.data).timeModel;
+    }
+  }
   if (options.timeModels) changes.sort((a, b) => Number(a.kind === "event" && !!a.data.externalSeriesID) - Number(b.kind === "event" && !!b.data.externalSeriesID));
   return { changes, nextCursor: nextSyncToken ?? currentCursor, reset };
+}
+
+/** The local explicit model has one zone for both endpoints. Do not erase
+ * Google's independently specified end zone when proving a reminder ACK. */
+function googleReminderEventEvidence(data: any) {
+  if (data.end?.timeZone != null && data.end.timeZone !== data.start?.timeZone)
+    throw new EventWriteError("event-write", "unsupported");
+  return assertCreatedEventEvidence(normalizeGoogleTime(data, toNormalized(data)));
 }
 
 export const googleAdapter: CalendarAdapter = {
@@ -661,7 +678,7 @@ export const googleAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
-      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled });
+      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, reminderEvidence: config.api.providerReminderEditsEnabled });
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {
@@ -720,7 +737,7 @@ export const googleAdapter: CalendarAdapter = {
     if (data.status === "cancelled") return null;
     if (data.recurringEventId || data.originalStartTime || data.recurrence?.length)
       throw new EventWriteError("event-write", "unsupported");
-    return { ref: { externalEventId: data.id, etag: requireEventEtag(strongEventEtag(data.etag)) }, state: googleEventState(data), event: assertCreatedEventEvidence(toNormalized(data)) };
+    return { ref: { externalEventId: data.id, etag: requireEventEtag(strongEventEtag(data.etag)) }, state: googleEventState(data), event: googleReminderEventEvidence(data) };
   },
 
   async writeReminders(userID, accountId, externalCalendarId, ref, input, signal) {
@@ -745,7 +762,7 @@ export const googleAdapter: CalendarAdapter = {
     try {
       if (data.recurringEventId || data.originalStartTime || data.recurrence?.length)
         throw new Error("Unsupported recurring reminder evidence");
-      return { ref: { externalEventId: data.id, etag }, state: googleEventState(data), event: assertCreatedEventEvidence(toNormalized(data)) };
+      return { ref: { externalEventId: data.id, etag }, state: googleEventState(data), event: googleReminderEventEvidence(data) };
     } catch {
       throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", response.status);
     }

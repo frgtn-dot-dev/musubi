@@ -10,6 +10,8 @@ export type NormalizedEvent = {
   providerState?: ProviderEventState;
   creationOperationID?: string;
   providerOccurrence?: { externalSeriesID: string; originalStart: OccurrenceStart };
+  // Observation-only proof for pending reminders; never adopts canonical time.
+  reminderTimeEvidence?: EventTimeModel;
   timeModel?: EventTimeModel;
   externalSeriesID?: string | null;
   originalStart?: OccurrenceStart | null;

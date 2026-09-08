@@ -27,6 +27,11 @@ export function normalizeGoogleTime(item: any, base: NormalizedEvent, master?: a
   if (externalSeriesID && (!master || master.id !== externalSeriesID || !master.recurrence?.length || master.recurringEventId))
     throw new Error("Google occurrence requires a complete series master.");
   const zone = item.start?.timeZone ?? master?.start?.timeZone;
+  // A single-zone model cannot retain a separately specified endpoint zone.
+  // Reject before a pull can advance its cursor or classify an echo from a
+  // temporal projection which erased that provider change.
+  if (item.end?.timeZone != null && item.end.timeZone !== zone)
+    throw new Error("Google event endpoint zones require a separate time model.");
   const originalStart = externalSeriesID ? original(item.originalStartTime ?? {}, master.start?.timeZone) : null;
   if (item.status === "cancelled" && !externalSeriesID) return base;
   let start: Date;

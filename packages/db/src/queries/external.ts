@@ -715,6 +715,7 @@ async function upsertExternalEventInTransaction(
   time?: ProviderTime,
   providerOccurrence?: ProviderOccurrence,
   providerState?: ProviderEventState,
+  reminderTimeEvidence?: EventTimeModel,
 ): Promise<boolean> {
     const state = providerState === undefined ? undefined : ProviderEventStateSchema.parse(providerState);
     if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
@@ -744,6 +745,7 @@ async function upsertExternalEventInTransaction(
       const candidate = { ...values, ...temporal, id: crypto.randomUUID(), creatorID: userID, calendars: [calendarID], hasAttendees: false, isCanceled: false };
       expandRecurringEvents(parent ? [{ ...parent.event, calendars: [calendarID], isCanceled: false }, candidate] : [candidate], values.start, values.end, { consumerTimeZone: "UTC" });
     }
+    const pendingTemporal = temporal ?? (reminderTimeEvidence ? { timeModel: EventTimeModelSchema.parse(reminderTimeEvidence) } : undefined);
     const map = await mappedEventForUpdate(
       tx,
       provider,
@@ -771,10 +773,10 @@ async function upsertExternalEventInTransaction(
       {
         // An unchanged baseline is not a conflict with a queued local write.
         // It can still supersede a previously retained personal observation.
-        if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid, state, true);
+        if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state, true);
         return false;
       }
-      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...temporal }, etag, icalUid, state)) return false;
+      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state)) return false;
       if (map.event.originCalendarID !== calendarID) {
         const changedFields = (
           Object.keys(values) as (keyof EventValues)[]
