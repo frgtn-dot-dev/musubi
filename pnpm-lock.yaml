@@ -547,6 +547,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@musubi/calendar':
+        specifier: workspace:*
+        version: link:../calendar
       '@musubi/config':
         specifier: workspace:*
         version: link:../config
