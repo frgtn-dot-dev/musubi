@@ -1,3 +1,5 @@
+import { EventExpansionError, expandKnownTimeEvents } from "./time-expansion"
+export { EventExpansionError } from "./time-expansion"
 import { rrulestr } from 'rrule'
 import type { ICalendarEventBase } from './interfaces'
 import { joinRecurrence, splitRecurrence } from './rrule-editor'
@@ -165,10 +167,20 @@ export function expandRecurringEvents<T extends ICalendarEventBase>(
   events: T[],
   rangeStart: Date,
   rangeEnd: Date,
+  options: { consumerTimeZone?: string } = {},
 ): T[] {
-  const result: T[] = []
+  const known = events.filter(event => event.seriesID || event.originalStart || (event.timeModel && event.timeModel.kind !== "legacy-unknown"))
+  const knownSet = new Set(known)
+  const definitions = new Map(events.map(event => [event.id, event]))
+  for (const event of known) {
+    const parent = event.seriesID ? definitions.get(event.seriesID) : undefined
+    if (parent && !knownSet.has(parent))
+      throw new EventExpansionError(event.id, "legacy-exception-parent-unresolved")
+  }
+  const result: T[] = expandKnownTimeEvents(known, rangeStart, rangeEnd, options.consumerTimeZone)
 
   for (const event of events) {
+    if (knownSet.has(event)) continue
     if (!event.recurrence) {
       // Keep only if it overlaps the window — an event years away shouldn't
       // flow through filter/enrich on every swipe. Overlap (not start-in-range)
