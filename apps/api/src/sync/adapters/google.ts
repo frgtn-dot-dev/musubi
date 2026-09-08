@@ -1,3 +1,4 @@
+import { googleRsvpMethods } from "./google_rsvp_delivery";
 import { googleOccurrenceMethods } from "./google_occurrence";
 import { googleEventState } from "./provider_event_state";
 import { normalizeGoogleTime } from "./google_time";
@@ -580,6 +581,11 @@ function googleReminderEventEvidence(data: any) {
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
   ...googleOccurrenceMethods(getAccessToken, toNormalized),
+  ...googleRsvpMethods(async (user, account) => {
+    const token = await getAccessToken(user, account);
+    await assertOAuthEventWriteGrant(user, "google", account);
+    return token;
+  }),
   projectEvent(event) { return toNormalized({ ...toGoogleEvent(event), id: event.id }); },
 
   async listAccounts(

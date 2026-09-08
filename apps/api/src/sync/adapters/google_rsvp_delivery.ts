@@ -1,0 +1,67 @@
+import { isDeepStrictEqual } from "node:util";
+import { z } from "zod";
+import { config } from "@musubi/config";
+import { EventWriteError } from "@musubi/types";
+import type { CalendarAdapter, ExternalEventRef } from "../adapter";
+import { assertCompleteEventReadResponse } from "../event_create_identity";
+import { assertProviderEventMutationResponse, ProviderEventWriteError } from "../event_write";
+import { googleRsvpEvidence, confirmGoogleRsvp } from "./google_rsvp";
+
+const GCAL = "https://www.googleapis.com/calendar/v3";
+const primaryCalendar = z.object({ id: z.email(), primary: z.literal(true), accessRole: z.literal("owner") });
+/** The injected token reader must refresh credentials and verify OAuth write
+ * scope for this exact user/account. Production wiring does both; no caller
+ * supplied URL or email can substitute for the provider's primary identity. */
+export function googleRsvpMethods(getAuthorizedToken: (user: string, account: string) => Promise<string>): Pick<CalendarAdapter, "readRsvp" | "writeRsvp"> {
+  async function context(user: string, account: string, calendar: string, ref: ExternalEventRef, signal?: AbortSignal) {
+    if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const token = await getAuthorizedToken(user, account);
+    const headers = { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" };
+    const response = await fetch(`${GCAL}/users/me/calendarList/primary`, { headers, redirect: "error", signal });
+    assertCompleteEventReadResponse(response);
+    const parsed = primaryCalendar.safeParse(await response.json());
+    if (!parsed.success || calendar.toLowerCase() !== parsed.data.id.toLowerCase())
+      throw new EventWriteError("event-write", "unsupported");
+    const url = `${GCAL}/calendars/${encodeURIComponent(parsed.data.id)}/events/${encodeURIComponent(ref.externalEventId)}`;
+    async function read() {
+      const result = await fetch(url, { headers, redirect: "error", signal });
+      assertCompleteEventReadResponse(result);
+      return result.json();
+    }
+    return { headers, url, read, email: parsed.data.id };
+  }
+  return {
+    async readRsvp(user, account, calendar, ref, response, signal) {
+      const ctx = await context(user, account, calendar, ref, signal);
+      return googleRsvpEvidence(await ctx.read(), { eventId: ref.externalEventId, etag: ref.etag ?? "", authenticatedCopyEmail: ctx.email }, response);
+    },
+    async writeRsvp(user, account, calendar, evidence, policy, signal) {
+      if (policy.sendUpdates !== "all") throw new EventWriteError("event-write", "unsupported");
+      const ref = { externalEventId: evidence.baseline.id, etag: evidence.baseline.etag };
+      const ctx = await context(user, account, calendar, ref, signal);
+      // Rebuild the minimal payload; a stored patch or selfEmail is not trusted.
+      const intent = googleRsvpEvidence(evidence.baseline, { eventId: ref.externalEventId, etag: ref.etag, authenticatedCopyEmail: ctx.email }, evidence.response);
+      const current = await ctx.read();
+      try {
+        const confirmed = confirmGoogleRsvp(current, intent);
+        return { ...confirmed, recovered: true, notificationDelivery: "unknown" as const };
+      } catch { /* An unchanged baseline may still permit one conditional PATCH. */ }
+      if (!isDeepStrictEqual(current, intent.baseline)) throw new ProviderEventWriteError("provider-conflict");
+      let result: Response;
+      try {
+        result = await fetch(`${ctx.url}?sendUpdates=all&conferenceDataVersion=1`, { method: "PATCH", headers: { ...ctx.headers, "Content-Type": "application/json", "If-Match": ref.etag }, body: JSON.stringify(intent.patch), redirect: "error", signal });
+      } catch { throw new ProviderEventWriteError("provider-write-failed", "unconfirmed"); }
+      assertProviderEventMutationResponse(result);
+      // Disposing an already errored successful body must not skip the full
+      // confirmation GET or escape as an ordinary pre-write network failure.
+      try { await result.body?.cancel(); } catch { /* Confirmation is authoritative. */ }
+      // A complete fresh GET also covers a truncated successful PATCH response.
+      try {
+        return { ...confirmGoogleRsvp(await ctx.read(), intent), recovered: false, notificationDelivery: "unknown" as const };
+      } catch (cause) {
+        if (cause instanceof ProviderEventWriteError && cause.outcome === "unconfirmed") throw cause;
+        throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
+      }
+    },
+  };
+}

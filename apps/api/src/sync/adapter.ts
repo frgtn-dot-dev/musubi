@@ -1,3 +1,4 @@
+import type { GoogleRsvpEvidence, GoogleRsvpResponse } from "./adapters/google_rsvp";
 import type { GoogleOccurrenceIntent } from "@musubi/db";
 import type { GoogleOccurrenceEvidence, GoogleSeriesEvidence } from "./adapters/google_occurrence";
 import type { CaldavSeriesIntent, CaldavSeriesEvidence, CaldavSeriesWrite, CaldavSeriesResolutionEvidence } from "./adapters/caldav_series";
@@ -116,6 +117,8 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   provider: string;
+  readRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal): Promise<GoogleRsvpEvidence>;
+  writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
   readCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal): Promise<CaldavSeriesResolutionEvidence>;
   writeCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesWrite, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
