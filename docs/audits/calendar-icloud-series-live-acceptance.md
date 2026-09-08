@@ -92,9 +92,36 @@ This accepts the bounded iCloud transport behavior for personal whole-resource
 **master content** edits and recovery in these three fixtures. It does not accept
 series time/recurrence changes, occurrence/following scopes, scheduling/RSVP,
 shared calendars, masterless/RANGE resources, arbitrary provider serialization,
-or full iCloud HTTP-to-database delivery. Resource-aware conflict resolution
-remains open. K12 as a whole and K13/K14 are not complete. Google whole-series
+or full iCloud HTTP-to-database delivery. Resource-aware master-content conflict resolution is implemented and covered
+by fake HTTP/DB and Radicale tests; its live iCloud acceptance remains blocked
+by the same missing resource permission evidence. K12 as a whole and K13/K14 are not complete. Google whole-series
 remains unsupported by the explicit preservation decision recorded in
 [its separate live audit](calendar-google-series-live-acceptance.md).
 
 No release version, minimum client version, production flag or deployment changed.
+
+## Follow-up: three standard DAV privilege queries
+
+On 2026-09-08, a further synthetic probe created a new temporary iCloud calendar
+and one past event resource without attendees or an organizer. It requested
+`current-user-privilege-set`, `owner`, `inherited-acl-set` and
+`supported-privilege-set` through three independent standard paths:
+
+| Query | HTTP status | Exact synthetic resource result |
+| --- | --- | --- |
+| Resource PROPFIND, Depth 0 | 207 | Empty 200 propstat; all four requested properties in 404 propstat |
+| Parent collection PROPFIND, Depth 1 | 207 | Same result for the exact resource href |
+| Calendar-multiget REPORT for the resource | 207 | Same result for the exact resource href |
+
+No response supplied positive resource write privileges. The matched resource
+href stayed on the expected origin. This rules out treating a different DAV
+query method or the first response parser as a demonstrated fix. Calendar
+ownership in the UI and a successful direct PUT do not supply the missing
+resource permission evidence required by the current application contract.
+
+The temporary calendar was deleted successfully (204). No existing calendar was
+modified, no invitation was sent, and the running application flags stayed off.
+The authenticated iCloud scope path remains unsupported pending a trustworthy
+permission mechanism or an explicit product decision about a different contract.
+This is a remaining decision/acceptance gate, not an invitation to treat unknown
+permissions as write access.
