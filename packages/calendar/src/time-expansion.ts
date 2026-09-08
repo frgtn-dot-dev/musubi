@@ -32,6 +32,7 @@ export function expandKnownTimeEvents<T extends ICalendarEventBase>(
   from: Date,
   to: Date,
   consumerTimeZone?: string,
+  includeAllNonRecurring = false,
 ): T[] {
   if (
     !Number.isFinite(from.getTime()) ||
@@ -158,7 +159,10 @@ export function expandKnownTimeEvents<T extends ICalendarEventBase>(
     }
     if (event.isCanceled || parent?.isCanceled) return;
     const f = frame(event);
-    if (overlaps(f.start, f.end, f.model.kind === "all-day"))
+    if (
+      includeAllNonRecurring ||
+      overlaps(f.start, f.end, f.model.kind === "all-day")
+    )
       result.push({
         ...event,
         start: f.start,
@@ -173,7 +177,10 @@ export function expandKnownTimeEvents<T extends ICalendarEventBase>(
     if (event.seriesID || event.isCanceled) continue;
     const f = frame(event);
     if (!event.recurrence) {
-      if (overlaps(f.start, f.end, f.model.kind === "all-day"))
+      if (
+        includeAllNonRecurring ||
+        overlaps(f.start, f.end, f.model.kind === "all-day")
+      )
         result.push({ ...event, start: f.start, end: f.end });
       continue;
     }

@@ -89,7 +89,7 @@ async function loadFederatedWorkspace(
         ]);
         return {
           calendars: calendars.map((calendar) => tagCalendar(calendar, connection)),
-          events: events.events.filter((event) => !event.isCanceled),
+          events: events.events,
           status: {
             connectionId: connection.id,
             label: connection.label,

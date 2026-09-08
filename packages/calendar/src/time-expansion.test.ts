@@ -419,6 +419,50 @@ assert.deepEqual(
   [],
   "UNTIL bounds pre-window work for expired series",
 );
+const agendaOptions = { consumerTimeZone: "UTC", includeAllNonRecurring: true };
+const agenda = expandRecurringEvents(
+  [
+    gapSeries,
+    moved,
+    {
+      ...singleDay,
+      id: "00000000-0000-4000-8000-000000000004",
+      start: new Date("2030-01-01Z"),
+      end: new Date("2030-01-01Z"),
+    },
+  ],
+  new Date("2026-03-01Z"),
+  new Date("2026-03-31Z"),
+  agendaOptions,
+);
+assert.ok(
+  agenda.some((event) => event.id === moved.id),
+  "agenda preserves an exception moved beyond recurrence window",
+);
+assert.ok(
+  agenda.some((event) => event.start.getUTCFullYear() === 2030),
+  "agenda retains distant standalone events",
+);
+assert.ok(
+  !agenda.some(
+    (event) =>
+      event.occurrenceIdentity?.originalStart.value ===
+        moved.originalStart!.value && event.id !== moved.id,
+  ),
+  "agenda does not regenerate the replaced original slot",
+);
+assert.ok(
+  !expandRecurringEvents(
+    [gapSeries, { ...moved, isCanceled: true }],
+    new Date("2026-03-01Z"),
+    new Date("2026-04-10Z"),
+    agendaOptions,
+  ).some(
+    (event) =>
+      event.occurrenceIdentity?.originalStart.value ===
+      moved.originalStart!.value,
+  ),
+);
 console.log(
   `Known time expansion through public API: OK (host TZ=${process.env.TZ ?? "default"})`,
 );

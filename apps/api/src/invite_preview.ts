@@ -53,7 +53,7 @@ export function buildInvitePreview(
       isAllDay: event.isAllDay,
       recurrence: event.recurrence ?? null,
     }));
-  const events = expandRecurringEvents(eventDefinitions, now, previewEndsAt)
+  const events = expandRecurringEvents(eventDefinitions, now, previewEndsAt, { consumerTimeZone: "UTC" })
     // The recurrence helper deliberately falls back to the source event when
     // an RRULE is malformed; retain the privacy window even in that case.
     .filter((event) => event.end >= now && event.start <= previewEndsAt)

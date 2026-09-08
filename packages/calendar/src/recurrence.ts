@@ -167,7 +167,11 @@ export function expandRecurringEvents<T extends ICalendarEventBase>(
   events: T[],
   rangeStart: Date,
   rangeEnd: Date,
-  options: { consumerTimeZone?: string } = {},
+  options: {
+    consumerTimeZone?: string
+    /** Agenda keeps standalone/detached events beyond the finite RRULE window. */
+    includeAllNonRecurring?: boolean
+  } = {},
 ): T[] {
   const known = events.filter(event => event.seriesID || event.originalStart || (event.timeModel && event.timeModel.kind !== "legacy-unknown"))
   const knownSet = new Set(known)
@@ -177,7 +181,7 @@ export function expandRecurringEvents<T extends ICalendarEventBase>(
     if (parent && !knownSet.has(parent))
       throw new EventExpansionError(event.id, "legacy-exception-parent-unresolved")
   }
-  const result: T[] = expandKnownTimeEvents(known, rangeStart, rangeEnd, options.consumerTimeZone)
+  const result: T[] = expandKnownTimeEvents(known, rangeStart, rangeEnd, options.consumerTimeZone, options.includeAllNonRecurring)
 
   for (const event of events) {
     if (knownSet.has(event)) continue
@@ -185,7 +189,7 @@ export function expandRecurringEvents<T extends ICalendarEventBase>(
       // Keep only if it overlaps the window — an event years away shouldn't
       // flow through filter/enrich on every swipe. Overlap (not start-in-range)
       // so multi-day events spanning into the window from before it survive.
-      if (event.end >= rangeStart && event.start <= rangeEnd) result.push(event)
+      if (options.includeAllNonRecurring || (event.end >= rangeStart && event.start <= rangeEnd)) result.push(event)
       continue
     }
 

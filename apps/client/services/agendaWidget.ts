@@ -42,6 +42,7 @@ function calendarForEvent(event: Event, calendarById: Map<string, Calendar>): Ca
 
 function buildSnapshot() {
   const now = new Date();
+  const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const rangeStart = new Date(now);
   rangeStart.setDate(rangeStart.getDate() - LOOKBACK_DAYS);
   const rangeEnd = new Date(now);
@@ -52,7 +53,7 @@ function buildSnapshot() {
   const { timeFormat, weekStartsOn } = useSettingsStore.getState();
   const calendarById = new Map(calendars.map(calendar => [calendar.id, calendar]));
 
-  const upcoming = expandRecurringEvents(events, rangeStart, rangeEnd)
+  const upcoming = expandRecurringEvents(events, rangeStart, rangeEnd, { consumerTimeZone })
     .filter(event => {
       if (event.isCanceled) return false;
       if (event.isAllDay) {
@@ -85,7 +86,7 @@ function buildSnapshot() {
   const calendarRangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const calendarRangeEnd = new Date(now.getFullYear(), now.getMonth() + 13, 1);
   const calendarDaysByDate = new Map<string, Omit<CalendarWidgetDay, "date">>();
-  const calendarEvents = expandRecurringEvents(events, calendarRangeStart, calendarRangeEnd)
+  const calendarEvents = expandRecurringEvents(events, calendarRangeStart, calendarRangeEnd, { consumerTimeZone })
     .filter(event => !event.isCanceled)
     .sort((a, b) => {
       if (a.isAllDay !== b.isAllDay) return a.isAllDay ? -1 : 1;
