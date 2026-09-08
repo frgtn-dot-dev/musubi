@@ -6,8 +6,8 @@ import { calendarEvents, calendarMembers, events, externalCalendars, externalEve
 
 /** The connected account's own source copy only. Provider responses/reminders
  * are personal evidence and must not leak through another member's calendar. */
-export async function getOwnProviderEventObservation(actorID: string, eventID: string, reminderEditsEnabled = false): Promise<ProviderEventStateResponse> {
-  const [row] = await db.select({ id: externalEvents.id, etag: externalEvents.etag, providerState: externalEvents.providerState, role: calendarMembers.role, event: events }).from(externalEvents)
+export async function getOwnProviderEventObservation(actorID: string, eventID: string, reminderEditsEnabled = false, rsvpEditsEnabled = false): Promise<ProviderEventStateResponse> {
+  const [row] = await db.select({ externalCalendarID: externalCalendars.externalCalendarID, id: externalEvents.id, etag: externalEvents.etag, providerState: externalEvents.providerState, role: calendarMembers.role, event: events }).from(externalEvents)
     .innerJoin(events, and(eq(events.id, externalEvents.eventID), eq(events.originCalendarID, externalEvents.calendarID), isNull(events.deletedAt)))
     .innerJoin(calendarEvents, and(eq(calendarEvents.eventID, events.id), eq(calendarEvents.calendarID, externalEvents.calendarID)))
     .innerJoin(calendarMembers, and(eq(calendarMembers.calendarID, calendarEvents.calendarID), eq(calendarMembers.userID, actorID)))
@@ -20,7 +20,9 @@ export async function getOwnProviderEventObservation(actorID: string, eventID: s
   // Advertises a supported queue contract, never a fresh provider write grant.
   // The queue and worker still recheck source, state, pending work and permission.
   const editable = reminderEditsEnabled && state.provider === "google" && reminders?.success && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && event.timeModel?.kind !== "floating" && !event.recurrence && !event.seriesID && !event.originalStart && !event.isCanceled;
-  return { state, version: providerStateVersion(row), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
+  const self = state.attendees.filter(item => item.self === true);
+  const rsvpEditable = rsvpEditsEnabled && state.provider === "google" && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && event.timeModel?.kind !== "floating" && !event.recurrence && !event.seriesID && !event.originalStart && !event.isCanceled && state.attendeesComplete && state.attendees.length <= 200 && self.length === 1 && !!self[0]!.address && self[0]!.address.toLowerCase() === row.externalCalendarID.toLowerCase() && state.isOrganizer !== true && !!state.organizer?.address && state.organizer.address.toLowerCase() !== row.externalCalendarID.toLowerCase() && ["confirmed", "tentative"].includes(state.status ?? "") && [null, "default"].includes(state.eventType);
+  return { state, version: providerStateVersion(row), ...(rsvpEditable ? { rsvpEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
 
 }
 

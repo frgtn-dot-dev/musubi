@@ -183,3 +183,25 @@ unsupported notification policy, disabled flag, viewer/shared editor denial,
 private receipt shape, unchanged canonical event and pending/completed replay.
 The worker still performs the actual conditional write. Client controls, native
 RSVP conflict resolution and live two-account acceptance remain follow-ups.
+
+## Default-off web and native response controls
+
+The private provider-state response may advertise `rsvpEdit` only for the caller's
+editable one-off Google source, a strong version, complete bounded attendees and
+one self identity matching the source calendar. Organizer copies, unsupported
+event kinds, series and floating events remain unavailable. This is a queue
+capability; the endpoint and worker still require fresh provider identity and
+write evidence.
+
+Web and native details reload the observation before every opening. They retain
+the selected response and frozen revision/state/operation identity for an
+identical retry, require an explicit response choice, and state the provider
+notification policy before submission. A pending receipt never claims a sent
+email or an accepted organizer-visible response. Existing account/server context
+boundaries discard the dialog on a context change. The web dialog hands focus
+back to the calendar trigger and isolates portaled keyboard/pointer events.
+
+Client tests and mock-API Chromium checks cover explicit choice, no write on
+cancel, failed submission and exact retry, refreshed/revoked capability, narrow
+dark/light rendering and accessibility. Physical native QA and live two-account
+acceptance remain deferred; no production flag was enabled.
