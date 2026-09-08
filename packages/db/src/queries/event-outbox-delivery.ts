@@ -175,6 +175,8 @@ export async function completeEventOutbox(
           address.externalCalendarLinkID,
           resource.externalEventId,
         );
+      if (address.payload.googleOccurrence)
+        await tx.select({ id: events.id }).from(events).where(eq(events.id, address.payload.googleOccurrence.master.id)).for("update");
       const [current] = await tx
         .select()
         .from(events)
@@ -216,6 +218,11 @@ export async function completeEventOutbox(
           "destination-disconnected",
           resultRef,
         );
+      if (row.payload.googleOccurrence) {
+        const [master] = await tx.select({ revision: events.revision, deletedAt: events.deletedAt }).from(events).where(eq(events.id, row.payload.googleOccurrence.master.id));
+        if (!master || master.deletedAt || master.revision !== row.payload.googleOccurrence.master.revision)
+          return settle(tx, row, "unconfirmed", "local-master-revision-changed", resultRef);
+      }
       if (observation?.isEcho && observation.externalEventId === resultRef?.externalEventId &&
           (!row.remoteSnapshot || row.remoteSnapshot.isEcho && observation.observedAt >= row.remoteSnapshot.observedAt))
         row.remoteSnapshot = observation;

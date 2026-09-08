@@ -1,3 +1,5 @@
+import { ProviderEventWriteError } from "../sync/event_write";
+import { prepareGoogleOccurrence } from "../sync/google_scope";
 import { config } from "@musubi/config";
 import { eventMutationIdentity } from "./event_mutation";
 import type { Request, Response } from "express";
@@ -310,7 +312,18 @@ export async function handlerEventScope(req: Request, res: Response) {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported", "Scope editing is not enabled on this server. No changes were saved.");
   const eventID = requireUUID(req.params.eventId, "eventId");
-  const result = await applyLocalEventScope(eventID, req.user!.id, req.body);
+  let result = await applyLocalEventScope(eventID, req.user!.id, req.body, { prepareProvider: true });
+  if (result.status === "provider_required") {
+    try {
+      const provider = await prepareGoogleOccurrence(result.context, req.body);
+      result = await applyLocalEventScope(eventID, req.user!.id, req.body, { provider });
+    } catch (error) {
+      if (error instanceof ProviderEventWriteError && error.code === "provider-conflict")
+        return res.status(409).json({ error: "The provider occurrence changed. Sync the calendar before retrying.", code: "provider-conflict", localCommitted: false });
+      throw error;
+    }
+  }
+  if (result.status === "provider_required") throw new Error("Missing provider scope preparation.");
   if (result.status === "not_found") throw new NotFoundError("Event not found.");
   if (result.status === "conflict") return conflict(res, result.current);
   if (result.status === "replayed") return res.json({ ...result.outcome, localCommitted: true, replayed: true });

@@ -1,11 +1,11 @@
-import type { ProviderEventState } from "@musubi/types";
-import { matchesEventProviderProjection } from "./event-outbox-projection";
+import type { Event, ProviderEventState } from "@musubi/types";
+import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection } from "./event-outbox-projection";
 import { and, eq, sql } from "drizzle-orm";
 import { eventOutbox, events, externalCalendars } from "../schema";
 import type { DbTransaction } from "./calendars";
 import type { EventOutboxRow } from "./event-outbox";
 
-type PullValues = {
+type PullValues = Partial<Pick<Event, "timeModel" | "originalStart" | "isCanceled" | "seriesID">> & {
   title: string;
   start: Date;
   end: Date;
@@ -16,6 +16,7 @@ type PullValues = {
 };
 
 function matchesProjection(row: EventOutboxRow, values: PullValues) {
+  if (row.payload.googleOccurrence) return values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.event, values);
   return (
     row.action !== "delete" &&
     matchesEventProviderProjection(
@@ -53,6 +54,9 @@ export async function retainPendingEventPull(
     )
     .for("update");
   if (!rows.length || (onlyReplaceObservation && !rows.some(row => row.remoteSnapshot))) return false;
+  // A scope's local exception already contains the desired time/cancellation.
+  // Its accepted pre-write provider baseline is still not a concurrent edit.
+  if (values && rows.every(row => row.payload.googleOccurrence && row.expectedEtag === etag && values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.googleOccurrence.baseline, values)) && rows.every(row => !row.remoteSnapshot)) return true;
   // Our in-flight echo is not permission to replace newer local content or ETag.
   const echo = rows.find(
     (row) =>

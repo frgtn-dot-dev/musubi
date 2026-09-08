@@ -1,4 +1,4 @@
-import type { Event } from "@musubi/types";
+import { EventTimeModelSchema, OccurrenceStartSchema, type Event } from "@musubi/types";
 
 type EventProjection = Pick<
   Event,
@@ -41,4 +41,16 @@ export function matchesEventProviderProjection(
     text(intended.location) === (observed.location || null) &&
     recurrence(intended.recurrence) === recurrence(observed.recurrence)
   );
+}
+
+/** Cancellation-only instances have identity, not the former overridden content. */
+export function matchesGoogleOccurrenceProjection(
+  expected: Event,
+  actual: EventProjection & Partial<Pick<Event, "timeModel" | "originalStart" | "isCanceled">>,
+) {
+  const original = (value: unknown) => JSON.stringify(OccurrenceStartSchema.parse(value));
+  const model = (value: unknown) => JSON.stringify(EventTimeModelSchema.parse(value));
+  return !!expected.originalStart && !!actual.originalStart && original(expected.originalStart) === original(actual.originalStart) &&
+    !!expected.isCanceled === !!actual.isCanceled &&
+    (!!expected.isCanceled || (matchesEventProviderProjection("google", expected, actual) && model(expected.timeModel) === model(actual.timeModel)));
 }

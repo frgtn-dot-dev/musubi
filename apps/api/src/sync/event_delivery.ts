@@ -1,3 +1,4 @@
+import { matchesGoogleOccurrence } from "./adapters/google_occurrence";
 import { config } from "@musubi/config";
 import { ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
@@ -135,6 +136,29 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.googleOccurrence) {
+        if (!config.api.eventTimeEditsEnabled || row.provider !== "google" || row.action !== "update" || !adapter?.readOccurrence || !adapter.writeOccurrence)
+          throw new EventWriteError("event-write", "unsupported");
+        if (!(await checkDestination())) return;
+        if (!(await hasEventOutboxRevisionCoverage(row))) throw new ProviderEventWriteError("provider-conflict");
+        const intent = { ...row.payload.googleOccurrence, master: EventSchema.parse(row.payload.googleOccurrence.master), baseline: EventSchema.parse(row.payload.googleOccurrence.baseline) };
+        expectedRef = await getEventOutboxExpectedRef(row);
+        if (!expectedRef) throw new ProviderEventWriteError("provider-version-unavailable");
+        let observed = await adapter.readOccurrence(row.userID, row.accountID, row.externalCalendarID, intent, expectedRef, signal);
+        remoteSnapshot = { externalEventId: observed.ref.externalEventId, etag: observed.ref.etag ?? null, deleted: false, values: JSON.parse(JSON.stringify(observed.event)), providerState: observed.state, observedAt: new Date().toISOString() };
+        if (!matchesGoogleOccurrence(event, observed.event)) {
+          if (observed.ref.etag !== expectedRef.etag || !matchesGoogleOccurrence(intent.baseline, observed.event)) throw new ProviderEventWriteError("provider-conflict");
+          if (!(await checkDestination())) return;
+          remoteSnapshot = null;
+          mutationStarted = true;
+          observed = await adapter.writeOccurrence(row.userID, row.accountID, row.externalCalendarID, intent, event, expectedRef, signal);
+        }
+        resultRef = observed.ref;
+        signal.throwIfAborted();
+        await completeEventOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: resultRef.externalEventId, etag: resultRef.etag ?? null, deleted: false, providerState: observed.state, observedAt: new Date().toISOString() });
+        remoteSnapshot = null;
+        return;
+      }
       if (row.payload.reminderEdit) {
         if (!config.api.providerReminderEditsEnabled || hasKnownEventTime(event) || event.recurrence) throw new EventWriteError("event-write", "unsupported");
         const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);
