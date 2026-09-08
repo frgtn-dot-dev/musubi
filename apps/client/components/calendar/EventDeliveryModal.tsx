@@ -8,6 +8,8 @@ import {
   eventDeliveryExplanation,
   eventDeliveryLabel,
   providerReminderDescription,
+  providerRsvpNotice,
+  providerRsvpResponseLabel,
 } from "@musubi/calendar";
 import type {
   EventDelivery,
@@ -182,7 +184,7 @@ export function DeliveryBody({
     if (!busyRef.current) onClose();
   }
   const confirmLabel =
-    comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
+    comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
       ? "Delete remote copy"
       : comparison?.preview.action === "create"
         ? "Recreate remote copy"
@@ -195,7 +197,7 @@ export function DeliveryBody({
       {
         title: confirmLabel,
         confirmLabel,
-        message: saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
+        message: saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
           "Apply the version shown in this comparison? Remote differences may be replaced. Unsaved form edits are not sent.",
       },
       () => {
@@ -211,7 +213,7 @@ export function DeliveryBody({
           if (active.current) {
             setComparison(undefined);
             setNotice(
-              "Saved changes queued. Provider confirmation is still pending.",
+              saved.preview.rsvpResolution ? "Saved response queued. Google confirmation is still pending; email delivery cannot be verified." : "Saved changes queued. Provider confirmation is still pending.",
             );
           }
         });
@@ -262,7 +264,11 @@ export function DeliveryBody({
           ) : null}
           {comparison ? (
             <>
-              {comparison.preview.reminderResolution ? (
+              {comparison.preview.rsvpResolution ? <>
+                <Text style={copy}>{providerRsvpNotice}</Text>
+                <Text style={copy}>Saved Google response: {providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)}</Text>
+                <Text style={copy}>Current Google response: {providerRsvpResponseLabel(comparison.preview.rsvpResolution.remote)}</Text>
+              </> : comparison.preview.reminderResolution ? (
                 <>
                   <Text style={copy}>Google Calendar sends these notifications; other apps may notify separately.</Text>
                   <Text style={copy}>Saved Google reminders: {providerReminderDescription({ provider: "google", overrides: [], ...comparison.preview.reminderResolution.desired })}</Text>
@@ -405,6 +411,7 @@ export function DeliveryBody({
                                       expectedRemoteExists:
                                         preview.remote !== null,
                                       expectedRemoteEtag: preview.remoteEtag,
+                                      ...(preview.rsvpResolution ? { expectedRsvpBaselineVersion: preview.rsvpResolution.baselineVersion } : {}),
                                       ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
                                       ...(preview.masterRevision !== undefined
                                         ? {

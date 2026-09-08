@@ -16,3 +16,7 @@ export function providerRsvpReceiptMessage(status: string) {
   if (status === "unconfirmed") return "Google may have saved your response. Open Delivery details to verify the result.";
   return "Response request saved. Google confirmation is still pending; check Delivery details for the result.";
 }
+
+export function providerRsvpResponseLabel(response: string | null) {
+  return providerRsvpOptions.find(option => option.value === response)?.label ?? (response === "needsAction" ? "Awaiting response" : response ?? "Unknown");
+}

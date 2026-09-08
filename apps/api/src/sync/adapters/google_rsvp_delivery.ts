@@ -12,7 +12,7 @@ const primaryCalendar = z.object({ id: z.email(), primary: z.literal(true), acce
 /** The injected token reader must refresh credentials and verify OAuth write
  * scope for this exact user/account. Production wiring does both; no caller
  * supplied URL or email can substitute for the provider's primary identity. */
-export function googleRsvpMethods(getAuthorizedToken: (user: string, account: string) => Promise<string>): Pick<CalendarAdapter, "readRsvp" | "writeRsvp"> {
+export function googleRsvpMethods(getAuthorizedToken: (user: string, account: string) => Promise<string>): Pick<CalendarAdapter, "readRsvp" | "readRsvpResolution" | "writeRsvp"> {
   async function context(user: string, account: string, calendar: string, ref: ExternalEventRef, signal?: AbortSignal) {
     if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const token = await getAuthorizedToken(user, account);
@@ -34,6 +34,13 @@ export function googleRsvpMethods(getAuthorizedToken: (user: string, account: st
     async readRsvp(user, account, calendar, ref, response, signal) {
       const ctx = await context(user, account, calendar, ref, signal);
       return googleRsvpEvidence(await ctx.read(), { eventId: ref.externalEventId, etag: ref.etag ?? "", authenticatedCopyEmail: ctx.email }, response);
+    },
+    async readRsvpResolution(user, account, calendar, ref, response, signal) {
+      const ctx = await context(user, account, calendar, ref, signal);
+      const current = await ctx.read();
+      // Read the current version for an explicit preview; enqueue readRsvp keeps
+      // enforcing the originally accepted ETag. No write occurs here.
+      return googleRsvpEvidence(current, { eventId: ref.externalEventId, etag: current?.etag ?? "", authenticatedCopyEmail: ctx.email }, response);
     },
     async writeRsvp(user, account, calendar, evidence, policy, signal, beforeWrite) {
       if (policy.sendUpdates !== "all") throw new EventWriteError("event-write", "unsupported");

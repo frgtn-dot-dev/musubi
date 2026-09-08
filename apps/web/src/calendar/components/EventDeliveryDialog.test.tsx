@@ -379,3 +379,25 @@ it("shows personal reminders and keeps the exact confirmation after a failed req
   expect(requests[0].expectedReminderStateVersion).toBe("a".repeat(64));
   expect(requests[0]).not.toHaveProperty("reminders");
 });
+
+it("compares only the own RSVP response and freezes the full native preview for retry", async () => {
+  const requests: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/conflict")) return json({ ...preview, rsvpResolution: { desired: "accepted", remote: "declined", baselineVersion: "c".repeat(64) } });
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(String(init?.body))); return requests.length === 1 ? json({ error: "Temporary failure" }, 503) : json(receipt, 202); }
+    return json(receipt);
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText("Accept")).toBeTruthy(); expect(within(comparison).getByText("Decline")).toBeTruthy();
+  expect(within(comparison).queryByText("Remote title")).toBeNull();
+  expect(within(comparison).getByText(/Email delivery cannot be verified/)).toBeTruthy();
+  fireEvent.click(within(comparison).getByRole("button", { name: "Send saved response" }));
+  await screen.findByRole("alert");
+  fireEvent.click(within(comparison).getByRole("button", { name: "Send saved response" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1]).toEqual(requests[0]); expect(requests[0].expectedRsvpBaselineVersion).toBe("c".repeat(64));
+  expect(requests[0]).not.toHaveProperty("attendees"); expect(requests[0]).not.toHaveProperty("response");
+});

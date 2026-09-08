@@ -9,6 +9,8 @@ import {
   eventDeliveryExplanation,
   eventDeliveryLabel,
   providerReminderDescription,
+  providerRsvpNotice,
+  providerRsvpResponseLabel,
 } from "@musubi/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -116,6 +118,7 @@ export function EventDeliveryDialog({
           expectedLatestOperationId: preview.latestOperationId,
           expectedRemoteExists: preview.remote !== null,
           expectedRemoteEtag: preview.remoteEtag,
+          ...(preview.rsvpResolution ? { expectedRsvpBaselineVersion: preview.rsvpResolution.baselineVersion } : {}),
           ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
           ...(preview.masterRevision !== undefined
             ? { expectedMasterRevision: preview.masterRevision }
@@ -267,11 +270,11 @@ export function EventDeliveryDialog({
             }
           }}
           title="Review remote changes"
-          description={comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
+          description={comparison.preview.rsvpResolution ? "Compare your saved response with your current response in Google Calendar." : comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
           closeLabel="Close comparison"
           returnFocus={comparison.trigger}
           confirmLabel={
-            comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
+            comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
               ? "Delete remote copy"
               : comparison.preview.action === "create"
                 ? "Recreate remote copy"
@@ -290,17 +293,20 @@ export function EventDeliveryDialog({
               setComparison(undefined);
               setReviewTarget(undefined);
               setNotice(
-                "Saved changes queued. Provider confirmation is still pending.",
+                comparison.preview.rsvpResolution ? "Saved response queued. Google confirmation is still pending; email delivery cannot be verified." : "Saved changes queued. Provider confirmation is still pending.",
               );
             })
           }
         >
           <ConfirmationNotice icon={<AlertTriangle size={18} />}>
-            {comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
+            {comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
               ? "This removes the remote copy. The saved deletion in Musubi remains."
               : "This applies the saved version to the remote copy. Remote differences may be replaced; unsaved form edits are not sent."}
           </ConfirmationNotice>
-          {comparison.preview.reminderResolution ? (
+          {comparison.preview.rsvpResolution ? <>
+            <Row label="Saved Google response" detail={providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)} />
+            <Row label="Current Google response" detail={providerRsvpResponseLabel(comparison.preview.rsvpResolution.remote)} />
+          </> : comparison.preview.reminderResolution ? (
             <>
               <Row label="Saved Google reminders" detail={providerReminderDescription({ provider: "google", overrides: [], ...comparison.preview.reminderResolution.desired })} />
               <Row label="Current Google reminders" detail={providerReminderDescription(comparison.preview.reminderResolution.remote)} />

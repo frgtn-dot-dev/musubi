@@ -97,6 +97,11 @@ export const EventDeliveryConflictSchema = z.object({
     remote: ProviderEventStateSchema.shape.reminders,
     stateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   }).strict().optional(),
+  rsvpResolution: z.object({
+    desired: z.enum(["accepted", "tentative", "declined"]),
+    remote: z.string().nullable(),
+    baselineVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  }).strict().optional(),
   canResolve: z.boolean(),
   reason: z
     .enum([
@@ -117,6 +122,7 @@ export const ResolveEventDeliveryRequestSchema = z
     expectedRemoteExists: z.boolean(),
     expectedRemoteEtag: z.string().nullable(),
     expectedMasterRevision: z.number().int().positive().optional(),
+    expectedRsvpBaselineVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
     expectedReminderStateVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   })
   .strict();

@@ -1,8 +1,11 @@
+import { googleReminderEventEvidence } from "./adapters/google";
+import { googleEventState } from "./adapters/provider_event_state";
 import { config } from "@musubi/config";
 import {
   diffEventContent,
   matchesReminderEventProjection,
   providerStateVersion,
+  providerRsvpBaselineVersion,
   getEventDeliveryResolutionContext,
   getEventOutboxExpectedRef,
   getEventOutboxDeletion,
@@ -14,6 +17,7 @@ import {
   EventWriteError,
   EventSchema,
   ProviderReminderEditSchema,
+  ProviderRsvpEditSchema, providerRsvpDesiredState,
   type EventDeliveryConflict,
   type EventDeliveryContent,
   type Event,
@@ -129,6 +133,29 @@ async function prepare(
               ).url,
             }
           : null;
+  }
+  if (row.payload.rsvp) {
+    if (!config.api.providerRsvpEditsEnabled || !adapter.readRsvpResolution || !ref || context.deleted || !context.mapping)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const request = ProviderRsvpEditSchema.parse(row.payload.rsvp.request);
+    const deletion = await getEventOutboxDeletion(row, ref.externalEventId);
+    const evidence = await adapter.readRsvpResolution(row.userID, row.accountID, row.externalCalendarID, ref, request.response, signal);
+    const native = googleReminderEventEvidence(evidence.baseline);
+    if (evidence.baseline.id !== ref.externalEventId || !strongEventEtag(evidence.baseline.etag) || !matchesReminderEventProjection("google", context.local, native) || !native.timeModel)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const state = googleEventState(evidence.baseline);
+    const baselineVersion = providerRsvpBaselineVersion(context.mapping.id, evidence.baseline);
+    const currentRef = { externalEventId: evidence.baseline.id, etag: evidence.baseline.etag };
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
+      localRevision: context.localRevision, local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
+      remote: { ...content(native), timeModel: native.timeModel }, remoteEtag: currentRef.etag,
+      action: "update", canResolve: true, reason: null,
+      rsvpResolution: { desired: request.response, remote: state.ownResponse, baselineVersion },
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: currentRef, remoteExists: true, action: "update", patch: {}, deletion,
+      rsvp: { baselineVersion, intent: { request, baseline: evidence.baseline, nativeTime: native.timeModel, baselineState: state, desiredState: providerRsvpDesiredState(state, evidence.selfEmail, request.response), mappingID: context.mapping.id } } };
+    return { preview, proof };
   }
   if (row.payload.reminderEdit) {
     if (!config.api.providerReminderEditsEnabled || !adapter.readReminderState || !ref || context.deleted || !context.mapping)

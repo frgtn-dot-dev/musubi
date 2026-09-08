@@ -8363,3 +8363,62 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K13 own RSVP conflict confirmation: ${theme} ${width}`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)")) errors.push(message.text()); });
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const id = "00000000-0000-4000-8000-000000000151";
+    const operation = "00000000-0000-4000-8000-000000000152";
+    const saved = event(id, "RSVP appointment", "personal", "#b3492f", "2026-07-23T07:30:00Z", "2026-07-23T08:30:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [saved] });
+    const writes: Record<string, unknown>[] = [];
+    const target = { targetId: "00000000-0000-4000-8000-000000000154", calendarId: "00000000-0000-4000-8000-000000000153", calendarName: "Google", provider: "google", connected: true, owned: true,
+      operationId: operation, action: "update", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-23T09:00:00Z", retryAt: null, issue: "conflict" };
+    const receipt = { eventId: id, localRevision: 1, targets: [target] };
+    await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, receipt));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, route => respond(route, {
+      eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1,
+      local: { ...saved, description: null, location: null }, remote: { ...saved, description: null, location: null },
+      remoteEtag: '"fresh"', action: "update", canResolve: true, reason: null,
+      rsvpResolution: { desired: "accepted", remote: "declined", baselineVersion: "a".repeat(64) },
+    }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, route => {
+      writes.push(route.request().postDataJSON());
+      return writes.length === 1 ? respond(route, { error: "Temporary failure" }, 503) : respond(route, receipt, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveURL(/month\?date=2026-07-26/);
+    await expect(page).toHaveTitle(/Musubi/);
+    await page.getByRole("button", { name: /RSVP appointment/ }).first().click();
+    await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    const delivery = page.getByRole("dialog", { name: "Delivery", exact: true });
+    await delivery.getByRole("button", { name: "Review changes" }).click();
+    const comparison = page.getByRole("dialog", { name: "Review remote changes" });
+    await expect(comparison.getByText("Accept")).toBeVisible();
+    await expect(comparison.getByText("Decline")).toBeVisible();
+    await expect(comparison.getByText(/Email delivery cannot be verified/)).toBeVisible();
+    await expect(comparison.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await comparison.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+    expect(writes).toHaveLength(0);
+    await expect(delivery.getByRole("button", { name: "Review changes" })).toBeFocused();
+    await delivery.getByRole("button", { name: "Review changes" }).press("Enter");
+    await expect(comparison.getByText("Current Google response")).toBeVisible();
+    await expect(comparison.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    expect(await comparison.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await comparison.screenshot({ path: `/tmp/musubi-k13-rsvp-conflict-${theme}.png` });
+    await comparison.getByRole("button", { name: "Send saved response" }).click();
+    await expect(comparison.getByRole("alert")).toBeVisible();
+    await comparison.getByRole("button", { name: "Send saved response" }).click();
+    await expect(delivery.getByText(/Saved response queued/)).toBeVisible();
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0].expectedRsvpBaselineVersion).toBe("a".repeat(64));
+    expect(writes[0]).not.toHaveProperty("response");
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
