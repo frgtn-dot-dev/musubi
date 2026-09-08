@@ -262,7 +262,9 @@ Nejdřív krátký konkrétní návrh schématu/kontraktu, poté aditivní migra
 
 **K10 převod času — implementováno a ověřeno (PR #132):** sdílené přesné převody přes Temporal polyfill, oddělená explicitní/recurrence DST politika, testy v UTC/Prague/New_York včetně půlhodinového posunu a přeskočeného dne. Zoned model uchovává původní místní start/konec, protože instant neuchová neexistující02:30 po DST normalizaci. Dosavadní expanze se tím ještě nemění. Root check, striktní kontrakty, storage regrese, frozen install a Android Metro/Hermes export prošly; čistý reviewer nezávisle spustil kontrakty i převody v UTC/Prague/New_York (6 běhů bez chyby). Stav finálního převzetí je v [PR #132](https://github.com/frgtn-dot-dev/musubi/pull/132).
 
-**Checkpoint na žádost vlastníka:** po uzavření PR #132 zastavit další implementaci. K10 zůstává `in_progress`; pokračování začíná sdílenou expanzí a jejím napojením. [Review aktuálního stavu](calendar-core-checkpoint-2026-09-07.md).
+**Checkpoint na žádost vlastníka splněn:** PR #132 squash-mergnut jako `5b1ae9c` po všech 14 zelených CI kontrolách a čistém review; review stavu předáno. Vlastník 2026-09-08 obnovil pokračování. K10 zůstává `in_progress`; pokračování začíná sdílenou expanzí a jejím napojením. [Review aktuálního stavu](calendar-core-checkpoint-2026-09-07.md).
+
+**K10 sdílená expanze — rozpracovaný balíček (2026-09-08):** veřejný `expandRecurringEvents` rozlišuje doložený zoned/floating/all-day model od legacy. Nová cesta zachovává původní identitu, nahrazuje přesunuté/zrušené výjimky, počítá COUNT až po vynechání neexistujících časů a vyhodnocuje civilní RRULE v zóně série. All-day překryv používá datum konzumenta; floating vyžaduje explicitní zónu. Neplatné a nepodporované pravidlo se hlásí chybou. Metadata dosud nejsou připuštěná v produkčním DTO/writerech, takže současné klienty tento slice nepřepíná. Následuje napojení konzumentů a konzistentní revision-CAS read/write kontrakt; K10 tím ještě není převzatý.
 
 ### K11 — Věrný import a zachování providerových výjimek
 
