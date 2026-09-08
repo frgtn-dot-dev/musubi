@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard accepted in PR139; anonymous preview projection accepted in PR140; server reminder projection accepted in PR141; inclusive all-day widget correction accepted in PR142; shared reminder projection accepted in PR143; web expansion errors accepted in PR144; web reminder inheritance accepted in PR145; native expansion errors accepted in PR146. Explicit time-edit contract accepted in PR147; internal local time CAS in PR148; read metadata and default-off authenticated time endpoint in PR149; atomic content/time drafts in PR150; known civil editors in PR151; explicit model/zone choice in PR152. Occurrence detail temporal-tuple preservation accepted in PR153; civil whole-series shifts are under implementation; wider temporal scopes and compatibility rollout remain pending. No production migration or provider parity claim.
+Status: K10 local implementation complete through PR130–155 and the closure guards. See the [current acceptance matrix and activation conditions](../audits/calendar-k10-acceptance.md). The sections named checkpoint below are historical records, not current pending work. Production activation remains disabled; K11 provider rehydration, K12 wider temporal scopes and K14/K15 device/release verification are separate. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -186,3 +186,10 @@ Occurrence/following edits, changing series kind/zone/recurrence, legacy series 
 Known-model `POST /api/v1/events/:id/fork` rechecks source visibility, destination edit permission and the source revision under locks. It copies the validated stored tuple verbatim, preserving even a second-fold instant, rather than re-resolving the visible civil value. Detached families (including tombstoned children), external calendars, mapping and outbox histories remain unsupported. The old generic create contract remains unchanged. All three operations—create, fork and time edit—share the default-off flag.
 
 Both clients send a request-only create time intent; read/cache snapshots strip it. Native recurrence presets and labels use the selected civil start date. No backfill, version minimum change or production activation is part of this checkpoint.
+
+
+### Closure guards
+
+Generic unlink/tombstone cannot remove a detached definition or a master with children, including tombstones. The check runs under the existing event revision lock and preserves content/links on refusal. K12 must provide an atomic scope-aware removal before family writes are admitted.
+
+Production startup refuses explicit time activation unless product and enforced client/peer minimums are newer than released 0.1.8. The current defaults and versions remain unchanged. This prevents merely toggling the flag while clients that lose metadata during copy are still supported; it is a necessary release condition, not automatic release certification.

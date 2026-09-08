@@ -496,6 +496,15 @@ async function patchEventAndCalendarLinksInTransaction(
   const removedCalendarIDs = existing.filter((id) => !incoming.includes(id));
   const patch = diffEventContent(current, input);
   assertLegacyEventTimePatch(current, patch);
+  // Legacy unlink/delete must not remove an exception definition (resurrecting
+  // its original slot) or strand children after removing a master. K12 owns
+  // atomic family scope operations; even tombstoned children require that path.
+  if (removedCalendarIDs.length || (tombstoneIfOrphaned && incoming.length === 0)) {
+    const [child] = await tx.select({ id: events.id }).from(events)
+      .where(eq(events.seriesID, eventID)).limit(1);
+    if (current.seriesID || current.originalStart || child)
+      throw new BadRequestError("This removal requires an occurrence-aware scope operation. No changes were saved.");
+  }
   const deletedAt =
     tombstoneIfOrphaned && incoming.length === 0 ? new Date() : null;
   const changed =

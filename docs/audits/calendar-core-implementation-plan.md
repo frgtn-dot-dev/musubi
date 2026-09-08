@@ -28,7 +28,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `in_progress`; K11–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -244,6 +244,8 @@ Použít stávající cache, query invalidation, SSE a UI primitives. Retry endp
 ## Třetí série: věrný čas a opakování
 
 ### K10 — Časový model a identita výskytu
+
+**Aktuální převzetí:** lokální implementace K10 je dokončená. [Acceptance matice a závazné podmínky aktivace](calendar-k10-acceptance.md) shrnují finální stav. Níže jsou historické checkpointy; jejich tehdejší „pending“ není nový blocker. Produkční flag zůstává vypnutý, provider rehydratace je K11, atomic detached scopes K12 a release/device QA K14/K15.
 
 **K10 kontrakt převzat (PR #130, squash `5cc7a08`, 2026-09-07):** [konkrétní návrh schématu a rollout](../sync/event-time-model.md), striktní samostatné kontrakty time model / original start / occurrence identity. Nezapojují se zatím do event DTO ani writable requestů. Čisté review `39e0dca..863e47e` bez nálezů; root check, kontrakt testovaný v UTC/Prague/New_York a všech 14 CI kontrol prošly. Následuje aditivní storage, sdílená expanze a atomické napojení čtení/zápisů; samotný kontrakt neuzavírá K10.
 
@@ -570,6 +572,9 @@ gatem. Žádná změna backendu, migrací, verzí ani rozsahu K07–K15.
 This event / following, konverze typu nebo zóny série, legacy adopce série, dated recurrence (včetně parametrizované jednořádkové RDATE), detached identity, děti i jejich tombstones a providerová historie stále vyžadují navazující cesty. Serverové family/provider guards ani default-off aktivace se neuvolňují. Testy pokrývají UTC/Prague/New_York, DST civilní posun, frozen revision, společný content/time request, reálné HTTP/DB CAS a rollback stale requestu, nativní scope odmítnutí/retry/reminder a webový narrow-dark scope retry + desktop-light full handoff s axe. K10, fyzická native QA, create/copy a kompatibilní rollout zůstávají otevřené.
 
 
-**K10 explicitní lokální create/copy — ověřený balíček:** nový POST `/api/v1/events/time` přijímá oddělený obsah a explicitní časový intent, zapisuje revision 1 a celé vazby v jedné transakci. Membership i calendar lifecycle zámky chrání oprávnění až do commitu; autor/organizátor jsou autentizovaný aktér. Existující fork pro známý model má vlastní CAS cestu a zachovává přesný uložený instant i civilní metadata, včetně druhého DST foldu. Rodiny, externí kalendáře a providerová historie se odmítnou. Generic create nadále nepřijímá metadata. Oba editory umožňují explicitní model při vytváření a transportují samostatný create intent; nativní Weekly odvozuje den z civilního draftu. Chybějící zóna či vypnutá funkce draft zachová. Default-off zůstává; navazuje finální acceptance a kompatibilitní activation guard.
+**K10 explicitní lokální create/copy převzat (PR #155, squash `93ffa75`, 2026-09-08):** nový POST `/api/v1/events/time` přijímá oddělený obsah a explicitní časový intent, zapisuje revision 1 a celé vazby v jedné transakci. Membership i calendar lifecycle zámky chrání oprávnění až do commitu; autor/organizátor jsou autentizovaný aktér. Existující fork pro známý model má vlastní CAS cestu a zachovává přesný uložený instant i civilní metadata, včetně druhého DST foldu. Rodiny, externí kalendáře a providerová historie se odmítnou. Generic create nadále nepřijímá metadata. Oba editory umožňují explicitní model při vytváření a transportují samostatný create intent; nativní Weekly odvozuje den z civilního draftu. Chybějící zóna či vypnutá funkce draft zachová. Default-off zůstává; navazuje finální acceptance a kompatibilitní activation guard.
 
 Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:events`, 24 composer testů v Prague i skutečném New York procesu, 2 Playwright scénáře dark390/light1280 s axe. Nezávislé čisté review odhalilo původní Weekly den v mobilním create; oprava má regresi a opakované review nemá další blocker.
+
+
+**K10 uzavření lokální implementace:** generic unlink/tombstone nyní odmítá detached rodinu včetně masteru s tombstone child, aby se neobnovil původní slot ani neosiřely výjimky. Produkční startup kontroluje kompatibilní release a obě vynucená minima novější než vydané 0.1.8 ještě před migrací a listen. Flag i všechny verze zůstávají beze změny. Finální scope a důkazy jsou v [K10 acceptance](calendar-k10-acceptance.md); dalším bodem je K11.

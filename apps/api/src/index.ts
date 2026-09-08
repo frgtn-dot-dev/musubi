@@ -1,3 +1,4 @@
+import { assertEventTimeActivation } from "./event_time_activation";
 import { config, logger } from "@musubi/config";
 import { auth } from "@musubi/auth";
 import { canSendEmail, initializeEmailCapability } from "@musubi/emails";
@@ -681,6 +682,7 @@ const runNotifications = nonOverlapping(sendPendingNotifications, () => {
 });
 
 async function start() {
+  assertEventTimeActivation(config.api.environment, config.api.eventTimeEditsEnabled);
   // The dedicated PostgreSQL session lock makes the documented deployment
   // boundary fail-safe: a second API process sharing this DB does not serve
   // traffic with split SSE/rate-limit/scheduler state.
