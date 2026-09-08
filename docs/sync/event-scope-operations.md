@@ -1,0 +1,13 @@
+# Event scope operations
+
+K12 starts with a strict request contract and a pure local-family planner. This first slice adds no endpoint, database writer or provider capability; existing unsafe-write gates stay in place.
+
+A request names one stable operation UUID, the master revision, action (`update` or `delete`) and scope (`occurrence`, `following`, `series`). Occurrence/following requests also name the original typed start and the existing override revision, or explicit null for a generated occurrence. A whole-series time intent is anchored at the stored master; clients must translate a displayed occurrence edit before submitting it. Event identity, calendar membership and meeting authority are not writable patch fields.
+
+The planner receives a complete live local family and produces creates, updates and deletions without changing input. Its caller must authenticate, lock and re-read that family, reserve/replay the operation identity, persist the complete result atomically and append any supported outbound work in that same transaction. The planner itself does not make repeated calls idempotent, authorize provider writes or claim distributed atomicity.
+
+Occurrence deletion creates or updates a cancellation definition; it does not remove the suppression and resurrect the original slot. Moved exceptions retain their own content and duration. Whole-series changes preserve override content while moving original identities with the master anchor; an unchanged anchor preserves exact DST fold identity. A following split partitions COUNT by actual generated starts, preserves UNTIL, keeps the old master for the earlier segment and reparents later exceptions. Cutting at the first occurrence uses whole-series semantics. No-op edits produce no writes.
+
+This initial planner requires known zoned, floating or all-day models. Following requires one RRULE; dated additions/exclusions require later explicit partition support. Moving a series anchor with RDATE/EXDATE is refused rather than leaving stale dates. Any recurrence or anchor change that would orphan an existing exception is also refused. Existing orphan definitions remain readable and are not silently deleted by unrelated content edits. These unsupported cases are visible limitations, not implemented support.
+
+Regression: `packages/calendar/src/scope-plan.test.ts` covers all three scopes for edit/delete, original and moved instances, child/master CAS, COUNT/UNTIL, first/later cuts, floating/date/zoned time, skipped DST gaps, second-fold identity, no-op, ID collision and explicit unsupported/orphan refusals. The server transaction, durable operation replay, provider scope writes and client conversion remain the next K12 slices.

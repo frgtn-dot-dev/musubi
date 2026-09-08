@@ -28,7 +28,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11 je `in_progress`; K12–K15 jsou `pending`.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11 je `in_progress` (finální klientský řez v CI); K12 je `in_progress`; K13–K15 jsou `pending`.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -591,3 +591,7 @@ Validace create/copy: root `pnpm check` (225 native / 397 web), celá `test:db:e
 **K11 CalDAV převzat (PR #158, 2026-09-08):** všechny 14 CI kontroly zelené; jeden webový create-dialog scénář v prvním CI běhu selhal, trace prověřen a osm lokálních opakování (tři se zpomaleným CPU) prošlo, opakovaný shard zelený bez změny produktu. Nezávislé finální review čisté; atomické rodiny i skutečný izolovaný Radicale roundtrip prošly. Tato evidence není živé iCloud ověření.
 
 **K11 rozsah Outlooku — klientský řez (2026-09-08):** webové kalendářové pohledy a nativní kalendář/agenda/detail zobrazují persistentní informaci o omezeném rozsahu při aktivním Outlook event kalendáři. Upozornění zůstává i na prázdném vzdáleném datu a zmizí po skrytí těchto zdrojů. Netvrdí smyšlené přesné hranice podle aktuálního dne. Browser wide/narrow + axe a root check prošly; native physical-device gate stále čeká. Jde o stávající styl status banneru, nikoli restyle.
+
+**K11 Graph převzat (PR #159, 2026-09-08):** všech 14 kontrol zelených i po přenesení na main; čisté nezávislé rereview, root check a celá disposable DB sada prošly. Scope metadata jsou providerová mapování; žádný syntetický lokální master ani domyšlená Windows/IANA zóna. Klientské upozornění je PR #160.
+
+**K12 čistý scope kontrakt/planner — implementační řez (2026-09-08):** všechny scopes edit/delete nad explicitní lokální rodinou, oddělená revize masteru/výjimky, typed original identity, COUNT/UNTIL partition a zachování vlastního obsahu výjimek. Opakované review doplnilo přesnou fold identitu a odmítnutí změn, které by obnovily EXDATE nebo osiřely výjimky. Není to endpoint ani idempotentní DB operace; následuje transakce/outbox a zapojení klientů. Kontrakt a omezení: [scope operations](../sync/event-scope-operations.md).
