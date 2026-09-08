@@ -1,7 +1,7 @@
 # Google RSVP: evidence contract
 
-This first K13 write-preparation slice is pure logic. It does not expose an
-endpoint, authorize an account, enqueue an operation or send a response.
+K13 has a pure evidence planner and an internal conditional Google transport.
+There is no public endpoint, durable queue or client RSVP control yet.
 Production and live testing remain disabled/unimplemented.
 
 ## Native request
@@ -41,9 +41,44 @@ minimal body, case-preserving self identity, frozen baseline, all-day/zoned
 endpoints and preservation/refusal cases. The suite is included in API tests.
 There is no fake-HTTP or database writer evidence in this slice.
 
-Next: authenticated account binding, explicit notification policy, conditional
-HTTP transport, durable operation/recovery and conflict semantics, then clients
-and live two-account acceptance. Notification delivery is not proven exactly-once
+The internal transport below adds primary-account binding and conditional HTTP.
+Next are source authorization, durable operation/recovery and conflict semantics,
+then clients and live two-account acceptance. Notification delivery is not proven exactly-once
 by seeing the desired response in a subsequent GET. Organizer create/update/
 cancel, withdrawal and recurring RSVP need their own contracts. No change to
 feature flags, versions or compatibility minima is made here.
+
+## Default-off internal HTTP transport
+
+`PROVIDER_RSVP_EDITS_ENABLED` defaults to false. Both adapter entry points refuse
+before token or network access when disabled. Production wiring refreshes the
+exact user/account token and then verifies its OAuth event-write scope.
+A fresh `calendarList/primary` GET must return an owner grant, `primary: true`,
+and an email matching the selected external calendar. That provider-derived
+identity is compared with the one self attendee; secondary/delegated calendars
+are unsupported in this slice. [Primary calendar lookup](https://developers.google.com/workspace/calendar/api/v3/reference/calendarList/get)
+is documented by Google.
+
+The writer rebuilds the minimal patch from its baseline and performs a complete
+fresh GET. An already-matching desired response returns without PATCH. Otherwise
+the entire accepted baseline must still match before an `If-Match` PATCH with
+explicit `sendUpdates=all` and `conferenceDataVersion=1`. The notification policy
+is required by the internal caller and does not imply current live authorization.
+Redirects and partial reads are rejected; all URLs remain on the fixed Google
+origin, with encoded calendar/event IDs.
+
+After successful mutation, another full GET proves preservation. Network loss or
+an applied 503 leaves an unconfirmed outcome; a subsequent invocation reads and
+recognizes the applied result without a second PATCH. Concurrent native changes
+block automatic retry. The returned `notificationDelivery: unknown` never claims
+an email was delivered or sent exactly once. An unchanged baseline after an
+unapplied 503 permits a conditional retry; stronger notification guarantees still
+require live provider evidence and the durable worker contract.
+
+`google_rsvp_delivery.test.ts` exercises real HTTP against a local fake server:
+primary identity, disabled/auth-error gates, exact body/query/If-Match,
+truncated successful PATCH plus full GET, lost response, applied/unapplied 503,
+412 race, same-ETag drift and post-write conference change. The injected token
+reader is synthetic; this does not substitute for DB/account authorization,
+worker lease/replay, source ownership, or live organizer-visible acceptance.
+No external accounts are used by these tests.

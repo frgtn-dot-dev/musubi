@@ -672,3 +672,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K13 Google RSVP — čistý důkazní řez:** interní planner připraví pouze odpověď jediného prokázaného self účastníka normální jednorázové události. Vyžaduje přesnou providerovou identitu a strong ETag; následné porovnání uchová všechny ostatní nativní údaje včetně konferencí, alarmů a cizích odpovědí. [Kontrakt a regrese](../sync/google-rsvp.md) oddělují tuto přípravu od dosud nezapojené autorizace účtu, HTTP zápisu, outboxu a klientů. Není to odeslaná ani živě ověřená RSVP; navazuje explicitní notification policy a bezpečná obnova.
+
+
+**K13 Google RSVP — interní podmíněný HTTP transport:** nový default-off flag chrání reader i writer před token/network přístupem. Produkční adapter sváže OAuth grant a čerstvou primární providerovou identitu s jediným self účastníkem; sekundární/delegované kalendáře zatím odmítá. Přesný PATCH mění pouze vlastní odpověď, používá If-Match a explicitní notification policy. Kompletní GET ověří zachování; ztracenou odpověď/přijaté 503 lze rozpoznat bez druhého PATCH, cizí změna brání retry. [Fake HTTP důkazy a hranice](../sync/google-rsvp.md#default-off-internal-http-transport) nejsou důkazem doručeného e-mailu ani živé odpovědi. Endpoint, lokální CAS/outbox, klienti a dvě skutečné účastnické identity následují.
