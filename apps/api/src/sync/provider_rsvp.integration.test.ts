@@ -1,3 +1,10 @@
+import express from "express";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, ProviderRsvpReceiptSchema } from "@musubi/types";
+import { replaceMemberToken } from "@musubi/db";
+import { issueMemberToken } from "../federation_tokens";
+import { requireAuth } from "../middleware/require_auth";
+import { middlewareErrorHandler } from "../middleware/error_handler";
+import { handlerProviderRsvpEdit } from "../handlers/events";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -41,6 +48,14 @@ async function main() {
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const realFetch = globalThis.fetch;
+  const app = express(); app.use(express.json());
+  app.post("/api/v1/events/:eventId/provider-rsvp", requireAuth, handlerProviderRsvpEdit);
+  app.use(middlewareErrorHandler);
+  const api = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => api.once("listening", resolve));
+  const apiAddress = api.address(); assert.ok(apiAddress && typeof apiAddress !== "string");
+  const apiOrigin = `http://127.0.0.1:${apiAddress.port}`;
+
   globalThis.fetch = (input, init) => { const url = new URL(String(input)); assert.equal(url.origin, "https://www.googleapis.com", "No live requests allowed"); return realFetch(`http://127.0.0.1:${address.port}${url.pathname}${url.search}`, init); };
   try {
     for (const scenario of ["queue", "concurrent", "disabled", "wrong-user", "wrong-scope", "viewer", "revision-race", "role-race", "mapping-race", "native-state-race", "native-time-race", "known-zoned", "known-all-day", "worker-disabled", "lost", "applied-503", "worker-role-race", "ack-role-race", "lease-race", "pull-baseline", "pull-echo", "pull-state-conflict", "pull-zone-conflict", "legacy-pull-zone-conflict", "pull-native-comment-conflict"]) {
@@ -69,8 +84,43 @@ async function main() {
         if (scenario === "mapping-race") beforeRead = async () => { await db.update(externalEvents).set({ etag: '\"new\"' }).where(eq(externalEvents.id, mapping!.id)); };
         if (scenario === "native-state-race") beforeRead = async () => { remote.attendees[1].responseStatus = "declined"; };
         if (scenario === "native-time-race") beforeRead = async () => { remote.end.dateTime = "2026-09-10T13:00:00+02:00"; };
+        const credential = issueMemberToken();
+        await replaceMemberToken(owner, credential.tokenHash);
+        const post = (body: unknown, token: string | null = credential.raw, id = original.id, version = PRODUCT_VERSION) => realFetch(`${apiOrigin}/api/v1/events/${id}/provider-rsvp`, { method: "POST", headers: { "Content-Type": "application/json", [CLIENT_VERSION_HEADER]: version, ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+        if (scenario === "queue") {
+          const before = http;
+          assert.equal((await post(request, null)).status, 401);
+          assert.equal((await post(request, "invalid-token")).status, 401);
+          assert.equal((await post(request, credential.raw, original.id, "0.0.1")).status, 426);
+          assert.equal((await post(request, credential.raw, "not-a-uuid")).status, 400);
+          assert.equal((await post(request, credential.raw, randomUUID())).status, 403);
+          for (const invalid of [{ ...request, sendUpdates: "none" }, { ...request, selfEmail: "host@example.test" }, { ...request, response: "needsAction" }, { ...request, expectedStateVersion: "stale" }]) assert.equal((await post(invalid)).status, 400);
+          config.api.providerRsvpEditsEnabled = false;
+          assert.equal((await post(request)).status, 403);
+          config.api.providerRsvpEditsEnabled = true;
+          await db.update(calendarMembers).set({ role: "viewer" }).where(member);
+          assert.equal((await post(request)).status, 403);
+          await db.update(calendarMembers).set({ role: "owner" }).where(member);
+          const other = `rsvp-other-${randomUUID()}`;
+          const otherCredential = issueMemberToken();
+          await db.insert(user).values({ id: other, name: other, email: `${other}@example.test`, isExternal: true });
+          try {
+            await replaceMemberToken(other, otherCredential.tokenHash);
+            await db.insert(calendarMembers).values({ calendarID: calendar.id, userID: other, role: "editor" });
+            assert.equal((await post(request, otherCredential.raw)).status, 403, "Shared calendar editing does not authorize another account's RSVP");
+          } finally { await db.delete(user).where(eq(user.id, other)); }
+          assert.equal(http, before, "HTTP authorization/validation failures must never read provider data");
+          assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, original.id))).length, 0);
+        }
         const previousHttp = http;
-        const send = () => queueGoogleRsvp(scenario === "wrong-user" ? "outsider" : owner, original.id, request);
+        const send = async () => {
+          if (scenario !== "queue") return queueGoogleRsvp(scenario === "wrong-user" ? "outsider" : owner, original.id, request);
+          const response = await post(request);
+          assert.equal(response.status, 202); assert.equal(response.headers.get("cache-control"), "private, no-store");
+          const receipt = ProviderRsvpReceiptSchema.parse(await response.json());
+          assert.equal(patches, 0, "HTTP enqueue must not send RSVP or notifications");
+          return receipt;
+        };
         if (["disabled", "wrong-user", "wrong-scope", "viewer", "revision-race", "role-race", "mapping-race", "native-state-race", "native-time-race"].includes(scenario)) {
           await assert.rejects(send);
           assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, original.id))).length, 0);
@@ -87,6 +137,9 @@ async function main() {
           assert.deepEqual(await getOwnProviderEventObservation(owner, original.id), observation);
           const publicDelivery = JSON.stringify(await getEventDeliveryStatus(owner, original.id));
           for (const privateValue of ["Private attendee comment", "Private baseline", "guest@example.test", "https://meet.example.test/private"]) assert.ok(!publicDelivery.includes(privateValue));
+          if (scenario === "queue") {
+            assert.equal((await post({ ...request, response: "declined" })).status, 400);
+          }
           const previousReads = reads;
           assert.equal((await send()).replayed, true); assert.equal(reads, previousReads);
           await assert.rejects(() => queueGoogleRsvp(owner, original.id, { ...request, response: "declined" }));
@@ -133,6 +186,13 @@ async function main() {
           }
           const status = scenario === "worker-disabled" ? "blocked" : scenario === "ack-role-race" ? "unconfirmed" : ["worker-role-race", "pull-state-conflict", "pull-zone-conflict", "legacy-pull-zone-conflict", "pull-native-comment-conflict"].includes(scenario) ? "conflict" : "completed";
           assert.equal(result!.status, status);
+          if (scenario === "queue") {
+            const beforeReplay = http;
+            const completed = await post(request);
+            assert.equal(completed.status, 202);
+            assert.deepEqual(ProviderRsvpReceiptSchema.parse(await completed.json()), { operationID: row!.id, replayed: true, status: "completed", localCommitted: true, notificationDelivery: "unknown" });
+            assert.equal(http, beforeReplay, "Completed HTTP replay must not resend or re-read provider data");
+          }
           if (scenario === "pull-native-comment-conflict") { assert.equal(result!.remoteSnapshot?.etag, '"concurrent"'); assert.equal(result!.remoteSnapshot?.isEcho, false); }
           assert.equal(patches, ["worker-disabled", "worker-role-race"].includes(scenario) ? 0 : 1);
           const finalObservation = await getOwnProviderEventObservation(owner, original.id);
@@ -143,6 +203,6 @@ async function main() {
       } finally { beforeRead = undefined; await db.delete(user).where(eq(user.id, owner)); }
     }
     console.log("RSVP prepare/commit HTTP+DB: private intent, replay, OAuth/source/CAS races, unchanged event, conditional worker, recovery, lease/permission fencing and RSVP-only pending pull: OK");
-  } finally { config.api.providerRsvpEditsEnabled = oldFlag; config.api.eventTimeEditsEnabled = oldTimeFlag; config.api.providerReminderEditsEnabled = oldReminderFlag; globalThis.fetch = realFetch; await new Promise<void>(resolve => server.close(() => resolve())); await db.$client.end(); }
+  } finally { config.api.providerRsvpEditsEnabled = oldFlag; config.api.eventTimeEditsEnabled = oldTimeFlag; config.api.providerReminderEditsEnabled = oldReminderFlag; globalThis.fetch = realFetch; await new Promise<void>(resolve => api.close(() => resolve())); await new Promise<void>(resolve => server.close(() => resolve())); await db.$client.end(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
