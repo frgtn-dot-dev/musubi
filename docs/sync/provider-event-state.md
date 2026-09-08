@@ -99,12 +99,39 @@ an ETag-conditional Google PATCH containing only `reminders`, with
 only when canonical content also matches. An ambiguous response (including an
 incomplete successful response) is reconciled by GET before another PATCH.
 Unexpected content or version changes retain a conflict without adopting the
-unseen version. Generic content-conflict resolution refuses reminder intents.
+unseen version. Reminder conflicts use the dedicated comparison described below.
 
 Local fake HTTP plus PostgreSQL tests cover the disabled gate, authenticated
 queue, source ownership, CAS, concurrent/replayed intent, predecessor ordering,
 exact PATCH fields, guest-copy preservation, 503 recovery, incomplete successful
 responses, and concurrent remote content changes. These are not live provider
-acceptance. Editing UI, dedicated native-reminder conflict resolution,
+acceptance. Editing UI and client reminder-conflict presentation,
 series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
 flag must remain off until these activation prerequisites are addressed.
+
+
+## Explicit Google reminder conflict confirmation
+
+The existing authenticated delivery preview has a separate `reminderResolution`
+object containing the saved desired settings, fresh native settings and an opaque
+state version. It is available only for the latest isolated personal reminder
+intent on the caller's live writable source. Canonical content and explicit time
+must still match; remote content/time changes, deleted events, series and mixed
+pending histories require separate reconciliation.
+
+Confirmation must include `expectedReminderStateVersion` in addition to the
+existing revision, operation and ETag comparisons. A client which only knows the
+content preview cannot confirm a reminder replacement. The server re-reads the
+provider and rechecks the local source, membership, mapping, pending state and
+preview in the commit transaction. Even a personal settings change with the same
+ETag invalidates the preview. It atomically adopts the inspected baseline and
+appends one replacement personal intent; no canonical revision or content patch
+is created. Duplicate confirmations reuse that intent. The normal conditional
+worker and recovery path then confirm its result.
+
+Fake HTTP and disposable PostgreSQL cover the disabled flag, native preview,
+content-only confirmation refusal, stale personal state, local revision races,
+simultaneous confirmation, replay, unchanged canonical event and a later reminder
+edit after recovery. Legacy, zoned and all-day one-offs use the same flow. The
+client presentation of this personal comparison and the reminder editor remain
+follow-up work; production activation and live account writes are not enabled.
