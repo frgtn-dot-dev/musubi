@@ -1,6 +1,6 @@
 # Event time and occurrence identity (K10)
 
-Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration under implementation. No production migration or provider parity claim.
+Status: contract accepted in PR130; storage in PR131; exact conversion in PR132; shared expansion in PR133; reminder consumer in PR134. View/widget consumer integration accepted in PR135; complete range reads accepted in PR136; native durable cache accepted in PR137; native reminder receipt integration accepted in PR138; legacy time-write guard under implementation. No production migration or provider parity claim.
 
 ## Stored time
 
@@ -104,3 +104,10 @@ Tests use real node:sqlite through the production Drizzle Expo driver and migrat
 The native scheduler passes cached time and original-identity metadata to the shared resolver. Scoped refresh reads the complete cached family, retaining cancellation siblings and newer saved revisions. Receipts also belong to their original-key family after a detached definition is removed; restoring the original slot replaces the old target UUID rather than colliding on its unique key. Form rule helpers inherit the master override consistently with scheduling.
 
 OS/receipt mutations run serially, including explicit cancellation and account reset. Reset invalidates queued snapshots immediately; an in-flight OS write is canceled before it can leave a receipt. Cached-rule reads and pending remote rule writes cannot resume an old account's scheduling after reset. Tests exercise actual SQLite receipts with a simulated OS API; real device behavior and OS notification limits remain K14 verification work. Web/API metadata projections, consumer error handling and authoritative writes are still required before metadata activation.
+
+
+## Legacy temporal-write guard checkpoint
+
+Before a metadata-aware write contract is available, local CAS and accepted provider upsert check their actual content diff under the event lock. A stored known time model or detached identity rejects changes to start, end, isAllDay or recurrence. This happens after stale-revision handling and before content/link updates or provider ETag acceptance, so the entire mutation rolls back. Identical temporal fields and non-temporal updates preserve metadata; missing/null and explicit legacy-unknown keep existing behavior.
+
+This preparatory guard does not make provider serializers, fork, deletion/cascade or explicit time conversion metadata-aware. They remain activation prerequisites. PostgreSQL tests cover zoned/floating/all-day/detached records, unchanged metadata/revisions/links after rejection, safe renames/no-ops, CAS precedence and rejected pull validator retention; authenticated HTTP verifies a clear 400 response before any save.
