@@ -7,6 +7,7 @@ import {
   eventDeliveryActions,
   eventDeliveryExplanation,
   eventDeliveryLabel,
+  providerReminderDescription,
 } from "@musubi/calendar";
 import type {
   EventDelivery,
@@ -181,7 +182,7 @@ export function DeliveryBody({
     if (!busyRef.current) onClose();
   }
   const confirmLabel =
-    comparison?.preview.action === "delete"
+    comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
       ? "Delete remote copy"
       : comparison?.preview.action === "create"
         ? "Recreate remote copy"
@@ -194,7 +195,7 @@ export function DeliveryBody({
       {
         title: confirmLabel,
         confirmLabel,
-        message:
+        message: saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
           "Apply the version shown in this comparison? Remote differences may be replaced. Unsaved form edits are not sent.",
       },
       () => {
@@ -261,6 +262,13 @@ export function DeliveryBody({
           ) : null}
           {comparison ? (
             <>
+              {comparison.preview.reminderResolution ? (
+                <>
+                  <Text style={copy}>Google Calendar sends these notifications; other apps may notify separately.</Text>
+                  <Text style={copy}>Saved Google reminders: {providerReminderDescription({ provider: "google", overrides: [], ...comparison.preview.reminderResolution.desired })}</Text>
+                  <Text style={copy}>Current Google reminders: {providerReminderDescription(comparison.preview.reminderResolution.remote)}</Text>
+                </>
+              ) : <>
               <DeliveryContent
                 title="Saved in Musubi"
                 content={comparison.preview.local}
@@ -271,6 +279,7 @@ export function DeliveryBody({
                 content={comparison.preview.remote}
                 absent="Not found at the provider"
               />
+              </>}
               {!comparison.preview.canResolve ? (
                 <Text accessibilityRole="alert" style={copy}>
                   {comparison.preview.reason === "reconnect-required"
@@ -396,6 +405,7 @@ export function DeliveryBody({
                                       expectedRemoteExists:
                                         preview.remote !== null,
                                       expectedRemoteEtag: preview.remoteEtag,
+                                      ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
                                       ...(preview.masterRevision !== undefined
                                         ? {
                                             expectedMasterRevision:

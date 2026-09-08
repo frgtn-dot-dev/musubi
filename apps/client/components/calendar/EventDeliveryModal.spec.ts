@@ -686,3 +686,30 @@ it("confirms occurrence scope with the displayed master revision", async () => {
   await settle();
   expect(body.expectedMasterRevision).toBe(7);
 });
+
+it("confirms the displayed personal reminder state and preserves its retry identity", async () => {
+  const requests: any[] = [];
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(options.body)); if (requests.length === 1) throw new Error("Network unavailable"); }
+    return reply(url.endsWith("/conflict") ? { ...preview, reminderResolution: {
+      desired: { useDefault: false, overrides: [] },
+      remote: { provider: "google", useDefault: false, overrides: [{ method: "unknown-native", minutes: null }] },
+      stateVersion: "b".repeat(64),
+    } } : receipt);
+  });
+  let tree = await review();
+  expect(text(tree)).toMatch(/Saved Google reminders:\s+Off/);
+  expect(text(tree)).toContain("unknown-native · time not reported");
+  expect(text(tree)).toContain("other apps may notify separately");
+  buttons(tree, "Apply saved reminders")[0].onPress();
+  acceptNative();
+  await settle();
+  tree = render(null);
+  buttons(tree, "Apply saved reminders")[0].onPress();
+  acceptNative();
+  await settle();
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual(requests[0]);
+  expect(requests[0].expectedReminderStateVersion).toBe("b".repeat(64));
+  expect(requests[0]).not.toHaveProperty("reminders");
+});

@@ -105,7 +105,7 @@ Local fake HTTP plus PostgreSQL tests cover the disabled gate, authenticated
 queue, source ownership, CAS, concurrent/replayed intent, predecessor ordering,
 exact PATCH fields, guest-copy preservation, 503 recovery, incomplete successful
 responses, and concurrent remote content changes. These are not live provider
-acceptance. Editing UI and client reminder-conflict presentation,
+acceptance. Editing UI,
 series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
 flag must remain off until these activation prerequisites are addressed.
 
@@ -133,5 +133,16 @@ Fake HTTP and disposable PostgreSQL cover the disabled flag, native preview,
 content-only confirmation refusal, stale personal state, local revision races,
 simultaneous confirmation, replay, unchanged canonical event and a later reminder
 edit after recovery. Legacy, zoned and all-day one-offs use the same flow. The
-client presentation of this personal comparison and the reminder editor remain
-follow-up work; production activation and live account writes are not enabled.
+reminder editor remains follow-up work; production activation and live account writes are not enabled.
+
+
+Web and native delivery comparisons display personal Google reminders separately
+from canonical event content. They show both the saved target and current native
+settings, including defaults, off and unknown provider method values. Confirmation
+is labeled “Apply saved reminders” and carries the displayed state version. A
+transport failure keeps the same comparison and mutation identity; a conflict
+requires a fresh comparison. Cancellation returns focus without writing. These
+settings do not schedule Musubi notifications or promise cross-application
+deduplication. Client checks cover both renderers; Chromium light 1280/dark 390
+covers keyboard, focus, retry, axe, layout and console health. Physical native QA
+and live provider reminder acceptance remain outstanding.

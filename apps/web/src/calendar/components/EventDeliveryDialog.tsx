@@ -8,6 +8,7 @@ import {
   eventDeliveryActions,
   eventDeliveryExplanation,
   eventDeliveryLabel,
+  providerReminderDescription,
 } from "@musubi/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -115,6 +116,7 @@ export function EventDeliveryDialog({
           expectedLatestOperationId: preview.latestOperationId,
           expectedRemoteExists: preview.remote !== null,
           expectedRemoteEtag: preview.remoteEtag,
+          ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
           ...(preview.masterRevision !== undefined
             ? { expectedMasterRevision: preview.masterRevision }
             : {}),
@@ -265,11 +267,11 @@ export function EventDeliveryDialog({
             }
           }}
           title="Review remote changes"
-          description="Compare the current remote copy with the version saved in Musubi."
+          description={comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
           closeLabel="Close comparison"
           returnFocus={comparison.trigger}
           confirmLabel={
-            comparison.preview.action === "delete"
+            comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
               ? "Delete remote copy"
               : comparison.preview.action === "create"
                 ? "Recreate remote copy"
@@ -294,10 +296,16 @@ export function EventDeliveryDialog({
           }
         >
           <ConfirmationNotice icon={<AlertTriangle size={18} />}>
-            {comparison.preview.action === "delete"
+            {comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
               ? "This removes the remote copy. The saved deletion in Musubi remains."
               : "This applies the saved version to the remote copy. Remote differences may be replaced; unsaved form edits are not sent."}
           </ConfirmationNotice>
+          {comparison.preview.reminderResolution ? (
+            <>
+              <Row label="Saved Google reminders" detail={providerReminderDescription({ provider: "google", overrides: [], ...comparison.preview.reminderResolution.desired })} />
+              <Row label="Current Google reminders" detail={providerReminderDescription(comparison.preview.reminderResolution.remote)} />
+            </>
+          ) : <>
           <DeliveryContent
             title="Saved in Musubi"
             content={comparison.preview.local}
@@ -308,6 +316,7 @@ export function EventDeliveryDialog({
             content={comparison.preview.remote}
             absent="Not found at the provider"
           />
+          </>}
           {!comparison.preview.canResolve ? (
             <InlineError>
               {comparison.preview.reason === "reconnect-required"
