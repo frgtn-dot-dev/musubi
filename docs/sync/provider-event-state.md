@@ -69,6 +69,10 @@ No production activation or account write is part of this implementation.
 The read endpoint now returns `{ state, version }`; `version` is an opaque CAS
 value for the accepted source mapping, ETag and personal observation.
 
+This initial write slice accepts only legacy one-off events. Known civil-time
+models and recurring events are rejected before enqueue or provider calls: their
+zone and occurrence identity need additional version evidence before ACK.
+
 An intent supplies an operation UUID, expected event revision, expected state
 version, provider `google`, and either `useDefault: true` or `useDefault: false`
 with up to five `email`/`popup` overrides (0–40320 minutes). Only an editor of
@@ -91,5 +95,5 @@ queue, source ownership, CAS, concurrent/replayed intent, predecessor ordering,
 exact PATCH fields, guest-copy preservation, 503 recovery, incomplete successful
 responses, and concurrent remote content changes. These are not live provider
 acceptance. Editing UI, dedicated native-reminder conflict resolution,
-Microsoft/CalDAV writes, and real-account validation remain unfinished; the
+known-time/series evidence, Microsoft/CalDAV writes, and real-account validation remain unfinished; the
 flag must remain off until these activation prerequisites are addressed.

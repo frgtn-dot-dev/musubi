@@ -716,6 +716,8 @@ export const googleAdapter: CalendarAdapter = {
     const data = await response.json();
     if (data.id !== ref.externalEventId) throw new ProviderEventWriteError("provider-conflict");
     if (data.status === "cancelled") return null;
+    if (data.recurringEventId || data.originalStartTime || data.recurrence?.length)
+      throw new EventWriteError("event-write", "unsupported");
     return { ref: { externalEventId: data.id, etag: requireEventEtag(strongEventEtag(data.etag)) }, state: googleEventState(data), event: assertCreatedEventEvidence(toNormalized(data)) };
   },
 
@@ -728,6 +730,9 @@ export const googleAdapter: CalendarAdapter = {
     assertEventWriteResponse(calendarResponse);
     const calendar = await calendarResponse.json();
     assertEventWriteEvidence(typeof calendar.accessRole === "string" ? ["owner", "writer"].includes(calendar.accessRole) : undefined, "event-write");
+    const baseline = await googleAdapter.readReminderState!(userID, accountId, externalCalendarId, ref, signal);
+    if (!baseline) throw new ProviderEventWriteError("provider-conflict");
+    assertAcceptedEventEtag(ref.etag, baseline.ref.etag);
     // Only this authenticated copy's reminders change, never participants/time.
     const response = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}?sendUpdates=none`, { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "If-Match": requireEventEtag(ref.etag) }, body: JSON.stringify({ reminders }), redirect: "error", signal });
     assertProviderEventMutationResponse(response);
@@ -736,6 +741,8 @@ export const googleAdapter: CalendarAdapter = {
     const etag = strongEventEtag(data.etag);
     if (!etag) throw new ProviderEventWriteError("provider-version-unavailable", "unconfirmed", response.status);
     try {
+      if (data.recurringEventId || data.originalStartTime || data.recurrence?.length)
+        throw new Error("Unsupported recurring reminder evidence");
       return { ref: { externalEventId: data.id, etag }, state: googleEventState(data), event: assertCreatedEventEvidence(toNormalized(data)) };
     } catch {
       throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", response.status);

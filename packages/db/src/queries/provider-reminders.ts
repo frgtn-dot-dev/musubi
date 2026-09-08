@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   BadRequestError,
+  hasKnownEventTime,
   EventSchema,
   EventWriteError,
   ForbiddenError,
@@ -131,6 +132,9 @@ export async function queueProviderReminderEdit(
         status: previous.status,
       };
     }
+    // Native time/series evidence must be verified before accepting its ETag.
+    if (hasKnownEventTime(event) || event.recurrence)
+      throw new EventWriteError("event-write", "unsupported");
     const [mapping] = await tx
       .select()
       .from(externalEvents)

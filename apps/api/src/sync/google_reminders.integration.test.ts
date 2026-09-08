@@ -33,7 +33,7 @@ import { handlerProviderReminderEdit } from "../handlers/events";
 
 async function main(
   scenario:
-    "normal" | "noop-content-conflict" | "recovery-content-conflict" = "normal",
+    "normal" | "noop-content-conflict" | "recovery-content-conflict" | "legacy-detached" = "normal",
 ) {
   assert.equal(process.env.ENVIRONMENT, "test");
   const owner = `google-reminder-${randomUUID()}`;
@@ -234,6 +234,18 @@ async function main(
     );
     assert.equal(requests, 0, "disabled feature must make no provider request");
     config.api.providerReminderEditsEnabled = true;
+    if (scenario === "legacy-detached") {
+      const queued = await send(first);
+      Object.assign(remote, { recurringEventId: "master", originalStartTime: remote.start });
+      const blocked = await deliverEventOutbox(queued.body.operationID, () => googleAdapter);
+      assert.equal(blocked?.status, "blocked");
+      assert.equal(patches, 0, "legacy exception identity cannot become a native one-off write");
+      const [retained] = await db.select().from(externalEvents).where(eq(externalEvents.id, mapping.id));
+      assert.equal(retained.etag, '"v1"');
+      await assert.rejects(googleAdapter.writeReminders!(owner, "fixture", "source", { externalEventId: remote.id, etag: remote.etag }, first.reminders), /unsupported/);
+      assert.equal(patches, 0);
+      return;
+    }
     const accepted = await send(first);
     assert.equal(accepted.status, 202);
     assert.equal(accepted.body.status, "pending");
@@ -422,4 +434,5 @@ async function main(
 main()
   .then(() => main("noop-content-conflict"))
   .then(() => main("recovery-content-conflict"))
+  .then(() => main("legacy-detached"))
   .finally(() => db.$client.end());

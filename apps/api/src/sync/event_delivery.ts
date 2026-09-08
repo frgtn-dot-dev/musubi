@@ -136,7 +136,7 @@ export async function deliverEventOutbox(
         return true;
       };
       if (row.payload.reminderEdit) {
-        if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+        if (!config.api.providerReminderEditsEnabled || hasKnownEventTime(event) || event.recurrence) throw new EventWriteError("event-write", "unsupported");
         const intent = ProviderReminderEditSchema.parse(row.payload.reminderEdit);
         if (row.action !== "update" || row.provider !== intent.provider || !adapter?.readReminderState || !adapter.writeReminders)
           throw new EventWriteError("event-write", "unsupported");
