@@ -21,7 +21,7 @@ export type ReminderControl = {
     /** Resolves to whether it ended up on — a denied prompt returns false. */
     set: (wanted: boolean) => Promise<boolean>;
   };
-  /** `null` clears the override and puts the event back on its calendar's rule. */
+  /** `null` restores inheritance from the series, calendar or default. */
   onChange: (eventId: string, rule: ReminderRule | null) => Promise<unknown>;
   /** `null` puts the calendar back on the global default. */
   onCalendarChange: (
@@ -31,14 +31,14 @@ export type ReminderControl = {
 };
 
 export type EventReminder = {
-  /** True when this is the calendar's answer rather than the event's own. */
+  /** True when the event inherits its rule instead of having its own override. */
   inherited: boolean;
   rule: ReminderRule;
 };
 
 export function eventReminder(
   control: ReminderControl,
-  event: { calendars?: readonly string[]; id: string },
+  event: { calendars?: readonly string[]; id: string; seriesID?: string | null },
 ): EventReminder {
   const context = {
     calendarOrder: [...control.calendarOrder],
@@ -52,8 +52,18 @@ export function eventReminder(
   return {
     inherited: control.document.events[event.id] === undefined,
     rule: resolveReminderRule(
-      { calendars: [...(event.calendars ?? [])], id: event.id },
+      { calendars: [...(event.calendars ?? [])], id: event.id, seriesID: event.seriesID },
       context,
     ),
   };
+}
+
+/** Remove only this event's override; a detached event still follows its series. */
+export function inheritedEventReminder(
+  control: ReminderControl,
+  event: Parameters<typeof eventReminder>[1],
+): EventReminder {
+  const events = { ...control.document.events };
+  delete events[event.id];
+  return eventReminder({ ...control, document: { ...control.document, events } }, event);
 }
