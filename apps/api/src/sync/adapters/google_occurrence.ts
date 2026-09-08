@@ -28,6 +28,10 @@ export type GoogleOccurrenceEvidence = {
   event: NormalizedEvent;
   state: ReturnType<typeof googleEventState>;
 };
+export type GoogleSeriesEvidence = {
+  master: GoogleOccurrenceEvidence;
+  exceptions: GoogleOccurrenceEvidence[];
+};
 export function matchesGoogleOccurrence(
   expected: Event,
   actual: NormalizedEvent,
@@ -75,14 +79,15 @@ export function googleOccurrenceMethods(
     assertCompleteEventReadResponse(response);
     return response.json();
   };
-  async function readOccurrence(
+  async function readMaster(
     user: string,
     account: string,
     calendar: string,
-    intent: GoogleOccurrenceIntent,
-    ref?: ExternalEventRef,
+    expected: Event,
+    masterExternalID: string,
+    masterEtag: string,
     signal?: AbortSignal,
-  ): Promise<GoogleOccurrenceEvidence> {
+  ) {
     guard();
     const token = await tokenFor(user, account);
     await assertOAuthEventWriteGrant(user, "google", account);
@@ -93,30 +98,45 @@ export function googleOccurrenceMethods(
     );
     if (!["owner", "writer"].includes(grant.accessRole))
       throw new EventWriteError("event-write", "denied");
-    const master = await read(
-      path(calendar, intent.masterExternalID),
-      token,
-      signal,
-    );
+    const master = await read(path(calendar, masterExternalID), token, signal);
     if (
-      master.id !== intent.masterExternalID ||
+      master.id !== masterExternalID ||
       master.status === "cancelled" ||
       master.recurringEventId ||
       !master.recurrence?.length
     )
       throw new ProviderEventWriteError("provider-conflict");
     personal(master, true);
-    assertAcceptedEventEtag(intent.masterEtag, master.etag);
+    assertAcceptedEventEtag(masterEtag, master.etag);
     const masterEvent = normalizeGoogleTime(
       master,
       normalize({ ...master, recurrence: undefined }),
     );
     if (
-      !matchesEventProviderProjection("google", intent.master, masterEvent) ||
-      JSON.stringify(EventTimeModelSchema.parse(intent.master.timeModel)) !==
+      !matchesEventProviderProjection("google", expected, masterEvent) ||
+      JSON.stringify(EventTimeModelSchema.parse(expected.timeModel)) !==
         JSON.stringify(masterEvent.timeModel)
     )
       throw new ProviderEventWriteError("provider-conflict");
+    return { token, master, masterEvent };
+  }
+  async function readOccurrence(
+    user: string,
+    account: string,
+    calendar: string,
+    intent: GoogleOccurrenceIntent,
+    ref?: ExternalEventRef,
+    signal?: AbortSignal,
+  ): Promise<GoogleOccurrenceEvidence> {
+    const { token, master } = await readMaster(
+      user,
+      account,
+      calendar,
+      intent.master,
+      intent.masterExternalID,
+      intent.masterEtag,
+      signal,
+    );
     const evidence = (raw: any): GoogleOccurrenceEvidence => {
       if (
         !raw ||
@@ -179,6 +199,112 @@ export function googleOccurrenceMethods(
     if (matches.length !== 1)
       throw new ProviderEventWriteError("provider-conflict");
     return matches[0];
+  }
+  /** A complete unexpanded scan discovers exceptions outside any view window.
+   * These are sequential observations, not an atomic provider snapshot. */
+  async function readSeries(
+    user: string,
+    account: string,
+    calendar: string,
+    intent: Pick<
+      GoogleOccurrenceIntent,
+      "master" | "masterExternalID" | "masterEtag"
+    >,
+    signal?: AbortSignal,
+  ): Promise<GoogleSeriesEvidence> {
+    const { token, master, masterEvent } = await readMaster(
+      user,
+      account,
+      calendar,
+      intent.master,
+      intent.masterExternalID,
+      intent.masterEtag,
+      signal,
+    );
+    const exceptions: GoogleOccurrenceEvidence[] = [];
+    const ids = new Set<string>();
+    const originals = new Set<string>();
+    const pages = new Set<string>();
+    let foundMaster = false;
+    let next = "";
+    do {
+      if (pages.has(next) || pages.size >= 100)
+        throw new ProviderEventWriteError("provider-conflict");
+      pages.add(next);
+      const query = new URLSearchParams({
+        singleEvents: "false",
+        showDeleted: "true",
+        maxResults: "2500",
+        ...(next ? { pageToken: next } : {}),
+      });
+      const page = await read(
+        `${GCAL}/calendars/${encodeURIComponent(calendar)}/events?${query}`,
+        token,
+        signal,
+      );
+      if (!Array.isArray(page.items))
+        throw new ProviderEventWriteError("provider-conflict");
+      for (const raw of page.items) {
+        if (!raw || typeof raw !== "object")
+          throw new ProviderEventWriteError("provider-conflict");
+        if (raw.id === master.id) {
+          if (foundMaster || raw.recurringEventId || raw.status === "cancelled")
+            throw new ProviderEventWriteError("provider-conflict");
+          assertAcceptedEventEtag(master.etag, raw.etag);
+          foundMaster = true;
+        }
+        if (raw.recurringEventId !== master.id) continue;
+        if (typeof raw.id !== "string" || !raw.id || ids.has(raw.id))
+          throw new ProviderEventWriteError("provider-conflict");
+        personal(raw);
+        const event = normalizeGoogleTime(
+          raw,
+          normalize({ ...raw, recurrence: undefined }),
+          master,
+        );
+        const original = JSON.stringify(
+          OccurrenceStartSchema.parse(event.originalStart),
+        );
+        if (originals.has(original))
+          throw new ProviderEventWriteError("provider-conflict");
+        ids.add(raw.id);
+        originals.add(original);
+        exceptions.push({
+          ref: { externalEventId: raw.id, etag: requireEventEtag(raw.etag) },
+          event,
+          state: googleEventState(raw),
+        });
+      }
+      next = page.nextPageToken ?? "";
+      if (typeof next !== "string")
+        throw new ProviderEventWriteError("provider-conflict");
+    } while (next);
+    if (!foundMaster) throw new ProviderEventWriteError("provider-conflict");
+    // Detect a master change while scanning; a later write must still revalidate
+    // all evidence and use conditional requests. No write is authorized here.
+    await readMaster(
+      user,
+      account,
+      calendar,
+      intent.master,
+      intent.masterExternalID,
+      intent.masterEtag,
+      signal,
+    );
+    exceptions.sort((left, right) =>
+      left.ref.externalEventId.localeCompare(right.ref.externalEventId),
+    );
+    return {
+      master: {
+        ref: {
+          externalEventId: master.id,
+          etag: requireEventEtag(master.etag),
+        },
+        event: masterEvent,
+        state: googleEventState(master),
+      },
+      exceptions,
+    };
   }
   async function writeOccurrence(
     user: string,
@@ -264,5 +390,5 @@ export function googleOccurrenceMethods(
       throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
     }
   }
-  return { readOccurrence, writeOccurrence };
+  return { readOccurrence, readSeries, writeOccurrence };
 }

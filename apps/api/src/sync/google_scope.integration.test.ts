@@ -35,6 +35,8 @@ import { handlerEventScope } from "../handlers/events";
 
 async function main(
   scenario:
+    | "series-evidence"
+    | "series-evidence-day"
     | "update"
     | "cancel"
     | "ambiguous"
@@ -49,6 +51,8 @@ async function main(
     | "identity",
 ) {
   assert.equal(process.env.ENVIRONMENT, "test");
+  const seriesEvidence = scenario.startsWith("series-evidence");
+  const allDay = scenario === "all-day" || scenario === "series-evidence-day";
   const resolving = scenario === "conflict" || scenario === "resolve-cancel";
   const cancelling = scenario === "cancel" || scenario === "resolve-cancel";
   const owner = `google-scope-${randomUUID()}`;
@@ -80,7 +84,7 @@ async function main(
     instance.start.dateTime = "2026-09-11T12:00:00Z";
     instance.end.dateTime = "2026-09-11T13:00:00Z";
   }
-  if (scenario === "all-day") {
+  if (allDay) {
     master.start = { date: "2026-09-10" };
     master.end = { date: "2026-09-11" };
     instance.start = { date: "2026-09-11" };
@@ -93,6 +97,8 @@ async function main(
   let reads = 0;
   let echo: (() => Promise<void>) | undefined;
   let onInstances: (() => Promise<void>) | undefined;
+  let seriesPages: Record<string, any> = {};
+  let onPage: (() => void) | undefined;
   const fixture = createServer(async (req, res) => {
     const url = new URL(req.url!, "http://fixture.test");
     res.setHeader("content-type", "application/json");
@@ -103,10 +109,18 @@ async function main(
       if (url.pathname.endsWith("/calendarList/source"))
         return json({ accessRole: "owner" });
       if (url.pathname.endsWith("/events/master")) return json(master);
+      if (url.pathname.endsWith("/events")) {
+        assert.equal(url.searchParams.get("singleEvents"), "false");
+        assert.equal(url.searchParams.get("showDeleted"), "true");
+        assert.equal(url.searchParams.has("timeMin"), false);
+        assert.equal(url.searchParams.has("timeMax"), false);
+        if (onPage) onPage();
+        return json(seriesPages[url.searchParams.get("pageToken") ?? ""]);
+      }
       if (url.pathname.endsWith("/instances")) {
         assert.equal(
           url.searchParams.get("originalStart"),
-          scenario === "all-day" ? "2026-09-11" : "2026-09-11T09:00:00.000Z",
+          allDay ? "2026-09-11" : "2026-09-11T09:00:00.000Z",
         );
         if (onInstances) await onInstances();
         return json({ items: [instance] });
@@ -262,6 +276,113 @@ async function main(
         ),
       );
     const localMaster = (await getEventSnapshot(mapping.eventID))!;
+    if (seriesEvidence) {
+      const intent = {
+        master: localMaster,
+        masterExternalID: master.id,
+        masterEtag: master.etag,
+      };
+      const cancellation = {
+        id: "cancelled-far-away",
+        recurringEventId: master.id,
+        status: "cancelled",
+        etag: '\"c1\"',
+        originalStartTime: allDay
+          ? { date: "2028-09-12" }
+          : { dateTime: "2028-09-12T09:00:00Z" },
+      };
+      const moved = {
+        ...instance,
+        start: allDay
+          ? { date: "2026-10-01" }
+          : { ...instance.start, dateTime: "2026-10-01T09:00:00Z" },
+        end: allDay
+          ? { date: "2026-10-02" }
+          : { ...instance.end, dateTime: "2026-10-01T10:00:00Z" },
+      };
+      const normalPages = {
+        "": {
+          items: [
+            master,
+            moved,
+            { id: "other", recurringEventId: "other-series", attendees: [{}] },
+          ],
+          nextPageToken: "two",
+        },
+        two: { items: [cancellation] },
+      };
+      seriesPages = normalPages;
+      const read = () =>
+        googleAdapter.readSeries!(owner, "fixture", "source", intent);
+      const evidence = await read();
+      assert.equal(evidence.master.ref.etag, master.etag);
+      assert.equal(evidence.exceptions.length, 2);
+      const cancelled = evidence.exceptions.find(
+        (item) => item.ref.externalEventId === cancellation.id,
+      )!;
+      assert.equal(cancelled.event.isCanceled, true);
+      assert.equal(
+        cancelled.event.originalStart!.value.startsWith("2028-09-12"),
+        true,
+      );
+      const observedMoved = evidence.exceptions.find(
+        (item) => item.ref.externalEventId === moved.id,
+      )!;
+      assert.equal(
+        observedMoved.event.start.toISOString().startsWith("2026-10-01"),
+        true,
+      );
+      assert.equal(
+        observedMoved.event.originalStart!.value.startsWith("2026-09-11"),
+        true,
+      );
+      assert.deepEqual(observedMoved.state, googleEventState(moved));
+      seriesPages = { ...normalPages, two: { items: [moved] } };
+      await assert.rejects(read, /conflict/);
+      seriesPages = {
+        ...normalPages,
+        two: { items: [{ ...moved, id: "duplicate-original" }] },
+      };
+      await assert.rejects(read, /conflict/);
+      seriesPages = {
+        "": { items: [], nextPageToken: "loop" },
+        loop: { items: [], nextPageToken: "loop" },
+      };
+      await assert.rejects(read, /conflict/);
+      seriesPages = { "": { items: null } };
+      await assert.rejects(read, /conflict/);
+      seriesPages = {
+        ...normalPages,
+        two: {
+          items: [
+            {
+              ...instance,
+              id: "guest",
+              attendees: [{ email: "guest@example.test" }],
+            },
+          ],
+        },
+      };
+      await assert.rejects(read, /Meeting/);
+      seriesPages = normalPages;
+      let pageVisits = 0;
+      onPage = () => {
+        if (++pageVisits === 2) master.etag = '\"changed-during-scan\"';
+      };
+      await assert.rejects(read, /conflict/);
+      onPage = undefined;
+      master.etag = intent.masterEtag;
+      const before = reads;
+      config.api.eventTimeEditsEnabled = false;
+      await assert.rejects(read);
+      assert.equal(reads, before);
+      assert.equal(patches, 0);
+      assert.deepEqual(await getEventSnapshot(localMaster.id), localMaster);
+      console.log(
+        `Google series evidence ${allDay ? "all-day" : "zoned"}: unbounded exception pagination, cancellation, identity/permission/refusal and no mutation OK`,
+      );
+      return;
+    }
     const [existing] = await db
       .select()
       .from(events)
@@ -270,10 +391,9 @@ async function main(
       operationID: randomUUID(),
       expectedRevision: localMaster.revision,
       scope: "occurrence",
-      originalStart:
-        scenario === "all-day"
-          ? { kind: "date", value: "2026-09-11" }
-          : { kind: "instant", value: "2026-09-11T09:00:00.000Z" },
+      originalStart: allDay
+        ? { kind: "date", value: "2026-09-11" }
+        : { kind: "instant", value: "2026-09-11T09:00:00.000Z" },
       expectedOccurrenceRevision: existing?.revision ?? null,
       ...(cancelling
         ? { action: "delete" }
@@ -297,7 +417,7 @@ async function main(
                       endLocal: "2026-09-11T18:00:00.000",
                     },
                   }
-                : scenario === "all-day"
+                : allDay
                   ? {
                       time: {
                         kind: "all-day",
@@ -607,7 +727,7 @@ async function main(
       assert.equal(instance.start.dateTime, "2026-09-11T14:00:00.000Z");
       assert.equal(instance.end.dateTime, "2026-09-11T16:00:00.000Z");
     }
-    if (scenario === "all-day") {
+    if (allDay) {
       assert.deepEqual(instance.start, { date: "2026-09-12" });
       assert.deepEqual(instance.end, { date: "2026-09-14" });
     }
@@ -640,6 +760,8 @@ async function main(
   );
 }
 Promise.resolve()
+  .then(() => main("series-evidence"))
+  .then(() => main("series-evidence-day"))
   .then(() => main("update"))
   .then(() => main("cancel"))
   .then(() => main("ambiguous"))
