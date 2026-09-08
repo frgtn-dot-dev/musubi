@@ -104,7 +104,7 @@ internal object AgendaWidgetData {
   fun upcoming(snapshot: WidgetSnapshot, now: Long = System.currentTimeMillis()): List<WidgetEvent> =
     snapshot.events
       .filter { event ->
-        if (event.allDay) dateKey(event.end, UTC) > dateKey(now, TimeZone.getDefault())
+        if (event.allDay) dateKey(event.end, UTC) >= dateKey(now, TimeZone.getDefault())
         else event.end >= now
       }
       .sortedWith(

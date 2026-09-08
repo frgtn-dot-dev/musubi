@@ -57,7 +57,7 @@ function buildSnapshot() {
     .filter(event => {
       if (event.isCanceled) return false;
       if (event.isAllDay) {
-        return eventDay(event.end, true).isAfter(eventDay(now), "day");
+        return !eventDay(event.end, true).isBefore(eventDay(now), "day");
       }
       return event.end >= now;
     })
@@ -95,7 +95,8 @@ function buildSnapshot() {
 
   for (const event of calendarEvents) {
     const startDay = eventDay(event.start, event.isAllDay).startOf("day");
-    const endInstant = event.end.getTime() > event.start.getTime()
+    // All-day ends are inclusive dates; only timed midnight is exclusive.
+    const endInstant = !event.isAllDay && event.end.getTime() > event.start.getTime()
       ? new Date(event.end.getTime() - 1)
       : event.end;
     const endDay = eventDay(endInstant, event.isAllDay).startOf("day");
