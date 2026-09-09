@@ -27,3 +27,4 @@ export * from "./provider-event-state";
 export * from "./provider-reminders";
 
 export * from "./provider-rsvp";
+export * from "./availability";

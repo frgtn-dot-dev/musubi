@@ -86,7 +86,7 @@ async function patchCalendarColor(
   if (!res.ok) throw await googleError(res);
 }
 
-async function getAccessToken(
+export async function getGoogleAccessToken(
   userID: string,
   accountId: string,
   requireTasks = false,
@@ -587,14 +587,14 @@ export function googleReminderEventEvidence(data: any) {
 
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
-  ...googleOccurrenceMethods(getAccessToken, toNormalized),
+  ...googleOccurrenceMethods(getGoogleAccessToken, toNormalized),
   ...googleRsvpMethods(async (user, account) => {
-    const token = await getAccessToken(user, account);
+    const token = await getGoogleAccessToken(user, account);
     await assertOAuthEventWriteGrant(user, "google", account);
     return token;
   }),
   reminderInstance: googleReminderInstanceTransport(async (user, account) => {
-    const token = await getAccessToken(user, account);
+    const token = await getGoogleAccessToken(user, account);
     await assertOAuthEventWriteGrant(user, "google", account);
     return token;
   }),
@@ -609,7 +609,7 @@ export const googleAdapter: CalendarAdapter = {
       ids.map(async (id) => {
         let label = id;
         try {
-          const accessToken = await getAccessToken(userID, id);
+          const accessToken = await getGoogleAccessToken(userID, id);
           const res = await fetch(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             {
@@ -632,8 +632,9 @@ export const googleAdapter: CalendarAdapter = {
     userID: string,
     accountId: string,
   ): Promise<CalendarDiscoveryResult> {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
+    const availabilityCalendars: { externalId: string; name: string }[] = [];
     let pageToken: string | undefined;
     // The engine sweeps absent mirrors only after this complete discovery.
     do {
@@ -644,13 +645,15 @@ export const googleAdapter: CalendarAdapter = {
       });
       if (!res.ok) throw await googleError(res);
       const data = await res.json();
-      for (const c of data.items ?? []) {
+      if (!Array.isArray(data.items)) throw new Error("Incomplete Google calendar discovery");
+      for (const c of data.items) {
         // An Events mirror cannot represent a free/busy-only grant. Exclude it
         // from the authoritative detail-calendar set so a downgraded mirror is
         // removed before any (possibly failing) event fetch retains old details.
         // Busy interval reads require the separate Freebusy API/model.
         if (c.accessRole === "freeBusyReader") {
-          logger.warn("sync.calendar.freebusy_unsupported", { provider: "google", calendarId: c.id });
+          if (typeof c.id !== "string" || !c.id) throw new Error("Incomplete Google availability discovery");
+          availabilityCalendars.push({ externalId: c.id, name: typeof c.summary === "string" ? c.summary : "Google availability" });
           continue;
         }
         calendars.push({
@@ -666,11 +669,12 @@ export const googleAdapter: CalendarAdapter = {
       pageToken = data.nextPageToken;
     } while (pageToken);
     if (!(await hasOAuthTaskScope(userID, "google", accountId))) {
-      return { calendars, taskListsComplete: false };
+      return { calendars, availabilityCalendars, taskListsComplete: false };
     }
     try {
       const taskLists = await listGoogleTaskLists(accessToken);
       return {
+        availabilityCalendars,
         calendars: [...calendars, ...taskLists.map(toExternalGoogleTaskList)],
         taskListsComplete: true,
       };
@@ -681,7 +685,7 @@ export const googleAdapter: CalendarAdapter = {
         userId: userID,
         accountId,
       });
-      return { calendars, taskListsComplete: false };
+      return { calendars, availabilityCalendars, taskListsComplete: false };
     }
   },
 
@@ -691,7 +695,7 @@ export const googleAdapter: CalendarAdapter = {
     externalCalendarId,
     cursor,
   ): Promise<FetchChangesResult> {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
     if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
       throw new TaskScopeMissingError();
@@ -701,7 +705,7 @@ export const googleAdapter: CalendarAdapter = {
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     await assertOAuthEventWriteGrant(userID, "google", accountId);
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(
@@ -748,7 +752,7 @@ export const googleAdapter: CalendarAdapter = {
   },
 
   async readReminderState(userID, accountId, externalCalendarId, ref, signal) {
-    const response = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}`, { headers: { Authorization: `Bearer ${await getAccessToken(userID, accountId)}`, "Cache-Control": "no-cache" }, redirect: "error", signal });
+    const response = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}`, { headers: { Authorization: `Bearer ${await getGoogleAccessToken(userID, accountId)}`, "Cache-Control": "no-cache" }, redirect: "error", signal });
     if ([404, 410].includes(response.status)) return null;
     assertCompleteEventReadResponse(response);
     const data = await response.json();
@@ -764,7 +768,7 @@ export const googleAdapter: CalendarAdapter = {
     if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const reminders = GoogleReminderWriteSchema.parse(input);
     await assertOAuthEventWriteGrant(userID, "google", accountId);
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const calendarResponse = await fetch(`${GCAL}/users/me/calendarList/${encodeURIComponent(externalCalendarId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, redirect: "error", signal });
     assertEventWriteResponse(calendarResponse);
     const calendar = await calendarResponse.json();
@@ -793,7 +797,7 @@ export const googleAdapter: CalendarAdapter = {
   async readEvent(userID, accountId, externalCalendarId, ref, signal) {
     const response = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}`,
-      { headers: { Authorization: `Bearer ${await getAccessToken(userID, accountId)}`, "Cache-Control": "no-cache" }, redirect: "error", signal },
+      { headers: { Authorization: `Bearer ${await getGoogleAccessToken(userID, accountId)}`, "Cache-Control": "no-cache" }, redirect: "error", signal },
     );
     if ([404, 410].includes(response.status)) return null;
     assertCompleteEventReadResponse(response);
@@ -810,7 +814,7 @@ export const googleAdapter: CalendarAdapter = {
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${id}`,
       {
         headers: {
-          Authorization: `Bearer ${await getAccessToken(userID, accountId)}`,
+          Authorization: `Bearer ${await getGoogleAccessToken(userID, accountId)}`,
           "Cache-Control": "no-cache",
         },
         redirect: "error",
@@ -842,7 +846,7 @@ export const googleAdapter: CalendarAdapter = {
     event: Event,
     identity,
   ) {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events`,
       {
@@ -897,7 +901,7 @@ export const googleAdapter: CalendarAdapter = {
     const etag = requireEventEtag(ref?.etag);
     const payload = toGoogleEventPatch(event, patch);
     if (Object.keys(payload).length === 0) return; // Known local-only/no-op diff, no write.
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
       {
@@ -928,7 +932,7 @@ export const googleAdapter: CalendarAdapter = {
     signal,
   ) {
     const etag = requireEventEtag(ref?.etag);
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const res = await fetch(
       `${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(externalEventId)}`,
       {
@@ -948,7 +952,7 @@ export const googleAdapter: CalendarAdapter = {
     const taskListId = googleTaskListId(externalCalendarId);
     if (!taskListId) throw new Error("Google task write requires a task list");
     return createGoogleTask(
-      await getAccessToken(userID, accountId, true),
+      await getGoogleAccessToken(userID, accountId, true),
       taskListId,
       task,
     );
@@ -965,7 +969,7 @@ export const googleAdapter: CalendarAdapter = {
     const taskListId = googleTaskListId(externalCalendarId);
     if (!taskListId) throw new Error("Google task write requires a task list");
     return updateGoogleTask(
-      await getAccessToken(userID, accountId, true),
+      await getGoogleAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       task,
@@ -983,7 +987,7 @@ export const googleAdapter: CalendarAdapter = {
     const taskListId = googleTaskListId(externalCalendarId);
     if (!taskListId) throw new Error("Google task write requires a task list");
     await deleteGoogleTask(
-      await getAccessToken(userID, accountId, true),
+      await getGoogleAccessToken(userID, accountId, true),
       taskListId,
       externalTaskId,
       ref?.etag,
@@ -991,7 +995,7 @@ export const googleAdapter: CalendarAdapter = {
   },
 
   async createCalendar(userID, accountId, { name, color }) {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     await assertOAuthEventWriteGrant(userID, "google", accountId);
     const res = await fetch(`${GCAL}/calendars`, {
       method: "POST",
@@ -1008,7 +1012,7 @@ export const googleAdapter: CalendarAdapter = {
   },
 
   async updateCalendar(userID, accountId, externalCalendarId, { name, color }) {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
     if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
       throw new TaskScopeMissingError();
@@ -1043,7 +1047,7 @@ export const googleAdapter: CalendarAdapter = {
   },
 
   async deleteCalendar(userID, accountId, externalCalendarId) {
-    const accessToken = await getAccessToken(userID, accountId);
+    const accessToken = await getGoogleAccessToken(userID, accountId);
     const taskListId = googleTaskListId(externalCalendarId);
     if (taskListId && !(await hasOAuthTaskScope(userID, "google", accountId)))
       throw new TaskScopeMissingError();

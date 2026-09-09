@@ -1148,3 +1148,20 @@ export const eventScopeOperations = pgTable("event_scope_operations", {
   result: jsonb("result").$type<EventScopeOutcome>().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, table => [primaryKey({ columns: [table.actorID, table.operationID] })]);
+
+// Private connected-account availability. Never a shared calendar/event mirror.
+export const availabilityAccounts = pgTable("availability_accounts", {
+  epoch: uuid("epoch").notNull().defaultRandom(),
+  accountID: text("account_id").primaryKey().references(() => account.id, { onDelete: "cascade" }),
+  generation: integer("generation").notNull().default(0),
+});
+export const availabilitySources = pgTable("availability_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountID: text("account_id").notNull().references(() => availabilityAccounts.accountID, { onDelete: "cascade" }),
+  externalID: text("external_id").notNull(),
+  label: text("label").notNull(),
+  accountLabel: text("account_label").notNull(),
+  active: boolean("active").notNull().default(true),
+  enabled: boolean("enabled").notNull().default(false),
+  generation: integer("generation").notNull().default(0),
+}, table => [uniqueIndex("availability_sources_account_external").on(table.accountID, table.externalID)]);

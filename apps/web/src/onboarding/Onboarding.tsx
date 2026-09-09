@@ -127,7 +127,7 @@ export function Onboarding({
       const result = await authClient.linkSocial({
         callbackURL: window.location.href,
         provider,
-        scopes: providerConnectionScopes(provider, includeTasks),
+        scopes: providerConnectionScopes(provider, includeTasks, capabilities.data?.googleAvailability),
       });
       if (result?.error) throw new Error(result.error.message);
     }, "Could not start the connection.");

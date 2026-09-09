@@ -13,6 +13,7 @@ import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { logger } from "@musubi/config";
 import {
+  availabilityAccounts,
   caldavAccounts,
   account,
   calendarEvents,
@@ -199,6 +200,7 @@ export async function removeExternalAccountData(
   accountID: string,
 ) {
   return db.transaction(async (tx) => {
+    if (provider === "google") await tx.delete(availabilityAccounts).where(inArray(availabilityAccounts.accountID, tx.select({ id: account.id }).from(account).where(and(eq(account.userId, userID), eq(account.providerId, provider), eq(account.accountId, accountID)))));
     const links = await tx
       .select({ calendarID: calendars.id })
       .from(externalCalendars)

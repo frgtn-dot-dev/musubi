@@ -108,6 +108,7 @@ export type ExternalCalendarInfo = {
 };
 
 export type CalendarDiscoveryResult = {
+  availabilityCalendars?: { externalId: string; name: string }[];
   calendars: ExternalCalendarInfo[];
   // False means optional task-list discovery was omitted or failed. Its absent
   // mirrors are not evidence of deletion and must not be fetched or swept.

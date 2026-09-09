@@ -9075,3 +9075,55 @@ test("K14 CalDAV lost alarm discard retains a usable focus target on Escape", as
   await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
   await expectNoAccessibilityViolations(page);
 });
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Google availability explicit selection and unknown results: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await mockAuthenticatedReads(page);
+    await page.route("**/api/v1/server", route => respond(route, { email: true, pushPublicKey: null, socials: [], socialsWeb: [], syncProviders: ["google"], googleAvailability: true }));
+    const source = { id: "00000000-0000-4000-8000-000000000101", generation: 1, label: "Team availability", accountLabel: "Google work", enabled: false, reconnectRequired: false };
+    await page.route("**/api/v1/availability/sources", route => respond(route, { sources: [source] }));
+    await page.route(`**/api/v1/availability/sources/${source.id}`, route => {
+      expect(route.request().postDataJSON()).toEqual({ enabled: true, expectedGeneration: 1 });
+      source.enabled = true; source.generation++;
+      return respond(route, { sources: [source] });
+    });
+    const requests: unknown[] = [];
+    await page.route("**/api/v1/availability", route => {
+      const range = route.request().postDataJSON(); requests.push(range);
+      const result = requests.length === 1 ? { status: "available", intervals: [{ start: "2026-10-25T00:30:00Z", end: "2026-10-25T02:30:00Z" }] } : requests.length === 2 ? { status: "unavailable" } : { status: "available", intervals: [] };
+      return respond(route, { start: range.start, end: range.end, observedAt: "2026-10-24T12:00:00Z", sources: [{ sourceId: source.id, generation: source.generation, ...result }] });
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Check availability", exact: true });
+    await expect(trigger).toBeDisabled(); expect(requests).toHaveLength(0);
+    await page.getByRole("switch", { name: "Use Team availability for availability" }).click();
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Check availability", exact: true });
+    await dialog.getByLabel("From (UTC)", { exact: true }).fill("2026-10-25");
+    await dialog.getByLabel("Until (UTC, exclusive)", { exact: true }).fill("2026-10-26");
+    const read = dialog.getByRole("button", { name: "Read busy intervals" });
+    await read.click();
+    await expect(dialog.getByText("2026-10-25T00:30:00Z – 2026-10-25T02:30:00Z")).toBeVisible();
+    expect(requests[0]).toEqual({ start: "2026-10-25T00:00:00Z", end: "2026-10-26T00:00:00Z", sourceIds: [source.id] });
+    await expect(dialog.getByRole("button", { name: /Edit|RSVP|Reminder/ })).toHaveCount(0);
+    await dialog.evaluate(async node => { await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished)); });
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.screenshot({ path: `/tmp/musubi-availability-${theme}.png` });
+    await read.click();
+    await expect(dialog.getByText("Unavailable — free time is unknown", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Busy", { exact: true })).toHaveCount(0);
+    await expect(dialog.getByText("No busy intervals in the requested range")).toHaveCount(0);
+    await read.click();
+    await expect(dialog.getByText("No busy intervals in the requested range")).toBeVisible();
+    await dialog.getByRole("button", { name: "Close availability", exact: true }).click();
+    await expect(trigger).toBeFocused(); expect(requests).toHaveLength(3); expect(errors).toEqual([]);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}
