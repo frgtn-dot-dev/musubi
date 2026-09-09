@@ -7,6 +7,7 @@ import { config } from "@musubi/config";
 import { ProviderRsvpEditSchema, providerRsvpDesiredState, ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
   confirmCaldavSeriesOutbox,
+  confirmCaldavSeriesDeletionOutbox,
   hasProviderRsvpSource,
   completeProviderRsvpOutbox,
   matchesReminderEventProjection,
@@ -146,6 +147,20 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.caldavSeriesDeletion) {
+        if (!config.api.eventTimeEditsEnabled || row.provider !== "caldav" || row.action !== "delete" || !adapter?.deleteCaldavSeries) throw new EventWriteError("event-write", "unsupported");
+        const check = async () => {
+          if (!(await checkDestination()) || !(await confirmCaldavSeriesDeletionOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
+        };
+        await check();
+        expectedRef = row.payload.caldavSeriesDeletion.deletion.baseline.ref;
+        mutationStarted = true;
+        resultRef = await adapter.deleteCaldavSeries(row.userID, row.accountID, row.externalCalendarID, row.payload.caldavSeriesDeletion.deletion, signal, check);
+        signal.throwIfAborted();
+        if (!(await checkDestination())) return;
+        if (!(await confirmCaldavSeriesDeletionOutbox(row.id, token, resultRef))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        return;
+      }
       if (row.payload.caldavSeries) {
         if (!config.api.eventTimeEditsEnabled || row.provider !== "caldav" || row.action !== "update" || !adapter?.writeCaldavSeries)
           throw new EventWriteError("event-write", "unsupported");

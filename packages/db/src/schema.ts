@@ -1,4 +1,4 @@
-import type { CaldavSeriesPrepared } from "./queries/caldav-series-scope";
+import type { CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "./queries/caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
 import type { ProviderReminderEdit, ProviderRsvpIntent } from "@musubi/types";
 import { relations, sql } from "drizzle-orm";
@@ -882,6 +882,7 @@ export const eventOutbox = pgTable(
         rsvp?: ProviderRsvpIntent;
         googleOccurrence?: GoogleOccurrenceIntent;
         caldavSeries?: CaldavSeriesPrepared;
+        caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
         createIdentityVersion?: 1;
         resolution?: {
           operationID: string;
@@ -944,6 +945,9 @@ export const eventOutbox = pgTable(
       t.position,
     ),
     index("event_outbox_event_revision_idx").on(t.eventID, t.revision),
+    index("event_outbox_caldav_deleted_version_idx")
+      .on(t.provider, t.userID, t.calendarID, t.externalEventID, t.expectedEtag)
+      .where(sql`${t.action} = 'delete' and ${t.status} = 'completed' and ${t.payload}->'caldavSeriesDeletion' is not null`),
     index("event_outbox_inbox_idx")
       .on(t.userID, t.eventID)
       .where(sql`${t.status} not in ('completed', 'not-needed')`),

@@ -477,6 +477,13 @@
       "when": 1788879861448,
       "tag": "0067_provider_state_observation",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1788918023350,
+      "tag": "0068_caldav_series_deletion",
+      "breakpoints": true
     }
   ]
 }

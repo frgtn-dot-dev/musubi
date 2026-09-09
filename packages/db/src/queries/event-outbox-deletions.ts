@@ -77,17 +77,6 @@ export async function retainUnmappedEventDeletion(
       ),
     );
   if (!target) return;
-  await tx
-    .insert(externalEventTombstones)
-    .values({ externalCalendarLinkID: target.id, externalEventID })
-    .onConflictDoUpdate({
-      target: [
-        externalEventTombstones.externalCalendarLinkID,
-        externalEventTombstones.externalEventID,
-      ],
-      // Each observation gets a distinct CAS version, even within one ms.
-      set: { id: sql`gen_random_uuid()`, observedAt: new Date() },
-    });
   const candidates = await tx
     .select()
     .from(eventOutbox)
@@ -102,6 +91,29 @@ export async function retainUnmappedEventDeletion(
       or (${eventOutbox.provider} = 'caldav' and rtrim(${eventOutbox.externalCalendarID}, '/') || '/musubi-' || ${eventOutbox.id}::text || '.ics' = ${externalEventID}))`,
       ),
     );
+  // A delayed delta for our confirmed resource deletion is already represented
+  // by its durable receipt. Do not leave an address tombstone that would block a
+  // later incarnation. A new unresolved create still needs the existing fence.
+  if (!candidates.length) {
+    const resourceID = provider === "caldav" ? externalEventID.split("#musubi-original=")[0]! : externalEventID;
+    const [completed] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
+      eq(eventOutbox.provider, provider), eq(eventOutbox.userID, target.userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalEventID, resourceID),
+      eq(eventOutbox.externalCalendarLinkID, target.id), eq(eventOutbox.action, "delete"), eq(eventOutbox.status, "completed"), sql`${eventOutbox.payload}->'caldavSeriesDeletion' is not null`,
+      sql`${eventOutbox.payload}->'caldavSeriesDeletion'->'context'->'mappings' @> ${JSON.stringify([{ externalEventID }])}::jsonb`,
+    )).limit(1);
+    if (completed) return;
+  }
+  await tx
+    .insert(externalEventTombstones)
+    .values({ externalCalendarLinkID: target.id, externalEventID })
+    .onConflictDoUpdate({
+      target: [
+        externalEventTombstones.externalCalendarLinkID,
+        externalEventTombstones.externalEventID,
+      ],
+      // Each observation gets a distinct CAS version, even within one ms.
+      set: { id: sql`gen_random_uuid()`, observedAt: new Date() },
+    });
   for (const row of candidates) {
     await tx
       .select()

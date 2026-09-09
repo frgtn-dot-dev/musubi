@@ -35,7 +35,7 @@ async function main() {
   const { encryptSecret } = await import("../crypto");
   const { prepareEventDeliveryResolution } = await import("../event_resolution");
   const { commitEventDeliveryResolution } = await import("@musubi/db");
-  const { prepareCaldavSeries } = await import("../caldav_scope");
+  const { prepareCaldavSeries, prepareCaldavSeriesDelete } = await import("../caldav_scope");
   const { deliverEventOutbox } = await import("../event_delivery");
 
   const userID = `radicale-interop-${randomUUID()}`;
@@ -401,10 +401,20 @@ async function main() {
     const deletionBaseline = { master: deletionRoot, children: deletionChildren.map(item => item!), ref: { externalEventId: deletionMap.externalEventID, etag: deletionMap.etag, icalUid: deletionMap.icalUid } };
     const deletionEvidence = await caldavAdapter.readCaldavSeriesForDelete!(userID, account.id, collectionURL, deletionBaseline);
     const deletion = prepareCaldavSeriesDeletion(deletionEvidence, deletionBaseline);
-    await caldavAdapter.deleteCaldavSeries!(userID, account.id, collectionURL, deletion);
+    const deletionRequest = { operationID: randomUUID(), scope: "series", action: "delete", expectedRevision: deletionRoot.revision };
+    const deletionCandidate = await applyLocalEventScope(scopedRoot.id, userID, deletionRequest, { prepareProvider: true });
+    if (deletionCandidate.status !== "caldav_required") throw new Error("Missing deletion scope context");
+    const preparedDeletion = await prepareCaldavSeriesDelete(deletionCandidate.context, deletionRequest);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, deletionRequest, { caldavDeletion: preparedDeletion })).status, "saved");
+    const deletedRows = await rows();
+    assert.ok(deletedRows.filter(item => item.id === scopedRoot.id || item.seriesID === scopedRoot.id).every(item => item.deletedAt && item.revision === extendedRows.find(old => old.id === item.id)!.revision + 1));
+    const deletionOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === deletionRequest.operationID)!;
+    assert.equal((await deliverEventOutbox(deletionOperation.id, () => caldavAdapter))?.status, "completed");
     assert.equal((await davFetch(scopedURL, { headers: { authorization: basicAuth } })).status, 404);
+    assert.equal((await db.select().from(externalEvents)).filter(item => item.externalEventID === scopedURL || item.externalSeriesID === scopedURL).length, 0);
     await caldavAdapter.deleteCaldavSeries!(userID, account.id, collectionURL, deletion);
-    assert.deepEqual(await rows(), extendedRows, "Transport deletion alone does not acknowledge local tombstones");
+    await sync(); assert.deepEqual(await rows(), deletedRows);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, deletionRequest, { prepareProvider: true })).status, "replayed");
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

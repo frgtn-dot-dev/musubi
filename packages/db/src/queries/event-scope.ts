@@ -1,4 +1,4 @@
-import { sameCaldavRecurrence, caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { appendCaldavSeriesDeletion, type CaldavSeriesDeletionPrepared, sameCaldavRecurrence, caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import { lockExternalEventAddress } from "./event-outbox-deletions";
 import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
@@ -21,7 +21,7 @@ export type LocalEventScopeResult =
 /** Internal local-only scope commit. Every event, tombstone and replay receipt
  * is committed together; no provider work or user notification is sent here.
  */
-export async function applyLocalEventScope(eventID: string, actorID: string, input: unknown, options: { prepareProvider?: boolean; provider?: GoogleOccurrencePrepared; caldav?: CaldavSeriesPrepared } = {}): Promise<LocalEventScopeResult> {
+export async function applyLocalEventScope(eventID: string, actorID: string, input: unknown, options: { prepareProvider?: boolean; provider?: GoogleOccurrencePrepared; caldav?: CaldavSeriesPrepared; caldavDeletion?: CaldavSeriesDeletionPrepared } = {}): Promise<LocalEventScopeResult> {
   const request = EventScopeRequestSchema.parse(input);
   eventID = eventID.toLowerCase();
   const fingerprint = createHash("sha256").update(JSON.stringify({ eventID, request })).digest("hex");
@@ -71,12 +71,14 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     let providerContext: GoogleOccurrenceContext | undefined;
     let caldavContext: CaldavSeriesContext | undefined;
     if (target || mapping || history) {
-      if (caldavRoot && ["series", "occurrence"].includes(request.scope) && (options.prepareProvider || options.caldav)) {
-        if ((request.scope === "series" && request.action !== "update") || (request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))) || childRows.some(child => child.deletedAt))
+      if (caldavRoot && ["series", "occurrence"].includes(request.scope) && (options.prepareProvider || options.caldav || options.caldavDeletion)) {
+        if ((request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))) || childRows.some(child => child.deletedAt))
           throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing supports series content/time and occurrence content/time/cancellation. No changes were saved.");
         if (request.scope === "occurrence" && request.action === "delete" && childRows.some(child => child.isCanceled && sameCaldavScopeContext(child.originalStart, request.originalStart))) throw new EventWriteError("event-write", "unsupported");
         if (request.action === "update" && request.patch.recurrence !== undefined && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.map(child => EventSchema.parse(snapshot(child))));
+        if (options.caldavDeletion && (request.scope !== "series" || request.action !== "delete" || !sameCaldavScopeContext(options.caldavDeletion.context, caldavContext) || !sameCaldavScopeContext(options.caldavDeletion.deletion.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldavDeletion.deletion.baseline.children, caldavContext.children))) return { status: "conflict", current: EventSchema.parse(master) };
+        if (options.caldav && request.scope === "series" && request.action === "delete") throw new EventWriteError("event-write", "unsupported");
         if (options.caldav && (!sameCaldavScopeContext(options.caldav.write.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children)))
           return { status: "conflict", current: EventSchema.parse(master) };
         if (caldavContext.mappings.find(item => item.eventID === eventID)?.externalEventID !== caldavRoot.externalEventID || options.caldav && !sameCaldavScopeContext(options.caldav.context, caldavContext))
@@ -108,7 +110,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     }
     if (providerContext && (request.action === "update" && request.patch.url !== undefined || [...plan.creates, ...plan.updates].some(event => event.seriesID === master.id && (!["zoned", "all-day"].includes(event.timeModel?.kind ?? "") || event.timeModel?.kind !== master.timeModel?.kind))))
       throw new EventWriteError("event-write", "unsupported", "Google occurrence editing requires a supported time kind and provider content. No changes were saved.");
-    if (caldavContext && !options.caldav) return { status: "caldav_required", context: caldavContext };
+    if (caldavContext && !options.caldav && !options.caldavDeletion) return { status: "caldav_required", context: caldavContext };
     if (providerContext && !options.provider) return { status: "provider_required", context: providerContext };
     const outcome: EventScopeOutcome = { operationID: request.operationID, changed: false, events: [], deleted: [] };
     const previous: Event[] = [];
@@ -151,6 +153,13 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     if (providerContext && options.provider) {
       for (const event of saved.filter(event => event.seriesID === master.id))
         await appendGoogleOccurrence(tx, actorID, request.operationID, { ...providerContext, master: saved.find(item => item.id === master.id) ?? providerContext.master }, options.provider, event);
+    }
+    if (caldavContext && options.caldavDeletion) {
+      if (saved.length || outcome.deleted.length !== family.length || !family.every(event => outcome.deleted.some(item => item.id === event.id))) throw new EventWriteError("event-write", "unsupported");
+      const tombstones = await tx.select().from(events).where(inArray(events.id, familyIDs));
+      const deletedMaster = tombstones.find(item => item.id === master.id)!;
+      const deletedChildren = tombstones.filter(item => item.id !== master.id).sort((a, b) => a.id.localeCompare(b.id));
+      await appendCaldavSeriesDeletion(tx, actorID, request.operationID, { ...options.caldavDeletion, context: { ...caldavContext, master: EventSchema.parse(snapshot(deletedMaster)), children: deletedChildren.map(item => EventSchema.parse(snapshot(item))) } });
     }
     if (caldavContext && options.caldav) {
       const changedMaster = saved.find(event => event.id === master.id);

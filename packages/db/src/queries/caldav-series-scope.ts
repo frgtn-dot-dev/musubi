@@ -26,6 +26,8 @@ export type CaldavSeriesWriteIntent = {
   before: string;
   after: string;
 };
+export type CaldavSeriesDeletionIntent = { baseline: CaldavSeriesWriteIntent["baseline"]; before: string };
+export type CaldavSeriesDeletionPrepared = { context: CaldavSeriesContext; deletion: CaldavSeriesDeletionIntent };
 export type CaldavSeriesPrepared = { context: CaldavSeriesContext; write: CaldavSeriesWriteIntent };
 
 /** Stable across Date/string JSONB round trips and JSONB object-key ordering. */
@@ -160,6 +162,54 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       if (!completed) throw new CaldavLeaseLost();
       const replaced = row.payload.resolution?.replacedOperationIDs ?? [];
       if (replaced.length) await tx.update(eventOutbox).set({ status: "not-needed", updatedAt: new Date() }).where(and(inArray(eventOutbox.id, replaced), eq(eventOutbox.eventID, row.eventID), eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID), eq(eventOutbox.status, "cancelled"), eq(eventOutbox.errorCode, "superseded-by-resolution")));
+      return true;
+    });
+  } catch (error) { if (error instanceof CaldavLeaseLost) return false; throw error; }
+}
+
+/** The root deletion intent owns all local tombstones and mapping removal. */
+export async function appendCaldavSeriesDeletion(tx: DbTransaction, actorID: string, operationID: string, prepared: CaldavSeriesDeletionPrepared) {
+  const { context } = prepared;
+  const root = context.mappings.find(item => item.eventID === context.master.id)!;
+  if (!sameCaldavScopeContext(prepared.deletion.baseline.ref, { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid })) throw unsupported();
+  await appendEventOutbox(tx, context.master, [{ id: crypto.randomUUID(), actorID, mutationID: operationID, position: 0, eventID: context.master.id,
+    calendarID: context.link.calendarID, externalCalendarLinkID: context.link.id, provider: "caldav", userID: actorID, accountID: context.link.accountID,
+    externalCalendarID: context.link.externalCalendarID, externalEventID: root.externalEventID, expectedEtag: root.etag, icalUid: root.icalUid,
+    action: "delete", payload: { event: context.master, caldavSeriesDeletion: prepared } }]);
+}
+
+export async function confirmCaldavSeriesDeletionOutbox(id: string, token: string, result?: Ref): Promise<boolean> {
+  try {
+    return await db.transaction(async tx => {
+      const [address] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, id));
+      if (!address?.payload.caldavSeriesDeletion || !address.externalEventID || address.action !== "delete" || address.provider !== "caldav" || address.payload.caldavSeries || address.payload.googleOccurrence || address.payload.rsvp || address.payload.reminderEdit) return false;
+      await lockCalendarLifecycle(tx, [address.calendarID], "shared");
+      await lockExternalEventIdentity(tx, address.externalCalendarLinkID, address.externalEventID);
+      const [master] = await tx.select().from(events).where(eq(events.id, address.eventID)).for("update");
+      const children = await tx.select().from(events).where(eq(events.seriesID, address.eventID)).orderBy(events.id).for("update");
+      if (!master?.deletedAt || children.some(child => !child.deletedAt)) return false;
+      const links = await tx.select().from(calendarEvents).where(inArray(calendarEvents.eventID, [master.id, ...children.map(child => child.id)]));
+      const snapshot = (event: typeof master) => EventSchema.parse({ ...event, calendars: links.filter(link => link.eventID === event.id).map(link => link.calendarID).sort() });
+      let current: CaldavSeriesContext;
+      try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id); }
+      catch (error) { if (error instanceof EventWriteError) return false; throw error; }
+      const prepared = address.payload.caldavSeriesDeletion;
+      if (!sameCaldavScopeContext(current, prepared.context) || !sameCaldavScopeContext(current.master, EventSchema.parse(address.payload.event)) || address.revision !== master.revision ||
+        address.externalCalendarLinkID !== current.link.id || address.calendarID !== current.link.calendarID || address.accountID !== current.link.accountID || address.externalCalendarID !== current.link.externalCalendarID) return false;
+      const baseline = prepared.deletion.baseline;
+      if (baseline.children.length !== current.children.length || [baseline.master, ...baseline.children].some(old => {
+        const actual = [current.master, ...current.children].find(item => item.id === old.id);
+        return !actual || actual.revision !== old.revision! + 1 || !sameCaldavScopeContext(EventSchema.parse({ ...old, revision: actual.revision }), actual);
+      })) return false;
+      const root = current.mappings.find(item => item.eventID === master.id)!;
+      if (root.externalEventID !== address.externalEventID || root.etag !== address.expectedEtag || root.icalUid !== address.icalUid || !sameCaldavScopeContext(baseline.ref, { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid })) return false;
+      const [row] = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).for("update");
+      if (!row || row.remoteSnapshot && !row.remoteSnapshot.isEcho) return false;
+      if (!result) return true;
+      if (!sameCaldavScopeContext(result, baseline.ref)) return false;
+      await tx.delete(externalEvents).where(inArray(externalEvents.id, current.mappings.map(item => item.id)));
+      const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: result, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
+      if (!completed) throw new CaldavLeaseLost();
       return true;
     });
   } catch (error) { if (error instanceof CaldavLeaseLost) return false; throw error; }
