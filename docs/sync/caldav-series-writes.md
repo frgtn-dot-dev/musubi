@@ -667,3 +667,38 @@ comparison renderers consume the existing cancellation/identity fields.
 Following deletion, whole-resource deletion and split conflict reconciliation
 remain separate work. This neither changes iCloud's privilege contract nor
 activates flags, versions or live user-account operations.
+
+### Following deletion conflict confirmation
+
+A saved partial `following` deletion can now be explicitly confirmed after a
+resource ETag conflict. Fresh native evidence must still match every accepted
+canonical definition, time, rule and cancellation state before the original
+cut. Only uninterpreted native properties may differ; those fresh bytes are
+preserved. The same original slot and expected occurrence revision are reapplied
+to the original full baseline. Competing known native edits remain unsupported.
+
+The preview carries `scopeResolution: { kind: "following-delete", originalStart }`.
+Both clients label the action **Delete following occurrences**, show the original
+cut and explain that earlier occurrences remain. Confirmation requires the exact
+`expectedScopeResolution`, including on replay. Older clients that omit it cannot
+confirm a destructive scope they do not display. This adds no version/minimum
+change and leaves the time-edit flag off by default.
+
+The transaction rechecks the complete family, including exactly the expected
+child tombstones and their revisions/content, permissions, mappings and latest
+operation. It replaces the intent without editing the saved draft or incrementing
+revisions. The specialized worker performs conditional PUT and full native ACK.
+A completed replacement also fences accepted ETags of its exact superseded
+following-delete ancestors: delayed old snapshots cannot resurrect removed
+children. A pending replacement is not an ACK, and a genuinely new remote ETag
+can still represent an intentional restoration.
+
+Evidence includes authenticated HTTP preview/confirmation and older-client or
+changed-cut refusal, three time kinds, stale/local/permission/proof races,
+repeated conflicts, lost responses, every ancestor snapshot and a new-version
+restoration. A disposable Radicale round trip verifies native conflict,
+confirmation and stable echo. Web/native unit tests cover the displayed cut and
+frozen retry; Chromium checks desktop light and narrow dark, keyboard/focus,
+accessibility and exact submitted scope. Physical native and live-provider
+acceptance remain separate. Whole-resource deletion and split conflict resolution
+remain unsupported.

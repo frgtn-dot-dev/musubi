@@ -82,7 +82,13 @@ export const EventDeliveryContentSchema = z.object({
   originalStart: OccurrenceStartSchema.optional(),
 });
 
+export const EventDeliveryScopeResolutionSchema = z.object({
+  kind: z.literal("following-delete"),
+  originalStart: OccurrenceStartSchema,
+}).strict();
+
 export const EventDeliveryConflictSchema = z.object({
+  scopeResolution: EventDeliveryScopeResolutionSchema.optional(),
   eventId: z.uuid(),
   operationId: z.uuid(),
   latestOperationId: z.uuid(),
@@ -122,6 +128,7 @@ export const ResolveEventDeliveryRequestSchema = z
     expectedRemoteExists: z.boolean(),
     expectedRemoteEtag: z.string().nullable(),
     expectedMasterRevision: z.number().int().positive().optional(),
+    expectedScopeResolution: EventDeliveryScopeResolutionSchema.optional(),
     expectedRsvpBaselineVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
     expectedReminderStateVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   })

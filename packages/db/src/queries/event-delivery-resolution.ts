@@ -33,7 +33,7 @@ import {
   unresolvedEventOutbox,
   type EventOutboxRow,
 } from "./event-outbox";
-import { caldavSeriesContext, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { caldavSeriesDesired, caldavSeriesContext, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./google-occurrence-scope";
 import type { DbTransaction } from "./calendars";
 import type { EventContentPatch } from "./events";
@@ -163,12 +163,21 @@ async function resolutionContext(
   let caldavContext: CaldavSeriesContext | undefined;
   if (row.payload.caldavSplit || row.payload.caldavSeriesDeletion) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.caldavSeries) {
-    if (row.payload.caldavSeries.write.followingDelete) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const childRows = await tx.query.events.findMany({ where: eq(events.seriesID, eventID), with: { calendarEvents: true }, orderBy: events.id });
     const activeChildren = childRows.filter(child => !child.deletedAt || row.payload.caldavSeries!.context.children.some(item => item.id === child.id));
-    if (activeChildren.some(child => child.deletedAt)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const savedWrite = row.payload.caldavSeries.write;
+    const desired = caldavSeriesDesired(savedWrite);
+    const removed = savedWrite.followingDelete ? savedWrite.baseline.children.filter(child => !desired.children.some(item => item.id === child.id)) : [];
+    const removedIDs = new Set(removed.map(child => child.id));
+    if (activeChildren.some(child => !!child.deletedAt !== removedIDs.has(child.id)) || removed.some(old => {
+      const actual = activeChildren.find(child => child.id === old.id);
+      return !actual || actual.revision !== old.revision! + 1 || !sameCaldavScopeContext(
+        EventSchema.parse({ ...old, revision: actual.revision }),
+        EventSchema.parse({ ...actual, calendars: actual.calendarEvents.map(link => link.calendarID).sort() }),
+      );
+    })) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     try {
       caldavContext = await caldavSeriesContext(tx, userID, local, activeChildren.map(child => EventSchema.parse({ ...child, calendars: child.calendarEvents.map(link => link.calendarID).sort() })), row.id, true);
     } catch (error) {
@@ -300,6 +309,7 @@ function sameResolution(
     accepted.expectedLatestOperationID === request.expectedLatestOperationId &&
     accepted.expectedRemoteExists === request.expectedRemoteExists &&
     accepted.expectedRemoteEtag === request.expectedRemoteEtag &&
+    sameCaldavScopeContext(accepted.expectedScopeResolution, request.expectedScopeResolution) &&
     accepted.expectedMasterRevision === request.expectedMasterRevision &&
     accepted.expectedReminderStateVersion === request.expectedReminderStateVersion &&
     accepted.expectedRsvpBaselineVersion === request.expectedRsvpBaselineVersion
@@ -429,6 +439,8 @@ export async function commitEventDeliveryResolution(
         proof.rsvp?.baselineVersion !== request.expectedRsvpBaselineVersion ||
         !!current.row.payload.reminderEdit !== !!proof.reminder ||
         proof.reminder?.stateVersion !== request.expectedReminderStateVersion ||
+        !sameCaldavScopeContext(request.expectedScopeResolution, current.row.payload.caldavSeries?.write.followingDelete
+          ? { kind: "following-delete", originalStart: current.row.payload.caldavSeries.write.followingDelete.originalStart } : undefined) ||
         current.masterRevision !== request.expectedMasterRevision ||
         current.masterRevision !== proof.context.masterRevision ||
         !!current.row.payload.googleOccurrence !== !!proof.googleOccurrence ||
@@ -543,7 +555,7 @@ export async function commitEventDeliveryResolution(
         const family = current.caldavContext;
         if (!family || !proof.ref || !proof.remoteExists || proof.action !== "update" ||
             proof.caldavSeries.write.targetEventID !== current.row.payload.caldavSeries?.write.targetEventID ||
-            proof.caldavSeries.write.followingDelete ||
+            !sameCaldavScopeContext(proof.caldavSeries.write.followingDelete, current.row.payload.caldavSeries?.write.followingDelete) ||
             !sameCaldavScopeContext(proof.caldavSeries.write.newDefinition, current.row.payload.caldavSeries?.write.newDefinition) ||
             proof.caldavSeries.write.cancelTarget !== current.row.payload.caldavSeries?.write.cancelTarget ||
             !sameCaldavScopeContext(proof.caldavSeries.write.time, current.row.payload.caldavSeries?.write.time) ||
@@ -616,6 +628,7 @@ export async function commitEventDeliveryResolution(
             expectedRemoteExists: request.expectedRemoteExists,
             expectedRemoteEtag: request.expectedRemoteEtag,
             expectedMasterRevision: request.expectedMasterRevision,
+            expectedScopeResolution: request.expectedScopeResolution,
             expectedReminderStateVersion: request.expectedReminderStateVersion,
             expectedRsvpBaselineVersion: request.expectedRsvpBaselineVersion,
           },

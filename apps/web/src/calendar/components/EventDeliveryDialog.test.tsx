@@ -401,3 +401,31 @@ it("compares only the own RSVP response and freezes the full native preview for 
   expect(requests[1]).toEqual(requests[0]); expect(requests[0].expectedRsvpBaselineVersion).toBe("c".repeat(64));
   expect(requests[0]).not.toHaveProperty("attendees"); expect(requests[0]).not.toHaveProperty("response");
 });
+
+
+it("confirms the displayed following-deletion cut and retains it across an ambiguous retry", async () => {
+  const scopeResolution = { kind: "following-delete", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" } };
+  const requests: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/conflict")) return json({ ...preview, scopeResolution });
+    if (url.endsWith("/resolve")) {
+      requests.push(JSON.parse(String(init?.body)));
+      if (requests.length === 1) throw new Error("Lost response");
+      return json(receipt, 202);
+    }
+    return json(receipt);
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText("Delete this and following")).toBeTruthy();
+  expect(within(comparison).getByText(/Original start: 2026-09-07/)).toBeTruthy();
+  expect(within(comparison).getByText(/Earlier occurrences remain/)).toBeTruthy();
+  expect(within(comparison).queryByRole("button", { name: "Apply saved changes" })).toBeNull();
+  fireEvent.click(within(comparison).getByRole("button", { name: "Delete following occurrences" }));
+  await within(comparison).findByText(/Could not reach the server/);
+  fireEvent.click(within(comparison).getByRole("button", { name: "Delete following occurrences" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
+  expect(requests[1]).toEqual(requests[0]);
+});
