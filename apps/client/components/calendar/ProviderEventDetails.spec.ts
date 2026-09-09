@@ -18,7 +18,7 @@ vi.mock("@/services/federation", () => ({ remoteForCalendar: () => null }));
 vi.mock("@/contexts/ServerContext", () => ({ useServer: () => ({ apiUrl: "https://example.test" }) }));
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation = { version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
-function render() { h.index = 0; const result = ProviderEventDetailsBody({ event, userId: "owner" }); for (const effect of h.effects.splice(0)) effect(); return result; }
+function render(value = event) { h.index = 0; const result = ProviderEventDetailsBody({ event: value, userId: "owner" }); for (const effect of h.effects.splice(0)) effect(); return result; }
 function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
 beforeEach(() => { h.slots = []; h.index = 0; h.effects = []; vi.clearAllMocks(); });
@@ -33,4 +33,17 @@ it("reloads native settings on every open and does not open from a failed refres
   nodes(tree).find(node => node.type === "Btn")!.props.onPress(); await settle();
   editor = nodes(render()).find(node => node.type === "ProviderReminderEditor")!;
   expect(editor.props.observation.version).toBe("c".repeat(64)); expect(editor.props.observation.state.reminders.useDefault).toBe(false);
+});
+
+it("targets the existing child UUID when opening a scoped native response", async () => {
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-09-10T08:00:00.000Z" } };
+  h.fetch.mockResolvedValue({ ...observation, reminderEdit: undefined, rsvpEdit: { provider: "google", expectedRevision: 7 } });
+  render(child); await settle();
+  const action = nodes(render(child)).find(node => node.type === "Btn" && node.props.label === "Respond to this occurrence")!;
+  action.props.onPress(); await settle();
+  const editor = nodes(render(child)).find(node => node.type === "ProviderRsvpEditor")!;
+  expect(editor.props.event.id).toBe(child.id);
+  expect(editor.props.event.seriesID).toBe(child.seriesID);
+  expect(h.fetch.mock.calls[1][0].id).toBe(child.id);
+  expect(nodes(render(child)).some(node => node.type === "ProviderReminderEditor")).toBe(false);
 });

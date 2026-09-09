@@ -1,8 +1,9 @@
 import { isDeepStrictEqual } from "node:util";
 import { config } from "@musubi/config";
 import { BadRequestError, EventWriteError } from "@musubi/types";
-import { prepareProviderRsvpEdit, commitProviderRsvpEdit, matchesReminderEventProjection } from "@musubi/db";
-import { googleAdapter, googleReminderEventEvidence } from "./adapters/google";
+import { prepareProviderRsvpEdit, commitProviderRsvpEdit, matchesRsvpEventProjection } from "@musubi/db";
+import { googleAdapter } from "./adapters/google";
+import { googleRsvpEventEvidence } from "./adapters/google_rsvp_projection";
 import { googleEventState } from "./adapters/provider_event_state";
 
 /** Prepare a durable intent without sending the RSVP in the HTTP request. Never call provider
@@ -12,9 +13,9 @@ export async function queueGoogleRsvp(actorID: string, eventID: string, input: u
   const prepared = await prepareProviderRsvpEdit(actorID, eventID, input);
   if (prepared.kind === "replay") return prepared.receipt;
   const context = prepared.context;
-  const evidence = await googleAdapter.readRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag }, context.request.response);
-  const native = googleReminderEventEvidence(evidence.baseline);
-  if (!matchesReminderEventProjection("google", context.event, native) || !isDeepStrictEqual(context.state, googleEventState(evidence.baseline)))
+  const evidence = await googleAdapter.readRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag }, context.request.response, AbortSignal.timeout(10_000), context.instance ? { externalSeriesID: context.instance.externalSeriesID, originalStart: context.instance.originalStart } : undefined);
+  const native = googleRsvpEventEvidence(evidence);
+  if (!matchesRsvpEventProjection("google", context.event, native, context.instance) || !isDeepStrictEqual(context.state, googleEventState(evidence.baseline)))
     throw new BadRequestError("Provider meeting changed. Sync and reopen before responding.");
   return commitProviderRsvpEdit(context, evidence.baseline, native.timeModel!);
 }

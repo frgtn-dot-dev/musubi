@@ -14,13 +14,13 @@ export function ProviderEventDetails({ event, userId }: { event: Event; userId: 
   const { apiUrl } = useServer();
   const targetID = event.id.replace(/_-?\d+$/, "");
   const remoteID = remoteForCalendar(event.originCalendarID ?? event.calendars[0])?.id;
-  const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID]);
+  const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID, event.seriesID, event.originalStart]);
   return <ProviderEventDetailsBody key={key} event={event} userId={userId} />;
 }
 export function ProviderEventDetailsBody({ event, userId }: { event: Event; userId: string }) {
   const api = useApi();
   const targetID = event.id.replace(/_-?\d+$/, "");
-  const key = JSON.stringify([targetID, userId]);
+  const key = JSON.stringify([targetID, userId, event.seriesID, event.originalStart]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
   const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp"; observation: ProviderEventStateResponse }>();
   const readSequence = useRef(0);
@@ -59,7 +59,7 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
   return <View style={styles.fieldContainer}>
     <Text accessibilityRole="header" style={styles.fieldLabel}>{details ? `${details.provider} details` : "Provider details"}</Text>
     {details ? <>
-      <Text style={textStyle}>{event.recurrence && !event.seriesID ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}</Text>
+      <Text style={textStyle}>{event.seriesID ? "These settings describe this occurrence. " : event.recurrence ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}</Text>
       {details.rows.map(row => <Text key={row.label} style={textStyle}>{row.label}: {row.value}</Text>)}
       <Text style={textStyle}>Provider notifications and Musubi reminders are separate. Both apps may notify you.</Text>
     </> : <Text accessibilityLiveRegion="polite" style={textStyle}>{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</Text>}
@@ -67,7 +67,7 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
     {current?.reminderEdit && current.state && current.version && !event.recurrence && !event.seriesID ? <>
       <Btn label="Edit Google reminders" variant="secondary" loading={opening} onPress={() => void openEditor()} />
     </> : null}
-    {current?.rsvpEdit && current.state && current.version && !event.recurrence && !event.seriesID ? <Btn label="Respond in Google" variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
+    {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={event.seriesID ? "Respond to this occurrence" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={{ ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={{ ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
   </View>;

@@ -16,7 +16,7 @@ vi.mock("@/components/ui/OptionPicker", () => ({ OptionPicker: "OptionPicker" })
 vi.mock("@/services/api", () => ({ useApi: () => ({ editProviderRsvp: h.save }) }));
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation: ProviderEventStateResponse = { version: "a".repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: false, overrides: [{ method: "email", minutes: 30 }] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
-function render() { h.index = 0; return ProviderRsvpEditor({ event, observation, onClose: h.close }); }
+function render(value = event) { h.index = 0; return ProviderRsvpEditor({ event: value, observation, onClose: h.close }); }
 function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
 function button(tree: ReactNode, label: string) { return nodes(tree).find(node => node.type === "Btn" && node.props.label === label)!.props; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
@@ -34,4 +34,15 @@ it("requires an explicit native choice and retries the same frozen RSVP after co
 });
 it("cancelling a native response performs no write", () => {
   button(render(), "Cancel Google response").onPress(); expect(h.close).toHaveBeenCalledOnce(); expect(h.save).not.toHaveBeenCalled();
+});
+
+it("describes an instance-only response and submits the child's frozen identity", async () => {
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-09-10T08:00:00.000Z" } };
+  h.save.mockResolvedValue({ status: "pending" });
+  let tree = render(child);
+  expect(nodes(tree).some(node => node.props.children === "Respond to this occurrence")).toBe(true);
+  nodes(tree).find(node => node.type === "OptionPicker")!.props.onSelect("accepted");
+  tree = render(child); button(tree, "Send response").onPress(); await settle();
+  expect(h.save.mock.calls[0][0].id).toBe(child.id);
+  expect(h.save.mock.calls[0][0].seriesID).toBe(child.seriesID);
 });

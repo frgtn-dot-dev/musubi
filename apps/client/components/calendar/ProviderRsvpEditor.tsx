@@ -35,9 +35,9 @@ export function ProviderRsvpEditor({ event, observation, onClose }: { event: Eve
     <View pointerEvents="box-none" style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, paddingTop: insets.top, justifyContent: "flex-end" }}>
     <View style={[styles.modalSheet, { position: "relative", minHeight: 0, maxHeight: "100%" }]}>
       <View style={styles.modalHandle} />
-      <View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>Respond in Google</Text></View>
+      <View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{event.seriesID ? "Respond to this occurrence" : "Respond in Google"}</Text></View>
       <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[4] + insets.bottom, gap: spacing[3] }}>
-        <Text style={copy}>{providerRsvpNotice}</Text>
+        <Text style={copy}>{event.seriesID ? "This Google response applies only to this occurrence. " : ""}{providerRsvpNotice}</Text>
         {notice ? <Text accessibilityLiveRegion="polite" style={copy}>{notice}</Text> : <>
           <Btn variant="secondary" label={`Your Google response: ${providerRsvpOptions.find(item => item.value === response)?.label ?? "Choose a response"}`} disabled={busy} onPress={() => setPicker(true)} />
           {error ? <Text accessibilityRole="alert" style={copy}>{error}</Text> : null}

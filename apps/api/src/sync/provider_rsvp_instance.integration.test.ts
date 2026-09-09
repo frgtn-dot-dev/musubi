@@ -1,3 +1,10 @@
+import express from "express";
+import { account, replaceMemberToken } from "@musubi/db";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, ProviderRsvpReceiptSchema } from "@musubi/types";
+import { issueMemberToken } from "../federation_tokens";
+import { requireAuth } from "../middleware/require_auth";
+import { middlewareErrorHandler } from "../middleware/error_handler";
+import { handlerGetProviderEventState, handlerProviderRsvpEdit } from "../handlers/events";
 import { prepareEventDeliveryResolution } from "./event_resolution";
 import { commitEventDeliveryResolution, getEventDeliveryResolutionReplay } from "@musubi/db";
 import { createServer } from "node:http";
@@ -8,7 +15,7 @@ import { deliverEventOutbox } from "./event_delivery";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, prepareProviderRsvpEdit, prepareProviderRsvpInstanceEdit, commitProviderRsvpEdit, completeEventOutbox, hasProviderRsvpSource, calendarMembers } from "@musubi/db";
+import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, prepareProviderRsvpEdit, commitProviderRsvpEdit, completeEventOutbox, hasProviderRsvpSource, calendarMembers } from "@musubi/db";
 import { googleRsvpEvidence } from "./adapters/google_rsvp";
 import { googleEventState } from "./adapters/provider_event_state";
 import type { EventTimeModel } from "@musubi/types";
@@ -46,11 +53,19 @@ async function main() {
   await new Promise<void>(resolve => fixture.listen(0, "127.0.0.1", resolve));
   const address = fixture.address(); assert.ok(address && typeof address !== "string");
   const realFetch = globalThis.fetch;
+  const app = express(); app.use(express.json());
+  app.get("/api/v1/events/:eventId/provider-state", requireAuth, handlerGetProviderEventState);
+  app.post("/api/v1/events/:eventId/provider-rsvp", requireAuth, handlerProviderRsvpEdit);
+  app.use(middlewareErrorHandler);
+  const api = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => api.once("listening", resolve));
+  const apiAddress = api.address(); assert.ok(apiAddress && typeof apiAddress !== "string");
+  const apiOrigin = `http://127.0.0.1:${apiAddress.port}`;
   globalThis.fetch = (input, init) => { const url = new URL(String(input)); assert.equal(url.origin, "https://www.googleapis.com"); return realFetch(`http://127.0.0.1:${address.port}${url.pathname}${url.search}`, init); };
   const adapter = { ...googleAdapter, ...googleRsvpMethods(async () => "synthetic-instance-rsvp") };
   try {
   for (const kind of ["zoned", "all-day"] as const) {
-    for (const scenario of ["queue", "concurrent", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "deliver-normal", "deliver-lost", "deliver-503", "deliver-parent-before", "deliver-parent-after", "deliver-parent-map-before", "deliver-parent-map-after", "deliver-child-before", "deliver-grant-before", "deliver-grant-after", "deliver-lease-after", "deliver-pull-echo", "deliver-pull-state", "deliver-native-original-before", "deliver-native-original-after", "deliver-resolve-resend", "deliver-resolve-recover"]) {
+    for (const scenario of ["queue", "concurrent", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "deliver-normal", "deliver-lost", "deliver-503", "deliver-parent-before", "deliver-parent-after", "deliver-parent-map-before", "deliver-parent-map-after", "deliver-child-before", "deliver-grant-before", "deliver-grant-after", "deliver-lease-after", "deliver-pull-echo", "deliver-pull-state", "deliver-native-original-before", "deliver-native-original-after", "deliver-resolve-resend", "deliver-resolve-recover", "public-queue", "public-concurrent", "public-parent-race", "public-native-parent", "public-native-original"]) {
       mode = "normal"; patches = 0; expectedPatchEtag = '"child"'; onRead = undefined; onPatch = undefined;
       const owner = `rsvp-instance-${randomUUID()}`;
       await db.insert(user).values({ id: owner, name: owner, email: `${owner}@example.test`, isExternal: true });
@@ -73,10 +88,47 @@ async function main() {
         const child = (await getEventSnapshot(mapping.eventID))!;
         const parent = (await getEventSnapshot(parentMapping.eventID))!;
         const observation = await getOwnProviderEventObservation(owner, child.id, false, true);
-        assert.equal(observation.rsvpEdit, undefined, "Public recurring capability remains closed during staged integration");
+        assert.deepEqual(observation.rsvpEdit, { provider: "google", expectedRevision: child.revision });
         const request = { provider: "google", operationID: randomUUID(), expectedRevision: child.revision, expectedStateVersion: observation.version, response: "accepted", sendUpdates: "all" };
-        await assert.rejects(() => prepareProviderRsvpEdit(owner, child.id, request));
-        const candidate = await prepareProviderRsvpInstanceEdit(owner, child.id, request);
+        if (scenario.startsWith("public-")) {
+          await db.insert(account).values({ id: randomUUID(), userId: owner, providerId: "google", accountId: "fixture", scope: "https://www.googleapis.com/auth/calendar.events", accessToken: "synthetic-instance-rsvp", refreshToken: "synthetic-refresh", accessTokenExpiresAt: new Date(Date.now() + 3600000) });
+          const credential = issueMemberToken(); await replaceMemberToken(owner, credential.tokenHash);
+          const headers = { authorization: `Bearer ${credential.raw}`, [CLIENT_VERSION_HEADER]: PRODUCT_VERSION, "Content-Type": "application/json" };
+          const post = (body: unknown, id = child.id) => realFetch(`${apiOrigin}/api/v1/events/${id}/provider-rsvp`, { method: "POST", headers, body: JSON.stringify(body) });
+          assert.equal((await realFetch(`${apiOrigin}/api/v1/events/${child.id}/provider-rsvp`, { method: "POST", headers: { "Content-Type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: JSON.stringify(request) })).status, 401);
+          assert.equal((await post({ ...request, occurrence: { externalSeriesID: "forged" } })).status, 400);
+          assert.equal((await post(request, parent.id)).status, 403, "Series master remains unsupported");
+          config.api.providerRsvpEditsEnabled = false;
+          const disabled = await realFetch(`${apiOrigin}/api/v1/events/${child.id}/provider-state`, { headers });
+          assert.equal(disabled.status, 200); assert.equal((await disabled.json()).rsvpEdit, undefined);
+          assert.equal((await post(request)).status, 403);
+          config.api.providerRsvpEditsEnabled = true;
+          const fresh = await realFetch(`${apiOrigin}/api/v1/events/${child.id}/provider-state`, { headers });
+          assert.equal(fresh.headers.get("cache-control"), "private, no-store");
+          assert.deepEqual((await fresh.json()).rsvpEdit, { provider: "google", expectedRevision: child.revision });
+          if (scenario === "public-parent-race") onRead = async () => { await db.update(events).set({ revision: parent.revision + 1 }).where(eq(events.id, parent.id)); };
+          if (scenario === "public-native-parent") remote.recurringEventId = "other";
+          if (scenario === "public-native-original") remote.originalStartTime = allDay ? { date: "2026-10-26" } : { dateTime: "2026-10-25T02:30:00+01:00" };
+          const replies = scenario === "public-concurrent" ? await Promise.all([post(request), post(request)]) : [await post(request)];
+          assert.equal(patches, 0, "Public enqueue never PATCHes or notifies inline");
+          if (["public-parent-race", "public-native-parent", "public-native-original"].includes(scenario)) {
+            assert.equal(replies[0]!.status, scenario === "public-parent-race" ? 400 : 403);
+            assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 0);
+          } else {
+            const receipts = await Promise.all(replies.map(async response => { assert.equal(response.status, 202); assert.equal(response.headers.get("cache-control"), "private, no-store"); return ProviderRsvpReceiptSchema.parse(await response.json()); }));
+            assert.equal(new Set(receipts.map(item => item.operationID)).size, 1);
+            assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 1);
+            const receipt = receipts[0]!;
+            const replay = ProviderRsvpReceiptSchema.parse(await (await post(request)).json());
+            assert.equal(replay.replayed, true); assert.equal(replay.operationID, receipt.operationID);
+            assert.deepEqual(await getEventSnapshot(child.id), child);
+            assert.equal((await deliverEventOutbox(receipt.operationID, () => googleAdapter))?.status, "completed");
+            assert.equal(patches, 1); assert.equal(remote.attendees[0].responseStatus, "accepted");
+            assert.deepEqual(await getEventSnapshot(child.id), child);
+          }
+          continue;
+        }
+        const candidate = await prepareProviderRsvpEdit(owner, child.id, request);
         assert.equal(candidate.kind, "prepared"); if (candidate.kind !== "prepared") throw new Error("Expected context");
         const binding = candidate.context.instance!;
         assert.deepEqual(binding, { seriesID: parent.id, parentRevision: parent.revision, parentMappingID: parentMapping.id, externalSeriesID: "series", originalStart });
@@ -205,7 +257,7 @@ async function main() {
       } finally { await db.delete(user).where(eq(user.id, owner)); }
     }
   }
-  } finally { config.api.providerRsvpEditsEnabled = savedFlag; globalThis.fetch = realFetch; await new Promise<void>(resolve => fixture.close(() => resolve())); }
+  } finally { config.api.providerRsvpEditsEnabled = savedFlag; globalThis.fetch = realFetch; await new Promise<void>(resolve => api.close(() => resolve())); await new Promise<void>(resolve => fixture.close(() => resolve())); }
   console.log("Private Google instance RSVP journal and delivery: bound family, concurrent replay, stale parent/identity refusal, conditional HTTP recovery, parent/permission/lease/pull fences: OK");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
