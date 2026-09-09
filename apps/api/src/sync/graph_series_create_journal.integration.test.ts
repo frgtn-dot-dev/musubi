@@ -8,7 +8,7 @@ import { account, calendarMembers, db, events, externalCalendars, externalEvents
 import { microsoftAdapter } from "./adapters/microsoft";
 import { syncProvider } from "./engine";
 
-async function main() {
+async function main(until = false) {
   assert.equal(process.env.ENVIRONMENT, "test");
   const userID = `graph-create-journal-${randomUUID()}`, accountID = "fixture", savedFlag = config.api.eventTimeEditsEnabled;
   await db.insert(user).values({ id: userID, name: "Fixture", email: `${userID}@example.test` });
@@ -16,14 +16,14 @@ async function main() {
     const connectionID = randomUUID();
     await db.insert(account).values({ id: connectionID, userId: userID, providerId: "microsoft", accountId: accountID, scope: "Calendars.ReadWrite", refreshToken: "fixture", accessToken: "fixture" });
     const calendar = await importExternalCalendar("microsoft", userID, accountID, "Fixture", { externalId: "native-calendar", name: "Fixture", color: "red" });
-    const event = EventSchema.parse({ id: randomUUID(), revision: 1, creatorID: userID, organizer: userID, title: "Personal", color: "red", calendars: [calendar.id], originCalendarID: calendar.id, isCanceled: false, recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
+    const event = EventSchema.parse({ id: randomUUID(), revision: 1, creatorID: userID, organizer: userID, title: "Personal", color: "red", calendars: [calendar.id], originCalendarID: calendar.id, isCanceled: false, recurrence: until ? "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z" : "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
     const operationID = randomUUID();
     const rows = () => db.select().from(events).where(eq(events.creatorID, userID)).orderBy(events.id);
     const history = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, userID));
     config.api.eventTimeEditsEnabled = false;
     await assert.rejects(() => queueGraphSeriesCreate(userID, operationID, event)); assert.equal((await rows()).length, 0);
     config.api.eventTimeEditsEnabled = true;
-    for (const patch of [{ hasAttendees: true }, { organizer: "someone@example.test" }, { url: "https://meeting.test" }, { isCanceled: true }, { recurrence: "RRULE:FREQ=DAILY" }, { recurrence: "RRULE:FREQ=DAILY;COUNT=367" }, { timeModel: { kind: "legacy-unknown" } }]) {
+    for (const patch of [{ hasAttendees: true }, { organizer: "someone@example.test" }, { url: "https://meeting.test" }, { isCanceled: true }, { recurrence: "RRULE:FREQ=DAILY" }, { recurrence: "RRULE:FREQ=DAILY;COUNT=367" }, { recurrence: "FREQ=YEARLY;UNTIL=20300327T080000Z" }, { recurrence: "FREQ=DAILY;UNTIL=20260230T080000Z" }, { timeModel: { kind: "legacy-unknown" } }]) {
       await assert.rejects(() => queueGraphSeriesCreate(userID, randomUUID(), { ...event, ...patch }));
     }
     await db.update(calendarMembers).set({ role: "viewer" }).where(eq(calendarMembers.calendarID, calendar.id));
@@ -106,4 +106,4 @@ async function main() {
     console.log("Graph create journal: atomic replay, personal admission, pending import/cursor fence, durable uncertainty, exact lease/source checks and generic ACK refusal: OK");
   } finally { config.api.eventTimeEditsEnabled = savedFlag; await db.delete(user).where(eq(user.id, userID)); }
 }
-void main().catch(error => { console.error(error); process.exitCode = 1; });
+void main().then(() => main(true)).catch(error => { console.error(error); process.exitCode = 1; });

@@ -10,13 +10,13 @@ import { microsoftAdapter } from "./adapters/microsoft";
 import { deliverEventOutbox } from "./event_delivery";
 import { syncProvider } from "./engine";
 
-async function run(scenario: string) {
+async function run(scenario: string, until = false) {
   let failureTrigger: string | undefined;
   const actor = `graph-create-worker-${randomUUID()}`, allDay = scenario === "all-day", flag = config.api.eventTimeEditsEnabled;
   let mode = scenario, present = false, posts = 0, operationID = "", eventID = "", calendarID = "", raced = false;
   const time = resolveEventTimeEdit(allDay ? { kind: "all-day", startDate: "2026-12-30", endDate: "2026-12-31" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" });
   const utc = (date: Date) => ({ dateTime: date.toISOString().slice(0, -1), timeZone: "UTC" });
-  const native = () => ({ id: "series", transactionId: operationID, iCalUId: "master-uid", "@odata.etag": 'W/"master"', type: "seriesMaster", isAllDay: allDay, isCancelled: false, originalStartTimeZone: allDay ? "UTC" : "Europe/Prague", originalEndTimeZone: allDay ? "UTC" : "Europe/Prague", start: utc(time.start), end: utc(new Date(time.end.getTime() + (allDay ? 86400000 : 0))), recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: allDay ? "2026-12-30" : "2026-03-27", numberOfOccurrences: 4, ...(allDay ? {} : { recurrenceTimeZone: "Europe/Prague" }) } }, subject: mode === "changed-intent" && present ? "Changed elsewhere" : "Personal", body: { contentType: "text", content: "Notes" }, location: { displayName: "Office" }, attendees: [], isOrganizer: true, organizer: { emailAddress: { address: "owner@example.test" } }, isDraft: false, isOnlineMeeting: false, onlineMeeting: null, onlineMeetingUrl: null, cancelledOccurrences: [], exceptionOccurrences: [], isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", responseStatus: { response: "organizer" } });
+  const native = () => ({ id: "series", transactionId: operationID, iCalUId: "master-uid", "@odata.etag": 'W/"master"', type: "seriesMaster", isAllDay: allDay, isCancelled: false, originalStartTimeZone: allDay ? "UTC" : "Europe/Prague", originalEndTimeZone: allDay ? "UTC" : "Europe/Prague", start: utc(time.start), end: utc(new Date(time.end.getTime() + (allDay ? 86400000 : 0))), recurrence: { pattern: { type: "daily", interval: 1 }, range: { ...(until ? { type: "endDate", endDate: allDay ? "2027-01-02" : "2026-03-30" } : { type: "numbered", numberOfOccurrences: 4 }), startDate: allDay ? "2026-12-30" : "2026-03-27", ...(allDay ? {} : { recurrenceTimeZone: "Europe/Prague" }) } }, subject: mode === "changed-intent" && present ? "Changed elsewhere" : "Personal", body: { contentType: "text", content: "Notes" }, location: { displayName: "Office" }, attendees: [], isOrganizer: true, organizer: { emailAddress: { address: "owner@example.test" } }, isDraft: false, isOnlineMeeting: false, onlineMeeting: null, onlineMeetingUrl: null, cancelledOccurrences: [], exceptionOccurrences: [], isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", responseStatus: { response: "organizer" } });
   const instances = () => [27, 28, 29, 30].map(day => {
     const start = allDay ? new Date(time.start.getTime() + (day - 27) * 86400000) : new Date(`2026-03-${day}T0${day < 29 ? 8 : 7}:00:00Z`);
     const end = new Date(start.getTime() + (allDay ? 2 * 86400000 : 3600000));
@@ -29,7 +29,7 @@ async function run(scenario: string) {
     if (req.method === "POST") {
       assert.equal(path, "/v1.0/me/calendars/calendar/events");
       let raw = ""; for await (const part of req) raw += part;
-      const body = JSON.parse(raw); assert.equal(body.transactionId, operationID); assert.deepEqual(body.attendees, []); assert.equal(body.organizer, undefined); assert.equal(body.recurrence.range.numberOfOccurrences, 4);
+      const body = JSON.parse(raw); assert.equal(body.transactionId, operationID); assert.deepEqual(body.attendees, []); assert.equal(body.organizer, undefined); assert.deepEqual(body.recurrence.range, native().recurrence.range);
       assert.equal(body.start.timeZone, allDay ? "UTC" : "Europe/Prague");
       posts++; present = mode !== "absent";
       if (mode === "lost") { req.socket.destroy(); return; }
@@ -66,7 +66,7 @@ async function run(scenario: string) {
     config.api.eventTimeEditsEnabled = true;
     await db.insert(account).values({ id: randomUUID(), userId: actor, providerId: "microsoft", accountId: "fixture", scope: "Calendars.ReadWrite", refreshToken: "fixture", accessToken: "fixture", accessTokenExpiresAt: new Date(Date.now() + 3600000) });
     const calendar = await importExternalCalendar("microsoft", actor, "fixture", "Fixture", { externalId: "calendar", name: "Fixture", color: "red" }); calendarID = calendar.id;
-    const event = EventSchema.parse({ id: randomUUID(), revision: 1, creatorID: actor, organizer: actor, title: "Personal", color: "red", calendars: [calendar.id], originCalendarID: calendar.id, description: "Notes", location: "Office", isCanceled: false, recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...time }); eventID = event.id;
+    const event = EventSchema.parse({ id: randomUUID(), revision: 1, creatorID: actor, organizer: actor, title: "Personal", color: "red", calendars: [calendar.id], originCalendarID: calendar.id, description: "Notes", location: "Office", isCanceled: false, recurrence: until ? (allDay ? "RRULE:FREQ=DAILY;UNTIL=20270102" : "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z") : "RRULE:FREQ=DAILY;COUNT=4", ...time }); eventID = event.id;
     const queued = await queueGraphSeriesCreate(actor, randomUUID(), event); operationID = queued.operationID;
     const rows = () => db.select().from(events).where(eq(events.creatorID, actor)).orderBy(events.id);
     const maps = () => db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id);
@@ -86,7 +86,7 @@ async function run(scenario: string) {
     if (["local-race", "grant-race", "lease-race", "changed-intent"].includes(scenario)) {
       assert.equal(posts, scenario === "changed-intent" ? 1 : 0); assert.equal((await maps()).length, 0);
       assert.equal(result!.status, scenario === "lease-race" ? "attempting" : "conflict");
-      console.log(`Graph create worker ${scenario}: fenced`); return;
+      console.log(`Graph create worker ${until ? "UNTIL " : ""}${scenario}: fenced`); return;
     }
     if (["initial-failure", "initial-db", "ack-db", "unseen", "partial", "timeout", "late-lease", "flag-off", "native-denied", "absent"].includes(scenario)) {
       assert.equal(result!.status, ["initial-failure", "initial-db"].includes(scenario) ? "retry" : scenario === "late-lease" ? "attempting" : ["flag-off", "native-denied"].includes(scenario) ? "blocked" : "unconfirmed");
@@ -105,16 +105,18 @@ async function run(scenario: string) {
       if (beforePosts) assert.equal(posts, beforePosts, "Recovery reuses the same native transaction");
     }
     assert.equal(result!.status, "completed"); assert.equal(result!.uncertain, false); assert.equal(posts, 1);
+    assert.equal(result!.payload.event.recurrence, event.recurrence);
+    assert.equal(result!.payload.graphSeriesCreate!.nativeEvent.recurrence, event.recurrence);
     const accepted = await rows(), acceptedMaps = await maps(); assert.equal(accepted.length, 5); assert.equal(acceptedMaps.length, 5);
     assert.equal(accepted.find(row => !row.seriesID)!.id, eventID); assert.equal(result!.resultRef!.externalEventId, "series");
     assert.equal(expandRecurringEvents(accepted, new Date(time.start.getTime() - 86400000), new Date(time.end.getTime() + 10 * 86400000), { consumerTimeZone: "UTC" }).length, 4);
     config.api.eventTimeEditsEnabled = false;
     await syncProvider(microsoftAdapter, actor, { id: "fixture", label: "Fixture" });
     assert.deepEqual(await rows(), accepted); assert.deepEqual(await maps(), acceptedMaps); assert.equal(posts, 1);
-    console.log(`Graph create worker ${scenario}: complete family, stable IDs and flag-off echo no-op`);
+    console.log(`Graph create worker ${until ? "UNTIL " : ""}${scenario}: complete family, stable IDs and flag-off echo no-op`);
   } finally {
     if (failureTrigger) { await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${failureTrigger} ON external_events`)); await db.execute(sql.raw(`DROP FUNCTION ${failureTrigger}()`)); }
     config.api.eventTimeEditsEnabled = flag; globalThis.fetch = realFetch; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await db.delete(user).where(eq(user.id, actor)); }
 }
-async function main() { assert.equal(process.env.ENVIRONMENT, "test"); for (const scenario of ["normal", "concurrent", "all-day", "lost", "native-denied", "initial-db", "ack-db", "initial-failure", "unseen", "partial", "timeout", "late-lease", "flag-off", "absent", "local-race", "grant-race", "lease-race", "changed-intent"]) await run(scenario); }
+async function main() { assert.equal(process.env.ENVIRONMENT, "test"); for (const scenario of ["normal", "concurrent", "all-day", "lost", "native-denied", "initial-db", "ack-db", "initial-failure", "unseen", "partial", "timeout", "late-lease", "flag-off", "absent", "local-race", "grant-race", "lease-race", "changed-intent"]) await run(scenario); for (const scenario of ["normal", "all-day", "lost", "partial", "absent", "changed-intent"]) await run(scenario, true); }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

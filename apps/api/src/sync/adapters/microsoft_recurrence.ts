@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import { civilToInstant, instantToCivil } from "@musubi/calendar";
+import { civilToInstant, recurrenceUntilEndDate } from "@musubi/calendar";
 import { CivilDateTimeSchema, EventTimeModelSchema, EventWriteError, type Event } from "@musubi/types";
 import { graphTimeForEvent } from "./microsoft_time";
 
@@ -85,25 +85,8 @@ export function graphRecurrenceForEvent(event: Event): GraphRecurrence {
   const range: GraphRecurrence["range"] = { type: "noEnd", startDate, ...(model.kind === "zoned" ? { recurrenceTimeZone: model.timeZone } : {}) };
   if (rule.COUNT) { range.type = "numbered"; range.numberOfOccurrences = positive(rule.COUNT); }
   if (rule.UNTIL) {
-    let endDate: string;
-    if (model.kind === "all-day") {
-      if (!/^\d{8}$/.test(rule.UNTIL)) return unsupported("All-day UNTIL must be a date.");
-      endDate = `${rule.UNTIL.slice(0, 4)}-${rule.UNTIL.slice(4, 6)}-${rule.UNTIL.slice(6, 8)}`;
-    } else {
-      if (!/^\d{8}T\d{6}Z$/.test(rule.UNTIL)) return unsupported("Zoned UNTIL must be a UTC instant.");
-      const until = new Date(`${rule.UNTIL.slice(0, 4)}-${rule.UNTIL.slice(4, 6)}-${rule.UNTIL.slice(6, 8)}T${rule.UNTIL.slice(9, 11)}:${rule.UNTIL.slice(11, 13)}:${rule.UNTIL.slice(13, 15)}Z`);
-      const literal = `${rule.UNTIL.slice(0, 4)}-${rule.UNTIL.slice(4, 6)}-${rule.UNTIL.slice(6, 8)}T${rule.UNTIL.slice(9, 11)}:${rule.UNTIL.slice(11, 13)}:${rule.UNTIL.slice(13, 15)}`;
-      if (!CivilDateTimeSchema.safeParse(literal).success || !Number.isFinite(until.getTime())) return unsupported("Invalid UNTIL.");
-      endDate = instantToCivil(until, model.timeZone).slice(0, 10);
-      // Graph endDate is inclusive. An UNTIL before that day's start must
-      // exclude the entire day, even when UTC and event-zone dates differ.
-      const candidate = civilToInstant(endDate + model.startLocal.slice(10), model.timeZone, "recurrence");
-      if (!candidate) return unsupported("UNTIL intersects an unresolved DST gap.");
-      if (candidate > until) endDate = new Date(Date.parse(endDate + "T00:00Z") - 86400000).toISOString().slice(0, 10);
-    }
-    const parsed = new Date(endDate + "T00:00:00Z");
-    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== endDate || endDate < startDate) return unsupported("UNTIL precedes the master or is invalid.");
-    range.type = "endDate"; range.endDate = endDate;
+    range.type = "endDate";
+    range.endDate = recurrenceUntilEndDate(event, rule.UNTIL);
   }
   return { pattern, range };
 }

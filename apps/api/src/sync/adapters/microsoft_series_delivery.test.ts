@@ -61,7 +61,7 @@ async function main() {
     config.api.eventTimeEditsEnabled = false;
     await assert.rejects(write); assert.equal(reads + posts + permissions, 0);
     config.api.eventTimeEditsEnabled = true;
-    for (const recurrence of ["FREQ=DAILY", "FREQ=DAILY;COUNT=367", "FREQ=DAILY;UNTIL=20260330T070000Z"]) {
+    for (const recurrence of ["FREQ=DAILY", "FREQ=DAILY;COUNT=367", "FREQ=DAILY;UNTIL=20290330T070000Z"]) {
       await assert.rejects(() => createGraphSeries("synthetic-series-token", calendar, { ...saved, recurrence }, identity, { uncertain: false, beforeWrite: async () => { attempts++; } }));
       assert.equal(posts + reads + permissions + attempts, 0);
     }
@@ -84,6 +84,22 @@ async function main() {
     activeNative = { ...native, isAllDay: true, originalStartTimeZone: "UTC", originalEndTimeZone: "UTC", start: { dateTime: "2026-12-31T00:00:00", timeZone: "UTC" }, end: { dateTime: "2027-01-03T00:00:00", timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: "2026-12-31", numberOfOccurrences: 4 } } };
     expectedPayload = { ...initialPayload, isAllDay: true, start: { dateTime: "2026-12-31T00:00:00.000", timeZone: "UTC" }, end: { dateTime: "2027-01-03T00:00:00.000", timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: "2026-12-31", numberOfOccurrences: 4 } } };
     assert.equal((await write()).event.end.toISOString(), "2027-01-02T00:00:00.000Z"); assert.equal(posts, 1);
+    for (const allDay of [false, true]) {
+      for (const outcome of ["normal", "lost"]) {
+        reset(); mode = outcome;
+        activeSaved = { ...saved, recurrence: allDay ? "FREQ=DAILY;UNTIL=20270103" : "FREQ=DAILY;UNTIL=20260330T215959Z", ...(allDay ? resolveEventTimeEdit({ kind: "all-day", startDate: "2026-12-31", endDate: "2027-01-02" }) : {}) };
+        const range = { type: "endDate", startDate: allDay ? "2026-12-31" : "2026-03-27", endDate: allDay ? "2027-01-03" : "2026-03-30", ...(allDay ? {} : { recurrenceTimeZone: "Europe/Prague" }) };
+        activeNative = { ...native, ...(allDay ? { isAllDay: true, originalStartTimeZone: "UTC", originalEndTimeZone: "UTC", start: { dateTime: "2026-12-31T00:00:00", timeZone: "UTC" }, end: { dateTime: "2027-01-03T00:00:00", timeZone: "UTC" } } : {}), recurrence: { pattern: { type: "daily", interval: 1 }, range } };
+        expectedPayload = { ...initialPayload, ...(allDay ? { isAllDay: true, start: { dateTime: "2026-12-31T00:00:00.000", timeZone: "UTC" }, end: { dateTime: "2027-01-03T00:00:00.000", timeZone: "UTC" } } : {}), recurrence: { pattern: { type: "daily", interval: 1 }, range } };
+        const frozen = JSON.stringify(activeSaved);
+        assert.equal((await write()).ref.externalEventId, native.id);
+        assert.equal((await write(true)).recovered, true);
+        assert.equal(posts, 1); assert.equal(attempts, 1); assert.equal(JSON.stringify(activeSaved), frozen);
+        remote.recurrence.range.endDate = allDay ? "2027-01-04" : "2026-03-31";
+        await assert.rejects(() => write(true), error => error instanceof ProviderEventWriteError && error.code === "provider-conflict");
+        assert.equal(posts, 1);
+      }
+    }
     reset(); mode = "denied"; await assert.rejects(write, error => error instanceof ProviderEventWriteError && error.outcome === "not-written"); assert.equal(posts, 1);
     reset(); await assert.rejects(() => write(true)); assert.equal(posts + attempts, 0); assert.equal(permissions, 1);
     for (const value of [false, undefined, "true"]) { reset(); grant = value; await assert.rejects(write); assert.equal(posts + attempts, 0); }

@@ -20,3 +20,5 @@ export { providerEventDetails, providerReminderDescription } from "./provider-ev
 export { providerReminderDraft, providerReminderRequest, providerReminderReceiptMessage, type ProviderReminderDraft } from "./provider-reminder-draft";
 
 export * from "./provider-rsvp-draft";
+
+export * from "./finite-series";

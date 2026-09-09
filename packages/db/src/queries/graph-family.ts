@@ -3,8 +3,8 @@ import { lockExternalEventIdentity } from "./event-outbox-deletions";
 import { readGraphSeriesCreateOutboxInTransaction, graphSeriesCreateProjection, assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { randomUUID } from "node:crypto";
 import { and, eq, ne, inArray, or, sql } from "drizzle-orm";
-import { expandRecurringEvents } from "@musubi/calendar";
-import { EventSchema, EventWriteError, OccurrenceStartSchema, ProviderEventStateSchema, type Event, type EventTimeModel, type OccurrenceIdentity, type OccurrenceStart, type ProviderEventState } from "@musubi/types";
+import { finiteSeriesFootprint, expandRecurringEvents } from "@musubi/calendar";
+import { EventSchema, EventWriteError, OccurrenceStartSchema, ProviderEventStateSchema, type Event, type EventTimeModel, type OccurrenceStart, type ProviderEventState } from "@musubi/types";
 import { db } from "..";
 import { account, calendarEvents, calendarMembers, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -90,14 +90,12 @@ async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: Graph
     if (!same(context, current)) refuse();
     const { root, children, mappings, address } = current;
     const rootMap = mappings.find(value => value.eventID === root.id)!;
-    if (observation.master.externalID !== address.externalMasterID || observation.master.icalUid !== rootMap.icalUid || !observation.master.values.recurrence || !/(?:^|;)COUNT=[1-9]\d*(?:;|$)/.test(observation.master.values.recurrence.replace(/^RRULE:/, ""))) refuse();
+    if (observation.master.externalID !== address.externalMasterID || observation.master.icalUid !== rootMap.icalUid || !observation.master.values.recurrence) refuse();
     const candidate = EventSchema.parse({ ...root, ...observation.master.values, calendars: [address.calendarID] });
     if (!["zoned", "all-day"].includes(candidate.timeModel?.kind ?? "") || observation.instances.length + observation.cancelled.length > 366) refuse();
-    const slots = expandRecurringEvents<typeof candidate & { occurrenceIdentity?: OccurrenceIdentity }>([candidate], candidate.start, new Date(candidate.start.getTime() + 730 * DAY), { consumerTimeZone: "UTC" });
-    const count = /(?:^|;)COUNT=([1-9]\d*)(?:;|$)/.exec(candidate.recurrence!.replace(/^RRULE:/, ""));
-    if (!count || Number(count[1]) !== slots.length || slots.length !== observation.instances.length + observation.cancelled.length || slots.length > 366 ||
-        slots.some(value => value.end.getTime() + (value.isAllDay ? DAY : 0) > candidate.start.getTime() + 730 * DAY)) refuse();
-    const footprint = new Map(slots.map(value => [key(value.occurrenceIdentity!.originalStart), value]));
+    const slots = finiteSeriesFootprint(candidate);
+    if (slots.length !== observation.instances.length + observation.cancelled.length) refuse();
+    const footprint = new Map(slots.map(value => [key(value.originalStart), value]));
     const originals = new Set<string>(), nativeIDs = new Set([address.externalMasterID]);
     for (const value of [...observation.instances, ...observation.cancelled]) {
       const original = key(value.originalStart);
@@ -218,8 +216,8 @@ export async function completeGraphSeriesCreateOutbox(id: string, token: string,
         !same(content(master.values), content({ ...master.values, title: expected.title, description: expected.description ?? null, location: expected.location ?? null, url: null })) ||
         !same({ start: master.values.start, end: master.values.end, isAllDay: master.values.isAllDay, timeModel: master.values.timeModel }, { start: expected.start, end: expected.end, isAllDay: expected.isAllDay, timeModel: expected.timeModel })) refuse();
     // Compare the complete finite saved footprint, not RRULE string order.
-    const slots = expandRecurringEvents<Event & { occurrenceIdentity?: OccurrenceIdentity }>([expected], expected.start, new Date(expected.start.getTime() + 730 * DAY), { consumerTimeZone: "UTC" });
-    const byOriginal = new Map(slots.map(slot => [key(slot.occurrenceIdentity!.originalStart), slot]));
+    const slots = finiteSeriesFootprint(expected);
+    const byOriginal = new Map(slots.map(slot => [key(slot.originalStart), slot]));
     if (observation.instances.length !== slots.length || !slots.length) refuse();
     const originals = new Set<string>(), ids = new Set([master.externalID]), uids = new Set([master.icalUid]);
     for (const instance of observation.instances) {
