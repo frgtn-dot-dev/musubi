@@ -7,7 +7,7 @@ import type { GoogleRsvpEvidence } from "./google_rsvp";
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
   const before = { id: "event/id", etag: '\"v1\"', status: "confirmed", summary: "Meeting", start: { date: "2026-09-08" }, end: { date: "2026-09-09" }, organizer: { email: "host@example.test" }, attendees: [{ email: "guest@example.test", self: true, responseStatus: "needsAction", comment: "keep" }, { email: "other@example.test", responseStatus: "accepted" }], conferenceData: { conferenceId: "keep" }, reminders: { useDefault: true } };
-  let remote = structuredClone(before), mode = "normal", patches = 0, reads = 0, tokens = 0;
+  let remote: typeof before & { recurringEventId?: string; originalStartTime?: { date: string } } = structuredClone(before), mode = "normal", patches = 0, reads = 0, tokens = 0;
   let primary: any = { id: "guest@example.test", primary: true, accessRole: "owner" };
   const server = createServer(async (req, res) => {
     assert.equal(req.headers.authorization, "Bearer synthetic-rsvp-token");
@@ -72,6 +72,31 @@ async function main() {
         else if (scenario === "unapplied") { assert.equal((await write(evidence)).recovered, false); assert.equal(patches, 2); }
         else { await assert.rejects(() => write(evidence)); assert.equal(patches, 1); }
       }
+    }
+    for (const scenario of ["normal", "lost", "applied-503", "race", "changed-after"]) {
+      mode = "normal"; patches = 0;
+      remote = { ...structuredClone(before), recurringEventId: "master", originalStartTime: { date: "2026-09-07" } };
+      const occurrence = { externalSeriesID: "master", originalStart: { kind: "date" as const, value: "2026-09-07" } };
+      await assert.rejects(read); assert.equal(patches, 0);
+      const evidence = await adapter.readRsvp!("user", "account", "guest@example.test", ref, "accepted", undefined, occurrence);
+      assert.deepEqual(evidence.occurrence, occurrence);
+      await assert.rejects(() => write({ ...evidence, occurrence: undefined }));
+      await assert.rejects(() => write({ ...evidence, occurrence: { ...occurrence, externalSeriesID: "other" } }));
+      assert.equal(patches, 0);
+      mode = scenario;
+      if (scenario === "normal") await write(evidence);
+      else await assert.rejects(() => write(evidence));
+      assert.equal(patches, 1);
+      mode = "normal";
+      if (["normal", "lost", "applied-503"].includes(scenario)) {
+        assert.equal((await write(evidence)).recovered, true);
+        const preview = await adapter.readRsvpResolution!("user", "account", "guest@example.test", ref, "declined", undefined, occurrence);
+        assert.equal(preview.baseline.etag, remote.etag);
+        assert.deepEqual(preview.occurrence, occurrence);
+        remote.originalStartTime = { date: "2026-09-06" };
+        await assert.rejects(() => write(evidence));
+      } else await assert.rejects(() => write(evidence));
+      assert.equal(patches, 1);
     }
     mode = "normal"; remote = structuredClone(before); patches = 0;
     const evidence = await read();

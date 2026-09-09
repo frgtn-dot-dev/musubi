@@ -31,23 +31,23 @@ export function googleRsvpMethods(getAuthorizedToken: (user: string, account: st
     return { headers, url, read, email: parsed.data.id };
   }
   return {
-    async readRsvp(user, account, calendar, ref, response, signal) {
+    async readRsvp(user, account, calendar, ref, response, signal, occurrence) {
       const ctx = await context(user, account, calendar, ref, signal);
-      return googleRsvpEvidence(await ctx.read(), { eventId: ref.externalEventId, etag: ref.etag ?? "", authenticatedCopyEmail: ctx.email }, response);
+      return googleRsvpEvidence(await ctx.read(), { eventId: ref.externalEventId, etag: ref.etag ?? "", authenticatedCopyEmail: ctx.email, occurrence }, response);
     },
-    async readRsvpResolution(user, account, calendar, ref, response, signal) {
+    async readRsvpResolution(user, account, calendar, ref, response, signal, occurrence) {
       const ctx = await context(user, account, calendar, ref, signal);
       const current = await ctx.read();
       // Read the current version for an explicit preview; enqueue readRsvp keeps
       // enforcing the originally accepted ETag. No write occurs here.
-      return googleRsvpEvidence(current, { eventId: ref.externalEventId, etag: current?.etag ?? "", authenticatedCopyEmail: ctx.email }, response);
+      return googleRsvpEvidence(current, { eventId: ref.externalEventId, etag: current?.etag ?? "", authenticatedCopyEmail: ctx.email, occurrence }, response);
     },
     async writeRsvp(user, account, calendar, evidence, policy, signal, beforeWrite) {
       if (policy.sendUpdates !== "all") throw new EventWriteError("event-write", "unsupported");
       const ref = { externalEventId: evidence.baseline.id, etag: evidence.baseline.etag };
       const ctx = await context(user, account, calendar, ref, signal);
       // Rebuild the minimal payload; a stored patch or selfEmail is not trusted.
-      const intent = googleRsvpEvidence(evidence.baseline, { eventId: ref.externalEventId, etag: ref.etag, authenticatedCopyEmail: ctx.email }, evidence.response);
+      const intent = googleRsvpEvidence(evidence.baseline, { eventId: ref.externalEventId, etag: ref.etag, authenticatedCopyEmail: ctx.email, occurrence: evidence.occurrence }, evidence.response);
       const current = await ctx.read();
       try {
         const confirmed = confirmGoogleRsvp(current, intent);
