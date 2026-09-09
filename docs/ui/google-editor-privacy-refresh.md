@@ -10,7 +10,11 @@ owning component. At an advanced canonical revision, Google viewer access marks
 a privacy boundary. The cleared Busy shape also handles a batched downgrade and
 upgrade whose intermediate viewer role never rendered. The boundary replaces
 unchanged title, description, location, and URL fields with the canonical values;
-changed fields remain the user's draft. Organizer and color in the frozen
+changed fields remain the user's draft. Authored-field ownership persists across
+successive privacy refreshes, including explicit clears and values that happen
+to equal a later provider baseline. Compact-to-full handoffs preserve empty
+authored values; legacy marked fields with omitted values also mean an explicit
+clear. Organizer and color in the frozen
 baseline are refreshed too. Occurrence geometry and the original write revision
 stay frozen, so this read refresh does not grant a new write authorization.
 

@@ -20,12 +20,12 @@ export function isGoogleEditorRestricted(current: Event, calendars: Calendar[]) 
 }
 
 /** Replace copied provider values, retaining only changes made to the draft. */
-export function refreshPrivateEditorValues(values: EventFormValues, baseline: Event, current: Event): EventFormValues {
+export function refreshPrivateEditorValues(values: EventFormValues, baseline: Event, current: Event, owned: readonly PrivateEditorField[] = []): EventFormValues {
   const before = eventFormValues(baseline);
   const after = eventFormValues(current);
   const refreshed = { ...values };
   for (const field of privateEditorFields) {
-    if (values[field] === before[field]) refreshed[field] = after[field];
+    if (!owned.includes(field) && values[field] === before[field]) refreshed[field] = after[field];
   }
   return refreshed;
 }
@@ -33,4 +33,17 @@ export function refreshPrivateEditorValues(values: EventFormValues, baseline: Ev
 /** Keep the accepted write revision and occurrence geometry frozen. */
 export function refreshPrivateEditorBaseline(baseline: Event, current: Event): Event {
   return { ...baseline, title: current.title, description: current.description, location: current.location, url: current.url, organizer: current.organizer, color: current.color };
+}
+
+export type PrivateEditorField = typeof privateEditorFields[number];
+
+/** Ownership survives a copied baseline becoming equal to an authored value. */
+export function rememberPrivateEditorChanges(before: EventFormValues, after: EventFormValues, owned: readonly PrivateEditorField[] = []): PrivateEditorField[] {
+  return [...new Set([...owned, ...privateEditorFields.filter(field => before[field] !== after[field])])];
+}
+
+export function privateEditorSearch(values: EventFormValues, baseline?: Event) {
+  const draftFields = baseline ? rememberPrivateEditorChanges(eventFormValues(baseline), values, values.privateDraftFields) : undefined;
+  const field = (name: PrivateEditorField) => values[name] || (draftFields?.includes(name) ? "" : undefined);
+  return { draftFields, title: field("title"), description: field("description"), location: field("location"), url: field("url") };
 }

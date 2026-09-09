@@ -7,7 +7,7 @@ import {
 } from "~/calendar/event-editor-draft";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { isGoogleEditorPrivacyRefresh, isGoogleEditorRestricted, privateEditorFields, refreshPrivateEditorBaseline, refreshPrivateEditorValues } from "~/calendar/event-editor-privacy";
+import { isGoogleEditorPrivacyRefresh, isGoogleEditorRestricted, privateEditorFields, refreshPrivateEditorBaseline, refreshPrivateEditorValues, rememberPrivateEditorChanges, type PrivateEditorField } from "~/calendar/event-editor-privacy";
 import { useSessionUser } from "~/auth/use-session-user";
 import { EventEditorForm } from "~/calendar/components/EventEditorForm";
 // The class that fits the page layout into a dialog body lives with the form.
@@ -56,12 +56,14 @@ function EditEventRoute() {
     );
     const [event, setEvent] = useState<Event | undefined>(undefined);
     const [draftValues, setDraftValues] = useState<EventFormValues>();
+    const [ownedFields, setOwnedFields] = useState<PrivateEditorField[]>([]);
     const [googleSource, setGoogleSource] = useState(false);
     const [privacyRevision, setPrivacyRevision] = useState<number>();
     const [privacySearch, setPrivacySearch] = useState<typeof search>();
     if (event && event.id !== eventId) {
         setEvent(undefined);
         setDraftValues(undefined);
+        setOwnedFields([]);
         setPrivacyRevision(undefined);
         setGoogleSource(false);
         setPrivacySearch(undefined);
@@ -85,16 +87,20 @@ function EditEventRoute() {
             }
             setPrivacySearch(safeSearch);
         }
-        setDraftValues(applyEventEditorSearch(eventFormValues(baseline), safeSearch));
+        const initialValues = applyEventEditorSearch(eventFormValues(baseline), safeSearch);
+        setDraftValues(initialValues);
+        setOwnedFields(rememberPrivateEditorChanges(eventFormValues(baseline), initialValues, safeSearch.draftFields));
     }
     if (event && currentEvent && privacyRevision !== currentEvent.revision && isGoogleEditorPrivacyRefresh(event, currentEvent, calendars)) {
-        const refreshed = refreshPrivateEditorValues(draftValues ?? eventFormValues(event), event, currentEvent);
+        const refreshed = refreshPrivateEditorValues(draftValues ?? eventFormValues(event), event, currentEvent, ownedFields);
         const nextSearch = { ...search };
         // Keep explicit URL draft deltas, never copied provider fields.
         const oldValues = eventFormValues(event);
         for (const field of privateEditorFields) {
-            if (nextSearch[field] === oldValues[field]) nextSearch[field] = undefined;
+            if (ownedFields.includes(field)) nextSearch[field] = (draftValues ?? oldValues)[field];
+            else if (nextSearch[field] === oldValues[field]) nextSearch[field] = undefined;
         }
+        nextSearch.draftFields = ownedFields;
         setEvent(refreshPrivateEditorBaseline(event, currentEvent));
         setDraftValues(refreshed);
         setPrivacyRevision(currentEvent.revision);
@@ -108,9 +114,11 @@ function EditEventRoute() {
         const nextSearch = { ...search };
         const before = eventFormValues(event);
         for (const field of privateEditorFields) {
-            if (nextSearch[field] === before[field]) nextSearch[field] = undefined;
+            if (ownedFields.includes(field)) nextSearch[field] = (draftValues ?? before)[field];
+            else if (nextSearch[field] === before[field]) nextSearch[field] = undefined;
         }
-        setDraftValues(refreshPrivateEditorValues(draftValues ?? before, event, cleared));
+        nextSearch.draftFields = ownedFields;
+        setDraftValues(refreshPrivateEditorValues(draftValues ?? before, event, cleared, ownedFields));
         setEvent(refreshPrivateEditorBaseline(event, cleared));
         setPrivacyRevision(-1);
         setPrivacySearch(nextSearch);
@@ -191,7 +199,10 @@ function EditEventRoute() {
             ) : (
                 <EventEditorForm
                     key={`${event.id}:${privacyRevision ?? "initial"}`}
-                    onValuesChange={setDraftValues}
+                    onValuesChange={values => {
+                        setOwnedFields(rememberPrivateEditorChanges(draftValues ?? eventFormValues(event), values, ownedFields));
+                        setDraftValues(values);
+                    }}
                     calendarLocked
                     calendars={calendars}
                     initialValues={draftValues ?? eventFormValues(event)}

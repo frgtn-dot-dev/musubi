@@ -1,4 +1,4 @@
-import { isGoogleEditorPrivacyRefresh, refreshPrivateEditorBaseline, refreshPrivateEditorValues } from "../event-editor-privacy";
+import { isGoogleEditorPrivacyRefresh, refreshPrivateEditorBaseline, refreshPrivateEditorValues, rememberPrivateEditorChanges, type PrivateEditorField } from "../event-editor-privacy";
 import { Empty } from "~/ui/Empty";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
@@ -202,13 +202,14 @@ export function EventDetailsPopover({
 	weekStartsOn,
 }: EventDetailsPopoverProps) {
 	const liveMaster = getEventMaster(event);
-	const [draft, setDraft] = useState<{ event: Event; master: Event; values?: EventFormValues; privacyRevision?: number }>();
+	const [draft, setDraft] = useState<{ event: Event; master: Event; values?: EventFormValues; ownedFields?: PrivateEditorField[]; privacyRevision?: number }>();
   const privacyChanged = draft && draft.privacyRevision !== liveMaster.revision && isGoogleEditorPrivacyRefresh(draft.master, liveMaster, calendars);
   if (privacyChanged) {
     setDraft({
       event: refreshPrivateEditorBaseline(draft.event, event),
       master: refreshPrivateEditorBaseline(draft.master, liveMaster),
-      values: refreshPrivateEditorValues(draft.values ?? eventFormValues(draft.event), draft.event, event),
+      values: refreshPrivateEditorValues(draft.values ?? eventFormValues(draft.event), draft.event, event, draft.ownedFields),
+      ownedFields: draft.ownedFields,
       privacyRevision: liveMaster.revision,
     });
   }
@@ -695,7 +696,7 @@ export function EventDetailsPopover({
 							</header>
 							<EventEditorForm
                 key={draft?.privacyRevision ?? "initial"}
-                onValuesChange={(values) => setDraft(current => current ? { ...current, values } : current)}
+                onValuesChange={(values) => setDraft(current => current ? { ...current, values, ownedFields: rememberPrivateEditorChanges(current.values ?? eventFormValues(master.recurrence && onRestoreEvent ? occurrence : master), values, current.ownedFields) } : current)}
 								calendarLocked
 								calendars={calendars}
 								compact
@@ -708,7 +709,7 @@ export function EventDetailsPopover({
 										? (values) => {
 												// The full editor explicitly edits the master. Carry the
 												// draft's changes, not the occurrence's anchor dates.
-												const draft =
+												const expandedDraft =
 													master.recurrence && onRestoreEvent
 														? eventFormValues(
 																seriesEditWrites({
@@ -720,7 +721,7 @@ export function EventDetailsPopover({
 															)
 														: values;
 												handleOpenChange(false);
-												onOpenFullEditor(draft, master);
+												onOpenFullEditor({ ...expandedDraft, privateDraftFields: draft?.ownedFields }, master);
 											}
 										: undefined
 								}

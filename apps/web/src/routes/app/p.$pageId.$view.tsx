@@ -1,5 +1,4 @@
-import { eventFormValues } from "~/calendar/event-form";
-import { privateEditorFields } from "~/calendar/event-editor-privacy";
+import { privateEditorSearch } from "~/calendar/event-editor-privacy";
 import { handoffEventEditor } from "~/calendar/event-editor-draft";
 import {
   createFileRoute,
@@ -320,7 +319,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       onOpenFullEditor={(values, event) => {
         // The draft goes in the URL so the page survives a reload.
         const search = {
-          draftFields: event ? privateEditorFields.filter(field => values[field] !== eventFormValues(event)[field]) : undefined,
+          ...privateEditorSearch(values, event),
           createID: event ? undefined : values.createID,
           timeKind: values.timeKind,
           timeZone: values.timeZone,
@@ -330,15 +329,11 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           calendarIds:
             values.calendarIds.length > 1 ? values.calendarIds : undefined,
           date: values.date,
-          description: values.description || undefined,
           endDate: values.endDate || undefined,
           endTime: values.endTime || undefined,
-          location: values.location || undefined,
           recurrence: values.recurrence || undefined,
           returnDate: date,
           startTime: values.startTime || undefined,
-          title: values.title || undefined,
-          url: values.url || undefined,
           view: activeView,
         };
 

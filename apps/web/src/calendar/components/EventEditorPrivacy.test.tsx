@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Calendar, Event } from "@musubi/types";
 import { EventDetailsPopover } from "./EventDetailsPopover";
 import { clearEventEditorBaseline, eventEditorBaseline, handoffEventEditor } from "../event-editor-draft";
-import { eventEditorSearchSchema } from "../event-editor-search";
+import { eventFormValues } from "../event-form";
+import { privateEditorSearch } from "../event-editor-privacy";
+import { applyEventEditorSearch, eventEditorSearchSchema } from "../event-editor-search";
 
 const mocks = vi.hoisted(() => ({ workspace: {} as Record<string, unknown>, search: {} as Record<string, unknown>, navigate: vi.fn(), update: vi.fn() }));
 vi.mock("~/calendar/workspace-queries", () => ({ useWorkspaceQueries: () => mocks.workspace }));
@@ -63,7 +65,7 @@ describe("Google private editor refresh", () => {
     workspace(busy, [viewer]); view.rerender(<EditRoute />);
     expect(screen.queryByDisplayValue("Private notes")).toBeNull();
     expect(eventEditorBaseline(event.id)?.title).toBe("Busy");
-    expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ replace: true, search: expect.objectContaining({ title: undefined, description: undefined, location: undefined, url: undefined }) }));
+    expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ replace: true, search: expect.objectContaining({ title: "My draft", description: undefined, location: undefined, url: undefined, draftFields: ["title"] }) }));
     workspace(busy); view.rerender(<EditRoute />);
     expect((screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement).value).toBe("My draft");
     expect(screen.queryByDisplayValue("Private notes")).toBeNull();
@@ -88,7 +90,7 @@ describe("Google private editor refresh", () => {
     workspace(undefined, []); view.rerender(<EditRoute />);
     expect(screen.queryByRole("textbox", { name: "Event title" })).toBeNull();
     expect(eventEditorBaseline(event.id)).toBeUndefined();
-    expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ search: expect.objectContaining({ title: undefined, description: undefined }) }));
+    expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ search: expect.objectContaining({ title: "My retained draft", description: undefined, draftFields: ["title"] }) }));
     workspace(busy); view.rerender(<EditRoute />);
     expect((screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement).value).toBe("My retained draft");
     expect(screen.queryByDisplayValue("Private notes")).toBeNull();
@@ -164,6 +166,45 @@ describe("Google private editor refresh", () => {
     expect(screen.queryByRole("textbox", { name: "Event title" })).toBeNull();
     expect(eventEditorBaseline(event.id)).toBeUndefined();
     expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ search: expect.objectContaining({ title: undefined, description: undefined }) }));
+  });
+
+  for (const compact of [false, true]) {
+    it(`keeps an explicit clear across successive ${compact ? "compact" : "full"} privacy refreshes`, async () => {
+      workspace(event); mocks.search = eventEditorSearchSchema.parse({}); handoffEventEditor(event);
+      const user = userEvent.setup();
+      const view = render(compact ? popover(event, event, [calendar]) : <EditRoute />);
+      if (compact) {
+        await user.click(screen.getByRole("button", { name: "Open event" }));
+        await user.click(screen.getByRole("button", { name: /^Edit$/ }));
+        if (!screen.queryByRole("textbox", { name: "Description" })) await user.click(screen.getByRole("button", { name: "More options" }));
+      }
+      await user.clear(screen.getByRole("textbox", { name: "Description" }));
+      for (const current of [busy, { ...busy, revision: 6, title: "Readable title", description: "New provider note" }, { ...busy, revision: 7 }]) {
+        workspace(current, [viewer]); view.rerender(compact ? popover(current, current, [viewer]) : <EditRoute />);
+        workspace(current, [calendar]); view.rerender(compact ? popover(current, current, [calendar]) : <EditRoute />);
+        if (compact && !screen.queryByRole("textbox", { name: "Description" })) await user.click(screen.getByRole("button", { name: "More options" }));
+        expect((screen.getByRole("textbox", { name: "Description" }) as HTMLTextAreaElement).value).toBe("");
+      }
+      if (!compact) expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ search: expect.objectContaining({ description: "", draftFields: expect.arrayContaining(["description"]) }) }));
+    });
+  }
+
+  it("treats legacy ownership markers without URL values as explicit clears", () => {
+    workspace(event); mocks.search = eventEditorSearchSchema.parse({ draftFields: ["description"] });
+    const view = render(<EditRoute />);
+    expect((screen.getByRole("textbox", { name: "Description" }) as HTMLTextAreaElement).value).toBe("");
+    workspace(busy, [viewer]); view.rerender(<EditRoute />);
+    workspace(busy); view.rerender(<EditRoute />);
+    expect((screen.getByRole("textbox", { name: "Description" }) as HTMLTextAreaElement).value).toBe("");
+    expect(mocks.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ search: expect.objectContaining({ description: "", draftFields: ["description"] }) }));
+  });
+
+  it("carries authored empty values through the full-editor URL handoff", () => {
+    const values = { ...eventFormValues(busy), privateDraftFields: ["description" as const] };
+    const search = privateEditorSearch(values, busy);
+    expect(search.description).toBe("");
+    expect(search.draftFields).toContain("description");
+    expect(applyEventEditorSearch(eventFormValues(event), eventEditorSearchSchema.parse(search)).description).toBe("");
   });
 
   it("does not reset an unrelated local draft on ordinary revision updates", async () => {
