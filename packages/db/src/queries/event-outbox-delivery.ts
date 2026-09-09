@@ -176,7 +176,7 @@ async function completeEventOutboxInternal(
         .select()
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
-      if (!address || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== rsvpConfirmed) return undefined;
+      if (!address || address.payload.reminderInstance || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== rsvpConfirmed) return undefined;
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);

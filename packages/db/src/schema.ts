@@ -2,7 +2,7 @@ import type { GraphSeriesCreateJournal } from "./queries/graph-series-create";
 import type { CaldavSplitJournal } from "./queries/caldav-split";
 import type { CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "./queries/caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
-import type { ProviderReminderEdit, ProviderRsvpIntent } from "@musubi/types";
+import type { ProviderReminderEdit, ProviderRsvpIntent, ProviderReminderInstanceIntent } from "@musubi/types";
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
@@ -882,6 +882,7 @@ export const eventOutbox = pgTable(
         scopeEditValidated?: boolean;
         reminderEdit?: ProviderReminderEdit;
         rsvp?: ProviderRsvpIntent;
+        reminderInstance?: ProviderReminderInstanceIntent;
         googleOccurrence?: GoogleOccurrenceIntent;
         caldavSeries?: CaldavSeriesPrepared;
         caldavSplit?: CaldavSplitJournal;
