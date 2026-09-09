@@ -57,8 +57,8 @@ interval/DST normalization, per-calendar errors, scope checks, private owner and
 account isolation, downgrade mirror retirement, disabled defaults, and delayed
 responses across source removal, selection changes and disconnect/reconnect.
 
-Day/week grid rendering is a deferred implementation follow-up, not blocked
-solely by the interval DTO. A static layout may reuse
+The bounded day/week grid below is implemented; faithful DST-axis rendering and
+additional grid views remain follow-ups. A static layout may reuse
 existing visual patterns; any genuinely new visual pattern needs a Storybook
 proposal and normal Musubi UI approval. These dialogs are functional clients, not completion of all K14 availability/cache work.
 
@@ -89,3 +89,36 @@ contract with mocked authenticated transport. They are not screenshots, emulator
 rendering or physical-device QA; VoiceOver/TalkBack, touch/layout and real OAuth
 acceptance remain unverified. No live provider requests or production activation
 were performed for the native caller.
+
+
+## Bounded web day/week grid
+
+The Availability toolbar popover offers an initially off page/session choice to
+show the connection owner's explicitly selected sources. It does not change page
+calendar visibility or persist a page preference. Sources and interval list opens
+the existing Connections flow. While that flow is open, grid observation is
+suspended so its polls cannot race a source selection mutation.
+
+Static Busy blocks reuse the current timeline block styling, overlap placement
+and time geometry. They have no Event IDs, popovers, drag/resize, menus or write
+actions. The parent column excludes their marker from create gestures. Very short
+intervals remove internal padding instead of inflating their represented duration.
+Labels and the existing interval list remain the readable route for such blocks.
+
+Grid query keys include home origin, user, page, visible date range, timezone and
+source generations. Range/identity changes, stream refresh, offline state, hiding
+the overlay and opening the list retire old observations; no grid queries enter
+offline persistence. Incomplete sources have explicit coverage notices and never
+mean free time. Only normal 24-hour local days project intervals into the grid.
+DST-transition days have an explicit coverage notice and UTC-list fallback because
+the existing event axis does not faithfully represent 23/25-hour days. No existing
+event-axis correction or new visual pattern is included in this slice.
+
+Source selection uses the shared query client mutation lifetime: closing or reopening
+Connections keeps both source observers suspended until the pending PUT settles.
+An older source read is canceled before its confirmed response is published. Static
+availability uses a separate overlap calculation and remains below actionable event
+layers, preserving every event-only lane even when an availability interval starts
+earlier or lasts longer. While a selection change is pending, coverage explicitly
+remains unverified;
+the interval list retains full access to intervals covered by events.

@@ -1211,7 +1211,8 @@
 	border-right: 0;
 }
 
-.timelineEvent {
+.timelineEvent,
+.timelineAvailability {
 	--event-color: var(--accent-primary);
 	--event-foreground: #000;
 	/* The block is its own container: its height is set from geometry, so what

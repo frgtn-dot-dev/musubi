@@ -1,6 +1,8 @@
-import type { Calendar, Event, Settings } from "@musubi/types";
+import { availabilityDaySegments, type GridAvailabilityInterval } from "../availability-grid";
+import { DEFAULT_CALENDAR_COLOR, type Calendar, type Event, type Settings } from "@musubi/types";
 import {
 	addDays,
+	assignOverlapColumns,
 	bucketEventsByDay,
 	dayKey,
 	getDaySegments,
@@ -71,6 +73,7 @@ const timeZoneFormatter = new Intl.DateTimeFormat("en", {
 });
 
 type TimeGridViewProps = EventActionHandlers & {
+  availabilityIntervals?: GridAvailabilityInterval[];
 	anchor: Date;
 	/** The event a write is in flight for, so its block can say so. */
 	busyEventId?: string;
@@ -372,6 +375,7 @@ const TimelineEvent = memo(function TimelineEvent({
 });
 
 export function TimeGridView({
+  availabilityIntervals = [],
 	anchor,
 	calendars,
 	events,
@@ -398,8 +402,11 @@ export function TimeGridView({
 	const eventsByDay = useMemo(() => bucketEventsByDay(events), [events]);
 	const segmentsByDay = useMemo(
 		() =>
-			days.map((day) => getDaySegments(eventsByDay.get(dayKey(day)) ?? [], day)),
-		[days, eventsByDay],
+			days.map((day) => [
+          ...getDaySegments(eventsByDay.get(dayKey(day)) ?? [], day).map(segment => ({ ...segment, kind: "event" as const })),
+          ...assignOverlapColumns(availabilityDaySegments(availabilityIntervals, day)),
+        ]),
+		[days, eventsByDay, availabilityIntervals],
 	);
 	const calendarsById = useMemo(
 		() => new Map(calendars.map((calendar) => [calendar.id, calendar])),
@@ -431,6 +438,7 @@ export function TimeGridView({
 	const [detailBoundary, setDetailBoundary] = useState<HTMLElement | null>(null);
 	const dismissGuard = useLayerDismissGuard();
 	const rootRef = useRef<HTMLElement>(null);
+	const availabilityPress = useRef(false);
 	const setRoot = useCallback((element: HTMLElement | null) => {
 		rootRef.current = element;
 		setDetailBoundary(element?.parentElement ?? null);
@@ -839,6 +847,7 @@ export function TimeGridView({
 								key={dayKey(day)}
 								tabIndex={-1}
 								onPointerDown={(pointerEvent) => {
+									availabilityPress.current = pointerEvent.target instanceof Element && !!pointerEvent.target.closest("[data-availability-interval]");
 									if (
 										!onCreateAtTime ||
 										pointerEvent.button !== 0 ||
@@ -846,7 +855,7 @@ export function TimeGridView({
 										// also leave a draft behind the thing it just closed.
 										dismissGuard.pressDismissedLayer() ||
 										(pointerEvent.target instanceof Element &&
-											pointerEvent.target.closest("button"))
+											pointerEvent.target.closest("button,[data-availability-interval]"))
 									) {
 										return;
 									}
@@ -861,6 +870,8 @@ export function TimeGridView({
 									});
 								}}
 								onClick={(event) => {
+									// A release outside the static block can target this column.
+									if (availabilityPress.current) { availabilityPress.current = false; return; }
 									if (
 										!onCreateAtTime ||
 										// A drag already answered "when" — don't create twice.
@@ -869,7 +880,7 @@ export function TimeGridView({
 										// dismisses on pointerdown, so nothing is open to ask about
 										// by now — the press had to be remembered.
 										dismissGuard.consumeDismiss() ||
-										(event.target instanceof Element && event.target.closest("button"))
+										(event.target instanceof Element && event.target.closest("button,[data-availability-interval]"))
 									) {
 										return;
 									}
@@ -972,7 +983,13 @@ export function TimeGridView({
 										<span className={styles.dragPreviewTitle}>{drag.event.title}</span>
 									</div>
 								) : null}
-								{segmentsByDay[dayIndex]?.map((segment) => (
+								{segmentsByDay[dayIndex]?.map((segment) => segment.kind === "availability" ? (
+                  <div key={`${segment.interval.sourceId}:${segment.interval.start}:${segment.interval.end}`} className={styles.timelineAvailability} data-availability-interval="" role="note" aria-label={`Busy, ${segment.interval.label}, ${dayKey(day)}, ${minuteLabel(segment.startMin, timeFormat)}–${minuteLabel(segment.endMin, timeFormat)}`} style={{ "--event-color": DEFAULT_CALENDAR_COLOR, "--event-foreground": getReadableEventTextColor(DEFAULT_CALENDAR_COLOR), top: `${minutesToY(segment.startMin, geometry)}px`, height: `${durationToHeight(segment.endMin - segment.startMin, geometry)}px`, padding: durationToHeight(segment.endMin - segment.startMin, geometry) < 12 ? 0 : undefined, ...overlapPlacement(segment.col, segment.cols), zIndex: 0 } as CSSProperties}>
+                    <span className={styles.timelineEventTime}>{minuteLabel(segment.startMin, timeFormat)}–{minuteLabel(segment.endMin, timeFormat)}</span>
+                    <span className={styles.timelineEventTitle}>Busy</span>
+                    <span className={styles.timelineEventMeta}>{segment.interval.label}</span>
+                  </div>
+                ) : (
 									<TimelineEvent
 										detailBoundary={detailBoundary}
 										detailInsideTrigger={dayMode}

@@ -1,3 +1,4 @@
+import { useGridAvailability } from "../use-grid-availability";
 import { type EventScopeRequest, editedEvent, EventMutationError } from "@musubi/types";
 import type {
   Calendar,
@@ -484,6 +485,7 @@ export function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [connectionsReturnFocus, setConnectionsReturnFocus] = useState<HTMLElement | null>(null);
   // Coming back from a provider's consent screen, the dialog that started the
   // link is long gone — so it reopens itself onto the freshly imported account.
   // Derived rather than set in an effect, and dismissible like any other close.
@@ -563,6 +565,7 @@ export function Workspace({
   const presentationView = viewConfigFor(workingConfig, activeView);
   const showWeekend =
     "weekend" in presentationView ? presentationView.weekend : true;
+  const gridAvailability = useGridAvailability({ userId: user.id, pageId: activePage.id, anchor, view: activeView, weekStartsOn: settings.weekStartsOn, showWeekend, offline, listOpen: showConnections });
   const showAdjacentDays =
     "showAdjacentDays" in presentationView
       ? presentationView.showAdjacentDays
@@ -997,6 +1000,7 @@ export function Workspace({
         ) : null}
         <Toolbar
           activeView={activeView}
+          availability={gridAvailability.available ? { shown: gridAvailability.shown, onToggle: gridAvailability.toggle, onOpenList: target => { setConnectionsReturnFocus(target); setConnectionsOpen(true); } } : undefined}
           canCreateEvents={editableCalendars.length > 0}
           canCreateTasks={!offline && editableTaskCalendars.length > 0}
           navigationTriggerRef={sidebarTriggerRef}
@@ -1060,6 +1064,7 @@ export function Workspace({
           </section>
         ) : null}
 
+        {gridAvailability.notice ? <CoverageBanner message={gridAvailability.notice} /> : null}
         {coverageNotice && activeView !== "tasks" ? <CoverageBanner message={coverageNotice} /> : null}
         <div
           className={`${styles.calendarArea} ${
@@ -1117,6 +1122,7 @@ export function Workspace({
             />
           ) : activeView === "day" || activeView === "week" ? (
             <TimeGridView
+              availabilityIntervals={gridAvailability.intervals}
               anchor={anchor}
               busyEventId={busyEventId}
               calendars={calendars}
@@ -1363,6 +1369,7 @@ export function Workspace({
       />
       {showConnections ? (
         <ConnectionsDialog
+          returnFocus={connectionsReturnFocus}
           calendars={calendars}
           importFailed={providerLink?.error}
           importing={providerLink?.importing}
@@ -1370,6 +1377,7 @@ export function Workspace({
           onOpenChange={(open) => {
             if (!open) {
               setConnectionsOpen(false);
+              setConnectionsReturnFocus(null);
               setLinkNoticeDismissed(true);
             }
           }}
