@@ -99,7 +99,6 @@ async function main() {
       const time = kind === "all-day" ? { kind: "all-day" as const, startDate: "2026-04-02", endDate: "2026-04-03" } : { kind: kind === "floating" ? "floating" as const : "zoned" as const, ...(kind === "zoned" ? { timeZone: "Europe/Prague" } : {}), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" };
       const timeWrite = prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, undefined, undefined, time as any);
       assert.ok(timeWrite.after.includes(master) && timeWrite.after.includes(cancelled));
-      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, time as any));
       assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, true, undefined, time as any));
       assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, undefined, undefined, { kind: "zoned", timeZone: "America/New_York", startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" }));
       reset("applied-503");
@@ -112,6 +111,36 @@ async function main() {
       assert.equal(observedTime.start.getTime(), resolveEventTimeEdit(time).start.getTime());
       assert.equal(observedTime.end.getTime(), resolveEventTimeEdit(time).end.getTime());
       await deliverTime(); assert.equal(puts, 1);
+      if (kind === "zoned") {
+        const utcMaster = master.replace(stamp("DTSTART", "28", "09"), "DTSTART:20260328T070000Z").replace(stamp("DTEND", "29", "10"), "DTEND:20260329T080000Z");
+        const utcBefore = before.replace(master, utcMaster).split("RECURRENCE-ID;TZID=Europe/Prague:").join("RECURRENCE-ID;TZID=Europe/Prague;X-IDENTITY=keep:");
+        const [utcFirst, ...utcRest] = normalizeCaldavResource({ url: ref.externalEventId, etag: ref.etag, data: utcBefore });
+        const utcBaseline = { ref, master: event(utcFirst, 0), children: utcRest.map((item, index) => event(item, index + 1)) };
+        const utcTime = { kind: "zoned" as const, timeZone: "UTC", startLocal: "2026-04-02T07:00:00.000", endLocal: "2026-04-03T08:00:00.000" };
+        const utcWrite = prepareCaldavSeriesWrite(caldavSeriesEvidence(utcBefore, utcBaseline), utcBaseline, {}, undefined, undefined, undefined, utcTime);
+        assert.ok(!/RECURRENCE-ID[^\r\n]*TZID/i.test(utcWrite.after));
+        assert.match(utcWrite.after, /RECURRENCE-ID;X-IDENTITY=keep:20260403T070000Z/i);
+        reset("applied-503"); data = utcBefore;
+        const deliverUtc = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(utcWrite)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+        await assert.rejects(deliverUtc, (error: any) => error.outcome === "unconfirmed"); mode = "ok";
+        const utcResult = await deliverUtc();
+        assert.deepEqual(utcResult.exceptions.map(item => item.timeModel), utcRest.map(item => item.timeModel));
+        await deliverUtc(); assert.equal(puts, 1);
+      }
+      const seriesTime = prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, time as any);
+      reset("applied-503");
+      const deliverSeriesTime = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(seriesTime)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      await assert.rejects(deliverSeriesTime, (error: any) => error.outcome === "unconfirmed"); mode = "ok";
+      const shifted = await deliverSeriesTime();
+      assert.deepEqual(shifted.master.timeModel, resolveEventTimeEdit(time).timeModel);
+      const plan = planEventScope(baseline.master, baseline.children, { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: baseline.master.revision!, patch: {}, time });
+      for (const [index, previous] of evidence.exceptions.entries()) {
+        const next = shifted.exceptions[index]!;
+        assert.deepEqual(next.timeModel, previous.timeModel); assert.equal(next.title, previous.title); assert.equal(next.isCanceled, previous.isCanceled);
+        const expected = plan.updates.find(item => item.id === baseline.children[index]!.id)!;
+        assert.deepEqual(next.originalStart, expected.originalStart);
+      }
+      await deliverSeriesTime(); assert.equal(puts, 1);
       const revival = prepareCaldavSeriesWrite(evidence, baseline, { title: "Restored occurrence" }, baseline.children.find(item => item.isCanceled)!.id);
       assert.ok(revival.after.includes(master) && revival.after.includes(child));
       assert.ok(revival.after.includes("STATUS:CONFIRMED"));

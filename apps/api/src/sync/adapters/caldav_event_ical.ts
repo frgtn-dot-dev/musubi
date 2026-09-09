@@ -89,7 +89,7 @@ export function replaceEventProperties(
             lines[positions[0]].unfolded,
           );
           const parameters = structuredClone(original.toJSON()[1]);
-          if (["dtstart", "dtend"].includes(name)) {
+          if (["dtstart", "dtend", "recurrence-id"].includes(name)) {
             delete parameters.tzid;
             delete parameters.value;
           }

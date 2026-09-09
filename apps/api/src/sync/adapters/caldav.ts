@@ -9,6 +9,7 @@ import {
   EventSchema,
   EventTimeModelSchema,
   type EventTimeEdit,
+  type OccurrenceStart,
   type Event,
   type Task,
   type TaskStatus,
@@ -921,6 +922,13 @@ function eventTimeProperties(input: Event) {
   return { start: timeProperty("dtstart", false), end: timeProperty("dtend", true) };
 }
 
+function occurrenceIdentityProperty(master: Event, originalStart: OccurrenceStart, definitionID: string) {
+  const definition = planEventScope(master, [], { operationID: definitionID, scope: "occurrence", action: "update", expectedRevision: master.revision, originalStart, expectedOccurrenceRevision: null, patch: {}, ensureDefinition: true }, () => definitionID).creates[0]!;
+  const property = structuredClone(eventTimeProperties(definition).start.toJSON());
+  property[0] = "recurrence-id";
+  return new ICAL.Property(property);
+}
+
 /** Rebuild the permitted content/cancellation change from complete original bytes.
  * A persisted replacement cannot widen the scope or invent a recurrence member. */
 export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string, cancelTarget?: true, newDefinition?: Event, time?: EventTimeEdit): CaldavSeriesWrite {
@@ -940,10 +948,8 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     const template = `BEGIN:VCALENDAR${newline}${eventComponentBytes(evidence.data, masterIndex)}END:VCALENDAR${newline}`;
     const { start, end } = eventTimeProperties(newDefinition);
     // A moved generated definition keeps the old recurrence slot identity.
-    // Reuse the planner without the edit to derive that slot in the master's zone.
-    const originalDefinition = planEventScope(baseline.master, baseline.children, { operationID: newDefinition.id, scope: "occurrence", action: "update", expectedRevision: baseline.master.revision, originalStart: newDefinition.originalStart, expectedOccurrenceRevision: null, patch: {}, ensureDefinition: true }, () => newDefinition!.id).creates[0]!;
-    const original = structuredClone(eventTimeProperties(originalDefinition).start.toJSON()); original[0] = "recurrence-id";
-    const replacements = new Map<string, ICAL.Property[]>([["dtstart", [start]], ["dtend", [end]], ["duration", []], ["rrule", []], ["rdate", []], ["exdate", []], ["recurrence-id", [new ICAL.Property(original)]]]);
+    const original = occurrenceIdentityProperty(baseline.master, newDefinition.originalStart!, newDefinition.id);
+    const replacements = new Map<string, ICAL.Property[]>([["dtstart", [start]], ["dtend", [end]], ["duration", []], ["rrule", []], ["rdate", []], ["exdate", []], ["recurrence-id", [original]]]);
     for (const [field, name] of [["title", "summary"], ["description", "description"], ["location", "location"]] as const) {
       if (cleanPatch[field] === undefined) continue;
       const component = new ICAL.Component("vevent");
@@ -975,7 +981,23 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
       replacements.set("status", [cancellation]);
     }
     after = replaceEventProperties(evidence.data, components.indexOf(component), replacements);
-  } else after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, cleanPatch);
+  } else {
+    after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, cleanPatch);
+    if (time) {
+      const { index } = eventMaster(after, baseline.ref.icalUid);
+      const { start, end } = eventTimeProperties(desired.master);
+      after = replaceEventProperties(after, index, new Map([["dtstart", [start]], ["dtend", [end]], ["duration", []]]));
+      const components = new ICAL.Component(ICAL.parse(evidence.data)).getAllSubcomponents("vevent");
+      const exceptions = components.filter(item => item.hasProperty("recurrence-id"));
+      for (const child of baseline.children) {
+        const next = desired.children.find(item => item.id === child.id)!;
+        if (JSON.stringify(child.originalStart) === JSON.stringify(next.originalStart)) continue;
+        const ordinal = evidence.exceptions.findIndex(item => JSON.stringify(item.originalStart) === JSON.stringify(child.originalStart));
+        const componentIndex = components.indexOf(exceptions[ordinal]!);
+        after = replaceEventProperties(after, componentIndex, new Map([["recurrence-id", [occurrenceIdentityProperty(desired.master, next.originalStart!, child.id)]]]));
+      }
+    }
+  }
   caldavSeriesEvidence(after, desired);
   return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), ...(cancelTarget ? { cancelTarget } : {}), ...(newDefinition ? { newDefinition } : {}), ...(time ? { time } : {}), before: evidence.data, after };
 }

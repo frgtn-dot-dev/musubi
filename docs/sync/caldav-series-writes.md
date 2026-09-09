@@ -282,3 +282,22 @@ Fake HTTP and DB tests cover zoned/all-day/floating moves, applied 503, full-res
 conflicts and echo identity. Radicale verifies the first generated slot moved away
 from its original date through scope, worker and import. Master/following time and
 time-kind/zone changes remain separate work. Flags and privilege gates are unchanged.
+
+## Series time edit preserving detached content
+
+A series update can move its explicit start/end within the existing time kind and
+IANA zone. The shared planner shifts original recurrence identities while retaining
+each detached definition's own time, content and cancellation. Native writes alter
+master DTSTART/DTEND/DURATION and the affected RECURRENCE-ID properties only.
+Dated additions/exclusions that cannot be partitioned exactly remain refused.
+
+The scope transaction remaps deterministic child addresses atomically. Temporary
+addresses inside the transaction avoid collisions when adjacent identities move
+into each other's old slots; no temporary address is committed. A target tombstone
+rolls back events, mappings and intent together. Pending pulls stay blocked and
+only full-resource ACK advances all validators. Time conflicts do not enter the
+master-content-only resolution flow.
+
+Fake HTTP, DB and Radicale cover time kinds, adjacent identity remapping, preserved
+exception times, applied 503, stale ETags, rollback and echo. Following/delete and
+time-kind/zone changes remain separate work. Flags and privileges are unchanged.
