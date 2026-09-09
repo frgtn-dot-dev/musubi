@@ -4,15 +4,7 @@ import { ProviderEventWriteError } from "../event_write";
 const invalidResource = () =>
   new ProviderEventWriteError("provider-write-failed");
 
-/** Locate physical content-line spans only. ICAL owns grammar, component
- * selection and value encoding; untouched bytes never go through its serializer.
- * A normalized/projected calendar-query result is NOT a complete input here.
- */
-export function replaceEventProperties(
-  data: string,
-  masterIndex: number,
-  replacements: Map<string, ICAL.Property[]>,
-): string {
+function calendarLines(data: string) {
   const lines: { raw: string; unfolded: string }[] = [];
   for (const raw of data.match(/[^\r\n]*(?:\r\n|\n|$)/g) ?? []) {
     if (!raw) continue;
@@ -28,6 +20,19 @@ export function replaceEventProperties(
   }
   // Do not guess about malformed line endings that the span reader cannot cover.
   if (lines.map((line) => line.raw).join("") !== data) throw invalidResource();
+  return lines;
+}
+
+/** Locate physical content-line spans only. ICAL owns grammar, component
+ * selection and value encoding; untouched bytes never go through its serializer.
+ * A normalized/projected calendar-query result is NOT a complete input here.
+ */
+export function replaceEventProperties(
+  data: string,
+  masterIndex: number,
+  replacements: Map<string, ICAL.Property[]>,
+): string {
+  const lines = calendarLines(data);
   const stack: string[] = [];
   let eventIndex = -1;
   let selected = false;
@@ -113,6 +118,40 @@ export function replaceEventProperties(
     .join("");
   // Reject invalid generated input before any network mutation, without using
   // the parsed representation to serialize the resource.
+  ICAL.parse(output);
+  return output;
+}
+
+/** Extract exactly one physical VEVENT, including nested alarm bytes. */
+export function eventComponentBytes(data: string, eventIndex: number): string {
+  replaceEventProperties(data, eventIndex, new Map());
+  const lines = calendarLines(data);
+  let depth = 0, ordinal = -1, start = -1;
+  for (const [index, line] of lines.entries()) {
+    const boundary = /^(BEGIN|END):([A-Z0-9-]+)$/i.exec(line.unfolded);
+    if (!boundary) continue;
+    if (boundary[1]!.toUpperCase() === "BEGIN") {
+      if (depth === 1 && boundary[2]!.toLowerCase() === "vevent" && ++ordinal === eventIndex) start = index;
+      depth++;
+    } else {
+      if (depth === 2 && boundary[2]!.toLowerCase() === "vevent" && start >= 0) return lines.slice(start, index + 1).map(item => item.raw).join("");
+      depth--;
+    }
+  }
+  throw invalidResource();
+}
+
+/** Insert a validated single component without reserializing existing data. */
+export function appendEventComponent(data: string, component: string): string {
+  replaceEventProperties(data, 0, new Map());
+  const newline = data.includes("\r\n") ? "\r\n" : "\n";
+  const wrapper = `BEGIN:VCALENDAR${newline}${component}END:VCALENDAR${newline}`;
+  if (eventComponentBytes(wrapper, 0) !== component) throw invalidResource();
+  const lines = calendarLines(data);
+  const reverseEnd = [...lines].reverse().findIndex(line => /^END:VCALENDAR$/i.test(line.unfolded));
+  if (reverseEnd < 0) throw invalidResource();
+  const end = lines.length - 1 - reverseEnd;
+  const output = lines.map((line, index) => (index === end ? component : "") + line.raw).join("");
   ICAL.parse(output);
   return output;
 }

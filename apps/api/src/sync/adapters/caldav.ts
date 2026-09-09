@@ -6,6 +6,7 @@ import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
   EventWriteError,
   EventSchema,
+  EventTimeModelSchema,
   type Event,
   type Task,
   type TaskStatus,
@@ -43,7 +44,7 @@ import {
   requireEventPatch,
   strongEventEtag,
 } from "../event_write";
-import { replaceEventProperties } from "./caldav_event_ical";
+import { appendEventComponent, eventComponentBytes, replaceEventProperties } from "./caldav_event_ical";
 import {
   caldavAllows,
   caldavEventPrivileges,
@@ -898,18 +899,50 @@ async function readEventResource(
   return { data, etag, master, uid };
 }
 
-/** Only content fields of the master may differ. Rebuilding from the original
- * body prevents a persisted/client-supplied replacement from widening the write. */
-export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string, cancelTarget?: true): CaldavSeriesWrite {
+/** Rebuild the permitted content/cancellation change from complete original bytes.
+ * A persisted replacement cannot widen the scope or invent a recurrence member. */
+export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string, cancelTarget?: true, newDefinition?: Event): CaldavSeriesWrite {
   if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !["title", "description", "location"].includes(key)))
     throw new EventWriteError("event-write", "unsupported");
   caldavSeriesEvidence(evidence.data, baseline);
   if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag)
     throw new ProviderEventWriteError("provider-conflict");
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
-  const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID, cancelTarget });
+  const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID, cancelTarget, newDefinition });
   let after: string;
-  if (targetEventID) {
+  if (newDefinition) {
+    newDefinition = EventSchema.parse(newDefinition);
+    const components = new ICAL.Component(ICAL.parse(evidence.data)).getAllSubcomponents("vevent");
+    const masterIndex = components.findIndex(item => !item.hasProperty("recurrence-id"));
+    const newline = evidence.data.includes("\r\n") ? "\r\n" : "\n";
+    const template = `BEGIN:VCALENDAR${newline}${eventComponentBytes(evidence.data, masterIndex)}END:VCALENDAR${newline}`;
+    const model = EventTimeModelSchema.parse(newDefinition.timeModel);
+    if (model.kind === "legacy-unknown") throw new EventWriteError("event-write", "unsupported");
+    function timeProperty(name: "dtstart" | "dtend", end: boolean) {
+      const prop = new ICAL.Property(name);
+      if (model.kind === "all-day") prop.setValue(allDayTime(end ? new Date(newDefinition!.end.getTime() + 86400000) : newDefinition!.start));
+      else {
+        if (model.kind === "legacy-unknown") throw new EventWriteError("event-write", "unsupported");
+        const civil = end ? model.endLocal : model.startLocal;
+        if (!civil.endsWith(".000")) throw new EventWriteError("event-write", "unsupported");
+        const utc = model.kind === "zoned" && model.timeZone === "UTC";
+        prop.setValue(ICAL.Time.fromDateTimeString(civil.slice(0, -4) + (utc ? "Z" : ""), prop));
+        if (model.kind === "zoned" && !utc) prop.setParameter("tzid", model.timeZone);
+      }
+      return prop;
+    }
+    const start = timeProperty("dtstart", false), end = timeProperty("dtend", true);
+    const original = structuredClone(start.toJSON()); original[0] = "recurrence-id";
+    const replacements = new Map<string, ICAL.Property[]>([["dtstart", [start]], ["dtend", [end]], ["duration", []], ["rrule", []], ["rdate", []], ["exdate", []], ["recurrence-id", [new ICAL.Property(original)]]]);
+    for (const [field, name] of [["title", "summary"], ["description", "description"], ["location", "location"]] as const) {
+      if (cleanPatch[field] === undefined) continue;
+      const component = new ICAL.Component("vevent");
+      if (cleanPatch[field] !== null) component.addPropertyWithValue(name, cleanPatch[field]);
+      replacements.set(name, component.getAllProperties(name));
+    }
+    if (cancelTarget) { const status = new ICAL.Property("status"); status.setValue("CANCELLED"); replacements.set("status", [status]); }
+    after = appendEventComponent(evidence.data, eventComponentBytes(replaceEventProperties(template, 0, replacements), 0));
+  } else if (targetEventID) {
     const child = baseline.children.find(item => item.id === targetEventID)!;
     const original = JSON.stringify(child.originalStart);
     const ordinal = evidence.exceptions.findIndex(item => JSON.stringify(item.originalStart) === original);
@@ -930,7 +963,7 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     after = replaceEventProperties(evidence.data, components.indexOf(component), replacements);
   } else after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, cleanPatch);
   caldavSeriesEvidence(after, desired);
-  return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), ...(cancelTarget ? { cancelTarget } : {}), before: evidence.data, after };
+  return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), ...(cancelTarget ? { cancelTarget } : {}), ...(newDefinition ? { newDefinition } : {}), before: evidence.data, after };
 }
 
 async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal) {
@@ -954,7 +987,7 @@ async function seriesAuthorization(userID: string, accountId: string, externalCa
 export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal): Promise<CaldavSeriesEvidence> {
   if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const { baseline } = write;
-  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch, write.targetEventID, write.cancelTarget);
+  const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch, write.targetEventID, write.cancelTarget, write.newDefinition);
   if (rebuilt.after !== write.after) throw new ProviderEventWriteError("provider-conflict");
   const desired = caldavSeriesDesired(rebuilt);
   const resource = caldavSeriesResourceURL(externalCalendarId, baseline.ref.externalEventId);
