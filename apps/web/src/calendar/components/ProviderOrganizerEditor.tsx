@@ -193,6 +193,7 @@ export function ProviderOrganizerEditor({
       onKeyDown={(event) => event.stopPropagation()}
     >
       <Dialog
+        elevated
         open
         closeLabel="Close meeting editor"
         title={occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
@@ -322,6 +323,7 @@ export function ProviderOrganizerEditor({
       </Dialog>
       {confirm && (
         <ConfirmationDialog
+          elevated
           open
           returnFocus={closeButton}
           children={error ? <InlineError>{error}</InlineError> : null}

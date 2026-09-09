@@ -9,6 +9,20 @@ import {
 	type Route,
 } from "@playwright/test";
 
+async function expectOrganizerPaintedAbovePopover(editor: Locator) {
+  // A modal can receive keyboard input even while an inert popover paints
+  // over it. Include that surface in the paint-order probe, then restore it.
+  await expect.poll(() => editor.evaluate(node => {
+      const surfaces = [...document.querySelectorAll<HTMLElement>('[data-ui="popover-content"]')];
+      const previous = surfaces.map(surface => surface.style.pointerEvents);
+      try {
+        surfaces.forEach(surface => { surface.style.pointerEvents = "auto"; });
+        const rect = node.getBoundingClientRect();
+        return [[rect.left + 24, rect.top + rect.height * 0.25], [rect.right - 24, rect.top + rect.height * 0.5], [rect.right - 24, rect.bottom - 30]].every(([x, y]) => node.contains(document.elementFromPoint(x, y)));
+      } finally { surfaces.forEach((surface, index) => { surface.style.pointerEvents = previous[index]; }); }
+    })).toBe(true);
+}
+
 const session = {
 	session: {
 		createdAt: "2026-07-26T14:00:00.000Z",
@@ -9515,10 +9529,12 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     if (action === "create") { await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning"); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test"); await editor.getByRole("button", { name: "Create and send invitations" }).click(); await expect(editor.getByRole("alert")).toContainText("Choose external guests"); await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toBeEnabled(); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test"); }
     if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await expectOrganizerPaintedAbovePopover(editor);
     await editor.screenshot({ path: `/tmp/musubi-k12-live/google-organizer-${action}-${theme}.png` });
     if (action === "delete") {
       await editor.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
       const confirmation = page.getByRole("dialog", { name: "Cancel Google meeting", exact: true });
+      await expectOrganizerPaintedAbovePopover(confirmation);
       expect(writes).toHaveLength(0);
       await confirmation.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
       await expect(confirmation.getByRole("alert")).toContainText("Temporary failure");
@@ -9599,10 +9615,12 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     else { await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC"); await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled(); }
     if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await expectOrganizerPaintedAbovePopover(editor);
     await editor.screenshot({ path: `/tmp/musubi-k12-live/caldav-organizer-${action}-${theme}.png` });
     if (action === "delete") {
       await editor.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
       const confirmation = page.getByRole("dialog", { name: "Cancel CalDAV meeting", exact: true });
+      await expectOrganizerPaintedAbovePopover(confirmation);
       expect(writes).toHaveLength(0);
       await confirmation.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
       await expect(confirmation.getByRole("alert")).toContainText("Temporary failure");
@@ -9654,6 +9672,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     expect(writes[0]).toMatchObject({ eventID, calendarID, action, provider: "google", sendUpdates: "all", scope: "occurrence", expectedRevision: 4, expectedInstanceVersion: "b".repeat(64) });
     if (action === "update") expect(writes[0].patch).toEqual({ title: "Changed occurrence" });
     expect(writes[0]).not.toHaveProperty("originalStart"); expect(writes[0]).not.toHaveProperty("guests");
+    await expectOrganizerPaintedAbovePopover(editor);
     await editor.screenshot({ path: `/tmp/musubi-k12-live/google-organizer-instance-${action}-${theme}.png` });
     await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
@@ -9725,6 +9744,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     await editor.getByLabel("End", { exact: true }).fill(kind === "all-day" ? "2026-07-28" : "2026-07-27T12:00");
     await expect(editor).toContainText("Their existing responses will reset");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await expectOrganizerPaintedAbovePopover(editor);
     await editor.screenshot({ path: `/tmp/musubi-k12-live/caldav-organizer-retime-${kind}-${theme}.png` });
     await editor.getByRole("button", { name: "Save and notify guests" }).press("Enter");
     await expect(editor.getByRole("alert")).toContainText("Response lost");
@@ -9766,6 +9786,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(editor.getByRole("alert")).toContainText("Choose external guests");
     await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test");
     await expectNoAccessibilityViolations(page);
+    await expectOrganizerPaintedAbovePopover(editor);
     await editor.screenshot({ path: testInfo.outputPath(`outlook-organizer-${theme}.png`) });
     await editor.getByRole("button", { name: "Create and send invitations" }).press("Enter");
     await expect(editor.getByRole("alert")).toContainText("Temporary failure");
