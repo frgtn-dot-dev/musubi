@@ -384,6 +384,17 @@ async function main() {
       assert.notDeepEqual(next.originalStart, old.originalStart);
     }
     await sync(); assert.deepEqual(await rows(), shiftedRows);
+    const ruleRequest = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: (await getEventSnapshot(scopedRoot.id))!.revision, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=6" } };
+    const ruleCandidate = await applyLocalEventScope(scopedRoot.id, userID, ruleRequest, { prepareProvider: true });
+    if (ruleCandidate.status !== "caldav_required") throw new Error("Missing recurrence context");
+    const rulePrepared = await prepareCaldavSeries(ruleCandidate.context, ruleRequest);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, ruleRequest, { caldav: rulePrepared })).status, "saved");
+    const ruleOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === ruleRequest.operationID)!;
+    assert.equal((await deliverEventOutbox(ruleOperation.id, () => caldavAdapter))?.status, "completed");
+    const extendedRows = await rows();
+    assert.equal(extendedRows.find(item => item.id === scopedRoot.id)!.recurrence, ruleRequest.patch.recurrence);
+    assert.deepEqual(extendedRows.filter(item => item.seriesID === scopedRoot.id), shiftedRows.filter(item => item.seriesID === scopedRoot.id));
+    await sync(); assert.deepEqual(await rows(), extendedRows);
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

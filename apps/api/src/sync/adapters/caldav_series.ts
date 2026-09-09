@@ -59,7 +59,7 @@ export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSerie
   return { baseline, evidence: caldavSeriesEvidence(data, baseline) };
 }
 
-/** Durable server-only input for one content-only resource replacement. The
+/** Durable server-only input for one scope-validated resource replacement. The
  * accepted validator never advances merely because a newer GET was observed. */
 export type CaldavSeriesWrite = import("@musubi/db").CaldavSeriesWriteIntent;
 

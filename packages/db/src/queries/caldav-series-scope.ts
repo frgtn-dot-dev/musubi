@@ -18,7 +18,7 @@ export type CaldavSeriesContext = {
 /** Private server-only resource input. Never project this into a public DTO. */
 export type CaldavSeriesWriteIntent = {
   baseline: { ref: Ref; master: Event; children: Event[] };
-  patch: Pick<Partial<Event>, "title" | "description" | "location">;
+  patch: Pick<Partial<Event>, "title" | "description" | "location" | "recurrence">;
   targetEventID?: string;
   cancelTarget?: true;
   newDefinition?: Event;
@@ -75,11 +75,25 @@ export async function appendCaldavSeries(tx: DbTransaction, actorID: string, ope
   }]);
 }
 
+/** Compare single RRULE syntax without losing duplicate/unknown clauses. */
+export function sameCaldavRecurrence(left: unknown, right: unknown): boolean {
+  const clauses = (value: unknown) => {
+    if (typeof value !== "string" || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(value)) return null;
+    const parts = value.replace(/^RRULE:/i, "").toUpperCase().split(";");
+    if (new Set(parts.map(part => part.split("=")[0])).size !== parts.length) return null;
+    // ICAL omits these RFC defaults. Preserve every other clause verbatim.
+    return parts.filter(part => part !== "INTERVAL=1" && part !== "WKST=MO").sort().join(";");
+  };
+  const expected = clauses(left);
+  return expected !== null && expected === clauses(right);
+}
+
 /** Reconstruct the only permitted canonical change from the private input. */
 export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition" | "time">): CaldavSeriesWriteIntent["baseline"] {
-  if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
+  if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location", "recurrence"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
+  if (write.patch.recurrence !== undefined && (targetEventID || !write.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(write.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(baseline.master.recurrence ?? ""))) throw unsupported();
   if (write.time !== undefined && write.cancelTarget) throw unsupported();
   const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
   const currentModel = write.newDefinition || !targetEventID ? baseline.master.timeModel : baseline.children.find(child => child.id === targetEventID)?.timeModel;
@@ -94,7 +108,7 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
     return { ...baseline, children: [...baseline.children, definition] };
   }
   if (!targetEventID) {
-    if (!time) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
+    if (!time && write.patch.recurrence === undefined) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
     const plan = planEventScope(baseline.master, baseline.children, { operationID: baseline.master.id, scope: "series", action: "update", expectedRevision: baseline.master.revision, patch: write.patch, time: write.time });
     if (plan.creates.length || plan.deletes.length) throw unsupported();
     return { ...baseline, master: plan.updates.find(item => item.id === baseline.master.id) ?? baseline.master, children: baseline.children.map(child => plan.updates.find(item => item.id === child.id) ?? child) };

@@ -147,7 +147,7 @@ async function resolutionContext(
   }
   let caldavContext: CaldavSeriesContext | undefined;
   if (row.payload.caldavSeries) {
-    if (row.payload.caldavSeries.write.targetEventID || row.payload.caldavSeries.write.time) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    if (row.payload.caldavSeries.write.targetEventID || row.payload.caldavSeries.write.time || row.payload.caldavSeries.write.patch.recurrence !== undefined) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const childRows = await tx.query.events.findMany({ where: eq(events.seriesID, eventID), with: { calendarEvents: true }, orderBy: events.id });
