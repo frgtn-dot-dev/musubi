@@ -1,3 +1,4 @@
+import { queueGoogleReminders } from "../sync/provider_reminders";
 import { resolveEventTimeEdit } from "@musubi/calendar";
 import { queueGraphSeriesCreateRequest, findGraphSeriesCreateRequest } from "../sync/graph_series_create";
 import { queueGoogleRsvp } from "../sync/provider_rsvp";
@@ -23,7 +24,6 @@ import {
   getExternalLinkForCalendar,
   readGraphSeriesCreateReceipt,
   getOwnProviderEventObservation,
-  queueProviderReminderEdit,
   getEventAttendees,
   getEventOrigin,
   getUsersEvents,
@@ -683,7 +683,8 @@ export async function handlerGetProviderEventState(req: Request, res: Response) 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {
   if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const id = requireUUID(req.params.eventId, "eventId");
-  const receipt = await queueProviderReminderEdit(req.user!.id, id, req.body);
+  const receipt = await queueGoogleReminders(req.user!.id, id, req.body);
+  res.setHeader("Cache-Control", "private, no-store");
   res.status(202).json({ ...receipt, localCommitted: true });
 }
 

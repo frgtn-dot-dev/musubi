@@ -64,8 +64,8 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
       <Text style={textStyle}>Provider notifications and Musubi reminders are separate. Both apps may notify you.</Text>
     </> : <Text accessibilityLiveRegion="polite" style={textStyle}>{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</Text>}
     {openError ? <Text accessibilityRole="alert" style={textStyle}>{openError}</Text> : null}
-    {current?.reminderEdit && current.state && current.version && !event.recurrence && !event.seriesID ? <>
-      <Btn label="Edit Google reminders" variant="secondary" loading={opening} onPress={() => void openEditor()} />
+    {current?.reminderEdit && current.state && current.version && !event.recurrence ? <>
+      <Btn label={event.seriesID ? "Edit reminders for this occurrence" : "Edit Google reminders"} variant="secondary" loading={opening} onPress={() => void openEditor()} />
     </> : null}
     {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={event.seriesID ? "Respond to this occurrence" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={{ ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}

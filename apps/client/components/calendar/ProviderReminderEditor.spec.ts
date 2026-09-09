@@ -16,7 +16,7 @@ vi.mock("@/components/ui/OptionPicker", () => ({ OptionPicker: "OptionPicker" })
 vi.mock("@/services/api", () => ({ useApi: () => ({ editProviderReminders: h.save }) }));
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation: ProviderEventStateResponse = { version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: false, overrides: [{ method: "email", minutes: 30 }] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
-function render() { h.index = 0; return ProviderReminderEditor({ event, observation, onClose: h.close }); }
+function render(value = event) { h.index = 0; return ProviderReminderEditor({ event: value, observation, onClose: h.close }); }
 function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
 function button(tree: ReactNode, label: string) { return nodes(tree).find(node => node.type === "Btn" && node.props.label === label)!.props; }
 function input(tree: ReactNode) { return nodes(tree).find(node => node.type === "TextInput")!.props; }
@@ -37,4 +37,17 @@ it("native off choice sends no overrides and cancellation performs no write", as
   button(tree, "Reminder mode: Custom").onPress(); tree = render(); nodes(tree).find(node => node.type === "OptionPicker")!.props.onSelect("off");
   h.save.mockResolvedValue({ status: "completed" }); tree = render(); button(tree, "Save Google reminders").onPress(); await settle();
   expect(h.save.mock.calls[0][1].reminders).toEqual({ useDefault: false, overrides: [] });
+});
+
+it("keeps the native occurrence UUID and request across a failed reminder save", async () => {
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-09-10T08:00:00.000Z" } };
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  let tree = render(child);
+  expect(nodes(tree).some(node => node.props.children === "Google reminders for this occurrence")).toBe(true);
+  input(tree).onChangeText("15"); tree = render(child); button(tree, "Save Google reminders").onPress(); await settle();
+  tree = render(child); button(tree, "Save Google reminders").onPress(); await settle();
+  expect(h.save.mock.calls[0][0].id).toBe(child.id);
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[0][1]).not.toHaveProperty("seriesID");
+  expect(h.save.mock.calls[0][1]).not.toHaveProperty("originalStart");
 });

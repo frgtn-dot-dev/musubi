@@ -62,10 +62,10 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
     </p> : <p role="status">{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</p>}
     {openError ? <InlineError>{openError}</InlineError> : null}
     {current?.reminderEdit && current.state && current.version && !series ? <>
-      <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>Edit Google reminders</Button>
+      <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
     </> : null}
     {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : "Respond in Google"}</Button> : null}
-    {editor?.kind === "reminders" ? <ProviderReminderEditor eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
+    {editor?.kind === "reminders" ? <ProviderReminderEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
   </section>;
 }

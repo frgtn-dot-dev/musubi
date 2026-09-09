@@ -75,3 +75,17 @@ it("opens a clearly scoped instance response and discards it when scope changes"
   expect(screen.queryByRole("dialog", { name: "Respond to this occurrence" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Respond to this occurrence" })).toBeNull();
 });
+
+it("opens reminders for the bound occurrence and clears the editor on scope change", async () => {
+  const google = { ...state, provider: "google", reminders: { provider: "google", useDefault: true, overrides: [] } };
+  fetchState.mockResolvedValue({ state: google, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 } });
+  const view = render(<ProviderEventDetails eventId="child" userId="owner" occurrence />);
+  const action = await screen.findByRole("button", { name: "Edit reminders for this occurrence" });
+  await act(async () => action.click());
+  expect(await screen.findByRole("dialog", { name: "Google reminders for this occurrence" })).toBeTruthy();
+  expect(screen.getByText("These Google reminders apply only to this occurrence. Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.")).toBeTruthy();
+  expect(fetchState.mock.calls[1][0]).toBe("child");
+  view.rerender(<ProviderEventDetails eventId="child" userId="owner" series />);
+  expect(screen.queryByRole("dialog", { name: "Google reminders for this occurrence" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit reminders for this occurrence" })).toBeNull();
+});

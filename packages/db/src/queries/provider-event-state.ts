@@ -20,15 +20,16 @@ export async function getOwnProviderEventObservation(actorID: string, eventID: s
   const reminders = state.reminders.provider === "google" ? GoogleReminderWriteSchema.safeParse(state.reminders.useDefault === true ? { useDefault: true } : { useDefault: state.reminders.useDefault, overrides: state.reminders.overrides }) : undefined;
   // Advertises a supported queue contract, never a fresh provider write grant.
   // The queue and worker still recheck source, state, pending work and permission.
-  const editable = reminderEditsEnabled && state.provider === "google" && reminders?.success && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && event.timeModel?.kind !== "floating" && !event.recurrence && !event.seriesID && !event.originalStart && !event.isCanceled;
+  const reminderEligible = reminderEditsEnabled && state.provider === "google" && reminders?.success && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && event.timeModel?.kind !== "floating" && !event.recurrence && !event.isCanceled;
   const self = state.attendees.filter(item => item.self === true);
   const rsvpEligible = rsvpEditsEnabled && state.provider === "google" && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && event.timeModel?.kind !== "floating" && !event.recurrence && !event.isCanceled && state.attendeesComplete && state.attendees.length <= 200 && self.length === 1 && !!self[0]!.address && self[0]!.address.toLowerCase() === row.externalCalendarID.toLowerCase() && state.isOrganizer !== true && !!state.organizer?.address && state.organizer.address.toLowerCase() !== row.externalCalendarID.toLowerCase() && ["confirmed", "tentative"].includes(state.status ?? "") && [null, "default"].includes(state.eventType);
-  let rsvpScope = !event.seriesID && !event.originalStart && !row.mapping.externalSeriesID && !row.mapping.originalStart;
-  if (rsvpEligible && !rsvpScope) {
-    try { rsvpScope = !!(await readProviderRsvpInstance(db, event, row.mapping, actorID)); }
-    catch { rsvpScope = false; }
+  let personalScope = !event.seriesID && !event.originalStart && !row.mapping.externalSeriesID && !row.mapping.originalStart;
+  if ((rsvpEligible || reminderEligible) && !personalScope) {
+    try { personalScope = !!(await readProviderRsvpInstance(db, event, row.mapping, actorID)); }
+    catch { personalScope = false; }
   }
-  const rsvpEditable = rsvpEligible && rsvpScope;
+  const rsvpEditable = rsvpEligible && personalScope;
+  const editable = reminderEligible && personalScope;
   return { state, version: providerStateVersion(row), ...(rsvpEditable ? { rsvpEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
 
 }

@@ -8697,3 +8697,77 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     });
   }
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  for (const kind of ["zoned", "all-day"] as const) test(`K14 Google instance reminder editor ${kind} preserves retry: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)")) errors.push(message.text()); });
+    const imported = event("00000000-0000-4000-8000-000000000184", "Google reminder instance", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    const master = event("00000000-0000-4000-8000-000000000244", "Google reminder series", "personal", "red", "2026-07-25T09:00:00Z", "2026-07-25T10:00:00Z", { recurrence: "RRULE:FREQ=DAILY;COUNT=4", timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-25T11:00:00.000", endLocal: "2026-07-25T12:00:00.000" } });
+    Object.assign(imported, { seriesID: master.id, originalStart: { kind: "instant", value: "2026-07-26T09:00:00.000Z" }, start: "2026-07-26T11:00:00Z", end: "2026-07-26T12:00:00Z", timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T13:00:00.000", endLocal: "2026-07-26T14:00:00.000" } });
+    if (kind === "all-day") {
+      Object.assign(master, { isAllDay: true, start: "2026-07-25T00:00:00Z", end: "2026-07-25T00:00:00Z", timeModel: { kind: "all-day" } });
+      Object.assign(imported, { isAllDay: true, start: "2026-07-26T00:00:00Z", end: "2026-07-26T00:00:00Z", originalStart: { kind: "date", value: "2026-07-26" }, timeModel: { kind: "all-day" } });
+    }
+    await mockAuthenticatedReads(page, { ...events, events: [master, imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
+    let observations = 0;
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+      state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: false, overrides: [{ method: "popup", minutes: 30 }, { method: "email", minutes: 60 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      version: (++observations === 1 ? "b" : "a").repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 },
+    }));
+    const writes: any[] = [];
+    await page.route(`**/api/v1/events/${imported.id}/provider-reminders`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, replayed: true, status: "pending", localCommitted: true }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveTitle(/Musubi/);
+    const eventTrigger = page.getByRole("button", { name: /Google reminder instance/ }).first();
+    await eventTrigger.click();
+    const trigger = page.getByRole("button", { name: "Edit reminders for this occurrence" });
+    await trigger.click();
+    const editor = page.getByRole("dialog", { name: "Google reminders for this occurrence", exact: true });
+    await expect(editor.getByText(/These Google reminders apply only to this occurrence/)).toBeVisible();
+    const minutes = editor.getByRole("textbox", { name: "Reminder 1 minutes before start" });
+    await expect(minutes).toHaveValue("30");
+    await expect(editor.getByRole("textbox", { name: "Reminder 2 minutes before start" })).toHaveValue("60");
+    await chooseSelectOption(page, "Reminder 1 method", "Email");
+    await chooseSelectOption(page, "Reminder 1 method", "Notification");
+    await minutes.fill("-5");
+    await editor.getByRole("button", { name: "Save Google reminders" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("whole minutes");
+    expect(writes).toHaveLength(0);
+    await minutes.fill("15");
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await editor.evaluate(node => { const rect = node.getBoundingClientRect(); return [[rect.left + 24, rect.top + 50], [rect.right - 24, rect.top + 200], [rect.right - 24, rect.bottom - 30]].every(([x, y]) => node.contains(document.elementFromPoint(x, y))); })).toBe(true);
+    await editor.screenshot({ path: `/tmp/musubi-k14-instance-editor-${kind}-${theme}.png` });
+    await editor.getByRole("button", { name: "Save Google reminders" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+    await expect(minutes).toHaveValue("15");
+    await editor.getByRole("button", { name: "Save Google reminders" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Google confirmation is still pending");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ operationID: expect.any(String), expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "google", reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 15 }, { method: "email", minutes: 60 }] } });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(eventTrigger).toBeFocused();
+    const deliveryReads: string[] = [];
+    for (const id of [imported.id, master.id]) await page.route(`**/api/v1/events/${id}/delivery`, route => { deliveryReads.push(id); return respond(route, { eventId: id, localRevision: 7, targets: [] }); });
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Occurrence delivery details", exact: true }).click();
+    const delivery = page.getByRole("dialog", { name: "Delivery", exact: true });
+    await expect(delivery).toBeVisible();
+    await expect.poll(() => deliveryReads.at(-1)).toBe(imported.id);
+    await delivery.getByRole("button", { name: "Close delivery", exact: true }).click();
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Series delivery details", exact: true }).click();
+    await expect(delivery).toBeVisible();
+    await expect.poll(() => deliveryReads.at(-1)).toBe(master.id);
+    await delivery.getByRole("button", { name: "Close delivery", exact: true }).click();
+    expect(errors).toEqual([]);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}

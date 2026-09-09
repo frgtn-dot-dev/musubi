@@ -1,8 +1,9 @@
-# Google existing-instance reminder preparation
+# Google reminders for existing instances
 
-The private native candidate targets an existing bound instance on the connected
+The native transport targets an existing bound instance on the connected
 account's own primary calendar. The default-off reminder flag blocks provider I/O.
-No public capability or production activation is added by this candidate.
+Public actions require the server capability and remain disabled by default.
+No production activation is included.
 
 The accepted native instance ID, parent ID and original date/instant are checked
 independently of a moved current start. Timed instances require an explicit known
@@ -23,8 +24,8 @@ ETag never establishes a whole-family concurrency guarantee.
 Pure and fake HTTP regressions cover zoned/all-day original identity, moved time,
 defaults/off/custom settings, field preservation, lost/error responses, malformed
 successful bodies, confirmation failure, replay, native/local denial, conditional
-races, signal abort and caller mutation. Durable local parent/mapping/lease fences,
-queue/worker/ACK, explicit conflicts and client acceptance remain separate work.
+races, signal abort and caller mutation. Durable local fences, delivery, explicit conflicts and client integration are
+described below. Live acceptance remains separate.
 No invitations or real account writes are performed by these tests.
 
 Google describes reminders as private settings for the authenticated user in its
@@ -46,8 +47,7 @@ permission loss and changed bindings cannot enqueue a replacement implicitly.
 Neither canonical event revision nor accepted provider mapping changes on enqueue.
 The claimed-source helper checks the current lease and accepted binding again.
 Generic ACK and generic content-conflict proofs refuse this private journal. The
-specialized worker/ACK is described below; public composition remains follow-up
-work.
+specialized worker/ACK is described below; public composition is described below.
 
 Disposable PostgreSQL regressions cover zoned/all-day moved slots, defaults/off/
 custom intent, concurrent replay, stale parent and mapping, deleted/unlinked parent,
@@ -73,7 +73,7 @@ an unconfirmed operation that can recover by full read without a second PATCH.
 Actual adapter/fake HTTP/PostgreSQL coverage includes defaults/off/custom, concurrent
 workers, applied lost/503 responses, failed ACK storage, pre/post-write parent and
 permission changes, changed lease/native original/unknown fields, baseline and echo
-pulls, foreign pulled state, and default-off refusal. Public admission and client acceptance are still separate work.
+pulls, foreign pulled state, and default-off refusal. Public admission and client acceptance are described below.
 
 ## Explicit conflict confirmation
 
@@ -92,3 +92,26 @@ another PATCH, preserving the current unrelated provider state and native fields
 Zoned/all-day PostgreSQL and fake HTTP regressions cover resend/recovery, stale
 previews, private-field changes, reparenting/original-slot refusal, permission loss
 and concurrent confirmation/replay. No raw native fields enter the public preview.
+
+## Public admission and clients
+
+The existing strict `provider-reminders` endpoint now selects the bound-instance
+contract for a saved child. It reads native evidence outside database locks and
+commits only after full local context revalidation. Parent IDs and original slots
+are server-derived and cannot be supplied in the request. An exact replay returns
+the durable receipt without another native read. HTTP 202 with private/no-store
+caching means local acceptance, not completed Google delivery.
+
+Web and native editors require a refreshed server capability, identify the action
+as applying to this occurrence and retain the same request on a failed unchanged
+retry. Changing account/scope clears the editor. Web event details expose separate
+occurrence and series delivery histories so the child's conflict is reachable.
+The normal one-off editor keeps its existing contract.
+
+Actual authenticated HTTP/PostgreSQL regressions cover strict DTO/auth/flag guards,
+concurrent receipt identity, parent/native races and worker completion. Web/native
+component tests cover exact child targeting and retry. Browser/mock acceptance
+covers zoned/all-day instances at 1280 px/light and 390 px/dark, keyboard and focus,
+accessibility, failed draft preservation, exact request replay and both delivery
+targets, plus the prior one-off editors. This does not replace live Google reminder
+acceptance or physical native/OS notification QA.
