@@ -224,3 +224,20 @@ components with retry. This is an internal transport capability: public scope
 transactions still require an existing detached definition. Atomic creation of the
 local child and its external mapping is the next integration step. No provider
 flags or iCloud privilege requirements change.
+
+## Generated occurrence scope transaction
+
+Public occurrence content/cancellation scope now accepts an unmaterialized member
+with `expectedOccurrenceRevision: null`. Preparation freezes the planner-selected
+child ID. Commit rechecks the entire original family and stores the new child,
+calendar membership, deterministic native mapping, root revision and one resource
+outbox intent in a single transaction. The mapping initially retains the accepted
+resource ETag; only a complete family ACK advances every validator together.
+
+Pending resource pulls are refused, including an old body that omits the new
+component. An applied 503 is recovered by full GET without another PUT. Completed
+pulls reuse the prepared child identity. DB regressions cover all three time kinds,
+content/cancellation, preflight races, remote child races and a tombstone collision
+that rolls back all local writes. Radicale verifies the scope-to-worker-to-echo
+path for new content and cancellation. Reviving a cancelled definition, time edits
+and following scopes remain separate work; iCloud unknown privileges stay closed.

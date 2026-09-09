@@ -317,6 +317,24 @@ async function main() {
     const acceptedRows = await rows();
     await sync();
     assert.deepEqual(await rows(), acceptedRows, "Confirmed Radicale echo preserves local revisions and identities");
+    for (const cancellation of [false, true]) {
+      const current = (await getEventSnapshot(scopedRoot.id))!;
+      const originalStart = { kind: "instant", value: cancellation ? "2026-03-31T07:00:00.000Z" : "2026-03-30T07:00:00.000Z" };
+      const request = { operationID: randomUUID(), scope: "occurrence", originalStart, expectedOccurrenceRevision: null, expectedRevision: current.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: { title: "Scoped generated definition" } }) };
+      const candidate = await applyLocalEventScope(current.id, userID, request, { prepareProvider: true });
+      if (candidate.status !== "caldav_required") throw new Error("Missing generated scope context");
+      const prepared = await prepareCaldavSeries(candidate.context, request);
+      const saved = await applyLocalEventScope(current.id, userID, request, { caldav: prepared });
+      assert.equal(saved.status, "saved");
+      const [operation] = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, current.id))).filter(item => item.mutationID === request.operationID);
+      const result = await deliverEventOutbox(operation.id, () => caldavAdapter);
+      assert.equal(result?.status, "completed");
+      const beforeEcho = await rows();
+      const child = beforeEcho.find(item => item.id === prepared.write.newDefinition!.id)!;
+      assert.equal(child.isCanceled, cancellation); assert.equal(child.revision, 1);
+      await sync(); assert.deepEqual(await rows(), beforeEcho);
+      assert.equal((await applyLocalEventScope(current.id, userID, request, { prepareProvider: true })).status, "replayed");
+    }
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {
