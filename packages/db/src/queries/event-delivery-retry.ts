@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { NotFoundError } from "@musubi/types";
+import { GraphRsvpDispatchSchema, ProviderRsvpEditSchema, NotFoundError } from "@musubi/types";
 import { db } from "..";
 import {
   calendars,
@@ -98,10 +98,14 @@ export async function requestEventDeliveryRetry(
     await assertEventDeliveryDestination(tx, row, userID, true);
     if (row.status === "cancelled")
       throw new EventDeliveryRetryError("delivery-destination-unavailable");
-    if (
+    const graphRequest = ProviderRsvpEditSchema.safeParse(row.payload.rsvp?.request);
+    const graphCheck = row.provider === "microsoft" && row.action === "update" && row.actorID === userID && graphRequest.success && graphRequest.data.provider === "microsoft" && GraphRsvpDispatchSchema.safeParse(row.payload.rsvp?.graphDispatch).success;
+    // A dispatched Graph response can only be observed again. Keep its original
+    // conflict snapshot and permanent marker; this never authorizes another POST.
+    if (!graphCheck && (
       row.status === "conflict" ||
       (row.remoteSnapshot && !row.remoteSnapshot.isEcho)
-    )
+    ))
       throw new EventDeliveryRetryError("delivery-conflict-unresolved");
     if (["completed", "not-needed", "attempting"].includes(row.status))
       return row.id;
@@ -117,10 +121,10 @@ export async function requestEventDeliveryRetry(
       .update(eventOutbox)
       .set({
         status:
-          row.uncertain || row.status === "unconfirmed"
+          graphCheck || row.uncertain || row.status === "unconfirmed"
             ? "unconfirmed"
             : "retry",
-        uncertain: row.uncertain || row.status === "unconfirmed",
+        uncertain: graphCheck || row.uncertain || row.status === "unconfirmed",
         updatedAt: new Date(),
         // A manual click must not shorten a provider's persisted Retry-After.
         nextAttemptAt: sql`greatest(${eventOutbox.nextAttemptAt}, clock_timestamp())`,

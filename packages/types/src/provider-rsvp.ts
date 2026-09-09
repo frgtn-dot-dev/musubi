@@ -9,6 +9,7 @@ const ProviderRsvpCommonSchema = z.object({
 });
 export const ProviderRsvpEditSchema = z.discriminatedUnion("provider", [
   ProviderRsvpCommonSchema.extend({ provider: z.literal("google"), sendUpdates: z.literal("all") }).strict(),
+  ProviderRsvpCommonSchema.extend({ provider: z.literal("microsoft"), notificationPolicy: z.literal("send-response") }).strict(),
   ProviderRsvpCommonSchema.extend({ provider: z.literal("caldav"), notificationPolicy: z.literal("server-reply") }).strict(),
 ]);
 export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
@@ -28,6 +29,7 @@ export type ProviderRsvpIntent = {
   baselineState: ProviderEventState;
   desiredState: ProviderEventState;
   mappingID: string;
+  graphDispatch?: { kind: "graph-rsvp-dispatch"; version: 1; startedAt: string; acceptedAt?: string };
 };
 export function providerRsvpDesiredState(input: ProviderEventState, copyEmail: string, response: ProviderRsvpEdit["response"]): ProviderEventState {
   const state = ProviderEventStateSchema.parse(input);
@@ -59,3 +61,14 @@ export const ProviderRsvpReceiptSchema = z.object({
   notificationDelivery: z.literal("unknown"),
 }).strict();
 export type ProviderRsvpReceiptResponse = z.infer<typeof ProviderRsvpReceiptSchema>;
+
+export function microsoftRsvpDesiredState(input: ProviderEventState, selfAddress: string, response: ProviderRsvpEdit["response"]): ProviderEventState {
+  const state = ProviderEventStateSchema.parse(input);
+  const own = selfAddress.toLowerCase(), self = state.attendees.filter(item => item.address?.toLowerCase() === own);
+  if (state.provider !== "microsoft" || !state.attendeesComplete || state.isOrganizer !== false || state.eventType !== "singleInstance" || state.status !== "active" || self.length !== 1 || self[0]!.role === "resource" || !state.organizer?.address || state.organizer.address.toLowerCase() === own) throw new Error("Unsupported Graph RSVP identity");
+  const native = response === "tentative" ? "tentativelyAccepted" : response;
+  self[0]!.response = native; state.ownResponse = native;
+  return state;
+}
+export const GraphRsvpDispatchSchema = z.object({ kind: z.literal("graph-rsvp-dispatch"), version: z.literal(1), startedAt: z.iso.datetime(), acceptedAt: z.iso.datetime().optional() }).strict();
+export type MicrosoftRsvpConfirmation = { baselineHash: string; observedResponse: string };

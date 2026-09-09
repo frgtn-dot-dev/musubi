@@ -9352,3 +9352,57 @@ test("Availability grid keeps capped event lanes usable and selection pending ac
   await expect(page.locator("[data-availability-interval]")).toHaveCount(0);
   await commit(); await expect(page.getByText(/No availability sources selected/)).toBeVisible();
 });
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K13 Graph RSVP editor preserves retry: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)")) errors.push(message.text()); });
+    const imported = event("00000000-0000-4000-8000-000000000192", "Graph RSVP meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
+    let observations = 0;
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+      state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "microsoft", expectedRevision: 7 },
+    }));
+    const writes: any[] = [];
+    await page.route(`**/api/v1/events/${imported.id}/provider-rsvp`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    let checked = false, checks = 0;
+    const delivery = () => ({ eventId: imported.id, localRevision: 7, targets: [{ targetId: "00000000-0000-4000-8000-000000000193", calendarId: "00000000-0000-4000-8000-000000000194", calendarName: "Outlook", provider: "microsoft", connected: true, owned: true, operationId: writes[0]?.operationID ?? "00000000-0000-4000-8000-000000000195", action: "update", status: checked ? "unconfirmed" : "conflict", revision: 7, latestRevision: 7, updatedAt: "2026-07-26T12:00:00Z", retryAt: null, issue: checked ? "unconfirmed" : "conflict", graphRsvpPhase: checked ? "absent" : "accepted" }] });
+    await page.route(`**/api/v1/events/${imported.id}/delivery`, route => respond(route, delivery()));
+    await page.route(`**/api/v1/events/${imported.id}/delivery/*/retry`, route => { checks++; checked = true; return respond(route, delivery(), 202); });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    const eventTrigger = page.getByRole("button", { name: /Graph RSVP meeting/ }).first();
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Respond in Outlook", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Respond in Outlook", exact: true });
+    await expect(editor.getByRole("button", { name: "Send response to organizer" })).toBeDisabled();
+    await chooseSelectOption(page, "Your response", "Tentative");
+    await expect(editor.getByText(/Organizer delivery cannot be verified/)).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await editor.screenshot({ path: `/tmp/musubi-k12-live/microsoft-rsvp-browser-${theme}.png` });
+    await editor.getByRole("button", { name: "Send response to organizer" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+    await expect(editor.getByRole("combobox", { name: "Your response" })).toContainText("Tentative");
+    await editor.getByRole("button", { name: "Send response to organizer" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Check Delivery details for Outlook acceptance");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ operationID: expect.any(String), expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "microsoft", response: "tentative", notificationPolicy: "send-response" });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(eventTrigger).toBeFocused();
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    const receiptDialog = page.getByRole("dialog", { name: "Delivery", exact: true });
+    await expect(receiptDialog.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
+    await receiptDialog.getByRole("button", { name: "Check response", exact: true }).press("Enter");
+    await expect(receiptDialog.getByText(/Outlook meeting copy unavailable/)).toBeVisible();
+    expect(checks).toBe(1); expect(writes).toHaveLength(2); expect(errors).toEqual([]);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}

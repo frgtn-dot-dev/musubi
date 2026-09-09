@@ -83,3 +83,5 @@ tedy polohu 08:00; podzimní 25hodinový den se navíc ořezává. Nová regrese
 intervaly se na takových dnech nevykreslí a coverage notice odkazuje na UTC list.
 Další práce musí sjednotit grid/label/selection/drag geometrii pro 23/25hodinové
 dny; chybějící busy bloky se nesmějí vydávat za volno.
+
+Graph K13 one-off RSVP: default-off accept/tentativelyAccept/decline, marker před POST a pouze read-only recovery po nejistém výsledku; žádná CAS ani organizer-delivery garance. Recurring/delegated RSVP a živá acceptance zbývají. [Kontrakt](../sync/microsoft-rsvp.md).

@@ -897,6 +897,10 @@ async function upsertExternalEventInTransaction(
       const readRecovery = state && accessContext ? await googlePersonalReadRecovery(tx, map.event, map, accessContext) : undefined;
       if (!restoringRead && !readRecovery && !stateChanged && (!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
       {
+        // Older Graph one-off imports omitted UID. Enrich only this accepted
+        // source mapping; no canonical revision, event delta or fanout changes.
+        if (provider === "microsoft" && !map.icalUid && icalUid && map.event.originCalendarID === calendarID && !map.event.seriesID && !map.event.originalStart && !map.event.recurrence && !map.event.isCanceled && !map.externalSeriesID && !map.originalStart && map.externalCalendarID === externalCalendarID && state?.eventType === "singleInstance")
+          await tx.update(externalEvents).set({ icalUid }).where(and(eq(externalEvents.id, map.id), isNull(externalEvents.icalUid)));
         // An unchanged baseline is not a conflict with a queued local write.
         // It can still supersede a previously retained personal observation.
         if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state, true);

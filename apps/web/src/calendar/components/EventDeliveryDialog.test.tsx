@@ -643,3 +643,17 @@ it("explicitly adopts a provider family locally and preserves the preview on ret
   expect(bodies[1]).toEqual(bodies[0]);
   expect(bodies[0]).toEqual({ kind: "graph-create-adoption", mutationID: expect.any(String), expectedRevision: 2, stateVersion: "a".repeat(64) });
 });
+
+it("checks a dispatched Graph pull conflict without offering a new response or resolution", async () => {
+  let checked = false;
+  const fetcher = vi.fn(async (input: string) => {
+    if (String(input).endsWith("/retry")) checked = true;
+    return json({ ...receipt, targets: [{ ...target, provider: "microsoft", status: checked ? "unconfirmed" : "conflict", graphRsvpPhase: checked ? "absent" : "accepted" }] });
+  });
+  vi.stubGlobal("fetch", fetcher); mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Check response", exact: true }));
+  await screen.findByText(/Outlook meeting copy unavailable/);
+  expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+  expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/retry"))).toHaveLength(1);
+  expect(fetcher.mock.calls.some(([url]) => String(url).includes("/resolve") || String(url).includes("/provider-rsvp"))).toBe(false);
+});

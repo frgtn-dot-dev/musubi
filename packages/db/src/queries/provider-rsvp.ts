@@ -1,3 +1,5 @@
+import { hasProviderSyncScopes } from "./oauth";
+import type { DbTransaction } from "./calendars";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
@@ -8,11 +10,12 @@ import {
   ForbiddenError,
   EventTimeModelSchema, type EventTimeModel,
   ProviderEventStateSchema,
-  ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, caldavRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
+  GraphRsvpDispatchSchema, microsoftRsvpDesiredState, ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, caldavRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
 } from "@musubi/types";
 import { config } from "@musubi/config";
 import { db } from "..";
 import {
+  account,
   calendarEvents,
   calendarMembers,
   events,
@@ -20,7 +23,7 @@ import {
   externalCalendars,
   externalEvents,
 } from "../schema";
-import { lockCalendarLifecycle } from "./calendar-lifecycle";
+import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { appendEventOutbox } from "./event-outbox";
 import { providerStateVersion } from "./provider-reminders";
 import { isDeepStrictEqual } from "node:util";
@@ -45,7 +48,7 @@ async function rsvpTransaction(
   prepared?: { context: ProviderRsvpContext; baseline: Record<string, unknown>; nativeTime: EventTimeModel },
 ): Promise<ProviderRsvpPreparation> {
   const request = ProviderRsvpEditSchema.parse(input);
-  if (request.provider === "caldav" && !config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  if (request.provider !== "google" && !config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   eventID = eventID.toLowerCase();
   return db.transaction(async (tx) => {
     await tx.execute(
@@ -145,11 +148,11 @@ async function rsvpTransaction(
       .for("update");
     if (
       !mapping?.etag ||
-      mapping.etag.startsWith("W/") ||
+      (request.provider !== "microsoft" && mapping.etag.startsWith("W/")) ||
       !mapping.providerState
     )
       throw new EventWriteError("event-write", "unsupported");
-    if (request.provider === "caldav" && (event.seriesID || event.originalStart || mapping.externalSeriesID || mapping.originalStart || !mapping.icalUid || !["zoned", "all-day"].includes(event.timeModel?.kind ?? ""))) throw new EventWriteError("event-write", "unsupported");
+    if (request.provider !== "google" && (event.seriesID || event.originalStart || mapping.externalSeriesID || mapping.originalStart || !mapping.icalUid || (request.provider === "caldav" && !["zoned", "all-day"].includes(event.timeModel?.kind ?? "")))) throw new EventWriteError("event-write", "unsupported");
     const instance = request.provider === "google" ? await readProviderRsvpInstance(tx, event, mapping, actorID) : undefined;
     if (
       event.revision !== request.expectedRevision ||
@@ -202,7 +205,7 @@ async function rsvpTransaction(
       calendars: links.map((link) => link.calendarID).sort(),
     });
     const state = ProviderEventStateSchema.parse(mapping.providerState);
-    const desiredState = request.provider === "google" ? providerRsvpDesiredState(state, target.link.externalCalendarID, request.response) : prepared ? caldavRsvpDesiredState(state, String(prepared.baseline.selfAddress), request.response) : state;
+    const desiredState = request.provider === "google" ? providerRsvpDesiredState(state, target.link.externalCalendarID, request.response) : prepared ? (request.provider === "microsoft" ? microsoftRsvpDesiredState : caldavRsvpDesiredState)(state, String(prepared.baseline.selfAddress), request.response) : state;
     const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, icalUid: mapping.icalUid, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}) };
     if (!prepared) return { kind: "prepared", context };
     if (!isDeepStrictEqual(context, prepared.context)) throw new BadRequestError("RSVP source changed during provider verification.");
@@ -236,10 +239,10 @@ async function rsvpTransaction(
 }
 
 /** Recheck a claimed intent's exact live source before provider work. */
-export async function hasProviderRsvpSource(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
+export async function hasProviderRsvpSource(row: import("./event-outbox").EventOutboxRow, executor: typeof db | DbTransaction = db, lock = false): Promise<boolean> {
   const intent = row.payload.rsvp;
-  if (!intent || !row.leaseToken || !["google", "caldav"].includes(row.provider) || intent.request.provider !== row.provider || row.action !== "update" || row.actorID !== row.userID) return false;
-  const [source] = await db.select({ event: events, mapping: externalEvents, role: calendarMembers.role })
+  if (!intent || !row.leaseToken || !["google", "caldav", "microsoft"].includes(row.provider) || intent.request.provider !== row.provider || row.action !== "update" || row.actorID !== row.userID) return false;
+  const query = executor.select({ event: events, mapping: externalEvents, role: calendarMembers.role })
     .from(events)
     .innerJoin(eventOutbox, and(eq(eventOutbox.id, row.id), eq(eventOutbox.leaseToken, row.leaseToken), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`))
     .innerJoin(calendarEvents, and(eq(calendarEvents.eventID, events.id), eq(calendarEvents.calendarID, row.calendarID)))
@@ -247,10 +250,11 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
     .innerJoin(externalCalendars, and(eq(externalCalendars.id, row.externalCalendarLinkID), eq(externalCalendars.calendarID, row.calendarID), eq(externalCalendars.userID, row.userID), eq(externalCalendars.accountID, row.accountID), eq(externalCalendars.provider, row.provider), eq(externalCalendars.externalCalendarID, row.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true)))
     .innerJoin(externalEvents, and(eq(externalEvents.id, intent.mappingID), eq(externalEvents.eventID, events.id), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider), eq(externalEvents.externalCalendarID, row.externalCalendarID), eq(externalEvents.externalEventID, row.externalEventID!)))
     .where(and(eq(events.id, row.eventID), eq(events.originCalendarID, row.calendarID), isNull(events.deletedAt)));
+  const [source] = lock ? await query.for("share", { of: [events, calendarEvents, calendarMembers, externalCalendars, externalEvents] }) : await query;
   if (!source || !["owner", "editor"].includes(source.role) || source.event.revision !== row.revision || source.mapping.etag !== row.expectedEtag || providerStateVersion(source.mapping) !== intent.request.expectedStateVersion) return false;
   try {
-    if (row.provider === "caldav") return config.api.providerRsvpEditsEnabled && !intent.instance && !source.event.seriesID && !source.event.originalStart && !source.event.recurrence && !source.event.isCanceled && !source.mapping.externalSeriesID && !source.mapping.originalStart && source.mapping.icalUid === row.icalUid;
-    const current = await readProviderRsvpInstance(db, source.event, source.mapping, row.userID);
+    if (row.provider !== "google") return config.api.providerRsvpEditsEnabled && !intent.instance && !source.event.seriesID && !source.event.originalStart && !source.event.recurrence && !source.event.isCanceled && !source.mapping.externalSeriesID && !source.mapping.originalStart && source.mapping.icalUid === row.icalUid;
+    const current = await readProviderRsvpInstance(executor, source.event, source.mapping, row.userID);
     return isDeepStrictEqual(current, intent.instance);
   } catch { return false; }
 }
@@ -264,4 +268,32 @@ export function providerRsvpBaselineVersion(mappingID: string, baseline: Record<
     return value;
   }
   return createHash("sha256").update(JSON.stringify([mappingID, ordered(baseline), ...(instance ? [ProviderRsvpInstanceSchema.parse(instance)] : [])])).digest("hex");
+}
+
+/** Irreversible permission to attempt ONE Graph response action. A persisted
+ * marker is never cleared, including HTTP refusal, timeout or process death. */
+export async function markGraphRsvpDispatched(row: import("./event-outbox").EventOutboxRow) {
+  if (!config.api.providerRsvpEditsEnabled || row.provider !== "microsoft" || row.payload.rsvp?.request.provider !== "microsoft") return false;
+  return db.transaction(async tx => {
+    await lockUserLifecycle(tx, [row.userID], "shared");
+    await lockCalendarLifecycle(tx, [row.calendarID], "shared");
+    await tx.select({ id: events.id }).from(events).where(eq(events.id, row.eventID)).for("update");
+    await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(eq(eventOutbox.id, row.id)).for("update");
+    if (!(await hasProviderRsvpSource(row, tx, true))) return false;
+    const [grant] = await tx.select().from(account).where(and(eq(account.userId, row.userID), eq(account.providerId, "microsoft"), eq(account.accountId, row.accountID))).for("share");
+    if (!grant || grant.syncStatus !== "active" || !grant.refreshToken || !hasProviderSyncScopes("microsoft", grant.scope ?? "") || !config.api.providerRsvpEditsEnabled) return false;
+    const marker = GraphRsvpDispatchSchema.parse({ kind: "graph-rsvp-dispatch", version: 1, startedAt: new Date().toISOString() });
+    const [marked] = await tx.update(eventOutbox).set({ payload: { ...row.payload, rsvp: { ...row.payload.rsvp!, graphDispatch: marker } }, uncertain: true, updatedAt: new Date() })
+      .where(and(eq(eventOutbox.id, row.id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, row.leaseToken!), sql`${eventOutbox.leaseUntil} > clock_timestamp()`, sql`${eventOutbox.payload} = ${JSON.stringify(row.payload)}::jsonb`, sql`${eventOutbox.payload}->'rsvp'->'graphDispatch' is null`)).returning({ id: eventOutbox.id });
+    return !!marked;
+  });
+}
+export async function markGraphRsvpAccepted(id: string, leaseToken: string) {
+  return db.transaction(async tx => {
+    const [row] = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.id, id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, leaseToken), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).for("update");
+    if (!row || row.payload.rsvp?.request.provider !== "microsoft") return false;
+    const marker = GraphRsvpDispatchSchema.parse(row.payload.rsvp.graphDispatch);
+    await tx.update(eventOutbox).set({ payload: { ...row.payload, rsvp: { ...row.payload.rsvp, graphDispatch: { ...marker, acceptedAt: new Date().toISOString() } } } }).where(eq(eventOutbox.id, id));
+    return true;
+  });
 }

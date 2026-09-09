@@ -299,6 +299,34 @@ export async function deliverEventOutbox(
         remoteSnapshot = null;
         return;
       }
+      if (row.payload.rsvp?.request.provider === "microsoft") {
+        if (!config.api.providerRsvpEditsEnabled || row.provider !== "microsoft" || row.action !== "update" || !adapter?.writeMicrosoftRsvp) throw new EventWriteError("event-write", "unsupported");
+        if (!(await checkDestination())) return;
+        const { microsoftRsvpEvidence, microsoftRsvpProjection } = await import("./adapters/microsoft_rsvp");
+        const { GraphRsvpDispatchSchema, microsoftRsvpDesiredState } = await import("@musubi/types");
+        const { markGraphRsvpDispatched, markGraphRsvpAccepted, providerRsvpBaselineVersion } = await import("@musubi/db");
+        const intent = row.payload.rsvp, request = ProviderRsvpEditSchema.parse(intent.request);
+        if (request.provider !== "microsoft" || intent.instance || request.expectedRevision !== row.revision) throw new ProviderEventWriteError("provider-conflict");
+        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response);
+        if (!isDeepStrictEqual(evidence, intent.baseline) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || !matchesRsvpEventProjection("microsoft", row.payload.event, microsoftRsvpProjection(evidence)) || !isDeepStrictEqual(intent.desiredState, microsoftRsvpDesiredState(intent.baselineState, evidence.selfAddress, request.response))) throw new ProviderEventWriteError("provider-conflict");
+        expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag, icalUid: row.icalUid };
+        const dispatched = intent.graphDispatch !== undefined;
+        if (dispatched) GraphRsvpDispatchSchema.parse(intent.graphDispatch);
+        if (!(await hasProviderRsvpSource(row))) throw new ProviderEventWriteError("provider-conflict");
+        const observed = await adapter.writeMicrosoftRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, dispatched, signal, async () => {
+          signal.throwIfAborted();
+          if (!(await markGraphRsvpDispatched(row))) throw new ProviderEventWriteError("provider-conflict");
+          mutationStarted = true;
+        }, async () => { if (!(await markGraphRsvpAccepted(row.id, token))) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed"); });
+        if (observed.kind !== "observed") {
+          await finishEventOutbox(row.id, token, "unconfirmed", observed.kind === "absent" ? "graph-rsvp-copy-absent" : "graph-rsvp-response-unconfirmed", { uncertain: dispatched || mutationStarted });
+          return;
+        }
+        const native = microsoftRsvpProjection(observed.evidence);
+        resultRef = { externalEventId: native.externalId, etag: native.etag, icalUid: native.icalUid };
+        await completeProviderRsvpOutbox(row.id, token, resultRef, expectedRef!, { isEcho: true, externalEventId: native.externalId, etag: native.etag, deleted: false, providerState: native.providerState, observedAt: new Date().toISOString() }, undefined, { baselineHash: providerRsvpBaselineVersion(intent.mappingID, intent.baseline), observedResponse: native.providerState.ownResponse! });
+        return;
+      }
       if (row.payload.rsvp?.request.provider === "caldav") {
         if (!config.api.providerRsvpEditsEnabled || row.provider !== "caldav" || row.action !== "update" || !adapter?.writeCaldavRsvp) throw new EventWriteError("event-write", "unsupported");
         if (!(await checkDestination())) return;

@@ -838,3 +838,19 @@ it("requires explicit native confirmation to adopt the provider family without q
   expect(bodies[0]).toEqual({ kind: "graph-create-adoption", mutationID: expect.any(String), expectedRevision: preview.localRevision, stateVersion: "b".repeat(64) });
   expect(text(render())).toContain("Provider version accepted in Musubi");
 });
+
+it("offers read-only checking of a dispatched Graph conflict and preserves its operation", async () => {
+  let checked = false;
+  h.request.mockImplementation(async (url: string) => {
+    if (url.endsWith("/retry")) checked = true;
+    return reply({ ...receipt, targets: [{ ...target, provider: "microsoft", status: checked ? "unconfirmed" : "conflict", graphRsvpPhase: checked ? "absent" : "accepted" }] });
+  });
+  render(); await settle();
+  let tree = render();
+  expect(buttons(tree, "Review changes")).toHaveLength(0);
+  buttons(tree, "Check response")[0].onPress(); await settle();
+  render(); await settle(); tree = render();
+  expect(text(tree)).toContain("Outlook meeting copy unavailable");
+  expect(h.request.mock.calls.filter(call => call[0].endsWith("/retry"))).toHaveLength(1);
+  expect(h.request.mock.calls.some(call => call[0].includes("/resolve") || call[0].includes("/provider-rsvp"))).toBe(false);
+});
