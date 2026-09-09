@@ -124,14 +124,16 @@ async function main() {
       assert.deepEqual(restored.exceptions.map(item => item.timeModel), evidence.exceptions.map(item => item.timeModel));
       await deliverRevival(); assert.equal(puts, 1);
       const originalStart: OccurrenceStart = kind === "all-day" ? { kind: "date", value: "2026-03-31" } : kind === "floating" ? { kind: "floating", value: "2026-03-31T09:00:00.000" } : { kind: "instant", value: "2026-03-31T07:00:00.000Z" };
-      for (const cancelNew of [false, true]) {
+      for (const variant of ["content", "cancel", "time"]) {
+        const cancelNew = variant === "cancel";
+        const generatedTime = variant === "time" ? time : undefined;
         const definitionID = randomUUID();
         const patch = cancelNew ? {} : { title: "New detached definition", description: "Keep unknown data" };
         const common = { operationID: randomUUID(), expectedRevision: baseline.master.revision!, scope: "occurrence" as const, expectedOccurrenceRevision: null, originalStart };
-        const request = cancelNew ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch, ensureDefinition: true };
+        const request = cancelNew ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch, ensureDefinition: true, time: generatedTime };
         const definition = planEventScope(baseline.master, baseline.children, request, () => definitionID).creates[0]!;
         assert.ok(definition);
-        const generatedWrite = prepareCaldavSeriesWrite(evidence, baseline, patch, definitionID, cancelNew ? true : undefined, definition);
+        const generatedWrite = prepareCaldavSeriesWrite(evidence, baseline, patch, definitionID, cancelNew ? true : undefined, definition, generatedTime as any);
         assert.ok(generatedWrite.after.includes(master) && generatedWrite.after.includes(child) && generatedWrite.after.includes(cancelled));
         assert.equal(generatedWrite.after.split("X-PRIVATE;LANGUAGE=cs:Folded\r\n extension").length, 3, "New definition retains inherited unknown bytes");
         assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, patch, definitionID, cancelNew ? true : undefined, { ...definition, start: new Date(0) }));
@@ -146,6 +148,8 @@ async function main() {
         assert.equal(added.isCanceled, cancelNew);
         assert.equal(added.title, cancelNew ? baseline.master.title : patch.title);
         assert.deepEqual(added.timeModel, definition.timeModel);
+        assert.equal(added.start.getTime(), definition.start.getTime());
+        assert.equal(added.end.getTime(), definition.end.getTime());
         await deliverGenerated(); assert.equal(puts, 1, "Generated definition replay never appends a second VEVENT or repeats PUT");
       }
       for (const failure of ["lost", "applied-503"]) {

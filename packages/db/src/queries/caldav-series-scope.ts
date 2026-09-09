@@ -80,12 +80,15 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
-  if (write.time !== undefined && (!targetEventID || write.newDefinition || write.cancelTarget)) throw unsupported();
+  if (write.time !== undefined && (!targetEventID || write.cancelTarget)) throw unsupported();
+  const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
+  const currentModel = write.newDefinition ? baseline.master.timeModel : baseline.children.find(child => child.id === targetEventID)?.timeModel;
+  if (time && (time.timeModel.kind !== currentModel?.kind || time.timeModel.kind === "zoned" && (currentModel?.kind !== "zoned" || time.timeModel.timeZone !== currentModel.timeZone))) throw unsupported();
   if (write.newDefinition) {
     const definition = EventSchema.parse(write.newDefinition);
     if (targetEventID !== definition.id || !definition.originalStart || [baseline.master, ...baseline.children].some(item => item.id === definition.id)) throw unsupported();
     const common = { operationID: definition.id, scope: "occurrence" as const, expectedRevision: baseline.master.revision!, originalStart: definition.originalStart, expectedOccurrenceRevision: null };
-    const request = write.cancelTarget ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch: write.patch, ensureDefinition: true };
+    const request = write.cancelTarget ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch: write.patch, ensureDefinition: true, time: write.time };
     const plan = planEventScope(baseline.master, baseline.children, request, () => definition.id);
     if (plan.creates.length !== 1 || plan.deletes.length || !sameCaldavScopeContext(plan.creates[0], definition)) throw unsupported();
     return { ...baseline, children: [...baseline.children, definition] };
@@ -93,9 +96,6 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
   const target = baseline.children.filter(child => child.id === targetEventID);
   if (target.length !== 1 || (target[0]!.isCanceled && write.cancelTarget) || !target[0]!.originalStart) throw unsupported();
-  const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
-  const currentModel = target[0]!.timeModel;
-  if (time && (time.timeModel.kind !== currentModel?.kind || time.timeModel.kind === "zoned" && (currentModel?.kind !== "zoned" || time.timeModel.timeZone !== currentModel.timeZone))) throw unsupported();
   return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, ...time, isCanceled: write.cancelTarget === true }) : child) };
 }
 

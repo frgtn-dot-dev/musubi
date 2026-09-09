@@ -52,7 +52,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -80,8 +80,9 @@ async function main() {
         const root = original.find(event => !event.seriesID)!;
         if (scenario.startsWith("generated-")) {
           const cancellation = scenario.includes("cancel");
+          const generatedTime = scenario.startsWith("generated-time-") ? scenario.endsWith("all-day") ? { kind: "all-day", startDate: "2026-04-02", endDate: "2026-04-03" } : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" } : undefined;
           const originalStart = scenario.endsWith("all-day") ? { kind: "date", value: "2026-03-31" } : scenario.endsWith("floating") ? { kind: "floating", value: "2026-03-31T09:00:00.000" } : { kind: "instant", value: "2026-03-31T07:00:00.000Z" };
-          const generatedRequest = { operationID: randomUUID(), scope: "occurrence", originalStart, expectedOccurrenceRevision: null, expectedRevision: root.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: { title: "New definition" } }) };
+          const generatedRequest = { operationID: randomUUID(), scope: "occurrence", ...(generatedTime ? { time: generatedTime } : {}), originalStart, expectedOccurrenceRevision: null, expectedRevision: root.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: { title: "New definition" } }) };
           const candidate = await applyLocalEventScope(root.id, owner, generatedRequest, { prepareProvider: true });
           assert.equal(candidate.status, "caldav_required"); if (candidate.status !== "caldav_required") throw new Error("Missing generated context");
           const prepared = await prepareCaldavSeries(candidate.context, generatedRequest);
@@ -104,6 +105,7 @@ async function main() {
           const definition = savedRows.find(item => item.id === definitionID)!;
           assert.equal(definition.revision, 1); assert.equal(definition.isCanceled, cancellation);
           assert.deepEqual(definition.originalStart, originalStart);
+          if (generatedTime) assert.deepEqual(definition.timeModel, resolveEventTimeEdit(generatedTime).timeModel);
           assert.ok(savedMaps.every(item => item.etag === '"before"'));
           assert.equal(savedMaps.find(item => item.eventID === definitionID)!.externalSeriesID, resource);
           const [operation] = await outbox(); assert.equal((await outbox()).length, 1);
