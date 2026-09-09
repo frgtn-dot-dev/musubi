@@ -282,7 +282,7 @@ async function prepare(
     const savedWrite = row.payload.caldavSeries.write;
     const targetEventID = savedWrite.targetEventID;
     const zoneConversion = savedWrite.time?.kind === "zoned" && savedWrite.baseline.master.timeModel?.kind === "zoned" && savedWrite.time.timeZone !== savedWrite.baseline.master.timeModel.timeZone;
-    const restoringExdates = savedWrite.patch.recurrence !== undefined && /(?:^|\n)EXDATE/.test(savedWrite.baseline.master.recurrence ?? "");
+    const restoringExdates = savedWrite.patch.recurrence !== undefined && /(?:^|\n)(?:EXDATE|RDATE)/.test((savedWrite.baseline.master.recurrence ?? "") + "\n" + (savedWrite.patch.recurrence ?? ""));
     const localTarget = targetEventID ? family.children.find(child => child.id === targetEventID) : family.master;
     if (!localTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, zoneConversion || restoringExdates || savedWrite.newDefinition || savedWrite.cancelTarget || savedWrite.followingDelete ? null : targetEventID);

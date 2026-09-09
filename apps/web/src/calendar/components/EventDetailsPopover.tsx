@@ -695,6 +695,7 @@ export function EventDetailsPopover({
 								</IconButton>
 							</header>
 							<EventEditorForm
+                rdateMaster={homeCalendar?.provider === "caldav" && !liveMaster.seriesID ? liveMaster : undefined}
                 key={draft?.privacyRevision ?? "initial"}
                 onValuesChange={(values) => setDraft(current => current ? { ...current, values, ownedFields: rememberPrivateEditorChanges(current.values ?? eventFormValues(master.recurrence && onRestoreEvent ? occurrence : master), values, current.ownedFields) } : current)}
 								calendarLocked

@@ -4,6 +4,7 @@ import {
 	DEFAULT_CALENDAR_COLOR,
 	providerDisplayName,
 	type Calendar,
+	type Event,
 	type Settings,
 } from "@musubi/types";
 import {
@@ -78,6 +79,7 @@ export type EventWhen = Pick<
 >;
 
 type EventEditorFormProps = {
+	rdateMaster?: Event;
 	calendarLocked?: boolean;
 	calendars: Calendar[];
 	/**
@@ -126,6 +128,7 @@ type EventEditorFormProps = {
 };
 
 export function EventEditorForm({
+	rdateMaster,
 	calendarLocked = false,
 	calendars,
 	compact = false,
@@ -424,6 +427,8 @@ export function EventEditorForm({
 						variant="section"
 					>
 						<RecurrenceEditor
+                            rdateMaster={rdateMaster}
+                            weekStartsOn={weekStartsOn}
 							allDay={values.timeKind === "all-day"}
 							date={values.date}
 							disabled={saving}

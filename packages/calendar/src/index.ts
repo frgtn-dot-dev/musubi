@@ -28,3 +28,4 @@ export * from "./exdate-restoration";
 
 export * from "./caldav-alarm-scope";
 export * from "./provider-organizer-draft";
+export * from "./rdate-edit";

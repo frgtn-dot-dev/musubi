@@ -4,7 +4,7 @@ import { lockExternalEventAddress } from "./event-outbox-deletions";
 import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { caldavExdateRestoration, planEventScope } from "@musubi/calendar";
+import { caldavRdateEdit, caldavExdateRestoration, planEventScope } from "@musubi/calendar";
 import { BadRequestError, can, EventSchema, EventScopeOutcomeSchema, EventScopeRequestSchema, EventWriteError, occurrenceKey, type Event, type EventScopeOutcome } from "@musubi/types";
 import { db } from "..";
 import { calendarEvents, calendarMembers, events, eventScopeOperations, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
@@ -82,11 +82,16 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
           if (request.scope !== "series" || request.time || childRows.length || Object.keys(request.patch).length !== 1) throw new EventWriteError("event-write", "unsupported");
           caldavExdateRestoration(EventSchema.parse(master), request.patch.recurrence!);
         }
+        const editsRdate = request.action === "update" && typeof request.patch.recurrence === "string" && /(?:^|\n)RDATE/.test((master.recurrence ?? "") + "\n" + request.patch.recurrence);
+        if (editsRdate && request.action === "update") {
+          if (request.scope !== "series" || request.time || childRows.length || Object.keys(request.patch).length !== 1) throw new EventWriteError("recurrence", "unsupported");
+          caldavRdateEdit(EventSchema.parse(master), request.patch.recurrence!);
+        }
         if (removesRecurrence && (request.scope !== "series" || request.time || childRows.length)) throw new EventWriteError("event-write", "unsupported");
-        if (!restoresExdates && request.action === "update" && request.patch.recurrence !== undefined && ((!removesRecurrence && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence))) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
+        if (!restoresExdates && !editsRdate && request.action === "update" && request.patch.recurrence !== undefined && ((!removesRecurrence && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence))) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
         if (request.action === "update" && request.time?.kind === "zoned" && master.timeModel?.kind === "zoned" && request.time.timeZone !== master.timeModel.timeZone && caldavContext.retiredDefinitions?.length) throw new EventWriteError("event-write", "unsupported");
-        if (request.action === "update" && request.patch.recurrence !== undefined && /(?:^|\n)EXDATE/.test(master.recurrence ?? "") && caldavContext.retiredDefinitions?.length) throw new EventWriteError("event-write", "unsupported");
+        if (request.action === "update" && request.patch.recurrence !== undefined && (/(?:^|\n)EXDATE/.test(master.recurrence ?? "") || editsRdate) && caldavContext.retiredDefinitions?.length) throw new EventWriteError("event-write", "unsupported");
         if (options.caldavSplit && (options.caldav || options.caldavDeletion || options.provider || !sameCaldavScopeContext(options.caldavSplit.split.request, request))) throw new EventWriteError("event-write", "unsupported");
         if (options.caldavSplit && !sameCaldavScopeContext(options.caldavSplit.context, caldavContext)) return { status: "conflict", current: EventSchema.parse(master) };
         if (options.caldavDeletion && (!["series", "following"].includes(request.scope) || request.action !== "delete" || !sameCaldavScopeContext(options.caldavDeletion.context, caldavContext) || !sameCaldavScopeContext(options.caldavDeletion.deletion.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldavDeletion.deletion.baseline.children, caldavContext.children))) return { status: "conflict", current: EventSchema.parse(master) };

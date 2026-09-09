@@ -633,6 +633,36 @@ async function main() {
       assert.equal((await applyLocalEventScope(local.id, userID, request, { prepareProvider: true })).status, "replayed");
       console.log("Radicale DATE restoration: selected native exclusion, immutable conflict recovery, private preservation, stable ACK/echo and stale CAS refusal: OK");
     }
+    {
+      const datedURL = new URL("single-rdate.ics", collectionURL).href;
+      const native = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Musubi//RDATE//EN", "BEGIN:VEVENT", "UID:single-rdate", "DTSTART;VALUE=DATE:20260328", "DTEND;VALUE=DATE:20260329", "RRULE:FREQ=DAILY;COUNT=2", "SUMMARY:Additional date", "X-PRESERVE:private extension", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Keep alarm", "END:VALARM", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n");
+      assert.ok((await davFetch(datedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-none-match": "*" }, body: native })).ok);
+      await sync();
+      const [mapping] = await db.select().from(externalEvents).where(eq(externalEvents.externalEventID, datedURL));
+      for (const remove of [false, true]) {
+        const local = (await getEventSnapshot(mapping!.eventID))!;
+        const recurrence = remove ? local.recurrence!.split("\n")[0]! : local.recurrence + "\nRDATE;VALUE=DATE:20260402";
+        const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: local.revision, patch: { recurrence } };
+        const candidate = await applyLocalEventScope(local.id, userID, request, { prepareProvider: true });
+        if (candidate.status !== "caldav_required") throw new Error("Missing RDATE native context");
+        const prepared = await prepareCaldavSeries(candidate.context, request);
+        assert.equal(prepared.write.after, remove ? prepared.write.before.replace("RDATE;VALUE=DATE:20260402\r\n", "") : prepared.write.before.replace("END:VEVENT", "RDATE;VALUE=DATE:20260402\r\nEND:VEVENT"));
+        assert.equal((await applyLocalEventScope(local.id, userID, request, { caldav: prepared })).status, "saved");
+        const [operation] = await db.select().from(eventOutbox).where(eq(eventOutbox.mutationID, request.operationID));
+        if (!remove) {
+          const competing = await davFetch(datedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": mapping!.etag! }, body: prepared.write.before.replace("private extension", "fresh private extension") }); assert.ok(competing.ok);
+          assert.equal((await deliverEventOutbox(operation!.id, () => caldavAdapter))?.status, "conflict");
+          const comparison = await prepareEventDeliveryResolution(userID, local.id, operation!.id, () => caldavAdapter);
+          const replacement = await commitEventDeliveryResolution(userID, comparison.proof, { mutationId: randomUUID(), expectedLocalRevision: comparison.preview.localRevision, expectedLatestOperationId: operation!.id, expectedRemoteExists: true, expectedRemoteEtag: comparison.preview.remoteEtag });
+          assert.equal((await deliverEventOutbox(replacement, () => caldavAdapter))?.status, "completed");
+        } else assert.equal((await deliverEventOutbox(operation!.id, () => caldavAdapter))?.status, "completed");
+        const settled = await rows(); await sync(); assert.deepEqual(await rows(), settled);
+        const bytes = await (await davFetch(datedURL, { headers: { authorization: basicAuth } })).text();
+        assert.equal(bytes.includes("RDATE;VALUE=DATE:20260402"), !remove); assert.ok(bytes.includes("RRULE:FREQ=DAILY;COUNT=2") && bytes.includes("X-PRESERVE:fresh private extension") && bytes.includes("DESCRIPTION:Keep alarm"));
+        assert.equal((await applyLocalEventScope(local.id, userID, request, { prepareProvider: true })).status, "replayed");
+      }
+      console.log("Radicale single RDATE: reversible add/remove, immutable conflict, full native CAS, unchanged COUNT/anchor/extension/alarm and ACK echo: OK");
+    }
     for (const kind of ["zoned", "floating", "all-day"]) {
       const removalURL = new URL(`remove-${kind}.ics`, collectionURL).href;
       const stamp = kind === "all-day" ? "DTSTART;VALUE=DATE:20260328" : `DTSTART${kind === "zoned" ? ";TZID=Europe/Prague" : ""}:20260328T090000`;

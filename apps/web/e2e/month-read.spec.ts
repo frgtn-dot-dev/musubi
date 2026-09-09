@@ -9533,3 +9533,36 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  for (const remove of [false, true]) test(`K12 single CalDAV RDATE ${remove ? "remove" : "add"}: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const known = event("00000000-0000-4000-8000-000000000901", "Additional series date", "personal", "red", "2026-03-28T00:00:00Z", "2026-03-28T00:00:00Z", {
+      recurrence: "RRULE:FREQ=DAILY;COUNT=2" + (remove ? "\nRDATE;VALUE=DATE:20260402" : ""), seriesID: null, originalStart: null, isAllDay: true, timeModel: { kind: "all-day" },
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [known] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "CalDAV" }]);
+    const writes: Record<string, unknown>[] = [];
+    await page.route(`**/api/v1/events/${known.id}/scope`, route => { const body = route.request().postDataJSON(); writes.push(body); return respond(route, { operationID: body.operationID, changed: true, events: [{ id: known.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false }); });
+    await page.goto("/app/p/my-calendar/month?date=2026-03-29");
+    await page.locator('[data-day-key="2026-03-29"]').getByRole("button", { name: /Additional series date/ }).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "More options", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
+    await expect(editor.getByText("Changes here apply to the recurring series.")).toBeVisible();
+    if (remove) await editor.getByRole("button", { name: "Remove additional date", exact: true }).click();
+    else {
+      await editor.getByRole("button", { name: /^Additional series date:/ }).click();
+      await page.getByRole("textbox", { name: "Exact date", exact: true }).fill("2026-04-02");
+      await page.getByRole("textbox", { name: "Exact date", exact: true }).press("Enter");
+      await expect(editor.getByRole("button", { name: "Remove additional date", exact: true })).toBeVisible();
+    }
+    await expectNoAccessibilityViolations(page);
+    await editor.screenshot({ path: testInfo.outputPath("single-additional-date.png") });
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=2" + (remove ? "" : "\nRDATE;VALUE=DATE:20260402") } });
+    expect(writes[0]).not.toHaveProperty("time"); expect(writes[0]).not.toHaveProperty("originalStart");
+  });
+}
