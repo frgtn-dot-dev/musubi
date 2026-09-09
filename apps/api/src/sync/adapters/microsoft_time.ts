@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { instantToCivil, unambiguousCivilToInstant } from "@musubi/calendar";
-import { CivilDateTimeSchema, EventTimeModelSchema, EventTimeZoneSchema, EventWriteError, type Event } from "@musubi/types";
+import { CivilDateTimeSchema, EventTimeModelSchema, EventTimeZoneSchema, EventWriteError, OccurrenceStartSchema, type OccurrenceStart, type Event } from "@musubi/types";
 
 const DAY = 86_400_000;
 function refuse(): never { throw new EventWriteError("event-write", "unsupported", "Outlook requires an explicit, exact, unambiguous master time. No changes were saved."); }
@@ -41,6 +41,42 @@ function utcDate(value: string): Date {
   if (!match || /[1-9]/.test((match[2] ?? "").slice(3))) refuse();
   const civil = CivilDateTimeSchema.parse(`${match[1]}.${(match[2] ?? "").padEnd(3, "0").slice(0, 3)}`);
   return new Date(civil + "Z");
+}
+
+export function graphOriginalStartFromUtc(value: unknown, isAllDay: boolean): OccurrenceStart {
+  if (typeof value !== "string" || !value.endsWith("Z")) refuse();
+  const instant = utcDate(value.slice(0, -1));
+  if (isAllDay && !instant.toISOString().endsWith("T00:00:00.000Z")) refuse();
+  return OccurrenceStartSchema.parse(isAllDay ? { kind: "date", value: instant.toISOString().slice(0, 10) } : { kind: "instant", value: instant.toISOString() });
+}
+
+const instanceTime = z.object({
+  type: z.enum(["occurrence", "exception"]), seriesMasterId: z.string(), originalStart: z.string(),
+  isAllDay: z.boolean(), isCancelled: z.literal(false), "@removed": z.never().optional(),
+  start: utcEndpoint, end: utcEndpoint,
+  originalStartTimeZone: z.string().optional(), originalEndTimeZone: z.string().optional(),
+});
+
+/** Regular occurrences must equal the proven current recurrence slot. A moved
+ * timed exception has exact UTC instants, but historical original*TimeZone
+ * labels are not a proof of its current event zone: preserve that uncertainty. */
+export function graphInstanceTimeFromUtc(native: unknown, masterID: string, expected: Time & { originalStart: OccurrenceStart }): Time & { originalStart: OccurrenceStart } {
+  try {
+    const item = instanceTime.parse(native);
+    const originalStart = graphOriginalStartFromUtc(item.originalStart, expected.isAllDay);
+    if (item.seriesMasterId !== masterID || item.isAllDay !== expected.isAllDay || JSON.stringify(originalStart) !== JSON.stringify(OccurrenceStartSchema.parse(expected.originalStart))) refuse();
+    const start = utcDate(item.start.dateTime), exclusiveEnd = utcDate(item.end.dateTime);
+    if (exclusiveEnd < start) refuse();
+    const end = item.isAllDay ? new Date(exclusiveEnd.getTime() - DAY) : exclusiveEnd;
+    if (item.isAllDay && (end < start || ![start, exclusiveEnd].every(value => value.toISOString().endsWith("T00:00:00.000Z")))) refuse();
+    if (item.type === "occurrence") {
+      graphTimeForEvent(expected);
+      if (start.getTime() !== expected.start.getTime() || end.getTime() !== expected.end.getTime()) refuse();
+      return { start, end, isAllDay: item.isAllDay, timeModel: EventTimeModelSchema.parse(expected.timeModel), originalStart };
+    }
+    if (item.isAllDay && [item.originalStartTimeZone, item.originalEndTimeZone].some(value => value !== undefined && value !== "UTC")) refuse();
+    return { start, end, isAllDay: item.isAllDay, timeModel: item.isAllDay ? { kind: "all-day" } : { kind: "legacy-unknown" }, originalStart };
+  } catch { return refuse(); }
 }
 
 /** Strict master-time evidence for future recurring-create recovery. Existing
