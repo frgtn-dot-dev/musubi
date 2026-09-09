@@ -627,6 +627,18 @@ async function mappedEventForUpdate(
   return mapping ? { ...mapping, event: mapped.event } : undefined;
 }
 
+/** Caller holds the calendar lifecycle lock. Complete Graph replacement uses
+ * its exclusive mode, so a stale per-event delta/reset cannot race this check
+ * and tombstone or partially overwrite a newly accepted canonical family. */
+async function isTrackedGraphMapping(tx: DbTransaction, provider: string, mapped: NonNullable<Awaited<ReturnType<typeof mappedEventForUpdate>>>) {
+  if (provider !== "microsoft") return false;
+  const root = (value: typeof events.$inferSelect) => !value.seriesID && !!value.recurrence && ["zoned", "all-day"].includes(value.timeModel?.kind ?? "");
+  if (root(mapped.event)) return true;
+  if (!mapped.event.seriesID) return false;
+  const [parent] = await tx.select().from(events).where(eq(events.id, mapped.event.seriesID));
+  return !!parent && root(parent);
+}
+
 /**
  * Upsert a provider event. Returns TRUE when it actually wrote something —
  * the scheduled sync uses this to decide whether to wake connected clients.
@@ -812,6 +824,7 @@ async function upsertExternalEventInTransaction(
       }
     }
     if (map) {
+      if (await isTrackedGraphMapping(tx, provider, map)) return false;
       const stateChanged = state !== undefined && JSON.stringify(map.providerState == null ? null : ProviderEventStateSchema.parse(map.providerState)) !== JSON.stringify(state);
       if (expandedIdentity && map.externalSeriesID && (map.externalSeriesID !== expandedIdentity.externalSeriesID || !sameTimeMetadata(map.originalStart, expandedIdentity.originalStart)))
         throw new Error("Provider-expanded occurrence identity cannot change.");
@@ -951,6 +964,7 @@ export async function deleteExternalEvent(
       await retainUnmappedEventDeletion(tx, provider, calendarID, externalEventID);
       return false;
     }
+    if (await isTrackedGraphMapping(tx, provider, mapped)) return false;
     if (provider === "caldav") {
       if ((mapped.externalSeriesID ?? null) !== (address?.resource ?? null)) throw new Error("CalDAV resource address changed during deletion.");
       const [family] = await tx.select().from(eventOutbox).where(and(

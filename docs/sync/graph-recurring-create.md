@@ -123,9 +123,9 @@ Independent native fixtures and fake HTTP tests cover DST, all-day year bounds,
 a moved exception outside the query window, per-instance native identities and
 reminders/privacy, complete cancellation, unknown zone preservation, malformed
 and cross-family inputs, incomplete pagination and changed second observations.
-This reader is not yet connected to production sync, local recurrence expansion,
-the durable create ACK or reset sweep; those integrations must preserve the same
-completeness boundary and handle unsupported observations without deleting data.
+Tracked known masters now use this reader during sync, including with the edit
+flag off. The durable create ACK remains separate; unsupported or missing native
+masters currently fail the read without deleting stored data or advancing the cursor.
 
 ## Private atomic family persistence
 
@@ -167,8 +167,39 @@ unknown-zone moved exceptions, preserved cancellation content, never-observed
 cancellations, native-ID changes, COUNT shrink/revival, year-boundary dates,
 no-op, malformed/incomplete rollback, native-ID collision, stale local/mapping
 state, pending operation, grant/link/account changes and concurrent one-winner
-commit. The engine's calendarView suppression, reset sweep, pending-create
-coordination and durable create ACK must still be connected before activation.
+commit. The engine now suppresses the matching calendarView family and retains its
+accepted mapping IDs through reset. Pending-create coordination, authoritative
+whole-master removal and durable create ACK remain required before activation.
+
+## Tracked family synchronization
+
+The engine discovers only already mapped known recurring masters, captures their
+accepted local contexts, and reads each complete native family before requesting
+the bounded calendarView delta. It supplies current/historical native IDs and
+master IDs as exclusions. Microsoft filters those records before ordinary
+hydration, including stale unmapped instance IDs and removed records. Other
+native series retain the existing provider-expanded import contract.
+
+After the complete read and view fetch succeed, each family commits through its
+context-checked transaction before ordinary changes. Reset sweep sees the union
+of ordinary IDs and all retained family mapping IDs, including cancellation
+history. Ordinary per-event upsert/delete checks also exclude a tracked canonical
+family under the calendar lifecycle lock. This protects IDs accepted by another
+sync after the earlier retained-ID list was captured. An empty/re-windowed view
+cannot delete a finite family's master or
+suppression definitions. Existing known families keep this read contract when
+the time-edit flag is disabled; that flag does not turn accepted definitions back
+into independent provider-expanded rows. Each full family read has a bounded
+60-second signal, and runs even when the delta reports no family changes.
+
+Actual adapter/fake HTTP/PostgreSQL tests cover both flag states, stale-ID
+suppression before hydration, repeated no-op, window renewal/reset, moved and
+cancelled exceptions, revival UUIDs, unrelated one-offs, full-reader/view failures
+a local revision race before commit, and overlapping sync/reset with replacement
+native IDs. Stale per-event updates/deletes cannot bypass full-family evidence. Failed complete proof preserves the
+family and cursor. Remote whole-master 404 currently remains an explicit failed
+read: authoritative family deletion/revival and coordination with a newly
+appearing or pending create must be completed before enabling recurring creation.
 
 ## Remaining before activation
 

@@ -4,6 +4,7 @@ import { hasKnownEventTime, EventWriteError, type Event, type Task } from "@musu
 import { logger } from "@musubi/config";
 import {
   getDueEventOutboxIDs, getEventOutboxBacklog,
+  listGraphFamilyContexts, replaceGraphFamily, type GraphFamilyContext, type GraphFamilyObservation,
   type EventOutboxIntent,
   deleteExternalEvent,
   deleteExternalTask,
@@ -287,12 +288,33 @@ export async function syncProvider(
     if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
     let fetched;
+    const families: { context: GraphFamilyContext; observation: GraphFamilyObservation }[] = [];
+    const excludedEventIDs = new Set<string>(), excludedSeriesIDs = new Set<string>();
     try {
+      if (provider === "microsoft" && !taskOnly) {
+        for (const context of await listGraphFamilyContexts(userID, accountId, link.calendarID)) {
+          if (!adapter.readGraphFamily) throw new Error("Complete Graph family reader is unavailable.");
+          const mapping = context.mappings.find(value => value.eventID === context.root.id)!;
+          const native = await adapter.readGraphFamily(userID, accountId, link.externalCalendarID, { ...context.root, calendars: [link.calendarID] }, { externalEventId: mapping.externalEventID, icalUid: mapping.icalUid, etag: mapping.etag });
+          const project = (event: NormalizedEvent): GraphFamilyObservation["master"] => {
+            if (!event.timeModel || !event.icalUid || !event.providerState) throw new Error("Incomplete Graph family projection.");
+            return { externalID: event.externalId, icalUid: event.icalUid, etag: event.etag ?? null, providerState: event.providerState, values: { ...toEventValues(event, link.calColor), timeModel: event.timeModel } };
+          };
+          const observation: GraphFamilyObservation = { master: project(native.master), instances: native.instances.map(value => {
+            if (!value.originalStart) throw new Error("Missing Graph original identity.");
+            return { ...project(value), originalStart: value.originalStart };
+          }), cancelled: native.cancelled };
+          families.push({ context, observation });
+          excludedSeriesIDs.add(mapping.externalEventID);
+          for (const id of [mapping.externalEventID, ...context.mappings.map(value => value.externalEventID), ...native.instances.map(value => value.externalId)]) excludedEventIDs.add(id);
+        }
+      }
       fetched = await adapter.fetchChanges(
         userID,
         accountId,
         link.externalCalendarID,
         link.cursor,
+        families.length ? { excludedEventIDs: [...excludedEventIDs], excludedSeriesIDs: [...excludedSeriesIDs] } : undefined,
       );
     } catch (error) {
       if (
@@ -315,9 +337,15 @@ export async function syncProvider(
     const onUnlink = (id: string, revision: number) => {
       unlinkedEventIDs.push({ id, revision });
     };
-    let changed: number;
+    let changed = 0;
+    const retainedGraphIDs = new Set<string>();
     try {
-      changed = await reconcileExternalChanges(changes, reset, {
+      for (const family of families) {
+        const result = await replaceGraphFamily(family.context, family.observation);
+        if (result.changed) changed++;
+        for (const id of result.seenExternalIDs) retainedGraphIDs.add(id);
+      }
+      changed += await reconcileExternalChanges(changes, reset, {
         replaceResource: (resourceID, observations) => replaceExternalEventResource(provider, userID, link.calendarID, link.externalCalendarID, resourceID, observations.map(event => {
           if (!event.timeModel || !event.icalUid) throw new Error("Resource observation requires a time model and UID.");
           return { providerState: event.providerState, externalId: event.externalId, values: toEventValues(event, link.calColor), etag: event.etag ?? null, icalUid: event.icalUid, time: { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } };
@@ -357,7 +385,7 @@ export async function syncProvider(
           sweepExternalEvents(
             provider,
             link.calendarID,
-            seenExternalIDs,
+            [...new Set([...seenExternalIDs, ...retainedGraphIDs])],
             onUnlink,
           ),
         sweepTasks: (seenExternalIDs) =>

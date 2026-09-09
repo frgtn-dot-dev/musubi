@@ -73,7 +73,7 @@ export async function readGraphFamilyContext(address: Address): Promise<GraphFam
 
 /** Atomically replaces a previously accepted, exclusively owned Graph family.
  * Caller supplies COMPLETE finite native proof, never calendarView absence.
- * Not connected to sync or create delivery until their full integration. */
+ * Used by tracked-family sync; native create delivery/ACK is separate. */
 export async function replaceGraphFamily(context: GraphFamilyContext, observation: GraphFamilyObservation): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
   context = structuredClone(context); observation = structuredClone(observation);
   return db.transaction(async tx => {
@@ -158,4 +158,17 @@ export async function replaceGraphFamily(context: GraphFamilyContext, observatio
     const retained = await tx.select({ id: externalEvents.externalEventID }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, address.calendarID), or(eq(externalEvents.externalEventID, address.externalMasterID), eq(externalEvents.externalSeriesID, address.externalMasterID))));
     return { changed, seenExternalIDs: retained.map(value => value.id).sort() };
   }).catch(() => { throw new Error("Complete Graph family could not be persisted."); });
+}
+
+/** Already accepted native masters only; never discovers or promotes ordinary
+ * provider-expanded rows into a canonical family. */
+export async function listGraphFamilyContexts(userID: string, accountID: string, calendarID: string): Promise<GraphFamilyContext[]> {
+  const roots = await db.select({ externalMasterID: externalEvents.externalEventID }).from(externalEvents)
+    .innerJoin(events, eq(events.id, externalEvents.eventID))
+    .innerJoin(externalCalendars, eq(externalCalendars.calendarID, externalEvents.calendarID))
+    .where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, calendarID), eq(externalCalendars.provider, "microsoft"), eq(externalCalendars.userID, userID), eq(externalCalendars.accountID, accountID),
+      sql`${events.seriesID} is null and ${events.deletedAt} is null and ${events.recurrence} is not null and ${events.recurrence} <> '' and ${events.timeModel}->>'kind' in ('zoned', 'all-day')`)).orderBy(externalEvents.externalEventID);
+  const result: GraphFamilyContext[] = [];
+  for (const root of roots) result.push(await readGraphFamilyContext({ userID, accountID, calendarID, externalMasterID: root.externalMasterID }));
+  return result;
 }
