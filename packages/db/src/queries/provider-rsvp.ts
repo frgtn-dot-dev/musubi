@@ -1,3 +1,4 @@
+import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -7,7 +8,7 @@ import {
   ForbiddenError,
   EventTimeModelSchema, type EventTimeModel,
   ProviderEventStateSchema,
-  ProviderRsvpEditSchema, providerRsvpDesiredState, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
+  ProviderRsvpEditSchema, providerRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
 } from "@musubi/types";
 import { db } from "..";
 import {
@@ -22,14 +23,18 @@ import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { appendEventOutbox } from "./event-outbox";
 import { providerStateVersion } from "./provider-reminders";
 import { isDeepStrictEqual } from "node:util";
-export type ProviderRsvpContext = { actorID: string; eventID: string; request: ProviderRsvpEdit; event: Event; mappingID: string; externalEventID: string; etag: string; accountID: string; externalCalendarID: string; linkID: string; state: import("@musubi/types").ProviderEventState };
+export type ProviderRsvpContext = { actorID: string; eventID: string; request: ProviderRsvpEdit; event: Event; mappingID: string; externalEventID: string; etag: string; accountID: string; externalCalendarID: string; linkID: string; state: import("@musubi/types").ProviderEventState; instance?: ProviderRsvpInstance };
 export type ProviderRsvpReceipt = { operationID: string; replayed: boolean; status: string };
 export type ProviderRsvpPreparation = { kind: "replay"; receipt: ProviderRsvpReceipt } | { kind: "prepared"; context: ProviderRsvpContext };
 export async function prepareProviderRsvpEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
   return rsvpTransaction(actorID, eventID, input);
 }
+/** Internal staged capability. Public enqueue still uses the one-off entry. */
+export async function prepareProviderRsvpInstanceEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
+  return rsvpTransaction(actorID, eventID, input, undefined, true);
+}
 export async function commitProviderRsvpEdit(prepared: ProviderRsvpContext, baseline: Record<string, unknown>, nativeTime: EventTimeModel): Promise<ProviderRsvpReceipt> {
-  const result = await rsvpTransaction(prepared.actorID, prepared.eventID, prepared.request, { context: prepared, baseline, nativeTime: EventTimeModelSchema.parse(nativeTime) });
+  const result = await rsvpTransaction(prepared.actorID, prepared.eventID, prepared.request, { context: prepared, baseline, nativeTime: EventTimeModelSchema.parse(nativeTime) }, !!prepared.instance);
   if (result.kind !== "replay") throw new Error("RSVP commit did not produce a receipt");
   return result.receipt;
 }
@@ -41,6 +46,7 @@ async function rsvpTransaction(
   eventID: string,
   input: unknown,
   prepared?: { context: ProviderRsvpContext; baseline: Record<string, unknown>; nativeTime: EventTimeModel },
+  allowInstance = false,
 ): Promise<ProviderRsvpPreparation> {
   const request = ProviderRsvpEditSchema.parse(input);
   eventID = eventID.toLowerCase();
@@ -49,18 +55,20 @@ async function rsvpTransaction(
       sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["musubi:event-mutation", actorID, request.operationID])}, 0))`,
     );
     const [initial] = await tx
-      .select({ calendarID: events.originCalendarID })
+      .select({ calendarID: events.originCalendarID, seriesID: events.seriesID })
       .from(events)
       .where(eq(events.id, eventID));
     if (!initial?.calendarID)
       throw new ForbiddenError("A live connected source event is required.");
     await lockCalendarLifecycle(tx, [initial.calendarID], "shared");
+    if (allowInstance && initial.seriesID)
+      await tx.select({ id: events.id }).from(events).where(eq(events.id, initial.seriesID)).for("update");
     const [event] = await tx
       .select()
       .from(events)
       .where(and(eq(events.id, eventID), isNull(events.deletedAt)))
       .for("update");
-    if (!event || event.originCalendarID !== initial.calendarID)
+    if (!event || event.originCalendarID !== initial.calendarID || (allowInstance && event.seriesID !== initial.seriesID))
       throw new ForbiddenError("The event source changed.");
     const [target] = await tx
       .select({ link: externalCalendars, role: calendarMembers.role })
@@ -124,7 +132,7 @@ async function rsvpTransaction(
       return { kind: "replay", receipt: { operationID: previous.id, replayed: true, status: previous.status } };
     }
     // Native time/series evidence must be verified before accepting its ETag.
-    if (event.timeModel?.kind === "floating" || event.recurrence || event.seriesID || event.originalStart || event.isCanceled)
+    if (event.timeModel?.kind === "floating" || event.recurrence || (!allowInstance && (event.seriesID || event.originalStart)) || event.isCanceled)
       throw new EventWriteError("event-write", "unsupported");
     const [mapping] = await tx
       .select()
@@ -144,6 +152,7 @@ async function rsvpTransaction(
       !mapping.providerState
     )
       throw new EventWriteError("event-write", "unsupported");
+    const instance = allowInstance ? await readProviderRsvpInstance(tx, event, mapping, actorID) : undefined;
     if (
       event.revision !== request.expectedRevision ||
       providerStateVersion(mapping) !== request.expectedStateVersion
@@ -196,13 +205,13 @@ async function rsvpTransaction(
     });
     const state = ProviderEventStateSchema.parse(mapping.providerState);
     const desiredState = providerRsvpDesiredState(state, target.link.externalCalendarID, request.response);
-    const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state };
+    const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}) };
     if (!prepared) return { kind: "prepared", context };
     if (!isDeepStrictEqual(context, prepared.context)) throw new BadRequestError("RSVP source changed during provider verification.");
     // Raw evidence is server-internal and was normalized/compared by preflight.
     if (prepared.baseline.id !== mapping.externalEventID || prepared.baseline.etag !== mapping.etag)
       throw new BadRequestError("RSVP provider identity changed.");
-    const rsvp: ProviderRsvpIntent = { request, baseline: prepared.baseline, nativeTime: prepared.nativeTime, baselineState: state, desiredState, mappingID: mapping.id };
+    const rsvp: ProviderRsvpIntent = { request, baseline: prepared.baseline, nativeTime: prepared.nativeTime, ...(instance ? { instance } : {}), baselineState: state, desiredState, mappingID: mapping.id };
     const id = randomUUID();
     await appendEventOutbox(tx, snapshot, [
       {
@@ -231,7 +240,7 @@ async function rsvpTransaction(
 /** Recheck a claimed intent's exact live source before provider work. */
 export async function hasProviderRsvpSource(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
   const intent = row.payload.rsvp;
-  if (!intent || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
+  if (!intent || intent.instance || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
   const [source] = await db.select({ event: events, mapping: externalEvents, role: calendarMembers.role })
     .from(events)
     .innerJoin(eventOutbox, and(eq(eventOutbox.id, row.id), eq(eventOutbox.leaseToken, row.leaseToken), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`))
