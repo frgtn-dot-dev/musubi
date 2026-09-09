@@ -4,7 +4,7 @@ import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
 import { expandRecurringEvents } from "@musubi/calendar";
-import { EventSchema, EventWriteError, can, type Event } from "@musubi/types";
+import { EventSchema, EventWriteError, BadRequestError, can, type Event } from "@musubi/types";
 import { db } from "..";
 import { account, calendarEvents, calendarMembers, events, externalCalendars, externalEvents, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -67,14 +67,14 @@ export async function queueGraphSeriesCreate(actorID: string, operationID: strin
       const row = existing[0]!;
       if (existing.length !== 1 || row.position !== 0 || row.action !== "create" || row.provider !== "microsoft" || row.userID !== actorID || row.eventID !== event.id || row.revision !== 1 ||
           row.calendarID !== calendarID || row.externalCalendarLinkID !== link.id || row.accountID !== link.accountID || row.externalCalendarID !== link.externalCalendarID ||
-          row.payload.graphSeriesCreate?.version !== 1 || !same(row.payload.event, event) || !same(row.payload.graphSeriesCreate.nativeEvent, nativeEvent)) refuse();
+          row.payload.graphSeriesCreate?.version !== 1 || !same(row.payload.event, event) || !same(row.payload.graphSeriesCreate.nativeEvent, nativeEvent)) throw new BadRequestError("This creation identity was already used for another request. No changes were saved.");
       return { event: EventSchema.parse(row.payload.event), operationID: row.id };
     }
     // No partially adopted identity or previous journal may be repurposed.
     const old = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(eq(eventOutbox.eventID, event.id)).limit(1);
     const mappings = await tx.select({ id: externalEvents.id }).from(externalEvents).where(eq(externalEvents.eventID, event.id)).limit(1);
     const children = await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, event.id)).limit(1);
-    if (old.length || mappings.length || children.length) refuse();
+    if (old.length || mappings.length || children.length) throw new BadRequestError("This event identity already has provider history. No changes were saved.");
     const saved = EventSchema.parse({ ...await createEventInTransaction(tx, event, [calendarID]), calendars: [calendarID] });
     if (!same(saved, event)) refuse();
     const id = randomUUID();
@@ -84,7 +84,10 @@ export async function queueGraphSeriesCreate(actorID: string, operationID: strin
       payload: { event: saved, createIdentityVersion: 1, graphSeriesCreate: { version: 1, nativeEvent } },
     }]);
     return { event: saved, operationID: id };
-  }).catch(() => { throw new Error("Outlook recurring intent could not be queued. No changes were saved."); });
+  }).catch(error => {
+    if (error instanceof EventWriteError || error instanceof BadRequestError) throw error;
+    throw new Error("Outlook recurring intent could not be queued. No changes were saved.");
+  });
 }
 
 /** Caller holds calendar lifecycle admission. An uncertain new POST has no
@@ -130,4 +133,34 @@ export async function confirmGraphSeriesCreateOutbox(id: string, token: string):
     if (error instanceof EventWriteError || error instanceof z.ZodError) return false;
     throw new Error("Graph creation authority could not be checked. Retry reconciliation.");
   });
+}
+
+/** Read only the currently visible canonical result, never return later private
+ * edits merely because the caller owns a historical operation receipt. */
+export async function readGraphSeriesCreateReceipt(actorID: string, id: string) {
+  return db.transaction(async tx => {
+    const [row] = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.id, id), eq(eventOutbox.userID, actorID), eq(eventOutbox.actorID, actorID)));
+    if (!row?.payload.graphSeriesCreate) return { kind: "unavailable" as const };
+    await lockUserLifecycle(tx, [actorID], "shared");
+    await lockCalendarLifecycle(tx, [row.calendarID], "shared");
+    const [event] = await tx.select().from(events).where(eq(events.id, row.eventID)).for("share");
+    const memberships = await tx.select().from(calendarEvents).where(eq(calendarEvents.eventID, row.eventID)).for("share");
+    const [grant] = await tx.select().from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, actorID))).for("share");
+    const [link] = await tx.select().from(externalCalendars).where(eq(externalCalendars.id, row.externalCalendarLinkID)).for("share");
+    if (!event || event.deletedAt || event.creatorID !== actorID || event.originCalendarID !== row.calendarID || memberships.length !== 1 || memberships[0]!.calendarID !== row.calendarID ||
+        !grant || !["owner", "editor", "viewer"].includes(grant.role) || !link || link.provider !== "microsoft" || link.userID !== actorID || link.calendarID !== row.calendarID || link.accountID !== row.accountID || link.externalCalendarID !== row.externalCalendarID || link.disabled || !link.supportsEvents)
+      return { kind: "unavailable" as const };
+    return { kind: "active" as const, event: EventSchema.parse({ ...event, calendars: [row.calendarID] }) };
+  }).catch(() => { throw new Error("The accepted creation could not be read."); });
+}
+
+/** Historical actor-owned intent lookup precedes new-write permission checks.
+ * Its content is never a current readable snapshot; use the locked receipt. */
+export async function findGraphSeriesCreateReplay(actorID: string, operationID: string, input: unknown) {
+  const rows = await db.select().from(eventOutbox).where(and(eq(eventOutbox.actorID, actorID), eq(eventOutbox.userID, actorID), eq(eventOutbox.mutationID, operationID.toLowerCase())));
+  if (!rows.some(row => row.payload.graphSeriesCreate)) return undefined;
+  const row = rows[0]!;
+  if (rows.length !== 1 || row.position !== 0 || row.action !== "create" || row.provider !== "microsoft" || row.payload.graphSeriesCreate?.version !== 1 || !same(row.payload.event, input))
+    throw new BadRequestError("This creation identity was already used for another request. No changes were saved.");
+  return { event: EventSchema.parse(row.payload.event), operationID: row.id };
 }
