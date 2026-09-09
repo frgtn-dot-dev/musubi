@@ -1,7 +1,8 @@
+import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { providerRsvpBaselineVersion } from "./provider-rsvp";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
-import { matchesReminderEventProjection } from "./event-outbox-projection";
+import { matchesReminderEventProjection, matchesRsvpEventProjection } from "./event-outbox-projection";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
@@ -10,7 +11,7 @@ import {
   NotFoundError,
   type ResolveEventDeliveryRequest,
   type ProviderReminderEdit,
-  type ProviderRsvpIntent,
+  type ProviderRsvpIntent, type ProviderRsvpInstance,
   ProviderRsvpEditSchema, providerRsvpDesiredState,
   type ProviderEventState,
 } from "@musubi/types";
@@ -137,10 +138,24 @@ async function resolutionContext(
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
   if (!row.payload.rsvp && (latest.payload.rsvp || pending.some(item => item.payload.rsvp))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-  if (row.payload.rsvp && (row.payload.reminderEdit || row.payload.googleOccurrence || row.payload.caldavSeries || local.recurrence || local.seriesID || local.originalStart || local.isCanceled || local.timeModel?.kind === "floating")) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  let rsvpInstance: ProviderRsvpInstance | undefined;
+  if (row.payload.rsvp) {
+    if (row.payload.reminderEdit || row.payload.googleOccurrence || row.payload.caldavSeries || row.payload.caldavSplit || row.payload.caldavSeriesDeletion || local.recurrence || local.isCanceled || local.timeModel?.kind === "floating")
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const saved = row.payload.rsvp.instance;
+    if (saved) {
+      // An explicit refresh may adopt a newer parent revision, never another
+      // canonical parent or original slot. This check precedes parent reads.
+      if (!linked || !current || !mapping || local.seriesID !== saved.seriesID || !isDeepStrictEqual(local.originalStart, saved.originalStart))
+        throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+      try { rsvpInstance = await readProviderRsvpInstance(tx, current, mapping, userID); }
+      catch { throw new EventDeliveryResolutionError("delivery-resolution-unavailable"); }
+      if (!rsvpInstance || rsvpInstance.externalSeriesID !== saved.externalSeriesID) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    } else if (local.seriesID || local.originalStart) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  }
   if (row.payload.reminderEdit || row.payload.rsvp) {
     const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID)));
-    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local))
+    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !(row.payload.rsvp ? matchesRsvpEventProjection("google", EventSchema.parse(row.payload.event), local, rsvpInstance) : matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local)))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   } else if (latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit)) {
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
@@ -222,6 +237,7 @@ async function resolutionContext(
   return {
     masterRevision,
     caldavContext,
+    rsvpInstance,
     row,
     latest,
     pending: pending.length ? pending : [row],
@@ -347,6 +363,8 @@ export async function commitEventDeliveryResolution(
           row.externalCalendarLinkID,
           proof.ref.externalEventId,
         );
+      if (row.payload.rsvp?.instance)
+        await tx.select({ id: events.id }).from(events).where(eq(events.id, row.payload.rsvp.instance.seriesID)).for("update");
       if (row.payload.googleOccurrence)
         await tx
           .select({ id: events.id })
@@ -400,6 +418,7 @@ export async function commitEventDeliveryResolution(
         );
       if (
         !!current.row.payload.rsvp !== !!proof.rsvp ||
+        !isDeepStrictEqual(current.rsvpInstance, proof.context.rsvpInstance) ||
         proof.rsvp?.baselineVersion !== request.expectedRsvpBaselineVersion ||
         !!current.row.payload.reminderEdit !== !!proof.reminder ||
         proof.reminder?.stateVersion !== request.expectedReminderStateVersion ||
@@ -435,7 +454,8 @@ export async function commitEventDeliveryResolution(
         if (!current.mapping || !proof.ref || intent.mappingID !== current.mapping.id ||
             intent.baseline.id !== proof.ref.externalEventId || intent.baseline.etag !== proof.ref.etag ||
             !intent.nativeTime || !isDeepStrictEqual(ProviderRsvpEditSchema.parse(intent.request), ProviderRsvpEditSchema.parse(current.row.payload.rsvp!.request)) ||
-            providerRsvpBaselineVersion(current.mapping.id, intent.baseline) !== baselineVersion ||
+            providerRsvpBaselineVersion(current.mapping.id, intent.baseline, intent.instance) !== baselineVersion ||
+            !isDeepStrictEqual(intent.instance, current.rsvpInstance) ||
             !isDeepStrictEqual(providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, intent.request.response), intent.desiredState))
           throw new EventDeliveryResolutionError("delivery-state-changed");
       }

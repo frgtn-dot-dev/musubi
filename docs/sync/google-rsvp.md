@@ -299,3 +299,21 @@ PATCH, lease loss, native original-identity drift, interleaved pull and stable e
 Generic ACK remains unable to confirm RSVP. Public instance enqueue/capability
 and explicit conflict resolution still require their final integration; no live
 RSVP or production flag activation is implied by this private delivery support.
+
+## Explicit instance RSVP conflict resolution
+
+A fresh conflict preview may accept a newer local parent revision, while keeping
+the same canonical parent, external parent and original slot. The opaque preview
+version binds both the complete native baseline and the accepted parent mapping/
+revision. An unchanged instance JSON therefore cannot validate an old preview
+after a parent change. Private attendee comments also invalidate a stale preview
+without appearing in the public response.
+
+Commit locks parent before child, re-derives the binding and atomically replaces
+the old intent with a fresh baseline. The new worker preserves current native
+fields and resends only the saved self-response; an already-applied response
+completes without another PATCH. The HTTP/DB instance fixture covers stale parent
+revisions (including freshly rebuilt proof against an old request), private
+comments, foreign parent/slot refusal, permission loss, frozen replay, explicit
+resend and already-desired recovery for all-day and zoned instances. This does
+not activate the public recurring RSVP entry or claim live organizer acceptance.
