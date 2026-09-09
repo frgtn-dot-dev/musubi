@@ -956,8 +956,8 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
       if (cleanPatch[field] !== null) replacement.addPropertyWithValue(name, cleanPatch[field]);
       replacements.set(name, replacement.getAllProperties(name));
     }
-    if (cancelTarget) {
-      const cancellation = new ICAL.Property("status"); cancellation.setValue("CANCELLED");
+    if (cancelTarget || child.isCanceled) {
+      const cancellation = new ICAL.Property("status"); cancellation.setValue(cancelTarget ? "CANCELLED" : "CONFIRMED");
       replacements.set("status", [cancellation]);
     }
     after = replaceEventProperties(evidence.data, components.indexOf(component), replacements);
