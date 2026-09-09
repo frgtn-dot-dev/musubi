@@ -58,6 +58,11 @@ function sameReminders(expected: GoogleReminderWrite, actual: z.infer<typeof nat
   const ordered = (items: { method: string; minutes: number }[]) => items.map(item => [item.method, item.minutes]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return isDeepStrictEqual(ordered(expected.overrides), ordered(actual.overrides ?? []));
 }
+export function googleReminderInstanceProjection(evidence: GoogleReminderInstanceEvidence) {
+  const verified = googleReminderInstanceEvidence(evidence.baseline, { eventID: evidence.baseline.id, etag: evidence.baseline.etag, occurrence: evidence.occurrence }, evidence.reminders);
+  const { recurringEventId: _series, originalStartTime: _original, ...content } = verified.baseline;
+  return { ...googleReminderEventEvidence(content), externalSeriesID: verified.occurrence.externalSeriesID, originalStart: verified.occurrence.originalStart };
+}
 export function confirmGoogleReminderInstance(input: unknown, evidence: GoogleReminderInstanceEvidence) {
   const parsed = native.safeParse(input);
   if (!parsed.success) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
@@ -66,8 +71,7 @@ export function confirmGoogleReminderInstance(input: unknown, evidence: GoogleRe
   try { requireEventEtag(parsed.data.etag); }
   catch { throw new ProviderEventWriteError("provider-version-unavailable", "unconfirmed"); }
   const verified = googleReminderInstanceEvidence(parsed.data, { eventID: evidence.baseline.id, etag: parsed.data.etag, occurrence: evidence.occurrence }, evidence.reminders);
-  const { recurringEventId: _series, originalStartTime: _original, ...content } = verified.baseline;
-  return { ref: { externalEventId: verified.baseline.id, etag: requireEventEtag(verified.baseline.etag) }, state: googleEventState(verified.baseline), event: { ...googleReminderEventEvidence(content), externalSeriesID: verified.occurrence.externalSeriesID, originalStart: verified.occurrence.originalStart } };
+  return { ref: { externalEventId: verified.baseline.id, etag: requireEventEtag(verified.baseline.etag) }, state: googleEventState(verified.baseline), event: googleReminderInstanceProjection(verified) };
 }
 
 const GCAL = "https://www.googleapis.com/calendar/v3";

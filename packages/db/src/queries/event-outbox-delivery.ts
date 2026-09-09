@@ -1,3 +1,4 @@
+import { matchesProviderReminderInstanceState } from "./provider-reminder-instance";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
@@ -157,10 +158,13 @@ export async function hasEventOutboxRevisionCoverage(row: EventOutboxRow) {
 /** Acknowledgement and mapping acceptance are one transaction. Preserve lock
  * order lifecycle -> event -> mapping/outbox, and fence completion by live lease. */
 export async function completeEventOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef | null, expectedRef: EventDeliveryRef | null, observation?: EventOutboxRow["remoteSnapshot"]) {
-  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, false);
+  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "ordinary");
 }
 export async function completeProviderRsvpOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef, expectedRef: EventDeliveryRef, observation: EventOutboxRow["remoteSnapshot"]) {
-  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, true);
+  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "rsvp");
+}
+export async function completeProviderReminderInstanceOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef, expectedRef: EventDeliveryRef, observation: EventOutboxRow["remoteSnapshot"]) {
+  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "reminder-instance");
 }
 async function completeEventOutboxInternal(
   id: string,
@@ -168,7 +172,7 @@ async function completeEventOutboxInternal(
   resultRef: EventDeliveryRef | null,
   expectedRef: EventDeliveryRef | null,
   observation: EventOutboxRow["remoteSnapshot"] | undefined,
-  rsvpConfirmed: boolean,
+  confirmation: "ordinary" | "rsvp" | "reminder-instance",
 ) {
   try {
     return await db.transaction(async (tx) => {
@@ -176,7 +180,7 @@ async function completeEventOutboxInternal(
         .select()
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
-      if (!address || address.payload.reminderInstance || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== rsvpConfirmed) return undefined;
+      if (!address || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== (confirmation === "rsvp") || !!address.payload.reminderInstance !== (confirmation === "reminder-instance")) return undefined;
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);
@@ -186,8 +190,9 @@ async function completeEventOutboxInternal(
           address.externalCalendarLinkID,
           resource.externalEventId,
         );
-      if (address.payload.rsvp?.instance)
-        await tx.select({ id: events.id }).from(events).where(eq(events.id, address.payload.rsvp.instance.seriesID)).for("update");
+      const addressInstance = address.payload.rsvp?.instance ?? address.payload.reminderInstance?.instance;
+      if (addressInstance)
+        await tx.select({ id: events.id }).from(events).where(eq(events.id, addressInstance.seriesID)).for("update");
       if (address.payload.googleOccurrence)
         await tx.select({ id: events.id }).from(events).where(eq(events.id, address.payload.googleOccurrence.master.id)).for("update");
       const [current] = await tx
@@ -208,15 +213,17 @@ async function completeEventOutboxInternal(
         )
         .for("update");
       if (!row) return undefined;
-      if (row.payload.rsvp) {
-        const intent = row.payload.rsvp;
-        if (!isDeepStrictEqual(intent.instance, address.payload.rsvp?.instance))
-          return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
+      const settings = row.payload.rsvp ?? row.payload.reminderInstance;
+      const sourceChanged = row.payload.reminderInstance ? "reminder-source-changed" : "rsvp-source-changed";
+      if (settings) {
+        const intent = settings;
+        if (!isDeepStrictEqual(intent.instance, addressInstance))
+          return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
         const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID))).for("share");
         if (!membership || !["owner", "editor"].includes(membership.role) || row.actorID !== row.userID || row.provider !== "google" || row.action !== "update" || !current || current.deletedAt || current.originCalendarID !== row.calendarID || current.revision !== row.revision)
-          return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
-        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !isDeepStrictEqual(observation.providerState, intent.desiredState) || !isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, intent.request.response)))
-          return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
+          return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
+        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !(row.payload.reminderInstance ? matchesProviderReminderInstanceState(row.payload.reminderInstance, observation.providerState) : isDeepStrictEqual(observation.providerState, intent.desiredState) && isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, row.payload.rsvp!.request.response))))
+          return settle(tx, row, "unconfirmed", row.payload.reminderInstance ? "reminder-confirmation-unavailable" : "rsvp-confirmation-unavailable", resultRef);
       }
       const [target] = await tx
         .select()
@@ -249,7 +256,7 @@ async function completeEventOutboxInternal(
       // A projected RSVP echo is only a candidate. Native fields omitted by
       // the read DTO are proved by the worker's full GET at this exact ETag.
       // Never replace another pulled version just because the ACK clock is later.
-      if (row.payload.rsvp && row.remoteSnapshot && (row.remoteSnapshot.deleted || row.remoteSnapshot.externalEventId !== resultRef?.externalEventId || row.remoteSnapshot.etag !== resultRef?.etag)) {
+      if (settings && row.remoteSnapshot && (row.remoteSnapshot.deleted || row.remoteSnapshot.externalEventId !== resultRef?.externalEventId || row.remoteSnapshot.etag !== resultRef?.etag)) {
         row.remoteSnapshot = { ...row.remoteSnapshot, isEcho: false };
         return settle(tx, row, "conflict", "provider-conflict", resultRef);
       }
@@ -345,14 +352,14 @@ async function completeEventOutboxInternal(
             resultRef,
           );
         const mapping = mappings[0];
-        if (row.payload.rsvp && (!mapping || mapping.id !== row.payload.rsvp.mappingID || providerStateVersion(mapping) !== row.payload.rsvp.request.expectedStateVersion))
+        if (settings && (!mapping || mapping.id !== settings.mappingID || providerStateVersion(mapping) !== settings.request.expectedStateVersion))
           return settle(tx, row, "conflict", "mapping-version-changed", resultRef);
-        if (row.payload.rsvp) {
+        if (settings) {
           try {
             const instance = current && mapping ? await readProviderRsvpInstance(tx, current, mapping, row.userID) : undefined;
-            if (!isDeepStrictEqual(instance, row.payload.rsvp.instance))
-              return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
-          } catch { return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef); }
+            if (!isDeepStrictEqual(instance, settings.instance))
+              return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
+          } catch { return settle(tx, row, "unconfirmed", sourceChanged, resultRef); }
         }
         if (
           mapping &&
