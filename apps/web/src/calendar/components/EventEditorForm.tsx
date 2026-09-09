@@ -424,6 +424,7 @@ export function EventEditorForm({
 						variant="section"
 					>
 						<RecurrenceEditor
+							allDay={values.timeKind === "all-day"}
 							date={values.date}
 							disabled={saving}
 							value={values.recurrence}

@@ -1,3 +1,5 @@
+import { allDayExclusionDates, restoreAllDayExclusion } from "@musubi/calendar";
+import { Row } from "~/ui/Row";
 import {
 	buildRRule,
 	describeAdvanced,
@@ -45,6 +47,7 @@ const OPTIONS = [
 ] as const;
 
 type RecurrenceEditorProps = {
+	allDay?: boolean;
 	date: string;
 	disabled: boolean;
 	onChange: (recurrence: string) => void;
@@ -56,12 +59,16 @@ function dateAtNoon(date: string) {
 }
 
 export function RecurrenceEditor({
+	allDay = false,
 	date,
 	disabled,
 	onChange,
 	value,
 }: RecurrenceEditorProps) {
 	const { extras, rrule } = splitRecurrence(value);
+	const root = useRef<HTMLDivElement>(null);
+	const restoreFocus = useRef(false);
+	useEffect(() => { if (restoreFocus.current) { restoreFocus.current = false; root.current?.querySelector<HTMLButtonElement>('[role="combobox"]')?.focus(); } }, [value]);
 	const startDate = dateAtNoon(date);
 	const initialOption = parseRRule(rrule);
 	// A custom rule can simplify to the same RRULE as a preset. Keep the user's
@@ -181,7 +188,7 @@ export function RecurrenceEditor({
 		option === "yearly" && startDate.getMonth() === 1 && day === 29;
 
 	return (
-		<div className={styles.recurrenceEditor}>
+		<div ref={root} className={styles.recurrenceEditor}>
 			<Select
 				disabled={disabled}
 				label="Repeat"
@@ -189,6 +196,8 @@ export function RecurrenceEditor({
 				value={option}
 				onChange={choose}
 			/>
+
+			{allDay && allDayExclusionDates(value)?.map(date => <Row key={date} className={styles.excludedDateRow} label={date} detail="Excluded from this series" size="compact" trailing={<Button type="button" disabled={disabled} size="compact" variant="ghost" aria-label={`Restore ${date}`} onClick={() => { restoreFocus.current = true; emit(restoreAllDayExclusion(value, date)); }}>Restore</Button>} />)}
 
 			{unsupported ? (
 				<div className={styles.unsupportedRecurrence} role="note">

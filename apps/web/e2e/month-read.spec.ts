@@ -9406,3 +9406,39 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K12 imported all-day exclusion restoration: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const known = event("00000000-0000-4000-8000-000000000201", "Imported excluded dates", "personal", "red", "2026-03-28T00:00:00Z", "2026-03-28T00:00:00Z", {
+      recurrence: "RRULE:FREQ=DAILY;COUNT=4\nEXDATE;VALUE=DATE:20260329,20260330", seriesID: null, originalStart: null, isAllDay: true, timeModel: { kind: "all-day" },
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [known] });
+    const writes: Record<string, unknown>[] = [];
+    await page.route(`**/api/v1/events/${known.id}/scope`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return respond(route, { operationID: body.operationID, changed: true, events: [{ id: known.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false });
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-03-29");
+    await page.locator('[data-day-key="2026-03-28"]').getByRole("button", { name: /Imported excluded dates/ }).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "More options", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
+    await expect(editor.getByText("Changes here apply to the recurring series.")).toBeVisible();
+    await editor.getByRole("button", { name: "Restore 2026-03-29", exact: true }).click();
+    await expect(editor.getByRole("combobox", { name: "Repeat", exact: true })).toBeFocused();
+    await expect(editor.getByRole("button", { name: "Restore 2026-03-30", exact: true })).toBeVisible();
+    const retainedDate = await editor.getByText("2026-03-30", { exact: true }).boundingBox();
+    const restoreButton = await editor.getByRole("button", { name: "Restore 2026-03-30", exact: true }).boundingBox();
+    expect(retainedDate).not.toBeNull(); expect(restoreButton).not.toBeNull();
+    expect(retainedDate!.x + retainedDate!.width).toBeLessThanOrEqual(restoreButton!.x);
+    await expectNoAccessibilityViolations(page);
+    await editor.screenshot({ path: testInfo.outputPath("restored-excluded-date.png") });
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=4\nEXDATE;VALUE=DATE:20260330" } });
+    expect(writes[0]).not.toHaveProperty("time");
+  });
+}

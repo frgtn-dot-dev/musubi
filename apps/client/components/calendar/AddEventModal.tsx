@@ -63,7 +63,7 @@ import {
 } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from "uuidv7";
-import { joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
+import { allDayExclusionDates, restoreAllDayExclusion, joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import {
   AdvancedEndType,
   AdvancedFreq,
@@ -212,6 +212,8 @@ export function AddEventModal({
   // EXDATE/RDATE lines from the stored recurrence — carried through an edit
   // untouched so deleting one occurrence survives a later series edit.
   const [recurrenceExtras, setRecurrenceExtras] = useState<string[]>([]);
+  const [restorationAvailable, setRestorationAvailable] = useState(true);
+  const [restoredRecurrence, setRestoredRecurrence] = useState<string | null>(null);
   // UNTIL from "end series here" — the editor UI can't express it (only COUNT),
   // so carry it through and re-apply unless the user picks a new ending.
   const [savedUntil, setSavedUntil] = useState<string | null>(null);
@@ -511,6 +513,8 @@ export function AddEventModal({
       setTimeDraft(event ? knownEventTimeDraft(event) : null);
       setAllDayToggle(event?.isAllDay ?? false);
       recurrenceEdited.current = false;
+      setRestorationAvailable(true);
+      setRestoredRecurrence(null);
       setNewTitle(event?.title ?? "");
       // Docked mode owns its own start/end via the anchor effect above (the day
       // in view + a sensible time) — don't clobber it here with `new Date()`.
@@ -653,6 +657,8 @@ export function AddEventModal({
     value: T | ((previous: T) => T),
   ) {
     recurrenceEdited.current = true;
+    setRestorationAvailable(false);
+    setRestoredRecurrence(null);
     setter(value);
   }
 
@@ -691,7 +697,7 @@ export function AddEventModal({
         newLocation === (event?.location ?? "")
           ? event?.location
           : newLocation.trim() || null,
-      recurrence:
+      recurrence: restoredRecurrence ?? (
         event && !recurrenceEdited.current
           ? event.recurrence
           : (unsupportedRecurrence ??
@@ -706,7 +712,7 @@ export function AddEventModal({
               if (rule && savedUntil && !/UNTIL=|COUNT=/.test(rule))
                 rule += `;${savedUntil}`;
               return joinRecurrence(rule, recurrenceExtras);
-            })()),
+            })())),
       url: newUrl === (event?.url ?? "") ? event?.url : newUrl.trim() || null,
     };
 
@@ -1273,6 +1279,7 @@ export function AddEventModal({
           <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
             Repeat
           </Text>
+          {event?.timeModel?.kind === "all-day" && restorationAvailable && allDayExclusionDates(restoredRecurrence ?? event.recurrence)?.map(date => <SettingRowAction key={date} label={`Restore ${date}`} detail="Excluded from this series" onPress={isLoading ? undefined : () => { const restored = restoreAllDayExclusion(restoredRecurrence ?? event.recurrence!, date); setRestoredRecurrence(restored); setRecurrenceExtras(splitRecurrence(restored).extras); }} />)}
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.horizontalPillView}>
               {RECURRENCE_OPTIONS.map((opt) => {
