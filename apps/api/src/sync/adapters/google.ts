@@ -1,3 +1,4 @@
+import { googleReminderInstanceTransport } from "./google_reminder_instance";
 import { googleRsvpMethods } from "./google_rsvp_delivery";
 import { googleOccurrenceMethods } from "./google_occurrence";
 import { googleEventState } from "./provider_event_state";
@@ -588,6 +589,11 @@ export const googleAdapter: CalendarAdapter = {
   provider: "google",
   ...googleOccurrenceMethods(getAccessToken, toNormalized),
   ...googleRsvpMethods(async (user, account) => {
+    const token = await getAccessToken(user, account);
+    await assertOAuthEventWriteGrant(user, "google", account);
+    return token;
+  }),
+  reminderInstance: googleReminderInstanceTransport(async (user, account) => {
     const token = await getAccessToken(user, account);
     await assertOAuthEventWriteGrant(user, "google", account);
     return token;

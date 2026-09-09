@@ -1,3 +1,5 @@
+import { googleReminderInstanceEvidence, googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
+import { hasProviderReminderInstanceSource, completeProviderReminderInstanceOutbox, matchesProviderReminderInstanceState } from "@musubi/db";
 import { confirmGraphSeriesCreateOutbox, completeGraphSeriesCreateOutbox, type GraphFamilyObservation } from "@musubi/db";
 import { googleRsvpEventEvidence } from "./adapters/google_rsvp_projection";
 import { googleRsvpEvidence } from "./adapters/google_rsvp";
@@ -150,8 +152,31 @@ export async function deliverEventOutbox(
         }
         return true;
       };
-      // Private instance reminder journals require their own worker and ACK.
-      if (row.payload.reminderInstance) throw new EventWriteError("event-write", "unsupported");
+      if (row.payload.reminderInstance) {
+        if (!config.api.providerReminderEditsEnabled || row.provider !== "google" || row.action !== "update" || !adapter?.reminderInstance) throw new EventWriteError("event-write", "unsupported");
+        const requireSource = async () => {
+          signal.throwIfAborted();
+          if (!(await checkDestination()) || !(await hasProviderReminderInstanceSource(row))) throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written");
+        };
+        await requireSource();
+        const intent = row.payload.reminderInstance;
+        const request = ProviderReminderEditSchema.parse(intent.request);
+        if (request.expectedRevision !== row.revision || !matchesProviderReminderInstanceState(intent, intent.desiredState)) throw new ProviderEventWriteError("provider-conflict");
+        expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag };
+        const evidence = googleReminderInstanceEvidence(intent.baseline, { eventID: expectedRef.externalEventId, etag: expectedRef.etag ?? "", occurrence: { externalSeriesID: intent.instance.externalSeriesID, originalStart: intent.instance.originalStart } }, request.reminders);
+        const native = googleReminderInstanceProjection(evidence);
+        if (!isDeepStrictEqual(intent.nativeTime, native.timeModel) || !isDeepStrictEqual(googleEventState(evidence.baseline), intent.baselineState) || !matchesRsvpEventProjection(row.provider, event, native, intent.instance)) throw new ProviderEventWriteError("provider-conflict");
+        const observed = await adapter.reminderInstance.write(row.userID, row.accountID, row.externalCalendarID, evidence, async () => {
+          await requireSource(); mutationStarted = true;
+        }, signal);
+        // A recovered full proof also confirms a prior applied mutation.
+        mutationStarted = true;
+        resultRef = observed.ref;
+        signal.throwIfAborted();
+        if (!matchesProviderReminderInstanceState(intent, observed.state) || !matchesRsvpEventProjection(row.provider, event, observed.event, intent.instance)) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        await completeProviderReminderInstanceOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: resultRef.externalEventId, etag: resultRef.etag ?? null, deleted: false, providerState: observed.state, observedAt: new Date().toISOString() });
+        return;
+      }
       if (row.payload.graphSeriesCreate) {
         if (!config.api.eventTimeEditsEnabled || row.provider !== "microsoft" || row.action !== "create" || !adapter?.createGraphFamily)
           throw new EventWriteError("event-write", "unsupported");

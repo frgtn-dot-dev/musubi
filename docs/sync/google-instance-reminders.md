@@ -45,10 +45,33 @@ Changed requests, pending child or parent work, cancelled previous source work,
 permission loss and changed bindings cannot enqueue a replacement implicitly.
 Neither canonical event revision nor accepted provider mapping changes on enqueue.
 The claimed-source helper checks the current lease and accepted binding again.
-Generic worker, ACK and conflict replacement paths refuse this private journal;
-the specialized worker/ACK and public composition remain follow-up work.
+Generic ACK and conflict replacement paths refuse this private journal. The
+specialized worker/ACK is described below; public composition remains follow-up
+work.
 
 Disposable PostgreSQL regressions cover zoned/all-day moved slots, defaults/off/
 custom intent, concurrent replay, stale parent and mapping, deleted/unlinked parent,
 changed child revision/original identity, permission and lease loss, and generic
 path isolation with zero provider I/O.
+
+## Specialized delivery and acceptance
+
+The default-off worker rebuilds the native evidence from the journal, checks it
+against accepted content/time/provider state and requires the exact live lease,
+source and parent binding before provider I/O and immediately before PATCH. Only
+a complete native read can confirm or recover the requested result. An inactive
+Google override list under `useDefault: true` is preserved as observed state; it
+does not change the meaning of choosing calendar defaults.
+
+The specialized ACK re-locks parent before child and atomically rechecks membership,
+source, mapping version, parent binding and live lease before accepting the observed
+ETag and personal state. A concurrent pull remains a candidate; another native
+version or unrelated state cannot be hidden by a later ACK timestamp. Canonical
+event content and revision remain unchanged. Transient ACK storage failure leaves
+an unconfirmed operation that can recover by full read without a second PATCH.
+
+Actual adapter/fake HTTP/PostgreSQL coverage includes defaults/off/custom, concurrent
+workers, applied lost/503 responses, failed ACK storage, pre/post-write parent and
+permission changes, changed lease/native original/unknown fields, baseline and echo
+pulls, foreign pulled state, and default-off refusal. Public admission, explicit
+conflict resolution and client acceptance are still separate work.

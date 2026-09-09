@@ -1,3 +1,4 @@
+import { matchesGoogleReminderIntent } from "./event-outbox-projection";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
@@ -254,3 +255,13 @@ export async function hasProviderReminderInstanceSource(row: import("./event-out
   } catch { return false; }
 }
 
+
+/** Compare personal intent semantically while freezing every other provider field.
+ * Google may keep inactive overrides when useDefault is true. */
+export function matchesProviderReminderInstanceState(intent: ProviderReminderInstanceIntent, input: unknown): boolean {
+  const parsed = ProviderEventStateSchema.safeParse(input);
+  if (!parsed.success) return false;
+  const { reminders: _before, ...before } = intent.baselineState;
+  const { reminders: _after, ...after } = parsed.data;
+  return isDeepStrictEqual(before, after) && matchesGoogleReminderIntent(intent.request.reminders, parsed.data);
+}

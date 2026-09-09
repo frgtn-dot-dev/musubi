@@ -1,3 +1,4 @@
+import type { googleReminderInstanceTransport } from "./adapters/google_reminder_instance";
 import type { GraphSeriesFamily } from "./adapters/microsoft_series_family";
 import type { GoogleRsvpEvidence, GoogleRsvpResponse, GoogleRsvpOccurrence } from "./adapters/google_rsvp";
 import type { GoogleOccurrenceIntent } from "@musubi/db";
@@ -137,6 +138,7 @@ export type CalendarAdapter = {
   readSeries?(user: string, account: string, calendar: string, intent: Pick<GoogleOccurrenceIntent, "master" | "masterExternalID" | "masterEtag">, signal?: AbortSignal): Promise<GoogleSeriesEvidence>;
   readOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, ref?: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
   writeOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, event: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
+  reminderInstance?: ReturnType<typeof googleReminderInstanceTransport>;
   readReminderState?(userID: string, accountID: string, calendarID: string, ref: ExternalEventRef, signal?: AbortSignal): Promise<{ ref: ExternalEventRef; state: ProviderEventState; event: NormalizedEvent } | null>;
   writeReminders?(userID: string, accountID: string, calendarID: string, ref: ExternalEventRef, reminders: GoogleReminderWrite, signal?: AbortSignal): Promise<{ ref: ExternalEventRef; state: ProviderEventState; event: NormalizedEvent }>;
   projectEvent?(event: Event): Pick<NormalizedEvent, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
