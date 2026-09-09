@@ -255,3 +255,17 @@ Fake HTTP tests exercise all three time models and applied-503 recovery. DB test
 cover restoration, revision checks, remote races, accepted echo and subsequent
 edits; Radicale verifies the durable scope/worker/import path. This is restricted
 to personal series with positive resource write privileges, not meeting scheduling.
+
+## Existing occurrence time edit
+
+An occurrence update can change an existing definition's explicit start and end
+within its current time kind and IANA zone. The writer replaces only DTSTART,
+DTEND and obsolete DURATION, preserving RECURRENCE-ID, master, sibling definitions,
+alarms and other native properties. Optional content changes and restoration use
+the same transaction and complete resource proof. Changing time kind/zone, a
+master's time or a generated slot's time remains unsupported in this slice.
+
+Fake HTTP and DB tests cover zoned/all-day/floating, durable JSON serialization,
+applied-503 recovery, stale provider ETags, unchanged original identity and accepted
+echo. Radicale confirms the scope/worker/import round trip. Provider flags and
+positive resource privilege requirements remain unchanged.
