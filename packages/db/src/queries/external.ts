@@ -1,3 +1,4 @@
+import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { caldavSeriesDesired } from "./caldav-series-scope";
 import { expandRecurringEvents } from "@musubi/calendar";
 import { ProviderEventStateSchema, type ProviderEventState, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
@@ -772,6 +773,7 @@ async function upsertExternalEventInTransaction(
     const state = providerState === undefined ? undefined : ProviderEventStateSchema.parse(providerState);
     if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
+    if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     if (sourceSeriesID !== undefined) {
       if (provider !== "microsoft" || !sourceSeriesID.trim() || sourceSeriesID.trim() !== sourceSeriesID || sourceSeriesID === externalEventID)
@@ -966,6 +968,7 @@ export async function deleteExternalEvent(
     // reset must use the same fence even after a split reparents it locally.
     const [address] = provider === "caldav" ? await tx.select({ resource: externalEvents.externalSeriesID }).from(externalEvents).where(and(eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID), eq(externalEvents.externalEventID, externalEventID))) : [];
     if (address?.resource) await lockExternalEventAddress(tx, provider, calendarID, address.resource);
+    if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     const mapped = await mappedEventForUpdate(
       tx,

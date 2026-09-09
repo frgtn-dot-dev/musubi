@@ -1,3 +1,4 @@
+import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { expandRecurringEvents } from "@musubi/calendar";
@@ -163,6 +164,7 @@ export async function replaceGraphFamily(context: GraphFamilyContext, observatio
 /** Already accepted native masters only; never discovers or promotes ordinary
  * provider-expanded rows into a canonical family. */
 export async function listGraphFamilyContexts(userID: string, accountID: string, calendarID: string): Promise<GraphFamilyContext[]> {
+  await db.transaction(async tx => { await lockUserLifecycle(tx, [userID], "shared"); await lockCalendarLifecycle(tx, [calendarID], "shared"); await assertNoPendingGraphSeriesCreate(tx, calendarID); });
   const roots = await db.select({ externalMasterID: externalEvents.externalEventID }).from(externalEvents)
     .innerJoin(events, eq(events.id, externalEvents.eventID))
     .innerJoin(externalCalendars, eq(externalCalendars.calendarID, externalEvents.calendarID))

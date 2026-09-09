@@ -1,3 +1,4 @@
+import type { GraphSeriesCreateJournal } from "./queries/graph-series-create";
 import type { CaldavSplitJournal } from "./queries/caldav-split";
 import type { CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "./queries/caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
@@ -885,6 +886,7 @@ export const eventOutbox = pgTable(
         caldavSeries?: CaldavSeriesPrepared;
         caldavSplit?: CaldavSplitJournal;
         caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
+        graphSeriesCreate?: GraphSeriesCreateJournal;
         createIdentityVersion?: 1;
         resolution?: {
           operationID: string;
