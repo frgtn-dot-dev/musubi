@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { AVAILABILITY_SOURCE_LIMIT, AvailabilityRequestSchema, type AvailabilityRequest } from "@musubi/types";
 import { getServerOrigin } from "~/api/query-keys";
@@ -15,7 +15,8 @@ export function AvailabilitySection({ userId, onReconnect }: { userId: string; o
   const attempt = useRef(0);
   const prefix = ["availability", getServerOrigin(), userId];
   const sourcesKey = [...prefix, "sources"];
-  const [busy, setBusy] = useState(false);
+  const mutationKey = ["availability-selection", getServerOrigin(), userId];
+  const busy = useIsMutating({ mutationKey }) > 0;
   const sources = useQuery({ queryKey: sourcesKey, queryFn: ({ signal }) => getAvailabilitySources(signal), retry: false, gcTime: 0, staleTime: 0, enabled: !busy, refetchInterval: busy ? false : 30000 });
   const [trigger, setTrigger] = useState<HTMLElement | null>(null);
   const [error, setError] = useState("");
@@ -29,14 +30,27 @@ export function AvailabilitySection({ userId, onReconnect }: { userId: string; o
   const result = useQuery({ queryKey: [...prefix, "intervals", requested, signature], queryFn: ({ signal }) => getAvailability(requested!.range, signal), enabled: !!trigger && !!requested && requested.signature === signature && !sources.isError && !sources.isFetching, retry: false, gcTime: 0, staleTime: 0 });
   const current = requested?.signature === signature && !sources.isFetching && !sources.isError && !result.isFetching && !result.isError ? result.data : undefined;
   function close() { setTrigger(null); setRequested(undefined); setError(""); }
-  async function toggle(id: string, value: boolean, generation: number) {
+  const selection = useMutation({
+    mutationKey,
+    mutationFn: async ({ id, value, generation }: { id: string; value: boolean; generation: number }) => {
+      await client.cancelQueries({ queryKey: prefix });
+      client.removeQueries({ queryKey: [...prefix, "intervals"] });
+      return selectAvailabilitySource(id, value, generation);
+    },
+    onSuccess: async value => {
+      // The mutation outlives this dialog. Retire any observer read before
+      // publishing its confirmed response, including after close/reopen.
+      await client.cancelQueries({ queryKey: sourcesKey });
+      client.setQueryData(sourcesKey, value);
+    },
+    onError: () => { setError("The source could not be changed. Refresh its current status and try again."); },
+    onSettled: () => { void client.invalidateQueries({ queryKey: sourcesKey }); },
+  });
+  function toggle(id: string, value: boolean, generation: number) {
+    if (busy) return;
     if (value && enabled.length >= AVAILABILITY_SOURCE_LIMIT) { setError(limitMessage); return; }
-    setBusy(true); setError(""); setRequested(undefined);
-    await client.cancelQueries({ queryKey: prefix });
-    client.removeQueries({ queryKey: [...prefix, "intervals"] });
-    try { client.setQueryData(sourcesKey, await selectAvailabilitySource(id, value, generation)); }
-    catch { setError("The source could not be changed. Refresh its current status and try again."); await sources.refetch(); }
-    finally { setBusy(false); }
+    setError(""); setRequested(undefined);
+    selection.mutate({ id, value, generation });
   }
   return <SettingsSection title="Google availability" description="Choose free/busy-only sources for availability checks. These are private to your connection and are not imported as events.">
     {sources.isError ? <InlineError>Availability sources could not be verified. <Button variant="secondary" onClick={() => void sources.refetch()}>Refresh availability sources</Button></InlineError> : sources.data?.sources.map(source => <Row key={source.id} label={source.label} detail={`${source.accountLabel}${source.reconnectRequired ? " · Reconnect Google to grant availability access" : " · Busy intervals only"}`} trailing={<Switch label={`Use ${source.label} for availability`} checked={source.enabled} disabled={busy || (!source.enabled && (enabled.length >= AVAILABILITY_SOURCE_LIMIT || source.reconnectRequired))} onCheckedChange={value => void toggle(source.id, value, source.generation)} />} />)}

@@ -226,6 +226,13 @@ jobs:
       # Four native Playwright shards give each quarter of the suite its own
       # runner. The browser download and dev server stay off the check job's
       # critical path.
+      - name: Exclude unused preinstalled Chrome package feeds
+        # Playwright downloads its own pinned Chromium. Runner-provided Chrome
+        # feeds can have inconsistent indexes and are not OS dependency sources.
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list \
+            /etc/apt/sources.list.d/google-chrome*.sources
+
       - name: Install Playwright browser
         run: >-
           pnpm --filter @musubi/web exec playwright install --with-deps chromium
@@ -255,6 +262,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Exclude unused preinstalled Chrome package feeds
+        # Keep OS package signatures/checksums and all browser tests unchanged.
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list \
+            /etc/apt/sources.list.d/google-chrome*.sources
 
       - name: Install Playwright browser
         run: >-

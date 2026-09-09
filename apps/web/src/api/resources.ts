@@ -7,7 +7,7 @@ import {
   EventDeliverySchema,
   EventDeliveryInboxSchema,
   EventDeliveryConflictSchema,
-  type ResolveEventDeliveryRequest,
+  type EventDeliveryResolutionRequest,
   eventCreateOperation,
   type EventWriteRequest,
   eventUpdateOperation,
@@ -675,7 +675,7 @@ export function getEventDeliveryConflict(eventId: string, operationId: string, s
   });
 }
 
-export function resolveEventDelivery(eventId: string, operationId: string, body: ResolveEventDeliveryRequest, connectionId?: string) {
+export function resolveEventDelivery(eventId: string, operationId: string, body: EventDeliveryResolutionRequest, connectionId?: string) {
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/resolve`), {
     method: "POST", body, responseSchema: EventDeliverySchema,
   });

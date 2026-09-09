@@ -17,7 +17,7 @@ import type {
   EventDeliveryConflict,
   EventDeliveryContent,
   EventDeliveryInbox,
-  ResolveEventDeliveryRequest,
+  EventDeliveryResolutionRequest,
 } from "@musubi/types";
 import { useServer } from "@/contexts/ServerContext";
 import { colors, fonts, styles } from "@/constants/theme";
@@ -76,7 +76,7 @@ export function DeliveryBody({
   const [busy, setBusy] = useState(false);
   const [comparison, setComparison] = useState<{
     preview: EventDeliveryConflict;
-    request: ResolveEventDeliveryRequest;
+    request: EventDeliveryResolutionRequest;
   }>();
   const active = useRef(true);
   const busyRef = useRef(false);
@@ -185,7 +185,7 @@ export function DeliveryBody({
     if (!busyRef.current) onClose();
   }
   const confirmLabel =
-    comparison?.preview.caldavAlarmResolution ? "Apply saved event alarm" : comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
+    comparison?.preview.graphCreateAdoption ? "Use provider version" : comparison?.preview.caldavAlarmResolution ? "Apply saved event alarm" : comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
       ? "Delete remote copy"
       : comparison?.preview.action === "create"
         ? "Recreate remote copy"
@@ -198,7 +198,7 @@ export function DeliveryBody({
       {
         title: confirmLabel,
         confirmLabel,
-        message: saved.preview.caldavAlarmResolution ? "Replace only the supported alarm on the CalDAV event with the saved setting? Calendar apps deliver it. Musubi reminders are separate; both may notify you." : saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : saved.preview.scopeResolution.kind === "following-create" ? "Finish only the saved future series at its original destination? The earlier series is already saved. An already present matching future series is confirmed without another write." : saved.preview.scopeResolution.kind === "following-update" ? "Apply the saved following changes in two steps: shorten the earlier series, then create the saved future series? Delivery may finish one step at a time; retry keeps the same future series identity." : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
+        message: saved.preview.graphCreateAdoption ? "Replace the local draft with the observed provider family? The original request stays in history. No provider write is sent." : saved.preview.caldavAlarmResolution ? "Replace only the supported alarm on the CalDAV event with the saved setting? Calendar apps deliver it. Musubi reminders are separate; both may notify you." : saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : saved.preview.scopeResolution.kind === "following-create" ? "Finish only the saved future series at its original destination? The earlier series is already saved. An already present matching future series is confirmed without another write." : saved.preview.scopeResolution.kind === "following-update" ? "Apply the saved following changes in two steps: shorten the earlier series, then create the saved future series? Delivery may finish one step at a time; retry keeps the same future series identity." : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
           "Apply the version shown in this comparison? Remote differences may be replaced. Unsaved form edits are not sent.",
       },
       () => {
@@ -214,7 +214,7 @@ export function DeliveryBody({
           if (active.current) {
             setComparison(undefined);
             setNotice(
-              saved.preview.rsvpResolution ? "Saved response queued. Google confirmation is still pending; email delivery cannot be verified." : "Saved changes queued. Provider confirmation is still pending.",
+              saved.preview.graphCreateAdoption ? "Provider version accepted in Musubi. No provider write was sent." : saved.preview.rsvpResolution ? "Saved response queued. Google confirmation is still pending; email delivery cannot be verified." : "Saved changes queued. Provider confirmation is still pending.",
             );
           }
         });
@@ -409,7 +409,7 @@ export function DeliveryBody({
                                 if (active.current)
                                   setComparison({
                                     preview,
-                                    request: {
+                                    request: preview.graphCreateAdoption ? { kind: "graph-create-adoption", mutationID: uuidv7(), expectedRevision: preview.localRevision!, stateVersion: preview.graphCreateAdoption.stateVersion } : {
                                       mutationId: uuidv7(),
                                       expectedLocalRevision:
                                         preview.localRevision,

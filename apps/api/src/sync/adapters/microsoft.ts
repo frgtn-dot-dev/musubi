@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { findGraphCreatedSeriesAdoption } from "./microsoft_series_create";
 import { createGraphSeries } from "./microsoft_series_delivery";
 import { readGraphSeriesFamily, readGraphSeriesFamilyOrMissing } from "./microsoft_series_family";
 import { microsoftEventState } from "./provider_event_state";
@@ -733,6 +735,24 @@ export const microsoftAdapter: CalendarAdapter = {
     }
     if (family.master.externalId !== created.ref.externalEventId || family.master.icalUid !== created.ref.icalUid || family.master.creationOperationID !== identity.operationID)
       throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+    return family;
+  },
+
+  async readGraphCreateAdoption(userID, accountID, calendarID, event, identity) {
+    if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const accessToken = await getAccessToken(userID, accountID);
+    if (!calendarID || calendarID.trim() !== calendarID || [".", ".."].includes(calendarID)) throw new ProviderEventWriteError("provider-conflict");
+    const permission = await fetch(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarID)}?$select=id,canEdit`, { headers: { Authorization: `Bearer ${accessToken}`, "Cache-Control": "no-cache" }, redirect: "error", signal: identity.signal });
+    assertCompleteEventReadResponse(permission);
+    const calendar = await permission.json();
+    if (calendar.id !== calendarID) throw new ProviderEventWriteError("provider-conflict");
+    assertEventWriteEvidence(calendar.canEdit, "event-write");
+    const found = await findGraphCreatedSeriesAdoption(accessToken, calendarID, event, identity);
+    if (!found) return null;
+    const family = await readGraphSeriesFamily(accessToken, calendarID, found.candidate, found.evidence.ref, identity.signal);
+    if (family.master.creationOperationID !== identity.operationID || family.cancelled.length || family.instances.some(value => value.providerState?.eventType !== "occurrence")) throw new ProviderEventWriteError("provider-conflict");
+    const again = await findGraphCreatedSeriesAdoption(accessToken, calendarID, event, identity);
+    if (!again || !isDeepStrictEqual(found, again)) throw new ProviderEventWriteError("provider-conflict");
     return family;
   },
 

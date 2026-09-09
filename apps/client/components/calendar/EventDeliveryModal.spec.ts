@@ -825,3 +825,16 @@ it("requires native confirmation before discarding only the saved alarm intent",
   expect(bodies).toHaveLength(0); acceptNative(); await settle();
   expect(bodies).toEqual([{ expectedRevision: 2 }]);
 });
+it("requires explicit native confirmation to adopt the provider family without queuing a write", async () => {
+  const bodies: any[] = [];
+  h.request.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/resolve")) { bodies.push(JSON.parse(String(init?.body))); return reply(receipt); }
+    return reply(url.endsWith("/conflict") ? { ...preview, action: "create", graphCreateAdoption: { stateVersion: "b".repeat(64), occurrenceCount: 3 } } : receipt);
+  });
+  const tree = await review();
+  expect(buttons(tree, "Recreate remote copy")).toHaveLength(0);
+  buttons(tree, "Use provider version")[0].onPress(); expect(bodies).toHaveLength(0);
+  acceptNative(); await settle();
+  expect(bodies[0]).toEqual({ kind: "graph-create-adoption", mutationID: expect.any(String), expectedRevision: preview.localRevision, stateVersion: "b".repeat(64) });
+  expect(text(render())).toContain("Provider version accepted in Musubi");
+});

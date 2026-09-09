@@ -181,6 +181,7 @@ export async function getEventDeliveryStatus(
         const { nextAttemptAt, errorCode, alarm, ...display } = first;
         targets.set(first.targetId, {
           ...display,
+          ...(first.status === "not-needed" && errorCode === "adopted-provider-version" ? { graphCreateAdopted: true as const } : {}),
           ...(alarm && first.status === "not-needed" && errorCode === "alarm-discarded" ? { alarmDiscarded: true as const } : {}),
           ...(alarm && first.owned && first.connected && visibleEvent && ["conflict", "blocked", "unconfirmed"].includes(first.status) ? { alarmDiscardRevision: visibleEvent.revision } : {}),
           latestRevision: last.revision,

@@ -128,6 +128,7 @@ export type CalendarAdapter = {
   readCaldavAlarm?(context: CaldavAlarmContext, signal?: AbortSignal): Promise<CaldavAlarmEvidence>;
   writeCaldavAlarm?(intent: CaldavAlarmIntent, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavAlarmEvidence>;
   createGraphFamily?(userID: string, accountID: string, calendarID: string, event: Event, identity: EventCreateIdentity, state: { uncertain: boolean; beforeWrite: () => Promise<void> }): Promise<GraphSeriesFamily>;
+  readGraphCreateAdoption?(user: string, account: string, calendar: string, event: Event, identity: EventCreateIdentity): Promise<GraphSeriesFamily | null>;
   readGraphFamily?(userID: string, accountID: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily | null>;
   readCaldavRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: import("./adapters/caldav_rsvp").CaldavRsvpResponse, signal?: AbortSignal): Promise<import("./adapters/caldav_rsvp").CaldavRsvpEvidence>;
   writeCaldavRsvp?(user: string, account: string, calendar: string, evidence: import("./adapters/caldav_rsvp").CaldavRsvpEvidence, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown"; confirmation: import("@musubi/types").CaldavRsvpConfirmation }>;

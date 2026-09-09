@@ -30,6 +30,7 @@ export const EventDeliveryTargetSchema = z.object({
   latestRevision: z.number().int().positive().nullable(),
   updatedAt: z.coerce.date().nullable(),
   retryAt: z.coerce.date().nullable(),
+  graphCreateAdopted: z.literal(true).optional(),
   alarmDiscarded: z.literal(true).optional(),
   alarmDiscardRevision: z.number().int().positive().optional(),
   issue: z
@@ -92,6 +93,7 @@ export const EventDeliveryScopeResolutionSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const EventDeliveryConflictSchema = z.object({
+  graphCreateAdoption: z.object({ stateVersion: z.string().regex(/^[0-9a-f]{64}$/), occurrenceCount: z.number().int().min(1).max(366) }).strict().optional(),
   scopeResolution: EventDeliveryScopeResolutionSchema.optional(),
   splitFuture: EventDeliveryContentSchema.optional(),
   eventId: z.uuid(),
@@ -145,3 +147,15 @@ export type EventDeliveryConflict = z.infer<typeof EventDeliveryConflictSchema>;
 export type ResolveEventDeliveryRequest = z.infer<
   typeof ResolveEventDeliveryRequestSchema
 >;
+
+export const GraphCreateAdoptionRequestSchema = z.object({
+  kind: z.literal("graph-create-adoption"), mutationID: z.uuid(),
+  expectedRevision: z.number().int().positive(), stateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+export type GraphCreateAdoptionRequest = z.infer<typeof GraphCreateAdoptionRequestSchema>;
+export const GraphCreateAdoptionRecordSchema = z.object({
+  kind: z.literal("graph-create-adoption"), version: z.literal(1), request: GraphCreateAdoptionRequestSchema,
+  acceptedRevision: z.number().int().positive(), externalMasterID: z.string().min(1),
+}).strict();
+export type GraphCreateAdoptionRecord = z.infer<typeof GraphCreateAdoptionRecordSchema>;
+export type EventDeliveryResolutionRequest = ResolveEventDeliveryRequest | GraphCreateAdoptionRequest;

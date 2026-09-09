@@ -43,6 +43,7 @@ import { AccountMark, ProviderIcon } from "./ProviderIcon";
 import styles from "./styles/connections.module.css";
 
 type ConnectionsDialogProps = {
+  returnFocus?: HTMLElement | null;
   calendars: Calendar[];
   /** Why the import of a just-linked account failed, if it did. */
   importFailed?: string;
@@ -105,6 +106,7 @@ function accountStatus(reconnect: boolean) {
 }
 
 export function ConnectionsDialog({
+  returnFocus,
   calendars,
   importFailed,
   importing,
@@ -272,6 +274,7 @@ export function ConnectionsDialog({
 
   return (
     <Dialog
+      returnFocus={returnFocus}
       bodyClassName={styles.body}
       bodyLayout="flush"
       bodyScroll="panels"

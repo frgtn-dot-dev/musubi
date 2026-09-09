@@ -161,3 +161,30 @@ export async function findGraphSeriesCreateReplay(actorID: string, operationID: 
     throw new BadRequestError("This creation identity was already used for another request. No changes were saved.");
   return { event: EventSchema.parse(row.payload.event), operationID: row.id };
 }
+
+export async function readGraphCreateAdoptionContextInTransaction(tx: DbTransaction, actorID: string, eventID: string, id: string) {
+  if (!config.api.eventTimeEditsEnabled) return null;
+    const [initial] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, id));
+    if (!initial?.payload.graphSeriesCreate || initial.actorID !== actorID || initial.userID !== actorID || initial.eventID !== eventID) return null;
+    await lockUserLifecycle(tx, [initial.userID], "shared");
+    await lockCalendarLifecycle(tx, [initial.calendarID], "exclusive");
+    const [event] = await tx.select().from(events).where(eq(events.id, initial.eventID)).for("update");
+    const links = await tx.select().from(calendarEvents).where(eq(calendarEvents.eventID, initial.eventID)).for("share");
+    const children = await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, initial.eventID)).limit(1);
+    const mappings = await tx.select({ id: externalEvents.id }).from(externalEvents).where(eq(externalEvents.eventID, initial.eventID)).limit(1);
+    if (!event || event.deletedAt || children.length || mappings.length || links.length !== 1 || links[0]!.calendarID !== initial.calendarID) return null;
+    const link = await destination(tx, initial.userID, initial.calendarID);
+    const history = await tx.select().from(eventOutbox).where(eq(eventOutbox.eventID, initial.eventID)).orderBy(eventOutbox.id).for("update");
+    if (history.length !== 1) return null;
+    const row = history[0]!;
+    if (row.calendarID !== link.calendarID || row.userID !== link.userID || !row.uncertain || row.id !== id || !["conflict", "blocked", "unconfirmed", "retry"].includes(row.status) || row.actorID !== row.userID || row.provider !== "microsoft" || row.action !== "create" || row.position !== 0 || row.revision !== 1 || row.predecessorID || row.externalEventID || row.expectedEtag || row.icalUid || row.resultRef || row.remoteSnapshot ||
+        row.externalCalendarLinkID !== link.id || row.accountID !== link.accountID || row.externalCalendarID !== link.externalCalendarID || row.payload.createIdentityVersion !== 1 || row.payload.graphSeriesCreate?.version !== 1 ||
+        Object.keys(row.payload).some(key => !["event", "createIdentityVersion", "graphSeriesCreate"].includes(key)) || !same({ ...event, calendars: [link.calendarID] }, row.payload.event) ||
+        !same(graphSeriesCreateProjection(row.payload.event, row.userID), row.payload.graphSeriesCreate.nativeEvent)) return null;
+    if (row.leaseToken || row.leaseUntil && row.leaseUntil.getTime() > Date.now()) return null;
+    return { row, event, link };
+}
+export type GraphCreateAdoptionContext = NonNullable<Awaited<ReturnType<typeof readGraphCreateAdoptionContextInTransaction>>>;
+export async function readGraphCreateAdoptionContext(actorID: string, eventID: string, id: string) {
+  return db.transaction(tx => readGraphCreateAdoptionContextInTransaction(tx, actorID, eventID, id));
+}

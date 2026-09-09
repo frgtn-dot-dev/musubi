@@ -1,5 +1,10 @@
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
+import { Row } from "~/ui/Row";
+import { Switch } from "~/ui/Switch";
+import { SettingsSection } from "~/ui/SettingsSection";
 import {
   CalendarPlus,
+  Clock,
   ChevronLeft,
   ChevronRight,
   ListTodo,
@@ -7,7 +12,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { useRef, type RefObject } from "react";
+import { useState, useRef, type RefObject } from "react";
 import { Button, IconButton } from "~/ui/Button";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/ui/Menu";
 import { Segmented } from "~/ui/Segmented";
@@ -17,6 +22,7 @@ import { offeredViews, type CalendarViewId } from "../view-registry";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
+  availability?: { shown: boolean; onToggle: () => void; onOpenList: (target: HTMLElement | null) => void };
   activeView: CalendarViewId;
   canCreateEvents: boolean;
   canCreateTasks: boolean;
@@ -36,6 +42,7 @@ type ToolbarProps = {
 };
 
 export function Toolbar({
+  availability,
   activeView,
   canCreateEvents,
   canCreateTasks,
@@ -57,6 +64,9 @@ export function Toolbar({
   const narrow = useNarrowViewport();
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const createEventAfterClose = useRef(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const availabilityTriggerRef = useRef<HTMLButtonElement>(null);
+  const availabilityListAfterClose = useRef(false);
 
   return (
     <header className={styles.toolbar}>
@@ -124,6 +134,15 @@ export function Toolbar({
         ) : null}
 
         <div className={styles.toolbarActions}>
+          {availability ? <Popover open={availabilityOpen} onOpenChange={setAvailabilityOpen}>
+            <PopoverTrigger asChild><IconButton label="Availability" ref={availabilityTriggerRef} size="compact"><Clock aria-hidden="true" size={17} strokeWidth={1.6} /></IconButton></PopoverTrigger>
+            <PopoverContent aria-label="Grid availability" align="end" onCloseAutoFocus={event => { if (availabilityListAfterClose.current) { event.preventDefault(); availabilityListAfterClose.current = false; availabilityTriggerRef.current?.focus(); availability.onOpenList(availabilityTriggerRef.current); } }}>
+              <SettingsSection title="Availability">
+                <Row label="Show selected availability" detail="Only on this page in this session" trailing={<Switch label="Show selected availability" checked={availability.shown} onCheckedChange={availability.onToggle} />} />
+                <Button variant="secondary" onClick={() => { availabilityListAfterClose.current = true; setAvailabilityOpen(false); }}>Sources and interval list</Button>
+              </SettingsSection>
+            </PopoverContent>
+          </Popover> : null}
           <IconButton
             className={styles.searchButton}
             label="Search events and actions"

@@ -9211,3 +9211,144 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }
+
+for (const [width, theme, outcome] of [[1280, "light", "success"], [390, "dark", "success"], [1280, "light", "cancel"], [390, "dark", "escape"]] as const) {
+  test(`Graph create adoption is an explicit local choice: ${theme} ${width} ${outcome}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)") && !message.text().includes("net::ERR_FAILED")) errors.push(message.text()); });
+    const id = "00000000-0000-4000-8000-000000000271", operation = "00000000-0000-4000-8000-000000000272";
+    const saved = event(id, "Original Graph draft", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [saved] });
+    const target = { targetId: "00000000-0000-4000-8000-000000000273", calendarId: "00000000-0000-4000-8000-000000000274", calendarName: "Outlook", provider: "microsoft", connected: true, owned: true, operationId: operation, action: "create", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-26T11:00:00Z", retryAt: null, issue: "conflict" };
+    let adopted = false; const writes: unknown[] = [];
+    const receipt = () => ({ eventId: id, localRevision: adopted ? 2 : 1, targets: [{ ...target, ...(adopted ? { status: "not-needed", issue: null, graphCreateAdopted: true } : {}) }] });
+    await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, receipt()));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, route => respond(route, { eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1, action: "create", local: { ...saved, description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=4" }, remote: { ...saved, title: "Current provider family", description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=3" }, remoteEtag: 'W/"snapshot"', canResolve: true, reason: null, graphCreateAdoption: { stateVersion: "a".repeat(64), occurrenceCount: 3 } }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, route => {
+      writes.push(route.request().postDataJSON());
+      if (outcome !== "success") { adopted = true; return route.abort("failed"); }
+      if (writes.length === 1) return respond(route, { error: "Temporary failure" }, 503);
+      adopted = true; return respond(route, receipt());
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Original Graph draft/ }).first().click();
+    await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Review changes", exact: true }); await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Review remote changes", exact: true });
+    await expect(dialog.getByRole("button", { name: "Recreate remote copy" })).toHaveCount(0);
+    await expect(dialog.getByText(/No provider write is sent/)).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.screenshot({ path: `/tmp/musubi-k12-live/graph-adoption-browser-${theme}.png` });
+    expect(writes).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Use provider version" }).press("Enter");
+    if (outcome !== "success") {
+      await expect(dialog.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled();
+      if (outcome === "cancel") await dialog.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+      else await dialog.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+      expect(writes).toHaveLength(1);
+      expect(errors).toEqual([]);
+      return;
+    }
+    await expect(dialog.getByRole("alert")).toContainText("Temporary failure");
+    await dialog.getByRole("button", { name: "Use provider version" }).press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText("Provider version accepted in Musubi. No provider write was sent.", { exact: true })).toBeVisible();
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ kind: "graph-create-adoption", mutationID: expect.any(String), expectedRevision: 1, stateVersion: "a".repeat(64) });
+    await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Availability grid explicit static intervals and DST fallback: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+    await mockAuthenticatedReads(page, { ...events, events: [] });
+    await page.route("**/api/v1/server", route => respond(route, { email: true, pushPublicKey: null, socials: [], socialsWeb: [], syncProviders: ["google"], googleAvailability: true }));
+    const id = "00000000-0000-4000-8000-000000000171";
+    await page.route("**/api/v1/availability/sources", route => respond(route, { sources: [{ id, generation: 1, enabled: true, label: "Team availability", accountLabel: "Google work", reconnectRequired: false }] }));
+    const reads: any[] = [];
+    await page.route("**/api/v1/availability", route => {
+      const range = route.request().postDataJSON(); reads.push(range);
+      const day = new Date(new Date(range.start).getTime() + 10 * 3600000).toISOString();
+      return respond(route, { start: range.start, end: range.end, observedAt: "2026-07-26T07:00:00Z", sources: [{ sourceId: id, generation: 1, status: "available", intervals: [{ start: day, end: new Date(new Date(day).getTime() + 3600000).toISOString() }] }] });
+    });
+    await page.goto("/app/p/my-calendar/day?date=2026-07-26");
+    await expect(page.getByRole("button", { name: "Availability", exact: true })).toBeVisible();
+    expect(reads).toHaveLength(0); await expect(page.locator("[data-availability-interval]")).toHaveCount(0);
+    await page.getByRole("button", { name: "Availability", exact: true }).click();
+    const popover = page.getByRole("dialog", { name: "Grid availability" });
+    await popover.getByRole("switch", { name: "Show selected availability" }).click();
+    await page.keyboard.press("Escape");
+    const block = page.getByRole("note", { name: /Busy, Team availability/ });
+    await expect(block).toBeVisible();
+    expect(reads[0].sourceIds).toEqual([id]);
+    await expect(block).not.toHaveAttribute("data-time-event"); await expect(block.getByRole("button")).toHaveCount(0);
+    await block.click(); await expect(page.getByRole("heading", { name: "New event", exact: true })).toHaveCount(0);
+    await block.hover(); await page.mouse.down(); await page.mouse.move(width - 60, 650, { steps: 8 }); await page.mouse.up();
+    await expect(page.getByRole("heading", { name: "New event", exact: true })).toHaveCount(0);
+    await expectNoAccessibilityViolations(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `/tmp/musubi-grid-${theme}.png` });
+    await page.getByRole("button", { name: "Availability", exact: true }).click();
+    await page.getByRole("button", { name: "Sources and interval list", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Connections", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Check availability", exact: true })).toBeVisible();
+    await page.getByRole("dialog", { name: "Connections", exact: true }).getByRole("button", { name: "Close connections", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Availability", exact: true })).toBeFocused();
+    await page.goto("/app/p/my-calendar/day?date=2026-10-25");
+    await page.getByRole("button", { name: "Availability", exact: true }).click();
+    await page.getByRole("switch", { name: "Show selected availability" }).click(); await page.keyboard.press("Escape");
+    await expect(page.getByText(/Availability cannot be shown in the grid on clock-change days/)).toBeVisible();
+    await expect(page.locator("[data-availability-interval]")).toHaveCount(0);
+    expect(errors).toEqual([]); await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}
+
+test("Availability grid keeps capped event lanes usable and selection pending across Connections closure", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockAuthenticatedReads(page, { ...events, events: [1, 2, 3, 4].map(index => event(`grid-overlap-${index}`, `Overlap ${index}`, "personal", "#b3492f", "2026-07-26T08:00:00Z", "2026-07-26T09:00:00Z")) });
+  await page.route("**/api/v1/server", route => respond(route, { email: true, pushPublicKey: null, socials: [], socialsWeb: [], syncProviders: ["google"], googleAvailability: true }));
+  const source = { id: "00000000-0000-4000-8000-000000000171", generation: 1, enabled: false, label: "Team availability", accountLabel: "Google work", reconnectRequired: false };
+  let sourceReads = 0; let commit!: () => Promise<void>;
+  await page.route("**/api/v1/availability/sources", route => { sourceReads++; return respond(route, { sources: [source] }); });
+  await page.route(`**/api/v1/availability/sources/${source.id}`, route => { commit = async () => { source.enabled = route.request().postDataJSON().enabled; source.generation++; await respond(route, { sources: [source] }); }; });
+  await page.route("**/api/v1/availability", route => { const range = route.request().postDataJSON(); return respond(route, { start: range.start, end: range.end, observedAt: range.start, sources: [{ sourceId: source.id, generation: source.generation, status: "available", intervals: [{ start: "2026-07-26T07:00:00Z", end: "2026-07-26T10:00:00Z" }] }] }); });
+  await page.goto("/app/p/my-calendar/day?date=2026-07-26");
+  await page.getByRole("button", { name: "Availability", exact: true }).click();
+  await page.getByRole("switch", { name: "Show selected availability" }).click(); await page.keyboard.press("Escape");
+  await expect(page.getByText(/No availability sources selected/)).toBeVisible();
+  const openConnections = async () => { await page.getByRole("button", { name: "Availability", exact: true }).click(); await page.getByRole("button", { name: "Sources and interval list", exact: true }).click(); };
+  await openConnections();
+  const select = page.getByRole("switch", { name: "Use Team availability for availability" });
+  await select.click(); await expect.poll(() => !!commit).toBe(true);
+  const readsBeforeClose = sourceReads;
+  await page.getByRole("button", { name: "Close connections", exact: true }).click();
+  await expect(page.locator("[data-availability-interval]")).toHaveCount(0);
+  await openConnections(); await expect(select).toBeDisabled(); expect(sourceReads).toBe(readsBeforeClose);
+  await page.getByRole("button", { name: "Close connections", exact: true }).click();
+  await commit(); await expect(page.locator("[data-availability-interval]")).toHaveCount(1);
+  for (const index of [1, 2, 3, 4]) {
+    const block = page.locator(`[data-time-event="grid-overlap-${index}"]`);
+    await block.click({ position: { x: 8, y: 20 } });
+    await expect(page.getByRole("heading", { name: `Overlap ${index}`, exact: true })).toBeVisible();
+    await page.keyboard.press("Escape"); await expect(block).toBeFocused();
+  }
+  await openConnections(); await select.click(); await expect(select).toBeDisabled();
+  await page.getByRole("button", { name: "Close connections", exact: true }).click();
+  await expect(page.getByText(/Availability selection is changing. No free time is confirmed yet/)).toBeVisible();
+  await expect(page.locator("[data-availability-interval]")).toHaveCount(0);
+  await commit(); await expect(page.getByText(/No availability sources selected/)).toBeVisible();
+});

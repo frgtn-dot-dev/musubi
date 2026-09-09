@@ -7,6 +7,7 @@ import { ProviderEventWriteError } from "../event_write";
 import { graphTimeForEvent, graphMasterTimeFromUtc } from "./microsoft_time";
 import { graphRecurrenceForEvent, recurrenceFromGraph, type GraphRecurrence } from "./microsoft_recurrence";
 import { microsoftEventState } from "./provider_event_state";
+import { graphSeriesFootprint } from "./microsoft_series_footprint";
 
 /** Personal create candidate. Production recurring creation remains gated by
  * the missing durable family import/echo contract, not by this serializer. */
@@ -70,7 +71,7 @@ const pageSchema = z.object({ value: z.array(z.object({ id: opaqueID, transactio
 /** Read-only recovery candidate. Absence is NOT permission to repeat POST.
  * A complete scoped listing must identify exactly one transaction, followed by
  * a fresh exact-master GET with explicit exception/cancellation expansion. */
-export async function findGraphCreatedSeries(accessToken: string, calendarID: string, saved: Event, identity: EventCreateIdentity): Promise<CreatedEventEvidence | null> {
+async function findGraphCreatedSeriesNative(accessToken: string, calendarID: string, saved: Event, identity: EventCreateIdentity): Promise<{ native: unknown; id: string } | null> {
   saved = structuredClone(saved);
   identity = { ...identity };
   const expected = graphSeriesCreateBody(saved, identity);
@@ -101,5 +102,28 @@ export async function findGraphCreatedSeries(accessToken: string, calendarID: st
   const url = new URL(`${base}/${encodeURIComponent(found)}`);
   url.searchParams.set("$select", fields);
   url.searchParams.set("$expand", "exceptionOccurrences");
-  return graphSeriesCreateEvidence(await read(url), saved, identity, found);
+  return { native: await read(url), id: found };
+}
+
+export async function findGraphCreatedSeries(accessToken: string, calendarID: string, saved: Event, identity: EventCreateIdentity): Promise<CreatedEventEvidence | null> {
+  saved = structuredClone(saved);
+  identity = { ...identity };
+  const found = await findGraphCreatedSeriesNative(accessToken, calendarID, saved, identity);
+  return found ? graphSeriesCreateEvidence(found.native, saved, identity, found.id) : null;
+}
+/** Explicit local adoption candidate: the saved create intent remains immutable.
+ * A different but supported personal master may be displayed for confirmation. */
+export async function findGraphCreatedSeriesAdoption(accessToken: string, calendarID: string, saved: Event, identity: EventCreateIdentity) {
+  saved = structuredClone(saved);
+  identity = { ...identity };
+  const found = await findGraphCreatedSeriesNative(accessToken, calendarID, saved, identity);
+  if (!found) return null;
+  try {
+    const item = nativeSeries.parse(found.native), time = graphMasterTimeFromUtc(found.native);
+    const recurrence = recurrenceFromGraph({ ...saved, ...time }, item.recurrence);
+    const candidate: Event = { ...saved, ...time, recurrence, title: item.subject, description: item.body.content || null, location: item.location.displayName || null };
+    graphSeriesFootprint(candidate);
+    const evidence = graphSeriesCreateEvidence(found.native, candidate, identity, found.id);
+    return { candidate, evidence };
+  } catch { throw new ProviderEventWriteError("provider-conflict"); }
 }

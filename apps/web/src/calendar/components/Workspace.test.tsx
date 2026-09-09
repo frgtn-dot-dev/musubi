@@ -1,11 +1,20 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement, ReactNode } from "react";
+import { getServerOrigin } from "~/api/query-keys";
 import type { PageConfigV1 } from "@musubi/types";
-import { render, screen, within } from "@testing-library/react";
+import { render as renderBase, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "~/api/http";
 import { fixtureCalendars, fixtureEvents } from "../fixtures";
 import type { SavePageResult } from "../page-editor";
 import { Workspace } from "./Workspace";
+
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  client.setQueryData(["server-capabilities", getServerOrigin()], { googleAvailability: false });
+  return renderBase(ui, { wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+}
 
 const commonProps = {
   activeView: "month" as const,

@@ -419,3 +419,13 @@ concurrent first requests, changed/deleted/private results, and an uncertain nat
 journal whose rows remain unchanged during receipt recovery. Reconciliation is
 bounded by retained canonical state; it does not promise UUID recovery after
 physical deletion of that state.
+
+## Changed native creation: explicit local adoption
+
+A unique changed personal finite family may now be accepted locally through the
+separate [Graph creation adoption contract](graph-create-adoption.md). The
+unchanged-create matcher and automatic ACK remain strict. The owner explicitly
+chooses the observed provider version; this sends no Graph write, retains the
+original intent and releases the pending import fence only after atomic local
+family acceptance. Absent, duplicate, meeting, exceptional or unsupported
+families remain unresolved.
