@@ -84,6 +84,32 @@ async function main() {
       assert.equal(confirmed.ref.etag, '"after"'); assert.equal(confirmed.master.title, "Renamed");
       assert.deepEqual(confirmed.exceptions.map(item => [item.title, item.timeModel, item.isCanceled]), evidence.exceptions.map(item => [item.title, item.timeModel, item.isCanceled]));
       await deliver(); assert.equal(puts, 1, "Repeated delivery recovers full desired resource without another PUT");
+      const cut = baseline.children.find(item => item.isCanceled)!;
+      const followingDelete = { originalStart: cut.originalStart!, expectedOccurrenceRevision: cut.revision! };
+      const truncated = prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, undefined, followingDelete);
+      assert.ok(truncated.after.includes(child), "Earlier original identity survives even when its actual time is after the cut");
+      assert.ok(!truncated.after.includes(cancelled));
+      assert.ok(truncated.after.includes(master.replace("COUNT=4", "COUNT=2")), "Only RRULE changes in the master, preserving alarms and folded extensions");
+      const untilBefore = before.replace("COUNT=4", "UNTIL=" + (kind === "all-day" ? "20260331" : kind === "floating" ? "20260331T090000" : "20260331T070000Z"));
+      const untilRaw = normalizeCaldavResource({ url: ref.externalEventId, etag: ref.etag, data: untilBefore })[0]!;
+      const untilBaseline = { ...baseline, master: EventSchema.parse({ ...baseline.master, recurrence: untilRaw.recurrence }) };
+      const untilWrite = prepareCaldavSeriesWrite(caldavSeriesEvidence(untilBefore, untilBaseline), untilBaseline, {}, undefined, undefined, undefined, undefined, followingDelete);
+      assert.ok(untilWrite.after.includes(master.replace("COUNT=4", "COUNT=2")) && untilWrite.after.includes(child) && !untilWrite.after.includes(cancelled));
+      const initialStart = kind === "all-day" ? { kind: "date", value: "2026-03-28" } : kind === "floating" ? { kind: "floating", value: "2026-03-28T09:00:00.000" } : { kind: "instant", value: "2026-03-28T08:00:00.000Z" };
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, undefined, { originalStart: initialStart as OccurrenceStart, expectedOccurrenceRevision: null }), "The first slot requires whole-resource DELETE");
+      const truncate = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(truncated)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      for (const failure of ["ok", "lost", "applied-503", "race"]) {
+        reset(failure);
+        if (failure === "race") { await assert.rejects(truncate, (error: any) => error.code === "provider-conflict"); assert.ok(data.includes("SUMMARY:Concurrent child")); }
+        else {
+          if (failure !== "ok") { await assert.rejects(truncate, (error: any) => error.outcome === "unconfirmed"); mode = "ok"; }
+          const result = await truncate(); assert.equal(result.exceptions.length, 1); assert.equal(result.exceptions[0]!.title, "Moved");
+          await truncate();
+        }
+        assert.equal(puts, 1);
+      }
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "Mixed intent" }, undefined, undefined, undefined, undefined, followingDelete));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, undefined, { ...followingDelete, expectedOccurrenceRevision: 999 }));
       const deletion = prepareCaldavSeriesDeletion(evidence, baseline);
       const remove = () => deleteCaldavSeriesResource(collection, JSON.parse(JSON.stringify(deletion)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
       for (const failure of ["ok", "lost", "applied-503", "delete-unreadable", "delete-race", "delete-recreated"]) {

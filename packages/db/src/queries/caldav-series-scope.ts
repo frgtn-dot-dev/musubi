@@ -1,6 +1,6 @@
 import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { EventSchema, EventWriteError, can, type Event, type EventTimeEdit } from "@musubi/types";
+import { EventSchema, EventWriteError, can, type Event, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
 import { db } from "..";
 import { calendarMembers, calendarEvents, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -23,6 +23,7 @@ export type CaldavSeriesWriteIntent = {
   cancelTarget?: true;
   newDefinition?: Event;
   time?: EventTimeEdit;
+  followingDelete?: { originalStart: OccurrenceStart; expectedOccurrenceRevision: number | null };
   before: string;
   after: string;
 };
@@ -94,9 +95,16 @@ export function sameCaldavRecurrence(left: unknown, right: unknown): boolean {
 }
 
 /** Reconstruct the only permitted canonical change from the private input. */
-export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition" | "time">): CaldavSeriesWriteIntent["baseline"] {
+export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition" | "time" | "followingDelete">): CaldavSeriesWriteIntent["baseline"] {
   if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location", "recurrence"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
+  if (write.followingDelete) {
+    if (targetEventID || write.cancelTarget || write.newDefinition || write.time || Object.keys(write.patch).length) throw unsupported();
+    const plan = planEventScope(baseline.master, baseline.children, { operationID: baseline.master.id, scope: "following", action: "delete", expectedRevision: baseline.master.revision, ...write.followingDelete });
+    // The first occurrence removes the whole resource and needs the DELETE path.
+    if (plan.creates.length || plan.updates.length !== 1 || plan.updates[0]!.id !== baseline.master.id || plan.deletes.includes(baseline.master.id)) throw unsupported();
+    return { ...baseline, master: plan.updates[0]!, children: baseline.children.filter(child => !plan.deletes.includes(child.id)) };
+  }
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
   if (write.patch.recurrence !== undefined && (targetEventID || !write.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(write.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(baseline.master.recurrence ?? ""))) throw unsupported();
   if (write.time !== undefined && write.cancelTarget) throw unsupported();

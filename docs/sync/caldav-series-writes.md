@@ -398,3 +398,20 @@ successfully edits/delivers it again with new local identities.
 The echo check includes exact detached addresses retained in the receipt's mapping
 set, using the indexed root resource address first. A full sweep that captured
 those mappings before ACK must not leave child-address tombstones either.
+
+## Native following deletion
+
+The private resource writer can truncate a single RRULE at a later original slot.
+It uses the shared scope planner to calculate the retained count and removes only
+those complete detached components whose original identity is at or after the cut.
+Earlier exceptions retain every byte, even if their actual time was moved past the
+cut. The master changes only its RRULE; alarm/extension bytes and RRULE parameters
+survive. COUNT and UNTIL inputs share this exact partition. The first slot requires
+the existing whole-resource DELETE path, not an empty recurring resource.
+
+The ordinary full-resource If-Match/readback/recovery protocol also covers this
+intent. Fake HTTP tests exercise all three time kinds, JSON persistence, 503/lost
+response recovery, concurrent child changes and mixed/stale intent refusal. Radicale
+confirms the actual conditional truncation and repeat delivery. This slice is only
+the private native transport; public following scope, local tombstones, retained
+mapping reconciliation and the durable ACK are the next integration step.
