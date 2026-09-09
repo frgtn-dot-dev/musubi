@@ -128,6 +128,7 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   caldavOrganizer?: ReturnType<typeof import("./adapters/caldav_organizer_delivery").caldavOrganizerTransport>;
+  microsoftOrganizer?: ReturnType<typeof import("./adapters/microsoft_organizer").microsoftOrganizerTransport>;
   organizer?: ReturnType<typeof import("./adapters/google_organizer_delivery").googleOrganizerTransport>;
   provider: string;
   readCaldavAlarm?(context: CaldavAlarmContext, signal?: AbortSignal): Promise<CaldavAlarmEvidence>;

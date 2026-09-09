@@ -303,3 +303,22 @@ it("reschedules only within the observed zone and freezes the exact time request
  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
  expect(h.save.mock.calls[0][0].patch.time).toMatchObject({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-11T11:00:00.000" });
 });
+
+it("creates Outlook with explicit server invitation policy and freezes retry identity", async () => {
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  function create() {
+    h.index = 0;
+    return ProviderOrganizerEditor({ provider: "microsoft", calendarID: "00000000-0000-4000-8000-000000000004", color: "red", onClose: h.close });
+  }
+  const field = (tree: ReactNode, label: string) => nodes(tree).find(node => node.type === "TextInput" && node.props.accessibilityLabel === label)!.props;
+  expect(field(create(), "Event time zone").value).toBe("UTC");
+  expect(field(create(), "Event time zone").editable).toBe(false);
+  field(create(), "Title").onChangeText("Planning");
+  field(create(), "Guest email addresses").onChangeText("guest@example.test");
+  button(create(), "Create and send invitations").onPress(); await settle();
+  const saved = h.save.mock.calls[0][0];
+  expect(saved).toMatchObject({ provider: "microsoft", action: "create", notificationPolicy: "server-invite", time: { timeZone: "UTC" } });
+  expect(saved).not.toHaveProperty("sendUpdates");
+  button(create(), "Retry saved meeting action").onPress(); await settle();
+  expect(h.save.mock.calls[1][0]).toEqual(saved);
+});

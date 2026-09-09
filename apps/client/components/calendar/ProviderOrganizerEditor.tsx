@@ -45,7 +45,7 @@ function OrganizerCreateActionBody({
   useEffect(() => {
     apiRef.current = api;
   }, [api]);
-  const [available, setAvailable] = useState<"google" | "caldav" | null>(null),
+  const [available, setAvailable] = useState<"google" | "caldav" | "microsoft" | null>(null),
     [open, setOpen] = useState(false);
   useEffect(() => {
     let active = true;
@@ -62,7 +62,7 @@ function OrganizerCreateActionBody({
   return available ? (
     <>
       <Btn
-        label={`Create ${available === "caldav" ? "CalDAV" : "Google"} meeting`}
+        label={`Create ${available === "caldav" ? "CalDAV" : available === "microsoft" ? "Outlook" : "Google"} meeting`}
         variant="secondary"
         onPress={() => setOpen(true)}
       />
@@ -89,7 +89,7 @@ export function ProviderOrganizerEditor({
   color: string;
   event?: Event;
   observation?: ProviderEventStateResponse;
-  provider?: "google" | "caldav";
+  provider?: "google" | "caldav" | "microsoft";
   onClose: () => void;
 }) {
   const api = useApi(),
@@ -129,12 +129,12 @@ export function ProviderOrganizerEditor({
     observation?.organizerEdit?.timeEdit === true;
   const canUpdate =
     !event ||
-    provider !== "caldav" ||
-    observation?.organizerEdit?.actions?.includes("update") === true;
+    (provider !== "microsoft" && (provider !== "caldav" ||
+    observation?.organizerEdit?.actions?.includes("update") === true));
   const canDelete =
     !!event &&
-    (provider !== "caldav" ||
-      observation?.organizerEdit?.actions?.includes("delete") === true);
+    (provider !== "microsoft" && (provider !== "caldav" ||
+      observation?.organizerEdit?.actions?.includes("delete") === true));
   const canSubmit = frozenAction === "delete" ? canDelete : canUpdate;
   async function send(action: ProviderOrganizerRequest["action"]) {
     if (
@@ -158,7 +158,7 @@ export function ProviderOrganizerEditor({
       setSubmitted(true);
       await api.editProviderOrganizer(frozen.current);
       setNotice(
-        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : "Google's"} result. Guest notification delivery remains unknown.`,
+        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : provider === "microsoft" ? "Outlook's" : "Google's"} result. Guest notification delivery remains unknown.`,
       );
     } catch (cause) {
       if (
@@ -242,7 +242,7 @@ export function ProviderOrganizerEditor({
           <View style={styles.modalHandle} />
           <View style={styles.modalTitleRow}>
             <Text accessibilityRole="header" style={styles.modalTitle}>
-              {occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+              {occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
             </Text>
           </View>
           <ScrollView
@@ -268,7 +268,7 @@ export function ProviderOrganizerEditor({
                       style={styles.textInput}
                       editable={
                         !locked &&
-                        !(provider === "caldav" && key === "timeZone")
+                        !(provider !== "google" && key === "timeZone")
                       }
                       value={String(draft[key])}
                       onChangeText={(value) => patch(key, value)}
@@ -287,9 +287,9 @@ export function ProviderOrganizerEditor({
                         existing responses will reset.
                       </Text>
                     ) : null}
-                    {provider === "caldav" && !event && !draft.allDay ? (
+                    {provider !== "google" && !event && !draft.allDay ? (
                       <Text style={copy}>
-                        New timed CalDAV meetings use UTC.
+                        New timed meetings use UTC.
                       </Text>
                     ) : null}
                     <Btn
@@ -324,7 +324,7 @@ export function ProviderOrganizerEditor({
                     onPress={() =>
                       confirm(
                         {
-                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`,
+                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`,
                           message: `${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify all guests. Guest notification delivery cannot be verified.`,
                           confirmLabel: occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests",
                         },

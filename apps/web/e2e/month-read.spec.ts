@@ -9736,3 +9736,46 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     await editor.getByRole("button", { name: "Close", exact: true }).press("Space"); await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Outlook organizer explicit create: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000291";
+    await mockAuthenticatedReads(page, { ...events, events: [] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/calendars/${calendarID}/provider-organizer`, route => respond(route, { provider: "microsoft", calendarID, notificationPolicy: "server-invite", createTime: "utc-or-all-day", actions: ["create"] }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      if (writes.length === 1) return respond(route, { error: "Choose external guests", organizerAdmissionRejected: true }, 400);
+      if (writes.length === 2) return respond(route, { error: "Temporary failure" }, 503);
+      return respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Calendars", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true }); await trigger.click();
+    const editor = page.getByRole("dialog", { name: "Create Outlook meeting", exact: true });
+    await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
+    await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
+    await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning");
+    await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test");
+    await editor.getByRole("button", { name: "Create and send invitations" }).click();
+    await expect(editor.getByRole("alert")).toContainText("Choose external guests");
+    await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test");
+    await expectNoAccessibilityViolations(page);
+    await editor.screenshot({ path: testInfo.outputPath(`outlook-organizer-${theme}.png`) });
+    await editor.getByRole("button", { name: "Create and send invitations" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "Retry saved meeting action" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+    expect(writes).toHaveLength(3); expect(writes[2]).toEqual(writes[1]);
+    expect(writes[1]).toMatchObject({ action: "create", provider: "microsoft", notificationPolicy: "server-invite", time: { timeZone: "UTC" } });
+    expect(writes[1]).not.toHaveProperty("sendUpdates"); expect(writes[1].operationID).not.toBe(writes[0].operationID);
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}

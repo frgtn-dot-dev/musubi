@@ -1,4 +1,6 @@
 import { caldavOrganizerTimeEvidence } from "./adapters/caldav_organizer_time";
+import { microsoftAdapter } from "./adapters/microsoft";
+import { microsoftOrganizerBody } from "./adapters/microsoft_organizer";
 import { caldavAdapter } from "./adapters/caldav";
 import {
   caldavOrganizerDesired,
@@ -26,6 +28,10 @@ export async function observeOrganizerCalendar(
   calendarID: string,
 ) {
   const link = await readProviderOrganizerCalendar(actorID, calendarID);
+  if (link.provider === "microsoft") {
+    await microsoftAdapter.microsoftOrganizer!(actorID, link.accountID, link.externalCalendarID, AbortSignal.timeout(10_000));
+    return { provider: "microsoft" as const, calendarID, notificationPolicy: "server-invite" as const, createTime: "utc-or-all-day" as const, actions: ["create"] as ["create"] };
+  }
   if (link.provider === "caldav") {
     const transport = await caldavAdapter.caldavOrganizer!(
       actorID,
@@ -65,6 +71,15 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
   const prepared = await prepareProviderOrganizer(actorID, parsed.data);
   if (prepared.kind === "saved") return prepared.receipt;
   const context = prepared.context;
+  if (context.request.provider === "microsoft") {
+    const transport = await microsoftAdapter.microsoftOrganizer!(actorID, context.link.accountID, context.link.externalCalendarID, AbortSignal.timeout(10_000));
+    let desired;
+    try { desired = microsoftOrganizerBody(context.request, transport.email); }
+    catch { throw new OrganizerAdmissionRejectedError("Choose external guests and explicit UTC or all-day time."); }
+    const saved = await prepareProviderOrganizer(actorID, context.request, { context, baseline: null, desired, graphIdentity: transport.identity });
+    if (saved.kind !== "saved") throw new Error("Organizer intent was not committed");
+    return saved.receipt;
+  }
   if (context.request.provider === "caldav") {
     const transport = await caldavAdapter.caldavOrganizer!(
       actorID,

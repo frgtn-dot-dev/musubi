@@ -103,7 +103,7 @@ export async function requestEventDeliveryRetry(
     const graphCheck = row.provider === "microsoft" && row.action === "update" && row.actorID === userID && graphRequest.success && graphRequest.data.provider === "microsoft" && GraphRsvpDispatchSchema.safeParse(row.payload.rsvp?.graphDispatch).success;
     // A dispatched Graph response can only be observed again. Keep its original
     // conflict snapshot and permanent marker; this never authorizes another POST.
-    const organizerCheck = ["google", "caldav"].includes(row.provider) && row.payload.organizer?.request.provider === row.provider && row.payload.organizer?.dispatch?.kind === `${row.provider}-organizer-dispatch` && row.actorID === userID && ProviderOrganizerRequestSchema.safeParse(row.payload.organizer?.request).success && OrganizerDispatchSchema.safeParse(row.payload.organizer?.dispatch).success;
+    const organizerCheck = ["google", "caldav", "microsoft"].includes(row.provider) && row.payload.organizer?.request.provider === row.provider && row.payload.organizer?.dispatch?.kind === `${row.provider}-organizer-dispatch` && row.actorID === userID && ProviderOrganizerRequestSchema.safeParse(row.payload.organizer?.request).success && OrganizerDispatchSchema.safeParse(row.payload.organizer?.dispatch).success;
     if (!graphCheck && !organizerCheck && (
       row.status === "conflict" ||
       (row.remoteSnapshot && !row.remoteSnapshot.isEcho)

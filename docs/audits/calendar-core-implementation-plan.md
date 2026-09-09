@@ -872,3 +872,17 @@ recovery remain strict. Web/native expose locked-zone/type time controls only
 with this proof. Zone/type conversion, named-zone creation, meeting recurrence
 and live notification acceptance remain open. See
 [CalDAV organizer rescheduling](../sync/caldav-organizer.md#explicit-rescheduling).
+### K13 evidence update: Graph organizer create
+
+The bounded own-default-calendar one-off organizer create path is implemented behind the existing default-off organizer flag, with strict server-invite policy, transactionId and permanent-marker read-only recovery. Existing web/native composition and fake HTTP/disposable DB/browser evidence cover this slice. Graph update/delete CAS, broader meeting operations and live invitation delivery remain separate. See [the current contract](../sync/microsoft-organizer-create.md).
+
+### Závěrečná integrace organizer řezů (2026-09-09)
+
+Dřívější omezení CalDAV rescheduling v checkpointu výše překonává implementovaný
+one-off writer ve stejném typu a zóně s úplným native time proof. Finální společná
+dávka jej kombinuje s Graph one-off organizer CREATE a zachovává již integrované
+Google bound-occurrence operace. Graph organizer a RSVP nyní oddělují OAuth
+subject od tokenem ověřeného Graph object ID a ukládají jejich neměnnou vazbu;
+staré nevázané RSVP záměry nesmějí znovu odesílat. Samostatná feature review jsou
+uzavřená, společné integrační kontroly a CI této dávky ještě probíhají.
+Živá acceptance, fyzická zařízení, DST produkční vzor a release zůstávají oddělené.

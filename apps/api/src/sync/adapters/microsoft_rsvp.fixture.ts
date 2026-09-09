@@ -18,7 +18,7 @@ export async function graphRsvpFixture() {
     const url = new URL(req.url!, "http://fixture"), reply = (value: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); };
     if (req.method === "GET") {
       state.reads++;
-      if (url.pathname === "/v1.0/me") return reply({ id: "account", mail: "self@example.test", userPrincipalName: "self@example.test" });
+      if (url.pathname === "/v1.0/me") return reply({ id: state.mode === "swapped" ? "other-graph-id" : "graph-object-id", mail: "self@example.test", userPrincipalName: "self@example.test" });
       if (url.pathname === "/v1.0/me/calendar") return reply({ id: "calendar", isDefaultCalendar: true, canEdit: state.mode !== "denied", owner: { address: state.mode === "foreign" ? "foreign@example.test" : "self@example.test" } });
       assert.equal(url.pathname, "/v1.0/me/calendars/calendar/events/meeting");
       await state.hook?.();

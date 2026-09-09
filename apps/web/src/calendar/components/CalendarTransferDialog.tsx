@@ -698,7 +698,7 @@ function CalendarGroup({
 						<li key={calendar.id}>
 							<Row
 								className={styles.calendarRow}
-								detail={<>{calendarDetail(calendar, external)}{["google", "caldav"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} /> : null}</>}
+								detail={<>{calendarDetail(calendar, external)}{["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} /> : null}</>}
 								icon={
 									<span
 										className={styles.calendarSwatch}

@@ -1,3 +1,5 @@
+import { getOrganizerTimeEventIDs } from "@musubi/db";
+import { microsoftOrganizerTransport } from "./microsoft_organizer";
 import { graphRsvpTime } from "./microsoft_rsvp";
 import { isDeepStrictEqual } from "node:util";
 import { findGraphCreatedSeriesAdoption } from "./microsoft_series_create";
@@ -507,6 +509,7 @@ export async function fetchMicrosoftChanges(
     graphBase?: string;
     now?: number;
     timeModels?: boolean;
+    organizerEventIDs?: readonly string[];
     excludedEventIDs?: readonly string[];
     excludedSeriesIDs?: readonly string[];
   } = {},
@@ -584,6 +587,11 @@ export async function fetchMicrosoftChanges(
         } else item = { ...master, ...item };
       }
       const event = toNormalized(item);
+      if (options.organizerEventIDs?.includes(item.id) && !item["@removed"]) {
+        const time = graphRsvpTime({ ...item, isCancelled: false });
+        event.start = time.start; event.end = time.end; event.isAllDay = time.isAllDay; event.timeModel = time.timeModel;
+        if (item.isCancelled) event.status = "cancelled";
+      }
       // Keep the native parent address even with time editing disabled. A
       // family may be accepted after this fetch captured its exclusions.
       if (item.seriesMasterId != null) {
@@ -645,6 +653,7 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 }
 
 export const microsoftAdapter: CalendarAdapter = {
+  microsoftOrganizer: microsoftOrganizerTransport(getAccessToken),
   provider: "microsoft",
   projectEvent(event) { return toNormalized({ ...toGraphEvent(event), id: event.id }); },
 
@@ -728,7 +737,7 @@ export const microsoftAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
-      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, ...exclusions });
+      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, organizerEventIDs: await getOrganizerTimeEventIDs(userID, accountId, externalCalendarId, "microsoft"), ...exclusions });
   },
 
   async createGraphFamily(userID, accountId, externalCalendarId, event, identity, state) {
