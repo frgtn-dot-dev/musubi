@@ -324,7 +324,7 @@ export function ProviderOrganizerEditor({
                     onPress={() =>
                       confirm(
                         {
-                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`,
+                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`,
                           message: `${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify all guests. Guest notification delivery cannot be verified.`,
                           confirmLabel: occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests",
                         },
