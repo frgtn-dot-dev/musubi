@@ -269,3 +269,16 @@ Fake HTTP and DB tests cover zoned/all-day/floating, durable JSON serialization,
 applied-503 recovery, stale provider ETags, unchanged original identity and accepted
 echo. Radicale confirms the scope/worker/import round trip. Provider flags and
 positive resource privilege requirements remain unchanged.
+
+## Generated occurrence time edit
+
+A generated occurrence can now be materialized directly at its requested time,
+within the master's time kind and IANA zone. The planner separately proves the
+original recurrence slot and the desired definition. Native RECURRENCE-ID is built
+from that original slot, never from the moved DTSTART. The existing atomic child,
+mapping and resource intent transaction handles persistence and delivery.
+
+Fake HTTP and DB tests cover zoned/all-day/floating moves, applied 503, full-resource
+conflicts and echo identity. Radicale verifies the first generated slot moved away
+from its original date through scope, worker and import. Master/following time and
+time-kind/zone changes remain separate work. Flags and privilege gates are unchanged.

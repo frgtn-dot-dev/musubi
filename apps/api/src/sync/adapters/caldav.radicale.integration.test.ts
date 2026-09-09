@@ -358,6 +358,18 @@ async function main() {
     assert.deepEqual(movedRows.find(item => item.id === cancelledScope.id)!.timeModel, movedTime);
     assert.deepEqual(movedRows.find(item => item.id === cancelledScope.id)!.originalStart, cancelledScope.originalStart);
     await sync(); assert.deepEqual(await rows(), movedRows);
+    const generatedTimeRequest = { ...timeRequest, operationID: randomUUID(), expectedRevision: (await getEventSnapshot(scopedRoot.id))!.revision, originalStart: { kind: "instant", value: "2026-03-28T08:00:00.000Z" }, expectedOccurrenceRevision: null };
+    const generatedTimeCandidate = await applyLocalEventScope(scopedRoot.id, userID, generatedTimeRequest, { prepareProvider: true });
+    if (generatedTimeCandidate.status !== "caldav_required") throw new Error("Missing generated time context");
+    const generatedTimePrepared = await prepareCaldavSeries(generatedTimeCandidate.context, generatedTimeRequest);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, generatedTimeRequest, { caldav: generatedTimePrepared })).status, "saved");
+    const generatedTimeOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === generatedTimeRequest.operationID)!;
+    assert.equal((await deliverEventOutbox(generatedTimeOperation.id, () => caldavAdapter))?.status, "completed");
+    const generatedMovedRows = await rows();
+    const generatedMoved = generatedMovedRows.find(item => item.id === generatedTimePrepared.write.newDefinition!.id)!;
+    assert.deepEqual(generatedMoved.timeModel, movedTime);
+    assert.deepEqual(generatedMoved.originalStart, generatedTimeRequest.originalStart);
+    await sync(); assert.deepEqual(await rows(), generatedMovedRows);
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

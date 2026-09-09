@@ -1,6 +1,7 @@
 import { caldavEventState } from "./provider_event_state";
 import { caldavSeriesEvidence, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
+import { planEventScope } from "@musubi/calendar";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
@@ -938,7 +939,10 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     const newline = evidence.data.includes("\r\n") ? "\r\n" : "\n";
     const template = `BEGIN:VCALENDAR${newline}${eventComponentBytes(evidence.data, masterIndex)}END:VCALENDAR${newline}`;
     const { start, end } = eventTimeProperties(newDefinition);
-    const original = structuredClone(start.toJSON()); original[0] = "recurrence-id";
+    // A moved generated definition keeps the old recurrence slot identity.
+    // Reuse the planner without the edit to derive that slot in the master's zone.
+    const originalDefinition = planEventScope(baseline.master, baseline.children, { operationID: newDefinition.id, scope: "occurrence", action: "update", expectedRevision: baseline.master.revision, originalStart: newDefinition.originalStart, expectedOccurrenceRevision: null, patch: {}, ensureDefinition: true }, () => newDefinition!.id).creates[0]!;
+    const original = structuredClone(eventTimeProperties(originalDefinition).start.toJSON()); original[0] = "recurrence-id";
     const replacements = new Map<string, ICAL.Property[]>([["dtstart", [start]], ["dtend", [end]], ["duration", []], ["rrule", []], ["rdate", []], ["exdate", []], ["recurrence-id", [new ICAL.Property(original)]]]);
     for (const [field, name] of [["title", "summary"], ["description", "description"], ["location", "location"]] as const) {
       if (cleanPatch[field] === undefined) continue;
