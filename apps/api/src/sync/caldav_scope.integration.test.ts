@@ -51,7 +51,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -77,6 +77,60 @@ async function main() {
         const outbox = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, owner));
         const original = await rows(), mappings = await maps();
         const root = original.find(event => !event.seriesID)!;
+        if (scenario.startsWith("generated-")) {
+          const cancellation = scenario.includes("cancel");
+          const originalStart = scenario.endsWith("all-day") ? { kind: "date", value: "2026-03-31" } : scenario.endsWith("floating") ? { kind: "floating", value: "2026-03-31T09:00:00.000" } : { kind: "instant", value: "2026-03-31T07:00:00.000Z" };
+          const generatedRequest = { operationID: randomUUID(), scope: "occurrence", originalStart, expectedOccurrenceRevision: null, expectedRevision: root.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: { title: "New definition" } }) };
+          const candidate = await applyLocalEventScope(root.id, owner, generatedRequest, { prepareProvider: true });
+          assert.equal(candidate.status, "caldav_required"); if (candidate.status !== "caldav_required") throw new Error("Missing generated context");
+          const prepared = await prepareCaldavSeries(candidate.context, generatedRequest);
+          const definitionID = prepared.write.newDefinition!.id;
+          if (scenario === "generated-prepare-race") {
+            await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, root.id));
+            assert.equal((await applyLocalEventScope(root.id, owner, generatedRequest, { caldav: prepared })).status, "conflict");
+            assert.equal((await rows()).length, original.length); assert.deepEqual(await maps(), mappings); assert.equal((await outbox()).length, 0); continue;
+          }
+          if (scenario === "generated-tombstone") {
+            await db.insert(externalEventTombstones).values({ externalCalendarLinkID: prepared.context.link.id, externalEventID: resource + "#musubi-original=" + encodeURIComponent(JSON.stringify(originalStart)) });
+            await assert.rejects(() => applyLocalEventScope(root.id, owner, generatedRequest, { caldav: prepared }));
+            assert.deepEqual(await rows(), original); assert.deepEqual(await maps(), mappings); assert.equal((await outbox()).length, 0); continue;
+          }
+          const queued = await applyLocalEventScope(root.id, owner, generatedRequest, { caldav: prepared });
+          assert.equal(queued.status, "saved");
+          const savedRows = await rows(), savedMaps = await maps();
+          assert.equal(savedRows.length, original.length + 1); assert.equal(savedMaps.length, mappings.length + 1);
+          assert.equal(savedRows.find(item => item.id === root.id)!.revision, root.revision + 1);
+          const definition = savedRows.find(item => item.id === definitionID)!;
+          assert.equal(definition.revision, 1); assert.equal(definition.isCanceled, cancellation);
+          assert.deepEqual(definition.originalStart, originalStart);
+          assert.ok(savedMaps.every(item => item.etag === '"before"'));
+          assert.equal(savedMaps.find(item => item.eventID === definitionID)!.externalSeriesID, resource);
+          const [operation] = await outbox(); assert.equal((await outbox()).length, 1);
+          assert.equal((await applyLocalEventScope(root.id, owner, generatedRequest, { prepareProvider: true })).status, "replayed");
+          await assert.rejects(persist, /Complete external event resource/); assert.deepEqual(await rows(), savedRows); assert.deepEqual(await maps(), savedMaps);
+          mode = scenario.endsWith("lost") ? "lost" : scenario.endsWith("race") ? "race" : "ok";
+          let delivered = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          if (scenario.endsWith("lost")) {
+            assert.equal(delivered?.status, "unconfirmed");
+            await assert.rejects(persist, /Complete external event resource/); assert.deepEqual(await rows(), savedRows); assert.deepEqual(await maps(), savedMaps);
+            mode = "ok";
+            await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
+            delivered = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          }
+          assert.equal(puts, 1);
+          if (scenario.endsWith("race")) {
+            assert.equal(delivered?.status, "conflict"); assert.deepEqual(await maps(), savedMaps);
+            assert.ok(data.includes("SUMMARY:Remote child"));
+          } else {
+            assert.equal(delivered?.status, "completed", JSON.stringify(delivered?.errorCode));
+            assert.ok(data.includes(master) && data.includes(child) && data.includes(cancelled));
+            assert.ok((await maps()).every(item => item.etag === '"after"'));
+            await persist(); assert.deepEqual(await rows(), savedRows);
+            assert.equal((await maps()).filter(item => item.eventID === definitionID).length, 1);
+            await deliverEventOutbox(operation.id, () => caldavAdapter); assert.equal(puts, 1);
+          }
+          continue;
+        }
         const cancellation = scenario.startsWith("cancel-");
         const occurrence = cancellation || scenario.startsWith("occurrence-");
         const moved = original.find(event => event.seriesID && !event.isCanceled)!;
