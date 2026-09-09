@@ -81,6 +81,19 @@ async function main() {
       assert.equal(occurrenceResult.exceptions.find(item => !item.isCanceled)!.title, "Only this occurrence");
       await deliverCaldavSeriesResource(collection, occurrenceWrite, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
       assert.equal(puts, 1, "Occurrence retry recognizes the complete desired family");
+      const cancellationWrite = prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, true);
+      assert.ok(cancellationWrite.after.includes(master) && cancellationWrite.after.includes(cancelled));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, true));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "Mixed" }, movedID, true));
+      reset("applied-503");
+      const cancel = () => deliverCaldavSeriesResource(collection, cancellationWrite, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      await assert.rejects(cancel, (error: any) => error.outcome === "unconfirmed");
+      mode = "ok";
+      const cancelledResult = await cancel();
+      assert.equal(cancelledResult.master.title, "Master");
+      assert.ok(cancelledResult.exceptions.every(item => item.isCanceled));
+      assert.deepEqual(cancelledResult.exceptions.map(item => item.timeModel), evidence.exceptions.map(item => item.timeModel));
+      assert.equal(puts, 1, "Cancellation recovers an applied 503 without another PUT");
       for (const failure of ["lost", "applied-503"]) {
         reset(failure);
         await assert.rejects(deliver, (error: any) => error.outcome === "unconfirmed");

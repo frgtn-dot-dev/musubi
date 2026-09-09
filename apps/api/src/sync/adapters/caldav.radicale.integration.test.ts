@@ -240,6 +240,14 @@ async function main() {
     assert.equal(occurrenceResult.exceptions[0]!.location, "Native exception");
     assert.deepEqual(occurrenceResult.exceptions[0]!.timeModel, delivered.exceptions[0]!.timeModel);
     assert.equal((await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, occurrenceWrite)).ref.etag, occurrenceResult.ref.etag);
+    const cancelBaseline = { ...occurrenceWrite.baseline, ref: occurrenceResult.ref, children: occurrenceWrite.baseline.children.map(child => ({ ...child, title: "Only the moved occurrence", location: "Native exception" })) };
+    const cancelEvidence = await caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, cancelBaseline);
+    const cancelWrite = prepareCaldavSeriesWrite(cancelEvidence, cancelBaseline, {}, cancelBaseline.children[0]!.id, true);
+    const cancelResult = await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, cancelWrite);
+    assert.equal(cancelResult.exceptions[0]!.isCanceled, true);
+    assert.equal(cancelResult.master.title, occurrenceResult.master.title);
+    assert.deepEqual(cancelResult.exceptions[0]!.timeModel, occurrenceResult.exceptions[0]!.timeModel);
+    assert.equal((await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, cancelWrite)).ref.etag, cancelResult.ref.etag);
     await put(moved, master); // Restore the synthetic fixture for the existing import regressions.
     await sync();
     console.log("Radicale complete series GET, accepted ETag, private-only evidence and concurrent-child CAS: OK");

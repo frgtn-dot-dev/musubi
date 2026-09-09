@@ -188,3 +188,22 @@ concurrent replay, provider conflict, applied 503, preserved sibling cancellatio
 and byte-for-byte master preservation. A real local Radicale round-trip verifies
 native occurrence content and retry. This is not live iCloud application
 acceptance and does not enable production flags.
+
+## Cancel an existing detached occurrence
+
+An explicit `occurrence` delete may now cancel an existing active definition.
+It replaces only the selected VEVENT's STATUS with CANCELLED; its UID,
+RECURRENCE-ID, time, content and subcomponents remain intact. It neither deletes
+the shared resource nor modifies the master or sibling components. Cancellation
+cannot be combined with a content patch or target the master through this path.
+
+The same frozen revision, native privilege, full-resource ETag, transactional
+family update and ACK proof apply. Pull retains the cancellation definition so
+the original generated occurrence cannot reappear. Retry after an applied 503
+recognizes the complete cancelled resource without another PUT. Generated
+occurrence cancellation and revival require subsequent explicit support.
+
+Fake HTTP and scoped DB tests cover zoned/all-day/floating cancellation,
+concurrent replay, lost response and native race. Local Radicale additionally
+verifies STATUS:CANCELLED, unchanged time and repeat delivery. No scheduling
+resources or real iCloud accounts are written by these tests.
