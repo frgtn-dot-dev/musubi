@@ -93,6 +93,8 @@ type EventEditorFormProps = {
 	 */
 	onExpand?: (values: EventFormValues) => void;
 	initialValues: EventFormValues;
+	/** Retain a draft across an access-change unmount without retaining provider baselines. */
+	onValuesChange?: (values: EventFormValues) => void;
 	/** Full-page editors use the viewport as a workspace instead of a long card. */
 	layout?: "page" | "popover";
 	/**
@@ -128,6 +130,7 @@ export function EventEditorForm({
 	calendars,
 	compact = false,
 	initialValues,
+	onValuesChange,
 	layout = "popover",
 	onCancel,
 	onDraftChange,
@@ -172,6 +175,7 @@ export function EventEditorForm({
 	function patch(next: Partial<EventFormValues>) {
 		const merged = { ...values, ...next };
 		setValues(merged);
+		onValuesChange?.(merged);
 		setError(undefined);
 		if (onDraftChange && draftSignature(merged) !== draftSignature(values)) {
 			onDraftChange({

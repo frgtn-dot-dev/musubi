@@ -4,6 +4,8 @@ import { toDateKey } from "./date-key";
 import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
 export type EventFormValues = {
+  /** Authored private fields carried between editor surfaces, never sent as event content. */
+  privateDraftFields?: ("title" | "description" | "location" | "url")[];
   /** Stable creation identity for this draft, including retries and handoff. */
   createID?: string;
   timeLabel?: string;

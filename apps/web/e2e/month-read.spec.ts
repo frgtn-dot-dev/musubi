@@ -8890,3 +8890,68 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     });
   }
 }
+
+for (const mode of ["compact", "generated", "full"] as const) {
+  test(`Google editor privacy refresh preserves typed deltas (${mode})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: mode === "generated" ? 390 : 1280, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    if (mode === "generated") await page.addInitScript(() => localStorage.setItem("musubi-theme", "dark"));
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.addInitScript(() => {
+      class PrivacyEventSource {
+        onmessage: ((event: { data: string }) => void) | null = null;
+        readyState = 1;
+        constructor() { (window as unknown as { privacyStream: PrivacyEventSource }).privacyStream = this; }
+        close() { this.readyState = 2; }
+        addEventListener() {}
+        removeEventListener() {}
+      }
+      (window as unknown as { EventSource: unknown }).EventSource = PrivacyEventSource;
+    });
+    let current = event("aaaa1111-1111-4111-8111-111111111111", "Private appointment", "personal", "#b3492f", "2026-07-26T09:00:00.000Z", "2026-07-26T10:00:00.000Z", {
+      originCalendarID: "personal", description: "Private provider notes", location: "Private provider room", url: "https://private.example.test",
+      ...(mode === "generated" ? { recurrence: "FREQ=DAILY;COUNT=3" } : {}),
+    });
+    let source = { ...calendars[0]!, provider: "google", role: "owner" };
+    await mockAuthenticatedReads(page, { ...events, events: [current] }, [source]);
+    await page.route("**/api/v1/calendars", route => respond(route, [source]));
+    await page.route(/\/api\/v1\/events(?:\?.*)?$/, route => {
+      expect(route.request().method()).toBe("GET");
+      return respond(route, { ...events, events: [current] });
+    });
+    await page.route("**/api/v1/events/*/provider-state*", route => respond(route, { state: null, version: null }));
+    await page.route("**/api/v1/events/*/delivery*", route => respond(route, { eventId: current.id, localRevision: current.revision, targets: [] }));
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+    await page.getByRole("button", { name: /Private appointment/ }).first().click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("textbox", { name: "Event title" }).fill("My typed title");
+    if (mode === "full") {
+      await page.getByRole("button", { name: "More options", exact: true }).click();
+      await expect(page).toHaveURL(/\/event\//);
+    }
+    const emit = () => page.evaluate(() => {
+      (window as unknown as { privacyStream: { onmessage: (event: { data: string }) => void } }).privacyStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) });
+    });
+    current = { ...current, title: "Busy", description: null, location: null, url: null, organizer: "", revision: 2 };
+    source = { ...source, role: "viewer" };
+    await emit();
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+    await expect(page.getByText("This event is read-only", { exact: true }).first()).toBeVisible();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`google-editor-${mode}-readonly.png`), fullPage: false });
+    source = { ...source, role: "owner" };
+    await emit();
+    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("My typed title");
+    expect(await page.locator("input, textarea").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).not.toContain("Private provider notes");
+    expect(page.url()).not.toContain("Private+provider");
+    expect(page.url()).not.toContain("Private%20provider");
+    await page.screenshot({ path: testInfo.outputPath(`google-editor-${mode}.png`), fullPage: false });
+    if (mode !== "full") {
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("button", { name: /Busy/ }).first()).toBeFocused();
+    }
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}

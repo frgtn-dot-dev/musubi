@@ -10,6 +10,8 @@ const optional = z.string().optional().catch(undefined);
  * Back action restores the calendar.
  */
 export const eventEditorSearchSchema = z.object({
+  // Only explicitly changed content may survive a privacy refresh after reload.
+  draftFields: z.array(z.enum(["title", "description", "location", "url"])).optional().catch(undefined),
   createID: z.string().uuid().optional().catch(undefined),
   timeKind: z.enum(["legacy-unknown", "zoned", "floating", "all-day"]).optional().catch(undefined),
   timeZone: optional,
@@ -46,7 +48,7 @@ export type EventEditorSearch = z.infer<typeof eventEditorSearchSchema>;
 /** Navigation coordinates alone are not a restored content draft. */
 export function hasEventEditorContent(search: EventEditorSearch): boolean {
   return Object.entries(search).some(([key, value]) =>
-    value !== undefined && !["date", "returnDate", "view", "createID"].includes(key));
+    value !== undefined && !["date", "returnDate", "view", "createID", "draftFields"].includes(key));
 }
 
 export function applyEventEditorSearch(
@@ -68,15 +70,15 @@ export function applyEventEditorSearch(
     calendarId,
     calendarIds: Array.from(new Set(calendarIds)),
     date: search.date ?? base.date,
-    description: search.description ?? base.description,
+    description: search.description ?? (search.draftFields?.includes("description") ? "" : base.description),
     endDate: search.endDate ?? base.endDate,
     endTime: search.endTime ?? base.endTime,
     hasAttendees: search.attendees ?? base.hasAttendees,
     isAllDay: search.allDay ?? base.isAllDay,
-    location: search.location ?? base.location,
+    location: search.location ?? (search.draftFields?.includes("location") ? "" : base.location),
     recurrence: search.recurrence ?? base.recurrence,
     startTime: search.startTime ?? base.startTime,
-    title: search.title ?? base.title,
-    url: search.url ?? base.url,
+    title: search.title ?? (search.draftFields?.includes("title") ? "" : base.title),
+    url: search.url ?? (search.draftFields?.includes("url") ? "" : base.url),
   };
 }
