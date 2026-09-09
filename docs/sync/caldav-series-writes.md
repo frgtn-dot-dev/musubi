@@ -633,3 +633,37 @@ previously split family, complete worker ACK and unchanged identities after sync
 Generated/revival/cancellation, following/split reconciliation and adoption of
 competing provider time/rule changes remain separate work. Flags, versions and
 iCloud resource privilege requirements are unchanged.
+
+
+## Generated, cancellation and revival conflict confirmation
+
+Explicit confirmation also retains generated definition, occurrence cancellation
+and revival intents. The saved target, new-definition snapshot, cancellation
+choice, time and rule must match the original journal during the locked commit.
+An altered target/definition or revoked source cannot create a replacement.
+
+Generated and cancellation preflights retain every accepted canonical field of
+the original native resource. Fresh private extension/alarm bytes may be
+preserved, but another native definition, changed master/child content or changed
+temporal structure is not silently adopted. A generated preview derives the
+original slot from the verified original master rule; it does not invent a
+physical native child. Revival can compare fresh content of the existing
+cancelled definition while its original identity, time and cancelled baseline
+remain fixed. The prepared write restores the saved active definition.
+
+The unchanged comparison DTO exposes the occurrence's original identity and
+saved/native cancellation state. The canonical draft and UUIDs/revisions stay
+fixed across confirmation; full worker evidence and atomic family ACK settle
+the result. A repeated conflict preserves the same generated ID, and a lost
+response is reconciled without a second PUT or duplicate definition.
+
+Native and authenticated HTTP/DB regressions cover three time kinds, generated
+content/time/cancellation, existing cancellation and revival (including time),
+stale/repeated/concurrent confirmation, permission/local revision races,
+new-definition/target/cancel tampering and foreign native content/identity.
+Local Radicale exercises generated creation, cancellation and revival through
+real ETag conflicts, explicit replacement and stable echo. Existing web/native
+comparison renderers consume the existing cancellation/identity fields.
+Following deletion, whole-resource deletion and split conflict reconciliation
+remain separate work. This neither changes iCloud's privilege contract nor
+activates flags, versions or live user-account operations.

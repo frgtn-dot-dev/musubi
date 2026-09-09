@@ -1,3 +1,4 @@
+import { planEventScope } from "@musubi/calendar";
 import { googleRsvpEventEvidence } from "./adapters/google_rsvp_projection";
 import { googleEventState } from "./adapters/provider_event_state";
 import { config } from "@musubi/config";
@@ -185,19 +186,26 @@ async function prepare(
     const targetEventID = savedWrite.targetEventID;
     const localTarget = targetEventID ? family.children.find(child => child.id === targetEventID) : family.master;
     if (!localTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, targetEventID);
-    const remoteTarget = targetEventID ? observed.baseline.children.find(child => child.id === targetEventID) : observed.baseline.master;
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, savedWrite.newDefinition || savedWrite.cancelTarget ? null : targetEventID);
+    let remoteTarget = targetEventID ? observed.baseline.children.find(child => child.id === targetEventID) : observed.baseline.master;
+    if (savedWrite.newDefinition) {
+      const generated = savedWrite.newDefinition;
+      remoteTarget = planEventScope(observed.baseline.master, observed.baseline.children, {
+        operationID: generated.id, scope: "occurrence", action: "update", expectedRevision: observed.baseline.master.revision,
+        originalStart: generated.originalStart, expectedOccurrenceRevision: null, patch: {}, ensureDefinition: true,
+      }, () => generated.id).creates[0];
+    }
     if (!remoteTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const patch = { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null, ...(savedWrite.patch.recurrence !== undefined ? { recurrence: savedWrite.patch.recurrence } : {}) };
+    const patch = savedWrite.cancelTarget ? {} : { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null, ...(savedWrite.patch.recurrence !== undefined ? { recurrence: savedWrite.patch.recurrence } : {}) };
     const prepared = {
       context: { ...family, mappings: family.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) },
-      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch, targetEventID, undefined, undefined, savedWrite.time),
+      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch, targetEventID, savedWrite.cancelTarget, savedWrite.newDefinition, savedWrite.time),
     };
     const preview: EventDeliveryConflict = {
       eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
       localRevision: context.localRevision,
-      local: { ...content(localTarget), timeModel: localTarget.timeModel ?? undefined, originalStart: localTarget.originalStart ?? undefined },
-      remote: { ...content(remoteTarget), timeModel: remoteTarget.timeModel ?? undefined, originalStart: remoteTarget.originalStart ?? undefined },
+      local: { ...content(localTarget), isCanceled: localTarget.isCanceled, timeModel: localTarget.timeModel ?? undefined, originalStart: localTarget.originalStart ?? undefined },
+      remote: { ...content(remoteTarget), isCanceled: remoteTarget.isCanceled, timeModel: remoteTarget.timeModel ?? undefined, originalStart: remoteTarget.originalStart ?? undefined },
       remoteEtag: observed.evidence.ref.etag!, action: "update", canResolve: true, reason: null,
     };
     const proof: EventDeliveryResolutionProof = { context, ref: observed.evidence.ref, remoteExists: true, action: "update", patch: {}, deletion: await getEventOutboxDeletion(row, ref.externalEventId), caldavSeries: prepared };

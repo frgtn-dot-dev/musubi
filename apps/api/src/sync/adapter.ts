@@ -121,7 +121,7 @@ export type CalendarAdapter = {
   readRsvpResolution?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
   readCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
-  readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal, targetEventID?: string): Promise<CaldavSeriesResolutionEvidence>;
+  readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal, targetEventID?: string | null): Promise<CaldavSeriesResolutionEvidence>;
   readCaldavSeriesForDelete?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   deleteCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesDeletion, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<ExternalEventRef>;
   assertCaldavSplitCreation?(user: string, account: string, calendar: string, intent: CaldavSeriesSplit, signal?: AbortSignal): Promise<void>;

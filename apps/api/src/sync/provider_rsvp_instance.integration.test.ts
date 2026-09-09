@@ -82,7 +82,7 @@ async function main() {
         const parentModel: EventTimeModel = allDay ? { kind: "all-day" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-24T02:30:00.000", endLocal: "2026-10-24T03:30:00.000" };
         await upsertExternalEvent("google", owner, calendar.id, "guest@example.test", "series", { ...values, title: "Series", start: new Date(allDay ? "2026-10-24T00:00:00Z" : "2026-10-24T00:30:00Z"), end: new Date(allDay ? "2026-10-24T00:00:00Z" : "2026-10-24T01:30:00Z"), recurrence: "RRULE:FREQ=DAILY;COUNT=4" }, '"parent"', null, undefined, { timeModel: parentModel }, undefined, state);
         await upsertExternalEvent("google", owner, calendar.id, "guest@example.test", "instance", values, native.etag, null, undefined, { timeModel: model, externalSeriesID: "series", originalStart }, undefined, state);
-        const maps = await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id));
+        const maps = await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id);
         const mapping = maps.find(item => item.externalEventID === "instance")!;
         const parentMapping = maps.find(item => item.externalEventID === "series")!;
         const child = (await getEventSnapshot(mapping.eventID))!;
@@ -155,7 +155,7 @@ async function main() {
           assert.equal(row.payload.rsvp!.desiredState.ownResponse, "accepted");
           assert.deepEqual(await getEventSnapshot(child.id), child);
           assert.deepEqual(await getEventSnapshot(parent.id), parent);
-          assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)), maps);
+          assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
           assert.equal((await commit()).replayed, true);
           if (scenario.startsWith("deliver-")) {
             const parentRevision = async () => { await db.update(events).set({ revision: parent.revision + 1 }).where(eq(events.id, parent.id)); };
