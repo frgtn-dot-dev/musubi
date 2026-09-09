@@ -34,7 +34,7 @@ import {
   googleEventCreateID,
   caldavEventCreateIdentity,
 } from "./event_create_identity";
-import { prepareCaldavSeriesDeletion, prepareCaldavSeriesWrite } from "./adapters/caldav";
+import { prepareCaldavSeriesSplit, prepareCaldavSeriesDeletion, prepareCaldavSeriesWrite } from "./adapters/caldav";
 import { strongEventEtag, requireEventEtag } from "./event_write";
 import { ProviderAuthError } from "./errors";
 
@@ -176,6 +176,25 @@ async function prepare(
       reminderResolution: { desired: intent.reminders, remote: observed.state.reminders, stateVersion },
     };
     const proof: EventDeliveryResolutionProof = { context, ref: observed.ref, remoteExists: true, action: "update", patch: {}, deletion, reminder: { intent, state: observed.state, stateVersion } };
+    return { preview, proof };
+  }
+  if (row.payload.caldavSplit) {
+    if (!config.api.eventTimeEditsEnabled || !context.caldavSplitSnapshot || !adapter.readCaldavSeriesResolution || !adapter.assertCaldavSplitCreation || !ref || context.deleted)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const snapshot = context.caldavSplitSnapshot, saved = snapshot.journal.prepared;
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...saved.split.source.baseline, ref }, saved.split.source.before, signal, null);
+    const split = prepareCaldavSeriesSplit(observed.evidence, observed.baseline, saved.split.request, saved.split.creation.master.id);
+    await adapter.assertCaldavSplitCreation(row.userID, row.accountID, row.externalCalendarID, split, signal);
+    const prepared = { context: { ...saved.context, mappings: saved.context.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) }, split };
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: row.id, localRevision: snapshot.journal.after.source.revision!,
+      local: { ...content(snapshot.journal.after.source), timeModel: snapshot.journal.after.source.timeModel ?? undefined },
+      remote: { ...content(observed.baseline.master), timeModel: observed.baseline.master.timeModel ?? undefined },
+      splitFuture: { ...content(snapshot.journal.after.head), timeModel: snapshot.journal.after.head.timeModel ?? undefined },
+      scopeResolution: { kind: "following-update", originalStart: split.request.originalStart!, newSeriesId: split.creation.master.id },
+      remoteEtag: observed.evidence.ref.etag!, action: "update", canResolve: true, reason: null,
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: observed.evidence.ref, remoteExists: true, action: "update", patch: {}, deletion: await getEventOutboxDeletion(row, ref.externalEventId), caldavSplit: { before: snapshot, prepared } };
     return { preview, proof };
   }
   if (row.payload.caldavSeriesDeletion) {

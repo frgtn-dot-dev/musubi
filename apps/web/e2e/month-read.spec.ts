@@ -8583,3 +8583,63 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K12 following split conflict confirmation: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+    const id = "00000000-0000-4000-8000-000000000091", operation = "00000000-0000-4000-8000-000000000092";
+    const saved = event(id, "Following split", "personal", "#b3492f", "2026-07-23T07:30:00Z", "2026-07-23T08:30:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [saved] });
+    const scopeResolution = { kind: "following-update", newSeriesId: "00000000-0000-4000-8000-000000000099", originalStart: { kind: "instant", value: "2026-07-25T07:30:00.000Z" } };
+    const writes: unknown[] = [];
+    const target = { targetId: "00000000-0000-4000-8000-000000000094", calendarId: "00000000-0000-4000-8000-000000000093", calendarName: "CalDAV", provider: "caldav", connected: true, owned: true,
+      operationId: operation, action: "update", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-23T09:00:00Z", retryAt: null, issue: "conflict" };
+    const receipt = { eventId: id, localRevision: 1, targets: [target] };
+    await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, receipt));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, route => respond(route, {
+      eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1, scopeResolution,
+      local: { ...saved, description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=2" },
+      splitFuture: { ...saved, start: "2026-07-25T07:30:00Z", end: "2026-07-25T08:30:00Z", title: "Saved future title", description: "Future notes", location: null, recurrence: "RRULE:FREQ=WEEKLY;COUNT=4" },
+      remote: { ...saved, description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=8" },
+      remoteEtag: '"fresh"', action: "update", canResolve: true, reason: null,
+    }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, route => {
+      writes.push(route.request().postDataJSON()); return respond(route, receipt, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveURL(/\/app\/p\/my-calendar\/month\?date=2026-07-26/);
+    await expect(page).toHaveTitle(/Musubi/i);
+    const trigger = page.getByRole("button", { name: /Following split/ }).first();
+    await trigger.click(); await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    const delivery = page.getByRole("dialog", { name: "Delivery", exact: true });
+    await delivery.getByRole("button", { name: "Review changes" }).click();
+    const comparison = page.getByRole("dialog", { name: "Review remote changes" });
+    await expect(comparison.getByText("Saved future series", { exact: true })).toBeVisible();
+    await expect(comparison.getByText("Saved future title", { exact: true })).toBeVisible();
+    await expect(comparison.getByText("Change this and following", { exact: true })).toBeVisible();
+    await expect(comparison.getByText(/Original start: 2026-07-25/)).toBeVisible();
+    await expect(comparison.getByText(/two steps/)).toBeVisible();
+    await expect(comparison.getByRole("button", { name: "Apply saved changes" })).toHaveCount(0);
+    await expect(comparison.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await comparison.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+    expect(writes).toHaveLength(0);
+    await expect(delivery.getByRole("button", { name: "Review changes" })).toBeFocused();
+    await delivery.getByRole("button", { name: "Review changes" }).press("Enter");
+    await comparison.evaluate(async node => { await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished)); });
+    await expectNoAccessibilityViolations(page);
+    expect(await comparison.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    await comparison.screenshot({ path: `/tmp/musubi-k12-split-conflict-${theme}.png` });
+    const currentRule = comparison.getByRole("region", { name: "Remote copy" }).getByText("RRULE:FREQ=DAILY;COUNT=8", { exact: true });
+    await currentRule.scrollIntoViewIfNeeded(); await expect(currentRule).toBeVisible();
+    await comparison.getByRole("button", { name: "Apply following changes" }).click();
+    await expect(delivery.getByText(/Saved changes queued/)).toBeVisible();
+    expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ expectedScopeResolution: scopeResolution, expectedRemoteEtag: '"fresh"' });
+    await delivery.getByRole("button", { name: "Close delivery", exact: true }).click();
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}

@@ -455,3 +455,40 @@ it("confirms the displayed whole-series deletion and retains it across an ambigu
   expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
   expect(requests[1]).toEqual(requests[0]);
 });
+
+it("confirms the displayed following split and its future series and retains it across an ambiguous retry", async () => {
+  const scopeResolution = { kind: "following-update", newSeriesId: "00000000-0000-4000-8000-000000000099", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" } };
+  const requests: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/conflict")) return json({ ...preview, scopeResolution, splitFuture: { ...content, title: "Saved future title", recurrence: "RRULE:FREQ=WEEKLY;COUNT=4" } });
+    if (url.endsWith("/resolve")) {
+      requests.push(JSON.parse(String(init?.body)));
+      if (requests.length === 1) throw new Error("Lost response");
+      return json(receipt, 202);
+    }
+    return json(receipt);
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText("Saved future series")).toBeTruthy();
+  expect(within(comparison).getByText("Saved future title")).toBeTruthy();
+  expect(within(comparison).getByText("Change this and following")).toBeTruthy();
+  expect(within(comparison).getByText(/Original start: 2026-09-07/)).toBeTruthy();
+  expect(within(comparison).getByText(/two steps/)).toBeTruthy();
+  expect(within(comparison).queryByRole("button", { name: "Apply saved changes" })).toBeNull();
+  fireEvent.click(within(comparison).getByRole("button", { name: "Apply following changes" }));
+  await within(comparison).findByText(/Could not reach the server/);
+  fireEvent.click(within(comparison).getByRole("button", { name: "Apply following changes" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
+  expect(requests[1]).toEqual(requests[0]);
+});
+
+
+it("refuses a split confirmation that omits the saved future comparison", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => json(url.endsWith("/conflict") ? { ...preview, scopeResolution: { kind: "following-update", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" }, newSeriesId: "00000000-0000-4000-8000-000000000099" } } : receipt)));
+  mount(); fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const button = await screen.findByRole("button", { name: "Apply following changes" });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+});
