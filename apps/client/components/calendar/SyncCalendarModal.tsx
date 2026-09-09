@@ -1,3 +1,4 @@
+import { GOOGLE_AVAILABILITY_SCOPE, parseInviteLink } from "@musubi/types";
 import EventDeliveryModal from "./EventDeliveryModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useServer } from "@/contexts/ServerContext";
@@ -17,7 +18,6 @@ import { GoogleG } from "@/components/auth/SocialAuthButtons";
 import * as haptics from "@/lib/haptics";
 import { fetchWithTimeout, userFacingError } from "@/lib/network";
 import { hasSeenGoogleDisclosure, markGoogleDisclosureSeen } from "@/lib/googleDisclosure";
-import { parseInviteLink } from "@musubi/types";
 import { router } from "expo-router";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import {
@@ -50,17 +50,20 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   // Which providers this server can actually sync (same pattern as the welcome
   // screen's social buttons). null = unknown (old server / fetch failed) →
   // show everything rather than an empty modal.
+  const [availability, setAvailability] = useState<{ origin: string; enabled: boolean }>();
   const [available, setAvailable] = useState<string[] | null>(null);
   // Has the user already seen the Google data-use disclosure? Gates whether
   // tapping "Google Calendar" shows the disclosure step or goes straight to OAuth.
   const [googleAcked, setGoogleAcked] = useState(false);
   useEffect(() => {
     if (!visible || !apiUrl) return;
+    let active = true;
     fetchWithTimeout(`${apiUrl}/api/v1/server`)
       .then((res) => res.json())
-      .then(({ syncProviders }) => setAvailable(Array.isArray(syncProviders) ? syncProviders : null))
-      .catch(() => setAvailable(null));
-    hasSeenGoogleDisclosure().then(setGoogleAcked);
+      .then(({ syncProviders, googleAvailability }) => { if (active) { setAvailable(Array.isArray(syncProviders) ? syncProviders : null); setAvailability({ origin: apiUrl, enabled: googleAvailability === true }); } })
+      .catch(() => { if (active) { setAvailable(null); setAvailability(undefined); } });
+    hasSeenGoogleDisclosure().then(value => { if (active) setGoogleAcked(value); });
+    return () => { active = false; };
   }, [visible, apiUrl]);
   const shows = (provider: string) => !available || available.includes(provider);
 
@@ -137,6 +140,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   // Narrowest Google scopes for our two-way event, calendar, and task sync.
   const handleGoogle = () => handleOAuth("google", [
     "https://www.googleapis.com/auth/calendar.events",
+    ...(availability?.origin === apiUrl && availability.enabled ? [GOOGLE_AVAILABILITY_SCOPE] : []),
     "https://www.googleapis.com/auth/calendar.calendarlist",
     "https://www.googleapis.com/auth/calendar.calendars",
     ...(includeTasks ? ["https://www.googleapis.com/auth/tasks"] : []),

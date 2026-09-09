@@ -81,6 +81,7 @@ type APIConfig = {
   eventTimeEditsEnabled: boolean;
   providerReminderEditsEnabled: boolean;
   caldavAlarmEditsEnabled: boolean;
+  googleAvailabilityEnabled: boolean;
   providerRsvpEditsEnabled: boolean;
   port: number;
   environment: Environment;
@@ -239,6 +240,7 @@ const apiConfig: APIConfig = {
   eventTimeEditsEnabled: process.env.EVENT_TIME_EDITS_ENABLED === "true",
   providerReminderEditsEnabled: process.env.PROVIDER_REMINDER_EDITS_ENABLED === "true",
   caldavAlarmEditsEnabled: process.env.CALDAV_ALARM_EDITS_ENABLED === "true",
+  googleAvailabilityEnabled: process.env.GOOGLE_AVAILABILITY_ENABLED === "true",
   providerRsvpEditsEnabled: process.env.PROVIDER_RSVP_EDITS_ENABLED === "true",
   port: Number(process.env.API_SERVER_PORT) || 7531,
   environment,

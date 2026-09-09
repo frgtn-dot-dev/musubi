@@ -1,3 +1,4 @@
+import { handlerAvailabilitySources, handlerAvailabilitySelection, handlerAvailability } from "./handlers/availability";
 import { assertEventTimeActivation } from "./event_time_activation";
 import { config, logger } from "@musubi/config";
 import { auth } from "@musubi/auth";
@@ -366,6 +367,9 @@ app.put(
   wrap(handlerSetAttendance),
 );
 // Calendars — /google must stay before /:id (both one-segment GETs)
+app.get("/api/v1/availability/sources", requireAuth, wrap(handlerAvailabilitySources));
+app.put("/api/v1/availability/sources/:id", requireAuth, wrap(handlerAvailabilitySelection));
+app.post("/api/v1/availability", requireAuth, wrap(handlerAvailability));
 app.get("/api/v1/calendars", requireAuth, wrap(handlerGetCalendars));
 app.get(
   "/api/v1/calendars/google",

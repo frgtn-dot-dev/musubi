@@ -126,6 +126,7 @@ export function useServerStream(userId: string) {
           void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           break;
         case "external_sync":
+          void queryClient.resetQueries({ queryKey: ["availability", origin, userId] });
           void queryClient.invalidateQueries({ queryKey: calendarsKey });
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
           void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
@@ -144,6 +145,7 @@ export function useServerStream(userId: string) {
      */
     function refresh() {
       for (const queryKey of [
+        ["availability", origin, userId],
         calendarsKey,
         federatedKey,
         pagesKey,

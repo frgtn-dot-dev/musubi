@@ -138,3 +138,13 @@ it("opens retained delivery discovery from the actual native connection screen",
   modal.onClose();
   expect(find(render()).visible).toBe(false);
 });
+
+it.each([false, true])("native Google callback requests availability scope only with capability=%s", async enabled => {
+  const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
+  render();
+  // Capability state, otherwise exercise the actual disclosure and OAuth callbacks.
+  state.values[1] = { origin: "https://home.example.test", enabled };
+  control(render(), "Google Calendar")!.onPress!();
+  await control(render(), "Continue to Google")!.onPress!();
+  expect(linkSocial.mock.lastCall![0].scopes.includes("https://www.googleapis.com/auth/calendar.events.freebusy")).toBe(enabled);
+});

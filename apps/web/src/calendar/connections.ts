@@ -1,3 +1,4 @@
+import { GOOGLE_AVAILABILITY_SCOPE } from "@musubi/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -22,8 +23,8 @@ const GOOGLE_CALENDAR_SCOPES = [
 ];
 const MICROSOFT_CALENDAR_SCOPES = ["Calendars.ReadWrite"];
 
-export function providerConnectionScopes(provider: "google" | "microsoft", includeTasks: boolean) {
-  const calendars = provider === "google" ? GOOGLE_CALENDAR_SCOPES : MICROSOFT_CALENDAR_SCOPES;
+export function providerConnectionScopes(provider: "google" | "microsoft", includeTasks: boolean, availability = false) {
+  const calendars = provider === "google" ? [...GOOGLE_CALENDAR_SCOPES, ...(availability ? [GOOGLE_AVAILABILITY_SCOPE] : [])] : MICROSOFT_CALENDAR_SCOPES;
   const tasks = provider === "google" ? "https://www.googleapis.com/auth/tasks" : "Tasks.ReadWrite";
   return includeTasks ? [...calendars, tasks] : [...calendars];
 }
@@ -137,6 +138,7 @@ export function useConnections(userId: string) {
   });
 
   const refreshCalendars = () => {
+    void queryClient.resetQueries({ queryKey: ["availability", origin, userId] });
     void queryClient.invalidateQueries({ queryKey: calendarsKey });
     void queryClient.invalidateQueries({
       queryKey: ["events", origin, userId],

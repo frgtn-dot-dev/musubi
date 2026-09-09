@@ -1,7 +1,8 @@
+import { beginAvailabilityDiscovery, reconcileAvailabilitySources } from "@musubi/db";
 import { deliverEventOutbox } from "./event_delivery";
 import { randomUUID } from "node:crypto";
 import { hasKnownEventTime, EventWriteError, type Event, type Task } from "@musubi/types";
-import { logger } from "@musubi/config";
+import { config, logger } from "@musubi/config";
 import {
   getDueEventOutboxIDs, getEventOutboxBacklog,
   listGraphFamilyContexts, replaceGraphFamily, removeGraphFamily, type GraphFamilyContext, type GraphFamilyObservation,
@@ -227,7 +228,8 @@ export async function syncProvider(
   await setAccountLabel(provider, userID, accountId, account.label);
 
   // 1. reconcile the calendar list
-  const { calendars: remote, taskListsComplete } = await adapter.listCalendars(
+  const availabilityContext = provider === "google" && config.api.googleAvailabilityEnabled ? await beginAvailabilityDiscovery(userID, accountId) : undefined;
+  const { calendars: remote, taskListsComplete, availabilityCalendars } = await adapter.listCalendars(
     userID,
     accountId,
   );
@@ -253,6 +255,10 @@ export async function syncProvider(
       notifyCalendarMembers(removed.userIDs, "external_sync", { calendars: removed.calendarIDs });
       changedCalendarIDs.push(...removed.calendarIDs);
     }
+  }
+  if (availabilityContext && availabilityCalendars) {
+    await reconcileAvailabilitySources(userID, availabilityContext, availabilityCalendars, account.label);
+    notifyCalendarMembers([userID], "external_sync", {});
   }
   for (const link of absent) {
     if (provider !== "google" || !link.supportsEvents) await removeCalendar(link.calendarID);

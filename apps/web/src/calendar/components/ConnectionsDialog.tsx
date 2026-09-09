@@ -1,3 +1,4 @@
+import { AvailabilitySection } from "./AvailabilitySection";
 import {
   providerDisplayName,
   providerFlavor,
@@ -154,7 +155,7 @@ export function ConnectionsDialog({
       const result = await authClient.linkSocial({
         callbackURL: window.location.href,
         provider,
-        scopes: providerConnectionScopes(provider, includeTasks),
+        scopes: providerConnectionScopes(provider, includeTasks, connections.capabilities.data?.googleAvailability),
       });
       if (result?.error) throw new Error(result.error.message);
     }, "Could not start the connection.");
@@ -363,6 +364,7 @@ export function ConnectionsDialog({
               }
             />
           )}
+          {connections.capabilities.data?.googleAvailability ? <AvailabilitySection key={userId} userId={userId} onReconnect={() => void connectSocial("google")} /> : null}
           <Row
             label="Saved event deliveries"
             detail="Check pending changes, conflicts and undelivered deletions."

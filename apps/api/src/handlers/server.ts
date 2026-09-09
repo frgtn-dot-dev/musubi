@@ -59,6 +59,7 @@ export function handlerServer(_: Request, res: Response) {
     socials: enabledSocials(),
     socialsWeb: enabledWebSocials(),
     syncProviders: enabledSyncProviders(),
+    googleAvailability: config.api.googleAvailabilityEnabled,
     // Snapshot established during startup, so capability discovery never waits
     // for an external SMTP server.
     email: canSendEmail(),
