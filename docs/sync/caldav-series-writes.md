@@ -912,3 +912,53 @@ fences, permission/CAS/local/lease races and retired exception refusal. The loca
 Radicale suite exercises full preparation, conditional PUT, one-off ACK and echo,
 including retained DURATION and alarms. No production flag, version, dependency
 or live-provider acceptance changes with this batch.
+
+## Explicit finite series conversion to UTC
+
+The existing web/native Event time zone input can save a whole-series change
+from a known non-UTC zone to `UTC`, using exactly the displayed local dates and
+times. This is a wall-clock choice: a Prague 09:00 daily series spanning spring
+DST changes from 08:00Z / 07:00Z to 09:00Z on every date. It does not preserve the
+old occurrence instants. The master retains its original local anchor even when
+the editor opens a later generated occurrence. Draft validation checks only the
+explicit clock choice; the complete footprint is proved against the stored master
+at scope admission, never by restarting COUNT at a displayed occurrence.
+
+This first slice requires one personal non-meeting VEVENT, no live or retired
+detached definitions, one finite COUNT RRULE, 1–366 occurrences wholly within
+730 days, and a positive fixed duration within one civil day. Source and target
+footprints must agree on every local start/end. Independent civil enumeration
+refuses gaps, folds, skipped slots and duration changes. Other target zones,
+UNTIL/unbounded rules, RDATE/EXDATE, floating/all-day/type conversions, concurrent
+content/recurrence changes and simultaneous local time shifts remain refused.
+The existing explicit time-edit flag remains off by default.
+
+The native writer changes only DTSTART/DTEND (or the replaced duration encoding)
+and preserves every unrelated resource byte, including alarms and extensions.
+It neither invents nor deletes VTIMEZONE. If the source resource embeds a matching
+VTIMEZONE, all accepted source endpoints must also agree with its native offsets;
+contradictory or duplicate definitions are refused. Positive resource write
+privilege and the accepted strong ETag are required at the existing write gates.
+
+The existing typed series journal retains the exact target time intent and raw
+before/after resource proof. CAS, unknown-response replay, atomic family ACK and
+pull barriers apply unchanged. Explicit conflict recovery uses the same native
+address/UID and the saved UTC intent. It accepts refreshed private extensions
+only while every original canonical time, rule and content field stays equal;
+changed native content/time cannot silently become part of this zone-only edit.
+Local/source/revision/lease and stale preview guards remain in force.
+
+Verification lives in `caldav-series-zone.test.ts` (calendar package),
+`caldav_series_zone.test.ts` (native serializer), the registered CalDAV scope
+HTTP/DB suite, and the existing Radicale suite. Scope scenarios cover public
+admission, lost response, fresh conflict proof, changed native time refusal,
+active/retired definitions, disabled writes, absent positive privilege, local
+CAS, immutable target intent, stable mapping identity and pull echo. The native
+Radicale scenario creates only a disposable resource and verifies real
+conditional conflict/recovery, preserved private data and stale PUT refusal.
+The native `AddEventModal.spec.ts` composer regression exercises the actual input,
+All events callback and local reminder scheduling from the saved master.
+Browser cases `K12 explicit UTC whole-series` exercise the existing input and
+explicit whole-series full editor in light desktop and dark narrow layouts. These are mocked API
+browser checks, not live iCloud or physical native acceptance. No live provider
+or production flag was activated for this batch.

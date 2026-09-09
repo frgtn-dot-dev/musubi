@@ -22,3 +22,5 @@ export { providerReminderDraft, providerReminderRequest, caldavAlarmDescription,
 export * from "./provider-rsvp-draft";
 
 export * from "./finite-series";
+
+export * from "./caldav-series-zone";

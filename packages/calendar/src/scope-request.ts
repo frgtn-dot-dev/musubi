@@ -1,4 +1,5 @@
 import { EventScopeRequestSchema, EventTimeContentPatchSchema, eventContentPatch, hasKnownEventTime, requireEventRevision, type Event, type EventScopeRequest, type EventTimeEdit, type EventWriteRequest } from "@musubi/types";
+import { assertCaldavSeriesUTCConversion } from "./caldav-series-zone";
 import type { EditScope } from "./recurrence-edit";
 
 const pending = new WeakMap<Event, Map<string, string>>();
@@ -13,7 +14,8 @@ export function eventScopeRequest(master: Event, occurrence: Event, scope: EditS
   if (edited && !time && (edited.start.getTime() !== occurrence.start.getTime() || edited.end.getTime() !== occurrence.end.getTime())) throw new Error("This move needs an explicit civil time intent.");
   if (time && scope === "series") {
     const base = master.timeModel;
-    if (!base || base.kind === "legacy-unknown" || !model || model.kind === "legacy-unknown" || base.kind !== time.kind || model.kind !== time.kind || (base.kind === "zoned" && time.kind === "zoned" && (base.timeZone !== time.timeZone || (model.kind === "zoned" && model.timeZone !== time.timeZone)))) throw new Error("Save changes to the series time type or zone from its master.");
+    const utcConversion = base?.kind === "zoned" && model?.kind === "zoned" && time.kind === "zoned" && base.timeZone !== "UTC" && time.timeZone === "UTC" && model.timeZone === base.timeZone && !occurrence.seriesID && time.startLocal === model.startLocal && time.endLocal === model.endLocal;
+    if (!utcConversion && (!base || base.kind === "legacy-unknown" || !model || model.kind === "legacy-unknown" || base.kind !== time.kind || model.kind !== time.kind || (base.kind === "zoned" && time.kind === "zoned" && (base.timeZone !== time.timeZone || (model.kind === "zoned" && model.timeZone !== time.timeZone))))) throw new Error("Save changes to the series time type or zone from its master.");
     const anchors = (event: Event) => event.timeModel?.kind === "all-day" ? [event.start.toISOString().slice(0, 10) + "T00:00:00.000", event.end.toISOString().slice(0, 10) + "T00:00:00.000"] : [(event.timeModel as { startLocal: string }).startLocal, (event.timeModel as { endLocal: string }).endLocal];
     const [a, b] = anchors(master); const [c, d] = anchors(occurrence);
     const [e, f] = time.kind === "all-day" ? [time.startDate + "T00:00:00.000", time.endDate + "T00:00:00.000"] : [time.startLocal, time.endLocal];
@@ -21,6 +23,7 @@ export function eventScopeRequest(master: Event, occurrence: Event, scope: EditS
     const start = shift(a!, c!, e); const end = shift(b!, d!, f);
     time = time.kind === "all-day" ? { kind: "all-day", startDate: start.slice(0, 10), endDate: end.slice(0, 10) } : { ...time, startLocal: start, endLocal: end } as EventTimeEdit;
   }
+  if (time?.kind === "zoned" && scope === "series" && master.timeModel?.kind === "zoned" && time.timeZone !== master.timeModel.timeZone) assertCaldavSeriesUTCConversion(master, time);
   let patch;
   if (edited) {
     const { start: _start, end: _end, isAllDay: _allDay, ...content } = eventContentPatch(occurrence, edited);

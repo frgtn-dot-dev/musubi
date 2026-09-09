@@ -9127,3 +9127,34 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K12 explicit UTC whole-series clock conversion: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const known = event("00000000-0000-4000-8000-000000000194", "UTC clock series", "personal", "red", "2026-10-23T00:30:00Z", "2026-10-23T01:30:00Z", {
+      recurrence: "RRULE:FREQ=DAILY;COUNT=2", seriesID: null, originalStart: null,
+      timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" },
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [known] });
+    const writes: Record<string, unknown>[] = [];
+    await page.route(`**/api/v1/events/${known.id}/scope`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return respond(route, { operationID: body.operationID, changed: true, events: [{ id: known.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false });
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-10-24");
+    await page.locator('[data-day-key="2026-10-24"]').getByRole("button", { name: /UTC clock series/ }).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "More options", exact: true }).click();
+    await page.getByRole("textbox", { name: "Event time zone", exact: true }).fill("UTC");
+    await expect(page.getByLabel("Start time", { exact: true })).toHaveValue("02:30");
+    const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
+    await expect(editor.getByText("Changes here apply to the recurring series.")).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    await editor.screenshot({ path: testInfo.outputPath("utc-series-editor.png") });
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" } });
+  });
+}

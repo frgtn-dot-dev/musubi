@@ -281,9 +281,10 @@ async function prepare(
     const family = context.caldavContext;
     const savedWrite = row.payload.caldavSeries.write;
     const targetEventID = savedWrite.targetEventID;
+    const zoneConversion = savedWrite.time?.kind === "zoned" && savedWrite.baseline.master.timeModel?.kind === "zoned" && savedWrite.time.timeZone !== savedWrite.baseline.master.timeModel.timeZone;
     const localTarget = targetEventID ? family.children.find(child => child.id === targetEventID) : family.master;
     if (!localTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, savedWrite.newDefinition || savedWrite.cancelTarget || savedWrite.followingDelete ? null : targetEventID);
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, zoneConversion || savedWrite.newDefinition || savedWrite.cancelTarget || savedWrite.followingDelete ? null : targetEventID);
     let remoteTarget = targetEventID ? observed.baseline.children.find(child => child.id === targetEventID) : observed.baseline.master;
     if (savedWrite.newDefinition) {
       const generated = savedWrite.newDefinition;
@@ -293,7 +294,7 @@ async function prepare(
       }, () => generated.id).creates[0];
     }
     if (!remoteTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const patch = savedWrite.cancelTarget || savedWrite.followingDelete ? {} : { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null, ...(savedWrite.patch.recurrence !== undefined ? { recurrence: savedWrite.patch.recurrence } : {}) };
+    const patch = zoneConversion || savedWrite.cancelTarget || savedWrite.followingDelete ? {} : { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null, ...(savedWrite.patch.recurrence !== undefined ? { recurrence: savedWrite.patch.recurrence } : {}) };
     const prepared = {
       context: { ...family, mappings: family.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) },
       write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch, targetEventID, savedWrite.cancelTarget, savedWrite.newDefinition, savedWrite.time, savedWrite.followingDelete),
