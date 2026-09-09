@@ -769,6 +769,13 @@ test("reads, filters and signs out of the authenticated Month", async ({
 
 	await openCreateEvent(page);
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+	await expect(page.getByRole("menu", { name: "Create", exact: true })).toHaveCount(0);
+	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("button", { name: "Create event or task", exact: true })).toBeFocused();
+	await page.keyboard.press("Enter");
+	await page.getByRole("menuitem", { name: "Event", exact: true }).press("Enter");
+	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
 	await page.keyboard.press("Escape");
 
 	await expectNoAccessibilityViolations(page);
