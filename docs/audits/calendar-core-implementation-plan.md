@@ -749,3 +749,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K12 CalDAV — potvrzení uloženého time/RRULE záměru:** fresh preview nyní vychází z původního nativního baseline a přesně znovu aplikuje uložený čas série/existující výjimky nebo RRULE. Commit váže původní čas/rule/scope a celý kanonický family stav; rekeyed identity se potvrdí společně. [HTTP/DB kontrakt](../sync/caldav-series-writes.md#saved-time-and-rrule-conflict-confirmation) pokrývá tři časové typy, souběhy, repeated/503, tampering a odmítnutí jiné nativní struktury. Nejde o adopci souběžné providerové změny času či pravidla; generated/cancel/following/split konflikty zůstávají navazující práce. Flagy/verze/privileges beze změny.
+
+
+**K12 CalDAV — generated/cancel/revival konflikty:** explicitní potvrzení zachová vybranou identitu, zmrazenou novou definici a cancellation/time/rule volbu. Generated/cancel vyžadují shodná původní kanonická nativní data; revival porovnává obsah existující stále zrušené definice. [HTTP/DB a Radicale důkazy](../sync/caldav-series-writes.md#generated-cancellation-and-revival-conflict-confirmation) pokrývají tři časové typy, souběhy, tampering, repeated/503 a echo bez změn UUID/revizí. Following/whole-resource delete a split reconciliation následují; iCloud privileges, flagy/verze a živé účty se nemění.

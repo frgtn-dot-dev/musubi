@@ -65,6 +65,16 @@ for (const kind of ["zoned", "all-day", "floating"]) {
     remoteChild.replace("SUMMARY:Remote child", "STATUS:CANCELLED\r\nSUMMARY:Remote child"),
     remoteChild.replace("SUMMARY:Remote child", "SUMMARY:Remote child\r\nATTENDEE:mailto:guest@example.test"),
   ]) assert.throws(() => caldavSeriesResolutionEvidence(modified, intent, currentRef, data, target.id));
+  const privateOnly = data.replace("Keep folded", "Fresh extension");
+  const preserved = caldavSeriesResolutionEvidence(privateOnly, intent, currentRef, data, null);
+  assert.deepEqual(preserved.baseline.master, intent.master); assert.deepEqual(preserved.baseline.children, intent.children);
+  assert.equal(preserved.evidence.data, privateOnly);
+  assert.throws(() => caldavSeriesResolutionEvidence(currentData, intent, currentRef, data, null));
+  assert.throws(() => caldavSeriesResolutionEvidence(remoteChild, intent, currentRef, data, null));
+  const cancelledTarget = intent.children.find(item => item.isCanceled)!;
+  const revival = caldavSeriesResolutionEvidence(data.replace("SUMMARY:Cancelled child", "SUMMARY:Fresh cancelled content"), intent, currentRef, data, cancelledTarget.id);
+  assert.equal(revival.baseline.children.find(item => item.id === cancelledTarget.id)!.isCanceled, true);
+  assert.equal(revival.baseline.children.find(item => item.id === cancelledTarget.id)!.title, "Fresh cancelled content");
   const timezone = ["BEGIN:VTIMEZONE", "TZID:Europe/Prague", "BEGIN:STANDARD", "DTSTART:20261025T030000", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "END:STANDARD", "END:VTIMEZONE"].join("\r\n");
   const withZone = (value: string) => value.replace("VERSION:2.0", "VERSION:2.0\r\n" + timezone);
   assert.equal(caldavSeriesResolutionEvidence(withZone(currentData), intent, currentRef, withZone(data)).evidence.data, withZone(currentData));

@@ -31,9 +31,9 @@ export type CaldavSeriesResolutionEvidence = {
 };
 
 /** A fresh conflict comparison may adopt content of the selected master or
- * existing active child, never changed time/recurrence or another definition. Unknown resource data
+ * existing child, never changed time/recurrence or another definition. Unknown resource data
  * stays in the private evidence and must be preserved by the eventual write. */
-export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSeriesIntent, ref: ExternalEventRef, before: string, targetEventID?: string): CaldavSeriesResolutionEvidence {
+export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSeriesIntent, ref: ExternalEventRef, before: string, targetEventID?: string | null): CaldavSeriesResolutionEvidence {
   if (ref.externalEventId !== intent.ref.externalEventId || ref.icalUid !== intent.ref.icalUid)
     throw new ProviderEventWriteError("provider-conflict");
   // The civil model uses IANA rules and does not encode embedded VTIMEZONE
@@ -53,10 +53,17 @@ export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSerie
   if (JSON.stringify(timezones(data)) !== JSON.stringify(timezones(before)))
     throw new ProviderEventWriteError("provider-conflict");
   const etag = requireEventEtag(ref.etag);
+  // A generated definition or cancellation has no selected native content to
+  // adopt. Null explicitly retains every accepted canonical field; private
+  // native extensions may still have a fresh resource validator.
+  if (targetEventID === null) {
+    const baseline = { ...intent, ref };
+    return { baseline, evidence: caldavSeriesEvidence(data, baseline) };
+  }
   if (targetEventID !== undefined && (typeof targetEventID !== "string" || !targetEventID)) throw new ProviderEventWriteError("provider-conflict");
   const normalized = normalizeCaldavResource({ url: ref.externalEventId, etag, data });
   const target = targetEventID ? intent.children.find(child => child.id === targetEventID) : intent.master;
-  if (!target || target.isCanceled || (targetEventID && !target.originalStart)) throw new ProviderEventWriteError("provider-conflict");
+  if (!target || (targetEventID && !target.originalStart)) throw new ProviderEventWriteError("provider-conflict");
   const candidates = normalized.filter(item => targetEventID
     ? JSON.stringify(item.originalStart) === JSON.stringify(target.originalStart)
     : !item.originalStart);
