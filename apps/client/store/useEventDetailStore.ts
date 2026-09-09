@@ -41,6 +41,7 @@ export function presentEventDetail(events: Event[], event: Event) {
 // The classic edit composer (AddEventModal, non-docked), same treatment: global
 // state + one host, so opening "Edit" doesn't re-render the screen underneath.
 type EditComposerStore = {
+    refreshPrivateSnapshots: (prefilled?: Event, master?: Event) => void;
     prefilled: Event | undefined;
     master: Event | undefined;
     visible: boolean;
@@ -49,6 +50,7 @@ type EditComposerStore = {
 };
 
 export const useEditComposerStore = create<EditComposerStore>((set) => ({
+    refreshPrivateSnapshots: (prefilled, master) => set(state => ({ prefilled: prefilled ?? state.prefilled, master: master ?? state.master })),
     prefilled: undefined,
     master: undefined,
     visible: false,
@@ -67,3 +69,9 @@ export const useEditComposerStore = create<EditComposerStore>((set) => ({
         }),
     close: () => set({ visible: false }),
 }));
+
+/** Account/server changes must not reopen a previous account's modal snapshot. */
+export function resetEventModalSnapshots() {
+    useEventDetailStore.setState({ event: null, visible: false });
+    useEditComposerStore.setState({ prefilled: undefined, master: undefined, visible: false });
+}

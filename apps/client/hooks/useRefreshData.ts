@@ -159,7 +159,7 @@ export function refreshEventData(
     if (fixed.length) await cacheUpsertEvents(fixed);
 
     if (!isCurrent()) return;
-    loadEvents(kept);
+    loadEvents(kept, { reconciled: true });
     await cacheSetCalendars(calendars);
 
     // Rules first, then reschedule: they are what decides which of these events

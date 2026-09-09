@@ -1,3 +1,4 @@
+import { resetEventModalSnapshots } from "@/store/useEventDetailStore";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { router } from "expo-router";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
@@ -17,6 +18,7 @@ export async function resetLocalAccountState() {
   resetSettingsSync();
   await resetFederatedAccounts();
   useCalendarsStore.getState().loadCalendars([]);
+  resetEventModalSnapshots();
   useEventsStore.getState().resetEvents();
   resetOnboardingRoute();
   await clearAgendaWidget();

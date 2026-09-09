@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { Event } from "@musubi/types";
 import { AddEventModal } from "@/components/calendar/AddEventModal";
 import EventDetailModal from "@/components/calendar/EventDetailModal";
 import { applySeriesEdit } from "@/lib/seriesEdit";
 import { useApi } from "@/services/api";
-import { liveEventDetail } from "@/lib/liveEvent";
+import { privateEditorRefresh } from "@/lib/eventEditorPrivacy";
+import { liveEventDetail, isRetiredGoogleSnapshot } from "@/lib/liveEvent";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useEventsStore } from "@/store/useEventsStore";
 import {
@@ -19,9 +21,21 @@ import {
 export function GlobalEventModals() {
   const api = useApi();
   const { calendars } = useCalendarsStore();
-  const { events, addEvent, updateEvent, applyEventScope } = useEventsStore();
+  const { events, retiredGoogleEventIDs, retiredGoogleEventRevisions, addEvent, updateEvent, applyEventScope } = useEventsStore();
   const detail = useEventDetailStore();
   const composer = useEditComposerStore();
+
+  const privacyRefresh = (snapshot: Event | undefined) => privateEditorRefresh(snapshot,
+    events.find(event => event.id === snapshot?.id), calendars,
+    !!snapshot && isRetiredGoogleSnapshot(snapshot, retiredGoogleEventIDs, retiredGoogleEventRevisions));
+  const { refreshPrivateSnapshots } = composer;
+  const privatePrefilled = privacyRefresh(composer.prefilled);
+  const privateMaster = privacyRefresh(composer.master);
+  useEffect(() => {
+    if (privatePrefilled || privateMaster) refreshPrivateSnapshots(privatePrefilled, privateMaster);
+  }, [privatePrefilled, privateMaster, refreshPrivateSnapshots]);
+  const liveDetail = liveEventDetail(events, detail.event, retiredGoogleEventIDs, retiredGoogleEventRevisions);
+  const detailObservationRevision = events.find(event => event.id === detail.event?.id)?.revision;
 
   const handleEdit = (event: Event) => {
     detail.close();
@@ -43,19 +57,22 @@ export function GlobalEventModals() {
             applyEventScope: (event, request) => applyEventScope(event, request, api),
             addEvent: (event) => addEvent(event, api),
             edited,
-            master: composer.master,
-            occurrence: composer.prefilled ?? edited,
+            master: privacyRefresh(composer.master) ?? composer.master,
+            occurrence: privacyRefresh(composer.prefilled) ?? composer.prefilled ?? edited,
             updateEvent: (event) => updateEvent(event, api),
           });
         }}
         calendars={calendars}
         event={composer.prefilled}
+        privacyEvent={privatePrefilled ?? composer.prefilled}
+        sourceRemoved={!!composer.prefilled && isRetiredGoogleSnapshot(composer.prefilled, retiredGoogleEventIDs, retiredGoogleEventRevisions)}
       />
       <EventDetailModal
-        visible={detail.visible}
+        visible={detail.visible && !!liveDetail}
         onClose={detail.close}
         onEdit={handleEdit}
-        event={liveEventDetail(events, detail.event)}
+        event={liveDetail}
+        observationRevision={detailObservationRevision}
       />
     </>
   );

@@ -1,3 +1,4 @@
+import { refreshedPrivateField } from "@/lib/eventEditorPrivacy";
 import "react-native-get-random-values";
 import {
   editedEvent,
@@ -109,6 +110,8 @@ type Props = {
   onEdit: (event: Event) => Promise<boolean | void | Event>;
   calendars: Calendar[];
   event?: Event;
+  privacyEvent?: Event;
+  sourceRemoved?: boolean;
 };
 
 const withHours = (base: Date, hours: number): Date => {
@@ -170,6 +173,8 @@ export function AddEventModal({
   onEdit,
   calendars,
   event,
+  privacyEvent,
+  sourceRemoved,
 }: Props) {
   const { timeFormat, dateFormat, calendarOrder, tabBarLabels } =
     useSettingsStore();
@@ -196,6 +201,9 @@ export function AddEventModal({
   const [attendeesToggle, setAttendeesToggle] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  // Ownership survives provider baseline changes, including a draft value that
+  // coincides with the next provider value. Only closing/opening resets it.
+  const editedPrivateFields = useRef(new Set<"title" | "description" | "location" | "url">());
   const recurrenceEdited = useRef(false);
   const [newRecurrence, setNewRecurrence] = useState<RecurrenceOption>("none");
   const [unsupportedRecurrence, setUnsupportedRecurrence] = useState<
@@ -488,11 +496,16 @@ export function AddEventModal({
     anchor?.getTime(),
   ]);
 
+  const openingEvent = privacyEvent ?? event;
   const baseline = useRef<Event | undefined>(event);
   const [createID, setCreateID] = useState(() => uuidv7());
+  // The close/reset sequence also allocates a new draft identity in docked mode.
+  useEffect(() => { editedPrivateFields.current.clear(); }, [createID]);
 
   useEffect(() => {
     if (visible) {
+      const event = openingEvent;
+      editedPrivateFields.current.clear();
       setCreateID(uuidv7());
       baseline.current = event && { ...event, calendars: [...event.calendars] };
       setTimeDraft(event ? knownEventTimeDraft(event) : null);
@@ -544,6 +557,16 @@ export function AddEventModal({
     // A live cache refresh is not a new draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  useEffect(() => {
+    const before = baseline.current;
+    if (!visible || !before || !privacyEvent || privacyEvent.id !== before.id) return;
+    if (!editedPrivateFields.current.has("title")) setNewTitle(value => refreshedPrivateField(value, before.title, privacyEvent.title));
+    if (!editedPrivateFields.current.has("description")) setNewDescription(value => refreshedPrivateField(value, before.description, privacyEvent.description));
+    if (!editedPrivateFields.current.has("location")) setNewLocation(value => refreshedPrivateField(value, before.location, privacyEvent.location));
+    if (!editedPrivateFields.current.has("url")) setNewUrl(value => refreshedPrivateField(value, before.url, privacyEvent.url));
+    baseline.current = privacyEvent;
+  }, [visible, privacyEvent]);
 
   useEffect(() => {
     const lastStart = new Date(newStart);
@@ -634,6 +657,10 @@ export function AddEventModal({
   }
 
   const handleSave = async () => {
+    if (sourceRemoved) {
+      Alert.alert("Failed to save", "This Google event is no longer available. Your draft was kept.");
+      return;
+    }
     const event = baseline.current;
     const allDayUTC = (d: Date) =>
       new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -908,7 +935,7 @@ export function AddEventModal({
               </View>
               <TextInput
                 value={newTitle}
-                onChangeText={setNewTitle}
+                onChangeText={value => { editedPrivateFields.current.add("title"); setNewTitle(value); }}
                 onFocus={dockExpand}
                 placeholder={eventHint}
                 placeholderTextColor={colors.fg4}
@@ -949,7 +976,7 @@ export function AddEventModal({
             </Text>
             <TextInput
               value={newTitle}
-              onChangeText={setNewTitle}
+              onChangeText={value => { editedPrivateFields.current.add("title"); setNewTitle(value); }}
               placeholder={eventHint}
               placeholderTextColor={colors.fg4}
               multiline={true}
@@ -1802,7 +1829,7 @@ export function AddEventModal({
               </Text>
               <TextInput
                 value={newDescription}
-                onChangeText={setNewDescription}
+                onChangeText={value => { editedPrivateFields.current.add("description"); setNewDescription(value); }}
                 onFocus={scrollToBottomField}
                 placeholder="..."
                 placeholderTextColor={colors.fg4}
@@ -1816,7 +1843,7 @@ export function AddEventModal({
               </Text>
               <TextInput
                 value={newLocation}
-                onChangeText={setNewLocation}
+                onChangeText={value => { editedPrivateFields.current.add("location"); setNewLocation(value); }}
                 onFocus={scrollToBottomField}
                 placeholder="..."
                 placeholderTextColor={colors.fg4}
@@ -1830,7 +1857,7 @@ export function AddEventModal({
               </Text>
               <TextInput
                 value={newUrl}
-                onChangeText={setNewUrl}
+                onChangeText={value => { editedPrivateFields.current.add("url"); setNewUrl(value); }}
                 onFocus={scrollToBottomField}
                 placeholder="https://..."
                 placeholderTextColor={colors.fg4}

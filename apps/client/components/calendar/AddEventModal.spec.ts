@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   index: 0,
   effects: [] as (() => void)[],
   collectEffects: false,
+  persistent: false, refs: [] as any[], refIndex: 0, dependencies: [] as any[], effectIndex: 0,
 }));
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
@@ -20,11 +21,21 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
-  useEffect: (effect: () => void) => {
+  useEffect: (effect: () => void, deps: unknown[]) => {
+    if (state.persistent) {
+      const index = state.effectIndex++;
+      if (!state.dependencies[index] || deps?.some((value, i) => value !== state.dependencies[index][i])) state.effects.push(effect);
+      state.dependencies[index] = deps;
+      return;
+    }
     if (state.collectEffects) state.effects.push(effect);
   },
   useMemo: (fn: () => unknown) => fn(),
-  useRef: (value: unknown) => ({ current: value }),
+  useRef: (value: unknown) => {
+    if (!state.persistent) return { current: value };
+    const index = state.refIndex++;
+    return state.refs[index] ??= { current: value };
+  },
   useState: (initial: unknown) => {
     const index = state.index++;
     if (!(index in state.values))
@@ -188,19 +199,10 @@ vi.mock("@/services/eventsCache", () => ({
   cacheDeleteEvents: mocks.cache,
   cacheUpsertEvents: mocks.cache,
 }));
-vi.mock("@/store/useCalendarsStore", () => ({
-  useCalendarsStore: () => ({
-    calendars: [
-      {
-        id: "00000000-0000-4000-8000-000000000155",
-        creatorID: "owner",
-        role: "owner",
-        name: "Calendar",
-        color: "#7A8BA3",
-      },
-    ],
-  }),
-}));
+vi.mock("@/store/useCalendarsStore", async original => {
+  const actual = await original<typeof import("@/store/useCalendarsStore")>();
+  return { useCalendarsStore: Object.assign(() => actual.useCalendarsStore.getState(), actual.useCalendarsStore) };
+});
 vi.mock("@/store/useEventsStore", async (original) => {
   const actual = await original<typeof import("@/store/useEventsStore")>();
   return {
@@ -225,6 +227,7 @@ vi.mock("@/store/useEventDetailStore", async (original) => {
   };
 });
 const { GlobalEventModals } = await import("./GlobalEventModals");
+const { useCalendarsStore } = await import("@/store/useCalendarsStore");
 const { useEventsStore } = await import("@/store/useEventsStore");
 const { useEditComposerStore, useEventDetailStore, presentEventDetail } = await import("@/store/useEventDetailStore");
 const master = EventSchema.parse({
@@ -300,6 +303,8 @@ function saveButton(node: ReactNode): Props | undefined {
   return saveButton(node.props.children);
 }
 beforeEach(() => {
+  state.persistent = false; state.refs = []; state.dependencies = [];
+
   vi.clearAllMocks();
   mocks.stream = {};
   mocks.request.mockReset();
@@ -312,6 +317,7 @@ beforeEach(() => {
   state.values = [];
   state.effects = [];
   state.collectEffects = false;
+  useCalendarsStore.getState().loadCalendars([{ id: master.calendars[0], creatorID: "owner", role: "owner", name: "Calendar", color: "#7A8BA3" } as any]);
   useEventsStore.setState({ events: [master] });
   useEditComposerStore.getState().open(occurrence);
 });
@@ -870,4 +876,100 @@ it("new native composer retains its creation UUID through failed and edited retr
   await saveButton(render())!.onPress!();
   expect(saved).toHaveLength(4);
   expect(saved[3]!.id).not.toBe(saved[0]!.id);
+});
+
+
+it.each([false, true])("privacy refresh preserves field deltas and accepted revision (all private fields edited: %s)", async (editExtras) => {
+  state.persistent = true;
+  const before = { ...master, recurrence: null, description: "Provider note", location: "Private room", url: "https://private.example" };
+  const props = { visible: true, calendars: useCalendarsStore.getState().calendars, event: before, onClose: vi.fn(), onSave: vi.fn(), onEdit: vi.fn().mockResolvedValue(false) };
+  function render(privacyEvent?: typeof before, sourceRemoved = false) {
+    state.index = 0; state.refIndex = 0; state.effectIndex = 0;
+    const tree = AddEventModal({ ...props, privacyEvent, sourceRemoved });
+    state.effects.splice(0).forEach(effect => effect());
+    return tree;
+  }
+  render();
+  titleInput(render())!.onChangeText("My draft title");
+  function allNodes(node: ReactNode): any[] {
+    if (Array.isArray(node)) return node.flatMap(allNodes);
+    if (!isValidElement(node)) return [];
+    return [node, ...allNodes((node.props as any).children)];
+  }
+  const inputs = () => allNodes(render()).filter(node => node.type === "TextInput");
+  inputs().find(node => node.props.value === "Provider note")!.props.onChangeText(editExtras ? "My note" : "");
+  if (editExtras) {
+    inputs().find(node => node.props.value === "Private room")!.props.onChangeText("My room");
+    inputs().find(node => node.props.value === "https://private.example")!.props.onChangeText("https://mine.example");
+  }
+  const { privateEditorRefresh } = await import("@/lib/eventEditorPrivacy");
+  const viewerSource = [{ id: before.originCalendarID, provider: "google", role: "viewer" }] as any;
+  const ownerSource = [{ id: before.originCalendarID, provider: "google", role: "owner" }] as any;
+  const redacted = privateEditorRefresh(before, { ...before, revision: 2, title: "Busy", description: null, location: null, url: null, organizer: "" }, viewerSource)! as any;
+  render(redacted);
+  let tree = render(redacted);
+  expect(titleInput(tree)!.value).toBe("My draft title");
+  // First let provider values coincide with the owned draft, then change them.
+  // Neither equality nor a null redaction baseline releases field ownership.
+  const coinciding = privateEditorRefresh(redacted, { ...redacted, revision: 3, title: "My draft title", description: editExtras ? "My note" : null, location: editExtras ? "My room" : null, url: editExtras ? "https://mine.example" : null }, viewerSource)! as any;
+  render(coinciding);
+  const readable = privateEditorRefresh(coinciding, { ...redacted, revision: 4, title: "Provider renamed", description: "Provider restored note", location: "Provider new room", url: "https://restored.example" }, ownerSource)! as any;
+  expect(readable.revision).toBe(before.revision);
+  render(readable);
+  tree = render(readable);
+  expect(titleInput(tree)!.value).toBe("My draft title");
+  expect(allNodes(tree).some(node => node.props.value === "Provider restored note")).toBe(false);
+  if (editExtras) {
+    expect(allNodes(tree).some(node => node.props.value === "My note")).toBe(true);
+    expect(allNodes(tree).some(node => node.props.value === "My room")).toBe(true);
+    expect(allNodes(tree).some(node => node.props.value === "https://mine.example")).toBe(true);
+  } else {
+    expect(allNodes(tree).some(node => node.props.value === "Provider new room")).toBe(true);
+    expect(allNodes(tree).some(node => node.props.value === "https://restored.example")).toBe(true);
+  }
+  render(redacted);
+  tree = render(redacted);
+  expect(JSON.stringify(tree)).not.toMatch(/Private room|private.example|Provider note/);
+  await saveButton(tree)!.onPress!();
+  expect(props.onEdit).toHaveBeenCalledWith(expect.objectContaining({ revision: 1, title: "My draft title", description: editExtras ? "My note" : null, location: editExtras ? "My room" : null, url: editExtras ? "https://mine.example" : null }));
+  props.onEdit.mockClear();
+  tree = render(redacted, true);
+  await saveButton(tree)!.onPress!();
+  expect(props.onEdit).not.toHaveBeenCalled();
+  expect(titleInput(render(redacted, true))!.value).toBe("My draft title");
+});
+
+
+it("the global native host closes a confirmed missing Google detail and retires frozen composer source values", async () => {
+  useCalendarsStore.getState().loadCalendars([{ id: master.originCalendarID, creatorID: "owner", role: "owner", name: "Google", provider: "google", color: "red" } as any]);
+  useEventsStore.getState().resetEvents();
+  useEventsStore.getState().loadEvents([master]);
+  useEventDetailStore.getState().open(occurrence);
+  useEditComposerStore.getState().open(occurrence);
+  useCalendarsStore.getState().loadCalendars([]);
+  // A transient empty cache is insufficient proof.
+  useEventsStore.getState().loadEvents([]);
+  let host = GlobalEventModals();
+  expect(host.props.children[1].props.visible).toBe(true);
+  useEventsStore.getState().loadEvents([], { reconciled: true });
+  state.collectEffects = true;
+  host = GlobalEventModals();
+  state.collectEffects = false;
+  state.effects.splice(0).forEach(effect => effect());
+  expect(host.props.children[1].props.visible).toBe(false);
+  expect(host.props.children[1].props.event).toBeNull();
+  expect(host.props.children[0].props.sourceRemoved).toBe(true);
+  expect(useEditComposerStore.getState().prefilled).toMatchObject({ title: "Busy", revision: occurrence.revision, start: occurrence.start });
+  expect(useEditComposerStore.getState().master).toMatchObject({ title: "Busy", revision: master.revision, start: master.start });
+});
+
+it("the native host passes canonical observation revision separately from a known occurrence's frozen time authority", () => {
+  const known = { ...master, timeModel: { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-07-06T11:00:00.000", endLocal: "2026-07-06T12:00:00.000" } };
+  const tapped = { ...known, start: occurrence.start, end: occurrence.end, timeModel: { ...known.timeModel, startLocal: "2026-07-20T11:00:00.000", endLocal: "2026-07-20T12:00:00.000" } };
+  useEventsStore.getState().resetEvents();
+  useEventsStore.getState().loadEvents([{ ...known, revision: 2, title: "Busy", organizer: "" }]);
+  useEventDetailStore.getState().open(tapped);
+  const props = GlobalEventModals().props.children[1].props;
+  expect(props.event).toMatchObject({ title: "Busy", revision: 1, start: tapped.start, timeModel: tapped.timeModel });
+  expect(props.observationRevision).toBe(2);
 });
