@@ -1,3 +1,5 @@
+import { prepareEventDeliveryResolution } from "./event_resolution";
+import { commitEventDeliveryResolution, getEventDeliveryResolutionReplay } from "@musubi/db";
 import { createServer } from "node:http";
 import { config } from "@musubi/config";
 import { googleAdapter } from "./adapters/google";
@@ -15,7 +17,7 @@ async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
   const savedFlag = config.api.providerRsvpEditsEnabled;
   config.api.providerRsvpEditsEnabled = true;
-  let remote: any, mode = "normal", patches = 0;
+  let remote: any, mode = "normal", patches = 0, expectedPatchEtag = '"child"';
   let onRead: (() => Promise<void>) | undefined, onPatch: (() => Promise<void>) | undefined;
   const fixture = createServer(async (req, res) => {
     try {
@@ -29,7 +31,7 @@ async function main() {
       }
       assert.equal(req.method, "PATCH");
       assert.equal(req.url, "/calendar/v3/calendars/guest%40example.test/events/instance?sendUpdates=all&conferenceDataVersion=1");
-      assert.equal(req.headers["if-match"], '\"child\"');
+      assert.equal(req.headers["if-match"], expectedPatchEtag);
       let body = ""; for await (const chunk of req) body += chunk;
       assert.deepEqual(JSON.parse(body), { attendeesOmitted: true, attendees: [{ email: "guest@example.test", responseStatus: "accepted" }] });
       patches++;
@@ -48,8 +50,8 @@ async function main() {
   const adapter = { ...googleAdapter, ...googleRsvpMethods(async () => "synthetic-instance-rsvp") };
   try {
   for (const kind of ["zoned", "all-day"] as const) {
-    for (const scenario of ["queue", "concurrent", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "deliver-normal", "deliver-lost", "deliver-503", "deliver-parent-before", "deliver-parent-after", "deliver-parent-map-before", "deliver-parent-map-after", "deliver-child-before", "deliver-grant-before", "deliver-grant-after", "deliver-lease-after", "deliver-pull-echo", "deliver-pull-state", "deliver-native-original-before", "deliver-native-original-after"]) {
-      mode = "normal"; patches = 0; onRead = undefined; onPatch = undefined;
+    for (const scenario of ["queue", "concurrent", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "deliver-normal", "deliver-lost", "deliver-503", "deliver-parent-before", "deliver-parent-after", "deliver-parent-map-before", "deliver-parent-map-after", "deliver-child-before", "deliver-grant-before", "deliver-grant-after", "deliver-lease-after", "deliver-pull-echo", "deliver-pull-state", "deliver-native-original-before", "deliver-native-original-after", "deliver-resolve-resend", "deliver-resolve-recover"]) {
+      mode = "normal"; patches = 0; expectedPatchEtag = '"child"'; onRead = undefined; onPatch = undefined;
       const owner = `rsvp-instance-${randomUUID()}`;
       await db.insert(user).values({ id: owner, name: owner, email: `${owner}@example.test`, isExternal: true });
       try {
@@ -118,8 +120,8 @@ async function main() {
             if (scenario === "deliver-lease-after") onPatch = async () => { await db.update(eventOutbox).set({ leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 60000) }).where(eq(eventOutbox.id, row.id)); };
             if (scenario === "deliver-native-original-before") onRead = nativeIdentity;
             if (scenario === "deliver-native-original-after") onPatch = nativeIdentity;
-            if (scenario.startsWith("deliver-pull-")) onPatch = async () => {
-              if (scenario === "deliver-pull-state") { remote.attendees[1].responseStatus = "declined"; remote.etag = '\"concurrent\"'; }
+            if (scenario.startsWith("deliver-pull-") || scenario.startsWith("deliver-resolve-")) onPatch = async () => {
+              if (scenario === "deliver-pull-state" || scenario.startsWith("deliver-resolve-")) { remote.attendees[1].responseStatus = "declined"; remote.etag = '\"concurrent\"'; }
               await upsertExternalEvent("google", owner, calendar.id, "guest@example.test", "instance", values, remote.etag, null, undefined, { timeModel: model, externalSeriesID: "series", originalStart }, undefined, googleEventState(remote));
             };
             if (scenario === "deliver-lost") mode = "lost";
@@ -142,6 +144,55 @@ async function main() {
               assert.notEqual(result?.status, "completed", scenario);
               assert.equal(accepted!.etag, native.etag, scenario);
               assert.equal(accepted!.providerState!.ownResponse, "needsAction", scenario);
+            }
+            if (scenario.startsWith("deliver-resolve-")) {
+              const beforePreview = patches;
+              if (scenario === "deliver-resolve-resend") { remote.attendees[0].responseStatus = "declined"; remote.etag = '\"own-changed\"'; }
+              // A newer accepted parent revision may be adopted only by an
+              // explicit new preview, while parent and original slot stay fixed.
+              await db.update(events).set({ revision: parent.revision + 1 }).where(eq(events.id, parent.id));
+              const first = await prepareEventDeliveryResolution(owner, child.id, row.id, () => adapter);
+              assert.equal(first.preview.canResolve, true);
+              assert.equal(first.proof.rsvp!.intent.instance!.parentRevision, parent.revision + 1);
+              assert.equal(first.preview.rsvpResolution!.desired, "accepted");
+              assert.equal(patches, beforePreview);
+              const request = { mutationId: randomUUID(), expectedLocalRevision: child.revision, expectedLatestOperationId: row.id, expectedRemoteExists: true, expectedRemoteEtag: remote.etag, expectedRsvpBaselineVersion: first.preview.rsvpResolution!.baselineVersion };
+              await db.update(events).set({ revision: parent.revision + 2 }).where(eq(events.id, parent.id));
+              await assert.rejects(() => commitEventDeliveryResolution(owner, first.proof, request));
+              const second = await prepareEventDeliveryResolution(owner, child.id, row.id, () => adapter);
+              assert.notEqual(second.preview.rsvpResolution!.baselineVersion, request.expectedRsvpBaselineVersion, "Same native JSON with a changed parent invalidates the old preview");
+              await assert.rejects(() => commitEventDeliveryResolution(owner, second.proof, request));
+              remote.attendees[0].comment = "Current private comment";
+              const fresh = await prepareEventDeliveryResolution(owner, child.id, row.id, () => adapter);
+              assert.notEqual(fresh.preview.rsvpResolution!.baselineVersion, second.preview.rsvpResolution!.baselineVersion);
+              assert.ok(!JSON.stringify(fresh.preview).includes("Current private comment"));
+              const acceptedRequest = { ...request, expectedRsvpBaselineVersion: fresh.preview.rsvpResolution!.baselineVersion };
+              const savedOriginal = remote.originalStartTime; await nativeIdentity();
+              await assert.rejects(() => prepareEventDeliveryResolution(owner, child.id, row.id, () => adapter));
+              remote.originalStartTime = savedOriginal;
+              await db.update(externalEvents).set({ externalEventID: "other-parent" }).where(eq(externalEvents.id, parentMapping.id));
+              await db.update(externalEvents).set({ externalSeriesID: "other-parent" }).where(eq(externalEvents.id, mapping.id));
+              remote.recurringEventId = "other-parent";
+              await assert.rejects(() => prepareEventDeliveryResolution(owner, child.id, row.id, () => adapter));
+              await db.update(externalEvents).set({ externalEventID: "series" }).where(eq(externalEvents.id, parentMapping.id));
+              await db.update(externalEvents).set({ externalSeriesID: "series" }).where(eq(externalEvents.id, mapping.id));
+              remote.recurringEventId = "series";
+              await loseGrant(); await assert.rejects(() => commitEventDeliveryResolution(owner, fresh.proof, acceptedRequest));
+              await db.update(calendarMembers).set({ role: "owner" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+              const replacement = await commitEventDeliveryResolution(owner, fresh.proof, acceptedRequest);
+              assert.equal(await getEventDeliveryResolutionReplay(owner, child.id, row.id, acceptedRequest), replacement);
+              await assert.rejects(() => getEventDeliveryResolutionReplay(owner, child.id, row.id, request));
+              const [replacementRow] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, replacement));
+              assert.equal(replacementRow!.payload.rsvp!.instance!.parentRevision, parent.revision + 2);
+              assert.equal(replacementRow!.payload.rsvp!.request.operationID, acceptedRequest.mutationId);
+              expectedPatchEtag = remote.etag;
+              const delivered = await deliverEventOutbox(replacement, () => adapter);
+              assert.equal(delivered?.status, "completed", JSON.stringify({ scenario, status: delivered?.status, error: delivered?.errorCode, patches }));
+              assert.equal(patches, beforePreview + (scenario === "deliver-resolve-resend" ? 1 : 0));
+              assert.equal(remote.attendees[0].comment, "Current private comment");
+              assert.equal(remote.attendees[1].responseStatus, "declined");
+              assert.deepEqual(await getEventSnapshot(child.id), child);
+              continue;
             }
             assert.equal(patches, scenario.endsWith("-before") ? 0 : 1, scenario);
             continue;

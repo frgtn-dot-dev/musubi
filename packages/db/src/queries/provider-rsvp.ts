@@ -8,7 +8,7 @@ import {
   ForbiddenError,
   EventTimeModelSchema, type EventTimeModel,
   ProviderEventStateSchema,
-  ProviderRsvpEditSchema, providerRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
+  ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
 } from "@musubi/types";
 import { db } from "..";
 import {
@@ -258,11 +258,11 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
 
 /** Opaque preview identity includes every native field, including unprojected
  * attendee comments. JSON object key ordering is not a provider edit. */
-export function providerRsvpBaselineVersion(mappingID: string, baseline: Record<string, unknown>): string {
+export function providerRsvpBaselineVersion(mappingID: string, baseline: Record<string, unknown>, instance?: ProviderRsvpInstance): string {
   function ordered(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(ordered);
     if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, ordered(item)]));
     return value;
   }
-  return createHash("sha256").update(JSON.stringify([mappingID, ordered(baseline)])).digest("hex");
+  return createHash("sha256").update(JSON.stringify([mappingID, ordered(baseline), ...(instance ? [ProviderRsvpInstanceSchema.parse(instance)] : [])])).digest("hex");
 }
