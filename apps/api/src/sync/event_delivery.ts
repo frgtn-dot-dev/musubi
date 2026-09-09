@@ -147,6 +147,7 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.caldavSplit) throw new EventWriteError("event-write", "unsupported");
       if (row.payload.caldavSeriesDeletion) {
         if (!config.api.eventTimeEditsEnabled || row.provider !== "caldav" || row.action !== "delete" || !adapter?.deleteCaldavSeries) throw new EventWriteError("event-write", "unsupported");
         const check = async () => {

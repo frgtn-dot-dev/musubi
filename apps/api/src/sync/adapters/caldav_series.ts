@@ -1,16 +1,12 @@
 import ICAL from "ical.js";
 import { matchesEventProviderProjection } from "@musubi/db";
-import { EventSchema, EventTimeModelSchema, EventWriteError, OccurrenceStartSchema, type Event, type EventScopeRequest } from "@musubi/types";
+import { EventSchema, EventTimeModelSchema, EventWriteError, OccurrenceStartSchema, type Event } from "@musubi/types";
 import type { ExternalEventRef, NormalizedEvent } from "../adapter";
 import { ProviderEventWriteError, requireEventEtag } from "../event_write";
 import { replaceEventProperties } from "./caldav_event_ical";
 import { normalizeCaldavResource } from "./caldav_time";
 
-export type CaldavSeriesSplit = {
-  source: CaldavSeriesWrite;
-  request: EventScopeRequest;
-  creation: CaldavSeriesIntent & { data: string };
-};
+export type CaldavSeriesSplit = import("@musubi/db").CaldavSeriesSplitIntent;
 
 export type CaldavSeriesIntent = {
   ref: ExternalEventRef;

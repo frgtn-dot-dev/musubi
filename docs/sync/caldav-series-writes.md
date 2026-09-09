@@ -484,3 +484,36 @@ prefix/clause ordering and omitted known defaults preserve the same rule. A dire
 RED/GREEN regression and independent review caught the former mismatch between the
 planned recurrence string and ICAL serialization; bare editor syntax and INTERVAL=1
 now produce a matching planned/native family without dropping unknown clauses.
+
+
+## Private split transaction and dependency journal
+
+A server-only `caldavSplit` preparation can atomically save the shortened master,
+a new master and reparented future definitions, with one scope replay receipt and
+two outbox rows. Canonical intent is rebuilt from the original request and full
+accepted context; changed revisions, account bindings, exception content or an
+invented creation validator abort the transaction. The new resource UUID is frozen.
+The creation row explicitly depends on the source update across event identities.
+
+Whole-resource and individual-component pulls cannot import either unresolved
+address as a second family. The existing unmapped-delete fence recognizes the new
+URL before its mapping exists. Generic ACK, conflict resolution and delivery reject
+this private journal; the public following-update endpoint remains unsupported.
+Specialized delivery, phase-specific ACK, remote recovery and permission preflight
+must land before exposing it. No provider call is made by the transaction.
+
+Database coverage includes three time kinds, time/recurrence changes, simultaneous
+replay, rollback after a second-row identity collision, stale preparation, private
+input tampering, dependency claiming, both import paths and an unmapped delete.
+Existing past exceptions and all accepted mappings stay unchanged at enqueue.
+
+A reset/delete observation also fences every mapped component owned by a pending
+resource journal, including split-reparented exceptions. It records a conflict on
+the resource operation without tombstoning saved local definitions. This same
+protection applies to existing series PUT/DELETE journals; child-first deletion
+and an empty reset snapshot are covered by database regressions.
+
+Superseded journals are excluded from deletion observation routing; their
+replacement marker survives a reset. The active replacement receives the conflict
+and can be explicitly reconciled again. Expected component-removal echoes do not
+clear a retained conflict and cannot acknowledge a write on their own.

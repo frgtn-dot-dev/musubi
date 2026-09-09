@@ -146,7 +146,7 @@ async function resolutionContext(
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   }
   let caldavContext: CaldavSeriesContext | undefined;
-  if (row.payload.caldavSeriesDeletion) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.caldavSplit || row.payload.caldavSeriesDeletion) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.caldavSeries) {
     if (row.payload.caldavSeries.write.followingDelete || row.payload.caldavSeries.write.targetEventID || row.payload.caldavSeries.write.time || row.payload.caldavSeries.write.patch.recurrence !== undefined) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))

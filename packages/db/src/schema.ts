@@ -1,3 +1,4 @@
+import type { CaldavSplitJournal } from "./queries/caldav-split";
 import type { CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "./queries/caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./queries/google-occurrence-scope";
 import type { ProviderReminderEdit, ProviderRsvpIntent } from "@musubi/types";
@@ -882,6 +883,7 @@ export const eventOutbox = pgTable(
         rsvp?: ProviderRsvpIntent;
         googleOccurrence?: GoogleOccurrenceIntent;
         caldavSeries?: CaldavSeriesPrepared;
+        caldavSplit?: CaldavSplitJournal;
         caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
         createIdentityVersion?: 1;
         resolution?: {
