@@ -19,6 +19,7 @@ import { config, logger } from "@musubi/config";
 import {
   getExternalLinkForCalendar,
   caldavSeriesDesired,
+  sameCaldavRecurrence,
   getCaldavAccountById,
   getCaldavAccountsByUser,
   getUserExternalCalendars,
@@ -932,12 +933,17 @@ function occurrenceIdentityProperty(master: Event, originalStart: OccurrenceStar
 /** Rebuild the permitted content/cancellation change from complete original bytes.
  * A persisted replacement cannot widen the scope or invent a recurrence member. */
 export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, patch: CaldavSeriesWrite["patch"], targetEventID?: string, cancelTarget?: true, newDefinition?: Event, time?: EventTimeEdit): CaldavSeriesWrite {
-  if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !["title", "description", "location"].includes(key)))
+  if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))
     throw new EventWriteError("event-write", "unsupported");
   caldavSeriesEvidence(evidence.data, baseline);
   if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag)
     throw new ProviderEventWriteError("provider-conflict");
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
+  if (typeof cleanPatch.recurrence === "string") {
+    const canonical = "RRULE:" + ICAL.Recur.fromString(cleanPatch.recurrence.replace(/^RRULE:/i, "")).toString();
+    if (!sameCaldavRecurrence(cleanPatch.recurrence, canonical)) throw new EventWriteError("event-write", "unsupported");
+    cleanPatch.recurrence = canonical;
+  }
   const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID, cancelTarget, newDefinition, time });
   let after: string;
   if (newDefinition) {
@@ -982,7 +988,15 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     }
     after = replaceEventProperties(evidence.data, components.indexOf(component), replacements);
   } else {
-    after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, cleanPatch);
+    const { recurrence: _recurrence, ...contentPatch } = cleanPatch;
+    after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, contentPatch);
+    if (cleanPatch.recurrence !== undefined) {
+      const { master, index } = eventMaster(after, baseline.ref.icalUid);
+      const rule = new ICAL.Property("rrule");
+      rule.setValue(ICAL.Recur.fromString(desired.master.recurrence!.replace(/^RRULE:/i, "")));
+      Object.assign(rule.toJSON()[1], structuredClone(master.getFirstProperty("rrule")!.toJSON()[1]));
+      after = replaceEventProperties(after, index, new Map([["rrule", [rule]]]));
+    }
     if (time) {
       const { index } = eventMaster(after, baseline.ref.icalUid);
       const { start, end } = eventTimeProperties(desired.master);

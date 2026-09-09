@@ -141,6 +141,29 @@ async function main() {
         assert.deepEqual(next.originalStart, expected.originalStart);
       }
       await deliverSeriesTime(); assert.equal(puts, 1);
+      for (const recurrence of ["FREQ=DAILY;COUNT=5", "RRULE:FREQ=DAILY;INTERVAL=1;COUNT=5", "RRULE:FREQ=DAILY;COUNT=5", kind === "all-day" ? "RRULE:FREQ=DAILY;UNTIL=20260403" : kind === "floating" ? "RRULE:FREQ=DAILY;UNTIL=20260403T090000" : "RRULE:FREQ=DAILY;UNTIL=20260403T070000Z"]) {
+        const recurrenceWrite = prepareCaldavSeriesWrite(evidence, baseline, { recurrence });
+        assert.ok(recurrenceWrite.after.includes(child) && recurrenceWrite.after.includes(cancelled));
+        reset("applied-503");
+        const deliverRecurrence = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(recurrenceWrite)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+        await assert.rejects(deliverRecurrence, (error: any) => error.outcome === "unconfirmed"); mode = "ok";
+        const repeated = await deliverRecurrence();
+        assert.equal(repeated.master.recurrence, recurrenceWrite.patch.recurrence);
+        assert.deepEqual(repeated.exceptions, evidence.exceptions.map(item => ({ ...item, etag: repeated.ref.etag })));
+        await deliverRecurrence(); assert.equal(puts, 1);
+      }
+      if (kind === "zoned") {
+        const alone = before.replace(child + "\r\n", "").replace(cancelled + "\r\n", "");
+        const aloneBaseline = { ...baseline, children: [] };
+        for (const recurrence of ["FREQ=WEEKLY;BYDAY=SA;COUNT=5", "FREQ=MONTHLY;BYMONTHDAY=28;COUNT=5"]) {
+          const prepared = prepareCaldavSeriesWrite(caldavSeriesEvidence(alone, aloneBaseline), aloneBaseline, { recurrence });
+          reset("ok"); data = alone;
+          const result = await deliverCaldavSeriesResource(collection, prepared, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+          assert.equal(result.master.recurrence, prepared.patch.recurrence); assert.equal(result.exceptions.length, 0); assert.equal(puts, 1);
+        }
+      }
+      for (const recurrence of [null, "RRULE:FREQ=DAILY;COUNT=2", "FREQ=DAILY;COUNT=5;COUNT=6", "FREQ=DAILY;COUNT=5;X-UNKNOWN=1", "RRULE:FREQ=DAILY;COUNT=5\nRDATE:20260410T070000Z"]) assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { recurrence }));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { recurrence: "RRULE:FREQ=DAILY;COUNT=5" }, movedID));
       const revival = prepareCaldavSeriesWrite(evidence, baseline, { title: "Restored occurrence" }, baseline.children.find(item => item.isCanceled)!.id);
       assert.ok(revival.after.includes(master) && revival.after.includes(child));
       assert.ok(revival.after.includes("STATUS:CONFIRMED"));

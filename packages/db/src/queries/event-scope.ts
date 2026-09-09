@@ -1,4 +1,4 @@
-import { caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { sameCaldavRecurrence, caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import { lockExternalEventAddress } from "./event-outbox-deletions";
 import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
@@ -72,9 +72,10 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     let caldavContext: CaldavSeriesContext | undefined;
     if (target || mapping || history) {
       if (caldavRoot && ["series", "occurrence"].includes(request.scope) && (options.prepareProvider || options.caldav)) {
-        if ((request.scope === "series" && request.action !== "update") || (request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location"].includes(key)))) || childRows.some(child => child.deletedAt))
+        if ((request.scope === "series" && request.action !== "update") || (request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))) || childRows.some(child => child.deletedAt))
           throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing supports series content/time and occurrence content/time/cancellation. No changes were saved.");
         if (request.scope === "occurrence" && request.action === "delete" && childRows.some(child => child.isCanceled && sameCaldavScopeContext(child.originalStart, request.originalStart))) throw new EventWriteError("event-write", "unsupported");
+        if (request.action === "update" && request.patch.recurrence !== undefined && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.map(child => EventSchema.parse(snapshot(child))));
         if (options.caldav && (!sameCaldavScopeContext(options.caldav.write.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children)))
           return { status: "conflict", current: EventSchema.parse(master) };
@@ -96,7 +97,12 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     const revival = request.scope === "occurrence" ? childRows.find(child => child.deletedAt && child.originalStart && occurrenceKey({ seriesId: eventID, originalStart: child.originalStart }) === occurrenceKey({ seriesId: eventID, originalStart: request.originalStart! })) : undefined;
     let plan;
     try {
-      plan = planEventScope(EventSchema.parse(master), liveChildren, request, () => revival?.id ?? options.caldav?.write.newDefinition?.id ?? randomUUID());
+      let plannedRequest = request;
+      if (options.caldav && request.action === "update" && request.patch.recurrence !== undefined) {
+        if (!sameCaldavRecurrence(request.patch.recurrence, options.caldav.write.patch.recurrence)) throw new EventWriteError("event-write", "unsupported");
+        plannedRequest = { ...request, patch: { ...request.patch, recurrence: options.caldav.write.patch.recurrence } };
+      }
+      plan = planEventScope(EventSchema.parse(master), liveChildren, plannedRequest, () => revival?.id ?? options.caldav?.write.newDefinition?.id ?? randomUUID());
     } catch (error) {
       throw new BadRequestError(error instanceof Error ? error.message : "Invalid scope operation.");
     }

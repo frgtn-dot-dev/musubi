@@ -301,3 +301,25 @@ master-content-only resolution flow.
 Fake HTTP, DB and Radicale cover time kinds, adjacent identity remapping, preserved
 exception times, applied 503, stale ETags, rollback and echo. Following/delete and
 time-kind/zone changes remain separate work. Flags and privileges are unchanged.
+
+## Recurrence rule update
+
+A series update can replace one RRULE while preserving all detached definitions.
+The shared planner requires every existing original identity to remain a member of
+the new rule; orphaning an override or cancellation is refused before commit.
+Native replacement retains RRULE extension parameters and every other property
+and component. COUNT/UNTIL updates share the same resource CAS, replay and atomic
+ACK. Removing recurrence or rewriting dated RDATE/EXDATE sets remains unsupported.
+
+Fake HTTP covers count/until for all time kinds and applied-503 recovery. DB tests
+cover native delivery, remote races, rejected orphaning with no local writes and
+accepted echo. Radicale extends a shifted series and verifies unchanged detached
+rows. Recurrence conflicts are excluded from content-only resolution. No flags,
+versions or privilege requirements change.
+
+Editor-generated bare rules and reordered clauses are normalized to the native
+RRULE representation before commit. The final scope transaction binds that
+representation to the original request using only clause-order/prefix and known
+INTERVAL=1/WKST=MO equivalence. Duplicate or dropped unknown clauses are refused.
+Bare daily, weekly and monthly editor formats are covered, and confirmed imports
+do not rewrite the canonical recurrence or increment its revision.
