@@ -118,6 +118,7 @@ export function EventDeliveryDialog({
           expectedLatestOperationId: preview.latestOperationId,
           expectedRemoteExists: preview.remote !== null,
           expectedRemoteEtag: preview.remoteEtag,
+          ...(preview.scopeResolution ? { expectedScopeResolution: preview.scopeResolution } : {}),
           ...(preview.rsvpResolution ? { expectedRsvpBaselineVersion: preview.rsvpResolution.baselineVersion } : {}),
           ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
           ...(preview.masterRevision !== undefined
@@ -274,7 +275,7 @@ export function EventDeliveryDialog({
           closeLabel="Close comparison"
           returnFocus={comparison.trigger}
           confirmLabel={
-            comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
+            comparison.preview.scopeResolution ? "Delete following occurrences" : comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
               ? "Delete remote copy"
               : comparison.preview.action === "create"
                 ? "Recreate remote copy"
@@ -299,10 +300,11 @@ export function EventDeliveryDialog({
           }
         >
           <ConfirmationNotice icon={<AlertTriangle size={18} />}>
-            {comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
+            {comparison.preview.scopeResolution ? "This removes the selected occurrence and all later occurrences from the remote series. Earlier occurrences remain. The saved deletion in Musubi remains." : comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
               ? "This removes the remote copy. The saved deletion in Musubi remains."
               : "This applies the saved version to the remote copy. Remote differences may be replaced; unsaved form edits are not sent."}
           </ConfirmationNotice>
+          {comparison.preview.scopeResolution ? <Row label="Delete this and following" detail={`Original start: ${comparison.preview.scopeResolution.originalStart.value}`} /> : null}
           {comparison.preview.rsvpResolution ? <>
             <Row label="Saved Google response" detail={providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)} />
             <Row label="Current Google response" detail={providerRsvpResponseLabel(comparison.preview.rsvpResolution.remote)} />

@@ -682,6 +682,23 @@ export async function replaceExternalEventResource(
       ...(master.etag ? [eq(eventOutbox.expectedEtag, master.etag)] : []),
     )).limit(1);
     if (deletedVersion) return false;
+    if (master.etag) {
+      const [resolvedVersion] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
+        eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID),
+        eq(eventOutbox.externalCalendarID, externalCalendarID), eq(eventOutbox.externalEventID, resourceID),
+        eq(eventOutbox.status, "completed"), sql`((${eventOutbox.action} = 'delete' and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null) or (${eventOutbox.action} = 'update' and (${eventOutbox.payload}->'caldavSeries'->'write'->'followingDelete' is not null or ${eventOutbox.payload}->'caldavSplit' is not null)))`,
+        sql`exists (select 1 from jsonb_array_elements_text(coalesce(${eventOutbox.payload}->'resolution'->'replacedOperationIDs', '[]'::jsonb)) replaced(id)
+          join event_outbox ancestor on ancestor.id = replaced.id::uuid
+          where ancestor.expected_etag = ${master.etag}
+            and ancestor.status = 'not-needed' and ancestor.error_code = 'superseded-by-resolution'
+            and ancestor.provider = ${eventOutbox.provider} and ancestor.user_id = ${eventOutbox.userID}
+            and ancestor.calendar_id = ${eventOutbox.calendarID} and ancestor.external_calendar_id = ${eventOutbox.externalCalendarID}
+            and ancestor.external_calendar_link_id = ${eventOutbox.externalCalendarLinkID}
+            and ancestor.external_event_id = ${eventOutbox.externalEventID} and ancestor.event_id = ${eventOutbox.eventID}
+            and ancestor.action = 'update' and ancestor.payload->'caldavSeries'->'write'->'followingDelete' is not null)`,
+      )).limit(1);
+      if (resolvedVersion) return false;
+    }
     await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, resourceID);
     const mappings = await tx.select().from(externalEvents).where(and(
       eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID),

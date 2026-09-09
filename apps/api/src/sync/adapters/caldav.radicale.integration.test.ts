@@ -461,7 +461,15 @@ async function main() {
     assert.equal((await applyLocalEventScope(scopedRoot.id, userID, followingRequest, { caldav: followingPrepared })).status, "saved");
     const beforeDeletionRows = await rows();
     const followingOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === followingRequest.operationID)!;
-    assert.equal((await deliverEventOutbox(followingOperation.id, () => caldavAdapter))?.status, "completed");
+    const cutRemote = await davFetch(scopedURL, { headers: { authorization: basicAuth } });
+    const cutBody = await cutRemote.text();
+    const cutChanged = await davFetch(scopedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": cutRemote.headers.get("etag")! }, body: cutBody.replace("END:VCALENDAR", "X-MUSUBI-CUT-CONFLICT:1\r\nEND:VCALENDAR") });
+    assert.ok(cutChanged.ok);
+    assert.equal((await deliverEventOutbox(followingOperation.id, () => caldavAdapter))?.status, "conflict");
+    const cutComparison = await prepareEventDeliveryResolution(userID, scopedRoot.id, followingOperation.id, () => caldavAdapter);
+    assert.deepEqual(cutComparison.preview.scopeResolution, { kind: "following-delete", originalStart: cut.originalStart });
+    const cutReplacement = await commitEventDeliveryResolution(userID, cutComparison.proof, { mutationId: randomUUID(), expectedLocalRevision: cutComparison.preview.localRevision, expectedLatestOperationId: cutComparison.preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: cutComparison.preview.remoteEtag, expectedScopeResolution: cutComparison.preview.scopeResolution });
+    assert.equal((await deliverEventOutbox(cutReplacement, () => caldavAdapter))?.status, "completed");
     await sync(); assert.deepEqual(await rows(), beforeDeletionRows);
     assert.equal((await applyLocalEventScope(scopedRoot.id, userID, followingRequest, { prepareProvider: true })).status, "replayed");
     const deletionRoot = (await getEventSnapshot(scopedRoot.id))!;

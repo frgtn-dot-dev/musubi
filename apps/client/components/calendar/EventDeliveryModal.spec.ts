@@ -729,3 +729,24 @@ it("confirms the saved own RSVP response and keeps the same native preview on re
   expect(requests[0].expectedRsvpBaselineVersion).toBe("d".repeat(64));
   expect(requests[0]).not.toHaveProperty("attendees"); expect(requests[0]).not.toHaveProperty("response");
 });
+
+
+it("confirms the displayed following-deletion cut with a frozen retry identity", async () => {
+  const scopeResolution = { kind: "following-delete", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" } };
+  const requests: any[] = [];
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(options.body)); if (requests.length === 1) throw new Error("Lost response"); }
+    return reply(url.endsWith("/conflict") ? { ...preview, scopeResolution } : receipt);
+  });
+  let tree = await review();
+  expect(text(tree)).toContain("Delete this and following");
+  expect(text(tree)).toContain(scopeResolution.originalStart.value);
+  expect(text(tree)).toContain("Earlier occurrences remain");
+  expect(buttons(tree, "Apply saved changes")).toHaveLength(0);
+  buttons(tree, "Delete following occurrences")[0].onPress(); acceptNative(); await settle();
+  tree = render();
+  buttons(tree, "Delete following occurrences")[0].onPress(); acceptNative(); await settle();
+  expect(requests).toHaveLength(2);
+  expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
+  expect(requests[1]).toEqual(requests[0]);
+});
