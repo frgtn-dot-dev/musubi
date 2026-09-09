@@ -1,4 +1,4 @@
-import { hasKnownEventTime, EventTimeModelSchema, OccurrenceStartSchema, type Event, type GoogleReminderWrite, type ProviderEventState } from "@musubi/types";
+import { hasKnownEventTime, EventTimeModelSchema, OccurrenceStartSchema, type ProviderRsvpInstance, type Event, type GoogleReminderWrite, type ProviderEventState } from "@musubi/types";
 
 type EventProjection = Pick<
   Event,
@@ -74,4 +74,24 @@ export function matchesGoogleReminderIntent(intent: GoogleReminderWrite, state: 
   if (intent.useDefault) return true;
   const canonical = (items: { method: string | null; minutes: number | null }[]) => JSON.stringify(items.map(item => [item.method, item.minutes]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
   return canonical(intent.overrides) === canonical(state.reminders.overrides);
+}
+
+
+/** RSVP may target a bound existing child. Reminder edits retain their separate
+ * one-off contract; neither equal instants nor social attendance bind a slot. */
+export function matchesRsvpEventProjection(
+  provider: string,
+  expected: Event,
+  actual: EventProjection & Partial<Pick<Event, "timeModel" | "seriesID" | "originalStart" | "isCanceled">> & { externalSeriesID?: string | null },
+  instance?: ProviderRsvpInstance,
+) {
+  if (!instance) return matchesReminderEventProjection(provider, expected, actual);
+  const original = OccurrenceStartSchema.safeParse(expected.originalStart);
+  const binding = OccurrenceStartSchema.safeParse(instance.originalStart);
+  if (provider !== "google" || expected.seriesID !== instance.seriesID || expected.recurrence || actual.recurrence || expected.isCanceled || actual.isCanceled ||
+      !original.success || !binding.success || JSON.stringify(original.data) !== JSON.stringify(binding.data) ||
+      !hasKnownEventTime(expected) || !["zoned", "all-day"].includes(expected.timeModel!.kind) ||
+      (!actual.seriesID && !actual.externalSeriesID) || (actual.seriesID && actual.seriesID !== instance.seriesID) ||
+      (actual.externalSeriesID && actual.externalSeriesID !== instance.externalSeriesID)) return false;
+  return matchesGoogleOccurrenceProjection(expected, actual);
 }

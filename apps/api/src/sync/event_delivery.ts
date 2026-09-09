@@ -1,6 +1,6 @@
+import { googleRsvpEventEvidence } from "./adapters/google_rsvp_projection";
 import { googleRsvpEvidence } from "./adapters/google_rsvp";
 import { googleEventState } from "./adapters/provider_event_state";
-import { googleReminderEventEvidence } from "./adapters/google";
 import { isDeepStrictEqual } from "node:util";
 import { matchesGoogleOccurrence } from "./adapters/google_occurrence";
 import { config } from "@musubi/config";
@@ -9,6 +9,7 @@ import {
   confirmCaldavSplitOutbox,
   confirmCaldavSeriesOutbox,
   confirmCaldavSeriesDeletionOutbox,
+  matchesRsvpEventProjection,
   hasProviderRsvpSource,
   completeProviderRsvpOutbox,
   matchesReminderEventProjection,
@@ -232,9 +233,9 @@ export async function deliverEventOutbox(
         const request = ProviderRsvpEditSchema.parse(intent.request);
         if (request.expectedRevision !== row.revision || !isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, request.response))) throw new ProviderEventWriteError("provider-conflict");
         expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag };
-        const evidence = googleRsvpEvidence(intent.baseline, { eventId: expectedRef.externalEventId, etag: expectedRef.etag ?? "", authenticatedCopyEmail: row.externalCalendarID }, intent.request.response);
-        const native = googleReminderEventEvidence(evidence.baseline);
-        if (!isDeepStrictEqual(intent.nativeTime, native.timeModel) || !isDeepStrictEqual(googleEventState(evidence.baseline), intent.baselineState) || !matchesReminderEvent(row.provider, event, native)) throw new ProviderEventWriteError("provider-conflict");
+        const evidence = googleRsvpEvidence(intent.baseline, { eventId: expectedRef.externalEventId, etag: expectedRef.etag ?? "", authenticatedCopyEmail: row.externalCalendarID, ...(intent.instance ? { occurrence: { externalSeriesID: intent.instance.externalSeriesID, originalStart: intent.instance.originalStart } } : {}) }, intent.request.response);
+        const native = googleRsvpEventEvidence(evidence);
+        if (!isDeepStrictEqual(intent.nativeTime, native.timeModel) || !isDeepStrictEqual(googleEventState(evidence.baseline), intent.baselineState) || !matchesRsvpEventProjection(row.provider, event, native, intent.instance)) throw new ProviderEventWriteError("provider-conflict");
         const observed = await adapter.writeRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, { sendUpdates: intent.request.sendUpdates }, signal, async () => {
           await requireSource();
           mutationStarted = true;

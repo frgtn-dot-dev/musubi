@@ -1,15 +1,55 @@
+import { createServer } from "node:http";
+import { config } from "@musubi/config";
+import { googleAdapter } from "./adapters/google";
+import { googleRsvpMethods } from "./adapters/google_rsvp_delivery";
+import { deliverEventOutbox } from "./event_delivery";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, prepareProviderRsvpEdit, prepareProviderRsvpInstanceEdit, commitProviderRsvpEdit, completeProviderRsvpOutbox, hasProviderRsvpSource } from "@musubi/db";
+import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, prepareProviderRsvpEdit, prepareProviderRsvpInstanceEdit, commitProviderRsvpEdit, completeEventOutbox, hasProviderRsvpSource, calendarMembers } from "@musubi/db";
 import { googleRsvpEvidence } from "./adapters/google_rsvp";
 import { googleEventState } from "./adapters/provider_event_state";
 import type { EventTimeModel } from "@musubi/types";
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
+  const savedFlag = config.api.providerRsvpEditsEnabled;
+  config.api.providerRsvpEditsEnabled = true;
+  let remote: any, mode = "normal", patches = 0;
+  let onRead: (() => Promise<void>) | undefined, onPatch: (() => Promise<void>) | undefined;
+  const fixture = createServer(async (req, res) => {
+    try {
+      assert.equal(req.headers.authorization, "Bearer synthetic-instance-rsvp");
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/calendar/v3/users/me/calendarList/primary") { res.end(JSON.stringify({ id: "guest@example.test", primary: true, accessRole: "owner" })); return; }
+      assert.ok(req.url?.startsWith("/calendar/v3/calendars/guest%40example.test/events/instance"));
+      if (req.method === "GET") {
+        if (onRead) { const action = onRead; onRead = undefined; await action(); }
+        res.end(JSON.stringify(remote)); return;
+      }
+      assert.equal(req.method, "PATCH");
+      assert.equal(req.url, "/calendar/v3/calendars/guest%40example.test/events/instance?sendUpdates=all&conferenceDataVersion=1");
+      assert.equal(req.headers["if-match"], '\"child\"');
+      let body = ""; for await (const chunk of req) body += chunk;
+      assert.deepEqual(JSON.parse(body), { attendeesOmitted: true, attendees: [{ email: "guest@example.test", responseStatus: "accepted" }] });
+      patches++;
+      if (remote.etag !== req.headers["if-match"]) { res.writeHead(412); res.end(); return; }
+      remote.attendees[0].responseStatus = "accepted"; remote.etag = '\"child-next\"';
+      if (onPatch) { const action = onPatch; onPatch = undefined; await action(); }
+      if (mode === "lost") { req.socket.destroy(); return; }
+      if (mode === "503") { res.writeHead(503); res.end(); return; }
+      res.end(JSON.stringify(remote));
+    } catch (error) { res.statusCode = 500; res.end(JSON.stringify({ error: String(error) })); }
+  });
+  await new Promise<void>(resolve => fixture.listen(0, "127.0.0.1", resolve));
+  const address = fixture.address(); assert.ok(address && typeof address !== "string");
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (input, init) => { const url = new URL(String(input)); assert.equal(url.origin, "https://www.googleapis.com"); return realFetch(`http://127.0.0.1:${address.port}${url.pathname}${url.search}`, init); };
+  const adapter = { ...googleAdapter, ...googleRsvpMethods(async () => "synthetic-instance-rsvp") };
+  try {
   for (const kind of ["zoned", "all-day"] as const) {
-    for (const scenario of ["queue", "concurrent", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper"]) {
+    for (const scenario of ["queue", "concurrent", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "deliver-normal", "deliver-lost", "deliver-503", "deliver-parent-before", "deliver-parent-after", "deliver-parent-map-before", "deliver-parent-map-after", "deliver-child-before", "deliver-grant-before", "deliver-grant-after", "deliver-lease-after", "deliver-pull-echo", "deliver-pull-state", "deliver-native-original-before", "deliver-native-original-after"]) {
+      mode = "normal"; patches = 0; onRead = undefined; onPatch = undefined;
       const owner = `rsvp-instance-${randomUUID()}`;
       await db.insert(user).values({ id: owner, name: owner, email: `${owner}@example.test`, isExternal: true });
       try {
@@ -19,6 +59,7 @@ async function main() {
         const originalStart = allDay ? { kind: "date" as const, value: "2026-10-25" } : { kind: "instant" as const, value: "2026-10-25T00:30:00.000Z" };
         const model: EventTimeModel = allDay ? { kind: "all-day" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-25T02:30:00.000", endLocal: "2026-10-25T03:30:00.000" };
         const native = { id: "instance", etag: '"child"', status: "confirmed", summary: "Moved meeting", start: allDay ? { date: "2026-10-26" } : { dateTime: "2026-10-25T02:30:00+01:00", timeZone: "Europe/Prague" }, end: allDay ? { date: "2026-10-27" } : { dateTime: "2026-10-25T03:30:00+01:00", timeZone: "Europe/Prague" }, recurringEventId: "series", originalStartTime: allDay ? { date: originalStart.value } : { dateTime: "2026-10-25T02:30:00+02:00", timeZone: "Europe/Prague" }, organizer: { email: "host@example.test" }, attendees: [{ email: "guest@example.test", self: true, responseStatus: "needsAction" }, { email: "other@example.test", responseStatus: "accepted" }] };
+        remote = structuredClone(native);
         const state = googleEventState(native);
         const values = { title: native.summary, color: "red", start: new Date(allDay ? "2026-10-26T00:00:00Z" : "2026-10-25T01:30:00Z"), end: new Date(allDay ? "2026-10-26T00:00:00Z" : "2026-10-25T02:30:00Z"), isAllDay: allDay, description: null, location: null, organizer: "host@example.test", recurrence: null, url: null };
         const parentModel: EventTimeModel = allDay ? { kind: "all-day" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-24T02:30:00.000", endLocal: "2026-10-24T03:30:00.000" };
@@ -47,7 +88,7 @@ async function main() {
         if (scenario === "mapping-identity") await db.update(externalEvents).set({ externalSeriesID: "other" }).where(eq(externalEvents.id, mapping.id));
         if (scenario.startsWith("parent-") && ["parent-pending", "parent-cancelled"].includes(scenario)) await db.insert(eventOutbox).values({ id: randomUUID(), actorID: owner, mutationID: randomUUID(), position: 0, eventID: parent.id, revision: parent.revision, calendarID: calendar.id, externalCalendarLinkID: link!.id, provider: "google", userID: owner, accountID: "fixture", externalCalendarID: "guest@example.test", externalEventID: "series", action: "update", status: scenario === "parent-cancelled" ? "cancelled" : "pending", payload: { event: parent } });
         if (scenario === "tamper") candidate.context.instance!.parentRevision++;
-        if (!["queue", "concurrent"].includes(scenario)) {
+        if (!["queue", "concurrent"].includes(scenario) && !scenario.startsWith("deliver-")) {
           await assert.rejects(commit);
           assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 0);
         } else {
@@ -62,14 +103,58 @@ async function main() {
           assert.deepEqual(await getEventSnapshot(parent.id), parent);
           assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)), maps);
           assert.equal((await commit()).replayed, true);
+          if (scenario.startsWith("deliver-")) {
+            const parentRevision = async () => { await db.update(events).set({ revision: parent.revision + 1 }).where(eq(events.id, parent.id)); };
+            const parentIdentity = async () => { await db.update(externalEvents).set({ externalEventID: "other-parent" }).where(eq(externalEvents.id, parentMapping.id)); };
+            const loseGrant = async () => { await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner))); };
+            const nativeIdentity = async () => { remote.originalStartTime = allDay ? { date: "2026-10-26" } : { dateTime: "2026-10-25T02:30:00+01:00", timeZone: "Europe/Prague" }; };
+            if (scenario === "deliver-parent-before") onRead = parentRevision;
+            if (scenario === "deliver-parent-after") onPatch = parentRevision;
+            if (scenario === "deliver-parent-map-before") onRead = parentIdentity;
+            if (scenario === "deliver-parent-map-after") onPatch = parentIdentity;
+            if (scenario === "deliver-child-before") onRead = async () => { await db.update(events).set({ revision: child.revision + 1 }).where(eq(events.id, child.id)); };
+            if (scenario === "deliver-grant-before") onRead = loseGrant;
+            if (scenario === "deliver-grant-after") onPatch = loseGrant;
+            if (scenario === "deliver-lease-after") onPatch = async () => { await db.update(eventOutbox).set({ leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 60000) }).where(eq(eventOutbox.id, row.id)); };
+            if (scenario === "deliver-native-original-before") onRead = nativeIdentity;
+            if (scenario === "deliver-native-original-after") onPatch = nativeIdentity;
+            if (scenario.startsWith("deliver-pull-")) onPatch = async () => {
+              if (scenario === "deliver-pull-state") { remote.attendees[1].responseStatus = "declined"; remote.etag = '\"concurrent\"'; }
+              await upsertExternalEvent("google", owner, calendar.id, "guest@example.test", "instance", values, remote.etag, null, undefined, { timeModel: model, externalSeriesID: "series", originalStart }, undefined, googleEventState(remote));
+            };
+            if (scenario === "deliver-lost") mode = "lost";
+            if (scenario === "deliver-503") mode = "503";
+            let result = await deliverEventOutbox(row.id, () => adapter);
+            if (["deliver-lost", "deliver-503"].includes(scenario)) {
+              assert.equal(result?.status, "unconfirmed", scenario); assert.equal(patches, 1);
+              mode = "normal"; await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, row.id));
+              result = await deliverEventOutbox(row.id, () => adapter);
+            }
+            const completed = ["deliver-normal", "deliver-lost", "deliver-503", "deliver-pull-echo"].includes(scenario);
+            const [accepted] = await db.select().from(externalEvents).where(eq(externalEvents.id, mapping.id));
+            if (completed) {
+              assert.equal(result?.status, "completed", scenario);
+              assert.equal(accepted!.etag, remote.etag); assert.equal(accepted!.providerState!.ownResponse, "accepted");
+              assert.deepEqual(await getEventSnapshot(child.id), child);
+              await upsertExternalEvent("google", owner, calendar.id, "guest@example.test", "instance", values, remote.etag, null, undefined, { timeModel: model, externalSeriesID: "series", originalStart }, undefined, googleEventState(remote));
+              assert.deepEqual(await getEventSnapshot(child.id), child);
+            } else {
+              assert.notEqual(result?.status, "completed", scenario);
+              assert.equal(accepted!.etag, native.etag, scenario);
+              assert.equal(accepted!.providerState!.ownResponse, "needsAction", scenario);
+            }
+            assert.equal(patches, scenario.endsWith("-before") ? 0 : 1, scenario);
+            continue;
+          }
           const token = randomUUID(); await db.update(eventOutbox).set({ status: "attempting", leaseToken: token, leaseUntil: new Date(Date.now() + 60000) }).where(eq(eventOutbox.id, row.id));
           const [claimed] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, row.id));
-          assert.equal(await hasProviderRsvpSource(claimed!), false, "Instance delivery remains explicitly closed in this journal slice");
-          assert.equal(await completeProviderRsvpOutbox(row.id, token, { externalEventId: "instance", etag: '"new"' }, { externalEventId: "instance", etag: native.etag }, { isEcho: true, externalEventId: "instance", etag: '"new"', deleted: false, providerState: row.payload.rsvp!.desiredState, observedAt: new Date().toISOString() }), undefined);
+          assert.equal(await hasProviderRsvpSource(claimed!), true);
+          assert.equal(await completeEventOutbox(row.id, token, { externalEventId: "instance", etag: '"new"' }, { externalEventId: "instance", etag: native.etag }, { isEcho: true, externalEventId: "instance", etag: '"new"', deleted: false, providerState: row.payload.rsvp!.desiredState, observedAt: new Date().toISOString() }), undefined);
         }
       } finally { await db.delete(user).where(eq(user.id, owner)); }
     }
   }
-  console.log("Private Google instance RSVP journal: bound family, concurrent replay, stale parent/identity refusal, closed delivery: OK");
+  } finally { config.api.providerRsvpEditsEnabled = savedFlag; globalThis.fetch = realFetch; await new Promise<void>(resolve => fixture.close(() => resolve())); }
+  console.log("Private Google instance RSVP journal and delivery: bound family, concurrent replay, stale parent/identity refusal, conditional HTTP recovery, parent/permission/lease/pull fences: OK");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
