@@ -1,3 +1,4 @@
+import { hasGooglePersonalReadRecovery } from "./google-personal-read-recovery";
 import { readCaldavSplitResolution, replaceCaldavSplitResolution, type CaldavSplitResolutionSnapshot } from "./caldav-split-resolution";
 import type { CaldavSplitPrepared } from "./caldav-split";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
@@ -160,7 +161,7 @@ async function resolutionContext(
   }
   if (row.payload.reminderEdit || row.payload.rsvp || row.payload.reminderInstance) {
     const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID)));
-    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !((row.payload.rsvp || row.payload.reminderInstance) ? matchesRsvpEventProjection("google", EventSchema.parse(row.payload.event), local, providerInstance) : matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local)))
+    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || (!hasGooglePersonalReadRecovery(row, local, mapping.id) && (local.revision !== row.revision || !((row.payload.rsvp || row.payload.reminderInstance) ? matchesRsvpEventProjection("google", EventSchema.parse(row.payload.event), local, providerInstance) : matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local)))))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   } else if (latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit)) {
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");

@@ -4,6 +4,7 @@ import express from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
+  account,
   user,
   events,
   calendarMembers,
@@ -150,6 +151,9 @@ async function main() {
           externalCalendarID: `private-calendar-${randomUUID()}`,
         })
         .returning();
+      // Receipt title projection requires a real current connected account,
+      // including legacy links whose access discovery has not run yet.
+      await db.insert(account).values({ id: randomUUID(), accountId: link.accountID, providerId: provider, userId: person.id });
       return { calendar, link };
     };
     const google = await destination(owner, "Google", "google");

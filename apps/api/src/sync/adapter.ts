@@ -141,7 +141,7 @@ export type CalendarAdapter = {
   writeOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, event: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
   reminderInstance?: ReturnType<typeof googleReminderInstanceTransport>;
   readReminderState?(userID: string, accountID: string, calendarID: string, ref: ExternalEventRef, signal?: AbortSignal): Promise<{ ref: ExternalEventRef; state: ProviderEventState; event: NormalizedEvent } | null>;
-  writeReminders?(userID: string, accountID: string, calendarID: string, ref: ExternalEventRef, reminders: GoogleReminderWrite, signal?: AbortSignal): Promise<{ ref: ExternalEventRef; state: ProviderEventState; event: NormalizedEvent }>;
+  writeReminders?(userID: string, accountID: string, calendarID: string, ref: ExternalEventRef, reminders: GoogleReminderWrite, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ ref: ExternalEventRef; state: ProviderEventState; event: NormalizedEvent }>;
   projectEvent?(event: Event): Pick<NormalizedEvent, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "recurrence">;
 
   // Connected accounts for this provider (id = Better Auth account.accountId for

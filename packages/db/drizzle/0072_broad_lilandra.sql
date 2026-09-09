@@ -1,0 +1,1 @@
+ALTER TABLE "event_outbox" ADD COLUMN "personal_read_recovery" jsonb;

@@ -20,6 +20,7 @@ import {
   importExternalEvent,
   importExternalTask,
   removeCalendar,
+  removeGoogleCalendarMirrors,
   setAccountLabel,
   setCursor,
   setExternalCalendarCapabilities,
@@ -27,6 +28,7 @@ import {
   setExternalTaskSyncData,
   setMemberRole,
   reconcileGoogleCalendarAccess,
+  getGoogleMirrorReadCalendars,
   sweepExternalEvents,
   sweepExternalTasks,
   upsertExternalEvent,
@@ -174,6 +176,15 @@ export async function reconcileExternalChanges(
   return changed;
 }
 
+async function reconcileGoogleAccessAndNotify(...args: Parameters<typeof reconcileGoogleCalendarAccess>) {
+  const calendars = await reconcileGoogleCalendarAccess(...args);
+  if (!calendars) return;
+  const members = await Promise.all(calendars.map(id => getCalendarMembers(id)));
+  // Publish the committed downgrade before any subsequent provider fetch can
+  // fail. Linked-calendar readers must refresh the same shared canonical row.
+  notifyCalendarMembers([...new Set([args[0], ...members.flat().map(member => member.userID)])], "external_sync", { calendars });
+}
+
 // A user who lost their last link is absent from subsequent event deltas.
 // Include the accepted local revision so a delayed removal cannot evict a newer row.
 async function notifyExternalEventUnlinks(
@@ -228,18 +239,23 @@ export async function syncProvider(
     calendars: remote.length,
   });
 
-  // remote calendar gone -> drop the Musubi mirror (removeCalendar handles orphan events)
-  for (const link of await getUserExternalCalendars(
-    provider,
-    userID,
-    accountId,
-  )) {
-    if (
-      !remoteIDs.has(link.externalCalendarID) &&
-      (taskListsComplete || link.supportsEvents || !link.supportsTasks)
-    ) {
-      await removeCalendar(link.calendarID);
+  // Google discovery only returns after all Events pages succeed; free/busy
+  // grants are excluded from its authoritative detail-calendar set.
+  const absent = (await getUserExternalCalendars(provider, userID, accountId)).filter(link =>
+    !remoteIDs.has(link.externalCalendarID) &&
+    (taskListsComplete || link.supportsEvents || !link.supportsTasks));
+  const changedCalendarIDs: string[] = [];
+  if (provider === "google") {
+    const removed = await removeGoogleCalendarMirrors(userID, accountId, absent.filter(link => link.supportsEvents));
+    if (removed.calendarIDs.length) {
+      // Memberships were captured before source deletion. Publish the committed
+      // invalidation even when a later unrelated calendar fetch fails.
+      notifyCalendarMembers(removed.userIDs, "external_sync", { calendars: removed.calendarIDs });
+      changedCalendarIDs.push(...removed.calendarIDs);
     }
+  }
+  for (const link of absent) {
+    if (provider !== "google" || !link.supportsEvents) await removeCalendar(link.calendarID);
   }
   // new remote calendar -> import; existing -> keep the read-only flag fresh
   // (also self-heals calendars imported before readOnly existed, e.g. holidays)
@@ -257,7 +273,7 @@ export async function syncProvider(
     const link = links.find((l) => l.externalCalendarID === cal.externalId);
     if (link) {
       if (provider === "google" && cal.googleAccessRole && capabilities.supportsEvents)
-        await reconcileGoogleCalendarAccess(userID, accountId, link.calendarID, cal.googleAccessRole);
+        await reconcileGoogleAccessAndNotify(userID, accountId, link.calendarID, cal.googleAccessRole);
       else await setMemberRole(userID, link.calendarID, desiredRole);
       await setExternalCalendarCapabilities(
         provider,
@@ -276,14 +292,13 @@ export async function syncProvider(
         desiredRole,
       );
       if (provider === "google" && cal.googleAccessRole && capabilities.supportsEvents)
-        await reconcileGoogleCalendarAccess(userID, accountId, imported.id, cal.googleAccessRole);
+        await reconcileGoogleAccessAndNotify(userID, accountId, imported.id, cal.googleAccessRole);
     }
   }
 
   // 2. pull objects per (now reconciled) calendar. Track which calendars really
   // changed so the scheduled sync can wake connected clients — the etag-aware
   // upsert makes a CalDAV full-fetch a quiet no-op when nothing moved.
-  const changedCalendarIDs: string[] = [];
   for (const link of await getUserExternalCalendars(
     provider,
     userID,
@@ -353,6 +368,12 @@ export async function syncProvider(
       unlinkedEventIDs.push({ id, revision });
     };
     let changed = 0;
+    let googleReadChanged = false;
+    const trackGoogleRead = async <T extends boolean | number>(write: Promise<T>): Promise<T> => {
+      const result = await write;
+      if (provider === "google" && result) googleReadChanged = true;
+      return result;
+    };
     const retainedGraphIDs = new Set<string>();
     try {
       for (const family of families) {
@@ -366,11 +387,11 @@ export async function syncProvider(
           return { providerState: event.providerState, externalId: event.externalId, values: toEventValues(event, link.calColor), etag: event.etag ?? null, icalUid: event.icalUid, time: { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } };
         })),
         deleteEvent: (externalID) =>
-          deleteExternalEvent(provider, link.calendarID, externalID, onUnlink, accessContext),
+          trackGoogleRead(deleteExternalEvent(provider, link.calendarID, externalID, onUnlink, accessContext)),
         deleteTask: (externalID) =>
           deleteExternalTask(provider, link.calendarID, externalID),
         upsertEvent: (event) =>
-          upsertExternalEvent(
+          trackGoogleRead(upsertExternalEvent(
             provider,
             userID,
             link.calendarID,
@@ -386,7 +407,7 @@ export async function syncProvider(
             event.reminderTimeEvidence,
             event.sourceSeriesID,
             accessContext,
-          ),
+          )),
         upsertTask: (task) =>
           upsertExternalTask(
             provider,
@@ -399,19 +420,27 @@ export async function syncProvider(
             task.icalUid ?? null,
           ),
         sweepEvents: (seenExternalIDs) =>
-          sweepExternalEvents(
+          trackGoogleRead(sweepExternalEvents(
             provider,
             link.calendarID,
             [...new Set([...seenExternalIDs, ...retainedGraphIDs])],
             onUnlink,
             accessContext,
-          ),
+          )),
         sweepTasks: (seenExternalIDs) =>
           sweepExternalTasks(provider, link.calendarID, seenExternalIDs),
       });
     } finally {
       // Earlier unlinks have committed even if a later resource fails.
       await notifyExternalEventUnlinks(link.calendarID, unlinkedEventIDs);
+      if (googleReadChanged) {
+        const calendars = await getGoogleMirrorReadCalendars(link.calendarID);
+        const members = await Promise.all(calendars.map(id => getCalendarMembers(id)));
+        // Include committed partial reads if a later item fails. A linked-only
+        // reader must hear about restoration as well as the earlier redaction.
+        notifyCalendarMembers([...new Set([userID, ...members.flat().map(member => member.userID)])], "external_sync", { calendars });
+        changedCalendarIDs.push(...calendars);
+      }
     }
 
     if (changed > 0) changedCalendarIDs.push(link.calendarID);
@@ -436,7 +465,7 @@ export async function syncProvider(
     changedCalendars: changedCalendarIDs.length,
     durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
   });
-  return changedCalendarIDs;
+  return [...new Set(changedCalendarIDs)];
 }
 
 // Sync every connected account of every registered provider. listAccounts returns

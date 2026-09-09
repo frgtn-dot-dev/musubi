@@ -14,7 +14,7 @@ export function ProviderEventDetails({ event, userId }: { event: Event; userId: 
   const { apiUrl } = useServer();
   const targetID = event.id.replace(/_-?\d+$/, "");
   const remoteID = remoteForCalendar(event.originCalendarID ?? event.calendars[0])?.id;
-  const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID, event.seriesID, event.originalStart]);
+  const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID, event.seriesID, event.originalStart, event.revision]);
   return <ProviderEventDetailsBody key={key} event={event} userId={userId} />;
 }
 export function ProviderEventDetailsBody({ event, userId }: { event: Event; userId: string }) {

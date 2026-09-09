@@ -769,6 +769,13 @@ test("reads, filters and signs out of the authenticated Month", async ({
 
 	await openCreateEvent(page);
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
+	await expect(page.getByRole("menu", { name: "Create", exact: true })).toHaveCount(0);
+	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("button", { name: "Create event or task", exact: true })).toBeFocused();
+	await page.keyboard.press("Enter");
+	await page.getByRole("menuitem", { name: "Event", exact: true }).press("Enter");
+	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
 	await page.keyboard.press("Escape");
 
 	await expectNoAccessibilityViolations(page);
@@ -8770,4 +8777,58 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(errors).toEqual([]);
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
+}
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  for (const openEditor of [false, true]) {
+    test(`K14 privacy downgrade retires open ${openEditor ? "editor" : "details"}: ${theme} ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(value => {
+        localStorage.setItem("musubi-theme", value);
+        class FakeEventSource {
+          onmessage: ((event: { data: string }) => void) | null = null;
+          readyState = 1;
+          constructor(public url: string) { ((window as any).__privacyStreams ??= []).push(this); }
+          close() { this.readyState = 2; }
+          addEventListener() {}
+          removeEventListener() {}
+        }
+        (window as any).EventSource = FakeEventSource;
+      }, theme);
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      const imported = event("00000000-0000-4000-8000-000000000248", "Native private title", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z", { description: "Native private notes", location: "Native private room" });
+      const source = { ...calendars[0]!, provider: "google" as const, accountID: "fixture", accountLabel: "Fixture" };
+      let redacted = false;
+      await mockAuthenticatedReads(page, { ...events, events: [imported] }, [source]);
+      await page.route(/\/api\/v1\/events(?:\?.*)?$/, route => route.request().method() === "GET" ? respond(route, { ...events, events: [redacted ? { ...imported, revision: 2, title: "Busy", description: null, location: null, organizer: "", url: null } : imported] }) : route.fallback());
+      await page.route("**/api/v1/calendars", route => route.request().method() === "GET" ? respond(route, [{ ...source, role: redacted ? "viewer" : "owner" }]) : route.fallback());
+      await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, redacted ? { state: null, version: null } : {
+        state: { provider: "google", organizer: { name: "Native private host", address: "private-host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: false, overrides: [{ method: "popup", minutes: 30 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 1 },
+      }));
+      await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+      await page.getByRole("button", { name: /Native private title/ }).first().click();
+      await expect(page.getByText(/private-host@example.test/)).toBeVisible();
+      if (openEditor) {
+        await page.getByRole("button", { name: "Edit Google reminders" }).click();
+        await expect(page.getByRole("dialog", { name: "Google reminders", exact: true })).toBeVisible();
+      }
+      redacted = true;
+      await page.evaluate(() => {
+        const streams = (window as any).__privacyStreams;
+        const active = streams?.filter((stream: any) => stream.readyState === 1);
+        if (!active?.length) throw new Error("No active fixture stream");
+        for (const stream of active) stream.onmessage?.({ data: JSON.stringify({ type: "external_sync", payload: { calendars: ["personal"] } }) });
+      });
+      const busy = page.getByRole("button", { name: /Busy/ }).first();
+      await expect(busy).toBeVisible();
+      await expect(page.getByText(/private-host@example.test/)).toHaveCount(0);
+      await expect(page.getByText("Native private notes", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("dialog", { name: "Google reminders", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Edit Google reminders" })).toHaveCount(0);
+      if (openEditor) await expect(busy).toBeFocused();
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  }
 }

@@ -238,7 +238,7 @@ export function EventDetailsPopover({
 	// A primitive, so the attendees effect can depend on it without re-running on
 	// every re-render of the calendar list.
 	const homeConnectionId = connectionOfCalendar(homeCalendar);
-  const providerReminderContext = JSON.stringify([getServerOrigin(), user.id, homeConnectionId, event.id, event.seriesID, event.originalStart]);
+  const providerReminderContext = JSON.stringify([getServerOrigin(), user.id, homeConnectionId, event.id, event.seriesID, event.originalStart, event.revision, liveMaster.revision]);
   if (deliveryTarget && deliveryTarget.context !== providerReminderContext) setDeliveryTarget(undefined);
   if (providerReminderEditor && providerReminderEditor.context !== providerReminderContext) setProviderReminderEditor(undefined);
   if (providerRsvpEditor && providerRsvpEditor.context !== providerReminderContext) setProviderRsvpEditor(undefined);
@@ -829,7 +829,7 @@ export function EventDetailsPopover({
 									</section>
 								) : null}
 
-								{homeCalendar?.provider ? <ProviderEventDetails occurrence={!!event.seriesID} eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onRespond={observation => { setOpen(false); setProviderRsvpEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
+								{homeCalendar?.provider ? <ProviderEventDetails revision={event.seriesID ? event.revision : liveMaster.revision} occurrence={!!event.seriesID} eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onRespond={observation => { setOpen(false); setProviderRsvpEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
 
 								{reminder ? (
 									<section aria-labelledby={reminderTitleId} className={styles.notes}>

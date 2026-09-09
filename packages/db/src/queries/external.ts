@@ -1,3 +1,4 @@
+import { googlePersonalReadRecovery, finishGooglePersonalReadRecovery } from "./google-personal-read-recovery";
 import { assertExternalCalendarAccess, type ExternalCalendarAccessContext } from "./external-access";
 import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { caldavSeriesDesired } from "./caldav-series-scope";
@@ -783,7 +784,7 @@ async function upsertExternalEventInTransaction(
     const state = providerState === undefined ? undefined : ProviderEventStateSchema.parse(providerState);
     if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
-    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
+    const access = await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     if (sourceSeriesID !== undefined) {
@@ -866,14 +867,23 @@ async function upsertExternalEventInTransaction(
         ], values.start, values.end, { consumerTimeZone: "UTC" });
       }
 
-      if (!stateChanged && (!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
+      if (map.readRedactionRevision !== null && !accessContext) throw new Error("Redacted mirror requires fresh access context.");
+      const restoringRead = map.readRedactionRevision !== null && map.readRedactionRevision === map.event.revision;
+      // A limited-grant marker survives accepted reads so a later fuller read
+      // can restore same-ETag details. Only the first post-redaction observation
+      // and full-grant restoration suppress fanout; subsequent native changes
+      // under the same limited grant remain ordinary inbound updates.
+      const privacyRestoration = restoringRead && (map.etag === null || !!access && ["owner", "writer"].includes(access.role ?? ""));
+      const readRecovery = state && accessContext ? await googlePersonalReadRecovery(tx, map.event, map, accessContext) : undefined;
+      if (!restoringRead && !readRecovery && !stateChanged && (!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
       {
         // An unchanged baseline is not a conflict with a queued local write.
         // It can still supersede a previously retained personal observation.
         if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state, true);
         return false;
       }
-      if (await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state)) return false;
+      const retained = await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state);
+      if (retained && !readRecovery) return false;
       if (map.event.originCalendarID !== calendarID) {
         const changedFields = (
           Object.keys(values) as (keyof EventValues)[]
@@ -926,9 +936,10 @@ async function upsertExternalEventInTransaction(
       }
       await tx
         .update(externalEvents)
-        .set({ etag, ...(state !== undefined ? { providerState: state, providerStateObservedAt: new Date() } : {}), icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
+        .set({ etag, ...(restoringRead ? { readRedactionRevision: access && ["owner", "writer"].includes(access.role ?? "") ? null : map.event.revision + Number(changed) } : {}), ...(state !== undefined ? { providerState: state, providerStateObservedAt: new Date() } : {}), icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
         .where(eq(externalEvents.id, map.id));
-      if (changed && contentChanged) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
+      if (readRecovery) await finishGooglePersonalReadRecovery(tx, readRecovery, map.event.revision + Number(changed));
+      if (changed && contentChanged && !readRecovery && !privacyRestoration) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
       return changed || stateChanged;
     } else {
       if (await retainUnmappedCreatePull(tx, provider, userID, calendarID, externalCalendarID, externalEventID, { ...values, ...temporal }, etag, icalUid, creationOperationID, state)) return false;

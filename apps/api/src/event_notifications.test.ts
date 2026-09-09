@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describeChange } from "./event_notifications";
-import { planDeliveries, toEventChange, wants } from "./notification_dispatch";
+import { drainPendingNotifications, planDeliveries, toEventChange, wants } from "./notification_dispatch";
 
 // Two decisions decide whether this feature is useful or a reason to filter
 // Musubi into a folder: what counts as news, and who hears about it.
@@ -86,6 +86,7 @@ const base = {
 
 {
   const row = (over: Record<string, unknown> = {}) => ({
+    eligible: true,
     dueAt: new Date("2026-08-20T08:00:00Z"),
     email: "filip@example.com",
     id: "row-1",
@@ -104,6 +105,10 @@ const base = {
     ...over,
   });
 
+  const denied = planDeliveries([row({ eligible: false })]);
+  assert.deepEqual(denied.deliveries, []);
+  assert.deepEqual(denied.discard, ["row-1"]);
+
   // Two changes for one person are one email, not two.
   const { deliveries } = planDeliveries([
     row(),
@@ -119,7 +124,8 @@ const base = {
   // re-reads them on every pass until the end of time.
   const { deliveries, discard } = planDeliveries([
     {
-      dueAt: new Date(),
+      eligible: true,
+    dueAt: new Date(),
       email: "no@example.com",
       id: "row-9",
       kind: "event_changed",
@@ -169,3 +175,30 @@ const base = {
 }
 
 console.log("event_notifications.test.ts ok");
+
+
+async function dispatchRace() {
+  const rows = ["first", "later"].map(id => ({
+    id, userID: id, email: `${id}@example.test`, name: id, eligible: true,
+    kind: "event_changed", dueAt: new Date(), notificationEmails: null,
+    payload: { kind: "cancelled", title: "Private title", start: base.start.toISOString(), isAllDay: false },
+    subjectID: id, timezone: "UTC",
+  }));
+  for (const change of ["deleted", "denied", "updated"] as const) {
+    let sent = 0;
+    let current = [...rows];
+    const result = await drainPendingNotifications(new Date(), {
+      canSendEmail: () => true,
+      getDuePendingNotifications: async (_now, ids) => current.filter(row => !ids || ids.includes(row.id)),
+      deletePendingNotifications: async ids => { current = current.filter(row => !ids.includes(row.id)); },
+      sendEmail: async (_email, _subject, html) => {
+        sent++;
+        if (sent === 1) current = change === "deleted" ? current.filter(row => row.id !== "later") : current.map(row => row.id === "later" ? { ...row, eligible: change !== "denied", payload: { ...row.payload, title: "Fresh title" } } : row);
+        else { assert.match(html, /Fresh title/); assert.doesNotMatch(html, /Private title/); }
+      },
+    });
+    assert.equal(result.sent, change === "updated" ? 2 : 1);
+    assert.equal(current.length, 0);
+  }
+}
+void dispatchRace().catch(error => { console.error(error); process.exitCode = 1; });

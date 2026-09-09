@@ -56,6 +56,7 @@ export function Toolbar({
   // A flick moves the period on touch, so the arrows are desktop furniture.
   const narrow = useNarrowViewport();
   const createTriggerRef = useRef<HTMLButtonElement>(null);
+  const createEventAfterClose = useRef(false);
 
   return (
     <header className={styles.toolbar}>
@@ -157,13 +158,26 @@ export function Toolbar({
                   <Plus aria-hidden="true" size={18} strokeWidth={1.7} />
                 </IconButton>
               </MenuTrigger>
-              <MenuContent align="end" label="Create" mobileSurface="anchored">
+              <MenuContent
+                align="end"
+                label="Create"
+                mobileSurface="anchored"
+                onCloseAutoFocus={(event) => {
+                  if (!createEventAfterClose.current) return;
+                  createEventAfterClose.current = false;
+                  const target = createTriggerRef.current;
+                  if (!target) return;
+                  // Finish the outgoing menu's focus lifecycle before mounting
+                  // the form, so it cannot dismiss the newly opened popover.
+                  event.preventDefault();
+                  onCreateEvent(target);
+                }}
+              >
                 <MenuItem
                   disabled={!canCreateEvents}
                   icon={<CalendarPlus size={16} strokeWidth={1.7} />}
                   onSelect={() => {
-                    const target = createTriggerRef.current;
-                    if (target) onCreateEvent(target);
+                    createEventAfterClose.current = true;
                   }}
                 >
                   Event

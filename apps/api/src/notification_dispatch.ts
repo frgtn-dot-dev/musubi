@@ -120,7 +120,7 @@ export function planDeliveries(rows: DueRow[]) {
   const discard: string[] = [];
 
   for (const row of rows) {
-    if (!wants(row.notificationEmails, row.kind)) {
+    if (!row.eligible || !wants(row.notificationEmails, row.kind)) {
       discard.push(row.id);
       continue;
     }
@@ -141,7 +141,11 @@ export function planDeliveries(rows: DueRow[]) {
   return { discard, deliveries: [...byUser.values()] };
 }
 
-export async function drainPendingNotifications(now = new Date()) {
+// Injectable transport and queue reads keep dispatch race tests entirely local.
+export async function drainPendingNotifications(now = new Date(), dependencies = {
+  canSendEmail, getDuePendingNotifications, deletePendingNotifications, sendEmail,
+}) {
+  const { canSendEmail, getDuePendingNotifications, deletePendingNotifications, sendEmail } = dependencies;
   if (!canSendEmail()) return { sent: 0 };
 
   const all = await getDuePendingNotifications(now);
@@ -164,8 +168,16 @@ export async function drainPendingNotifications(now = new Date()) {
   await deletePendingNotifications(discard);
 
   let sent = 0;
-  for (const delivery of deliveries) {
+  for (const planned of deliveries) {
     try {
+      // Earlier recipients may have taken arbitrarily long to send. Re-read both
+      // payload and authorization just before this recipient's transport call.
+      // This cannot revoke a message already handed to SMTP.
+      const freshRows = await getDuePendingNotifications(now, planned.ids);
+      const fresh = planDeliveries(freshRows);
+      await deletePendingNotifications(fresh.discard);
+      const delivery = fresh.deliveries[0];
+      if (!delivery) continue;
       await sendEmail(
         delivery.email,
         delivery.changes.length === 1
@@ -177,12 +189,13 @@ export async function drainPendingNotifications(now = new Date()) {
       );
       // Only on success: a row deleted before a failed send is a change nobody
       // is ever told about.
-      await deletePendingNotifications(delivery.ids);
+      // A newer change queued while SMTP was running still needs delivery.
+      await deletePendingNotifications(delivery.ids, freshRows.filter(row => delivery.ids.includes(row.id)));
       sent += 1;
     } catch (error) {
       logger.error("notifications.email_failed", {
         error,
-        events: delivery.changes.length,
+        events: planned.changes.length,
       });
     }
   }

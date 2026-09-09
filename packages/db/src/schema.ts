@@ -832,6 +832,8 @@ export const externalEvents = pgTable(
     icalUid: text("ical_uid"),
     providerState: jsonb("provider_state").$type<ProviderEventState>(),
     providerStateObservedAt: timestamp("provider_state_observed_at", { withTimezone: true }),
+    // Fresh grant restoration is a read, not a new cross-provider write.
+    readRedactionRevision: integer("read_redaction_revision"),
     // Destination-scoped recurrence identity; never a cross-account UID join.
     externalSeriesID: text("external_series_id"),
     originalStart: jsonb("original_start").$type<OccurrenceStart>(),
@@ -878,6 +880,8 @@ export const eventOutbox = pgTable(
     expectedEtag: text("expected_etag"),
     icalUid: text("ical_uid"),
     action: text("action").$type<"create" | "update" | "delete">().notNull(),
+    // Read-only privacy recovery provenance; never changes the accepted intent.
+    personalReadRecovery: jsonb("personal_read_recovery").$type<{ acceptedRevision: number; intentHash: string; mappingID: string; redactedRevision: number; restoredRevision: number | null }>(),
     payload: jsonb("payload")
       .$type<{
         event: Event;

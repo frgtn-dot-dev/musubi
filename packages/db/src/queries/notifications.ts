@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { db, pendingNotifications, user, userSettings } from "..";
 
 export type PendingNotificationRow = typeof pendingNotifications.$inferSelect;
@@ -38,9 +38,43 @@ export async function queuePendingNotification(input: {
  * once per queued event would issue a query per notification, and the whole
  * point of batching is that there can be a lot of them.
  */
-export async function getDuePendingNotifications(now: Date) {
+export async function getDuePendingNotifications(now: Date, ids?: string[]) {
+  if (ids?.length === 0) return [];
+
   return db
     .select({
+      // Queue payloads can outlive redaction or be inserted after its cleanup.
+      // Evaluate current visibility and the exact native source at read time.
+      eligible: sql<boolean>`${pendingNotifications.kind} <> 'event_changed' or exists (
+        select 1 from events event
+        where event.id::text = ${pendingNotifications.subjectID}
+          and event.deleted_at is null
+          and (event.creator_id = ${pendingNotifications.userID}
+            or exists (select 1 from event_users attendee where attendee.event_id = event.id
+              and attendee.user_id = ${pendingNotifications.userID})
+            or exists (select 1 from calendar_events link
+              join calendar_members member on member.calendar_id = link.calendar_id
+              where link.event_id = event.id and member.user_id = ${pendingNotifications.userID}))
+          and (not exists (select 1 from external_events mapping
+              where mapping.event_id = event.id and mapping.calendar_id = event.origin_calendar_id
+                and mapping.provider = 'google')
+            and not exists (select 1 from external_calendars source
+              where source.calendar_id = event.origin_calendar_id and source.provider = 'google')
+            or exists (select 1 from external_events mapping
+              join external_calendars source on source.calendar_id = mapping.calendar_id
+                and source.external_calendar_id = mapping.external_calendar_id and source.provider = mapping.provider
+              join calendar_members member on member.calendar_id = source.calendar_id and member.user_id = source.user_id
+              join account connected on connected.account_id = source.account_id
+                and connected.provider_id = source.provider and connected.user_id = source.user_id
+              where mapping.event_id = event.id and mapping.calendar_id = event.origin_calendar_id
+                and mapping.provider = 'google' and source.user_id = event.creator_id
+                and source.disabled = false and source.supports_events = true
+                and connected.sync_status = 'active' and member.role in ('owner', 'editor')
+                and (source.provider_access_role in ('owner', 'writer')
+                  or (source.provider_access_role is null and source.provider_access_revision = 0))
+                and (source.provider_access_revision = 0 or nullif(source.cursor, '') is not null)
+                and mapping.read_redaction_revision is null))
+      )`,
       dueAt: pendingNotifications.dueAt,
       email: user.email,
       id: pendingNotifications.id,
@@ -59,14 +93,16 @@ export async function getDuePendingNotifications(now: Date) {
     // those people silently and forever, not merely until they look. Null here
     // means "no preference expressed", which the caller reads as the defaults.
     .leftJoin(userSettings, eq(userSettings.id, pendingNotifications.userID))
-    .where(lte(pendingNotifications.dueAt, now));
+    .where(and(lte(pendingNotifications.dueAt, now), ids ? inArray(pendingNotifications.id, ids) : undefined));
 }
 
-export async function deletePendingNotifications(ids: string[]) {
-  if (ids.length === 0) return;
+export async function deletePendingNotifications(ids: string[], delivered?: { id: string; payload: Record<string, unknown> }[]) {
+  if (ids.length === 0 || delivered?.length === 0) return;
   await db
     .delete(pendingNotifications)
-    .where(inArray(pendingNotifications.id, ids));
+    .where(and(inArray(pendingNotifications.id, ids), delivered ? or(...delivered.map(row =>
+      and(eq(pendingNotifications.id, row.id), sql`${pendingNotifications.payload} = ${JSON.stringify(row.payload)}::jsonb`),
+    )) : undefined));
 }
 
 /** Drop a queued notification that events overtook — the event was deleted. */

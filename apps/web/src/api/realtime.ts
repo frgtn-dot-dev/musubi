@@ -126,6 +126,7 @@ export function useServerStream(userId: string) {
           void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           break;
         case "external_sync":
+          void queryClient.invalidateQueries({ queryKey: calendarsKey });
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
           void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
           break;

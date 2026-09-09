@@ -89,3 +89,20 @@ it("opens reminders for the bound occurrence and clears the editor on scope chan
   expect(screen.queryByRole("dialog", { name: "Google reminders for this occurrence" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Edit reminders for this occurrence" })).toBeNull();
 });
+
+it("retires private details and an open editor when the event revision changes", async () => {
+  const google = { ...state, provider: "google", reminders: { provider: "google", useDefault: true, overrides: [] } };
+  fetchState.mockResolvedValueOnce({ state: google, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 } }).mockResolvedValueOnce({ state: google, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 } });
+  let complete!: (value: { state: null }) => void;
+  fetchState.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  const view = render(<ProviderEventDetails eventId="event" userId="owner" revision={7} />);
+  const action = await screen.findByRole("button", { name: "Edit Google reminders" });
+  await act(async () => action.click());
+  expect(await screen.findByRole("dialog", { name: "Google reminders" })).toBeTruthy();
+  view.rerender(<ProviderEventDetails eventId="event" userId="owner" revision={8} />);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByText(/host@example/)).toBeNull();
+  expect(screen.queryByText("Google details")).toBeNull();
+  await act(async () => complete({ state: null }));
+  expect(screen.queryByText("Provider details")).toBeNull();
+});
