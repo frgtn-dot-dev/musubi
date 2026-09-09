@@ -29,12 +29,8 @@ export type ProviderRsvpPreparation = { kind: "replay"; receipt: ProviderRsvpRec
 export async function prepareProviderRsvpEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
   return rsvpTransaction(actorID, eventID, input);
 }
-/** Internal staged capability. Public enqueue still uses the one-off entry. */
-export async function prepareProviderRsvpInstanceEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
-  return rsvpTransaction(actorID, eventID, input, undefined, true);
-}
 export async function commitProviderRsvpEdit(prepared: ProviderRsvpContext, baseline: Record<string, unknown>, nativeTime: EventTimeModel): Promise<ProviderRsvpReceipt> {
-  const result = await rsvpTransaction(prepared.actorID, prepared.eventID, prepared.request, { context: prepared, baseline, nativeTime: EventTimeModelSchema.parse(nativeTime) }, !!prepared.instance);
+  const result = await rsvpTransaction(prepared.actorID, prepared.eventID, prepared.request, { context: prepared, baseline, nativeTime: EventTimeModelSchema.parse(nativeTime) });
   if (result.kind !== "replay") throw new Error("RSVP commit did not produce a receipt");
   return result.receipt;
 }
@@ -46,7 +42,6 @@ async function rsvpTransaction(
   eventID: string,
   input: unknown,
   prepared?: { context: ProviderRsvpContext; baseline: Record<string, unknown>; nativeTime: EventTimeModel },
-  allowInstance = false,
 ): Promise<ProviderRsvpPreparation> {
   const request = ProviderRsvpEditSchema.parse(input);
   eventID = eventID.toLowerCase();
@@ -61,14 +56,14 @@ async function rsvpTransaction(
     if (!initial?.calendarID)
       throw new ForbiddenError("A live connected source event is required.");
     await lockCalendarLifecycle(tx, [initial.calendarID], "shared");
-    if (allowInstance && initial.seriesID)
+    if (initial.seriesID)
       await tx.select({ id: events.id }).from(events).where(eq(events.id, initial.seriesID)).for("update");
     const [event] = await tx
       .select()
       .from(events)
       .where(and(eq(events.id, eventID), isNull(events.deletedAt)))
       .for("update");
-    if (!event || event.originCalendarID !== initial.calendarID || (allowInstance && event.seriesID !== initial.seriesID))
+    if (!event || event.originCalendarID !== initial.calendarID || event.seriesID !== initial.seriesID)
       throw new ForbiddenError("The event source changed.");
     const [target] = await tx
       .select({ link: externalCalendars, role: calendarMembers.role })
@@ -132,7 +127,7 @@ async function rsvpTransaction(
       return { kind: "replay", receipt: { operationID: previous.id, replayed: true, status: previous.status } };
     }
     // Native time/series evidence must be verified before accepting its ETag.
-    if (event.timeModel?.kind === "floating" || event.recurrence || (!allowInstance && (event.seriesID || event.originalStart)) || event.isCanceled)
+    if (event.timeModel?.kind === "floating" || event.recurrence || event.isCanceled)
       throw new EventWriteError("event-write", "unsupported");
     const [mapping] = await tx
       .select()
@@ -152,7 +147,7 @@ async function rsvpTransaction(
       !mapping.providerState
     )
       throw new EventWriteError("event-write", "unsupported");
-    const instance = allowInstance ? await readProviderRsvpInstance(tx, event, mapping, actorID) : undefined;
+    const instance = await readProviderRsvpInstance(tx, event, mapping, actorID);
     if (
       event.revision !== request.expectedRevision ||
       providerStateVersion(mapping) !== request.expectedStateVersion

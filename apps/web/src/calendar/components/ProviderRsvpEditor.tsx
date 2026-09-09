@@ -8,8 +8,8 @@ import { Select } from "~/ui/Select";
 import { InlineError } from "~/ui/InlineError";
 import styles from "./styles/event-delivery.module.css";
 
-export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose, returnFocus }: {
-  eventId: string; connectionId?: string; observation: ProviderEventStateResponse; onClose: () => void; returnFocus?: HTMLElement | null;
+export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose, returnFocus, occurrence = false }: {
+  eventId: string; occurrence?: boolean; connectionId?: string; observation: ProviderEventStateResponse; onClose: () => void; returnFocus?: HTMLElement | null;
 }) {
   const [response, setResponse] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +29,7 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
     finally { pending.current = false; setBusy(false); }
   }
   return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-    <Dialog open title="Respond in Google" description={providerRsvpNotice} closeLabel="Close Google response" returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
+    <Dialog open title={occurrence ? "Respond to this occurrence" : "Respond in Google"} description={`${occurrence ? "This Google response applies only to this occurrence. " : ""}${providerRsvpNotice}`} closeLabel="Close Google response" returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
       <Button variant="secondary" disabled={busy} onClick={onClose}>{notice ? "Close" : "Cancel"}</Button>
       {!notice ? <Button disabled={!response} loading={busy} onClick={() => void send()}>Send response</Button> : null}
     </>}>

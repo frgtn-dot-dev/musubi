@@ -62,3 +62,16 @@ it("refreshes RSVP capability before handoff and refuses a revoked capability", 
   expect(await screen.findByText(/unavailable in the refreshed state/)).toBeTruthy();
   expect(onRespond).toHaveBeenCalledTimes(1);
 });
+
+it("opens a clearly scoped instance response and discards it when scope changes", async () => {
+  const google = { ...state, provider: "google", reminders: { provider: "google", useDefault: true, overrides: [] } };
+  fetchState.mockResolvedValue({ state: google, version: "a".repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 } });
+  const view = render(<ProviderEventDetails eventId="child" userId="owner" occurrence />);
+  const respond = await screen.findByRole("button", { name: "Respond to this occurrence" });
+  await act(async () => respond.click());
+  expect(await screen.findByRole("dialog", { name: "Respond to this occurrence" })).toBeTruthy();
+  expect(screen.getByText(/This Google response applies only to this occurrence/)).toBeTruthy();
+  view.rerender(<ProviderEventDetails eventId="child" userId="owner" series />);
+  expect(screen.queryByRole("dialog", { name: "Respond to this occurrence" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Respond to this occurrence" })).toBeNull();
+});

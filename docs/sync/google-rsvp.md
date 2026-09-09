@@ -1,10 +1,14 @@
 # Google RSVP: evidence contract
 
-K13 has a pure evidence planner and an internal conditional Google transport.
-There is no public endpoint or client RSVP control yet. The specialized worker
-is behind the default-off RSVP flag.
-Internal two-phase enqueue is described below.
-Production and live testing remain disabled/unimplemented.
+The default-off RSVP capability supports the connected account's own primary
+Google copy of a one-off meeting or an existing materialized instance. The public
+endpoint, private journal, conditional worker, explicit conflict resolution and
+web/native controls are connected. Series masters, unbound/generated slots and
+unsupported native evidence remain refused. Live two-account acceptance and
+production activation are separate gates; notification delivery stays unknown.
+
+The sections below describe the layers and their local evidence. The current
+public instance contract is summarized in [Public instance RSVP](#public-instance-rsvp).
 
 ## Native request
 
@@ -14,17 +18,18 @@ it never resends the attendee array or copies other event fields into a PATCH.
 References: [Events resource](https://developers.google.com/workspace/calendar/api/v3/reference/events)
 and [PATCH semantics](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch).
 The documented more-than-200-guest propagation boundary is unsupported here.
-These are protocol assumptions for a future transport test, not live acceptance.
+These protocol assumptions are covered by local HTTP tests, not live acceptance.
 
 ## Identity and preservation
 
-The eventual authenticated adapter must derive `authenticatedCopyEmail` from
+The authenticated adapter derives `authenticatedCopyEmail` from
 its connected provider identity. Client request JSON, Musubi attendance, and
 calendar ownership cannot supply that proof. The pure planner requires the
 accepted external event ID, strong ETag, one matching self attendee, a different
-organizer, full attendees and a normal active one-off with explicit endpoints.
-Organizer/resource self entries, private copies, locked/special events and series
-are refused. Defaults such as organizer.self=false follow Google's resource
+organizer, full attendees and a normal active event with explicit endpoints.
+An instance additionally requires its accepted parent and original slot.
+Organizer/resource self entries, private copies, locked/special events, series
+masters and unbound instances are refused. Defaults such as organizer.self=false follow Google's resource
 contract; missing organizer identity is not accepted.
 
 The private baseline is cloned. Confirmation permits only the intended self
@@ -41,13 +46,13 @@ mappings independently of local CAS, source ownership and worker fencing.
 `apps/api/src/sync/adapters/google_rsvp.test.ts` checks all three responses,
 minimal body, case-preserving self identity, frozen baseline, all-day/zoned
 endpoints and preservation/refusal cases. The suite is included in API tests.
-There is no fake-HTTP or database writer evidence in this slice.
+The subsequent HTTP and database sections establish transport and durable evidence.
 
 The internal transport below adds primary-account binding and conditional HTTP.
-Next are source authorization, durable operation/recovery and conflict semantics,
-then clients and live two-account acceptance. Notification delivery is not proven exactly-once
+Source authorization, durable recovery, conflict semantics and clients are
+implemented below; live two-account acceptance remains pending. Notification delivery is not proven exactly-once
 by seeing the desired response in a subsequent GET. Organizer create/update/
-cancel, withdrawal and recurring RSVP need their own contracts. No change to
+cancel, withdrawal and broader recurring RSVP need their own contracts. No change to
 feature flags, versions or compatibility minima is made here.
 
 ## Default-off internal HTTP transport
@@ -92,7 +97,8 @@ It first resolves the actor's own live source, editable membership, mapping,
 canonical revision and private state version under the established lifecycle /
 event / membership / mapping lock order. It returns an exact prior receipt before
 provider I/O on replay. Other pending or cancelled source history blocks a new
-operation. Floating, recurring, detached and cancelled events remain unsupported.
+operation. Floating/cancelled events, series masters and generated slots remain unsupported.
+Existing materialized instances use the bound family contract below.
 
 A fresh OAuth-authorized native read must match both the stored canonical event
 (including known civil time) and imported private provider state. The commit then
@@ -103,7 +109,8 @@ outbox contains the raw baseline and separate baseline/desired provider states;
 it does not alter canonical event content/revision, social attendance, accepted
 provider observation or local reminders.
 
-This is not yet a usable public RSVP flow: there is no route. The generic ACK and content conflict resolution explicitly refuse the new intent
+The public route uses this transaction. Generic ACK and generic content conflict
+resolution refuse the intent; specialized RSVP paths described below confirm it
 shape. The specialized worker and pull comparison described below use their own
 proofs. A private queue row alone is not delivery.
 
@@ -249,16 +256,15 @@ exactly-once notification delivery. The existing default-off flag still applies.
 DST folds, identity refusal and complete preservation. The real fake-HTTP
 `google_rsvp_delivery.test.ts` covers binding, minimal conditional PATCH,
 recovery, races and fresh conflict-preview reads. These are local evidence,
-not organizer-visible live acceptance. The public queue and capabilities still
-reject recurring events until their accepted parent/child binding, durable ACK
-and conflict resolution are connected and tested.
+not organizer-visible live acceptance. Public instance support also requires the
+accepted parent/child journal, durable ACK and conflict resolution described below.
 
 Provider references: [event identity and attendee response fields](https://developers.google.com/workspace/calendar/api/v3/reference/events)
 and [PATCH method](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch).
 
 ## Private instance journal and accepted family binding
 
-The internal `prepareProviderRsvpInstanceEdit` entry derives the existing child,
+The instance path of `prepareProviderRsvpEdit` derives the existing child,
 original slot, external parent and parent mapping from accepted local state.
 It freezes the parent revision as a local consistency fence; that revision is
 not a provider validator. Both events must remain live in the same owned source,
@@ -272,10 +278,8 @@ Neither canonical content/revisions nor accepted mappings change when queuing.
 parent revision/mapping/deletion/unlink races, child/mapping identity drift,
 pending/cancelled parent work, tampering and concurrent retry.
 
-Public enqueue/capabilities still refuse recurring RSVP. Instance journals are
-explicitly refused by worker source checks and specialized ACK until the complete
-instance delivery/confirmation path is installed. Native conflict resolution
-also remains closed. This staged internal entry is not a supported public action.
+The specialized worker/ACK and conflict-resolution layers below validate this
+private journal. Generic content delivery and generic ACK remain unavailable.
 
 ## Instance worker, full confirmation and pull coordination
 
@@ -297,8 +301,8 @@ The real HTTP/DB `provider_rsvp_instance.integration.test.ts` exercises both tim
 kinds, recovery, parent/child/mapping changes, permission loss before and after
 PATCH, lease loss, native original-identity drift, interleaved pull and stable echo.
 Generic ACK remains unable to confirm RSVP. Public instance enqueue/capability
-and explicit conflict resolution still require their final integration; no live
-RSVP or production flag activation is implied by this private delivery support.
+and explicit conflict resolution use this specialized path; no live RSVP or
+production flag activation is implied by its local verification.
 
 ## Explicit instance RSVP conflict resolution
 
@@ -316,4 +320,37 @@ completes without another PATCH. The HTTP/DB instance fixture covers stale paren
 revisions (including freshly rebuilt proof against an old request), private
 comments, foreign parent/slot refusal, permission loss, frozen replay, explicit
 resend and already-desired recovery for all-day and zoned instances. This does
-not activate the public recurring RSVP entry or claim live organizer acceptance.
+not claim live organizer acceptance; public instance controls are described below.
+
+## Public instance RSVP
+
+The authenticated RSVP endpoint now accepts an existing active detached instance
+when its own source, canonical parent, original slot and native Google copy agree.
+The server derives the entire binding; the unchanged strict public request accepts
+no parent/occurrence override. Preflight has a ten-second read deadline. It commits
+one durable intent and returns 202 without sending a PATCH inline. Concurrent
+requests and retry use one receipt. Masters, generated slots, foreign native
+parent/original identity and stale family state are refused before queuing.
+
+Private observation advertises this supported scope only under the default-off
+RSVP flag and a valid accepted family. Fresh preflight still verifies native
+identity, permissions and time; a timed native instance lacking explicit zone
+evidence remains unsupported. Reminders retain their separate one-off contract.
+No wire fields, product versions or compatibility minima changed.
+
+Web and native controls say “Respond to this occurrence” and retain the child UUID
+and scoped context. Opening refreshes capability; retry freezes the request and
+keeps the selected response. Context changes discard the old editor. Existing
+shared dialogs/buttons and focus return are reused, with no new styling or UI
+library. Generated/master views receive no instance capability.
+
+Evidence: authenticated HTTP/DB in `provider_rsvp_instance.integration.test.ts`
+checks flag/auth/schema refusal, master and foreign identity, parent race,
+concurrent 202/replay, no inline PATCH and real worker delivery through synthetic
+OAuth. Native component tests verify child targeting; web tests verify scoped
+context reset. Playwright covers 1280/light and 390/dark editor retry, explicit
+scope copy, accessibility, no overflow/overlay or application console errors and
+focus return, alongside existing RSVP conflict controls. Browser plugin/skill was
+not listed, so the repository's Playwright workflow used an isolated localhost
+port. Screenshots and logs remain outside the repository. Physical native devices,
+real invitation delivery and live organizer-visible responses remain unverified.

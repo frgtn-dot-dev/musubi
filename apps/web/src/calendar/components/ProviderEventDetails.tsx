@@ -10,11 +10,11 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/event-details.module.css";
 
-type Props = { eventId: string; userId: string; connectionId?: string; series?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
+type Props = { eventId: string; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
 export function ProviderEventDetails(props: Props) {
-  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId])} {...props} />;
+  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence])} {...props} />;
 }
-function ProviderEventDetailsBody({ eventId, userId, connectionId, series = false, onEditReminders, onRespond }: Props) {
+function ProviderEventDetailsBody({ eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
@@ -56,7 +56,7 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
   const details = current?.state ? providerEventDetails(current.state) : undefined;
   return <section aria-labelledby={titleId} className={styles.notes}>
     <div className={styles.sectionHeading}><SectionLabel id={titleId} level={3}>{details ? `${details.provider} details` : "Provider details"}</SectionLabel></div>
-    {details ? <p>{series ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}{"\n\n"}
+    {details ? <p>{series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}{"\n\n"}
       {details.rows.map(row => <span key={row.label}><strong>{row.label}: </strong>{row.value}{"\n"}</span>)}
       {"\n"}Provider notifications and Musubi reminders are separate. Both apps may notify you.
     </p> : <p role="status">{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</p>}
@@ -64,8 +64,8 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
     {current?.reminderEdit && current.state && current.version && !series ? <>
       <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>Edit Google reminders</Button>
     </> : null}
-    {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>Respond in Google</Button> : null}
+    {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : "Respond in Google"}</Button> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
-    {editor?.kind === "rsvp" ? <ProviderRsvpEditor eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
+    {editor?.kind === "rsvp" ? <ProviderRsvpEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
   </section>;
 }
