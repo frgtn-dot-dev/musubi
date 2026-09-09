@@ -973,3 +973,46 @@ it("the native host passes canonical observation revision separately from a know
   expect(props.event).toMatchObject({ title: "Busy", revision: 1, start: tapped.start, timeModel: tapped.timeModel });
   expect(props.observationRevision).toBe(2);
 });
+
+it("keeps explicit UTC clock fields in the native whole-series request", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const series = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000194", recurrence: "FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T09:00:00", endLocal: "2026-03-28T10:00:00" }) });
+  useEventsStore.setState({ events: [series] });
+  presentEventDetail([series], series);
+  useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
+  const tree = renderComposer(true);
+  find(tree, props => props.accessibilityLabel === "Event time zone")!.onChangeText("UTC");
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    useEventsStore.setState({ events: [{ ...series, ...resolveEventTimeEdit(body.time), revision: 2 }] });
+    return { error: null, data: { operationID: body.operationID, changed: true, events: [{ id: series.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false } };
+  });
+  const saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
+  scopeAnswer("All events"); await saving;
+  expect(mocks.request).toHaveBeenCalledOnce();
+  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ action: "update", scope: "series", expectedRevision: 1, patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-03-28T09:00:00.000", endLocal: "2026-03-28T10:00:00.000" } });
+  expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ revision: 2, start: new Date("2026-03-28T09:00:00.000Z") }), null);
+});
+it("converts the last generated COUNT occurrence without inventing a fold slot", async () => {
+  const { resolveEventTimeEdit, expandRecurringEvents } = await import("@musubi/calendar");
+  const series = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000194", recurrence: "FREQ=DAILY;COUNT=2", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-23T02:30:00", endLocal: "2026-10-23T03:30:00" }) });
+  useEventsStore.setState({ events: [series] });
+  const last = expandRecurringEvents([series], new Date("2026-10-24T00:00:00Z"), new Date("2026-10-24T23:59:59Z"), { consumerTimeZone: "UTC" })[0]!;
+  expect(last.id).toBe(series.id + "_" + Date.parse("2026-10-24T00:30:00Z"));
+  presentEventDetail([series], last);
+  useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
+  const tree = renderComposer(true);
+  find(tree, props => props.accessibilityLabel === "Event time zone")!.onChangeText("UTC");
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    useEventsStore.setState({ events: [{ ...series, ...resolveEventTimeEdit(body.time), revision: 2 }] });
+    return { error: null, data: { operationID: body.operationID, changed: true, events: [{ id: series.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false } };
+  });
+  const saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce());
+  scopeAnswer("All events"); await saving;
+  expect(mocks.request).toHaveBeenCalledOnce();
+  expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ action: "update", scope: "series", expectedRevision: 1, patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" } });
+  expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ revision: 2, start: new Date("2026-10-23T02:30:00.000Z") }), null);
+});

@@ -1,3 +1,4 @@
+import { assertCaldavUTCDraft } from "./caldav-series-zone";
 import { assertSeriesTimeEdit } from "./series-time-edit";
 import {
   editedEvent,
@@ -165,7 +166,10 @@ export function editEventTimeDraft(
         : { kind, ...anchors };
   }
 
-  if (event.recurrence) assertSeriesTimeEdit(event, time);
+  if (event.recurrence) {
+    if (event.timeModel?.kind === "zoned" && time.kind === "zoned" && time.timeZone !== event.timeModel.timeZone) assertCaldavUTCDraft(event, time);
+    else assertSeriesTimeEdit(event, time);
+  }
   try {
     const resolved = resolveEventTimeEdit(time);
     return {

@@ -1,4 +1,4 @@
-import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
+import { assertCaldavSeriesUTCConversion, planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { EventSchema, EventWriteError, can, type Event, type EventScopeRequest, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
 import { db } from "..";
@@ -126,7 +126,10 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   if (write.time !== undefined && write.cancelTarget) throw unsupported();
   const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
   const currentModel = write.newDefinition || !targetEventID ? baseline.master.timeModel : baseline.children.find(child => child.id === targetEventID)?.timeModel;
-  if (time && (time.timeModel.kind !== currentModel?.kind || time.timeModel.kind === "zoned" && (currentModel?.kind !== "zoned" || time.timeModel.timeZone !== currentModel.timeZone))) throw unsupported();
+  if (time && (time.timeModel.kind !== currentModel?.kind || time.timeModel.kind === "zoned" && (currentModel?.kind !== "zoned" || time.timeModel.timeZone !== currentModel.timeZone))) {
+    if (targetEventID || write.newDefinition || write.cancelTarget || baseline.children.length || Object.keys(write.patch).length) throw unsupported();
+    assertCaldavSeriesUTCConversion(baseline.master, write.time!);
+  }
   if (write.newDefinition) {
     const definition = EventSchema.parse(write.newDefinition);
     if (targetEventID !== definition.id || !definition.originalStart || [baseline.master, ...baseline.children].some(item => item.id === definition.id)) throw unsupported();

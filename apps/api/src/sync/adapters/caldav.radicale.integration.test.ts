@@ -574,6 +574,36 @@ async function main() {
     assert.deepEqual(await rows(), beforeStructuralConfirm);
     await sync(); assert.deepEqual(await rows(), beforeStructuralConfirm);
     console.log("Radicale saved series time/RRULE conflict: complete rekeyed family confirmation and stable echo OK");
+    {
+      const zoneURL = new URL("utc-conversion.ics", collectionURL).href;
+      const native = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Musubi//UTC proof//EN", "BEGIN:VEVENT", "UID:utc-conversion", "DTSTART;TZID=Europe/Prague:20260328T090000", "DTEND;TZID=Europe/Prague:20260328T100000", "RRULE:FREQ=DAILY;COUNT=4", "SUMMARY:Explicit UTC clock", "X-PRESERVE:private extension", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Keep alarm", "END:VALARM", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n");
+      assert.ok((await davFetch(zoneURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-none-match": "*" }, body: native })).ok);
+      await sync();
+      const [mapping] = await db.select().from(externalEvents).where(eq(externalEvents.externalEventID, zoneURL));
+      const local = (await getEventSnapshot(mapping!.eventID))!;
+      const time = { kind: "zoned", timeZone: "UTC", startLocal: "2026-03-28T09:00:00.000", endLocal: "2026-03-28T10:00:00.000" };
+      const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: local.revision, patch: {}, time };
+      const candidate = await applyLocalEventScope(local.id, userID, request, { prepareProvider: true });
+      if (candidate.status !== "caldav_required") throw new Error("Missing UTC native context");
+      const prepared = await prepareCaldavSeries(candidate.context, request);
+      assert.equal(prepared.write.after, prepared.write.before.replace("DTSTART;TZID=Europe/Prague:20260328T090000", "DTSTART:20260328T090000Z").replace("DTEND;TZID=Europe/Prague:20260328T100000", "DTEND:20260328T100000Z"));
+      assert.equal((await applyLocalEventScope(local.id, userID, request, { caldav: prepared })).status, "saved");
+      const operation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, local.id)))[0]!;
+      const competing = await davFetch(zoneURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": mapping!.etag! }, body: prepared.write.before.replace("private extension", "fresh private extension") });
+      assert.ok(competing.ok);
+      assert.equal((await deliverEventOutbox(operation.id, () => caldavAdapter))?.status, "conflict");
+      const comparison = await prepareEventDeliveryResolution(userID, local.id, operation.id, () => caldavAdapter);
+      const replacement = await commitEventDeliveryResolution(userID, comparison.proof, { mutationId: randomUUID(), expectedLocalRevision: comparison.preview.localRevision, expectedLatestOperationId: operation.id, expectedRemoteExists: true, expectedRemoteEtag: comparison.preview.remoteEtag });
+      assert.equal((await deliverEventOutbox(replacement, () => caldavAdapter))?.status, "completed");
+      const settled = await rows();
+      const read = await davFetch(zoneURL, { headers: { authorization: basicAuth } });
+      const bytes = await read.text(); assert.ok(bytes.includes("DTSTART:20260328T090000Z")); assert.ok(bytes.includes("X-PRESERVE:fresh private extension")); assert.ok(bytes.includes("DESCRIPTION:Keep alarm"));
+      const stale = await davFetch(zoneURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": mapping!.etag! }, body: prepared.write.before }); assert.equal(stale.status, 412);
+      await sync(); assert.deepEqual(await rows(), settled);
+      const [current] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, local.id)); assert.equal(current!.id, mapping!.id);
+      assert.equal((await applyLocalEventScope(local.id, userID, request, { prepareProvider: true })).status, "replayed");
+      console.log("Radicale explicit UTC series: native conditional conflict/recovery, private preservation, stable ACK/echo and stale CAS refusal: OK");
+    }
     for (const kind of ["zoned", "floating", "all-day"]) {
       const removalURL = new URL(`remove-${kind}.ics`, collectionURL).href;
       const stamp = kind === "all-day" ? "DTSTART;VALUE=DATE:20260328" : `DTSTART${kind === "zoned" ? ";TZID=Europe/Prague" : ""}:20260328T090000`;

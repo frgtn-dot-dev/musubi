@@ -1,3 +1,4 @@
+import { eventScopeRequest } from "@musubi/calendar";
 import type { Event } from "@musubi/types";
 import {
     eventEditorBaseline,
@@ -216,9 +217,10 @@ function EditEventRoute() {
                         )
                     }
                     onSubmit={async (values: EventFormValues) => {
-                        await eventMutations.updateEvent(
-                            updateEventFromForm(event, values),
-                        );
+                        const edited = updateEventFromForm(event, values);
+                        if (event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) {
+                            await eventMutations.applyEventScope(event, eventScopeRequest(event, event, "series", edited));
+                        } else await eventMutations.updateEvent(edited);
                         back();
                     }}
                     submitLabel="Save"

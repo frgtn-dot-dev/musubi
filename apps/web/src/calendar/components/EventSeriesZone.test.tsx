@@ -1,0 +1,25 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+import { EventSchema, type Calendar } from "@musubi/types";
+import { expandRecurringEvents, resolveEventTimeEdit } from "@musubi/calendar";
+import { EventDetailsPopover } from "./EventDetailsPopover";
+vi.mock("./ProviderEventDetails", () => ({ ProviderEventDetails: () => null }));
+vi.mock("./EventDeliveryDialog", () => ({ EventDeliveryDialog: () => null }));
+afterEach(cleanup);
+it("saves UTC from a synthetic final occurrence without restarting COUNT", async () => {
+  const calendar: Calendar = { id: "calendar", creatorID: "owner", color: "red", name: "Personal", role: "owner", members: [] };
+  const master = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000194", creatorID: "owner", organizer: "", originCalendarID: calendar.id, calendars: [calendar.id], revision: 1, title: "Final occurrence", color: "red", isCanceled: false, recurrence: "FREQ=DAILY;COUNT=2", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-23T02:30:00", endLocal: "2026-10-23T03:30:00" }) });
+  const last = expandRecurringEvents([master], new Date("2026-10-24T00:00:00Z"), new Date("2026-10-24T23:59:59Z"), { consumerTimeZone: "UTC" })[0]!;
+  expect(last.id).toBe(master.id + "_" + Date.parse("2026-10-24T00:30:00Z"));
+  const apply = vi.fn().mockResolvedValue(undefined), user = userEvent.setup();
+  render(<EventDetailsPopover calendar={calendar} calendars={[calendar]} event={last} getEventMaster={() => master} user={{ id: "owner", name: "Owner" }} onNotice={vi.fn()} onForkEvent={vi.fn()} onLinkEvent={vi.fn()} onUpdateEvent={vi.fn()} onRemoveEvent={vi.fn()} onRestoreEvent={vi.fn()} onSetAttendance={vi.fn()} onApplyEventScope={apply} timeFormat="24h" weekStartsOn="monday"><button>Open occurrence</button></EventDetailsPopover>);
+  await user.click(screen.getByRole("button", { name: "Open occurrence" }));
+  await user.click(screen.getByRole("button", { name: /^Edit$/ }));
+  await user.click(screen.getByRole("button", { name: /^More options$/ }));
+  const zone = screen.getByRole("textbox", { name: /^Event time zone$/ });
+  await user.clear(zone); await user.type(zone, "UTC");
+  await user.click(screen.getByRole("button", { name: /^Save$/ }));
+  await user.click(screen.getByRole("button", { name: /^All events$/ }));
+  expect(apply).toHaveBeenCalledWith(master, expect.objectContaining({ scope: "series", patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" } }));
+});

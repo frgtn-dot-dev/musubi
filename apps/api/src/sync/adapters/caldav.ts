@@ -3,7 +3,7 @@ import type { CaldavAlarmIntent } from "@musubi/db";
 import { caldavEventState } from "./provider_event_state";
 import { caldavSeriesEvidence, caldavSeriesCreationEvidence, type CaldavSeriesSplit, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
-import { planEventScope } from "@musubi/calendar";
+import { finiteSeriesFootprint, planEventScope } from "@musubi/calendar";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
@@ -953,6 +953,24 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     if (master.getAllProperties("rrule").length !== 1 || master.hasProperty("rdate") || master.hasProperty("exdate")) throw new EventWriteError("event-write", "unsupported");
   }
   const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID, cancelTarget, newDefinition, time, followingDelete });
+  if (time?.kind === "zoned" && baseline.master.timeModel?.kind === "zoned" && time.timeZone !== baseline.master.timeModel.timeZone) {
+    // Embedded native rules must agree with the complete accepted IANA footprint.
+    // Keep the original VTIMEZONE bytes even though UTC no longer references it.
+    const zoneID = baseline.master.timeModel.timeZone;
+    const definitions = new ICAL.Component(ICAL.parse(evidence.data)).getAllSubcomponents("vtimezone").filter(component => component.getFirstPropertyValue("tzid") === zoneID);
+    if (definitions.length > 1) throw new EventWriteError("event-write", "unsupported");
+    if (definitions.length) {
+      const zone = new ICAL.Timezone({ component: definitions[0]!, tzid: zoneID });
+      for (const slot of finiteSeriesFootprint(EventSchema.parse(baseline.master))) {
+        if (slot.timeModel.kind !== "zoned") throw new EventWriteError("event-write", "unsupported");
+        for (const [civil, instant] of [[slot.timeModel.startLocal, slot.start], [slot.timeModel.endLocal, slot.end]] as const) {
+          const native = ICAL.Time.fromDateTimeString(civil.slice(0, 19));
+          native.zone = zone;
+          if (native.toUnixTime() * 1000 !== instant.getTime()) throw new EventWriteError("event-write", "unsupported");
+        }
+      }
+    }
+  }
   let after: string;
   if (followingDelete) {
     const { master, index } = eventMaster(evidence.data, baseline.ref.icalUid);
