@@ -695,7 +695,7 @@ export async function replaceExternalEventResource(
             and ancestor.calendar_id = ${eventOutbox.calendarID} and ancestor.external_calendar_id = ${eventOutbox.externalCalendarID}
             and ancestor.external_calendar_link_id = ${eventOutbox.externalCalendarLinkID}
             and ancestor.external_event_id = ${eventOutbox.externalEventID} and ancestor.event_id = ${eventOutbox.eventID}
-            and ancestor.action = 'update' and ancestor.payload->'caldavSeries'->'write'->'followingDelete' is not null)`,
+            and ((ancestor.action = 'update' and ancestor.payload->'caldavSeries'->'write'->'followingDelete' is not null) or (ancestor.action = 'delete' and ancestor.payload->'caldavSeriesDeletion' is not null)))`,
       )).limit(1);
       if (resolvedVersion) return false;
     }

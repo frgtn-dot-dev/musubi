@@ -702,3 +702,39 @@ frozen retry; Chromium checks desktop light and narrow dark, keyboard/focus,
 accessibility and exact submitted scope. Physical native and live-provider
 acceptance remain separate. Whole-resource deletion and split conflict resolution
 remain unsupported.
+
+### Whole-series deletion conflict confirmation
+
+Whole-resource series deletion now has its own explicit conflict confirmation.
+Fresh evidence uses positive **collection unbind** authorization; missing resource
+write permission does not disable a separately proven delete capability. The
+same resource/UID, complete original canonical family, time/rule/cancellation
+state and VTIMEZONE evidence must remain intact. Fresh uninterpreted native bytes
+are retained in the private deletion baseline. Known competing edits still
+require reconciliation; they are not silently included in the deletion.
+
+`scopeResolution: { kind: "series-delete" }` distinguishes deletion of the entire
+series from a partial following cut. Web/native clients explicitly say **Delete
+entire series** and include all occurrences and exceptions in the confirmation.
+The local preview is absent because the saved family is already deleted. Exact
+scope confirmation is required on both submission and replay, so an older or
+changed-scope request cannot confirm it.
+
+The transaction locks and verifies the original master and every tracked child,
+including their saved tombstones, revisions, content, calendar links, mappings
+and permissions. It advances all accepted ETags and appends one immutable
+replacement. The delete worker recognizes only its exact superseded deletion
+chain, repeats source and native unbind checks, performs conditional DELETE and
+requires full-resource absence before removing mappings and acknowledging the
+chain. Completed deletion receipts also fence exact superseded accepted ETags;
+a genuinely new remote resource version may be imported as a new family.
+
+Evidence: authenticated HTTP preview/confirmation and old-client/changed-scope
+refusal; all three time kinds; root/child tombstone, revision, permission and
+private-proof races; native content/time refusal; missing resource write versus
+missing/revoked unbind; repeated conflicts, lost responses, stale ancestor
+snapshots and new-resource recreation; disposable Radicale DELETE conflict and
+404/stable sync; web/native frozen confirmation tests; desktop light and narrow
+dark Chromium keyboard/focus, accessibility and request checks. No physical
+native or live-account acceptance is implied. Split conflict resolution remains
+open, and production flags and client versions are unchanged.

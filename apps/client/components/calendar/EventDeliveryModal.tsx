@@ -184,7 +184,7 @@ export function DeliveryBody({
     if (!busyRef.current) onClose();
   }
   const confirmLabel =
-    comparison?.preview.scopeResolution ? "Delete following occurrences" : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
+    comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
       ? "Delete remote copy"
       : comparison?.preview.action === "create"
         ? "Recreate remote copy"
@@ -197,7 +197,7 @@ export function DeliveryBody({
       {
         title: confirmLabel,
         confirmLabel,
-        message: saved.preview.scopeResolution ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
+        message: saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
           "Apply the version shown in this comparison? Remote differences may be replaced. Unsaved form edits are not sent.",
       },
       () => {
@@ -264,7 +264,7 @@ export function DeliveryBody({
           ) : null}
           {comparison ? (
             <>
-              {comparison.preview.scopeResolution ? <Text style={copy}>Delete this and following · original start {comparison.preview.scopeResolution.originalStart.value}. Earlier occurrences remain.</Text> : null}
+              {comparison.preview.scopeResolution?.kind === "following-delete" ? <Text style={copy}>Delete this and following · original start {comparison.preview.scopeResolution.originalStart.value}. Earlier occurrences remain.</Text> : comparison.preview.scopeResolution?.kind === "series-delete" ? <Text style={copy}>Entire series · all occurrences and exceptions.</Text> : null}
               {comparison.preview.rsvpResolution ? <>
                 <Text style={copy}>{providerRsvpNotice}</Text>
                 <Text style={copy}>Saved Google response: {providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)}</Text>

@@ -82,10 +82,10 @@ export const EventDeliveryContentSchema = z.object({
   originalStart: OccurrenceStartSchema.optional(),
 });
 
-export const EventDeliveryScopeResolutionSchema = z.object({
-  kind: z.literal("following-delete"),
-  originalStart: OccurrenceStartSchema,
-}).strict();
+export const EventDeliveryScopeResolutionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("following-delete"), originalStart: OccurrenceStartSchema }).strict(),
+  z.object({ kind: z.literal("series-delete") }).strict(),
+]);
 
 export const EventDeliveryConflictSchema = z.object({
   scopeResolution: EventDeliveryScopeResolutionSchema.optional(),

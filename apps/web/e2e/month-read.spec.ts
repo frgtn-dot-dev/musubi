@@ -8525,3 +8525,61 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K12 whole series deletion conflict confirmation: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+    const id = "00000000-0000-4000-8000-000000000091", operation = "00000000-0000-4000-8000-000000000092";
+    const saved = event(id, "Whole series deletion", "personal", "#b3492f", "2026-07-23T07:30:00Z", "2026-07-23T08:30:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [] });
+    const scopeResolution = { kind: "series-delete" };
+    const writes: unknown[] = [];
+    const target = { targetId: "00000000-0000-4000-8000-000000000094", calendarId: "00000000-0000-4000-8000-000000000093", calendarName: "CalDAV", provider: "caldav", connected: true, owned: true,
+      operationId: operation, action: "delete", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-23T09:00:00Z", retryAt: null, issue: "conflict" };
+    const receipt = { eventId: id, localRevision: null, targets: [target] };
+    await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, receipt));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, route => respond(route, {
+      eventId: id, operationId: operation, latestOperationId: operation, localRevision: null, scopeResolution,
+      local: null,
+      remote: { ...saved, description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=8" },
+      remoteEtag: '"fresh"', action: "delete", canResolve: true, reason: null,
+    }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, route => {
+      writes.push(route.request().postDataJSON()); return respond(route, receipt, 202);
+    });
+    await page.route("**/api/v1/event-deliveries", route => respond(route, { items: [{ eventId: id, savedTitle: "Whole series deletion" }], nextCursor: null }));
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveURL(/\/app\/p\/my-calendar\/month\?date=2026-07-26/);
+    await expect(page).toHaveTitle(/Musubi/i);
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    await page.getByRole("button", { name: "Unfinished deliveries", exact: true }).click();
+    const trigger = page.getByRole("button", { name: /Whole series deletion/ }).first();
+    await trigger.click();
+    const delivery = page.getByRole("dialog", { name: "Delivery", exact: true });
+    await delivery.getByRole("button", { name: "Review changes" }).click();
+    const comparison = page.getByRole("dialog", { name: "Review remote changes" });
+    await expect(comparison.getByText("Entire series", { exact: true })).toBeVisible();
+    await expect(comparison.getByText(/This removes the entire remote series/)).toBeVisible();
+    await expect(comparison.getByRole("button", { name: "Apply saved changes" })).toHaveCount(0);
+    await expect(comparison.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await comparison.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+    expect(writes).toHaveLength(0);
+    await expect(delivery.getByRole("button", { name: "Review changes" })).toBeFocused();
+    await delivery.getByRole("button", { name: "Review changes" }).press("Enter");
+    await comparison.evaluate(async node => { await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished)); });
+    await expectNoAccessibilityViolations(page);
+    expect(await comparison.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    await comparison.screenshot({ path: `/tmp/musubi-k12-whole-delete-conflict-${theme}.png` });
+    await comparison.getByRole("button", { name: "Delete entire series" }).click();
+    await expect(delivery.getByText(/Saved changes queued/)).toBeVisible();
+    expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ expectedScopeResolution: scopeResolution, expectedRemoteEtag: '"fresh"' });
+    await delivery.getByRole("button", { name: "Close delivery", exact: true }).click();
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}
