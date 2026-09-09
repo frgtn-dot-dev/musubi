@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
-import { classifyCaldavCalendars } from "./adapters/caldav";
 import { config } from "@musubi/config";
-import { createCaldavClient } from "./caldav_client";
-import { caldavEventPrivileges, caldavReadAccess, caldavAllows } from "./caldav_privileges";
 
 async function main() {
   const origin = "http://127.0.0.1:1", home = origin + "/home/", collection = home + "calendar/";
   const originalFetch = globalThis.fetch, allowPrivate = config.security.federationAllowPrivateHosts;
   config.security.federationAllowPrivateHosts = true;
+  // Construct module-scoped guarded transports only after the local fixture policy.
+  const { classifyCaldavCalendars } = await import("./adapters/caldav");
+  const { createCaldavClient } = await import("./caldav_client");
+  const { caldavEventPrivileges, caldavReadAccess, caldavAllows } = await import("./caldav_privileges");
   let chain = "ok", listings = 0;
   let mode = "ok", read = true, write = true;
   const row = (href: string, props: string, status = "HTTP/1.1 200 OK") => `<d:response><d:href>${href}</d:href><d:propstat><d:prop>${props}</d:prop>${mode === "missing-status" ? "" : `<d:status>${status}</d:status>`}</d:propstat></d:response>`;

@@ -1,7 +1,10 @@
+import { EventEmitter } from "node:events";
+import type { Request, Response } from "express";
+import { handlerStream } from "../handlers/stream";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { caldavAccounts, createTask, db, events, externalTasks, tasks, user, getUserExternalCalendars, reconcileCaldavReadAccess, updateTask, assertExternalTaskPush, setExternalTaskSyncData, queuePendingNotification, getDuePendingNotifications, eventOutbox, getEventDeliveryInbox, calendarMembers, setCursor } from "@musubi/db";
+import { caldavAccounts, createTask, db, events, externalTasks, tasks, user, getUserExternalCalendars, reconcileCaldavReadAccess, updateTask, assertExternalTaskPush, setExternalTaskSyncData, queuePendingNotification, getDuePendingNotifications, eventOutbox, getEventDeliveryInbox, calendarMembers, setCursor, calendarEvents, createCalendar } from "@musubi/db";
 import { config } from "@musubi/config";
 import { encryptSecret } from "./crypto";
 import { EventSchema, TaskSchema } from "@musubi/types";
@@ -151,4 +154,57 @@ async function main() {
     console.log("CalDAV event/task read retirement, same-validator regain, ABA, task admission/ACK and notification fences: OK");
   } finally { await db.delete(user).where(eq(user.id, userID)); await db.delete(user).where(eq(user.id, editorID)); }
 }
-main().then(() => process.exit(0), error => { console.error(error); process.exit(1); });
+main().then(verifyResourceRestorationStream).then(() => process.exit(0), error => { console.error(error); process.exit(1); });
+
+
+async function verifyResourceRestorationStream() {
+  for (const laterFailure of [false, true]) {
+    const owner = `caldav-resource-owner-${randomUUID()}`, reader = `caldav-resource-reader-${randomUUID()}`, accountID = randomUUID();
+    const address = "http://127.0.0.1:1/resource-stream/";
+    await db.insert(user).values([{ id: owner, name: "Owner", email: `${owner}@example.test` }, { id: reader, name: "Linked reader", email: `${reader}@example.test` }]);
+    const emitted: string[] = [];
+    const response = Object.assign(new EventEmitter(), { destroyed: false, writableEnded: false, setHeader() {}, flushHeaders() {}, write(value: string) { emitted.push(value); return true; }, end() { response.writableEnded = true; } });
+    const request = Object.assign(new EventEmitter(), { aborted: false, user: { id: reader, isExternal: true } });
+    let injectFailure = false, title = "Private series", serial = 0;
+    const adapter: CalendarAdapter = { ...caldavAdapter,
+      async listCalendars() { return { calendars: [{ externalId: address, name: "Source", color: "red", supportsEvents: true, supportsTasks: false, readOnly: false, caldavAccess: { read: true, readFreeBusy: true } }], taskListsComplete: true }; },
+      async fetchChanges() {
+        const resource = normalizeCaldavResource({ url: address + "family.ics", etag: '"same"', data: ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:stream-family", "DTSTART:20260915T090000Z", "DTEND:20260915T100000Z", "RRULE:FREQ=DAILY;COUNT=3", `SUMMARY:${title}`, "END:VEVENT", "BEGIN:VEVENT", "UID:stream-family", "RECURRENCE-ID:20260916T090000Z", "DTSTART:20260916T110000Z", "DTEND:20260916T120000Z", `SUMMARY:${title} child`, "END:VEVENT", "END:VCALENDAR"].join("\r\n") });
+        const changes: NormalizedChange[] = [{ kind: "event-resource", externalId: address + "family.ics", events: resource }];
+        if (injectFailure) changes.push({ kind: "event-resource", externalId: address + "invalid.ics", events: [{ ...resource[0]!, externalId: address + "invalid.ics", timeModel: undefined }] });
+        return { changes, reset: true, nextCursor: `stream-${++serial}` };
+      },
+    };
+    const sync = () => syncProvider(adapter, owner, { id: accountID, label: "Stream fixture" });
+    try {
+      await db.insert(caldavAccounts).values({ id: accountID, userID: owner, serverUrl: address, username: "fixture", encryptedPassword: encryptSecret("fixture") });
+      await sync();
+      const source = (await getUserExternalCalendars("caldav", owner, accountID))[0]!;
+      const family = await db.select().from(events).where(eq(events.creatorID, owner));
+      const root = family.find(item => !item.seriesID)!;
+      const linked = await createCalendar({ creatorID: owner, name: "Linked reader only", color: "red" });
+      await db.insert(calendarEvents).values({ eventID: root.id, calendarID: linked.id });
+      await db.insert(calendarMembers).values({ userID: reader, calendarID: linked.id, role: "viewer" });
+      assert.equal((await db.select().from(calendarMembers).where(eq(calendarMembers.userID, reader))).some(member => member.calendarID === source.calendarID), false);
+      await handlerStream(request as unknown as Request, response as unknown as Response);
+      // Commit grant changes directly before the measured sync. Discovery sees
+      // an unchanged full grant, so its invalidations cannot satisfy this test.
+      await reconcileCaldavReadAccess(owner, accountID, source.calendarID, { read: false, readFreeBusy: true }, false);
+      await reconcileCaldavReadAccess(owner, accountID, source.calendarID, { read: true, readFreeBusy: true }, false);
+      assert.equal((await db.select().from(events).where(eq(events.id, root.id)))[0]!.title, "Busy");
+      const cursorBefore = (await getUserExternalCalendars("caldav", owner, accountID))[0]!.cursor;
+      emitted.length = 0; title = "Restored authorized series"; injectFailure = laterFailure;
+      if (laterFailure) await assert.rejects(sync(), /Resource observation requires a time model and UID/);
+      else assert.ok((await sync()).includes(linked.id));
+      assert.equal((await db.select().from(events).where(eq(events.id, root.id)))[0]!.title, title);
+      assert.ok(emitted.some(frame => frame.includes("external_sync") && frame.includes(linked.id) && frame.includes(source.calendarID)), "Linked-only stream reader receives the committed resource restoration, even before a later failure returns");
+      if (laterFailure) assert.equal((await getUserExternalCalendars("caldav", owner, accountID))[0]!.cursor, cursorBefore, "Partial resource failure does not commit the cursor");
+      injectFailure = false;
+      await sync();
+      emitted.length = 0;
+      await sync();
+      assert.equal(emitted.some(frame => frame.includes("external_sync")), false, "An unchanged complete resource remains a quiet no-op");
+      console.log(`CalDAV resource restoration linked-only stream (${laterFailure ? "later invalid resource" : "normal"}): OK`);
+    } finally { request.emit("close"); response.emit("close"); await db.delete(user).where(eq(user.id, owner)); await db.delete(user).where(eq(user.id, reader)); }
+  }
+}

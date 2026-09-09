@@ -410,10 +410,10 @@ export async function syncProvider(
         for (const id of result.seenExternalIDs) retainedGraphIDs.add(id);
       }
       changed += await reconcileExternalChanges(changes, reset, {
-        replaceResource: (resourceID, observations) => replaceExternalEventResource(provider, userID, link.calendarID, link.externalCalendarID, resourceID, observations.map(event => {
+        replaceResource: (resourceID, observations) => trackGoogleRead(replaceExternalEventResource(provider, userID, link.calendarID, link.externalCalendarID, resourceID, observations.map(event => {
           if (!event.timeModel || !event.icalUid) throw new Error("Resource observation requires a time model and UID.");
           return { providerState: event.providerState, externalId: event.externalId, values: toEventValues(event, link.calColor), etag: event.etag ?? null, icalUid: event.icalUid, time: { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } };
-        }), accessContext),
+        }), accessContext)),
         deleteEvent: (externalID) =>
           trackGoogleRead(deleteExternalEvent(provider, link.calendarID, externalID, onUnlink, accessContext)),
         deleteTask: (externalID) =>

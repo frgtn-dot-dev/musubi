@@ -159,7 +159,13 @@ export function TaskList({
   }
 
   const liveTask = editing ? sourceTasks.find(task => task.id === editing.id) : undefined;
-  if (editing && draft && liveTask && (liveTask.providerReadRetiredGeneration ?? 0) > (editing.providerReadRetiredGeneration ?? 0)) {
+  const liveRetirement = liveTask?.providerReadRetiredGeneration ?? 0;
+  const editingRetirement = editing?.providerReadRetiredGeneration ?? 0;
+  const restoredContent = editing && liveTask && liveRetirement > 0 && liveRetirement === editingRetirement &&
+    (["title", "description", "url", "relatedTo"] as const).some(field => (liveTask[field] ?? "") !== (editing[field] ?? ""));
+  // Restoration retains the retirement counter. Refresh copied fields from the
+  // newly authorized baseline even when retirement arrived in a separate read.
+  if (editing && draft && liveTask && (liveRetirement > editingRetirement || restoredContent)) {
     const refreshed = { ...draft, expectedProviderReadRetiredGeneration: liveTask.providerReadRetiredGeneration ?? 0 };
     for (const field of ["title", "description", "url", "relatedTo"] as const) {
       if (!ownedFields.includes(field) && (draft[field] ?? "") === (editing[field] ?? "")) Object.assign(refreshed, { [field]: liveTask[field] });

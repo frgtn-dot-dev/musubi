@@ -64,3 +64,40 @@ it("retires a removed source only after confirmed task data, retaining authored 
   expect((screen.getByRole("button", { name: "Save task" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByText(/no longer available from its source/)).toBeTruthy();
 });
+
+it("refreshes untouched task fields after separate retirement and same-generation restoration before saving", async () => {
+  const user = userEvent.setup();
+  const task = TaskSchema.parse({ id: "task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Original private task", description: "Original notes", url: "https://private.example.test/old", relatedTo: "old-related" });
+  const onUpdate = vi.fn(async () => task);
+  const props = { calendars: fixtureCalendars, tasks: [task], createRequest: 0, editableCalendarIds: new Set([task.calendarID]), offline: false, tasksResolved: true, onCreateRequestHandled: vi.fn(), onCreate: vi.fn(), onUpdate, onRemove: vi.fn(), settings: { timeFormat: "24h" as const, weekStartsOn: "monday" as const } };
+  const view = render(<TaskList {...props} />);
+  await user.click(screen.getByRole("button", { name: /Original private task/ }));
+  const retired = { ...task, title: "Private task", description: null, url: null, relatedTo: null, providerReadRetiredGeneration: 1 };
+  view.rerender(<TaskList {...props} tasks={[retired]} />);
+  expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", "Private task");
+  expect(screen.getByRole("textbox", { name: "Notes" })).toHaveProperty("value", "");
+  const restored = { ...task, title: "Restored provider title", description: "Restored provider notes", url: "https://private.example.test/restored", relatedTo: "restored-related", providerReadRetiredGeneration: 1 };
+  view.rerender(<TaskList {...props} tasks={[restored]} />);
+  expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", restored.title);
+  expect(screen.getByRole("textbox", { name: "Notes" })).toHaveProperty("value", restored.description);
+  await user.click(screen.getByRole("button", { name: "Save task" }));
+  expect(onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ title: restored.title, description: restored.description, url: restored.url, relatedTo: restored.relatedTo, expectedProviderReadRetiredGeneration: 1 }));
+});
+
+it("preserves authored title and explicit note clear through separate retirement and restoration", async () => {
+  const user = userEvent.setup();
+  const task = TaskSchema.parse({ id: "task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Private draft source", description: "Private notes" });
+  const onUpdate = vi.fn(async () => task);
+  const props = { calendars: fixtureCalendars, tasks: [task], createRequest: 0, editableCalendarIds: new Set([task.calendarID]), offline: false, tasksResolved: true, onCreateRequestHandled: vi.fn(), onCreate: vi.fn(), onUpdate, onRemove: vi.fn(), settings: { timeFormat: "24h" as const, weekStartsOn: "monday" as const } };
+  const view = render(<TaskList {...props} />);
+  await user.click(screen.getByRole("button", { name: /Private draft source/ }));
+  await user.clear(screen.getByRole("textbox", { name: "Title" }));
+  await user.type(screen.getByRole("textbox", { name: "Title" }), "My authored title");
+  await user.clear(screen.getByRole("textbox", { name: "Notes" }));
+  view.rerender(<TaskList {...props} tasks={[{ ...task, title: "Private task", description: null, providerReadRetiredGeneration: 1 }]} />);
+  view.rerender(<TaskList {...props} tasks={[{ ...task, title: "Authorized restored title", description: "Authorized restored notes", providerReadRetiredGeneration: 1 }]} />);
+  expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", "My authored title");
+  expect(screen.getByRole("textbox", { name: "Notes" })).toHaveProperty("value", "");
+  await user.click(screen.getByRole("button", { name: "Save task" }));
+  expect(onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ title: "My authored title", description: null, expectedProviderReadRetiredGeneration: 1 }));
+});
