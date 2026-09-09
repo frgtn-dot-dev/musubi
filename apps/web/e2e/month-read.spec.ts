@@ -9211,3 +9211,61 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }
+
+for (const [width, theme, outcome] of [[1280, "light", "success"], [390, "dark", "success"], [1280, "light", "cancel"], [390, "dark", "escape"]] as const) {
+  test(`Graph create adoption is an explicit local choice: ${theme} ${width} ${outcome}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)") && !message.text().includes("net::ERR_FAILED")) errors.push(message.text()); });
+    const id = "00000000-0000-4000-8000-000000000271", operation = "00000000-0000-4000-8000-000000000272";
+    const saved = event(id, "Original Graph draft", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [saved] });
+    const target = { targetId: "00000000-0000-4000-8000-000000000273", calendarId: "00000000-0000-4000-8000-000000000274", calendarName: "Outlook", provider: "microsoft", connected: true, owned: true, operationId: operation, action: "create", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-26T11:00:00Z", retryAt: null, issue: "conflict" };
+    let adopted = false; const writes: unknown[] = [];
+    const receipt = () => ({ eventId: id, localRevision: adopted ? 2 : 1, targets: [{ ...target, ...(adopted ? { status: "not-needed", issue: null, graphCreateAdopted: true } : {}) }] });
+    await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, receipt()));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/conflict`, route => respond(route, { eventId: id, operationId: operation, latestOperationId: operation, localRevision: 1, action: "create", local: { ...saved, description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=4" }, remote: { ...saved, title: "Current provider family", description: null, location: null, recurrence: "RRULE:FREQ=DAILY;COUNT=3" }, remoteEtag: 'W/"snapshot"', canResolve: true, reason: null, graphCreateAdoption: { stateVersion: "a".repeat(64), occurrenceCount: 3 } }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/resolve`, route => {
+      writes.push(route.request().postDataJSON());
+      if (outcome !== "success") { adopted = true; return route.abort("failed"); }
+      if (writes.length === 1) return respond(route, { error: "Temporary failure" }, 503);
+      adopted = true; return respond(route, receipt());
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Original Graph draft/ }).first().click();
+    await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Review changes", exact: true }); await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Review remote changes", exact: true });
+    await expect(dialog.getByRole("button", { name: "Recreate remote copy" })).toHaveCount(0);
+    await expect(dialog.getByText(/No provider write is sent/)).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.screenshot({ path: `/tmp/musubi-k12-live/graph-adoption-browser-${theme}.png` });
+    expect(writes).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Use provider version" }).press("Enter");
+    if (outcome !== "success") {
+      await expect(dialog.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled();
+      if (outcome === "cancel") await dialog.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+      else await dialog.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+      expect(writes).toHaveLength(1);
+      expect(errors).toEqual([]);
+      return;
+    }
+    await expect(dialog.getByRole("alert")).toContainText("Temporary failure");
+    await dialog.getByRole("button", { name: "Use provider version" }).press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText("Provider version accepted in Musubi. No provider write was sent.", { exact: true })).toBeVisible();
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ kind: "graph-create-adoption", mutationID: expect.any(String), expectedRevision: 1, stateVersion: "a".repeat(64) });
+    await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+    expect(errors).toEqual([]);
+  });
+}

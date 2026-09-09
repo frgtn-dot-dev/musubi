@@ -1,3 +1,8 @@
+import { notifyCalendarMembers } from "./stream";
+import { getCalendarMembers } from "@musubi/db";
+import { prepareGraphCreateAdoption } from "../sync/graph_create_adoption";
+import { adoptGraphCreatedFamily, graphCreateAdoptionReplay } from "@musubi/db";
+import { GraphCreateAdoptionRequestSchema } from "@musubi/types";
 import { discardCaldavAlarm } from "@musubi/db";
 import { z } from "zod";
 import type { Request, Response } from "express";
@@ -48,6 +53,8 @@ export async function handlerGetEventDeliveryConflict(
   const operationID = requireUUID(req.params.operationId, "operationId");
   res.setHeader("Cache-Control", "private, no-store");
   try {
+    const adoption = await prepareGraphCreateAdoption(req.user!.id, eventID, operationID);
+    if (adoption) return res.json(adoption.preview);
     const { preview } = await prepareEventDeliveryResolution(
       req.user!.id,
       eventID,
@@ -67,6 +74,20 @@ export async function handlerGetEventDeliveryConflict(
 export async function handlerResolveEventDelivery(req: Request, res: Response) {
   const eventID = requireUUID(req.params.eventId, "eventId");
   const operationID = requireUUID(req.params.operationId, "operationId");
+  if (req.body?.kind === "graph-create-adoption") {
+    const request = GraphCreateAdoptionRequestSchema.parse(req.body);
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      if (!await graphCreateAdoptionReplay(req.user!.id, eventID, operationID, request)) {
+        const prepared = await prepareGraphCreateAdoption(req.user!.id, eventID, operationID);
+        if (!prepared) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+        await adoptGraphCreatedFamily(prepared.context, prepared.observation, request);
+        // Post-commit refresh only. Delivery retirement must not dispatch a write.
+        void getCalendarMembers(prepared.context.row.calendarID).then(members => notifyCalendarMembers([...new Set([req.user!.id, ...members.map(member => member.userID)])], "external_sync", { calendars: [prepared.context.row.calendarID] })).catch(() => undefined);
+      }
+      return res.json(await getEventDeliveryStatus(req.user!.id, eventID));
+    } catch { return res.status(409).json({ error: "The provider family or saved creation changed. Load a fresh comparison before accepting it." }); }
+  }
   const parsed = ResolveEventDeliveryRequestSchema.safeParse(req.body);
   if (!parsed.success)
     throw new BadRequestError(

@@ -4,7 +4,7 @@ import styles from "./styles/event-delivery.module.css";
 import type {
   EventDeliveryConflict,
   EventDeliveryContent,
-  ResolveEventDeliveryRequest,
+  EventDeliveryResolutionRequest,
 } from "@musubi/types";
 import {
   eventDeliveryActions,
@@ -69,7 +69,7 @@ export function EventDeliveryDialog({
   const [notice, setNotice] = useState("");
   const [comparison, setComparison] = useState<{
     preview: EventDeliveryConflict;
-    request: ResolveEventDeliveryRequest;
+    request: EventDeliveryResolutionRequest;
     trigger: HTMLElement;
   }>();
   const [discard, setDiscard] = useState<{ id: string; revision: number; trigger: HTMLElement }>();
@@ -93,10 +93,11 @@ export function EventDeliveryDialog({
           ? cause.message
           : "Could not reach the server. Try again; the saved operation will keep its identity.",
       );
-      if (discard) {
+      if (discard || comparison?.preview.graphCreateAdoption) {
         await query.refetch();
         refreshed = true;
-        discardReturnFocus.current = refreshRef.current;
+        if (discard) discardReturnFocus.current = refreshRef.current;
+        if (comparison?.preview.graphCreateAdoption) adoptionReturnFocus.current = refreshRef.current;
       }
       if (cause instanceof ApiError && cause.status === 409) {
         setComparison(undefined);
@@ -114,7 +115,9 @@ export function EventDeliveryDialog({
     }
   }
 
+  const adoptionReturnFocus = useRef<HTMLElement | null>(null);
   function review(id: string, trigger: HTMLElement) {
+    adoptionReturnFocus.current = trigger;
     setReviewTarget({ id, trigger });
     void run(async () => {
       const preview = await getEventDeliveryConflict(
@@ -126,7 +129,7 @@ export function EventDeliveryDialog({
       setComparison({
         preview,
         trigger,
-        request: {
+        request: preview.graphCreateAdoption ? { kind: "graph-create-adoption", mutationID: crypto.randomUUID(), expectedRevision: preview.localRevision!, stateVersion: preview.graphCreateAdoption.stateVersion } : {
           mutationId: crypto.randomUUID(),
           expectedLocalRevision: preview.localRevision,
           expectedLatestOperationId: preview.latestOperationId,
@@ -288,11 +291,11 @@ export function EventDeliveryDialog({
             }
           }}
           title="Review remote changes"
-          description={comparison.preview.caldavAlarmResolution ? "Compare the saved event alarm with the current CalDAV event alarm." : comparison.preview.rsvpResolution ? "Compare your saved response with your current response in Google Calendar." : comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
+          description={comparison.preview.graphCreateAdoption ? "Review the current Outlook family before accepting it into Musubi." : comparison.preview.caldavAlarmResolution ? "Compare the saved event alarm with the current CalDAV event alarm." : comparison.preview.rsvpResolution ? "Compare your saved response with your current response in Google Calendar." : comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
           closeLabel="Close comparison"
-          returnFocus={comparison.trigger}
+          returnFocus={comparison.preview.graphCreateAdoption ? adoptionReturnFocus : comparison.trigger}
           confirmLabel={
-            comparison.preview.caldavAlarmResolution ? "Apply saved event alarm" : comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
+            comparison.preview.graphCreateAdoption ? "Use provider version" : comparison.preview.caldavAlarmResolution ? "Apply saved event alarm" : comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
               ? "Delete remote copy"
               : comparison.preview.action === "create"
                 ? "Recreate remote copy"
@@ -308,16 +311,18 @@ export function EventDeliveryDialog({
                 comparison.request,
                 connectionId,
               );
+              if (comparison.preview.graphCreateAdoption) { await query.refetch(); adoptionReturnFocus.current = refreshRef.current; }
               setComparison(undefined);
               setReviewTarget(undefined);
               setNotice(
-                comparison.preview.rsvpResolution ? "Saved response queued. Google confirmation is still pending; email delivery cannot be verified." : "Saved changes queued. Provider confirmation is still pending.",
+                comparison.preview.graphCreateAdoption ? "Provider version accepted in Musubi. No provider write was sent." : comparison.preview.rsvpResolution ? "Saved response queued. Google confirmation is still pending; email delivery cannot be verified." : "Saved changes queued. Provider confirmation is still pending.",
               );
+              return comparison.preview.graphCreateAdoption ? true : undefined;
             })
           }
         >
           <ConfirmationNotice icon={<AlertTriangle size={18} />}>
-            {comparison.preview.caldavAlarmResolution ? "This replaces only the supported alarm on the CalDAV event. Calendar apps deliver this alarm; Musubi reminders are separate and both may notify you." : comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "This removes the selected occurrence and all later occurrences from the remote series. Earlier occurrences remain. The saved deletion in Musubi remains." : comparison.preview.scopeResolution.kind === "following-create" ? "The earlier series is already saved. This finishes only the saved future series at its original destination. If the complete future series is already present, it is confirmed without another write." : comparison.preview.scopeResolution.kind === "following-update" ? "This applies the saved following changes in two steps: shorten the earlier series, then create the saved future series. Delivery may finish one step at a time; retry keeps the same future series identity." : "This removes the entire remote series, including all occurrences and exceptions. The saved deletion in Musubi remains.") : comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
+            {comparison.preview.graphCreateAdoption ? "This replaces the local draft with the observed provider family. The original request remains in history. No provider write is sent." : comparison.preview.caldavAlarmResolution ? "This replaces only the supported alarm on the CalDAV event. Calendar apps deliver this alarm; Musubi reminders are separate and both may notify you." : comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "This removes the selected occurrence and all later occurrences from the remote series. Earlier occurrences remain. The saved deletion in Musubi remains." : comparison.preview.scopeResolution.kind === "following-create" ? "The earlier series is already saved. This finishes only the saved future series at its original destination. If the complete future series is already present, it is confirmed without another write." : comparison.preview.scopeResolution.kind === "following-update" ? "This applies the saved following changes in two steps: shorten the earlier series, then create the saved future series. Delivery may finish one step at a time; retry keeps the same future series identity." : "This removes the entire remote series, including all occurrences and exceptions. The saved deletion in Musubi remains.") : comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
               ? "This removes the remote copy. The saved deletion in Musubi remains."
               : "This applies the saved version to the remote copy. Remote differences may be replaced; unsaved form edits are not sent."}
           </ConfirmationNotice>

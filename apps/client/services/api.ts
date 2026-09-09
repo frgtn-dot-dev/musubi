@@ -11,7 +11,7 @@ import {
   EventDeliverySchema,
   EventDeliveryInboxSchema,
   EventDeliveryConflictSchema,
-  type ResolveEventDeliveryRequest,
+  type EventDeliveryResolutionRequest,
   eventCreateOperation,
   type EventWriteRequest,
   EventScopeResponseSchema,
@@ -198,7 +198,7 @@ export function useApi() {
     async retryEventDelivery(eventId: string, operationId: string, connectionId?: string) {
       return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/retry`, connectionId, {}));
     },
-    async resolveEventDelivery(eventId: string, operationId: string, request: ResolveEventDeliveryRequest, connectionId?: string) {
+    async resolveEventDelivery(eventId: string, operationId: string, request: EventDeliveryResolutionRequest, connectionId?: string) {
       return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/resolve`, connectionId, request));
     },
     async createCalendar(calendar: Calendar) {

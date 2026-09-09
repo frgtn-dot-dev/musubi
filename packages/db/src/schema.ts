@@ -896,6 +896,7 @@ export const eventOutbox = pgTable(
         caldavAlarm?: import("./queries/caldav-alarms").CaldavAlarmIntent;
         caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
         graphSeriesCreate?: GraphSeriesCreateJournal;
+        graphCreateAdoption?: import("@musubi/types").GraphCreateAdoptionRecord;
         createIdentityVersion?: 1;
         resolution?: {
           operationID: string;

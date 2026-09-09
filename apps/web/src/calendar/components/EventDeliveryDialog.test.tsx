@@ -623,3 +623,23 @@ it("returns focus after cancelling a lost discard response whose refreshed recei
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discard saved alarm change" })).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh status" })));
 });
+it("explicitly adopts a provider family locally and preserves the preview on retry", async () => {
+  const bodies: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/conflict")) return json({ ...preview, action: "create", graphCreateAdoption: { stateVersion: "a".repeat(64), occurrenceCount: 3 } });
+    if (url.endsWith("/resolve")) { bodies.push(JSON.parse(String(init?.body))); return bodies.length === 1 ? json({ error: "offline" }, 503) : json(receipt); }
+    return json({ ...receipt, targets: [{ ...target, provider: "microsoft", action: "create" }] });
+  }));
+  mount(); await screen.findByText(/Remote changes need review/);
+  fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+  const dialog = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(dialog).queryByRole("button", { name: "Recreate remote copy" })).toBeNull();
+  expect(within(dialog).getByText(/No provider write is sent/)).toBeTruthy();
+  expect(bodies).toHaveLength(0);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Use provider version" }));
+  await within(dialog).findByText(/offline/);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Use provider version" }));
+  await screen.findByText(/Provider version accepted in Musubi. No provider write was sent/);
+  expect(bodies[1]).toEqual(bodies[0]);
+  expect(bodies[0]).toEqual({ kind: "graph-create-adoption", mutationID: expect.any(String), expectedRevision: 2, stateVersion: "a".repeat(64) });
+});

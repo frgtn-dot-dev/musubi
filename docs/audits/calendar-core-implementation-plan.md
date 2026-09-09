@@ -826,3 +826,11 @@ endpoints při pull před ACK. Organizer delivery zůstává unknown. Graph RSVP
 organizer create/update/cancel, širší recurrence/identity a živá dvouúčtová
 acceptance zůstávají otevřené. [Kontrakt](../sync/caldav-rsvp.md). Flagy,
 minimální klientské verze ani release verze se nemění.
+
+**K12 Graph create konflikt — explicitní lokální převzetí:** vlastník může
+potvrdit jedinečnou aktuální osobní finite family pod původním transactionId.
+`Use provider version` zachová původní intent, nepřidá POST/PATCH a atomicky
+přijme ověřený master i úplnou rodinu, teprve poté uvolní pending-import fence.
+Stale preview, změněná historie/zdroj, neúplná či duplicitní family, meetings,
+exceptions/cancellations a nepodporovaná recurrence se odmítají. Nejde o remote
+family CAS ani organizer delivery proof. [Kontrakt](../sync/graph-create-adoption.md).

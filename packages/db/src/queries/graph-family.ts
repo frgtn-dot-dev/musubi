@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { config } from "@musubi/config";
+import { GraphCreateAdoptionRequestSchema, GraphCreateAdoptionRecordSchema, type GraphCreateAdoptionRequest } from "@musubi/types";
+import { readGraphCreateAdoptionContextInTransaction, type GraphCreateAdoptionContext } from "./graph-series-create";
 import { ZodError } from "zod";
 import { lockExternalEventIdentity } from "./event-outbox-deletions";
 import { readGraphSeriesCreateOutboxInTransaction, graphSeriesCreateProjection, assertNoPendingGraphSeriesCreate } from "./graph-series-create";
@@ -205,28 +209,7 @@ export async function completeGraphSeriesCreateOutbox(id: string, token: string,
     if (!creation) return false;
     const { row, event, link } = creation;
     const expected = graphSeriesCreateProjection(row.payload.event, row.userID);
-    const master = observation.master;
-    const personal = (value: Active | GraphFamilyObservation["master"], type: string) => {
-      const state = ProviderEventStateSchema.parse(value.providerState);
-      return state.provider === "microsoft" && state.isOrganizer === true && state.attendeesComplete && state.attendees.length === 0 && state.status === "active" && state.eventType === type && state.conferenceURLs.length === 0 &&
-        !!state.organizer?.address && value.values.organizer === state.organizer.address;
-    };
-    const content = (values: Values) => ({ title: values.title, description: values.description || null, location: values.location || null, organizer: values.organizer, url: values.url || null });
-    if (master.creationOperationID !== row.id || !master.externalID || !master.icalUid || !personal(master, "seriesMaster") || observation.cancelled.length ||
-        !same(content(master.values), content({ ...master.values, title: expected.title, description: expected.description ?? null, location: expected.location ?? null, url: null })) ||
-        !same({ start: master.values.start, end: master.values.end, isAllDay: master.values.isAllDay, timeModel: master.values.timeModel }, { start: expected.start, end: expected.end, isAllDay: expected.isAllDay, timeModel: expected.timeModel })) refuse();
-    // Compare the complete finite saved footprint, not RRULE string order.
-    const slots = finiteSeriesFootprint(expected);
-    const byOriginal = new Map(slots.map(slot => [key(slot.originalStart), slot]));
-    if (observation.instances.length !== slots.length || !slots.length) refuse();
-    const originals = new Set<string>(), ids = new Set([master.externalID]), uids = new Set([master.icalUid]);
-    for (const instance of observation.instances) {
-      const original = key(instance.originalStart), slot = byOriginal.get(original);
-      if (!slot || originals.has(original) || !instance.externalID || ids.has(instance.externalID) || !instance.icalUid || uids.has(instance.icalUid) ||
-          !personal(instance, "occurrence") || !same(content(instance.values), content(master.values)) ||
-          !same({ start: instance.values.start, end: instance.values.end, isAllDay: instance.values.isAllDay, timeModel: instance.values.timeModel }, { start: slot.start, end: slot.end, isAllDay: slot.isAllDay, timeModel: slot.timeModel })) refuse();
-      originals.add(original); ids.add(instance.externalID); uids.add(instance.icalUid);
-    }
+    const { master, ids } = validatePlainGraphCreation(observation, expected, row.id);
     for (const nativeID of [...ids].sort()) await lockExternalEventIdentity(tx, link.id, nativeID);
     const deleted = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, link.id), inArray(externalEventTombstones.externalEventID, [...ids]))).limit(1);
     const collisions = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, row.calendarID), or(inArray(externalEvents.externalEventID, [...ids]), eq(externalEvents.externalSeriesID, master.externalID)))).limit(1);
@@ -242,4 +225,67 @@ export async function completeGraphSeriesCreateOutbox(id: string, token: string,
     if (error instanceof GraphFamilyChanged || error instanceof EventWriteError || error instanceof ZodError) return false;
     throw new Error("Complete Graph creation could not be acknowledged. Retry reconciliation.");
   });
+}
+
+function validatePlainGraphCreation(observation: GraphFamilyObservation, expected: Event, transactionID: string) {
+    const master = observation.master;
+    const personal = (value: Active | GraphFamilyObservation["master"], type: string) => {
+      const state = ProviderEventStateSchema.parse(value.providerState);
+      return state.provider === "microsoft" && state.isOrganizer === true && state.attendeesComplete && state.attendees.length === 0 && state.status === "active" && state.eventType === type && state.conferenceURLs.length === 0 &&
+        !!state.organizer?.address && value.values.organizer === state.organizer.address;
+    };
+    const content = (values: Values) => ({ title: values.title, description: values.description || null, location: values.location || null, organizer: values.organizer, url: values.url || null });
+    if (master.creationOperationID !== transactionID || !master.externalID || !master.icalUid || !personal(master, "seriesMaster") || observation.cancelled.length ||
+        !same(content(master.values), content({ ...master.values, title: expected.title, description: expected.description ?? null, location: expected.location ?? null, url: null })) ||
+        !same({ start: master.values.start, end: master.values.end, isAllDay: master.values.isAllDay, timeModel: master.values.timeModel }, { start: expected.start, end: expected.end, isAllDay: expected.isAllDay, timeModel: expected.timeModel })) refuse();
+    // Compare the complete finite saved footprint, not RRULE string order.
+    const slots = finiteSeriesFootprint(expected);
+    const byOriginal = new Map(slots.map(slot => [key(slot.originalStart), slot]));
+    if (observation.instances.length !== slots.length || !slots.length) refuse();
+    const originals = new Set<string>(), ids = new Set([master.externalID]), uids = new Set([master.icalUid]);
+    for (const instance of observation.instances) {
+      const original = key(instance.originalStart), slot = byOriginal.get(original);
+      if (!slot || originals.has(original) || !instance.externalID || ids.has(instance.externalID) || !instance.icalUid || uids.has(instance.icalUid) ||
+          !personal(instance, "occurrence") || !same(content(instance.values), content(master.values)) ||
+          !same({ start: instance.values.start, end: instance.values.end, isAllDay: instance.values.isAllDay, timeModel: instance.values.timeModel }, { start: slot.start, end: slot.end, isAllDay: slot.isAllDay, timeModel: slot.timeModel })) refuse();
+      originals.add(original); ids.add(instance.externalID); uids.add(instance.icalUid);
+    }
+    return { master, ids };
+}
+
+/** Local preview comparison only; Graph has no atomic whole-family read CAS. */
+export function graphCreateAdoptionVersion(context: GraphCreateAdoptionContext, observation: GraphFamilyObservation) {
+  return createHash("sha256").update(JSON.stringify(canonical({ context, observation }))).digest("hex");
+}
+export function validateGraphCreateAdoptionObservation(context: GraphCreateAdoptionContext, observation: GraphFamilyObservation) {
+  const expected = graphSeriesCreateProjection({ ...context.row.payload.event, ...observation.master.values, organizer: context.row.userID }, context.row.userID);
+  return validatePlainGraphCreation(observation, expected, context.row.id);
+}
+export async function adoptGraphCreatedFamily(context: GraphCreateAdoptionContext, observation: GraphFamilyObservation, input: GraphCreateAdoptionRequest) {
+  const request = GraphCreateAdoptionRequestSchema.parse(input);
+  if (!config.api.eventTimeEditsEnabled) refuse();
+  return db.transaction(async tx => {
+    const current = await readGraphCreateAdoptionContextInTransaction(tx, context.row.userID, context.row.eventID, context.row.id);
+    if (!current || !same(current, context) || request.expectedRevision !== current.event.revision || request.stateVersion !== graphCreateAdoptionVersion(current, observation)) refuse();
+    const { row, event, link } = current;
+    const { master, ids } = validateGraphCreateAdoptionObservation(current, observation);
+    for (const nativeID of [...ids].sort()) await lockExternalEventIdentity(tx, link.id, nativeID);
+    const deleted = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, link.id), inArray(externalEventTombstones.externalEventID, [...ids]))).limit(1);
+    const collisions = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, row.calendarID), or(inArray(externalEvents.externalEventID, [...ids]), eq(externalEvents.externalSeriesID, master.externalID)))).limit(1);
+    if (deleted.length || collisions.length) refuse();
+    await tx.insert(externalEvents).values({ provider: "microsoft", calendarID: row.calendarID, eventID: event.id, externalCalendarID: link.externalCalendarID, externalEventID: master.externalID, icalUid: master.icalUid });
+    const family = await accepted(tx, { userID: row.userID, accountID: row.accountID, calendarID: row.calendarID, externalMasterID: master.externalID }, row.id);
+    await replaceGraphFamilyInTransaction(tx, family, observation, row.id);
+    const [adopted] = await tx.select({ revision: events.revision }).from(events).where(eq(events.id, event.id));
+    const marker = GraphCreateAdoptionRecordSchema.parse({ kind: "graph-create-adoption", version: 1, request, acceptedRevision: adopted!.revision, externalMasterID: master.externalID });
+    await tx.update(eventOutbox).set({ status: "not-needed", errorCode: "adopted-provider-version", payload: { ...row.payload, graphCreateAdoption: marker }, resultRef: { externalEventId: master.externalID, icalUid: master.icalUid, etag: master.etag }, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(eq(eventOutbox.id, row.id));
+  });
+}
+export async function graphCreateAdoptionReplay(actorID: string, eventID: string, id: string, input: GraphCreateAdoptionRequest) {
+  const request = GraphCreateAdoptionRequestSchema.parse(input);
+  const [row] = await db.select().from(eventOutbox).where(and(eq(eventOutbox.id, id), eq(eventOutbox.eventID, eventID), eq(eventOutbox.actorID, actorID), eq(eventOutbox.userID, actorID)));
+  if (!row?.payload.graphCreateAdoption) return false;
+  const marker = GraphCreateAdoptionRecordSchema.parse(row.payload.graphCreateAdoption);
+  if (row.status !== "not-needed" || row.errorCode !== "adopted-provider-version" || !same(marker.request, request)) refuse();
+  return true;
 }
