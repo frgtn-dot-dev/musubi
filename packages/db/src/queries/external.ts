@@ -767,11 +767,24 @@ async function upsertExternalEventInTransaction(
   providerOccurrence?: ProviderOccurrence,
   providerState?: ProviderEventState,
   reminderTimeEvidence?: EventTimeModel,
+  sourceSeriesID?: string,
 ): Promise<boolean> {
     const state = providerState === undefined ? undefined : ProviderEventStateSchema.parse(providerState);
     if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    if (sourceSeriesID !== undefined) {
+      if (provider !== "microsoft" || !sourceSeriesID.trim() || sourceSeriesID.trim() !== sourceSeriesID || sourceSeriesID === externalEventID)
+        throw new Error("Invalid source series address.");
+      const [tracked] = await tx.select({ id: events.id }).from(externalEvents)
+        .innerJoin(events, eq(events.id, externalEvents.eventID))
+        .where(and(eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID), eq(externalEvents.externalCalendarID, externalCalendarID), eq(externalEvents.externalEventID, sourceSeriesID),
+          sql`${events.seriesID} is null and ${events.recurrence} is not null and ${events.recurrence} <> '' and ${events.timeModel}->>'kind' in ('zoned', 'all-day')`)).limit(1);
+      // The calendar shared lifecycle lock serializes this check with complete
+      // family acceptance. Do not create a standalone echo of its native child.
+      if (tracked) return false;
+    }
+
     if (!deferFamilyValidation) await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID);
     const expandedIdentity = providerOccurrence ? {
       externalSeriesID: providerOccurrence.externalSeriesID,

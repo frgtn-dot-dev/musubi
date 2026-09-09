@@ -375,6 +375,7 @@ export async function syncProvider(
             event.providerOccurrence,
             event.providerState,
             event.reminderTimeEvidence,
+            event.sourceSeriesID,
           ),
         upsertTask: (task) =>
           upsertExternalTask(
