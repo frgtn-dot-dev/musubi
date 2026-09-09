@@ -678,7 +678,7 @@ export async function replaceExternalEventResource(
     // the same accepted resource version after its mappings have been removed.
     const [deletedVersion] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
       eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalEventID, resourceID),
-      eq(eventOutbox.status, "completed"), sql`((${eventOutbox.action} = 'delete' and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null) or (${eventOutbox.action} = 'update' and ${eventOutbox.payload}->'caldavSeries'->'write'->'followingDelete' is not null))`,
+      eq(eventOutbox.status, "completed"), sql`((${eventOutbox.action} = 'delete' and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null) or (${eventOutbox.action} = 'update' and (${eventOutbox.payload}->'caldavSeries'->'write'->'followingDelete' is not null or ${eventOutbox.payload}->'caldavSplit' is not null)))`,
       ...(master.etag ? [eq(eventOutbox.expectedEtag, master.etag)] : []),
     )).limit(1);
     if (deletedVersion) return false;

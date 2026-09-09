@@ -54,20 +54,27 @@ export function caldavSplitPlan(prepared: CaldavSplitPrepared) {
   return plan;
 }
 
-/** Called after the local planner saves both families in the same transaction.
- * The second row depends on the first across event IDs, not just timestamps. */
-export async function appendCaldavSplit(tx: DbTransaction, actorID: string, operationID: string, prepared: CaldavSplitPrepared, saved: Event[]) {
+/** Exact post-commit revisions and identities, independent of persisted JSON. */
+export function caldavSplitAfter(prepared: CaldavSplitPrepared): CaldavSplitJournal["after"] {
   const plan = caldavSplitPlan(prepared);
   const { context, split } = prepared;
-  const expected = [...plan.creates, ...plan.updates].map(event => EventSchema.parse({ ...event, revision: event.id === split.creation.master.id ? 1 : [context.master, ...context.children].find(item => item.id === event.id)!.revision! + 1 }));
-  if (actorID !== context.link.userID || operationID !== split.request.operationID || saved.length !== expected.length ||
-      expected.some(event => !sameCaldavScopeContext(event, saved.find(item => item.id === event.id)))) refuse();
-  const after = {
+  const saved = [...plan.creates, ...plan.updates].map(event => EventSchema.parse({ ...event, revision: event.id === split.creation.master.id ? 1 : [context.master, ...context.children].find(item => item.id === event.id)!.revision! + 1 }));
+  return {
     source: saved.find(item => item.id === context.master.id)!,
     retained: context.children.filter(item => !split.creation.children.some(child => child.id === item.id)),
     head: saved.find(item => item.id === split.creation.master.id)!,
     moved: split.creation.children.map(child => saved.find(item => item.id === child.id)!),
   };
+}
+
+/** Called after the local planner saves both families in the same transaction.
+ * The second row depends on the first across event IDs, not just timestamps. */
+export async function appendCaldavSplit(tx: DbTransaction, actorID: string, operationID: string, prepared: CaldavSplitPrepared, saved: Event[]) {
+  const { context, split } = prepared;
+  const after = caldavSplitAfter(prepared);
+  const expected = [after.source, after.head, ...after.moved];
+  if (actorID !== context.link.userID || operationID !== split.request.operationID || saved.length !== expected.length ||
+      expected.some(event => !sameCaldavScopeContext(event, saved.find(item => item.id === event.id)))) refuse();
   // Sharing a UUID with the new event makes the existing unmapped-delete URL
   // fence recognize this create before any mapping can exist.
   const journal: CaldavSplitJournal = { prepared, after, sourceOperationID: randomUUID(), creationOperationID: after.head.id };
