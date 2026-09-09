@@ -59,6 +59,7 @@ async function resolutionContext(
   userID: string,
   eventID: string,
   operationID: string,
+  lockDestination = false,
 ) {
   const [row] = await tx
     .select()
@@ -71,7 +72,7 @@ async function resolutionContext(
       ),
     );
   if (!row) throw new NotFoundError("Delivery operation not found.");
-  await assertEventDeliveryDestination(tx, row, userID);
+  await assertEventDeliveryDestination(tx, row, userID, lockDestination);
   const target = and(
     eq(eventOutbox.eventID, eventID),
     eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID),
@@ -456,7 +457,7 @@ export async function commitEventDeliveryResolution(
         )
         .orderBy(eventOutbox.id)
         .for("update");
-      const current = await resolutionContext(tx, userID, row.eventID, row.id);
+      const current = await resolutionContext(tx, userID, row.eventID, row.id, true);
       // A retry/pull can change uncertainty without changing the local revision
       // or latest operation ID. In particular, never replace a newly ambiguous
       // create with another identity based on an earlier absence observation.

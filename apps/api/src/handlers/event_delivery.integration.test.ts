@@ -413,6 +413,15 @@ async function main() {
           .where(eq(eventOutbox.id, retryJob.id))
       )[0];
     const beforeRetry = await storedRetry();
+    await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, google.calendar.id), eq(calendarMembers.userID, owner.id)));
+    const beforeReadOnlyRetry = await storedRetry();
+    const readOnlyRetry = await retry(owner, value.id, retryJob.id);
+    assert.equal(readOnlyRetry.status, 409, "The connected account's current viewer role cannot readmit an old write");
+    assert.equal(readOnlyRetry.body.code, "delivery-destination-unavailable");
+    assert.deepEqual(await storedRetry(), beforeReadOnlyRetry);
+    assert.equal((await read(owner, value.id)).status, 200, "Loss of write access does not hide the delivery receipt");
+    await db.update(calendarMembers).set({ role: "owner" }).where(and(eq(calendarMembers.calendarID, google.calendar.id), eq(calendarMembers.userID, owner.id)));
+
     for (const [code, issue] of [
       ["provider-reconnect-required", "reconnect-required"],
       ["provider-write-denied", "write-denied"],

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { NotFoundError } from "@musubi/types";
 import { db } from "..";
 import {
@@ -31,8 +31,9 @@ export async function assertEventDeliveryDestination(
   tx: DbTransaction,
   row: EventOutboxRow,
   userID: string,
+  lock = false,
 ) {
-  const [destination] = await tx
+  const query = tx
     .select({ id: externalCalendars.id })
     .from(externalCalendars)
     .innerJoin(calendars, eq(calendars.id, externalCalendars.calendarID))
@@ -54,8 +55,12 @@ export async function assertEventDeliveryDestination(
         eq(externalCalendars.externalCalendarID, row.externalCalendarID),
         eq(externalCalendars.disabled, false),
         eq(externalCalendars.supportsEvents, true),
+        inArray(calendarMembers.role, ["owner", "editor"]),
       ),
     );
+  // Read-only preview transactions cannot lock. Mutating callers hold the
+  // grant through admission so a concurrent downgrade cannot slip past it.
+  const [destination] = lock ? await query.for("share", { of: [calendarMembers, externalCalendars] }) : await query;
   if (!destination || row.userID !== userID)
     throw new EventDeliveryRetryError("delivery-destination-unavailable");
 }
@@ -90,7 +95,7 @@ export async function requestEventDeliveryRetry(
       .where(owned)
       .for("update");
     if (!row) throw new NotFoundError("Delivery operation not found.");
-    await assertEventDeliveryDestination(tx, row, userID);
+    await assertEventDeliveryDestination(tx, row, userID, true);
     if (row.status === "cancelled")
       throw new EventDeliveryRetryError("delivery-destination-unavailable");
     if (
