@@ -105,7 +105,7 @@ export async function handlerCreateTask(req: Request, res: Response) {
     creatorID: req.user!.id,
   });
   await pushTaskToCalendar(task, "create");
-  res.status(201).json(task);
+  res.status(201).json(await getUserTask(req.user!.id, task.id));
 }
 
 export async function handlerUpdateTask(req: Request, res: Response) {
@@ -121,10 +121,10 @@ export async function handlerUpdateTask(req: Request, res: Response) {
       "Moving tasks between calendars is not supported yet...",
     );
   }
-  const task = await updateTask(taskID, toMutation(input));
-  if (!task) throw new NotFoundError("Task not found...");
+  const task = await updateTask(taskID, toMutation(input), input.expectedProviderReadRetiredGeneration ?? 0);
+  if (!task) return res.status(409).json({ error: "The task or its source access changed. Refresh before saving; your changes have not been saved.", code: "task-source-changed" });
   await pushTaskToCalendar(task, "update");
-  res.status(200).json(task);
+  res.status(200).json(await getUserTask(req.user!.id, taskID));
 }
 
 export async function handlerRemoveTask(req: Request, res: Response) {

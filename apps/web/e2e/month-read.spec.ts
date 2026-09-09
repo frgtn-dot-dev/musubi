@@ -8901,7 +8901,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
   }
 }
 
-for (const provider of ["google", "microsoft"] as const) {
+for (const provider of ["google", "microsoft", "caldav"] as const) {
 for (const mode of ["compact", "generated", "full"] as const) {
   test(`${provider} editor privacy refresh preserves typed deltas (${mode})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: mode === "generated" ? 390 : 1280, height: 900 });
@@ -8944,8 +8944,8 @@ for (const mode of ["compact", "generated", "full"] as const) {
     const emit = () => page.evaluate(() => {
       (window as unknown as { privacyStream: { onmessage: (event: { data: string }) => void } }).privacyStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) });
     });
-    current = { ...current, title: provider === "microsoft" ? "Public permitted title" : "Busy", description: null, location: null, url: null, organizer: "", revision: 3, providerReadRetiredRevision: 2 };
-    source = { ...source, role: provider === "microsoft" ? "owner" : "viewer" };
+    current = { ...current, title: provider !== "google" ? "Public permitted title" : "Busy", description: null, location: null, url: null, organizer: "", revision: 3, providerReadRetiredRevision: 2 };
+    source = { ...source, role: provider !== "google" ? "owner" : "viewer" };
     await emit();
     if (provider === "google") {
       await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
@@ -8962,7 +8962,7 @@ for (const mode of ["compact", "generated", "full"] as const) {
     await page.screenshot({ path: testInfo.outputPath(`${provider}-editor-${mode}.png`), fullPage: false });
     if (mode !== "full") {
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: provider === "microsoft" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
+      await expect(page.getByRole("button", { name: provider !== "google" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
     }
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
     expect(errors).toEqual([]);
@@ -9656,3 +9656,47 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+
+test("CalDAV task editor retires coalesced baseline and preserves explicit clear", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => {
+    class TaskPrivacyStream {
+      onmessage: ((event: { data: string }) => void) | null = null;
+      readyState = 1;
+      constructor() { (window as unknown as { taskPrivacyStream: TaskPrivacyStream }).taskPrivacyStream = this; }
+      close() { this.readyState = 2; }
+      addEventListener() {}
+      removeEventListener() {}
+    }
+    (window as unknown as { EventSource: unknown }).EventSource = TaskPrivacyStream;
+  });
+  await mockAuthenticatedReads(page, events, [{ ...calendars[0]!, provider: "caldav", supportsTasks: true, role: "owner" }]);
+  let current = { id: "11111111-1111-4111-8111-111111111111", creatorID: "alex", calendarID: "personal", title: "Private task baseline", description: "Private copied notes", status: "needs-action", isAllDay: false, sequence: 3, percentComplete: 0, priority: 0, providerReadRetiredGeneration: null as number | null };
+  await page.route("**/api/v1/tasks", route => respond(route, { tasks: [current] }));
+  const writes: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/tasks/*", route => {
+    writes.push(route.request().postDataJSON());
+    return respond(route, { ...current, ...writes.at(-1) });
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`);
+  await page.getByRole("button", { name: /Private task baseline/ }).click();
+  await page.getByRole("textbox", { name: "Notes", exact: true }).fill("");
+  const emit = () => page.evaluate(() => (window as unknown as { taskPrivacyStream: { onmessage: (event: { data: string }) => void } }).taskPrivacyStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) }));
+  current = { ...current, title: "Fresh permitted task", description: "Fresh copied notes", providerReadRetiredGeneration: 1 };
+  await emit();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Fresh permitted task");
+  await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("");
+  current = { ...current, title: "Second permitted task", description: "Second copied notes", providerReadRetiredGeneration: 2 };
+  await emit();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Second permitted task");
+  await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("caldav-task-retirement.png") });
+  await page.getByRole("button", { name: "Save task", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Edit task" })).toHaveCount(0);
+  expect(writes).toEqual([expect.objectContaining({ title: "Second permitted task", description: null, expectedProviderReadRetiredGeneration: 2 })]);
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

@@ -19,7 +19,7 @@ it("refreshes one-off and generated known-occurrence privacy without rebasing te
 it("requires canonical privacy evidence and retains each explicit field delta", () => {
   expect(privateEditorRefresh(event, { ...event, title: "Busy" }, calendars)).toBeUndefined();
   expect(privateEditorRefresh(event, { ...event, revision: 4, title: "Renamed" }, [{ id: "source", role: "owner", provider: "google" }] as any)).toBeUndefined();
-  expect(privateEditorRefresh(event, redacted, [{ id: "source", role: "viewer", provider: "caldav" }] as any)).toBeUndefined();
+  expect(privateEditorRefresh(event, redacted, [{ id: "source", role: "viewer", provider: "local" }] as any)).toBeUndefined();
   expect(privateEditorRefresh(event, undefined, [])).toBeUndefined();
   expect(privateEditorRefresh(event, undefined, [], true)).toMatchObject({ title: "Busy", revision: 3 });
   expect(refreshedPrivateField("Note", "Note", null)).toBe("");
@@ -56,4 +56,12 @@ it("observes durable retirement even when the Busy response was coalesced", () =
   const current = { ...snapshot, revision: 6, providerReadRetiredRevision: 5, title: "Public", description: null };
   const refreshed = privateEditorRefresh(snapshot, current, [{ id: "c", provider: "microsoft", role: "owner" } as Calendar]);
   expect(refreshed?.title).toBe("Public"); expect(refreshed?.description).toBeNull(); expect(refreshed?.revision).toBe(4);
+});
+
+it("retires coalesced CalDAV copied fields while retaining authored changes", () => {
+  const latest = { ...event, revision: 6, title: "Fresh authorized", description: null, providerReadRetiredRevision: 4 };
+  const refreshed = privateEditorRefresh(event, latest, [{ id: "source", provider: "caldav", role: "owner" }] as Calendar[])!;
+  expect(refreshed.title).toBe("Fresh authorized");
+  expect(refreshedPrivateField("Note", event.description, refreshed.description)).toBe("");
+  expect(refreshedPrivateField("Authored", event.description, refreshed.description)).toBe("Authored");
 });

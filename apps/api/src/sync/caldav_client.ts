@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { assertDavReadResponse, canonicalDavReadXML, requestedDavHrefs, davMultistatus, successfulDavProperty, CALDAV } from "./caldav_properties";
 import { lookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import { config } from "@musubi/config";
@@ -159,11 +161,63 @@ export function createCaldavClient(
 	username: string,
 	password: string,
 ) {
+  const guarded = createGuardedCaldavFetch();
+  const resourceReads = new AsyncLocalStorage<Map<string, string>>();
+  let discoveryFailure: unknown;
+  const verified: typeof globalThis.fetch = async (input, init) => {
+    if (discoveryFailure) throw discoveryFailure;
+    const method = init?.method?.toUpperCase(), headers = new Headers(init?.headers);
+    const body = typeof init?.body === "string" ? init.body : "";
+    const kind = method === "PROPFIND" && body.includes("current-user-principal") ? "principal" : method === "PROPFIND" && body.includes("calendar-home-set") ? "home" : method === "PROPFIND" && headers.get("depth") === "1" ? (body.includes("resourcetype") ? "discovery" : body.includes("getetag") ? "listing" : undefined) : method === "REPORT" && body.includes("calendar-multiget") ? "multiget" : method === "REPORT" && body.includes("sync-collection") ? "sync" : undefined;
+    let response: Response;
+    try { response = await guarded(input, kind === "multiget" ? { ...init, redirect: "error" } : init); } catch (error) {
+      if (kind === "principal" || kind === "home") discoveryFailure = error;
+      throw error;
+    }
+    if (kind) {
+      try {
+      if (response.status !== 207 || response.headers.has("content-range") || !/^(?:application|text)\/(?:[a-z0-9!#$&^_.+-]+\+)?xml(?:\s*;|$)/i.test(response.headers.get("content-type") ?? "")) throw new Error("CalDAV discovery/read was not complete.");
+      const xml = await response.text();
+      assertDavReadResponse(xml, response.url || String(input), kind, kind === "multiget" ? requestedDavHrefs(body) : undefined);
+      if (kind === "multiget") {
+        const resources = resourceReads.getStore();
+        for (const row of davMultistatus(xml, response.url || String(input))) {
+          const data = successfulDavProperty(row, CALDAV, "calendar-data")!;
+          if (resources?.has(row.href)) throw new Error("CalDAV resource appeared twice in one read.");
+          resources?.set(row.href, data.text);
+        }
+      }
+      const originalURL = response.url;
+      response = new Response(canonicalDavReadXML(xml, originalURL || String(input)), { status: response.status, statusText: response.statusText, headers: response.headers });
+      Object.defineProperty(response, "url", { value: originalURL });
+      } catch (error) {
+        // tsdav may catch discovery errors and fall back to the root. Such a
+        // fallback must not turn unproven principal/home data into removals.
+        if (kind === "principal" || kind === "home") discoveryFailure = error;
+        throw error;
+      }
+    }
+    return response;
+  };
 	return createDAVClient({
 		serverUrl,
 		credentials: { username, password },
 		authMethod: "Basic",
 		defaultAccountType: "caldav",
-		fetch: createGuardedCaldavFetch(),
-	});
+		fetch: verified,
+	}).then(client => {
+    const fetchObjects = client.fetchCalendarObjects.bind(client);
+    client.fetchCalendarObjects = parameters => resourceReads.run(new Map(), async () => {
+      const objects = await fetchObjects(parameters);
+      const resources = resourceReads.getStore()!;
+      // Use the validated namespace-preserving scalar, not tsdav's trimmed text.
+      // The map belongs to this read only, including concurrent calls.
+      return objects.map(object => {
+        const data = resources.get(object.url);
+        if (data === undefined) throw new Error("CalDAV resource lacks a validated complete body.");
+        return { ...object, data };
+      });
+    });
+    return client;
+  });
 }

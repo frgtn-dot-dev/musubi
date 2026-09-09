@@ -1,17 +1,17 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "..";
-import { account, calendarEvents, calendarMembers, events, externalCalendars } from "../schema";
+import { account, caldavAccounts, calendarEvents, calendarMembers, events, externalCalendars } from "../schema";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { lockCalendarRemovalEvents, removeCalendarInTransaction } from "./calendars";
 import { redactGoogleCalendarMirror } from "./external-access-redaction";
 
-/** Only call after authoritative Google Events discovery completes. Candidates
+/** Only call after authoritative provider collection discovery completes. Candidates
  * carry the source identity observed by that discovery's reconciliation pass. */
 export async function removeGoogleCalendarMirrors(
   userID: string,
   accountID: string,
   candidates: { sourceID: string; calendarID: string; externalCalendarID: string }[],
-  provider: "google" | "microsoft" = "google",
+  provider: "google" | "microsoft" | "caldav" = "google",
 ) {
   if (!candidates.length) return { calendarIDs: [], userIDs: [] };
   return db.transaction(async tx => {
@@ -19,8 +19,8 @@ export async function removeGoogleCalendarMirrors(
     const sources = await tx.select().from(externalCalendars).where(and(
       eq(externalCalendars.provider, provider), eq(externalCalendars.userID, userID),
       eq(externalCalendars.accountID, accountID), eq(externalCalendars.disabled, false),
-      eq(externalCalendars.supportsEvents, true),
-      sql`exists (select 1 from ${account} where ${account.userId} = ${userID}
+      provider === "caldav" ? undefined : eq(externalCalendars.supportsEvents, true),
+      provider === "caldav" ? sql`exists (select 1 from ${caldavAccounts} where ${caldavAccounts.id}::text = ${accountID} and ${caldavAccounts.userID} = ${userID})` : sql`exists (select 1 from ${account} where ${account.userId} = ${userID}
         and ${account.providerId} = ${provider} and ${account.accountId} = ${accountID}
         and ${account.syncStatus} = 'active')`,
       or(...candidates.map(source => and(eq(externalCalendars.id, source.sourceID),

@@ -36,8 +36,12 @@ export async function reconcileGoogleCalendarAccess(userID: string, accountID: s
 export async function assertExternalCalendarAccess(tx: DbTransaction, provider: string, calendarID: string, context?: ExternalCalendarAccessContext) {
   if (!context) return;
   if (!["google", "caldav", "microsoft"].includes(provider) || (context.provider ?? "google") !== provider || !Number.isSafeInteger(context.revision) || context.revision < (provider === "caldav" ? 0 : 1)) throw new Error("Invalid calendar access context.");
-  const [source] = await tx.select({ id: externalCalendars.id, role: externalCalendars.providerAccessRole }).from(externalCalendars).where(and(eq(externalCalendars.id, context.linkID), eq(externalCalendars.provider, provider), eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.userID, context.userID), eq(externalCalendars.accountID, context.accountID), eq(externalCalendars.externalCalendarID, context.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true), eq(externalCalendars.providerAccessRevision, context.revision)));
+  const [source] = await tx.select({ id: externalCalendars.id, role: externalCalendars.providerAccessRole }).from(externalCalendars).where(and(eq(externalCalendars.id, context.linkID), eq(externalCalendars.provider, provider), eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.userID, context.userID), eq(externalCalendars.accountID, context.accountID), eq(externalCalendars.externalCalendarID, context.externalCalendarID), eq(externalCalendars.disabled, false), (provider === "caldav" ? sql`(${externalCalendars.supportsEvents} or ${externalCalendars.supportsTasks})` : eq(externalCalendars.supportsEvents, true)), eq(externalCalendars.providerAccessRevision, context.revision)));
   if (!source) throw new Error("Calendar access changed during sync. Retry with fresh discovery.");
+  if (provider === "caldav") {
+    const [membership] = await tx.select({ id: calendarMembers.id }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, calendarID), eq(calendarMembers.userID, context.userID), sql`exists (select 1 from caldav_accounts account where account.id::text = ${context.accountID} and account.user_id = ${context.userID})`));
+    if (!membership || source.role?.startsWith("caldav:read=no;")) throw new Error("CalDAV read access is unavailable.");
+  }
   return source;
 }
 

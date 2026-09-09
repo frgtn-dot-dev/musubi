@@ -1,15 +1,22 @@
 import { markGooglePersonalReadRedaction } from "./google-personal-read-recovery";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { calendarEvents, calendars, events, externalEvents, pendingNotifications } from "../schema";
+import { calendarEvents, calendars, events, externalEvents, externalTasks, tasks, pendingNotifications } from "../schema";
 import type { DbTransaction } from "./calendars";
 
 /** Under the source calendar's exclusive lifecycle fence. Keep native identity,
  * temporal meaning and private pending intents; retire only the readable mirror.
  * Refresh must establish what the narrower native grant still allows reading. */
-export async function redactGoogleCalendarMirror(tx: DbTransaction, calendarID: string, userID: string, sourceID: string, provider: "google" | "microsoft" = "google") {
+export async function redactGoogleCalendarMirror(tx: DbTransaction, calendarID: string, userID: string, sourceID: string, provider: "google" | "microsoft" | "caldav" = "google") {
   const [calendar] = await tx.select({ color: calendars.color }).from(calendars).where(eq(calendars.id, calendarID));
   if (!calendar) throw new Error("Calendar access source changed.");
-  const rows = await tx.select().from(events).where(and(eq(events.originCalendarID, calendarID), eq(events.creatorID, userID), sql`exists (select 1 from ${externalEvents} where (${externalEvents.eventID} = ${events.id} or (${provider} = 'microsoft' and ${externalEvents.eventID} = ${events.seriesID})) and ${externalEvents.calendarID} = ${calendarID} and ${externalEvents.provider} = ${provider})`)).orderBy(events.id).for("update");
+  const rows = await tx.select().from(events).where(and(eq(events.originCalendarID, calendarID), eq(events.creatorID, userID), sql`exists (select 1 from ${externalEvents} where (${externalEvents.eventID} = ${events.id} or (${provider} in ('microsoft', 'caldav') and ${externalEvents.eventID} = ${events.seriesID})) and ${externalEvents.calendarID} = ${calendarID} and ${externalEvents.provider} = ${provider})`)).orderBy(events.id).for("update");
+  if (provider === "caldav") {
+    const taskIDs = await tx.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.calendarID, calendarID), sql`exists (select 1 from ${externalTasks} where ${externalTasks.taskID} = ${tasks.id} and ${externalTasks.provider} = 'caldav' and ${externalTasks.calendarID} = ${calendarID})`)).orderBy(tasks.id).for("update");
+    if (taskIDs.length) {
+      await tx.update(tasks).set({ title: "Private task", description: null, url: null, relatedTo: null, providerReadRetiredGeneration: sql`coalesce(${tasks.providerReadRetiredGeneration}, 0) + 1` }).where(inArray(tasks.id, taskIDs.map(task => task.id)));
+      await tx.update(externalTasks).set({ etag: null }).where(and(eq(externalTasks.provider, "caldav"), eq(externalTasks.calendarID, calendarID), inArray(externalTasks.taskID, taskIDs.map(task => task.id))));
+    }
+  }
   if (!rows.length) return [calendarID];
   if (provider === "google") for (const row of rows) await markGooglePersonalReadRedaction(tx, row, sourceID);
   const ids = rows.map(row => row.id);

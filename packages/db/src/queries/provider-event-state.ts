@@ -1,6 +1,6 @@
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { providerStateVersion } from "./provider-reminders";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { GoogleReminderWriteSchema, ProviderEventStateSchema, type ProviderEventStateResponse } from "@musubi/types";
 import { db } from "..";
 import { calendarEvents, calendarMembers, events, externalCalendars, externalEvents } from "../schema";
@@ -13,7 +13,11 @@ export async function getOwnProviderEventObservation(actorID: string, eventID: s
     .innerJoin(calendarEvents, and(eq(calendarEvents.eventID, events.id), eq(calendarEvents.calendarID, externalEvents.calendarID)))
     .innerJoin(calendarMembers, and(eq(calendarMembers.calendarID, calendarEvents.calendarID), eq(calendarMembers.userID, actorID)))
     .innerJoin(externalCalendars, and(eq(externalCalendars.calendarID, externalEvents.calendarID), eq(externalCalendars.provider, externalEvents.provider), eq(externalCalendars.userID, actorID), eq(externalCalendars.externalCalendarID, externalEvents.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true)))
-    .where(eq(events.id, eventID));
+    .where(and(eq(events.id, eventID), sql`(${externalEvents.provider} <> 'caldav' or (
+      ${externalEvents.readRedactionRevision} is null
+      and (${externalCalendars.providerAccessRole} is null or ${externalCalendars.providerAccessRole} not like 'caldav:read=no;%')
+      and exists (select 1 from caldav_accounts connected where connected.id::text = ${externalCalendars.accountID} and connected.user_id = ${externalCalendars.userID})
+    ))`));
   if (!row?.providerState) return { state: null, version: null };
   const state = ProviderEventStateSchema.parse(row.providerState);
   const event = row.event;

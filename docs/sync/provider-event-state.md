@@ -213,3 +213,11 @@ HTTP read and later delta read preserve `workingElsewhere`, confidentiality,
 reminders and Teams links when the provider supplies a changed title. It also
 checks that Musubi's native Graph title writer remains refused. This is read
 preservation evidence, not Graph PATCH/CAS certification or live-provider QA.
+
+## CalDAV collection read retirement
+
+[CalDAV read access](./caldav-read-access.md) adds strict discovery proof and
+source-generation fences for imported VEVENT families and VTODO. Confirmed
+collection read loss retires stale provider fields before fetch; write loss alone
+does not change readable content. Task updates have a separate retirement
+admission counter, with an explicit compatibility boundary for older clients.

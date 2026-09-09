@@ -22,6 +22,11 @@ async function main() {
     calendarID: "00000000-0000-4000-8000-000000000002",
     title: "Reopened task",
   });
+  const protectedUpdate = parseTaskUpdateBody({ ...updated, providerReadRetiredGeneration: 42, expectedProviderReadRetiredGeneration: 7 });
+  assert.equal("providerReadRetiredGeneration" in protectedUpdate, false);
+  assert.equal(protectedUpdate.expectedProviderReadRetiredGeneration, 7);
+  assert.equal("providerReadRetiredGeneration" in parseTaskCreateBody({ ...created, providerReadRetiredGeneration: 42 }), false);
+  assert.throws(() => parseTaskUpdateBody({ ...updated, expectedProviderReadRetiredGeneration: -1 }));
   assert.equal(updated.status, "needs-action");
   assert.equal(updated.percentComplete, 0);
 

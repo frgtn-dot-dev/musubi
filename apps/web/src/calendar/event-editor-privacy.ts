@@ -14,7 +14,7 @@ export function isGoogleEditorPrivacyRefresh(baseline: Event, current: Event | u
 
 export function isGoogleEditorRestricted(current: Event, calendars: Calendar[]) {
   const home = getEventHomeCalendar(current, calendars);
-  return !!home && ["google", "microsoft"].includes(home.provider ?? "") && ((home.provider === "google" && home.role === "viewer") || (
+  return !!home && ["google", "microsoft", "caldav"].includes(home.provider ?? "") && ((home.provider === "google" && home.role === "viewer") || (
     current.title === "Busy" && !current.description && !current.location && !current.url && !current.organizer
   ));
 }

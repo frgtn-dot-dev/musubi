@@ -57,9 +57,9 @@ export async function getDuePendingNotifications(now: Date, ids?: string[]) {
               where link.event_id = event.id and member.user_id = ${pendingNotifications.userID}))
           and (not exists (select 1 from external_events mapping
               where mapping.event_id = event.id and mapping.calendar_id = event.origin_calendar_id
-                and mapping.provider in ('google', 'microsoft'))
+                and mapping.provider in ('google', 'microsoft', 'caldav'))
             and not exists (select 1 from external_calendars source
-              where source.calendar_id = event.origin_calendar_id and source.provider in ('google', 'microsoft'))
+              where source.calendar_id = event.origin_calendar_id and source.provider in ('google', 'microsoft', 'caldav'))
             or exists (select 1 from external_events mapping
               join external_calendars source on source.calendar_id = mapping.calendar_id
                 and source.external_calendar_id = mapping.external_calendar_id and source.provider = mapping.provider
@@ -74,7 +74,21 @@ export async function getDuePendingNotifications(now: Date, ids?: string[]) {
                   or (source.provider = 'microsoft' and source.provider_access_role like 'microsoft:private=yes;%')
                   or (source.provider_access_role is null and source.provider_access_revision = 0))
                 and (source.provider_access_revision = 0 or nullif(source.cursor, '') is not null)
-                and mapping.read_redaction_revision is null))
+                and mapping.read_redaction_revision is null)
+            or exists (select 1 from external_events mapping
+              join external_calendars source on source.calendar_id = mapping.calendar_id
+                and source.external_calendar_id = mapping.external_calendar_id and source.provider = mapping.provider
+              join caldav_accounts connected on connected.id::text = source.account_id and connected.user_id = source.user_id
+              join calendar_members member on member.calendar_id = source.calendar_id and member.user_id = source.user_id
+              where mapping.event_id = event.id and mapping.calendar_id = event.origin_calendar_id
+                and mapping.provider = 'caldav' and source.user_id = event.creator_id
+                and source.disabled = false and source.supports_events = true
+                and (source.provider_access_role is null or source.provider_access_role not like 'caldav:read=no;%')
+                and mapping.read_redaction_revision is null and mapping.etag is not null
+                and (event.provider_read_retired_revision is null or
+                  case when jsonb_typeof(${pendingNotifications.payload}->'eventRevision') = 'number'
+                    then (${pendingNotifications.payload}->>'eventRevision')::numeric >= event.provider_read_retired_revision
+                    else false end)))
       )`,
       dueAt: pendingNotifications.dueAt,
       email: user.email,

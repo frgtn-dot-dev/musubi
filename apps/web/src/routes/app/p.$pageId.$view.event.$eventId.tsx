@@ -80,7 +80,7 @@ function EditEventRoute() {
             revision: urlDraft ? undefined : currentEvent.revision,
         });
         setEvent(baseline);
-        setGoogleSource(["google", "microsoft"].includes(getEventHomeCalendar(currentEvent, calendars)?.provider ?? ""));
+        setGoogleSource(["google", "microsoft", "caldav"].includes(getEventHomeCalendar(currentEvent, calendars)?.provider ?? ""));
         const safeSearch = { ...search };
         if ((!handedOff || eventEditorBaselineRedacted(eventId)) && (isGoogleEditorRestricted(currentEvent, calendars) || currentEvent.providerReadRetiredRevision != null)) {
             for (const field of privateEditorFields) {
@@ -107,7 +107,7 @@ function EditEventRoute() {
         setPrivacyRevision(currentEvent.revision);
         setPrivacySearch(nextSearch);
     }
-    if (event && !googleSource && ["google", "microsoft"].includes(getEventHomeCalendar(event, calendars)?.provider ?? "")) setGoogleSource(true);
+    if (event && !googleSource && ["google", "microsoft", "caldav"].includes(getEventHomeCalendar(event, calendars)?.provider ?? "")) setGoogleSource(true);
     // A pending range is not evidence of deletion. A settled response is.
     const eventMissing = !currentEvent && !workspace.events.isPending && !workspace.events.isFetching && !workspace.events.isPlaceholderData && !workspace.events.isError;
     if (event && eventMissing && privacyRevision !== -1 && googleSource) {

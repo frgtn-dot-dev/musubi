@@ -25,7 +25,7 @@ async function main() {
     reset(); state.data = evidence.after;
     const same = await readCaldavRsvp(collection, ref, auth, "accepted"); assert.equal(same.before, same.after);
     await deliverCaldavRsvp(collection, same, auth); assert.equal(state.puts, 0);
-    for (const mode of ["no-auto", "no-outbox", "no-reply", "no-write", "wrong-owner", "two-self", "cross-origin", "wrong-href", "wrong-namespace", "duplicate-response", "failed-propstat", "redirect", "weak-etag", "no-schedule-tag"]) {
+    for (const mode of ["no-auto", "no-outbox", "no-reply", "no-write", "wrong-owner", "two-self", "cross-origin", "wrong-href", "wrong-namespace", "duplicate-response", "failed-propstat", "partial-propstat", "redirect", "weak-etag", "no-schedule-tag"]) {
       reset(mode); await assert.rejects(() => readCaldavRsvp(collection, ref, auth, "declined")); assert.equal(state.puts, 0);
     }
     for (const method of ["OPTIONS", "PROPFIND"]) for (const status of [408, 429, 503]) {

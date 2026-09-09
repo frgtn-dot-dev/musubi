@@ -24,7 +24,7 @@ export async function getEventDeliveryInbox(
       // Explicit outer qualification survives Drizzle's single-table SELECT
       // normalization; bare column interpolation would bind inside EXISTS.
       savedTitle: sql<string>`case
-        when event_outbox.provider not in ('google', 'microsoft') or exists (
+        when event_outbox.provider not in ('google', 'microsoft', 'caldav') or exists (
           select 1 from external_calendars source
           inner join calendar_members member
             on member.calendar_id = source.calendar_id
@@ -46,7 +46,25 @@ export async function getEventDeliveryInbox(
               or (source.provider = 'microsoft' and source.provider_access_role like 'microsoft:private=yes;%')
               or (source.provider_access_role is null and source.provider_access_revision = 0))
             and (source.provider_access_revision = 0 or nullif(source.cursor, '') is not null)
-        ) then event_outbox.payload->'event'->>'title'
+        ) or (event_outbox.provider = 'caldav' and exists (
+          select 1 from external_calendars source
+          join caldav_accounts connected on connected.id::text = source.account_id and connected.user_id = source.user_id
+          join calendar_members member on member.calendar_id = source.calendar_id and member.user_id = source.user_id
+          join events event on event.id = event_outbox.event_id
+          where source.id = event_outbox.external_calendar_link_id
+            and source.provider = 'caldav' and source.user_id = event_outbox.user_id
+            and source.account_id = event_outbox.account_id and source.calendar_id = event_outbox.calendar_id
+            and source.external_calendar_id = event_outbox.external_calendar_id
+            and source.disabled = false and source.supports_events = true
+            and (source.provider_access_role is null or source.provider_access_role not like 'caldav:read=no;%')
+            and (event.provider_read_retired_revision is null or exists (
+              select 1 from external_events mapping where mapping.event_id = event.id
+                and mapping.calendar_id = source.calendar_id and mapping.provider = source.provider
+                and mapping.external_calendar_id = source.external_calendar_id
+                and mapping.read_redaction_revision is null and mapping.etag is not null))
+        )) then case when event_outbox.provider = 'caldav'
+          then (select event.name from events event where event.id = event_outbox.event_id)
+          else event_outbox.payload->'event'->>'title' end
         else 'Calendar event' end`,
     })
     .from(eventOutbox)

@@ -62,6 +62,7 @@ export function useServerStream(userId: string) {
     const pagesKey = queryKeys.pages(origin, userId);
     const settingsKey = queryKeys.settings(origin, userId);
     const remindersKey = queryKeys.reminders(origin, userId);
+    const tasksKey = queryKeys.tasks(origin, userId);
     const calendarsKey = queryKeys.calendars(origin, userId);
     const federatedKey = queryKeys.federated(origin, userId);
     // Event ranges share this prefix; a prefix match invalidates every window.
@@ -114,6 +115,7 @@ export function useServerStream(userId: string) {
           break;
         case "calendar_updated":
         case "calendar_removed":
+          void queryClient.invalidateQueries({ queryKey: tasksKey });
           void queryClient.invalidateQueries({ queryKey: calendarsKey });
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
           void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
@@ -127,6 +129,7 @@ export function useServerStream(userId: string) {
           break;
         case "external_sync":
           void queryClient.resetQueries({ queryKey: ["availability", origin, userId] });
+          void queryClient.invalidateQueries({ queryKey: tasksKey });
           void queryClient.invalidateQueries({ queryKey: calendarsKey });
           void queryClient.invalidateQueries({ queryKey: eventsPrefix });
           void queryClient.invalidateQueries({ queryKey: deliveryPrefix });
@@ -147,6 +150,7 @@ export function useServerStream(userId: string) {
       for (const queryKey of [
         ["availability", origin, userId],
         calendarsKey,
+        tasksKey,
         federatedKey,
         pagesKey,
         settingsKey,

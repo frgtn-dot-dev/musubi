@@ -38,6 +38,7 @@ type EventTiming = {
   isCanceled: boolean;
   start: Date;
   title: string;
+  revision?: number;
 };
 
 /**
@@ -49,7 +50,7 @@ type EventTiming = {
  * noise unless somebody asked.
  */
 export function describeChange(
-  previous: Pick<EventTiming, "isCanceled" | "start" | "end">,
+  previous: Pick<EventTiming, "isCanceled" | "start" | "end" | "revision">,
   updated: EventTiming,
 ): EventChangePayload | null {
   if (updated.isCanceled && !previous.isCanceled) {
@@ -84,7 +85,7 @@ export function describeChange(
  * not turn a successful edit into an error.
  */
 export async function queueEventChange(
-  previous: Pick<EventTiming, "isCanceled" | "start" | "end">,
+  previous: Pick<EventTiming, "isCanceled" | "start" | "end" | "revision">,
   updated: EventTiming,
   actorID: string,
 ) {
@@ -103,7 +104,7 @@ export async function queueEventChange(
       await queuePendingNotification({
         dueAt,
         kind: EVENT_CHANGED,
-        payload: change,
+        payload: { ...change, eventRevision: change.wasStart ? (previous.revision === undefined || updated.revision === undefined ? undefined : Math.min(previous.revision, updated.revision)) : updated.revision },
         subjectID: updated.id,
         userID: attendee.id,
       });

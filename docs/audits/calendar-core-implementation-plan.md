@@ -854,3 +854,12 @@ separate provider guests from Musubi attendance. See
 [the bounded contract](../sync/caldav-organizer.md). Named-zone creation,
 existing meeting rescheduling, guest-list/recurrence edits and live organizer
 notification acceptance remain open; this does not declare K13 complete.
+
+
+### CalDAV read-access follow-up (2026-09-09)
+
+The bounded collection read-retirement slice is implemented in
+[the current contract](../sync/caldav-read-access.md): strict discovery, event
+family/task generation fences, task admission and public editor refresh. It does
+not complete all K14 or establish iCloud resource write grants; live account and
+physical-device acceptance remain separate from the locally tested behavior.

@@ -19,7 +19,7 @@ export function privateEditorRefresh(snapshot: Event | undefined, current: Event
   const observed = privacyObservations.get(snapshot);
   if (!current || current.id !== snapshot.id || (current.revision ?? 0) <= Math.max(snapshot.revision ?? 0, observed?.revision ?? 0)) return;
   const source = calendars.find(calendar => calendar.id === current.originCalendarID);
-  if (!source || !["google", "microsoft"].includes(source.provider ?? "") || !((current.providerReadRetiredRevision ?? 0) > (snapshot.revision ?? 0) || observed?.sourceID === source.id || (source.provider === "google" && source.role === "viewer") || (
+  if (!source || !["google", "microsoft", "caldav"].includes(source.provider ?? "") || !((current.providerReadRetiredRevision ?? 0) > (snapshot.revision ?? 0) || observed?.sourceID === source.id || (source.provider === "google" && source.role === "viewer") || (
     current.title === "Busy" && !current.description && !current.location && !current.url && !current.organizer
   ))) return;
   const refreshed = { ...snapshot, providerReadRetiredRevision: current.providerReadRetiredRevision, title: current.title, description: current.description, location: current.location, url: current.url, organizer: current.organizer, color: current.color };

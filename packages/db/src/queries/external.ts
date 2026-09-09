@@ -305,6 +305,7 @@ export async function getExternalLinkForCalendar(calendarID: string) {
     .select({
       id: externalCalendars.id,
       disabled: externalCalendars.disabled,
+      providerAccessRevision: externalCalendars.providerAccessRevision,
       provider: externalCalendars.provider,
       externalCalendarID: externalCalendars.externalCalendarID,
       supportsEvents: externalCalendars.supportsEvents,
@@ -761,7 +762,7 @@ export async function replaceExternalEventResource(
     }
     let changed = false;
     for (const item of [master, ...observations.filter(item => item !== master)]) {
-      changed = await upsertExternalEventInTransaction(tx, true, provider, userID, calendarID, externalCalendarID, item.externalId, item.values, item.etag, item.icalUid, undefined, item.time, undefined, item.providerState) || changed;
+      changed = await upsertExternalEventInTransaction(tx, true, provider, userID, calendarID, externalCalendarID, item.externalId, item.values, item.etag, item.icalUid, undefined, item.time, undefined, item.providerState, undefined, undefined, accessContext) || changed;
     }
     const seen = new Set(observations.map(item => item.externalId));
     for (const mapping of mappings.filter(item => !seen.has(item.externalEventID))) {
@@ -938,7 +939,7 @@ async function upsertExternalEventInTransaction(
 
       if (map.readRedactionRevision !== null && !accessContext) throw new Error("Redacted mirror requires fresh access context.");
       if (map.readRedactionRevision !== null && provider === "microsoft" && microsoftPrivateAccess(access?.role ?? null) === null) throw new Error("Microsoft private-read evidence is unknown.");
-      const restoringRead = map.readRedactionRevision !== null && (provider === "microsoft" || map.readRedactionRevision === map.event.revision);
+      const restoringRead = map.readRedactionRevision !== null && (["microsoft", "caldav"].includes(provider) || map.readRedactionRevision === map.event.revision);
       // A limited-grant marker survives accepted reads so a later fuller read
       // can restore same-ETag details. Only the first post-redaction observation
       // and full-grant restoration suppress fanout; subsequent native changes
@@ -1239,8 +1240,11 @@ export async function upsertExternalTask(
   values: TaskValues,
   etag: string | null = null,
   icalUid: string | null = null,
+  accessContext?: ExternalCalendarAccessContext,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     const [mapping] = await tx
       .select({
         id: externalTasks.id,
@@ -1298,8 +1302,12 @@ export async function deleteExternalTask(
   provider: string,
   calendarID: string,
   externalTaskID: string,
+  accessContext?: ExternalCalendarAccessContext,
 ): Promise<boolean> {
-  const rows = await db
+  return db.transaction(async tx => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
+  const rows = await tx
     .update(tasks)
     .set({ deletedAt: new Date() })
     .where(
@@ -1307,7 +1315,7 @@ export async function deleteExternalTask(
         isNull(tasks.deletedAt),
         inArray(
           tasks.id,
-          db
+          tx
             .select({ id: externalTasks.taskID })
             .from(externalTasks)
             .where(
@@ -1322,14 +1330,19 @@ export async function deleteExternalTask(
     )
     .returning({ id: tasks.id });
   return rows.length > 0;
+  });
 }
 
 export async function sweepExternalTasks(
   provider: string,
   calendarID: string,
   seenExternalTaskIDs: string[],
+  accessContext?: ExternalCalendarAccessContext,
 ): Promise<number> {
-  const mappings = await db
+  return db.transaction(async tx => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
+  const mappings = await tx
     .select({
       taskID: externalTasks.taskID,
       externalTaskID: externalTasks.externalTaskID,
@@ -1348,11 +1361,12 @@ export async function sweepExternalTasks(
     .filter((mapping) => !seen.has(mapping.externalTaskID))
     .map((mapping) => mapping.taskID);
   if (gone.length === 0) return 0;
-  await db
+  await tx
     .update(tasks)
     .set({ deletedAt: new Date() })
     .where(inArray(tasks.id, gone));
   return gone.length;
+  });
 }
 
 export async function getExternalEvent(
@@ -1492,22 +1506,32 @@ export async function getExternalTask(
   return result ?? null;
 }
 
+type TaskPushSnapshot = Pick<typeof tasks.$inferSelect, "id" | "calendarID" | "sequence"> & { providerReadRetiredGeneration?: number | null };
+type TaskPushAdmission = { task: TaskPushSnapshot; context: ExternalCalendarAccessContext };
+
+async function assertTaskPushInTransaction(tx: DbTransaction, { task, context }: TaskPushAdmission) {
+  await lockCalendarLifecycle(tx, [task.calendarID], "shared");
+  const access = await assertExternalCalendarAccess(tx, context.provider ?? "caldav", task.calendarID, context);
+  if (access?.role?.startsWith("caldav:read=no;")) throw new Error("Task source read access is unavailable.");
+  const [current] = await tx.select().from(tasks).where(eq(tasks.id, task.id)).for("share");
+  if (!current || current.calendarID !== task.calendarID || current.sequence !== task.sequence || (current.providerReadRetiredGeneration ?? 0) !== (task.providerReadRetiredGeneration ?? 0)) throw new Error("Task changed during provider delivery.");
+}
+
 export async function setExternalTaskSyncData(
   provider: string,
   taskID: string,
   externalCalendarID: string,
   data: { etag: string | null; icalUid: string | null },
+  admission?: TaskPushAdmission,
 ) {
-  await db
-    .update(externalTasks)
-    .set(data)
-    .where(
-      and(
-        eq(externalTasks.provider, provider),
-        eq(externalTasks.taskID, taskID),
-        eq(externalTasks.externalCalendarID, externalCalendarID),
-      ),
-    );
+  await db.transaction(async tx => {
+    if (admission) await assertTaskPushInTransaction(tx, admission);
+    await tx.update(externalTasks).set(data).where(and(
+      eq(externalTasks.provider, provider),
+      eq(externalTasks.taskID, taskID),
+      eq(externalTasks.externalCalendarID, externalCalendarID),
+    ));
+  });
 }
 
 export async function importExternalTask(
@@ -1518,14 +1542,15 @@ export async function importExternalTask(
   externalTaskID: string,
   etag: string | null = null,
   icalUid: string | null = null,
+  admission?: TaskPushAdmission,
 ) {
-  await db.insert(externalTasks).values({
-    provider,
-    taskID,
-    calendarID,
-    externalCalendarID,
-    externalTaskID,
-    etag,
-    icalUid,
+  await db.transaction(async tx => {
+    if (admission) await assertTaskPushInTransaction(tx, admission);
+    await tx.insert(externalTasks).values({ provider, taskID, calendarID, externalCalendarID, externalTaskID, etag, icalUid });
   });
+}
+
+/** Immediate task writes keep their captured source and retirement admission. */
+export async function assertExternalTaskPush(task: TaskPushSnapshot, context: ExternalCalendarAccessContext) {
+  return db.transaction(tx => assertTaskPushInTransaction(tx, { task, context }));
 }

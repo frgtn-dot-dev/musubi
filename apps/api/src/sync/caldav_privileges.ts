@@ -1,25 +1,39 @@
-import { propfind } from "tsdav";
+import { DAV, CALDAV, davMultistatus, davName, successfulDavProperty, type DavNode } from "./caldav_properties";
 import { createGuardedCaldavFetch } from "./caldav_client";
 
 const fetch = createGuardedCaldavFetch();
 
-/** Only successful propstats for the requested resource are permission evidence. */
-async function properties(url: string, authorization: string, props: Record<string, unknown>, signal?: AbortSignal, redirect: RequestRedirect = "follow") {
-  const responses = await propfind({
-    url, depth: "0", props, headers: { authorization }, fetch: (input, init) => fetch(input, { ...init, signal, redirect }),
-  });
-  return responses.find((response) =>
-    response.ok && response.href && new URL(response.href, url).href === new URL(url).href,
-  )?.props;
+/** Only explicit successful propstats for the exact requested resource count. */
+async function properties(url: string, authorization: string, names: string[], signal?: AbortSignal, redirect: RequestRedirect = "follow") {
+  const response = await fetch(url, { method: "PROPFIND", headers: { authorization, depth: "0", "content-type": "application/xml", "cache-control": "no-cache" }, body: `<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>${names.map(name => `<${name}/>`).join("")}</d:prop></d:propfind>`, signal, redirect });
+  if (response.status !== 207 || response.headers.has("content-range")) return undefined;
+  let rows;
+  try { rows = davMultistatus(await response.text(), url); } catch { return undefined; }
+  const matching = rows.filter(row => row.href === new URL(url).href);
+  return matching.length === 1 && matching[0]!.status === undefined ? matching[0] : undefined;
 }
 
 export async function caldavEventPrivileges(url: string, authorization: string, signal?: AbortSignal, redirect: RequestRedirect = "follow") {
-  const props = await properties(url, authorization, { "d:current-user-privilege-set": {} }, signal, redirect);
-  const value = props?.currentUserPrivilegeSet;
-  if (value == null) return undefined;
-  const privileges = value.privilege == null ? []
-    : Array.isArray(value.privilege) ? value.privilege : [value.privilege];
-  return new Set<string>(privileges.flatMap((privilege: Record<string, unknown>) => Object.keys(privilege)));
+  const response = await properties(url, authorization, ["d:current-user-privilege-set"], signal, redirect);
+  const value = response && successfulDavProperty(response, DAV, "current-user-privilege-set");
+  if (!value || value.text) return undefined;
+  const result = new Set<string>();
+  for (const privilege of value.children) {
+    if (privilege.name !== davName(DAV, "privilege") || privilege.text || privilege.children.length !== 1) return undefined;
+    const child = privilege.children[0]!;
+    if (child.text || child.children.length) return undefined;
+    // Preserve the existing write helper vocabulary, but only for DAV namespace.
+    if (child.name.startsWith(`{${DAV}}`)) result.add(child.name.slice(DAV.length + 2).replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()));
+    else if (child.name === davName(CALDAV, "read-free-busy")) result.add("readFreeBusy");
+    else return undefined; // An unrecognized namespace is not evidence of absence.
+  }
+  return result;
+}
+
+export function caldavReadAccess(privileges: Set<string> | undefined) {
+  if (!privileges) return { read: null, readFreeBusy: null };
+  const read = privileges.has("all") || privileges.has("read");
+  return { read, readFreeBusy: read || privileges.has("readFreeBusy") };
 }
 
 export function caldavAllows(
@@ -33,16 +47,13 @@ export function caldavAllows(
 }
 
 export async function caldavOrganizerAddresses(url: string, authorization: string, signal?: AbortSignal) {
-  const props = await properties(url, authorization, { "d:current-user-principal": {} }, signal);
-  const href = props?.currentUserPrincipal?.href;
-  if (typeof href !== "string") return undefined;
+  const response = await properties(url, authorization, ["d:current-user-principal"], signal);
+  const principalNode = response && successfulDavProperty(response, DAV, "current-user-principal");
+  const href = principalNode?.children.length === 1 && principalNode.children[0]!.name === davName(DAV, "href") ? principalNode.children[0]!.text : undefined;
+  if (!href) return undefined;
   const principal = new URL(href, url);
-  // Do not send credentials to an unrelated principal origin.
   if (principal.origin !== new URL(url).origin) return undefined;
-  const addresses = await properties(principal.href, authorization, { "c:calendar-user-address-set": {} }, signal);
-  const values = addresses?.calendarUserAddressSet?.href;
-  if (values == null) return undefined;
-  return (Array.isArray(values) ? values : [values])
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.replace(/^mailto:/i, "").toLowerCase());
+  const addresses = await properties(principal.href, authorization, ["c:calendar-user-address-set"], signal);
+  const node = addresses && successfulDavProperty(addresses, CALDAV, "calendar-user-address-set");
+  return node?.children.filter((child: DavNode) => child.name === davName(DAV, "href") && !child.children.length).map((child: DavNode) => child.text.replace(/^mailto:/i, "").toLowerCase());
 }

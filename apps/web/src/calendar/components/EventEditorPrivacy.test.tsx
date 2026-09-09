@@ -18,7 +18,7 @@ vi.mock("./EventDeliveryDialog", () => ({ EventDeliveryDialog: () => null }));
 import { Route } from "~/routes/app/p.$pageId.$view.event.$eventId";
 
 const EditRoute = Route.options.component!;
-describe.each(["google", "microsoft"] as const)("%s privacy editor", provider => {
+describe.each(["google", "microsoft", "caldav"] as const)("%s privacy editor", provider => {
 const calendar: Calendar = { id: "calendar", creatorID: "owner", color: "#112233", name: provider, provider, role: "owner", members: [] };
 const event: Event = { id: "event", creatorID: "owner", originCalendarID: "calendar", calendars: ["calendar"], revision: 4, title: "Private appointment", description: "Private notes", location: "Private room", url: "https://private.example.test", organizer: "private@example.test", color: "#112233", start: new Date("2026-07-08T09:00:00Z"), end: new Date("2026-07-08T10:00:00Z"), isAllDay: false, isCanceled: false, hasAttendees: false };
 const busy: Event = { ...event, revision: 5, title: "Busy", description: undefined, location: undefined, url: undefined, organizer: "" };

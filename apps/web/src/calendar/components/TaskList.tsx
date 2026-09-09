@@ -31,9 +31,13 @@ type TaskListProps = {
   onUpdate: (id: string, task: TaskUpdate) => Promise<Task>;
   settings: Pick<Settings, "timeFormat" | "weekStartsOn">;
   tasks: Task[];
+  sourceTasks?: Task[];
+  sourceCalendars?: Calendar[];
+  calendarsResolved?: boolean;
+  tasksResolved?: boolean;
 };
 
-type Draft = Omit<TaskCreate, "id"> & { id?: string };
+type Draft = TaskUpdate & { id?: string };
 
 function emptyDraft(calendarID: string): Draft {
   return {
@@ -55,6 +59,7 @@ function emptyDraft(calendarID: string): Draft {
 
 export function taskUpdate(task: Task): TaskUpdate {
   return {
+    expectedProviderReadRetiredGeneration: task.providerReadRetiredGeneration ?? 0,
     calendarID: task.calendarID,
     completedAt: task.completedAt,
     description: task.description,
@@ -116,6 +121,10 @@ export function TaskList({
   onUpdate,
   settings,
   tasks,
+  sourceTasks = tasks,
+  sourceCalendars = calendars,
+  calendarsResolved = false,
+  tasksResolved = false,
 }: TaskListProps) {
   const firstEditableCalendarID = calendars.find((calendar) =>
     editableCalendarIds.has(calendar.id),
@@ -128,6 +137,8 @@ export function TaskList({
       ? emptyDraft(firstEditableCalendarID)
       : undefined,
   );
+  const [removedTaskID, setRemovedTaskID] = useState<string>();
+  const [ownedFields, setOwnedFields] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
@@ -147,9 +158,30 @@ export function TaskList({
     }
   }
 
+  const liveTask = editing ? sourceTasks.find(task => task.id === editing.id) : undefined;
+  if (editing && draft && liveTask && (liveTask.providerReadRetiredGeneration ?? 0) > (editing.providerReadRetiredGeneration ?? 0)) {
+    const refreshed = { ...draft, expectedProviderReadRetiredGeneration: liveTask.providerReadRetiredGeneration ?? 0 };
+    for (const field of ["title", "description", "url", "relatedTo"] as const) {
+      if (!ownedFields.includes(field) && (draft[field] ?? "") === (editing[field] ?? "")) Object.assign(refreshed, { [field]: liveTask[field] });
+    }
+    setEditing(liveTask); setDraft(refreshed);
+  }
+
+  if (editing && draft && !offline && ((tasksResolved && !liveTask) || (calendarsResolved && !sourceCalendars.some(calendar => calendar.id === editing.calendarID))) && removedTaskID !== editing.id) {
+    const retired = { ...draft };
+    for (const field of ["title", "description", "url", "relatedTo"] as const) {
+      if (!ownedFields.includes(field) && (draft[field] ?? "") === (editing[field] ?? "")) Object.assign(retired, { [field]: field === "title" ? "" : null });
+    }
+    setDraft(retired);
+    setRemovedTaskID(editing.id);
+    setError("This task is no longer available from its source. Your own changes are still here.");
+  }
+
   function resetEditor() {
     setDraft(undefined);
     setEditing(undefined);
+    setOwnedFields([]);
+    setRemovedTaskID(undefined);
     setError("");
     onCreateRequestHandled();
   }
@@ -161,13 +193,15 @@ export function TaskList({
   function openEdit(task: Task) {
     if (!editableCalendarIds.has(task.calendarID)) return;
     setEditing(task);
+    setOwnedFields([]);
+    setRemovedTaskID(undefined);
     setDraft({ ...taskUpdate(task), id: task.id });
     setError("");
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!draft || !draft.title.trim() || busy) return;
+    if (!draft || !draft.title.trim() || busy || removedTaskID === editing?.id && !!editing) return;
     setBusy(true);
     setError("");
     try {
@@ -257,6 +291,7 @@ export function TaskList({
       {draft ? (
         <TaskEditor
           busy={busy}
+          unavailable={Boolean(editing && removedTaskID === editing.id)}
           calendars={calendars}
           draft={draft}
           editableCalendarIds={editableCalendarIds}
@@ -264,8 +299,11 @@ export function TaskList({
           error={error}
           initialFocus={titleRef}
           settings={settings}
-          onChange={setDraft}
-          onDelete={editing ? remove : undefined}
+          onChange={next => {
+            if (draft) setOwnedFields(previous => [...new Set([...previous, ...["title", "description", "url", "relatedTo"].filter(field => next[field as keyof Draft] !== draft[field as keyof Draft])])]);
+            setDraft(next);
+          }}
+          onDelete={editing && removedTaskID !== editing.id ? remove : undefined}
           onOpenChange={(open) => {
             if (!open) closeEditor();
           }}
@@ -341,6 +379,7 @@ function TaskGroup({
 
 function TaskEditor({
   busy,
+  unavailable,
   calendars,
   draft,
   editableCalendarIds,
@@ -354,6 +393,7 @@ function TaskEditor({
   onSubmit,
 }: {
   busy: boolean;
+  unavailable: boolean;
   calendars: Calendar[];
   draft: Draft;
   editableCalendarIds: ReadonlySet<string>;
@@ -396,7 +436,7 @@ function TaskEditor({
             </Button>
           ) : null}
           <Button
-            disabled={busy || !draft.title.trim()}
+            disabled={busy || !draft.title.trim() || unavailable}
             form="task-editor"
             loading={busy}
             type="submit"
