@@ -9566,3 +9566,54 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(writes[0]).not.toHaveProperty("time"); expect(writes[0]).not.toHaveProperty("originalStart");
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (const action of ["create", "update", "delete"] as const) {
+  test(`CalDAV organizer explicit ${action}: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 }); await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000291", eventID = "00000000-0000-4000-8000-000000000292";
+    const saved = { ...event(eventID, "Organizer meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
+    await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/calendars/${calendarID}/provider-organizer`, route => respond(route, { provider: "caldav", calendarID, notificationPolicy: "server-invite", createTime: "utc-or-all-day" }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "caldav", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "needsAction" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "caldav", calendarID, expectedRevision: 4, actions: action === "delete" ? ["delete"] : ["update"] } }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); if (action === "create" && writes.length === 1) return respond(route, { error: "Choose external guests", organizerAdmissionRejected: true }, 400); return writes.length === (action === "create" ? 2 : 1) ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    let trigger: Locator;
+    if (action === "create") {
+      if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+      await page.getByRole("button", { name: "Calendars", exact: true }).click();
+      trigger = page.getByRole("button", { name: "Create CalDAV meeting", exact: true }); await trigger.click();
+    } else {
+      await page.getByRole("button", { name: /Organizer meeting/ }).first().click();
+      trigger = page.getByRole("button", { name: "Manage CalDAV meeting", exact: true }); await trigger.click();
+    }
+    const editor = page.getByRole("dialog", { name: action === "create" ? "Create CalDAV meeting" : "Manage CalDAV meeting", exact: true });
+    if (action === "create") { await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning"); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test"); await editor.getByRole("button", { name: "Create and send invitations" }).click(); await expect(editor.getByRole("alert")).toContainText("Choose external guests"); await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toBeEnabled(); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test"); }
+    if (action === "delete") await expect(editor.getByRole("button", { name: "Save and notify guests" })).toHaveCount(0);
+    if (action === "update") await expect(editor.getByRole("button", { name: "Cancel meeting and notify guests" })).toHaveCount(0);
+    if (action !== "create") await expect(editor.getByLabel("Start", { exact: true })).toHaveCount(0);
+    else { await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC"); await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled(); }
+    if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
+    await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await editor.screenshot({ path: `/tmp/musubi-k12-live/caldav-organizer-${action}-${theme}.png` });
+    if (action === "delete") {
+      await editor.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
+      const confirmation = page.getByRole("dialog", { name: "Cancel CalDAV meeting", exact: true });
+      expect(writes).toHaveLength(0);
+      await confirmation.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
+      await expect(confirmation.getByRole("alert")).toContainText("Temporary failure");
+      await confirmation.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
+    } else {
+      await editor.getByRole("button", { name: action === "create" ? "Create and send invitations" : "Save and notify guests" }).press("Enter");
+      await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+      await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeDisabled();
+      await editor.getByRole("button", { name: "Retry saved meeting action" }).press("Enter");
+    }
+    await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+    expect(writes).toHaveLength(action === "create" ? 3 : 2); expect(writes.at(-1)).toEqual(writes.at(-2)); expect(writes[0]).toMatchObject({ action, provider: "caldav", notificationPolicy: "server-invite", calendarID }); if (action === "create") { expect(writes[1].operationID).not.toBe(writes[0].operationID); expect(writes[1].guests[0].email).toBe("guest@example.test"); }
+    if (action === "update") expect(writes[0].patch).toEqual({ description: "New explicit note" });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}

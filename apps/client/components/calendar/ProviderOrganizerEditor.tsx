@@ -7,7 +7,7 @@ import { spacing } from "@musubi/design-system";
 import {
   organizerDraft,
   organizerRequest,
-  organizerNotice,
+  organizerNotificationNotice,
   type OrganizerDraft,
 } from "@musubi/calendar";
 import type {
@@ -45,14 +45,14 @@ function OrganizerCreateActionBody({
   useEffect(() => {
     apiRef.current = api;
   }, [api]);
-  const [available, setAvailable] = useState(false),
+  const [available, setAvailable] = useState<"google" | "caldav" | null>(null),
     [open, setOpen] = useState(false);
   useEffect(() => {
     let active = true;
     apiRef.current
       .getOrganizerCalendar(calendarID)
-      .then(() => {
-        if (active) setAvailable(true);
+      .then((result) => {
+        if (active) setAvailable(result.provider);
       })
       .catch(() => {});
     return () => {
@@ -62,12 +62,13 @@ function OrganizerCreateActionBody({
   return available ? (
     <>
       <Btn
-        label="Create Google meeting"
+        label={`Create ${available === "caldav" ? "CalDAV" : "Google"} meeting`}
         variant="secondary"
         onPress={() => setOpen(true)}
       />
       {open && (
         <ProviderOrganizerEditor
+          provider={available}
           calendarID={calendarID}
           color={color}
           onClose={() => setOpen(false)}
@@ -81,26 +82,30 @@ export function ProviderOrganizerEditor({
   color,
   event,
   observation,
+  provider = observation?.organizerEdit?.provider ?? "google",
   onClose,
 }: {
   calendarID: string;
   color: string;
   event?: Event;
   observation?: ProviderEventStateResponse;
+  provider?: "google" | "caldav";
   onClose: () => void;
 }) {
   const api = useApi(),
     insets = useSafeAreaInsets();
-  const [draft, setDraft] = useState(() => organizerDraft(event)),
+  const [draft, setDraft] = useState(() => organizerDraft(event, provider)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [submitted, setSubmitted] = useState(false);
+    [submitted, setSubmitted] = useState(false),
+    [frozenAction, setFrozenAction] = useState<ProviderOrganizerRequest["action"] | null>(null);
   const pending = useRef(false),
     frozen = useRef<ProviderOrganizerRequest | null>(null),
     changed = useRef<(keyof OrganizerDraft)[]>([]),
     identity = useRef({
       operationID: uuidv7(),
+      provider,
       eventID: event?.id ?? uuidv7(),
       calendarID,
       color,
@@ -116,7 +121,21 @@ export function ProviderOrganizerEditor({
     changed.current = [...new Set([...changed.current, key])];
     setDraft((previous) => ({ ...previous, [key]: value }));
   }
+  const canUpdate =
+    !event ||
+    provider !== "caldav" ||
+    observation?.organizerEdit?.actions?.includes("update") === true;
+  const canDelete =
+    !!event &&
+    (provider !== "caldav" ||
+      observation?.organizerEdit?.actions?.includes("delete") === true);
+  const canSubmit = frozenAction === "delete" ? canDelete : canUpdate;
   async function send(action: ProviderOrganizerRequest["action"]) {
+    if (
+      (action === "update" && !canUpdate) ||
+      (action === "delete" && !canDelete)
+    )
+      return;
     if (pending.current || notice) return;
     pending.current = true;
     setBusy(true);
@@ -129,10 +148,11 @@ export function ProviderOrganizerEditor({
         identity.current,
         observation,
       );
+      setFrozenAction(frozen.current.action);
       setSubmitted(true);
       await api.editProviderOrganizer(frozen.current);
       setNotice(
-        "Meeting change saved. Check Delivery details for Google's result. Guest notification delivery remains unknown.",
+        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : "Google's"} result. Guest notification delivery remains unknown.`,
       );
     } catch (cause) {
       if (
@@ -141,6 +161,7 @@ export function ProviderOrganizerEditor({
         cause.organizerAdmissionRejected === true
       ) {
         frozen.current = null;
+        setFrozenAction(null);
         identity.current.operationID = uuidv7();
         setSubmitted(false);
       }
@@ -154,7 +175,7 @@ export function ProviderOrganizerEditor({
       setBusy(false);
     }
   }
-  const locked = busy || submitted,
+  const locked = busy || submitted || !canUpdate,
     copy = { fontFamily: fonts.sans, color: colors.fg2 };
   const fields: [keyof OrganizerDraft, string][] = [
     ["title", "Title"],
@@ -163,17 +184,30 @@ export function ProviderOrganizerEditor({
     ...(!event
       ? [["guests", "Guest email addresses"] as [keyof OrganizerDraft, string]]
       : []),
-    [
-      "start",
-      draft.allDay ? "Start date (YYYY-MM-DD)" : "Start (YYYY-MM-DDTHH:mm:ss)",
-    ],
-    [
-      "end",
-      draft.allDay ? "End date (YYYY-MM-DD)" : "End (YYYY-MM-DDTHH:mm:ss)",
-    ],
-    ...(!draft.allDay
-      ? [["timeZone", "Event time zone"] as [keyof OrganizerDraft, string]]
-      : []),
+    ...(provider === "caldav" && event
+      ? []
+      : ([
+          [
+            "start",
+            draft.allDay
+              ? "Start date (YYYY-MM-DD)"
+              : "Start (YYYY-MM-DDTHH:mm:ss)",
+          ],
+          [
+            "end",
+            draft.allDay
+              ? "End date (YYYY-MM-DD)"
+              : "End (YYYY-MM-DDTHH:mm:ss)",
+          ],
+          ...(!draft.allDay
+            ? [
+                ["timeZone", "Event time zone"] as [
+                  keyof OrganizerDraft,
+                  string,
+                ],
+              ]
+            : []),
+        ] as [keyof OrganizerDraft, string][])),
   ];
   return (
     <ModalPortal visible onRequestClose={close}>
@@ -201,7 +235,7 @@ export function ProviderOrganizerEditor({
           <View style={styles.modalHandle} />
           <View style={styles.modalTitleRow}>
             <Text accessibilityRole="header" style={styles.modalTitle}>
-              {event ? "Manage Google meeting" : "Create Google meeting"}
+              {`${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
             </Text>
           </View>
           <ScrollView
@@ -212,7 +246,7 @@ export function ProviderOrganizerEditor({
               gap: spacing[3],
             }}
           >
-            <Text style={copy}>{organizerNotice}</Text>
+            <Text style={copy}>{organizerNotificationNotice(provider)}</Text>
             {notice ? (
               <Text accessibilityLiveRegion="polite" style={copy}>
                 {notice}
@@ -225,43 +259,60 @@ export function ProviderOrganizerEditor({
                     <TextInput
                       accessibilityLabel={label}
                       style={styles.textInput}
-                      editable={!locked}
+                      editable={
+                        !locked &&
+                        !(provider === "caldav" && key === "timeZone")
+                      }
                       value={String(draft[key])}
                       onChangeText={(value) => patch(key, value)}
                     />
                   </View>
                 ))}
-                <Btn
-                  variant="secondary"
-                  label={`All day: ${draft.allDay ? "yes" : "no"}`}
-                  disabled={locked}
-                  onPress={() => patch("allDay", !draft.allDay)}
-                />
-                <Btn
-                  label={
-                    submitted
-                      ? "Retry saved meeting action"
-                      : event
-                        ? "Save and notify guests"
-                        : "Create and send invitations"
-                  }
-                  loading={busy}
-                  onPress={() =>
-                    void send(
-                      frozen.current?.action ?? (event ? "update" : "create"),
-                    )
-                  }
-                />
-                {event && !submitted && (
+                {provider === "caldav" && event ? (
+                  <Text style={copy}>
+                    Meeting time and guests are preserved.
+                  </Text>
+                ) : (
+                  <>
+                    {provider === "caldav" && !draft.allDay ? (
+                      <Text style={copy}>
+                        New timed CalDAV meetings use UTC.
+                      </Text>
+                    ) : null}
+                    <Btn
+                      variant="secondary"
+                      label={`All day: ${draft.allDay ? "yes" : "no"}`}
+                      disabled={locked}
+                      onPress={() => patch("allDay", !draft.allDay)}
+                    />
+                  </>
+                )}
+                {canSubmit && (
+                  <Btn
+                    label={
+                      submitted
+                        ? "Retry saved meeting action"
+                        : event
+                          ? "Save and notify guests"
+                          : "Create and send invitations"
+                    }
+                    loading={busy}
+                    onPress={() =>
+                      void send(
+                        frozen.current?.action ?? (event ? "update" : "create"),
+                      )
+                    }
+                  />
+                )}
+                {canDelete && !submitted && (
                   <Btn
                     variant="secondary"
                     label="Cancel meeting and notify guests"
                     onPress={() =>
                       confirm(
                         {
-                          title: "Cancel Google meeting",
-                          message:
-                            "Google will be asked to cancel this meeting and notify all guests. Guest notification delivery cannot be verified.",
+                          title: `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`,
+                          message: `${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel this meeting and notify all guests. Guest notification delivery cannot be verified.`,
                           confirmLabel: "Cancel meeting and notify guests",
                         },
                         () => {

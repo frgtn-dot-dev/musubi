@@ -3,7 +3,7 @@ import { z } from "zod";
 import { config } from "@musubi/config";
 import {
   EventWriteError,
-  ProviderOrganizerRequestSchema,
+  GoogleOrganizerRequestSchema,
   OrganizerDispatchSchema,
   type ProviderOrganizerIntent,
 } from "@musubi/types";
@@ -74,13 +74,14 @@ export function googleOrganizerTransport(
         beforeDispatch: () => Promise<void>,
         accepted: () => Promise<void>,
       ) {
-        const request = ProviderOrganizerRequestSchema.parse(saved.request);
+        const request = GoogleOrganizerRequestSchema.parse(saved.request);
         const baseline = saved.baseline
           ? googleOrganizerNative(saved.baseline, primary.id)
           : null;
         const body = googleOrganizerBody(request, baseline, primary.id);
         if (!isDeepStrictEqual(body, saved.desired))
           throw new ProviderEventWriteError("provider-conflict");
+        if (saved.dispatch && saved.dispatch.kind !== "google-organizer-dispatch") throw new ProviderEventWriteError("provider-conflict");
         const dispatched =
           saved.dispatch === undefined
             ? false

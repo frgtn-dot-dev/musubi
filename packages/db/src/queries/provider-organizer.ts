@@ -16,6 +16,7 @@ import { resolveEventTimeEdit } from "@musubi/calendar";
 import { db } from "..";
 import {
   account,
+  caldavAccounts,
   calendars,
   calendarMembers,
   calendarEvents,
@@ -39,8 +40,14 @@ export type OrganizerContext = {
   event: Event | null;
   mapping: typeof externalEvents.$inferSelect | null;
 };
-function enabled() {
-  if (!config.api.providerOrganizerEditsEnabled)
+function enabled(provider: string) {
+  if (
+    provider === "google"
+      ? !config.api.providerOrganizerEditsEnabled
+      : provider === "caldav"
+        ? !config.api.caldavOrganizerEditsEnabled
+        : true
+  )
     throw new EventWriteError("organizer", "unsupported");
 }
 function receipt(row: EventOutboxRow, replayed: boolean) {
@@ -53,7 +60,12 @@ function receipt(row: EventOutboxRow, replayed: boolean) {
     notificationDelivery: "unknown" as const,
   };
 }
-async function source(tx: DbTransaction, actorID: string, calendarID: string) {
+async function source(
+  tx: DbTransaction,
+  actorID: string,
+  calendarID: string,
+  provider?: string,
+) {
   const [target] = await tx
     .select({ link: externalCalendars })
     .from(externalCalendars)
@@ -76,13 +88,31 @@ async function source(tx: DbTransaction, actorID: string, calendarID: string) {
       and(
         eq(externalCalendars.calendarID, calendarID),
         eq(externalCalendars.userID, actorID),
-        eq(externalCalendars.provider, "google"),
+        provider
+          ? eq(externalCalendars.provider, provider)
+          : sql`${externalCalendars.provider} in ('google', 'caldav')`,
         eq(externalCalendars.disabled, false),
         eq(externalCalendars.supportsEvents, true),
       ),
     )
     .for("share", { of: [externalCalendars, calendars, calendarMembers] });
   if (!target) throw new EventWriteError("organizer", "denied");
+  enabled(target.link.provider);
+  if (target.link.provider === "caldav") {
+    const [grant] = await tx
+      .select()
+      .from(caldavAccounts)
+      .where(
+        and(
+          eq(caldavAccounts.id, target.link.accountID),
+          eq(caldavAccounts.userID, actorID),
+        ),
+      )
+      .for("share");
+    if (!grant?.encryptedPassword)
+      throw new EventWriteError("organizer", "denied");
+    return target.link;
+  }
   const [grant] = await tx
     .select()
     .from(account)
@@ -115,15 +145,20 @@ export async function prepareProviderOrganizer(
   | { kind: "prepared"; context: OrganizerContext }
   | { kind: "saved"; receipt: ReturnType<typeof receipt> }
 > {
-  enabled();
   const request = ProviderOrganizerRequestSchema.parse(input);
+  enabled(request.provider);
   return db.transaction(async (tx) => {
     await lockUserLifecycle(tx, [actorID], "shared");
     await lockCalendarLifecycle(tx, [request.calendarID], "shared");
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["musubi:event-mutation", actorID, request.operationID])}, 0))`,
     );
-    const link = await source(tx, actorID, request.calendarID);
+    const link = await source(
+      tx,
+      actorID,
+      request.calendarID,
+      request.provider,
+    );
     const [previous] = await tx
       .select()
       .from(eventOutbox)
@@ -194,7 +229,7 @@ export async function prepareProviderOrganizer(
       if (
         maps.length !== 1 ||
         !mapping?.etag ||
-        mapping.provider !== "google" ||
+        mapping.provider !== request.provider ||
         mapping.externalCalendarID !== link.externalCalendarID ||
         mapping.externalSeriesID ||
         mapping.originalStart ||
@@ -230,7 +265,7 @@ export async function prepareProviderOrganizer(
         prepared.baseline?.etag !== mapping!.etag)
     )
       throw new BadRequestError("Native source version changed.");
-    enabled();
+    enabled(request.provider);
     let saved: Event;
     if (request.action === "create") {
       const created = await createEventInTransaction(
@@ -269,7 +304,7 @@ export async function prepareProviderOrganizer(
               ...(request.patch.location !== undefined
                 ? { location: request.patch.location }
                 : {}),
-              ...(request.patch.time
+              ...("time" in request.patch && request.patch.time
                 ? resolveEventTimeEdit(request.patch.time)
                 : {}),
             };
@@ -303,7 +338,7 @@ export async function prepareProviderOrganizer(
         eventID: saved.id,
         calendarID: request.calendarID,
         externalCalendarLinkID: link.id,
-        provider: "google",
+        provider: request.provider,
         userID: actorID,
         accountID: link.accountID,
         externalCalendarID: link.externalCalendarID,
@@ -329,16 +364,19 @@ export async function prepareProviderOrganizer(
 }
 /** Caller holds user/calendar fences before event/outbox locks. */
 async function activeSource(tx: DbTransaction, row: EventOutboxRow) {
-  enabled();
+  enabled(row.provider);
   const intent = row.payload.organizer;
   if (
     !intent ||
     row.actorID !== row.userID ||
-    row.provider !== "google" ||
+    !["google", "caldav"].includes(row.provider) ||
+    intent.request.provider !== row.provider ||
+    (intent.dispatch &&
+      intent.dispatch.kind !== `${row.provider}-organizer-dispatch`) ||
     intent.request.action !== row.action
   )
     throw new EventWriteError("organizer", "unsupported");
-  const link = await source(tx, row.userID, row.calendarID);
+  const link = await source(tx, row.userID, row.calendarID, row.provider);
   if (
     link.id !== row.externalCalendarLinkID ||
     link.accountID !== row.accountID ||
@@ -402,8 +440,9 @@ export async function withProviderOrganizerLease<T>(
     await lockUserLifecycle(tx, [row.userID], "shared");
     await lockCalendarLifecycle(tx, [row.calendarID], "shared");
     const identity =
-      row.externalEventID ??
-      `musubi${row.payload.organizer!.request.operationID.replace(/-/g, "")}`;
+      row.externalEventID ?? String(row.payload.organizer!.desired?.id ?? "");
+    if (!identity)
+      throw new BadRequestError("Organizer native identity is unavailable.");
     await lockExternalEventIdentity(tx, row.externalCalendarLinkID, identity);
     await tx
       .select({ id: events.id })
@@ -449,11 +488,14 @@ export async function markProviderOrganizer(
           acceptedAt: new Date().toISOString(),
         }
       : OrganizerDispatchSchema.parse({
-          kind: "google-organizer-dispatch",
+          kind:
+            row.provider === "caldav"
+              ? "caldav-organizer-dispatch"
+              : "google-organizer-dispatch",
           version: 1,
           startedAt: new Date().toISOString(),
         });
-    enabled();
+    enabled(row.provider);
     await tx
       .update(eventOutbox)
       .set({
@@ -523,7 +565,7 @@ export async function completeProviderOrganizer(
         await tx.insert(externalEvents).values({
           eventID: current.eventID,
           calendarID: current.calendarID,
-          provider: "google",
+          provider: current.provider,
           externalCalendarID: current.externalCalendarID,
           externalEventID: native.id,
           ...metadata,
@@ -560,7 +602,11 @@ export async function readProviderOrganizerCalendar(
   actorID: string,
   calendarID: string,
 ) {
-  enabled();
+  if (
+    !config.api.providerOrganizerEditsEnabled &&
+    !config.api.caldavOrganizerEditsEnabled
+  )
+    throw new EventWriteError("organizer", "unsupported");
   return db.transaction(async (tx) => {
     await lockUserLifecycle(tx, [actorID], "shared");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
@@ -571,10 +617,11 @@ export async function readProviderOrganizerCalendar(
 /** Continue reading explicit organizer time only for a persisted, exact source.
  * This read capability survives disabling organizer writes; unrelated imports
  * retain their existing legacy normalization and edit path. */
-export async function getGoogleOrganizerTimeEventIDs(
+export async function getOrganizerTimeEventIDs(
   userID: string,
   accountID: string,
   externalCalendarID: string,
+  provider: "google" | "caldav" = "google",
 ): Promise<string[]> {
   const rows = await db
     .select({
@@ -604,8 +651,8 @@ export async function getGoogleOrganizerTimeEventIDs(
     )
     .where(
       and(
-        eq(eventOutbox.provider, "google"),
-        eq(externalCalendars.provider, "google"),
+        eq(eventOutbox.provider, provider),
+        eq(externalCalendars.provider, provider),
         eq(eventOutbox.userID, userID),
         eq(eventOutbox.actorID, userID),
         eq(eventOutbox.accountID, accountID),
@@ -623,9 +670,15 @@ export async function getGoogleOrganizerTimeEventIDs(
         return row.externalID
           ? [row.externalID]
           : parsed.data.action === "create"
-            ? [`musubi${parsed.data.operationID.replace(/-/g, "")}`]
+            ? [
+                parsed.data.provider === "google"
+                  ? `musubi${parsed.data.operationID.replace(/-/g, "")}`
+                  : `${externalCalendarID.endsWith("/") ? externalCalendarID : `${externalCalendarID}/`}musubi-${parsed.data.operationID}.ics`,
+              ]
             : [];
       }),
     ),
   ];
 }
+
+export const getGoogleOrganizerTimeEventIDs = getOrganizerTimeEventIDs;

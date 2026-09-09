@@ -14,3 +14,11 @@ for (const versions of [
 ]) assert.throws(() => assertEventTimeActivation("prod", true, versions));
 assert.doesNotThrow(() => assertEventTimeActivation("prod", true, { product: "0.1.9", client: "0.1.9", peer: "0.1.9" }));
 console.log("Explicit time production activation compatibility gate: OK");
+
+for (const key of ["eventTimeEditsEnabled", "providerOrganizerEditsEnabled", "caldavOrganizerEditsEnabled"] as const) {
+ const flags = { eventTimeEditsEnabled: false, providerOrganizerEditsEnabled: false, caldavOrganizerEditsEnabled: false };
+ assert.doesNotThrow(() => assertEventTimeActivation("prod", flags, old));
+ flags[key] = true;
+ assert.throws(() => assertEventTimeActivation("prod", flags, old), /coordinated release/);
+ assert.doesNotThrow(() => assertEventTimeActivation("test", flags, old));
+}
