@@ -11,7 +11,7 @@ export async function prepareCaldavSeries(context: CaldavSeriesContext, input: u
   if (!["series", "occurrence"].includes(request.scope) || (request.scope === "series" && request.action !== "update") || (request.action === "update" && (request.time !== undefined || Object.keys(request.patch).some(key => !["title", "description", "location"].includes(key)))))
     throw new EventWriteError("event-write", "unsupported");
   const target = request.scope === "occurrence" ? context.children.find(child => sameCaldavScopeContext(child.originalStart, request.originalStart)) : undefined;
-  if (request.scope === "occurrence" && (target?.isCanceled || (target?.revision ?? null) !== request.expectedOccurrenceRevision)) throw new EventWriteError("event-write", "unsupported");
+  if (request.scope === "occurrence" && ((target?.isCanceled && request.action === "delete") || (target?.revision ?? null) !== request.expectedOccurrenceRevision)) throw new EventWriteError("event-write", "unsupported");
   const newDefinition = request.scope === "occurrence" && !target ? planEventScope(context.master, context.children, request, randomUUID).creates[0] : undefined;
   const root = context.mappings.find(item => item.eventID === context.master.id)!;
   const baseline = { master: context.master, children: context.children, ref: { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid } };

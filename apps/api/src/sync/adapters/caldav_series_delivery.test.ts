@@ -76,7 +76,7 @@ async function main() {
       const occurrenceWrite = prepareCaldavSeriesWrite(evidence, baseline, { title: "Only this occurrence", description: "Line one\nLine two", location: null }, movedID);
       assert.ok(occurrenceWrite.after.includes(master) && occurrenceWrite.after.includes(cancelled));
       assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "No" }, randomUUID()));
-      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "No" }, baseline.children.find(item => item.isCanceled)!.id));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, baseline.children.find(item => item.isCanceled)!.id, true));
       reset();
       const occurrenceResult = await deliverCaldavSeriesResource(collection, occurrenceWrite, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
       assert.equal(occurrenceResult.master.title, "Master");
@@ -96,6 +96,17 @@ async function main() {
       assert.ok(cancelledResult.exceptions.every(item => item.isCanceled));
       assert.deepEqual(cancelledResult.exceptions.map(item => item.timeModel), evidence.exceptions.map(item => item.timeModel));
       assert.equal(puts, 1, "Cancellation recovers an applied 503 without another PUT");
+      const revival = prepareCaldavSeriesWrite(evidence, baseline, { title: "Restored occurrence" }, baseline.children.find(item => item.isCanceled)!.id);
+      assert.ok(revival.after.includes(master) && revival.after.includes(child));
+      assert.ok(revival.after.includes("STATUS:CONFIRMED"));
+      reset("applied-503");
+      const deliverRevival = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(revival)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      await assert.rejects(deliverRevival, (error: any) => error.outcome === "unconfirmed");
+      mode = "ok";
+      const restored = await deliverRevival();
+      assert.ok(restored.exceptions.every(item => !item.isCanceled));
+      assert.deepEqual(restored.exceptions.map(item => item.timeModel), evidence.exceptions.map(item => item.timeModel));
+      await deliverRevival(); assert.equal(puts, 1);
       const originalStart: OccurrenceStart = kind === "all-day" ? { kind: "date", value: "2026-03-31" } : kind === "floating" ? { kind: "floating", value: "2026-03-31T09:00:00.000" } : { kind: "instant", value: "2026-03-31T07:00:00.000Z" };
       for (const cancelNew of [false, true]) {
         const definitionID = randomUUID();

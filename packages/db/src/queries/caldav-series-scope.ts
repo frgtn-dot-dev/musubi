@@ -90,8 +90,8 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   }
   if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
   const target = baseline.children.filter(child => child.id === targetEventID);
-  if (target.length !== 1 || target[0]!.isCanceled || !target[0]!.originalStart) throw unsupported();
-  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, ...(write.cancelTarget ? { isCanceled: true } : {}) }) : child) };
+  if (target.length !== 1 || (target[0]!.isCanceled && write.cancelTarget) || !target[0]!.originalStart) throw unsupported();
+  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, isCanceled: write.cancelTarget === true }) : child) };
 }
 
 class CaldavLeaseLost extends Error {}

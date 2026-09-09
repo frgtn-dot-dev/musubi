@@ -335,6 +335,17 @@ async function main() {
       await sync(); assert.deepEqual(await rows(), beforeEcho);
       assert.equal((await applyLocalEventScope(current.id, userID, request, { prepareProvider: true })).status, "replayed");
     }
+    const cancelledScope = (await rows()).find(item => item.seriesID === scopedRoot.id && item.isCanceled)!;
+    const restoreRequest = { operationID: randomUUID(), scope: "occurrence", action: "update", expectedRevision: (await getEventSnapshot(scopedRoot.id))!.revision, originalStart: cancelledScope.originalStart, expectedOccurrenceRevision: cancelledScope.revision, patch: { title: "Restored native occurrence" } };
+    const restoreCandidate = await applyLocalEventScope(scopedRoot.id, userID, restoreRequest, { prepareProvider: true });
+    if (restoreCandidate.status !== "caldav_required") throw new Error("Missing restoration context");
+    const restorePrepared = await prepareCaldavSeries(restoreCandidate.context, restoreRequest);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, restoreRequest, { caldav: restorePrepared })).status, "saved");
+    const restoreOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === restoreRequest.operationID)!;
+    assert.equal((await deliverEventOutbox(restoreOperation.id, () => caldavAdapter))?.status, "completed");
+    const restoredRows = await rows();
+    assert.equal(restoredRows.find(item => item.id === cancelledScope.id)!.isCanceled, false);
+    await sync(); assert.deepEqual(await rows(), restoredRows);
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

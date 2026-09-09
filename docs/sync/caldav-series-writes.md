@@ -241,3 +241,17 @@ content/cancellation, preflight races, remote child races and a tombstone collis
 that rolls back all local writes. Radicale verifies the scope-to-worker-to-echo
 path for new content and cancellation. Reviving a cancelled definition, time edits
 and following scopes remain separate work; iCloud unknown privileges stay closed.
+
+## Restore a cancelled detached occurrence
+
+An explicit occurrence update at the cancelled child's current revision restores
+that same definition as `STATUS:CONFIRMED`, optionally changing supported content
+fields. Its original identity, time and other native properties stay intact; no
+component is removed and no generated fallback is substituted. Full-resource
+If-Match and ACK rules still apply. Repeating the original operation replays the
+receipt; cancelling an already-cancelled definition remains unsupported.
+
+Fake HTTP tests exercise all three time models and applied-503 recovery. DB tests
+cover restoration, revision checks, remote races, accepted echo and subsequent
+edits; Radicale verifies the durable scope/worker/import path. This is restricted
+to personal series with positive resource write privileges, not meeting scheduling.
