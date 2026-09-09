@@ -44,3 +44,5 @@ export * from "./queries/caldav-split-delivery";
 export * from "./queries/provider-rsvp";
 
 export * from "./queries/graph-family";
+
+export * from "./queries/graph-series-create";

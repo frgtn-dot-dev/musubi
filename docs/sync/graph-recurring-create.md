@@ -255,3 +255,34 @@ family enumeration, then verifies that none of its four unmapped occurrences
 becomes a standalone row. A subsequent full read installs the family normally.
 Pending creation without a native master address still requires its own journal
 and admission fence before recurring creation can be enabled.
+
+
+## Private create journal and import admission
+
+A default-off private DB entry point now saves a personal finite known-time root
+and one immutable create operation in the same transaction. Exactly one own
+writable Microsoft calendar, active OAuth write scope and refresh-token presence
+are required. The canonical actor and empty native organizer projection are
+stored separately; no attendee or invitation is created. Exact mutation replay
+returns the original operation UUID, including normalized UUID/null spelling;
+a changed payload cannot reuse it. API Graph serializer/footprint preflight,
+public admission, native worker delivery and atomic family ACK remain pending.
+
+Existing outbox claim persists uncertainty before returning its lease. The
+private pre-write check validates that exact lease, frozen local event, exclusive
+origin membership, current connection/grant and absence of children or mappings.
+A generic master-only ACK cannot complete this operation. No HTTP runs inside a
+DB transaction.
+
+Until full-family reconciliation resolves the journal, ordinary imports/deletes
+on its exact connected calendar are refused under the lifecycle lock. Family
+enumeration also stops before native fetch. This includes unresolved cancelled
+history and catches admission during an already running fetch, preserving the
+cursor. A terminal completed/not-needed operation releases the fence; a removed
+historical connection cannot block its replacement. These are prerequisites,
+not evidence of successful native create or release acceptance.
+
+PostgreSQL tests cover concurrent exact replay, changed/unsupported admission,
+permission rollback, pending/unconfirmed/cancelled import refusal, cursor safety,
+lease restart/expiry, local revision/deletion, permission/token removal, premature
+mapping/child refusal and generic ACK rejection.
