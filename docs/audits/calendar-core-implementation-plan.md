@@ -722,3 +722,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K12 CalDAV — privátní split transakce:** interní commit atomicky uloží zkrácený master, novou část, přepojené výjimky a dva outbox kroky s explicitní závislostí. Replay i rollback zachovávají jedinou lokální identitu; import rozpracovaných adres nesmí vytvořit další family. [DB kontrakt](../sync/caldav-series-writes.md#private-split-transaction-and-dependency-journal) drží generic delivery/ACK/resolution uzavřené. Specializovaný dvoufázový worker, ACK a veřejný following update následují; flagy/verze beze změny.
+
+
+**K12 CalDAV — durable split worker:** první krok ověří obě nativní části a práva, podmíněně zkrátí zdroj a atomicky potvrdí jeho mapování. Závislý create potvrdí celou novou family společně; obnova po 503 neopakuje přijatý PUT. [HTTP/DB/Radicale kontrakt](../sync/caldav-series-writes.md#durable-split-delivery-and-independent-family-ack) zahrnuje synchronizaci mezi kroky a nezávislou editaci původní části po prvním ACK. Veřejný following update a jeho permission preflight bridge ještě následují; flagy/verze beze změny.

@@ -39,5 +39,6 @@ export type { GoogleOccurrenceContext, GoogleOccurrencePrepared, GoogleOccurrenc
 
 export * from "./queries/caldav-series-scope";
 export * from "./queries/caldav-split";
+export * from "./queries/caldav-split-delivery";
 
 export * from "./queries/provider-rsvp";

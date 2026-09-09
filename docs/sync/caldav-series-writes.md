@@ -517,3 +517,28 @@ Superseded journals are excluded from deletion observation routing; their
 replacement marker survives a reset. The active replacement receives the conflict
 and can be explicitly reconciled again. Expected component-removal echoes do not
 clear a retained conflict and cannot acknowledge a write on their own.
+
+
+## Durable split delivery and independent family ACK
+
+The private journal now has a specialized worker. Before truncating the source it
+rebuilds the complete native split, requires resource write and collection bind,
+and checks that the reserved destination is absent or already exactly desired.
+Only the accepted source ETag can authorize its PUT. A complete readback and an
+atomic family/lease check remove old future mappings and advance retained mappings.
+The dependent create then uses If-None-Match and full native readback; one ACK inserts
+all new family mappings together. No generic ACK can settle either step.
+
+Both phases recheck current local permission, family revisions, mappings,
+destination, observed deletions and lease immediately before mutation and at ACK.
+Lost/applied 503 replies recover without another PUT. The new-family step checks
+its own canonical state and the completed source receipt; it permits independent
+edits to the retained old family after the first ACK. There is no distributed
+atomicity claim: the future family stays locally visible and pending between steps.
+
+Completed source receipts fence stale old-resource snapshots and delayed removals.
+Tests cover both recovery phases, resource collision, bind/grant/lease/local races,
+private native tampering, stable echo identities and independent old-family edits.
+Radicale covers both conditional writes with synchronization between their ACKs.
+Public following update and its preflight bridge still remain closed; flags and
+versions are unchanged.

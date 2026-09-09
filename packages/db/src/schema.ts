@@ -949,7 +949,7 @@ export const eventOutbox = pgTable(
     index("event_outbox_event_revision_idx").on(t.eventID, t.revision),
     index("event_outbox_caldav_deleted_version_idx")
       .on(t.provider, t.userID, t.calendarID, t.externalEventID, t.expectedEtag)
-      .where(sql`${t.status} = 'completed' and ((${t.action} = 'delete' and ${t.payload}->'caldavSeriesDeletion' is not null) or (${t.action} = 'update' and ${t.payload}->'caldavSeries'->'write'->'followingDelete' is not null))`),
+      .where(sql`${t.status} = 'completed' and ((${t.action} = 'delete' and ${t.payload}->'caldavSeriesDeletion' is not null) or (${t.action} = 'update' and (${t.payload}->'caldavSeries'->'write'->'followingDelete' is not null or ${t.payload}->'caldavSplit' is not null)))`),
     index("event_outbox_inbox_idx")
       .on(t.userID, t.eventID)
       .where(sql`${t.status} not in ('completed', 'not-needed')`),

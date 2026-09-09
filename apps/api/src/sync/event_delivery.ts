@@ -6,6 +6,7 @@ import { matchesGoogleOccurrence } from "./adapters/google_occurrence";
 import { config } from "@musubi/config";
 import { ProviderRsvpEditSchema, providerRsvpDesiredState, ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
+  confirmCaldavSplitOutbox,
   confirmCaldavSeriesOutbox,
   confirmCaldavSeriesDeletionOutbox,
   hasProviderRsvpSource,
@@ -147,7 +148,25 @@ export async function deliverEventOutbox(
         }
         return true;
       };
-      if (row.payload.caldavSplit) throw new EventWriteError("event-write", "unsupported");
+      if (row.payload.caldavSplit) {
+        const journal = row.payload.caldavSplit;
+        const source = row.id === journal.sourceOperationID;
+        if (!config.api.eventTimeEditsEnabled || row.provider !== "caldav" || !adapter?.writeCaldavSplitSource || !adapter.createCaldavSeries) throw new EventWriteError("event-write", "unsupported");
+        const check = async () => {
+          if (!(await checkDestination()) || !(await confirmCaldavSplitOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
+        };
+        await check();
+        expectedRef = source ? journal.prepared.split.source.baseline.ref : journal.prepared.split.creation.ref;
+        mutationStarted = true;
+        const observed = source
+          ? await adapter.writeCaldavSplitSource(row.userID, row.accountID, row.externalCalendarID, journal.prepared.split, signal, check)
+          : await adapter.createCaldavSeries(row.userID, row.accountID, row.externalCalendarID, journal.prepared.split, signal, check);
+        resultRef = observed.ref;
+        signal.throwIfAborted();
+        if (!(await checkDestination())) return;
+        if (!(await confirmCaldavSplitOutbox(row.id, token, resultRef))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        return;
+      }
       if (row.payload.caldavSeriesDeletion) {
         if (!config.api.eventTimeEditsEnabled || row.provider !== "caldav" || row.action !== "delete" || !adapter?.deleteCaldavSeries) throw new EventWriteError("event-write", "unsupported");
         const check = async () => {

@@ -1080,22 +1080,31 @@ export function prepareCaldavSeriesSplit(evidence: CaldavSeriesEvidence, baselin
   return { source, request, creation };
 }
 
-/** A future durable split journal owns ordering; this step creates only its new resource. */
-export async function createCaldavSplitResource(externalCalendarId: string, split: CaldavSeriesSplit, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence> {
-  if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+function rebuildCaldavSplit(split: CaldavSeriesSplit): CaldavSeriesSplit {
   const rebuilt = prepareCaldavSeriesSplit(caldavSeriesEvidence(split.source.before, split.source.baseline), split.source.baseline, split.request, split.creation.master.id);
   if (!sameCaldavScopeContext(rebuilt, split)) throw new ProviderEventWriteError("provider-conflict");
+  return rebuilt;
+}
+
+/** A complete desired resource can be recovered; another resource at the
+ * reserved URL must stop the source write before it truncates anything. */
+async function readCaldavSplitCreation(resource: URL, creation: CaldavSeriesSplit["creation"], authorization: string, signal?: AbortSignal) {
+  const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "GET", headers: { authorization, accept: "text/calendar", "Cache-Control": "no-cache" } });
+  if (response.status === 404) { await response.body?.cancel().catch(() => {}); return null; }
+  assertEventWriteResponse(response);
+  if (response.status !== 200 || response.headers.has("content-range")) throw new ProviderEventWriteError("provider-write-failed");
+  const etag = requireEventEtag(response.headers.get("etag"));
+  const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
+  if (!sameCaldavResource(data, creation.data)) throw new ProviderEventWriteError("provider-conflict");
+  return caldavSeriesEvidence(data, { ...creation, ref: { ...creation.ref, etag } });
+}
+
+/** The durable journal owns ordering; this step creates only its new resource. */
+export async function createCaldavSplitResource(externalCalendarId: string, split: CaldavSeriesSplit, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence> {
+  if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const rebuilt = rebuildCaldavSplit(split);
   const resource = caldavSeriesResourceURL(externalCalendarId, rebuilt.creation.ref.externalEventId);
-  const read = async () => {
-    const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "GET", headers: { authorization, accept: "text/calendar", "Cache-Control": "no-cache" } });
-    if (response.status === 404) { await response.body?.cancel().catch(() => {}); return null; }
-    assertEventWriteResponse(response);
-    if (response.status !== 200 || response.headers.has("content-range")) throw new ProviderEventWriteError("provider-write-failed");
-    const etag = requireEventEtag(response.headers.get("etag"));
-    const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
-    if (!sameCaldavResource(data, rebuilt.creation.data)) throw new ProviderEventWriteError("provider-conflict");
-    return caldavSeriesEvidence(data, { ...rebuilt.creation, ref: { ...rebuilt.creation.ref, etag } });
-  };
+  const read = () => readCaldavSplitCreation(resource, rebuilt.creation, authorization, signal);
   const existing = await read(); if (existing) return existing;
   await beforeMutation?.(); signal?.throwIfAborted();
   let accepted = false;
@@ -1229,6 +1238,14 @@ export const caldavAdapter: CalendarAdapter = {
   async deleteCaldavSeries(userID, accountId, externalCalendarId, deletion, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, deletion.baseline, signal, "delete");
     return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal, beforeMutation);
+  },
+  async writeCaldavSplitSource(userID, accountId, externalCalendarId, split, signal, beforeMutation) {
+    if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const rebuilt = rebuildCaldavSplit(split);
+    const creation = await seriesAuthorization(userID, accountId, externalCalendarId, rebuilt.creation, signal, "create");
+    const source = await seriesAuthorization(userID, accountId, externalCalendarId, rebuilt.source.baseline, signal);
+    await readCaldavSplitCreation(creation.resource, rebuilt.creation, creation.authorization, signal);
+    return deliverCaldavSeriesResource(externalCalendarId, rebuilt.source, source.authorization, signal, beforeMutation);
   },
   async createCaldavSeries(userID, accountId, externalCalendarId, split, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, split.creation, signal, "create");
