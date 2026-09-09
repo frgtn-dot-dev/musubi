@@ -808,7 +808,7 @@ async function upsertExternalEventInTransaction(
     // A completed organizer cancellation must not be silently resurrected by
     // an active late pull. Retain it for read-only reconciliation of the same
     // permanently marked action; never recreate or send another cancellation.
-    if (provider === "google") {
+    if (provider === "google" || provider === "caldav") {
       const [cancelled] = await tx.select({ id: eventOutbox.id, eventID: eventOutbox.eventID }).from(eventOutbox).where(and(eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalCalendarID, externalCalendarID), eq(eventOutbox.externalEventID, externalEventID), eq(eventOutbox.action, "delete"), eq(eventOutbox.status, "completed"), sql`${eventOutbox.payload}->'organizer'->'dispatch' is not null`)).limit(1);
       if (cancelled) { await tx.select({ id: events.id }).from(events).where(eq(events.id, cancelled.eventID)).for("update"); await tx.update(eventOutbox).set({ status: "conflict", errorCode: "provider-conflict", remoteSnapshot: { externalEventId: externalEventID, etag, icalUid, deleted: false, observedAt: new Date().toISOString(), values: JSON.parse(JSON.stringify(values)), ...(state ? { providerState: state } : {}) } }).where(eq(eventOutbox.id, cancelled.id)); return false; }
     }
@@ -1093,7 +1093,7 @@ export async function deleteExternalEvent(
     // Record only this exact accepted cancellation's ordinary deletion transition.
     // Later reconciliation may accept this tombstone, never unrelated edits/deletes.
     const deletedAt = new Date();
-    if (provider === "google" && mapped.event.isCanceled) {
+    if ((provider === "google" || provider === "caldav") && mapped.event.isCanceled) {
       const cancellations = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.eventID, mapped.event.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), eq(eventOutbox.externalEventID, externalEventID), eq(eventOutbox.revision, mapped.event.revision), eq(eventOutbox.status, "completed"), eq(eventOutbox.action, "delete"))).for("update");
       for (const row of cancellations) {
         const intent = row.payload.organizer;

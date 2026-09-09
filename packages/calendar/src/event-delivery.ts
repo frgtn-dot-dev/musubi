@@ -3,7 +3,7 @@ import type { EventDeliveryTarget } from "@musubi/types";
 /** Shared language for the web and native clients; never aggregate receipts. */
 export function eventDeliveryLabel(target: EventDeliveryTarget): string {
   if (target.graphRsvpPhase) return ({ queued: "Response request saved", dispatched: "Outlook response outcome unknown", accepted: "Outlook accepted the response action", observed: "Response observed in Outlook", absent: "Outlook meeting copy unavailable" })[target.graphRsvpPhase];
-  if (target.organizerPhase) return ({ unchanged: "Google meeting already matches", queued: "Google meeting change saved", dispatched: "Google meeting outcome unknown", accepted: "Google accepted the meeting action", observed: "Meeting action observed in Google", absent: "Google meeting copy unavailable" })[target.organizerPhase];
+  if (target.organizerPhase) return ({ unchanged: "Google meeting already matches", queued: "Google meeting change saved", dispatched: "Google meeting outcome unknown", accepted: "Google accepted the meeting action", observed: "Meeting action observed in Google", absent: "Google meeting copy unavailable" })[target.organizerPhase].replace(/Google/g, target.provider === "caldav" ? "CalDAV" : "Google");
   if (target.graphCreateAdopted) return "Provider version accepted in Musubi";
   if (target.alarmDiscarded) return "Saved alarm change discarded";
   const labels: Record<EventDeliveryTarget["status"], string> = {
@@ -26,8 +26,8 @@ export function eventDeliveryLabel(target: EventDeliveryTarget): string {
 export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
   if (target.graphRsvpPhase) return target.graphRsvpPhase === "queued" ? "Outlook will be asked to send your response to the organizer. Organizer delivery cannot be verified." : target.graphRsvpPhase === "observed" ? "The current Outlook response matches your choice. Organizer delivery cannot be verified." : "The response action will not be resent. Musubi can check the current copy, but a missing copy or accepted action does not prove organizer delivery. Check Outlook if this remains unresolved.";
   if (target.organizerPhase === "unchanged") return "The meeting already matched this request. No new notification request was sent. Guest notification delivery remains unknown.";
-  if (target.organizerPhase === "queued") return "Google will be asked to notify all guests. Guest notification delivery cannot be verified.";
-  if (target.organizerPhase === "accepted") return "Google accepted the action with notification of all guests requested. Guest notification delivery cannot be verified. Checking the result never resends the action.";
+  if (target.organizerPhase === "queued") return `${target.provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to notify all guests. Guest notification delivery cannot be verified.`;
+  if (target.organizerPhase === "accepted") return `${target.provider === "caldav" ? "The CalDAV server" : "Google"} accepted the action with notification of all guests requested. Guest notification delivery cannot be verified. Checking the result never resends the action.`;
   if (target.organizerPhase) return "The action may have been sent with notification of all guests requested. Guest notification delivery cannot be verified. Checking the result never resends the action.";
   if (target.graphCreateAdopted) return "The observed provider family was accepted locally. The original request remains in history; this choice sent no provider write.";
   if (target.alarmDiscarded) return "This saved request was stopped. The current CalDAV event is read on the next sync; a change already accepted by the server is not undone.";

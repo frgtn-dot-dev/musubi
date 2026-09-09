@@ -4,7 +4,7 @@ import { resolveEventTimeEdit } from "@musubi/calendar";
 import {
   EventWriteError,
   EventTimeZoneSchema,
-  type ProviderOrganizerRequest,
+  type GoogleOrganizerRequest,
 } from "@musubi/types";
 import { requireEventEtag, ProviderEventWriteError } from "../event_write";
 import { googleEventCreateID } from "../event_create_identity";
@@ -135,7 +135,7 @@ function timeBody(input: unknown) {
       };
 }
 export function googleOrganizerBody(
-  request: ProviderOrganizerRequest,
+  request: GoogleOrganizerRequest,
   baseline: GoogleOrganizerNative | null,
   own: string,
 ): Record<string, unknown> | null {
@@ -200,7 +200,7 @@ function comparableEndpoint(value: unknown) {
 }
 export function matchesGoogleOrganizer(
   actual: unknown,
-  request: ProviderOrganizerRequest,
+  request: GoogleOrganizerRequest,
   baseline: GoogleOrganizerNative | null,
   own: string,
 ): boolean {

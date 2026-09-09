@@ -242,3 +242,56 @@ it("can correct a DST-invalid time after the server rejects admission", async ()
     api.save.mock.calls[0][0].operationID,
   );
 });
+it("edits CalDAV content without rebasing native time and explicitly requests server invitations", async () => {
+  api.save.mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: ["update", "delete"] } }} onClose={vi.fn()} />);
+  expect(screen.getByRole("dialog", { name: "Manage CalDAV meeting" })).toBeTruthy();
+  expect(screen.queryByLabelText("Start")).toBeNull();
+  expect(screen.queryByLabelText("Event time zone")).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", notificationPolicy: "server-invite", expectedRevision: 4, patch: { description: null } });
+  expect(api.save.mock.calls[0][0]).not.toHaveProperty("sendUpdates");
+});
+it("opens verified CalDAV creation in explicit UTC", async () => {
+  api.observe.mockResolvedValue({ provider: "caldav", calendarID, notificationPolicy: "server-invite", createTime: "utc-or-all-day" });
+  api.save.mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Create CalDAV meeting" }));
+  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).value).toBe("UTC");
+  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).disabled).toBe(true);
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Meeting" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Guest email addresses" }), { target: { value: "guest@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", notificationPolicy: "server-invite", time: { kind: "zoned", timeZone: "UTC" } });
+});
+for (const action of ["update", "delete"] as const) it(`offers only the proven CalDAV ${action} action`, async () => {
+  api.save.mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: [action] } }} onClose={vi.fn()} />);
+  expect(!!screen.queryByRole("button", { name: "Save and notify guests" })).toBe(action === "update");
+  expect(!!screen.queryByRole("button", { name: "Cancel meeting and notify guests" })).toBe(action === "delete");
+  expect((screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement).disabled).toBe(action === "delete");
+  if (action === "delete") {
+    fireEvent.click(screen.getByRole("button", { name: "Cancel meeting and notify guests" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Cancel CalDAV meeting" })).getByRole("button", { name: "Cancel meeting and notify guests" }));
+    await screen.findByRole("status"); expect(api.save.mock.calls[0][0].action).toBe("delete");
+  }
+});
+it("retries the exact cancellation-only request after dismissing its failed confirmation", async () => {
+  api.save.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: ["delete"] } }} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel meeting and notify guests" }));
+  const confirmation = screen.getByRole("dialog", { name: "Cancel CalDAV meeting" });
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Cancel meeting and notify guests" }));
+  await within(confirmation).findByText("Response lost");
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Keep meeting" }));
+  expect(screen.queryByRole("dialog", { name: "Cancel CalDAV meeting" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Save and notify guests" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save).toHaveBeenCalledTimes(2);
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+  expect(api.save.mock.calls[1][0]).toMatchObject({ action: "delete", provider: "caldav", notificationPolicy: "server-invite" });
+});

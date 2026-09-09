@@ -16,7 +16,15 @@ export type OrganizerDraft = {
 };
 export const organizerNotice =
   "Google will be asked to notify all guests. Guest notification delivery cannot be verified. These guests do not become Musubi calendar members or receive a second Musubi invitation.";
-export function organizerDraft(event?: Event): OrganizerDraft {
+export function organizerNotificationNotice(provider: "google" | "caldav") {
+  return provider === "google"
+    ? organizerNotice
+    : organizerNotice.replace("Google", "The CalDAV server");
+}
+export function organizerDraft(
+  event?: Event,
+  provider: "google" | "caldav" = "google",
+): OrganizerDraft {
   const day = new Date().toISOString().slice(0, 10),
     time = event?.timeModel;
   return {
@@ -45,7 +53,9 @@ export function organizerDraft(event?: Event): OrganizerDraft {
         ? time.timeZone
         : event
           ? ""
-          : Intl.DateTimeFormat().resolvedOptions().timeZone,
+          : provider === "caldav"
+            ? "UTC"
+            : Intl.DateTimeFormat().resolvedOptions().timeZone,
     allDay: event?.isAllDay ?? false,
   };
 }
@@ -58,11 +68,19 @@ export function organizerRequest(
     eventID: string;
     calendarID: string;
     color: string;
+    provider?: "google" | "caldav";
   },
   observation?: ProviderEventStateResponse,
 ): ProviderOrganizerRequest {
-  const { color, ...ids } = identity;
-  const common = { ...ids, provider: "google", sendUpdates: "all" };
+  const {
+    color,
+    provider = observation?.organizerEdit?.provider ?? "google",
+    ...ids
+  } = identity;
+  const common =
+    provider === "caldav"
+      ? { ...ids, provider, notificationPolicy: "server-invite" }
+      : { ...ids, provider, sendUpdates: "all" };
   const time = draft.allDay
     ? {
         kind: "all-day",
@@ -108,6 +126,7 @@ export function organizerRequest(
     if (changed.includes(key))
       patch[key] = draft[key] || (key === "title" ? "" : null);
   if (
+    provider === "google" &&
     changed.some((key) => ["start", "end", "timeZone", "allDay"].includes(key))
   )
     patch.time = time;

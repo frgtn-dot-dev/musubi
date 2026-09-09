@@ -63,6 +63,7 @@ export function GlobalEventModals() {
           });
         }}
         calendars={calendars}
+        seriesMaster={events.find(event => event.id === composer.master?.id && event.revision === composer.master?.revision)}
         event={composer.prefilled}
         privacyEvent={privatePrefilled ?? composer.prefilled}
         sourceRemoved={!!composer.prefilled && isRetiredGoogleSnapshot(composer.prefilled, retiredGoogleEventIDs, retiredGoogleEventRevisions)}

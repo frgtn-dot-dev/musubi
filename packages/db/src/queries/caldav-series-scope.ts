@@ -1,4 +1,4 @@
-import { assertCaldavSeriesUTCConversion, caldavExdateRestoration, planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
+import { caldavRdateEdit, assertCaldavSeriesUTCConversion, caldavExdateRestoration, planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { EventSchema, EventWriteError, can, type Event, type EventScopeRequest, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
 import { db } from "..";
@@ -123,6 +123,11 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   if (typeof write.patch.recurrence === "string" && /(?:^|\n)EXDATE/.test(baseline.master.recurrence ?? "")) {
     if (targetEventID || write.cancelTarget || write.newDefinition || write.time || baseline.children.length || Object.keys(write.patch).length !== 1) throw unsupported();
     caldavExdateRestoration(baseline.master, write.patch.recurrence);
+    return { ...baseline, master: EventSchema.parse({ ...baseline.master, recurrence: write.patch.recurrence }) };
+  }
+  if (typeof write.patch.recurrence === "string" && /(?:^|\n)RDATE/.test((baseline.master.recurrence ?? "") + "\n" + write.patch.recurrence)) {
+    if (targetEventID || write.cancelTarget || write.newDefinition || write.time || baseline.children.length || Object.keys(write.patch).length !== 1) throw unsupported();
+    caldavRdateEdit(baseline.master, write.patch.recurrence);
     return { ...baseline, master: EventSchema.parse({ ...baseline.master, recurrence: write.patch.recurrence }) };
   }
   const removesRecurrence = write.patch.recurrence === null;

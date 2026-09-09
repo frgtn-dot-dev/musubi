@@ -3,6 +3,7 @@ import { isValidElement, type ReactNode } from "react";
 import { EventSchema, DEFAULT_REMINDER_RULE } from "@musubi/types";
 
 const state = vi.hoisted(() => ({
+  platform: "android" as "android" | "ios",
   values: [] as unknown[],
   index: 0,
   effects: [] as (() => void)[],
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   close: vi.fn(),
   alert: vi.fn(),
+  actionSheet: vi.fn(),
   reminder: vi.fn(),
   reconcile: vi.fn(),
   cache: vi.fn(),
@@ -59,8 +61,9 @@ vi.mock("react-native", () => ({
   View: "View",
   ActivityIndicator: "ActivityIndicator",
   Alert: { alert: mocks.alert },
+  ActionSheetIOS: { showActionSheetWithOptions: mocks.actionSheet },
   Keyboard: { dismiss: vi.fn() },
-  Platform: { OS: "android" },
+  Platform: { get OS() { return state.platform; } },
   StyleSheet: { create: (value: unknown) => value },
   useWindowDimensions: () => ({ width: 390, height: 800 }),
 }));
@@ -284,6 +287,12 @@ function titleInput(
   return titleInput(node.props.children);
 }
 function scopeAnswer(label: string) {
+  if (state.platform === "ios") {
+    const [options, answer] = mocks.actionSheet.mock.lastCall!;
+    expect(options.title).toBe("Change recurring event");
+    answer(options.options.indexOf(label));
+    return;
+  }
   expect(mocks.alert.mock.lastCall![0]).toBe("Change recurring event");
   const options = mocks.alert.mock.lastCall![2] as {
     text: string;
@@ -303,6 +312,7 @@ function saveButton(node: ReactNode): Props | undefined {
   return saveButton(node.props.children);
 }
 beforeEach(() => {
+  state.platform = "android";
   state.persistent = false; state.refs = []; state.dependencies = [];
 
   vi.clearAllMocks();
@@ -1035,4 +1045,48 @@ it("restores an imported all-day exclusion through the native whole-series calle
   const body = JSON.parse(mocks.request.mock.lastCall![1].body);
   expect(body).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=4\nEXDATE;VALUE=DATE:20260330" } });
   expect(body.time).toBeUndefined();
+});
+
+for (const platform of ["android", "ios"] as const) for (const remove of [false, true]) it(`${platform} explicit series ${remove ? "removes" : "adds"} one date from the stored master`, async () => {
+  state.platform = platform;
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const recurrence = "RRULE:FREQ=DAILY;COUNT=2" + (remove ? "\nRDATE;VALUE=DATE:20260402" : "");
+  const series = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000901", recurrence, ...resolveEventTimeEdit({ kind: "all-day", startDate: "2026-03-28", endDate: "2026-03-28" }) });
+  useCalendarsStore.getState().loadCalendars([{ id: series.originCalendarID, creatorID: "owner", role: "owner", name: "CalDAV", provider: "caldav", color: "#7A8BA3" } as any]);
+  useEventsStore.setState({ events: [series] });
+  // Open the second generated slot: proof and COUNT anchor still use stored root.
+  presentEventDetail([series], { ...series, id: `${series.id}_${Date.parse("2026-03-29T00:00:00Z")}`, start: new Date("2026-03-29T00:00:00Z"), end: new Date("2026-03-29T00:00:00Z") });
+  useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
+  find(renderComposer(true), props => props.label === (remove ? "Remove additional date 2026-04-02" : "Add series date"))!.onPress();
+  if (!remove) {
+    const picker = () => find(renderComposer(), props => props.mode === "date" && typeof props.onValueChange === "function");
+    expect(picker()).toBeDefined();
+    expect(picker()![platform === "ios" ? "display" : "presentation"]).toBe(platform === "ios" ? "compact" : "dialog");
+    if (platform === "android") {
+      picker()!.onDismiss();
+      expect(picker()).toBeUndefined();
+      find(renderComposer(), props => props.label === "Add series date")!.onPress();
+    } else {
+      // Expo's compact iOS control stays mounted when its native popover is
+      // closed/reopened. It has no JS onDismiss callback; selection is the
+      // reachable callback that hides our temporary control.
+      expect(picker()!.onDismiss).toBeUndefined();
+      expect(picker()!.display).toBe("compact");
+      expect(picker()!.value).toEqual(new Date("2026-03-28T12:00:00"));
+    }
+    expect(useEditComposerStore.getState().visible).toBe(true);
+    expect(mocks.request).not.toHaveBeenCalled();
+    picker()!.onValueChange({}, new Date("2026-04-02T12:00:00"));
+    expect(picker()).toBeUndefined();
+    expect(mocks.request).not.toHaveBeenCalled();
+  }
+  mocks.request.mockImplementationOnce(async (_url, options) => { const body = JSON.parse(options.body); useEventsStore.setState({ events: [{ ...series, ...body.patch, revision: 2 }] }); return { error: null, data: { operationID: body.operationID, changed: true, events: [{ id: series.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false } }; });
+  const saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(platform === "ios" ? mocks.actionSheet : mocks.alert).toHaveBeenCalledOnce()); scopeAnswer("All events"); await saving;
+  expect(mocks.request).toHaveBeenCalledOnce();
+  const body = JSON.parse(mocks.request.mock.lastCall![1].body);
+  expect(mocks.request.mock.lastCall![0]).toContain(`/events/${series.id}/scope`);
+  expect(body).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: { recurrence: remove ? "RRULE:FREQ=DAILY;COUNT=2" : "RRULE:FREQ=DAILY;COUNT=2\nRDATE;VALUE=DATE:20260402" } });
+  expect(body.time).toBeUndefined(); expect(body.originalStart).toBeUndefined();
+  expect(useEditComposerStore.getState().visible).toBe(false);
 });

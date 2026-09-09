@@ -1015,3 +1015,7 @@ layouts with keyboard focus returned to Repeat after a row disappears.
 This does not activate a live provider or prove physical native/iCloud
 acceptance. Timed exclusions, new EXDATE additions, RDATE changes and families
 with detached definitions remain separate work.
+
+The bounded all-day writer also supports reversible addition/removal of one
+single-value DATE RDATE on a finite personal master, retaining the original RRULE
+COUNT and anchor. See [single additional date contract and evidence](caldav-rdate-writes.md).

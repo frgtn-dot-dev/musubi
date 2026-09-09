@@ -6,7 +6,7 @@ import { EventWriteError } from "@musubi/types";
 const DAV = "DAV:", CAL = "urn:ietf:params:xml:ns:caldav";
 const guardedFetch = createGuardedCaldavFetch();
 type Node = { name: string; text: string; children: Node[] };
-function refuse(): never { throw new EventWriteError("event-write", "unsupported", "Verified CalDAV automatic reply permission is required."); }
+function refuse(): never { throw new EventWriteError("event-write", "unsupported", "Verified CalDAV automatic scheduling permission is required."); }
 const key = (namespace: string, name: string) => `{${namespace}}${name}`;
 /** Preserve namespace identity; the ordinary DAV convenience parser discards it. */
 export function schedulingProperties(xml: string, expectedURL: string): Map<string, Node> {
@@ -97,7 +97,7 @@ function privileges(node: Node): Set<string> {
   }));
 }
 export type CaldavSchedulingProof = { principal: string; owner: string; outbox: string; addresses: string[] };
-export async function readCaldavSchedulingProof(collection: string, resource: string, authorization: string, signal?: AbortSignal): Promise<CaldavSchedulingProof> {
+export async function readCaldavSchedulingProof(collection: string, resource: string, authorization: string, signal?: AbortSignal, action: "reply" | "create" | "update" | "delete" = "reply"): Promise<CaldavSchedulingProof> {
   safeURL(resource, collection);
   const options = await guardedFetch(collection, { method: "OPTIONS", redirect: "error", signal, headers: { authorization, "cache-control": "no-cache" } });
   assertEventWriteResponse(options);
@@ -118,8 +118,8 @@ export async function readCaldavSchedulingProof(collection: string, resource: st
   const type = one(permission, DAV, "resourcetype");
   if (type.text || !type.children.some(item => item.name === key(DAV, "collection") && !item.children.length && !item.text) || !type.children.some(item => item.name === key(CAL, "schedule-outbox") && !item.children.length && !item.text)) refuse();
   const sending = privileges(one(permission, DAV, "current-user-privilege-set"));
-  if (![key(DAV, "all"), key(CAL, "schedule-send"), key(CAL, "schedule-send-reply")].some(value => sending.has(value))) refuse();
-  const writable = privileges(one(await properties(resource, authorization, ["d:current-user-privilege-set"], signal), DAV, "current-user-privilege-set"));
-  if (![key(DAV, "all"), key(DAV, "write"), key(DAV, "write-content")].some(value => writable.has(value))) refuse();
+  if (![key(DAV, "all"), key(CAL, "schedule-send"), key(CAL, action === "reply" ? "schedule-send-reply" : "schedule-send-invite")].some(value => sending.has(value))) refuse();
+  const writable = privileges(one(await properties(action === "create" || action === "delete" ? collection : resource, authorization, ["d:current-user-privilege-set"], signal), DAV, "current-user-privilege-set"));
+  if (![key(DAV, "all"), key(DAV, "write"), key(DAV, action === "create" ? "bind" : action === "delete" ? "unbind" : "write-content")].some(value => writable.has(value))) refuse();
   return { principal, owner, outbox, addresses };
 }

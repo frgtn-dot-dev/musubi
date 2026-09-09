@@ -15,6 +15,7 @@ produkční aktivace. Stejný provider může podporovat jednu operaci a odmítn
 | --- | --- | --- |
 | K12 Google | Osobní generated/existing occurrence update, čas ve stejném typu, cancel; durable queue/worker/ACK a explicitní apply-saved konflikt | Whole-series nepodporované podle rozhodnutí o zachování výjimek; following nepovolené. [Kontrakt](../sync/google-occurrence-writes.md) |
 | K12 CalDAV | Osobní whole-resource series content/time/RRULE změna, explicitní zoned→UTC převod konečné COUNT série se stejným civilním časem bez výjimek, obnovení vybraných importovaných all-day EXDATE dat v konečné COUNT sérii bez výjimek a odebrání samotného RRULE bez výjimek, occurrence content/time/cancel/revival, series/following delete a dvoukrokový following update | Známý zoned/floating/all-day model a úplná resource evidence; resource write, collection bind/unbind dle operace. Explicitní potvrzení master/active-child content a uloženého series/active-child time či series RRULE záměru je podporované při shodné původní nativní struktuře. Generated/cancel/revival potvrzení zachovává původní definice a intent; Partial following-delete konflikt má přesné potvrzení bodu řezu, kontrolu tombstones a ochranu proti opožděnému starému syncu. Whole-resource delete konflikt má samostatné potvrzení celé série a collection-unbind proof. Source konflikt splitu před prvním ACK má potvrzení obou operací se stejnou budoucí identitou. Po source ACK lze samostatně potvrdit vytvoření budoucí série na původní adrese, pokud chybí nebo již přesně odpovídá uloženému celému resource; dokončený source receipt zůstává neměnný. Přepis cizího resource, změna budoucí adresy a širší převody zbývají. [Kontrakt a Radicale důkazy](../sync/caldav-series-writes.md) |
+| K12 CalDAV přidané datum | Přidání nebo odebrání jednoho all-day RDATE mimo pravidlo osobní konečné COUNT série; explicitní stored-master scope, neměnný záměr, konflikt a úplný ACK | Jeden VEVENT bez EXDATE a detached historie, zachovaný DTSTART/COUNT, trvání a ostatní raw bytes. Web a native callery včetně generated slotu používají uložený master. HTTP/DB a disposable Radicale evidence nenahrazují živý iCloud; více dat, timed/UNTIL a kombinace zůstávají nepodporované. [Kontrakt](../sync/caldav-rdate-writes.md) |
 | K12 CalDAV DATE import/export | Veřejný ICS import/export zachovává all-day RDATE/EXDATE, původní DTSTART a COUNT včetně vyloučeného začátku a přidaných dat za koncem pravidla | Nejednoznačné či neplatné datumové parametry se odmítnou před vytvořením cílového kalendáře; přesné chyby zachovává i sdílený legacy serializer. Nejde o nový nativní dated writer ani úplné zachování detached importu. [Kontrakt](../sync/caldav-date-export.md) |
 | K12 Graph | Default-off veřejný create osobní konečné série: jeden vlastní kalendář, známý zoned/all-day model, COUNT nebo přesně ekvivalentní konečné UNTIL do 366 výskytů / 730 dnů. Durable intent, jediný POST, transaction recovery, úplný family ACK a sync bez duplicit včetně odstranění/obnovy masteru | HTTP 202 potvrzuje místní uložení, ne nativní doručení. Opakování používá stabilní klíč nebo UUID události a vrací aktuální dostupný stav. Web/native draft identita a browser HTTP-mock acceptance jsou pokryté; živý Outlook a fyzická native acceptance zbývají; NOEND, širší převody, konfliktní create recovery s výjimkami a native scope UPDATE/DELETE nejsou uzavřené. Weak ETag ani changeKey nejsou důkaz podmíněného zápisu. [Create kontrakt](../sync/graph-recurring-create.md), [import](../sync/provider-time-import.md#graph-occurrence-mapping-slice)  Explicitní lokální převzetí jedinečné změněné osobní plain finite create family je pokryté bez provider write; širší exception/cancellation adoption zbývá. [Adoption kontrakt](../sync/graph-create-adoption.md) |
 | K13 read/preserve | Privátní source observation organizátora, účastníků, rolí a odpovědí pro Google/Graph/CalDAV | CalDAV vlastní identita vyžaduje scheduling proof; provider observation není Musubi social attendance. [Kontrakt](../sync/provider-event-state.md) |
@@ -22,6 +23,7 @@ produkční aktivace. Stejný provider může podporovat jednu operaci a odmítn
 | K13 CalDAV RSVP | Default-off osobní one-off RSVP s ověřeným automatic scheduling, public/web/native, durable PUT/CAS a úplným readback ACK | Známý zoned/all-day resource bez recurrence, přesný self/principal/owner/outbox proof; organizer delivery zůstává unknown. Konflikt bez overwrite potvrzení, širší identity/series a živá dvouúčtová acceptance zbývají. [Kontrakt](../sync/caldav-rsvp.md) |
 | K13 Graph RSVP | Default-off vlastní primary one-off attendee copy: accept/tentativelyAccept/decline, veřejný endpoint, web/native editor a trvalý marker před POST | Po možném odeslání jen read-only Check response, včetně konfliktu a zmizelé kopie. Bez CAS nebo garance doručení organizátorovi. Recurring/delegated RSVP a živá acceptance zbývají. [Kontrakt](../sync/microsoft-rsvp.md) |
 | K13 Google organizer | Default-off vlastní primary one-off create/update/cancel s explicitním oznámením všem hostům, stabilní identitou a trvalým markerem před odesláním; veřejný endpoint a web/native callery | Nejistá obnova pouze čte stav a nikdy automaticky neopakuje pozvánku. Změny seznamu hostů, série, delegace/federace, další provideři a živé dvouúčtové doručení zůstávají otevřené. [Kontrakt](../sync/google-organizer.md) |
+| K13 CalDAV organizer | Default-off one-off create, změna obsahu a cancel s ověřeným automatic scheduling a explicitním server-invite; vlastní principal/owner, operaci odpovídající privilege proof a web/native callery | Stabilní URL/UID, podmíněný zápis, úplný readback a trvalý marker brání opakování nejisté pozvánky. Samostatné update/delete capabilities zachovávají i cancellation-only obnovu. Změna času je navazující řez; recurrence, změna hostů a živé doručení nejsou pokryté. [Kontrakt](../sync/caldav-organizer.md) |
 | K14 read/preserve | Privátní provider reminders a raw availability/privacy/type observation; Google title-only HTTP update/readback zachovává special state, conference metadata a reminders, Graph HTTP read/re-read zachovává workingElsewhere/Teams (writer zůstává blokovaný); Google freeBusyReader se nevydává za plnohodnotný detailový mirror | Google změny přístupu mají version fence proti opožděnému importu a vynucují čerstvé úplné načtení. Zúžení Google přístupu nyní skryje obsah provider-origin mirroru i při neúspěšném fetch, zachová identity/intenty a invaliduje otevřené detaily web/native. Úplné odebrání zdroje rediguje sdílené tombstones; veřejná historie doručování a čekající e-maily znovu ověřují aktuální přístup. Web/native otevřené editory a cache jsou pokryté v navazujících PR #249/#251; zbývá fyzická acceptance, starší klienti a intervalový model. [Web editor kontrakt](../ui/google-editor-privacy-refresh.md); nejde o kompletní intervalový free/busy model. [Access kontrakt](../sync/google-calendar-access.md). [Kontrakt](../sync/provider-event-state.md) |
 | K14 Graph private-read access | Discovery rozlišuje canEdit a tri-state canViewPrivateItems; potvrzené zúžení rediguje staré detaily před fetch a generation fence blokuje opožděný import/delete/cursor včetně rodin | Čerstvý omezený read může obnovit aktuálně povolený obsah; unknown proof neobnoví redigovaný obsah. Retained receipts/email a web/native editor drafty mají stejnou privacy hranici. Fake HTTP/DB a mounted klientské regrese nenahrazují živou Graph/device acceptance. CalDAV read-privilege parity zůstává implementace. [Kontrakt](../sync/microsoft-calendar-access.md) |
 | K14 CalDAV event alarms | One-off nebo explicitní konečná COUNT master série: známý zoned/all-day osobní VEVENT, nula/jeden jednoduchý DISPLAY START-relative alarm; web/native editor a explicitní konflikt | Samostatný default-off flag, plný privátní resource proof, strong ETag CAS, durable replay/ACK a blokace neúplného pull jsou lokálně pokryté včetně disposable Radicale. Nejde o per-user preference. Master-only série zachovává přesný RRULE a vyžaduje explicitní scope; active/retired exceptions, RDATE/EXDATE, složitější recurrence, komplexní alarmy, meeting/floating resources a živá iCloud/OS acceptance zůstávají otevřené. [Kontrakt](../sync/caldav-event-alarms.md) |
@@ -35,27 +37,25 @@ Pořadí dalších řezů je orientační; nový konkrétní nález může mít 
 opravy a zelené CI před squash mergem. Žádný níže uvedený bod se nepovažuje za
 hotový pouze tím, že má bezpečný unsupported guard.
 
-1. **Graph recurring create a echo.** Ověřit native master čas a identitu,
-   stable create operation, obnovu po ztracené odpovědi a import bez součtu
-   lokálního masteru s provider-expanded instancemi. Vyřešit reset/posun okna,
-   vzdálené výjimky a cancellation před povolením create. UPDATE/DELETE nadále
-   neodvozovat z `changeKey` ani z úspěšného běžného PATCH.
-2. **CalDAV scope konflikty a další reprezentovatelné editace.** Rozšířit
-   explicitní fresh preview/confirm pro další implementované scope operace;
-   zachovat celý resource, identity, permission evidence a trvalé kroky splitu.
-   Odstranění RRULE, změna typu/zóny nebo dated additions/exclusions vyžadují
-   samostatný přesný plán, zvlášť pokud existují výjimky.
-3. **K13 další meeting operace.** Doplnit podporované native RSVP/organizer
-   kontrakty, jejich privátní záměry, obnovu, explicitní notification policy a
-   klientské callery. Fake servery ověřují lokální implementaci; reálné
-   organizer-visible doručení zůstává samostatnou acceptance.
-4. **K14 reminders a privacy.** Doplnit další prokazatelné native reminder
-   operace, dostupnost bez detailů a privacy downgrade/regain bez úniku starého
-   obsahu. Neodvozovat vlastní odpověď nebo write oprávnění pouze z vlastnictví
-   kalendáře. Nezavádět dvojí plánování stejné připomínky.
-5. **K15 průběžná evidence.** Aktualizovat tento přehled po změně skutečného
-   podporovaného rozsahu. U každé závěrečné kontroly rozlišit unit/HTTP/DB,
-   browser/mock native, fyzické zařízení a živého providera.
+1. **K12 společné ověření dokončených řezů.** Graph finite create/echo a
+   lokální převzetí změněné plain family jsou implementované; původní create
+   položka už není otevřenou implementací. CalDAV scope konflikty, RRULE removal,
+   EXDATE restoration a jednotlivé RDATE mají vlastní přesné kontrakty. Při
+   integraci ověřit jejich společné chování a úplnost registrace regresí.
+2. **K13 organizer operace.** CalDAV one-off create/content/cancel je implementované;
+   dokončit navazující explicitní změnu času; Google content/cancel již uloženého výskytu;
+   Graph one-off create s obnovou pouze čtením. Každý řez potřebuje privátní
+   neměnný záměr, explicitní notification policy, klientské callery a důkaz proti
+   opakovanému odeslání po nejisté odpovědi. Živé doručení zůstává samostatné.
+3. **K14 CalDAV read privacy.** Dokončit společnou integraci úplného discovery
+   důkazu, redakce VEVENT/VTODO a ochrany otevřených editorů a opožděných odpovědí.
+   Google/Graph read privacy, dostupnost a vymezené reminder operace už mají
+   implementované kontrakty výše; další rozsah neodvozovat pouze z vlastnictví.
+4. **Závěrečná společná evidence.** Relevantní celé kontroly, nezávislé review
+   integrace a CI po ucelených dávkách; aktualizace tohoto přehledu podle skutečně
+   podporovaného rozsahu. Rozlišovat unit/HTTP/DB, browser/mock native, fyzické
+   zařízení a živého providera. Širší nepodporované varianty nejsou automaticky
+   novou podmínkou dokončení původního rozsahu.
 
 ## Na konec: vstup nebo rozhodnutí vlastníka
 

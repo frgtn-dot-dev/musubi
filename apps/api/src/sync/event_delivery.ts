@@ -156,13 +156,24 @@ export async function deliverEventOutbox(
         return true;
       };
       if (row.payload.organizer) {
-        if (!config.api.providerOrganizerEditsEnabled || !adapter?.organizer) throw new EventWriteError("organizer", "unsupported");
+        const caldav = row.provider === "caldav";
+        if (caldav ? !config.api.caldavOrganizerEditsEnabled || !adapter?.caldavOrganizer : !config.api.providerOrganizerEditsEnabled || !adapter?.organizer) throw new EventWriteError("organizer", "unsupported");
         await withProviderOrganizerLease(row, async () => undefined);
-        const transport = await adapter.organizer(row.userID, row.accountID, row.externalCalendarID, signal);
-        const outcome = await transport.deliver(row.payload.organizer, async () => { await markProviderOrganizer(row); mutationStarted = true; }, async () => { await markProviderOrganizer(row, true); });
-        if (outcome.kind === "observed") await completeProviderOrganizer(row, { id: outcome.native.id, etag: outcome.native.etag, iCalUID: outcome.native.iCalUID, state: googleEventState(outcome.native) });
-        else if (outcome.kind === "deleted") await completeProviderOrganizer(row, null);
-        else await finishEventOutbox(row.id, token, "unconfirmed", outcome.kind === "absent" ? "organizer-copy-absent" : "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
+        const mark = async () => { await markProviderOrganizer(row); mutationStarted = true; };
+        const accepted = async () => { await markProviderOrganizer(row, true); };
+        if (caldav) {
+          const transport = await adapter!.caldavOrganizer!(row.userID, row.accountID, row.externalCalendarID, row.action, row.externalEventID ?? undefined, signal);
+          const outcome = await transport.deliver(row.payload.organizer, mark, accepted);
+          if (outcome.kind === "observed") await completeProviderOrganizer(row, { id: outcome.native.id, etag: outcome.native.etag, iCalUID: outcome.native.iCalUID, state: outcome.state });
+          else if (outcome.kind === "deleted") await completeProviderOrganizer(row, null);
+          else await finishEventOutbox(row.id, token, "unconfirmed", outcome.kind === "absent" ? "organizer-copy-absent" : "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
+        } else {
+          const transport = await adapter!.organizer!(row.userID, row.accountID, row.externalCalendarID, signal);
+          const outcome = await transport.deliver(row.payload.organizer, mark, accepted);
+          if (outcome.kind === "observed") await completeProviderOrganizer(row, { id: outcome.native.id, etag: outcome.native.etag, iCalUID: outcome.native.iCalUID, state: googleEventState(outcome.native) });
+          else if (outcome.kind === "deleted") await completeProviderOrganizer(row, null);
+          else await finishEventOutbox(row.id, token, "unconfirmed", outcome.kind === "absent" ? "organizer-copy-absent" : "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
+        }
         return;
       }
       if (row.payload.reminderInstance) {

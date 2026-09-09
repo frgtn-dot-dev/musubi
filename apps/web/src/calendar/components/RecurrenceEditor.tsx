@@ -1,4 +1,6 @@
-import { allDayExclusionDates, restoreAllDayExclusion } from "@musubi/calendar";
+import type { Event, Settings } from "@musubi/types";
+import { DatePicker } from "~/ui/DatePicker";
+import { allDayAdditionalDate, setAllDayAdditionalDate, allDayExclusionDates, restoreAllDayExclusion } from "@musubi/calendar";
 import { Row } from "~/ui/Row";
 import {
 	buildRRule,
@@ -47,6 +49,8 @@ const OPTIONS = [
 ] as const;
 
 type RecurrenceEditorProps = {
+	rdateMaster?: Event;
+	weekStartsOn?: Settings["weekStartsOn"];
 	allDay?: boolean;
 	date: string;
 	disabled: boolean;
@@ -59,6 +63,8 @@ function dateAtNoon(date: string) {
 }
 
 export function RecurrenceEditor({
+	rdateMaster,
+	weekStartsOn = "monday",
 	allDay = false,
 	date,
 	disabled,
@@ -66,6 +72,16 @@ export function RecurrenceEditor({
 	value,
 }: RecurrenceEditorProps) {
 	const { extras, rrule } = splitRecurrence(value);
+	const [dateError, setDateError] = useState("");
+	let additional: ReturnType<typeof allDayAdditionalDate> | undefined;
+	try { if (allDay && rdateMaster) additional = allDayAdditionalDate({ ...rdateMaster, recurrence: value }); } catch { /* Unsupported drafts keep existing recurrence controls. */ }
+	function changeAdditionalDate(date: string | null) {
+		try {
+			const recurrence = setAllDayAdditionalDate({ ...rdateMaster!, recurrence: value }, date);
+			setDateError(""); restoreFocus.current = true; emit(recurrence);
+		} catch { setDateError("Choose one date outside the regular occurrences, within two years of the series start."); }
+	}
+
 	const root = useRef<HTMLDivElement>(null);
 	const restoreFocus = useRef(false);
 	useEffect(() => { if (restoreFocus.current) { restoreFocus.current = false; root.current?.querySelector<HTMLButtonElement>('[role="combobox"]')?.focus(); } }, [value]);
@@ -198,6 +214,12 @@ export function RecurrenceEditor({
 			/>
 
 			{allDay && allDayExclusionDates(value)?.map(date => <Row key={date} className={styles.excludedDateRow} label={date} detail="Excluded from this series" size="compact" trailing={<Button type="button" disabled={disabled} size="compact" variant="ghost" aria-label={`Restore ${date}`} onClick={() => { restoreFocus.current = true; emit(restoreAllDayExclusion(value, date)); }}>Restore</Button>} />)}
+
+			{additional ? <div className={styles.additionalDate}>
+				<Row label="Additional series date" detail="Adds one occurrence. The regular repeat count stays unchanged." size="compact" trailing={additional.date ? <Button type="button" disabled={disabled} size="compact" variant="ghost" onClick={() => changeAdditionalDate(null)}>Remove additional date</Button> : undefined} />
+				<DatePicker label="Additional series date" value={additional.date ?? ""} disabled={disabled || !!additional.date} min={rdateMaster!.start.toISOString().slice(0,10)} max={additional.limit} weekStartsOn={weekStartsOn} onChange={changeAdditionalDate} />
+				{dateError ? <p role="alert" className={styles.recurrenceHint}>{dateError}</p> : null}
+			</div> : null}
 
 			{unsupported ? (
 				<div className={styles.unsupportedRecurrence} role="note">

@@ -1,13 +1,14 @@
+import { caldavOrganizerTransport } from "./caldav_organizer_delivery";
 import { caldavAlarmScope } from "@musubi/calendar";
 import { recurrenceDateValues } from "./caldav_recurrence_dates";
-import { restoreEventExdates } from "./caldav_event_ical";
+import { editEventRdate, restoreEventExdates } from "./caldav_event_ical";
 import { inspectCaldavAlarm, writeCaldavAlarm } from "./caldav_alarms";
 import type { CaldavAlarmIntent } from "@musubi/db";
 import { readCaldavRsvp, deliverCaldavRsvp } from "./caldav_rsvp_delivery";
 import { caldavEventState } from "./provider_event_state";
 import { caldavSeriesEvidence, caldavSeriesCreationEvidence, type CaldavSeriesSplit, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
-import { caldavExdateRestoration, finiteSeriesFootprint, planEventScope } from "@musubi/calendar";
+import { caldavRdateEdit, caldavExdateRestoration, finiteSeriesFootprint, planEventScope } from "@musubi/calendar";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
@@ -25,6 +26,7 @@ import { normalizeCaldavResource } from "./caldav_time";
 import { config, logger } from "@musubi/config";
 import {
   getExternalLinkForCalendar,
+  getOrganizerTimeEventIDs,
   caldavSeriesDesired,
   sameCaldavRecurrence,
   sameCaldavScopeContext,
@@ -769,6 +771,7 @@ function assertCompleteObjects(urls: string[], objects: DAVCalendarObject[]) {
 
 export function normalizedObjectChanges(
   objects: DAVCalendarObject[],
+  organizerEventIDs: ReadonlySet<string> = new Set(),
 ): NormalizedChange[] {
   const changes: NormalizedChange[] = [];
   for (const object of objects) {
@@ -779,6 +782,13 @@ export function normalizedObjectChanges(
         else changes.push({ kind: "event-resource", externalId: object.url, events });
         continue;
       }
+    }
+    if (organizerEventIDs.has(object.url)) {
+      const native = normalizeCaldavResource(object);
+      if (native.length !== 1 || native[0]!.recurrence || native[0]!.originalStart)
+        throw new ProviderEventWriteError("provider-conflict");
+      changes.push({ kind: "event", data: native[0]! });
+      continue;
     }
     const event = icalToNormalized(object);
     const task = icalToNormalizedTask(object);
@@ -820,6 +830,7 @@ async function incrementalChanges(
   client: Awaited<ReturnType<typeof clientForAccount>>,
   calendar: DAVCalendar,
   cursor: string | null,
+  organizerEventIDs: ReadonlySet<string>,
 ): Promise<FetchChangesResult> {
   const responses = await client.syncCollection({
     props: { "d:getetag": {} },
@@ -858,7 +869,7 @@ async function incrementalChanges(
       })
     : [];
   assertCompleteObjects(changedUrls, objects);
-  const changes = normalizedObjectChanges(objects);
+  const changes = normalizedObjectChanges(objects, organizerEventIDs);
   for (const response of objectResponses) {
     if (response.status === 404) {
       changes.push(
@@ -971,7 +982,8 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     throw new ProviderEventWriteError("provider-conflict");
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
   const restoredDates = typeof cleanPatch.recurrence === "string" && /(?:^|\n)EXDATE/.test(baseline.master.recurrence ?? "") ? caldavExdateRestoration(baseline.master, cleanPatch.recurrence) : undefined;
-  if (typeof cleanPatch.recurrence === "string" && !restoredDates) {
+  const rdateEdit = typeof cleanPatch.recurrence === "string" && /(?:^|\n)RDATE/.test((baseline.master.recurrence ?? "") + "\n" + cleanPatch.recurrence) ? caldavRdateEdit(baseline.master, cleanPatch.recurrence) : undefined;
+  if (typeof cleanPatch.recurrence === "string" && !restoredDates && !rdateEdit) {
     const canonical = "RRULE:" + ICAL.Recur.fromString(cleanPatch.recurrence.replace(/^RRULE:/i, "")).toString();
     if (!sameCaldavRecurrence(cleanPatch.recurrence, canonical)) throw new EventWriteError("event-write", "unsupported");
     cleanPatch.recurrence = canonical;
@@ -1003,6 +1015,9 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
   if (restoredDates) {
     const { index } = eventMaster(evidence.data, baseline.ref.icalUid);
     after = restoreEventExdates(evidence.data, index, restoredDates);
+  } else if (rdateEdit) {
+    const { index } = eventMaster(evidence.data, baseline.ref.icalUid);
+    after = editEventRdate(evidence.data, index, { ...rdateEdit, rule: baseline.master.recurrence!.split("\n")[0]! });
   } else if (followingDelete) {
     const { master, index } = eventMaster(evidence.data, baseline.ref.icalUid);
     const rule = new ICAL.Property("rrule");
@@ -1321,6 +1336,7 @@ export async function deliverCaldavAlarmResource(intent: CaldavAlarmIntent, auth
 }
 
 export const caldavAdapter: CalendarAdapter = {
+  caldavOrganizer: caldavOrganizerTransport(async (userID, accountID) => { const accounts = await getCaldavAccountsByUser(userID); if (!accounts.some(account => account.id === accountID)) throw new EventWriteError("organizer", "denied"); return basicAuthForAccount(accountID); }),
   async readCaldavAlarm(context, signal) {
     if (!config.api.caldavAlarmEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const { resource, authorization } = await resourceAuthorization(context.link.userID, context.link.accountID, context.link.externalCalendarID, { master: context.event, ref: context.mapping.ref }, signal);
@@ -1451,6 +1467,7 @@ export const caldavAdapter: CalendarAdapter = {
     externalCalendarId,
     cursor,
   ): Promise<FetchChangesResult> {
+    const organizerEventIDs = new Set(await getOrganizerTimeEventIDs(_userID, accountId, externalCalendarId, "caldav"));
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
     const cal = cals.find((c) => c.url === externalCalendarId);
@@ -1470,7 +1487,7 @@ export const caldavAdapter: CalendarAdapter = {
 
     if (cal.reports?.includes("syncCollection")) {
       try {
-        return await incrementalChanges(client, cal, cursor);
+        return await incrementalChanges(client, cal, cursor, organizerEventIDs);
       } catch (error) {
         // An expired/unsupported token must never leave stale objects behind.
         // A complete query is the compatibility fallback and resets both kinds.
@@ -1514,7 +1531,7 @@ export const caldavAdapter: CalendarAdapter = {
       ? await client.fetchCalendarObjects({ calendar: cal, objectUrls })
       : [];
     assertCompleteObjects(objectUrls, objects);
-    const changes = normalizedObjectChanges(objects);
+    const changes = normalizedObjectChanges(objects, organizerEventIDs);
     logger.debug("caldav.objects.fetched", {
       accountId,
       externalCalendarId,
@@ -1589,6 +1606,8 @@ export const caldavAdapter: CalendarAdapter = {
           const self = addresses?.includes(
             organizer.replace(/^mailto:/i, "").toLowerCase(),
           );
+          if (self && master.getAllProperties("attendee").length)
+            throw new EventWriteError("organizer", "unsupported", "Organizer meetings require the explicit server notification action. No changes were saved.");
           // Nonmatch on a shared calendar does NOT prove an attendee copy: its
           // organizer may be the collection owner rather than this principal.
           assertEventWriteEvidence(

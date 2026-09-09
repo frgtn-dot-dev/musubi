@@ -236,3 +236,34 @@ it("can correct a native DST-invalid time after explicit admission rejection", a
     "2026-03-29T03:00:00.000",
   );
 });
+it("keeps CalDAV native time out of content editing and sends the explicit server policy", async () => {
+  h.save.mockResolvedValue({ status: "pending" });
+  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav" as const, actions: ["update", "delete"] as ("update" | "delete")[] } };
+  const tree = render(event, observed);
+  const fields = nodes(tree).filter(node => node.type === "TextInput");
+  expect(fields.map(node => node.props.accessibilityLabel)).toEqual(["Title", "Notes", "Location"]);
+  fields.find(node => node.props.accessibilityLabel === "Location")!.props.onChangeText("Changed room");
+  button(render(event, observed), "Save and notify guests").onPress();
+  await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", notificationPolicy: "server-invite", patch: { location: "Changed room" } });
+  expect(h.save.mock.calls[0][0].patch).not.toHaveProperty("time");
+});
+for (const action of ["update", "delete"] as const) it(`shows only the proven CalDAV ${action} control`, () => {
+ const tree = render(event, { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: [action] } });
+ const buttons = nodes(tree).filter(node => node.type === "Btn").map(node => node.props.label);
+ expect(buttons.includes("Save and notify guests")).toBe(action === "update");
+ expect(buttons.includes("Cancel meeting and notify guests")).toBe(action === "delete");
+ expect(nodes(tree).find(node => node.type === "TextInput")!.props.editable).toBe(action === "update");
+});
+it("keeps exact cancellation-only retry available after an ambiguous response", async () => {
+  h.save.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValue({ status: "pending" });
+  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav" as const, actions: ["delete"] as ("delete")[] } };
+  button(render(event, observed), "Cancel meeting and notify guests").onPress();
+  h.confirm.mock.calls[0][1](); await settle();
+  const tree = render(event, observed);
+  expect(nodes(tree).filter(node => node.type === "Btn").map(node => node.props.label)).not.toContain("Save and notify guests");
+  button(tree, "Retry saved meeting action").onPress(); await settle();
+  expect(h.save).toHaveBeenCalledTimes(2);
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[1][0]).toMatchObject({ action: "delete", provider: "caldav", notificationPolicy: "server-invite" });
+});

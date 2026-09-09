@@ -76,7 +76,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
     {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={event.seriesID ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
-    {current?.organizerEdit && !event.seriesID && !event.recurrence && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label="Manage Google meeting" variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}
+    {current?.organizerEdit && !event.seriesID && !event.recurrence && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label={`Manage ${current.organizerEdit.provider === "caldav" ? "CalDAV" : "Google"} meeting`} variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}
     {editor?.kind === "organizer" && editor.observation.organizerEdit ? <ProviderOrganizerEditor event={event} calendarID={editor.observation.organizerEdit.calendarID} color={event.color} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
   </View>;
 }

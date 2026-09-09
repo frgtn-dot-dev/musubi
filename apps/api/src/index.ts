@@ -698,7 +698,7 @@ const runNotifications = nonOverlapping(sendPendingNotifications, () => {
 });
 
 async function start() {
-  assertEventTimeActivation(config.api.environment, config.api.eventTimeEditsEnabled);
+  assertEventTimeActivation(config.api.environment, config.api);
   // The dedicated PostgreSQL session lock makes the documented deployment
   // boundary fail-safe: a second API process sharing this DB does not serve
   // traffic with split SSE/rate-limit/scheduler state.

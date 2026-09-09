@@ -844,3 +844,13 @@ possible-dispatch marker/read-only uncertain recovery and web/native callers.
 Guest lists remain provider-only; no second Musubi email. Guest-list editing,
 series/delegation and live two-account notification acceptance remain open.
 See [Google organizer contract](../sync/google-organizer.md).
+
+**K13 CalDAV organizer one-off slice:** a separate default-off
+`CALDAV_ORGANIZER_EDITS_ENABLED` path uses explicit `server-invite` policy for UTC
+or all-day creation, preserving content-only update and cancellation. It reuses
+strict automatic scheduling proof, full-resource strong ETag preconditions,
+private durable intent and permanent no-resend recovery. Web/native controls
+separate provider guests from Musubi attendance. See
+[the bounded contract](../sync/caldav-organizer.md). Named-zone creation,
+existing meeting rescheduling, guest-list/recurrence edits and live organizer
+notification acceptance remain open; this does not declare K13 complete.

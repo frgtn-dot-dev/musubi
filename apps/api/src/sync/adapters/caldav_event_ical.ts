@@ -218,3 +218,21 @@ export function restoreEventExdates(data: string, masterIndex: number, dates: st
   ICAL.parse(output);
   return output;
 }
+
+/** One DATE addition, preserving all unrelated physical spans and raw identity. */
+export function editEventRdate(data: string, masterIndex: number, edit: { before?: string; after?: string; rule: string }): string {
+  replaceEventProperties(data, masterIndex, new Map());
+  const dates: string[] = [];
+  let depth = 0, rules = 0;
+  for (const line of calendarLines(eventComponentBytes(data, masterIndex))) {
+    const boundary = /^(BEGIN|END):/i.exec(line.unfolded);
+    if (boundary) { depth += boundary[1]!.toUpperCase() === "BEGIN" ? 1 : -1; continue; }
+    if (depth !== 1) continue;
+    if (/^EXDATE[;:]/i.test(line.unfolded)) throw invalidResource();
+    if (/^RRULE[;:]/i.test(line.unfolded)) { rules++; if (line.unfolded !== "RRULE:" + edit.rule.replace(/^RRULE:/, "")) throw invalidResource(); }
+    if (/^RDATE[;:]/i.test(line.unfolded)) dates.push(line.unfolded);
+  }
+  if (rules !== 1 || dates.length !== (edit.before ? 1 : 0) || edit.before && dates[0] !== `RDATE;VALUE=DATE:${edit.before.replace(/-/g, "")}` || !!edit.before === !!edit.after) throw invalidResource();
+  const replacements = edit.after ? [ICAL.Property.fromString(`RDATE;VALUE=DATE:${edit.after.replace(/-/g, "")}`)] : [];
+  return replaceEventProperties(data, masterIndex, new Map([["rdate", replacements]]));
+}

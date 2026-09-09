@@ -199,6 +199,7 @@ function EditEventRoute() {
                 />
             ) : (
                 <EventEditorForm
+                    rdateMaster={currentHomeCalendar?.provider === "caldav" && currentEvent && currentEvent.revision === event.revision && !currentEvent.seriesID && !currentEvent.originalStart ? currentEvent : undefined}
                     key={`${event.id}:${privacyRevision ?? "initial"}`}
                     onValuesChange={values => {
                         setOwnedFields(rememberPrivateEditorChanges(draftValues ?? eventFormValues(event), values, ownedFields));
@@ -219,8 +220,9 @@ function EditEventRoute() {
                     onSubmit={async (values: EventFormValues) => {
                         const edited = updateEventFromForm(event, values);
                         if ((event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) ||
-                            (event.timeModel?.kind === "all-day" && /(?:^|\n)EXDATE/.test(event.recurrence ?? "") && edited.recurrence !== event.recurrence)) {
-                            await eventMutations.applyEventScope(event, eventScopeRequest(event, event, "series", edited));
+                            (event.timeModel?.kind === "all-day" && /(?:^|\n)(?:EXDATE|RDATE)/.test((event.recurrence ?? "") + "\n" + (edited.recurrence ?? "")) && edited.recurrence !== event.recurrence)) {
+                            if (!currentEvent || currentEvent.id !== event.id || currentEvent.revision !== event.revision || currentEvent.seriesID || currentEvent.originalStart) throw new Error("Refresh the stored series before saving this recurrence change.");
+                            await eventMutations.applyEventScope(currentEvent, eventScopeRequest(currentEvent, event, "series", edited));
                         } else await eventMutations.updateEvent(edited);
                         back();
                     }}

@@ -8,7 +8,7 @@ import type {
 import {
   organizerDraft,
   organizerRequest,
-  organizerNotice,
+  organizerNotificationNotice,
   type OrganizerDraft,
 } from "@musubi/calendar";
 import { editProviderOrganizer, getOrganizerCalendar } from "~/api/resources";
@@ -44,13 +44,13 @@ function OrganizerCreateActionBody({
   color: string;
   connectionId?: string;
 }) {
-  const [available, setAvailable] = useState(false),
+  const [available, setAvailable] = useState<"google" | "caldav" | null>(null),
     [trigger, setTrigger] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     getOrganizerCalendar(calendarID, controller.signal, connectionId)
-      .then(() => {
-        if (!controller.signal.aborted) setAvailable(true);
+      .then((result) => {
+        if (!controller.signal.aborted) setAvailable(result.provider);
       })
       .catch(() => {});
     return () => controller.abort();
@@ -62,10 +62,11 @@ function OrganizerCreateActionBody({
         size="compact"
         onClick={(event) => setTrigger(event.currentTarget)}
       >
-        Create Google meeting
+        Create {available === "caldav" ? "CalDAV" : "Google"} meeting
       </Button>
       {trigger ? (
         <ProviderOrganizerEditor
+          provider={available}
           calendarID={calendarID}
           color={color}
           connectionId={connectionId}
@@ -81,6 +82,7 @@ export function ProviderOrganizerEditor({
   color,
   event,
   observation,
+  provider = observation?.organizerEdit?.provider ?? "google",
   connectionId,
   returnFocus,
   onClose,
@@ -89,17 +91,19 @@ export function ProviderOrganizerEditor({
   color: string;
   event?: Event;
   observation?: ProviderEventStateResponse;
+  provider?: "google" | "caldav";
   connectionId?: string;
   returnFocus?: HTMLElement | null;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(() => organizerDraft(event));
+  const [draft, setDraft] = useState(() => organizerDraft(event, provider));
   const changed = useRef<(keyof OrganizerDraft)[]>([]),
     identity = useRef({
       eventID: event?.id ?? crypto.randomUUID(),
       calendarID,
       color,
       operationID: crypto.randomUUID(),
+      provider,
     });
   const frozen = useRef<ProviderOrganizerRequest | null>(null),
     pending = useRef(false);
@@ -107,7 +111,8 @@ export function ProviderOrganizerEditor({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [confirm, setConfirm] = useState(false),
-    [submitted, setSubmitted] = useState(false);
+    [submitted, setSubmitted] = useState(false),
+    [frozenAction, setFrozenAction] = useState<ProviderOrganizerRequest["action"] | null>(null);
   function patch<K extends keyof OrganizerDraft>(
     key: K,
     value: OrganizerDraft[K],
@@ -116,7 +121,21 @@ export function ProviderOrganizerEditor({
     changed.current = [...new Set([...changed.current, key])];
     setDraft((old) => ({ ...old, [key]: value }));
   }
+  const canUpdate =
+    !event ||
+    provider !== "caldav" ||
+    observation?.organizerEdit?.actions?.includes("update") === true;
+  const canDelete =
+    !!event &&
+    (provider !== "caldav" ||
+      observation?.organizerEdit?.actions?.includes("delete") === true);
+  const canSubmit = frozenAction === "delete" ? canDelete : canUpdate;
   async function send(action: ProviderOrganizerRequest["action"]) {
+    if (
+      (action === "update" && !canUpdate) ||
+      (action === "delete" && !canDelete)
+    )
+      return;
     if (pending.current || notice) return;
     pending.current = true;
     setBusy(true);
@@ -129,11 +148,12 @@ export function ProviderOrganizerEditor({
         identity.current,
         observation,
       );
+      setFrozenAction(frozen.current.action);
       setSubmitted(true);
       await editProviderOrganizer(frozen.current, connectionId);
       setConfirm(false);
       setNotice(
-        "Meeting change saved. Check Delivery details for Google's result. Guest notification delivery remains unknown.",
+        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : "Google's"} result. Guest notification delivery remains unknown.`,
       );
     } catch (cause) {
       if (
@@ -142,6 +162,7 @@ export function ProviderOrganizerEditor({
         cause.organizerAdmissionRejected === true
       ) {
         frozen.current = null;
+        setFrozenAction(null);
         identity.current.operationID = crypto.randomUUID();
         setSubmitted(false);
       }
@@ -156,7 +177,7 @@ export function ProviderOrganizerEditor({
     }
   }
   const closeButton = useRef<HTMLButtonElement | null>(null);
-  const locked = busy || submitted;
+  const locked = busy || submitted || !canUpdate;
   return (
     <div
       className={styles.layerBoundary}
@@ -167,8 +188,8 @@ export function ProviderOrganizerEditor({
       <Dialog
         open
         closeLabel="Close meeting editor"
-        title={event ? "Manage Google meeting" : "Create Google meeting"}
-        description={organizerNotice}
+        title={`${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+        description={organizerNotificationNotice(provider)}
         returnFocus={returnFocus}
         onOpenChange={(open) => {
           if (!open && !pending.current) onClose();
@@ -183,7 +204,7 @@ export function ProviderOrganizerEditor({
             >
               {notice ? "Close" : "Cancel"}
             </Button>
-            {!notice && (
+            {!notice && canSubmit && (
               <Button
                 loading={busy}
                 onClick={() =>
@@ -233,38 +254,51 @@ export function ProviderOrganizerEditor({
                 />
               </Field>
             )}
-            <Checkbox
-              label="All day"
-              checked={draft.allDay}
-              disabled={locked}
-              onChange={(event) => patch("allDay", event.target.checked)}
-            />
-            <Field label="Start">
-              <input
-                type={draft.allDay ? "date" : "datetime-local"}
-                value={draft.allDay ? draft.start.slice(0, 10) : draft.start}
-                disabled={locked}
-                onChange={(event) => patch("start", event.target.value)}
-              />
-            </Field>
-            <Field label="End">
-              <input
-                type={draft.allDay ? "date" : "datetime-local"}
-                value={draft.allDay ? draft.end.slice(0, 10) : draft.end}
-                disabled={locked}
-                onChange={(event) => patch("end", event.target.value)}
-              />
-            </Field>
-            {!draft.allDay && (
-              <Field label="Event time zone">
-                <input
-                  value={draft.timeZone}
+            {provider === "caldav" && event ? (
+              <p>Meeting time and guests are preserved.</p>
+            ) : (
+              <>
+                {provider === "caldav" && !draft.allDay ? (
+                  <p>New timed CalDAV meetings use UTC.</p>
+                ) : null}
+                <Checkbox
+                  label="All day"
+                  checked={draft.allDay}
                   disabled={locked}
-                  onChange={(event) => patch("timeZone", event.target.value)}
+                  onChange={(event) => patch("allDay", event.target.checked)}
                 />
-              </Field>
+                <Field label="Start">
+                  <input
+                    type={draft.allDay ? "date" : "datetime-local"}
+                    value={
+                      draft.allDay ? draft.start.slice(0, 10) : draft.start
+                    }
+                    disabled={locked}
+                    onChange={(event) => patch("start", event.target.value)}
+                  />
+                </Field>
+                <Field label="End">
+                  <input
+                    type={draft.allDay ? "date" : "datetime-local"}
+                    value={draft.allDay ? draft.end.slice(0, 10) : draft.end}
+                    disabled={locked}
+                    onChange={(event) => patch("end", event.target.value)}
+                  />
+                </Field>
+                {!draft.allDay && (
+                  <Field label="Event time zone">
+                    <input
+                      value={draft.timeZone}
+                      disabled={locked || provider === "caldav"}
+                      onChange={(event) =>
+                        patch("timeZone", event.target.value)
+                      }
+                    />
+                  </Field>
+                )}
+              </>
             )}
-            {event && !submitted && (
+            {canDelete && !submitted && (
               <Button variant="secondary" onClick={() => setConfirm(true)}>
                 Cancel meeting and notify guests
               </Button>
@@ -278,8 +312,8 @@ export function ProviderOrganizerEditor({
           open
           returnFocus={closeButton}
           children={error ? <InlineError>{error}</InlineError> : null}
-          title="Cancel Google meeting"
-          description="Google will be asked to cancel this meeting and notify every guest. Guest notification delivery cannot be verified."
+          title={`Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+          description={`${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel this meeting and notify every guest. Guest notification delivery cannot be verified.`}
           confirmLabel="Cancel meeting and notify guests"
           closeLabel="Keep meeting"
           loading={busy}

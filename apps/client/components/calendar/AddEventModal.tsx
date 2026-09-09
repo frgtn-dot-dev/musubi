@@ -63,7 +63,7 @@ import {
 } from "@/services/notifications";
 import dayjs from "dayjs";
 import { uuidv7 } from "uuidv7";
-import { allDayExclusionDates, restoreAllDayExclusion, joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
+import { allDayAdditionalDate, setAllDayAdditionalDate, allDayExclusionDates, restoreAllDayExclusion, joinRecurrence, splitRecurrence, knownEventTimeDraft, legacyEventTimeDraft, chooseEventTimeKind, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import {
   AdvancedEndType,
   AdvancedFreq,
@@ -109,6 +109,7 @@ type Props = {
   /** Resolving `false` means the save was called off — keep the composer open. */
   onEdit: (event: Event) => Promise<boolean | void | Event>;
   calendars: Calendar[];
+  seriesMaster?: Event;
   event?: Event;
   privacyEvent?: Event;
   sourceRemoved?: boolean;
@@ -173,6 +174,7 @@ export function AddEventModal({
   onEdit,
   calendars,
   event,
+  seriesMaster,
   privacyEvent,
   sourceRemoved,
 }: Props) {
@@ -190,7 +192,7 @@ export function AddEventModal({
   const [newEnd, setNewEnd] = useState(startingDate ?? new Date());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
-  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end">(
+  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end" | "additional">(
     "start",
   );
   const [reminderRule, setReminderRule] = useState<ReminderRule>(
@@ -214,6 +216,15 @@ export function AddEventModal({
   const [recurrenceExtras, setRecurrenceExtras] = useState<string[]>([]);
   const [restorationAvailable, setRestorationAvailable] = useState(true);
   const [restoredRecurrence, setRestoredRecurrence] = useState<string | null>(null);
+  const [additionalDateError, setAdditionalDateError] = useState("");
+  let additionalDate: ReturnType<typeof allDayAdditionalDate> | undefined;
+  try { if (seriesMaster && calendars.find(calendar => calendar.id === seriesMaster.originCalendarID)?.provider === "caldav" && restorationAvailable) additionalDate = allDayAdditionalDate({ ...seriesMaster, recurrence: restoredRecurrence ?? seriesMaster.recurrence }); } catch { /* Native unsupported series retain existing controls. */ }
+  function changeAdditionalDate(date: string | null) {
+    try {
+      const recurrence = setAllDayAdditionalDate({ ...seriesMaster!, recurrence: restoredRecurrence ?? seriesMaster!.recurrence }, date);
+      setRestoredRecurrence(recurrence); setRecurrenceExtras(splitRecurrence(recurrence).extras); setAdditionalDateError("");
+    } catch { setAdditionalDateError("Choose one date outside the regular occurrences, within two years of the series start."); }
+  }
   // UNTIL from "end series here" — the editor UI can't express it (only COUNT),
   // so carry it through and re-apply unless the user picks a new ending.
   const [savedUntil, setSavedUntil] = useState<string | null>(null);
@@ -515,6 +526,7 @@ export function AddEventModal({
       recurrenceEdited.current = false;
       setRestorationAvailable(true);
       setRestoredRecurrence(null);
+      setAdditionalDateError("");
       setNewTitle(event?.title ?? "");
       // Docked mode owns its own start/end via the anchor effect above (the day
       // in view + a sensible time) — don't clobber it here with `new Date()`.
@@ -619,6 +631,7 @@ export function AddEventModal({
   }
 
   function getDatePickerValue() {
+    if (datePickerTarget === "additional") return new Date((additionalDate?.date ?? (seriesMaster?.start ?? event?.start ?? newStart).toISOString().slice(0,10)) + "T12:00:00");
     const current =
       datePickerTarget === "start"
         ? new Date(newStart.getTime())
@@ -628,6 +641,7 @@ export function AddEventModal({
   }
 
   function setDateFromDatePicker(date: Date) {
+    if (datePickerTarget === "additional") { changeAdditionalDate(`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`); return; }
     const minutes =
       datePickerTarget === "start"
         ? newStart.getMinutes()
@@ -1279,6 +1293,21 @@ export function AddEventModal({
           <Text style={[styles.fieldLabel, { fontFamily: fonts.sans }]}>
             Repeat
           </Text>
+          {additionalDate ? <>
+            <SettingRowAction label={additionalDate.date ? `Remove additional date ${additionalDate.date}` : "Add series date"} detail="One extra occurrence; regular repeat count stays unchanged" onPress={isLoading ? undefined : () => { if (additionalDate.date) changeAdditionalDate(null); else { setDatePickerTarget("additional"); setDatePickerMode("date"); setDatePickerVisible(true); } }} />
+            {datePickerVisible && datePickerTarget === "additional" && Platform.OS === "ios" ? <DateTimePicker
+              value={getDatePickerValue()}
+              mode="date"
+              display="compact"
+              accentColor={colors.accent}
+              themeVariant={activeScheme}
+              onValueChange={(_event, selectedDate) => {
+                setDatePickerVisible(false);
+                setDateFromDatePicker(selectedDate);
+              }}
+            /> : null}
+            {additionalDateError ? <Text style={styles.errorText}>{additionalDateError}</Text> : null}
+          </> : null}
           {event?.timeModel?.kind === "all-day" && restorationAvailable && allDayExclusionDates(restoredRecurrence ?? event.recurrence)?.map(date => <SettingRowAction key={date} label={`Restore ${date}`} detail="Excluded from this series" onPress={isLoading ? undefined : () => { const restored = restoreAllDayExclusion(restoredRecurrence ?? event.recurrence!, date); setRestoredRecurrence(restored); setRecurrenceExtras(splitRecurrence(restored).extras); }} />)}
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.horizontalPillView}>
