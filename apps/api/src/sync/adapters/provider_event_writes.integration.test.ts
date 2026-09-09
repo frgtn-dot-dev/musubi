@@ -409,7 +409,15 @@ async function main() {
       location: "Room",
       start: { dateTime: googleEvent.start.toISOString() },
       end: { dateTime: googleEvent.end.toISOString() },
-      attendees: [{ email: "guest@example.test" }],
+      // This generic writer fixture is a personal event. Meetings with guests
+      // use the separate organizer action and its explicit notification policy.
+      attendees: [{ email: "owner@example.test", self: true, organizer: true, responseStatus: "accepted" }],
+      eventType: "focusTime",
+      focusTimeProperties: { autoDeclineMode: "declineNone", chatStatus: "doNotDisturb" },
+      transparency: "opaque",
+      visibility: "private",
+      reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 17 }] },
+      conferenceData: { conferenceId: "native-kept", signature: "opaque-native-signature", entryPoints: [{ entryPointType: "video", uri: "https://meet.google.com/aaa-bbbb-ccc" }] },
       extendedProperties: { private: { unknown: "keep" } },
     };
     remote.set(key("Bearer primary-access", googlePath), {
@@ -492,6 +500,21 @@ async function main() {
       remote.get(key("Bearer primary-access", googlePath))!.json?.attendees,
       googleJson.attendees,
     );
+    // The actual authenticated handler/worker PATCH above changed only title.
+    // Inspect stored native bytes/fields and then read them through the adapter,
+    // rather than inferring preservation from the outgoing request alone.
+    assert.deepEqual(remote.get(key("Bearer primary-access", googlePath))!.json, { ...googleJson, summary: "Title only" });
+    const readback = await googleAdapter.fetchChanges(owner, "primary", "same-calendar", pulled.nextCursor);
+    const observed = readback.changes.find(change => change.kind === "event");
+    assert.ok(observed?.kind === "event");
+    assert.equal(observed.data.title, "Title only");
+    assert.equal(observed.data.providerState?.eventType, "focusTime");
+    assert.equal(observed.data.providerState?.availability, "opaque");
+    assert.equal(observed.data.providerState?.privacy, "private");
+    assert.deepEqual(observed.data.providerState?.reminders, { provider: "google", useDefault: false, overrides: [{ method: "popup", minutes: 17 }] });
+    assert.deepEqual(observed.data.providerState?.conferenceURLs, ["https://meet.google.com/aaa-bbbb-ccc"]);
+    assert.equal(observed.data.start.toISOString(), googleEvent.start.toISOString());
+    assert.equal(observed.data.end.toISOString(), googleEvent.end.toISOString());
     await noMutation(async () => {
       await assert.rejects(
         () =>

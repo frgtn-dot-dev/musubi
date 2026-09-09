@@ -196,3 +196,20 @@ resources remain in the journal, and organizer delivery remains unknown.
 private observations before the next read and fences late ordinary/family imports,
 retained receipts, notifications and open client drafts. A fresh limited read may
 restore authorized content; unknown evidence cannot restore retired details.
+
+## K14 title-only preservation evidence
+
+`apps/api/src/sync/adapters/provider_event_writes.integration.test.ts` exercises
+an authenticated Google title update through the real handler/delivery path:
+only `summary` is PATCHed with the accepted validator. The native fixture retains
+special event type/properties, private visibility, transparency, reminders,
+conference metadata, attendees and time; a subsequent adapter HTTP read confirms
+the updated title with those observations intact. The generic fixture is a
+personal event, with only its organizer/self attendee. Meetings use the separate
+explicit organizer notification flow.
+
+`apps/api/src/sync/adapters/special_state_read.test.ts` separately verifies Graph
+HTTP read and later delta read preserve `workingElsewhere`, confidentiality,
+reminders and Teams links when the provider supplies a changed title. It also
+checks that Musubi's native Graph title writer remains refused. This is read
+preservation evidence, not Graph PATCH/CAS certification or live-provider QA.
